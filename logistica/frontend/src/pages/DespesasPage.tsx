@@ -44,7 +44,7 @@ export function DespesasPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <Banknote className="h-6 w-6 text-sky-600" />
+        <Banknote className="h-6 w-6 text-capul-600" />
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Custos da Frota</h2>
           <p className="text-sm text-slate-500">Despesas, fornecedores e locais — por veículo, com validação do supervisor / gestor de frota.</p>
@@ -57,7 +57,7 @@ export function DespesasPage() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-medium ${tab === t ? 'border-b-2 border-sky-600 text-sky-700' : 'text-slate-500 hover:text-slate-700'}`}
+              className={`px-4 py-2 text-sm font-medium ${tab === t ? 'border-b-2 border-capul-600 text-capul-700' : 'text-slate-500 hover:text-slate-700'}`}
             >
               {t === 'despesas' ? 'Despesas' : t === 'tipos' ? 'Tipos de despesa' : t === 'fornecedores' ? 'Fornecedores' : 'Locais de parada'}
             </button>
@@ -177,13 +177,13 @@ function DespesasTab() {
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
             <Printer className="h-4 w-4" /> Imprimir
           </button>
-          <button onClick={() => navigate('/despesas/nova')} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
+          <button onClick={() => navigate('/despesas/nova')} className="inline-flex items-center gap-2 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700">
             <Plus className="h-4 w-4" /> Lançar despesa
           </button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-12 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : despesas.length === 0 ? (
@@ -335,7 +335,7 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
           <div className="flex items-center gap-2">
             <span className="block max-w-[12rem] truncate" title={d.fornecedor ?? ''}>{d.fornecedor ?? '—'}</span>
             {d.temComprovante && (
-              <button onClick={(e) => { e.stopPropagation(); void verRecibo(); }} disabled={busy} title="Ver recibo" className="inline-flex shrink-0 items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+              <button onClick={(e) => { e.stopPropagation(); void verRecibo(); }} disabled={busy} title="Ver recibo" className="inline-flex shrink-0 items-center gap-1 rounded border border-capul-200 bg-capul-50 px-1.5 py-0.5 text-xs text-capul-700 hover:bg-capul-100 disabled:opacity-50">
                 <Paperclip className="h-3 w-3" /> Recibo
               </button>
             )}
@@ -392,7 +392,7 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
 // Ícone de ordenação (padrão workspace).
 function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
   if (!active) return <ArrowUpDown className="h-3 w-3 text-slate-300" />;
-  return dir === 'asc' ? <ArrowUp className="h-3 w-3 text-sky-600" /> : <ArrowDown className="h-3 w-3 text-sky-600" />;
+  return dir === 'asc' ? <ArrowUp className="h-3 w-3 text-capul-600" /> : <ArrowDown className="h-3 w-3 text-capul-600" />;
 }
 const thCad = 'px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500';
 const btnSortCad = 'flex items-center gap-1 hover:text-slate-700';
@@ -443,20 +443,20 @@ function FornecedoresTab() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-slate-500">Fornecedores usados nas despesas da frota (postos, oficinas, etc.).</p>
-        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
           <Plus className="h-4 w-4" /> Novo Fornecedor
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           <div className="mb-4 max-w-md">
             <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
             <input value={nome} onChange={(e) => setNome(e.target.value)} required maxLength={120} autoFocus placeholder="ex.: Posto Ipiranga Centro"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500" />
           </div>
           <div className="flex gap-3">
-            <button type="submit" disabled={salvando} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+            <button type="submit" disabled={salvando} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
             <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
           </div>
         </form>
@@ -470,7 +470,7 @@ function FornecedoresTab() {
           <p className="text-slate-500">Nenhum fornecedor cadastrado</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50">
@@ -496,13 +496,13 @@ function FornecedoresTab() {
                   ) : (
                     <>
                       <td className="px-6 py-4">
-                        <button onClick={() => { setEditId(f.id); setEditNome(f.nome); }} className="text-left font-medium text-sky-700 hover:underline">{f.nome}</button>
+                        <button onClick={() => { setEditId(f.id); setEditNome(f.nome); }} className="text-left font-medium text-capul-700 hover:underline">{f.nome}</button>
                       </td>
                       <td className="px-6 py-4"><span className={pill(f.ativo)}>{f.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <button onClick={() => { setEditId(f.id); setEditNome(f.nome); }} className="flex items-center gap-1 text-xs text-sky-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
-                          <button onClick={() => void toggle(f)} className="text-xs text-sky-600 hover:underline">{f.ativo ? 'Inativar' : 'Ativar'}</button>
+                          <button onClick={() => { setEditId(f.id); setEditNome(f.nome); }} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                          <button onClick={() => void toggle(f)} className="text-xs text-capul-600 hover:underline">{f.ativo ? 'Inativar' : 'Ativar'}</button>
                         </div>
                       </td>
                     </>
@@ -591,19 +591,19 @@ function LocaisTab() {
     return sortDir === 'asc' ? arr : arr.reverse();
   }, [locais, sortDir]);
 
-  const selCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500';
+  const selCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500';
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-slate-500">Locais/pontos de parada — atalho ao planejar a rota. O <b>escopo</b> define onde o local aparece (todos, um departamento ou um veículo) — evita poluir a lista.</p>
-        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
           <Plus className="h-4 w-4" /> Novo Local
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
@@ -644,7 +644,7 @@ function LocaisTab() {
             )}
           </div>
           <div className="mt-4 flex gap-3">
-            <button type="submit" disabled={salvando} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+            <button type="submit" disabled={salvando} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
             <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
           </div>
         </form>
@@ -658,7 +658,7 @@ function LocaisTab() {
           <p className="text-slate-500">Nenhum local cadastrado</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50">
@@ -688,15 +688,15 @@ function LocaisTab() {
                   ) : (
                     <>
                       <td className="px-6 py-4">
-                        <button onClick={() => { setEditId(l.id); setEditNome(l.nome); }} className="text-left font-medium text-sky-700 hover:underline">{l.nome}</button>
+                        <button onClick={() => { setEditId(l.id); setEditNome(l.nome); }} className="text-left font-medium text-capul-700 hover:underline">{l.nome}</button>
                       </td>
                       <td className="px-6 py-4 text-slate-600">{escopo(l)}</td>
                       <td className="px-6 py-4 text-slate-600">{filialNome(l.filialId)}</td>
                       <td className="px-6 py-4"><span className={pill(l.ativo)}>{l.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <button onClick={() => { setEditId(l.id); setEditNome(l.nome); }} className="flex items-center gap-1 text-xs text-sky-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
-                          <button onClick={() => void toggle(l)} className="text-xs text-sky-600 hover:underline">{l.ativo ? 'Inativar' : 'Ativar'}</button>
+                          <button onClick={() => { setEditId(l.id); setEditNome(l.nome); }} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                          <button onClick={() => void toggle(l)} className="text-xs text-capul-600 hover:underline">{l.ativo ? 'Inativar' : 'Ativar'}</button>
                         </div>
                       </td>
                     </>
@@ -759,32 +759,32 @@ function TiposTab() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-slate-500">Classificação das despesas (Combustível, Manutenção, Pedágio, IPVA, etc.).</p>
-        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+        <button onClick={() => { setShowForm(!showForm); setEditId(null); }} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
           <Plus className="h-4 w-4" /> Novo Tipo
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6">
+        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white shadow-sm p-6">
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
               <input value={nome} onChange={(e) => setNome(e.target.value)} required maxLength={60} autoFocus placeholder="ex.: Lavagem"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Descrição (opcional)</label>
               <input value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={255}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500" />
             </div>
           </div>
           <label className="mb-4 flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={requerAprovacao} onChange={(e) => setRequerAprovacao(e.target.checked)} className="h-4 w-4 accent-sky-600" />
+            <input type="checkbox" checked={requerAprovacao} onChange={(e) => setRequerAprovacao(e.target.checked)} className="h-4 w-4 accent-capul-600" />
             Exige aprovação do supervisor/gestor
             <span className="text-xs text-slate-400">— desmarque para tipos que entram automáticos (ex.: Abastecimento)</span>
           </label>
           <div className="flex gap-3">
-            <button type="submit" disabled={salvando} className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
+            <button type="submit" disabled={salvando} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Salvar'}</button>
             <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
           </div>
         </form>
@@ -798,7 +798,7 @@ function TiposTab() {
           <p className="text-slate-500">Nenhum tipo de despesa cadastrado</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50">
@@ -816,7 +816,7 @@ function TiposTab() {
                     <>
                       <td className="px-6 py-3"><input value={editNome} onChange={(e) => setEditNome(e.target.value)} maxLength={60} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
                       <td className="px-6 py-3"><input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} maxLength={255} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
-                      <td className="px-6 py-3"><label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={editRequer} onChange={(e) => setEditRequer(e.target.checked)} className="h-4 w-4 accent-sky-600" /> Exige</label></td>
+                      <td className="px-6 py-3"><label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={editRequer} onChange={(e) => setEditRequer(e.target.checked)} className="h-4 w-4 accent-capul-600" /> Exige</label></td>
                       <td className="px-6 py-3"><span className={pill(t.ativo)}>{t.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-3">
                         <div className="flex items-center gap-2">
@@ -828,7 +828,7 @@ function TiposTab() {
                   ) : (
                     <>
                       <td className="px-6 py-4">
-                        <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); }} className="text-left font-medium text-sky-700 hover:underline">{t.nome}</button>
+                        <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); }} className="text-left font-medium text-capul-700 hover:underline">{t.nome}</button>
                       </td>
                       <td className="px-6 py-4 text-slate-500">{t.descricao ?? '—'}</td>
                       <td className="px-6 py-4">
@@ -839,8 +839,8 @@ function TiposTab() {
                       <td className="px-6 py-4"><span className={pill(t.ativo)}>{t.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); }} className="flex items-center gap-1 text-xs text-sky-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
-                          <button onClick={() => void toggle(t)} className="text-xs text-sky-600 hover:underline">{t.ativo ? 'Inativar' : 'Ativar'}</button>
+                          <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); }} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                          <button onClick={() => void toggle(t)} className="text-xs text-capul-600 hover:underline">{t.ativo ? 'Inativar' : 'Ativar'}</button>
                         </div>
                       </td>
                     </>

@@ -43,7 +43,7 @@ const dh = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const SIT_META: Record<string, { label: string; cls: string }> = {
-  RASCUNHO: { label: 'Em preparação', cls: 'bg-sky-100 text-sky-700' },
+  RASCUNHO: { label: 'Em preparação', cls: 'bg-capul-100 text-capul-700' },
   EM_CURSO: { label: 'Em curso', cls: 'bg-amber-100 text-amber-700' },
   CONCLUIDA: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
   CANCELADA: { label: 'Cancelada', cls: 'bg-slate-100 text-slate-500' },
@@ -322,7 +322,7 @@ export function ViagemDetalhePage() {
 
 
       {ehRascunho && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
           {(!v.veiculoId || !v.motoristaId) && (
             <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Viagem salva sem {!v.veiculoId && !v.motoristaId ? 'veículo e motorista' : !v.veiculoId ? 'veículo' : 'motorista'} — defina e salve para poder despachar.
@@ -332,7 +332,7 @@ export function ViagemDetalhePage() {
             <div className="lg:col-span-4">
               <label className="block text-xs font-medium text-slate-500">Veículo (disponível)</label>
               <select value={veiculoSel} disabled={salvandoVm} onChange={(e) => setVeiculoSel(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none">
                 <option value="">—</option>
                 {v.veiculoId && !veiculos.some((x) => x.id === v.veiculoId) && (
                   <option value={v.veiculoId}>{v.veiculo?.placa ?? 'atual'}</option>
@@ -343,7 +343,7 @@ export function ViagemDetalhePage() {
             <div className="lg:col-span-4">
               <label className="block text-xs font-medium text-slate-500">Motorista</label>
               <select value={motoristaSel} disabled={salvandoVm} onChange={(e) => setMotoristaSel(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none">
                 <option value="">—</option>
                 {motoristas.map((x) => <option key={x.id} value={x.id}>{labelCore(x)}</option>)}
               </select>
@@ -359,7 +359,7 @@ export function ViagemDetalhePage() {
             <div className="lg:col-span-2">
               <button onClick={() => void salvarVeiculoMotorista()} disabled={salvandoVm || !vmAlterado}
                 title={!vmAlterado ? 'Nada alterado para salvar' : undefined}
-                className="w-full rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+                className="w-full rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
                 {salvandoVm ? 'Salvando…' : 'Salvar'}
               </button>
             </div>
@@ -367,7 +367,7 @@ export function ViagemDetalhePage() {
         </div>
       )}
       {!ehRascunho && (
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
         <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           <div><span className="block text-xs font-medium text-slate-500">Veículo</span>
             <div className="text-slate-700">{v.veiculo?.placa ?? '—'}{v.veiculo?.modelo ? ` · ${v.veiculo.modelo}` : ''}</div></div>
@@ -408,27 +408,27 @@ export function ViagemDetalhePage() {
           await ofereceRecalcular();
         };
         return (
-        <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
             <span>Fila de pendentes ({filaFiltrada.length})</span>
             {filaFiltrada.length > 0 && (
-              <button onClick={() => void adicionarTodas()} disabled={busy} className="text-xs font-medium text-sky-700 hover:underline">
+              <button onClick={() => void adicionarTodas()} disabled={busy} className="text-xs font-medium text-capul-700 hover:underline">
                 + Adicionar {bairrosSel.length > 0 || q ? 'as filtradas' : 'todas'} ({filaFiltrada.length})
               </button>
             )}
           </div>
           <div className="space-y-2 border-b border-slate-100 px-4 py-2.5">
             <input value={buscaFila} onChange={(e) => setBuscaFila(e.target.value)} placeholder="Buscar por nome, rua, bairro ou nº…"
-              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-sky-500 focus:outline-none" />
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-capul-500 focus:outline-none" />
             {bairros.length > 1 && (
               <div className="flex flex-wrap gap-1.5">
                 <button onClick={() => setBairrosSel([])}
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.length === 0 ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.length === 0 ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                   Todos
                 </button>
                 {bairros.map((b) => (
                   <button key={b.key} onClick={() => setBairrosSel((p) => (p.includes(b.key) ? p.filter((x) => x !== b.key) : [...p, b.key]))}
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.includes(b.key) ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.includes(b.key) ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                     {b.label} ({b.count})
                   </button>
                 ))}
@@ -442,7 +442,7 @@ export function ViagemDetalhePage() {
               {filaFiltrada.map((e) => (
                 <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
                   <button onClick={() => void adicionarEntrega(e.id)} disabled={busy} title="Adicionar ao fim da rota"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500 text-sky-600 hover:bg-sky-50 disabled:opacity-50">
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-capul-500 text-capul-600 hover:bg-capul-50 disabled:opacity-50">
                     <Plus className="h-4 w-4" />
                   </button>
                   <div className="min-w-0 flex-1">
@@ -460,13 +460,13 @@ export function ViagemDetalhePage() {
       })()}
       <div className="space-y-4">
       {/* Paradas na ordem da rota */}
-      <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
           <span>Rota ({v.paradas.length} paradas · {volumes} vol)</span>
           {ehRascunho && v.paradas.length >= 2 && (
             <button onClick={() => void sugerirOrdemRascunho()} disabled={busy || sugerindo || rotaOtimizada}
               title={rotaOtimizada ? 'Rota já otimizada — mude a composição/ordem para recalcular' : 'Recalcula o melhor percurso a partir da filial'}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+              className="inline-flex items-center gap-1.5 rounded-lg bg-capul-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-capul-700 disabled:cursor-not-allowed disabled:bg-slate-300">
               {sugerindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {sugerindo ? 'Recalculando…' : rotaOtimizada ? '✓ Rota otimizada' : 'Sugerir melhor rota'}
             </button>
@@ -498,7 +498,7 @@ export function ViagemDetalhePage() {
                   {p.entrega ? (
                     <>
                       <td className="px-3 py-2 font-medium text-slate-700">
-                        <Link to={`/entregas/${p.entrega.id}`} className="hover:text-sky-700 hover:underline">
+                        <Link to={`/entregas/${p.entrega.id}`} className="hover:text-capul-700 hover:underline">
                           #{p.entrega.numero} · {p.entrega.destinatarioNome}
                         </Link>
                       </td>
@@ -507,7 +507,7 @@ export function ViagemDetalhePage() {
                       </td>
                       <td className="px-3 py-2">
                         {p.entrega.telefone ? (
-                          <a href={`tel:${p.entrega.telefone}`} className="inline-flex items-center gap-1 text-sky-700 hover:underline">
+                          <a href={`tel:${p.entrega.telefone}`} className="inline-flex items-center gap-1 text-capul-700 hover:underline">
                             <Phone className="h-3 w-3" /> {maskTelefone(p.entrega.telefone)}
                           </a>
                         ) : <span className="text-slate-400">—</span>}
@@ -560,7 +560,7 @@ export function ViagemDetalhePage() {
                   {p.entrega ? (
                     <>
                       <div className="font-medium text-slate-700">
-                        <Link to={`/entregas/${p.entrega.id}`} className="hover:text-sky-700 hover:underline">
+                        <Link to={`/entregas/${p.entrega.id}`} className="hover:text-capul-700 hover:underline">
                           #{p.entrega.numero} · {p.entrega.destinatarioNome}
                         </Link>
                       </div>
@@ -569,7 +569,7 @@ export function ViagemDetalhePage() {
                         {p.entrega.endBairro ? ` — ${p.entrega.endBairro}` : ''} · {p.entrega.quantidadeVolumes} vol
                       </div>
                       {p.entrega.telefone && (
-                        <a href={`tel:${p.entrega.telefone}`} className="inline-flex items-center gap-1 text-xs text-sky-700 hover:underline">
+                        <a href={`tel:${p.entrega.telefone}`} className="inline-flex items-center gap-1 text-xs text-capul-700 hover:underline">
                           <Phone className="h-3 w-3" /> {maskTelefone(p.entrega.telefone)}
                         </a>
                       )}
@@ -582,9 +582,9 @@ export function ViagemDetalhePage() {
                   {ehRascunho && p.entrega && (
                     <>
                       <button onClick={() => moverParada(p.entrega!.id, -1)} disabled={busy || p.sequencia === 1}
-                        title="Subir" className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-sky-700 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+                        title="Subir" className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-capul-700 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
                       <button onClick={() => moverParada(p.entrega!.id, 1)} disabled={busy || p.sequencia === v.paradas.length}
-                        title="Descer" className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-sky-700 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+                        title="Descer" className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-capul-700 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
                     </>
                   )}
                   {v.situacao === 'RASCUNHO' && p.entrega && (

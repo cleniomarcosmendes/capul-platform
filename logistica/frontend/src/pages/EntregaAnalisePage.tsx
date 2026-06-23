@@ -28,7 +28,7 @@ const errMsg = (e: unknown, fb: string) => {
 
 const ORIGENS: [string, string][] = [['PRESENCIAL', 'Presencial'], ['TELE_VENDA', 'Tele-venda'], ['OUTRO', 'Outro'], ['NAO_INFORMADO', 'Não informado']];
 const STATUSES: [string, string][] = [['PENDENTE', 'Pendente'], ['EM_VIAGEM', 'Em viagem'], ['ENTREGUE', 'Entregue'], ['NAO_ENTREGUE', 'Não entregue']];
-const selCls = 'rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:border-sky-500 focus:outline-none';
+const selCls = 'rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:border-capul-500 focus:outline-none';
 
 export function EntregaAnalisePage() {
   const { toast } = useToast();
@@ -93,7 +93,7 @@ export function EntregaAnalisePage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <TrendingUp className="h-6 w-6 text-sky-600" />
+          <TrendingUp className="h-6 w-6 text-capul-600" />
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Análise de Entregas</h2>
             <p className="text-sm text-slate-500">Entregas do mês por origem, status, motorista e bairro — clique para detalhar.</p>
@@ -107,7 +107,7 @@ export function EntregaAnalisePage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white shadow-sm p-3">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Filter className="h-3.5 w-3.5" /> Filtros</span>
         <select value={fOrigem} onChange={(e) => setFOrigem(e.target.value)} className={selCls}>
           <option value="">Todas as origens</option>
@@ -137,15 +137,15 @@ export function EntregaAnalisePage() {
       ) : vazio ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">
           Sem entregas em {MESES[mes - 1]} / {ano}{qtdFiltros > 0 ? ' para os filtros aplicados' : ''}.
-          {qtdFiltros > 0 && <button onClick={limparFiltros} className="ml-1 text-sky-600 hover:underline">Limpar filtros</button>}
+          {qtdFiltros > 0 && <button onClick={limparFiltros} className="ml-1 text-capul-600 hover:underline">Limpar filtros</button>}
         </div>
       ) : data && (
         <div className="space-y-5">
-          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
+          <div className="rounded-2xl border border-capul-200 bg-capul-50 p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-sky-600 p-2.5"><Package className="h-6 w-6 text-white" /></div>
+              <div className="rounded-xl bg-capul-600 p-2.5"><Package className="h-6 w-6 text-white" /></div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-sky-700">Entregas no mês</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-capul-700">Entregas no mês</p>
                 <p className="text-3xl font-bold text-slate-800">{NUM(data.totalEntregas)}</p>
                 <p className="text-xs text-slate-500">Valor em cupons: {BRL(data.valorTotal)}</p>
               </div>
@@ -153,10 +153,10 @@ export function EntregaAnalisePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <CardGrupo titulo="Por origem da venda" dimensao="origem" icone={<Tag className="h-4 w-4 text-sky-600" />} itens={data.porOrigem} total={data.totalEntregas} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por status" dimensao="status" icone={<Package className="h-4 w-4 text-sky-600" />} itens={data.porStatus} total={data.totalEntregas} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por motorista" dimensao="motorista" icone={<Users className="h-4 w-4 text-sky-600" />} itens={data.porMotorista} total={data.totalEntregas} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por bairro" dimensao="bairro" icone={<MapPin className="h-4 w-4 text-sky-600" />} itens={data.porBairro} total={data.totalEntregas} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por origem da venda" dimensao="origem" icone={<Tag className="h-4 w-4 text-capul-600" />} itens={data.porOrigem} total={data.totalEntregas} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por status" dimensao="status" icone={<Package className="h-4 w-4 text-capul-600" />} itens={data.porStatus} total={data.totalEntregas} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por motorista" dimensao="motorista" icone={<Users className="h-4 w-4 text-capul-600" />} itens={data.porMotorista} total={data.totalEntregas} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por bairro" dimensao="bairro" icone={<MapPin className="h-4 w-4 text-capul-600" />} itens={data.porBairro} total={data.totalEntregas} onSelect={abrirDrill} />
           </div>
           <p className="text-xs text-slate-400">Clique num item para ver as entregas que o compõem. A soma reconcilia com o total; linhas em cinza são valores sem a dimensão (ex.: sem motorista / sem bairro).</p>
         </div>
@@ -173,7 +173,7 @@ function CardGrupo({ titulo, dimensao, icone, itens, total, onSelect }: {
 }) {
   let corIdx = 0;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">{icone} {titulo}</div>
       <ul className="divide-y divide-slate-50 p-2">
         {itens.length === 0 && <li className="px-2 py-3 text-sm text-slate-400">Sem dados.</li>}

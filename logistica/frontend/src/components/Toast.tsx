@@ -70,7 +70,7 @@ const iconStyles: Record<ToastType, string> = {
 const confirmBtnStyles: Record<string, string> = {
   danger: 'bg-red-600 hover:bg-red-700 text-white',
   warning: 'bg-amber-500 hover:bg-amber-600 text-white',
-  default: 'bg-sky-600 hover:bg-sky-700 text-white',
+  default: 'bg-capul-600 hover:bg-capul-700 text-white',
 };
 
 let nextId = 0;
@@ -284,7 +284,7 @@ function PromptModal({ state, onClose }: { state: PromptState; onClose: (v: stri
                 onChange={(e) => setValor(e.target.value)}
                 placeholder={state.placeholder ?? 'Digite aqui...'}
                 rows={3}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent resize-none"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500 focus:border-transparent resize-none"
                 onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleConfirm(); }}
               />
             ) : (
@@ -294,7 +294,7 @@ function PromptModal({ state, onClose }: { state: PromptState; onClose: (v: stri
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
                 placeholder={state.placeholder ?? 'Digite aqui...'}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500 focus:border-transparent"
                 onKeyDown={(e) => { if (e.key === 'Enter') handleConfirm(); }}
               />
             )}

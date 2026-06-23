@@ -15,7 +15,7 @@ interface Viagem {
 }
 
 const SIT_META: Record<string, { label: string; cls: string }> = {
-  RASCUNHO: { label: 'Em preparação', cls: 'bg-sky-100 text-sky-700' },
+  RASCUNHO: { label: 'Em preparação', cls: 'bg-capul-100 text-capul-700' },
   EM_CURSO: { label: 'Em curso', cls: 'bg-amber-100 text-amber-700' },
   CONCLUIDA: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
   CANCELADA: { label: 'Cancelada', cls: 'bg-slate-100 text-slate-500' },
@@ -54,7 +54,7 @@ export function ViagensPage() {
   }
   const SortIcon = ({ col }: { col: SortKey }) => {
     if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 text-slate-300" />;
-    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3 text-sky-600" /> : <ArrowDown className="h-3 w-3 text-sky-600" />;
+    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3 text-capul-600" /> : <ArrowDown className="h-3 w-3 text-capul-600" />;
   };
 
   const ordenadas = useMemo(() => {
@@ -88,25 +88,25 @@ export function ViagensPage() {
           <h2 className="text-lg font-semibold text-slate-800">Viagens</h2>
           <p className="text-sm text-slate-500">Clique numa viagem para ver as paradas, despachar e dar baixas.</p>
         </div>
-        <Link to="/viagens/montar" className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+        <Link to="/viagens/montar" className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
           <Truck className="h-4 w-4" /> Montar viagem
         </Link>
       </div>
 
-      <div className="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white shadow-sm p-4">
         <button onClick={() => setSituacaoSel('')}
-          className={`rounded-full px-3 py-1 text-xs font-medium ${situacaoSel === '' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+          className={`rounded-full px-3 py-1 text-xs font-medium ${situacaoSel === '' ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
           Todas
         </button>
         {Object.entries(SIT_META).map(([k, m]) => (
           <button key={k} onClick={() => setSituacaoSel(k)}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${situacaoSel === k ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+            className={`rounded-full px-3 py-1 text-xs font-medium ${situacaoSel === k ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
             {m.label}
           </button>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>
         ) : ordenadas.length === 0 ? (
@@ -139,7 +139,7 @@ export function ViagensPage() {
                     <td className="px-3 py-2"><span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span></td>
                     <td className="px-3 py-2 text-right" onClick={(ev) => ev.stopPropagation()}>
                       <a href={`/entregas/romaneio/viagem/${v.id}`} target="_blank" rel="noopener" title="Romaneio"
-                        className="inline-flex text-slate-300 hover:text-sky-600"><FileText className="h-4 w-4" /></a>
+                        className="inline-flex text-slate-300 hover:text-capul-600"><FileText className="h-4 w-4" /></a>
                     </td>
                   </tr>
                 );

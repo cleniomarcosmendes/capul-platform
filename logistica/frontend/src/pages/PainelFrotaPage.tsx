@@ -31,7 +31,7 @@ interface VeiculoLinha {
 const REFRESH_MS = 30_000;
 const SIT_VEIC: Record<string, { label: string; cls: string }> = {
   DISPONIVEL: { label: 'Disponível', cls: 'bg-emerald-100 text-emerald-700' },
-  EM_USO: { label: 'Em uso', cls: 'bg-sky-100 text-sky-700' },
+  EM_USO: { label: 'Em uso', cls: 'bg-capul-100 text-capul-700' },
   EM_MANUTENCAO: { label: 'Manutenção', cls: 'bg-amber-100 text-amber-700' },
   BAIXADO: { label: 'Baixado', cls: 'bg-slate-200 text-slate-600' },
 };
@@ -131,7 +131,7 @@ export function PainelFrotaPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <CircleDot className="h-6 w-6 text-sky-600" />
+          <CircleDot className="h-6 w-6 text-capul-600" />
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Monitor da Frota</h2>
             <p className="text-sm text-slate-500">Situação da frota agora · atualiza sozinho a cada 30s.</p>
@@ -148,17 +148,17 @@ export function PainelFrotaPage() {
       {/* Cartões de situação da frota — clicáveis (drill-down por veículo) */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <CardSituacao label="Disponíveis" valor={veiculos.disponivel} cls="text-emerald-600" active={drill?.situacao === 'DISPONIVEL'} onClick={() => void abrirDrill('DISPONIVEL', 'Disponíveis')} />
-        <CardSituacao label="Em uso" valor={veiculos.emUso} cls="text-sky-600" active={drill?.situacao === 'EM_USO'} onClick={() => void abrirDrill('EM_USO', 'Em uso')} />
+        <CardSituacao label="Em uso" valor={veiculos.emUso} cls="text-capul-600" active={drill?.situacao === 'EM_USO'} onClick={() => void abrirDrill('EM_USO', 'Em uso')} />
         <CardSituacao label="Em manutenção" valor={veiculos.manutencao} cls="text-amber-600" active={drill?.situacao === 'EM_MANUTENCAO'} onClick={() => void abrirDrill('EM_MANUTENCAO', 'Em manutenção')} />
         <CardSituacao label="Frota total" valor={veiculos.total} cls="text-slate-700" icon={<Car className="h-4 w-4" />} active={drill?.situacao === ''} onClick={() => void abrirDrill('', 'Frota total')} />
       </div>
 
       {/* Drill-down: veículos da situação clicada */}
       {drill && (
-        <div className="rounded-xl border border-sky-200 bg-white">
+        <div className="rounded-xl border border-capul-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
             <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <Car className="h-4 w-4 text-sky-500" /> {drill.label}
+              <Car className="h-4 w-4 text-capul-500" /> {drill.label}
               {!drillLoading && <span className="text-xs font-normal text-slate-400">({drillVeiculos.length})</span>}
             </span>
             <button onClick={() => setDrill(null)} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Fechar"><X className="h-4 w-4" /></button>
@@ -195,7 +195,7 @@ export function PainelFrotaPage() {
                     <tr
                       key={v.id}
                       onClick={clicavel ? () => navigate(`/frota/viagens/${c!.id}`) : undefined}
-                      className={`hover:bg-slate-50 ${clicavel ? 'cursor-pointer hover:bg-sky-50/60' : ''}`}
+                      className={`hover:bg-slate-50 ${clicavel ? 'cursor-pointer hover:bg-capul-50/60' : ''}`}
                       title={clicavel ? 'Abrir viagem' : undefined}
                     >
                       <td className="px-4 py-2 font-medium text-slate-800">{v.placa}</td>
@@ -267,7 +267,7 @@ export function PainelFrotaPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Na rua agora */}
-        <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
             Na rua agora ({emCurso.length})
           </div>
@@ -280,12 +280,12 @@ export function PainelFrotaPage() {
                   <button
                     type="button"
                     onClick={() => navigate(v.tipo === 'FROTA' ? `/frota/viagens/${v.id}` : `/viagens/${v.id}`)}
-                    className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-sky-50/60"
+                    className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-capul-50/60"
                     title="Abrir viagem"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${v.tipo === 'FROTA' ? 'bg-green-100 text-green-700' : 'bg-sky-100 text-sky-700'}`}>
+                        <span className={`inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${v.tipo === 'FROTA' ? 'bg-green-100 text-green-700' : 'bg-capul-100 text-capul-700'}`}>
                           {v.tipo === 'FROTA' ? 'Frota' : 'Entrega'}
                         </span>
                         <span className="font-medium text-slate-800">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</span>
@@ -297,7 +297,7 @@ export function PainelFrotaPage() {
                         <div>{fmtHora(v.dataHoraSaida)} <span className="text-slate-400">{desde(v.dataHoraSaida)}</span></div>
                         {v.paradas > 0 && <div className="inline-flex items-center gap-1 text-slate-400"><MapPin className="h-3 w-3" /> {v.paradas} parada(s)</div>}
                       </div>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-sky-500" />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-capul-500" />
                     </div>
                   </button>
                 </li>
@@ -307,7 +307,7 @@ export function PainelFrotaPage() {
         </div>
 
         {/* Indicadores do mês */}
-        <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
             <TrendingUp className="h-4 w-4 text-slate-400" /> Indicadores do mês
           </div>
@@ -331,7 +331,7 @@ function CardSituacao({ label, valor, cls, icon, active, onClick }: { label: str
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border bg-white p-4 text-left transition hover:border-sky-300 hover:shadow-sm ${active ? 'border-sky-400 ring-1 ring-sky-300' : 'border-slate-200'}`}
+      className={`rounded-xl border bg-white p-4 text-left transition hover:border-capul-300 hover:shadow-sm ${active ? 'border-capul-400 ring-1 ring-capul-300' : 'border-slate-200'}`}
     >
       <div className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-slate-400">{icon}{label}</div>
       <div className={`mt-1 text-3xl font-semibold ${cls}`}>{valor}</div>

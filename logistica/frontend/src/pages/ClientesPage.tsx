@@ -28,7 +28,7 @@ interface Linha {
 }
 
 const COR: Record<Origem, string> = {
-  'Cliente local': 'bg-sky-100 text-sky-700',
+  'Cliente local': 'bg-capul-100 text-capul-700',
   'Histórico': 'bg-slate-100 text-slate-600',
   'Protheus': 'bg-amber-100 text-amber-700',
 };
@@ -105,7 +105,7 @@ export function ClientesPage() {
   }
   const SortIcon = ({ col }: { col: keyof Linha }) => {
     if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 text-slate-300" />;
-    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3 text-sky-600" /> : <ArrowDown className="h-3 w-3 text-sky-600" />;
+    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3 text-capul-600" /> : <ArrowDown className="h-3 w-3 text-capul-600" />;
   };
   const ordenadas = useMemo(() => {
     const arr = [...(linhas ?? [])];
@@ -136,11 +136,11 @@ export function ClientesPage() {
             value={termo}
             onChange={(e) => setTermo(e.target.value)}
             placeholder="Telefone, nome ou matrícula (ex.: E01047)…"
-            className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm focus:border-sky-500 focus:outline-none"
+            className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm focus:border-capul-500 focus:outline-none"
           />
         </div>
         <button type="submit" disabled={loading}
-          className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+          className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Consultar
         </button>
       </form>
@@ -148,7 +148,7 @@ export function ClientesPage() {
       {erro && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{erro}</div>}
 
       {linhas !== null && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           {ordenadas.length === 0 ? (
             <div className="p-6 text-sm text-slate-500">Nenhum endereço encontrado para “{termo}”.</div>
           ) : (

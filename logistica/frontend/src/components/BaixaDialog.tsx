@@ -69,7 +69,7 @@ export function BaixaDialog({ entrega, onClose, onBaixado }: Props) {
   }
 
   const tabBtn = (ativo: boolean) =>
-    `flex-1 rounded-lg px-3 py-2 text-sm font-medium ${ativo ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
+    `flex-1 rounded-lg px-3 py-2 text-sm font-medium ${ativo ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
@@ -89,7 +89,7 @@ export function BaixaDialog({ entrega, onClose, onBaixado }: Props) {
           <div className="mt-4 space-y-3">
             <div>
               <label className="block text-xs font-medium text-slate-500">Prova de entrega (foto)</label>
-              <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500 hover:border-sky-400 hover:text-sky-600">
+              <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500 hover:border-capul-400 hover:text-capul-600">
                 <Camera className="h-5 w-5" />
                 {arquivo ? 'Trocar foto' : 'Tirar/escolher foto'}
                 <input type="file" accept="image/*" capture="environment" className="hidden"
@@ -100,19 +100,19 @@ export function BaixaDialog({ entrega, onClose, onBaixado }: Props) {
             <div>
               <label className="block text-xs font-medium text-slate-500">Recebido por (opcional)</label>
               <input value={recebedor} onChange={(e) => setRecebedor(e.target.value)} placeholder="Nome de quem recebeu"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none" />
             </div>
           </div>
         ) : (
           <div className="mt-4">
             <label className="block text-xs font-medium text-slate-500">Motivo da não-entrega *</label>
             <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder="Cliente ausente, endereço não localizado, recusa…"
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none" />
           </div>
         )}
 
         <button onClick={capturarGps} disabled={geoBusy}
-          className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-sky-600 disabled:opacity-50">
+          className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-500 hover:text-capul-600 disabled:opacity-50">
           {geoBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MapPin className="h-3.5 w-3.5" />}
           {geo ? `Local capturado (${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)})` : 'Capturar localização (GPS)'}
         </button>

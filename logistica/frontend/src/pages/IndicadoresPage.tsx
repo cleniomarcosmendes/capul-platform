@@ -81,7 +81,7 @@ export function IndicadoresPage() {
         </div>
         <div className="flex items-center gap-2">
           <select value={filialId} onChange={(e) => setFilialId(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none">
             <option value="">Todas as filiais</option>
             {filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}
           </select>
@@ -109,14 +109,14 @@ export function IndicadoresPage() {
           {/* KPIs do mês */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTexto icon={DollarSign} cor="text-emerald-600" bg="bg-emerald-50" valor={fmtBRL(ind.totais.valorTotal)} rotulo="Valor no mês" sub={`${ind.totais.entregas} entregas`} />
-            <Stat icon={Boxes} cor="text-sky-600" bg="bg-sky-50" valor={ind.totais.volumes} rotulo="Volumes transportados" />
+            <Stat icon={Boxes} cor="text-capul-600" bg="bg-capul-50" valor={ind.totais.volumes} rotulo="Volumes transportados" />
             <StatTexto icon={Receipt} cor="text-indigo-600" bg="bg-indigo-50" valor={fmtBRL(ind.totais.ticketMedio)} rotulo="Ticket médio" sub="valor ÷ entregas" />
             <Stat icon={RefreshCw} cor="text-amber-600" bg="bg-amber-50" valor={ind.totais.reentregas} rotulo="Re-entregas (2ª tentativa)" sub={`${fmtPct(ind.totais.taxaReentrega)} do total`} />
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Valor por tipo de venda */}
-            <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Valor por tipo de venda</div>
               {ind.porOrigem.length === 0 ? <Vazio /> : (
                 <>
@@ -146,7 +146,7 @@ export function IndicadoresPage() {
             </div>
 
             {/* Demanda por bairro */}
-            <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
                 <MapPin className="h-4 w-4 text-rose-500" /> Demanda por bairro
               </div>
@@ -172,7 +172,7 @@ export function IndicadoresPage() {
           </div>
 
           {/* Performance por motorista */}
-          <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Performance por motorista</div>
             {ind.porMotorista.length === 0 ? <Vazio /> : (
               <div className="overflow-x-auto">
@@ -215,7 +215,7 @@ export function IndicadoresPage() {
           </div>
 
           {/* Quilometragem (hodômetro na saída/chegada) */}
-          <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
               <Gauge className="h-4 w-4 text-indigo-500" /> Quilometragem
             </div>
@@ -228,7 +228,7 @@ export function IndicadoresPage() {
               <>
                 <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
                   <StatTexto icon={Gauge} cor="text-indigo-600" bg="bg-indigo-50" valor={fmtKm(ind.km.total)} rotulo="KM rodados no mês" sub={`${ind.km.viagens} viagem(ns) com hodômetro`} />
-                  <StatTexto icon={Boxes} cor="text-sky-600" bg="bg-sky-50" valor={ind.km.porEntrega != null ? `${ind.km.porEntrega.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km` : '—'} rotulo="KM por entrega" sub="eficiência da rota" />
+                  <StatTexto icon={Boxes} cor="text-capul-600" bg="bg-capul-50" valor={ind.km.porEntrega != null ? `${ind.km.porEntrega.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km` : '—'} rotulo="KM por entrega" sub="eficiência da rota" />
                 </div>
                 <div className="grid grid-cols-1 gap-0 border-t border-slate-100 sm:grid-cols-2">
                   <div className="sm:border-r sm:border-slate-100">
@@ -267,7 +267,7 @@ function Stat({ icon: Icon, cor, bg, valor, rotulo, sub }: {
   icon: typeof DollarSign; cor: string; bg: string; valor: number; rotulo: string; sub?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
       <div className={`mb-2 inline-flex rounded-lg ${bg} p-1.5`}><Icon className={`h-4 w-4 ${cor}`} /></div>
       <div className="text-2xl font-semibold text-slate-800">{valor}</div>
       <div className="text-xs text-slate-500">{rotulo}</div>
@@ -280,7 +280,7 @@ function StatTexto({ icon: Icon, cor, bg, valor, rotulo, sub }: {
   icon: typeof DollarSign; cor: string; bg: string; valor: string; rotulo: string; sub?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
       <div className={`mb-2 inline-flex rounded-lg ${bg} p-1.5`}><Icon className={`h-4 w-4 ${cor}`} /></div>
       <div className="text-xl font-semibold text-slate-800">{valor}</div>
       <div className="text-xs text-slate-500">{rotulo}</div>

@@ -23,7 +23,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onCancel}>
       <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start gap-3">
-          <div className={`mt-0.5 rounded-full p-2 ${perigo ? 'bg-red-100 text-red-600' : 'bg-sky-100 text-sky-600'}`}>
+          <div className={`mt-0.5 rounded-full p-2 ${perigo ? 'bg-red-100 text-red-600' : 'bg-capul-100 text-capul-600'}`}>
             <AlertTriangle className="h-5 w-5" />
           </div>
           <div className="min-w-0">

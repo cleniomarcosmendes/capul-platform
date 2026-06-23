@@ -91,7 +91,7 @@ export function ComprovantesPage() {
     } finally { setImgBusy(null); }
   }
 
-  const inp = 'mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
+  const inp = 'mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none';
 
   return (
     <div className="space-y-6">
@@ -100,7 +100,7 @@ export function ComprovantesPage() {
         <p className="text-sm text-slate-500">Localize a prova (lastro da cobrança a prazo) por nome, telefone ou matrícula — ou por cupom e nº de entrega.</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white shadow-sm p-4">
         <div className="flex-1 min-w-[220px]"><label className="block text-xs font-medium text-slate-500">Nome, telefone ou matrícula</label>
           <input value={termo} onChange={(e) => setTermo(e.target.value)} placeholder="ex: Maria · 38999… · E01047" className={`${inp} w-full`} onKeyDown={(e) => e.key === 'Enter' && buscar()} /></div>
         <div><label className="block text-xs font-medium text-slate-500">Cupom</label>
@@ -108,14 +108,14 @@ export function ComprovantesPage() {
         <div><label className="block text-xs font-medium text-slate-500">Nº da entrega</label>
           <input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="ex: 41" className={`${inp} w-28`} onKeyDown={(e) => e.key === 'Enter' && buscar()} /></div>
         <button onClick={buscar} disabled={loading}
-          className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+          className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />} Buscar
         </button>
       </div>
 
       {erro && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{erro}</div>}
 
-      <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Buscando…</div>
           : !buscou ? <div className="p-6 text-sm text-slate-500">Informe um filtro e clique em Buscar.</div>
           : itens.length === 0 ? <div className="p-6 text-sm text-slate-500">Nenhuma entrega baixada encontrada.</div>
@@ -129,7 +129,7 @@ export function ComprovantesPage() {
                     <td className="px-4 py-2 font-medium text-slate-700">#{e.numero}</td>
                     <td className="px-4 py-2 text-slate-600">
                       <div>{e.destinatarioNome}</div>
-                      {e.telefone && <a href={`tel:${e.telefone}`} className="inline-flex items-center gap-1 text-xs text-sky-700 hover:underline"><Phone className="h-3 w-3" /> {maskTelefone(e.telefone)}</a>}
+                      {e.telefone && <a href={`tel:${e.telefone}`} className="inline-flex items-center gap-1 text-xs text-capul-700 hover:underline"><Phone className="h-3 w-3" /> {maskTelefone(e.telefone)}</a>}
                     </td>
                     <td className="px-4 py-2 text-slate-600">{e.matricula ?? '—'}</td>
                     <td className="px-4 py-2">
@@ -170,7 +170,7 @@ export function ComprovantesPage() {
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                 {imagem.meta.tipo && (
-                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${imagem.meta.tipo === 'ASSINATURA' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'}`}>
+                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${imagem.meta.tipo === 'ASSINATURA' ? 'bg-violet-100 text-violet-700' : 'bg-capul-100 text-capul-700'}`}>
                     {imagem.meta.tipo === 'ASSINATURA' ? <PenLine className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}
                     {PROVA_LABEL[imagem.meta.tipo]}
                   </span>
@@ -190,7 +190,7 @@ export function ComprovantesPage() {
             <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
               <span className="break-all">SHA-256: {imagem.meta.hash}</span>
               {imagem.meta.geoLat && imagem.meta.geoLng && (
-                <a className="inline-flex shrink-0 items-center gap-1 text-sky-700 hover:underline" target="_blank" rel="noopener"
+                <a className="inline-flex shrink-0 items-center gap-1 text-capul-700 hover:underline" target="_blank" rel="noopener"
                   href={`https://www.google.com/maps?q=${imagem.meta.geoLat},${imagem.meta.geoLng}`}><MapPin className="h-3.5 w-3.5" /> ver no mapa</a>
               )}
             </div>

@@ -32,7 +32,7 @@ interface CoreItem { id: string; nome: string }
 const FINALIDADES: [string, string][] = [['ENTREGA', 'Entrega'], ['PASSEIO', 'Passeio'], ['SERVICO', 'Serviço']];
 const PORTES: [string, string][] = [['PESADO', 'Pesado'], ['LEVE', 'Leve']];
 const PROPRIEDADES: [string, string][] = [['PROPRIO', 'Próprio'], ['ALUGADO', 'Alugado']];
-const selCls = 'rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:border-sky-500 focus:outline-none';
+const selCls = 'rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:border-capul-500 focus:outline-none';
 
 export function FrotaAnalisePage() {
   const { toast } = useToast();
@@ -104,7 +104,7 @@ export function FrotaAnalisePage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Banknote className="h-6 w-6 text-sky-600" />
+          <Banknote className="h-6 w-6 text-capul-600" />
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Análise da Frota</h2>
             <p className="text-sm text-slate-500">Custo do mês por veículo, tipo, fornecedor e departamento — clique para detalhar.</p>
@@ -118,7 +118,7 @@ export function FrotaAnalisePage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white shadow-sm p-3">
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Filter className="h-3.5 w-3.5" /> Filtros</span>
         <select value={fVeiculo} onChange={(e) => setFVeiculo(e.target.value)} className={selCls}>
           <option value="">Todos os veículos</option>
@@ -161,15 +161,15 @@ export function FrotaAnalisePage() {
       ) : vazio ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">
           Sem despesas aprovadas em {MESES[mes - 1]} / {ano}{qtdFiltros > 0 ? ' para os filtros aplicados' : ''}.
-          {qtdFiltros > 0 && <button onClick={limparFiltros} className="ml-1 text-sky-600 hover:underline">Limpar filtros</button>}
+          {qtdFiltros > 0 && <button onClick={limparFiltros} className="ml-1 text-capul-600 hover:underline">Limpar filtros</button>}
         </div>
       ) : data && (
         <div className="space-y-5">
-          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
+          <div className="rounded-2xl border border-capul-200 bg-capul-50 p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-sky-600 p-2.5"><Banknote className="h-6 w-6 text-white" /></div>
+              <div className="rounded-xl bg-capul-600 p-2.5"><Banknote className="h-6 w-6 text-white" /></div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-sky-700">Custo total no mês</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-capul-700">Custo total no mês</p>
                 <p className="text-3xl font-bold text-slate-800">{BRL(data.total)}</p>
                 {data.anormal && data.anormal.valor > 0 && (
                   <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
@@ -181,14 +181,14 @@ export function FrotaAnalisePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <CardGrupo titulo="Por veículo" dimensao="veiculo" icone={<Car className="h-4 w-4 text-sky-600" />} itens={data.porVeiculo} total={data.total} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por tipo de despesa" dimensao="tipo" icone={<Tag className="h-4 w-4 text-sky-600" />} itens={data.porTipo} total={data.total} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por fornecedor" dimensao="fornecedor" icone={<Building2 className="h-4 w-4 text-sky-600" />} itens={data.porFornecedor} total={data.total} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por departamento solicitante" dimensao="departamento" icone={<Layers className="h-4 w-4 text-sky-600" />} itens={data.porDepartamento} total={data.total} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por porte (pesado × leve)" dimensao="porte" icone={<Gauge className="h-4 w-4 text-sky-600" />} itens={data.porPorte} total={data.total} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por finalidade (entrega × passeio × serviço)" dimensao="finalidade" icone={<Target className="h-4 w-4 text-sky-600" />} itens={data.porFinalidade} total={data.total} onSelect={abrirDrill} />
-            <CardGrupo titulo="Normal × Anormalidade (mau uso)" dimensao="normalidade" icone={<AlertTriangle className="h-4 w-4 text-sky-600" />} itens={data.porNormalidade} total={data.total} onSelect={abrirDrill} />
-            <CardGrupo titulo="Por tipo de veículo (próprio × alugado)" dimensao="propriedade" icone={<KeyRound className="h-4 w-4 text-sky-600" />} itens={data.porPropriedade} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por veículo" dimensao="veiculo" icone={<Car className="h-4 w-4 text-capul-600" />} itens={data.porVeiculo} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por tipo de despesa" dimensao="tipo" icone={<Tag className="h-4 w-4 text-capul-600" />} itens={data.porTipo} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por fornecedor" dimensao="fornecedor" icone={<Building2 className="h-4 w-4 text-capul-600" />} itens={data.porFornecedor} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por departamento solicitante" dimensao="departamento" icone={<Layers className="h-4 w-4 text-capul-600" />} itens={data.porDepartamento} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por porte (pesado × leve)" dimensao="porte" icone={<Gauge className="h-4 w-4 text-capul-600" />} itens={data.porPorte} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por finalidade (entrega × passeio × serviço)" dimensao="finalidade" icone={<Target className="h-4 w-4 text-capul-600" />} itens={data.porFinalidade} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Normal × Anormalidade (mau uso)" dimensao="normalidade" icone={<AlertTriangle className="h-4 w-4 text-capul-600" />} itens={data.porNormalidade} total={data.total} onSelect={abrirDrill} />
+            <CardGrupo titulo="Por tipo de veículo (próprio × alugado)" dimensao="propriedade" icone={<KeyRound className="h-4 w-4 text-capul-600" />} itens={data.porPropriedade} total={data.total} onSelect={abrirDrill} />
           </div>
           <p className="text-xs text-slate-400">Clique num item para ver as despesas que o compõem. A soma reconcilia com o total; linhas em cinza são valores sem a dimensão (ex.: sem departamento).</p>
         </div>
@@ -205,7 +205,7 @@ function CardGrupo({ titulo, dimensao, icone, itens, total, onSelect }: {
 }) {
   let corIdx = 0;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">{icone} {titulo}</div>
       <ul className="divide-y divide-slate-50 p-2">
         {itens.length === 0 && <li className="px-2 py-3 text-sm text-slate-400">Sem dados.</li>}

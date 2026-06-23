@@ -85,7 +85,7 @@ export function PainelPage() {
         </div>
         <div className="flex items-center gap-2">
           <select value={filialId} onChange={(e) => setFilialId(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none">
             <option value="">Todas as filiais</option>
             {filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}
           </select>
@@ -111,7 +111,7 @@ export function PainelPage() {
             <div className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Agora · estado operacional</div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat icon={Package} cor="text-amber-600" bg="bg-amber-50" valor={c.entregasPendentes} rotulo="Pendentes" />
-              <Stat icon={Truck} cor="text-sky-600" bg="bg-sky-50" valor={c.entregasEmViagem} rotulo="Em viagem" />
+              <Stat icon={Truck} cor="text-capul-600" bg="bg-capul-50" valor={c.entregasEmViagem} rotulo="Em viagem" />
               <Stat icon={Route} cor="text-indigo-600" bg="bg-indigo-50" valor={c.viagensEmCurso} rotulo="Viagens em curso" />
               <Stat icon={Car} cor="text-slate-600" bg="bg-slate-100" valor={c.veiculosEmUso} rotulo="Veíc. em uso" sub={`${c.veiculosDisponiveis} disp.`} />
             </div>
@@ -131,11 +131,11 @@ export function PainelPage() {
           </div>
 
           {/* Por dia */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-700">Movimento por dia · {MESES[mes - 1]} {ano}</h3>
               <div className="flex gap-3 text-xs text-slate-500">
-                <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-sky-500" /> Criadas</span>
+                <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-capul-500" /> Criadas</span>
                 <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> Despachadas</span>
               </div>
             </div>
@@ -143,7 +143,7 @@ export function PainelPage() {
               {data.porDia.map((d) => (
                 <div key={d.dia} className="flex min-w-[28px] flex-1 flex-col items-center gap-1">
                   <div className="flex w-full flex-1 items-end justify-center gap-0.5">
-                    <div className="w-1/2 rounded-t bg-sky-500" style={{ height: `${(d.criadas / maxDia) * 100}%` }} title={`${d.criadas} criadas`} />
+                    <div className="w-1/2 rounded-t bg-capul-500" style={{ height: `${(d.criadas / maxDia) * 100}%` }} title={`${d.criadas} criadas`} />
                     <div className="w-1/2 rounded-t bg-emerald-500" style={{ height: `${(d.despachadas / maxDia) * 100}%` }} title={`${d.despachadas} despachadas`} />
                   </div>
                   <span className="text-[10px] text-slate-400">{diaCurto(d.dia)}</span>
@@ -188,7 +188,7 @@ function Stat({ icon: Icon, cor, bg, valor, rotulo, sub }: {
   icon: typeof Package; cor: string; bg: string; valor: number; rotulo: string; sub?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
       <div className={`mb-2 inline-flex rounded-lg ${bg} p-1.5`}><Icon className={`h-4 w-4 ${cor}`} /></div>
       <div className="text-2xl font-semibold text-slate-800">{valor}</div>
       <div className="text-xs text-slate-500">{rotulo}</div>
@@ -201,7 +201,7 @@ function StatTexto({ icon: Icon, cor, bg, valor, rotulo, sub }: {
   icon: typeof Package; cor: string; bg: string; valor: string; rotulo: string; sub?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
       <div className={`mb-2 inline-flex rounded-lg ${bg} p-1.5`}><Icon className={`h-4 w-4 ${cor}`} /></div>
       <div className="text-xl font-semibold text-slate-800">{valor}</div>
       <div className="text-xs text-slate-500">{rotulo}</div>
@@ -212,7 +212,7 @@ function StatTexto({ icon: Icon, cor, bg, valor, rotulo, sub }: {
 
 function Tabela({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">{titulo}</div>
       <ul className="divide-y divide-slate-100">{children}</ul>
     </div>

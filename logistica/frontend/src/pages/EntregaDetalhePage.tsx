@@ -31,7 +31,7 @@ interface Entrega {
 }
 
 const STATUS_META: Record<Status, { label: string; cls: string }> = {
-  PENDENTE: { label: 'Pendente', cls: 'bg-sky-100 text-sky-700' },
+  PENDENTE: { label: 'Pendente', cls: 'bg-capul-100 text-capul-700' },
   EM_VIAGEM: { label: 'Em viagem', cls: 'bg-amber-100 text-amber-700' },
   ENTREGUE: { label: 'Entregue', cls: 'bg-emerald-100 text-emerald-700' },
   NAO_ENTREGUE: { label: 'Não entregue', cls: 'bg-rose-100 text-rose-700' },
@@ -89,7 +89,7 @@ export function EntregaDetalhePage() {
   }
 
   const lbl = 'block text-xs font-medium text-slate-500';
-  const card = 'rounded-xl border border-slate-200 bg-white p-5';
+  const card = 'rounded-xl border border-slate-200 bg-white shadow-sm p-5';
 
   if (loading) return <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>;
   if (!e) return (
@@ -135,7 +135,7 @@ export function EntregaDetalhePage() {
                 Cancelar entrega
               </button>
               <button onClick={() => navigate(`/entregas/${e.id}/editar`)}
-                className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
+                className="flex items-center gap-1.5 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700">
                 <Pencil className="h-3.5 w-3.5" /> Editar
               </button>
             </>
@@ -156,7 +156,7 @@ export function EntregaDetalhePage() {
           <div><span className={lbl}>Nome</span><div className="text-slate-700">{e.destinatarioNome}</div></div>
           <div><span className={lbl}>Telefone</span>
             <div className="text-slate-700">{e.telefone
-              ? <a className="inline-flex items-center gap-1 text-sky-700 hover:underline" href={`tel:${e.telefone}`}><Phone className="h-3 w-3" />{maskTelefone(e.telefone)}</a>
+              ? <a className="inline-flex items-center gap-1 text-capul-700 hover:underline" href={`tel:${e.telefone}`}><Phone className="h-3 w-3" />{maskTelefone(e.telefone)}</a>
               : '—'}</div></div>
           <div><span className={lbl}>Tipo</span><div className="text-slate-700">{TIPO_LABEL[e.tipoCliente] ?? e.tipoCliente}</div></div>
           <div><span className={lbl}>Matrícula</span><div className="text-slate-700">{e.matricula ?? '—'}</div></div>
@@ -205,7 +205,7 @@ export function EntregaDetalhePage() {
             {e.viagemNumero != null && (
               <div><span className={lbl}>Viagem</span>
                 <div className="text-slate-700">
-                  <Link to="/viagens" className="text-sky-700 hover:underline">#{e.viagemNumero}</Link>
+                  <Link to="/viagens" className="text-capul-700 hover:underline">#{e.viagemNumero}</Link>
                   {e.viagemSituacao ? ` · ${e.viagemSituacao}` : ''}
                 </div></div>
             )}

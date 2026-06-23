@@ -139,11 +139,11 @@ export function MapaFrota() {
   const semGps = ativos.filter((a) => !a.posicao).length;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <span className="text-sm font-semibold text-slate-700">Mapa ao vivo ({ativos.length} em curso)</span>
         <span className="flex items-center gap-3 text-xs text-slate-400">
-          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-sky-600" /> Entrega</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-capul-600" /> Entrega</span>
           <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-green-600" /> Frota</span>
         </span>
       </div>

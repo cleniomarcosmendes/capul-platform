@@ -152,7 +152,7 @@ export function MontarViagemPage() {
     }
   }
 
-  const sel = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
+  const sel = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none';
   const lbl = 'block text-xs font-medium text-slate-500';
 
   return (
@@ -168,7 +168,7 @@ export function MontarViagemPage() {
 
       {/* Veículo e motorista no TOPO (pedido 12/06 — com rota longa o card de
           baixo afundava; aqui fica sempre visível, igual ao detalhe). */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
         <p className="mb-3 text-xs text-slate-500">Veículo e motorista são <strong>opcionais agora</strong> — a viagem salva em preparação e você define depois; o <strong>despacho</strong> exige os dois.</p>
         <div className="grid grid-cols-2 items-end gap-3 lg:grid-cols-12">
           <div className="lg:col-span-4">
@@ -193,7 +193,7 @@ export function MontarViagemPage() {
             </button>
             <button onClick={() => void montar()} disabled={montando || rota.length === 0}
               title={rota.length === 0 ? 'Monte a rota primeiro' : undefined}
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
               {montando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
               Salvar montagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)
             </button>
@@ -203,27 +203,27 @@ export function MontarViagemPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Fila de pendentes */}
-        <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
             <span>Fila de pendentes ({fila.length})</span>
             {fila.length > 0 && (
-              <button onClick={adicionarTodasVisiveis} className="text-xs font-medium text-sky-700 hover:underline">
+              <button onClick={adicionarTodasVisiveis} className="text-xs font-medium text-capul-700 hover:underline">
                 + Adicionar {bairrosSel.length > 0 || busca ? 'as filtradas' : 'todas'} ({fila.length})
               </button>
             )}
           </div>
           <div className="space-y-2 border-b border-slate-100 px-4 py-2.5">
             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome, rua, bairro ou nº…"
-              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-sky-500 focus:outline-none" />
+              className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-capul-500 focus:outline-none" />
             {bairros.length > 1 && (
               <div className="flex flex-wrap gap-1.5">
                 <button onClick={() => setBairrosSel([])}
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.length === 0 ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.length === 0 ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                   Todos
                 </button>
                 {bairros.map((b) => (
                   <button key={b.key} onClick={() => setBairrosSel((p) => (p.includes(b.key) ? p.filter((x) => x !== b.key) : [...p, b.key]))}
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.includes(b.key) ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${bairrosSel.includes(b.key) ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                     {b.label} ({b.count})
                   </button>
                 ))}
@@ -239,7 +239,7 @@ export function MontarViagemPage() {
               {fila.map((e) => (
                 <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-50">
                   <button onClick={() => adicionar(e.id)} title="Adicionar à rota"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500 text-sky-600 hover:bg-sky-50">
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-capul-500 text-capul-600 hover:bg-capul-50">
                     <Plus className="h-4 w-4" />
                   </button>
                   <div className="min-w-0 flex-1">
@@ -264,12 +264,12 @@ export function MontarViagemPage() {
 
         {/* Rota em construção */}
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
               <span>Rota da viagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)</span>
               <button onClick={() => void sugerirOrdem()} disabled={sugerindo || rota.length < 2 || rotaOtimizada}
                 title={rota.length < 2 ? 'Adicione ao menos 2 entregas' : rotaOtimizada ? 'Rota já otimizada — mude a composição/ordem para recalcular' : 'Calcula o melhor percurso a partir da filial'}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-300">
+                className="inline-flex items-center gap-1.5 rounded-lg bg-capul-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-capul-700 disabled:cursor-not-allowed disabled:bg-slate-300">
                 {sugerindo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 {sugerindo ? 'Calculando…' : rotaOtimizada ? '✓ Rota otimizada' : 'Sugerir melhor rota'}
               </button>
@@ -283,7 +283,7 @@ export function MontarViagemPage() {
                   if (!e) return null;
                   return (
                     <li key={id} className="flex items-center gap-2 px-4 py-2 text-sm">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold text-white">{i + 1}</span>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-capul-600 text-xs font-semibold text-white">{i + 1}</span>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-slate-700">
                           #{e.numero} · {e.destinatarioNome}
@@ -298,9 +298,9 @@ export function MontarViagemPage() {
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <button onClick={() => mover(id, -1)} disabled={i === 0} title="Subir"
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-sky-700 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-capul-700 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
                         <button onClick={() => mover(id, 1)} disabled={i === rota.length - 1} title="Descer"
-                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-sky-700 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+                          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-capul-700 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
                         <button onClick={() => remover(id)} title="Tirar da rota"
                           className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600"><X className="h-4 w-4" /></button>
                       </div>

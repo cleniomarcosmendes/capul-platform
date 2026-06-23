@@ -24,7 +24,7 @@ interface EntregaG {
 }
 
 const STATUS_META: Record<Status, { label: string; cls: string }> = {
-  PENDENTE: { label: 'Pendente', cls: 'bg-sky-100 text-sky-700' },
+  PENDENTE: { label: 'Pendente', cls: 'bg-capul-100 text-capul-700' },
   EM_VIAGEM: { label: 'Em viagem', cls: 'bg-amber-100 text-amber-700' },
   ENTREGUE: { label: 'Entregue', cls: 'bg-emerald-100 text-emerald-700' },
   NAO_ENTREGUE: { label: 'Não entregue', cls: 'bg-rose-100 text-rose-700' },
@@ -82,7 +82,7 @@ export function EntregasPage() {
   }
   const SortIcon = ({ col }: { col: SortKey }) => {
     if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 text-slate-300" />;
-    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3 text-sky-600" /> : <ArrowDown className="h-3 w-3 text-sky-600" />;
+    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3 text-capul-600" /> : <ArrowDown className="h-3 w-3 text-capul-600" />;
   };
 
   const ordenadas = useMemo(() => {
@@ -109,7 +109,7 @@ export function EntregasPage() {
     } finally { setReabrindo(null); }
   }
 
-  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
+  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none';
   const lbl = 'block text-xs font-medium text-slate-500';
   const th = 'px-3 py-2.5';
   const btnSort = 'flex items-center gap-1 hover:text-slate-700';
@@ -121,21 +121,21 @@ export function EntregasPage() {
           <h2 className="text-lg font-semibold text-slate-800">Entregas</h2>
           <p className="text-sm text-slate-500">Todas as entregas da filial — clique numa linha para ver/editar.</p>
         </div>
-        <Link to="/entregas/nova" className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700">
+        <Link to="/entregas/nova" className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
           <Plus className="h-4 w-4" /> Nova entrega
         </Link>
       </div>
 
       {/* Filtros */}
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white shadow-sm p-4">
         <div className="flex flex-wrap gap-1.5">
           <button onClick={() => setStatusSel('')}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${statusSel === '' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+            className={`rounded-full px-3 py-1 text-xs font-medium ${statusSel === '' ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
             Todas
           </button>
           {(Object.keys(STATUS_META) as Status[]).map((s) => (
             <button key={s} onClick={() => setStatusSel(s)}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${statusSel === s ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              className={`rounded-full px-3 py-1 text-xs font-medium ${statusSel === s ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
               {STATUS_META[s].label}
             </button>
           ))}
@@ -156,7 +156,7 @@ export function EntregasPage() {
             <input type="date" value={ate} onChange={(e) => setAte(e.target.value)} className={inp} />
           </div>
           <button onClick={() => void carregar()} disabled={loading}
-            className="flex items-center gap-2 rounded-lg border border-sky-600 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50">
+            className="flex items-center gap-2 rounded-lg border border-capul-600 px-4 py-2 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
             <Search className="h-4 w-4" /> Buscar
           </button>
         </div>
@@ -164,7 +164,7 @@ export function EntregasPage() {
 
 
       {/* Grid */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>
         ) : ordenadas.length === 0 ? (
@@ -214,7 +214,7 @@ export function EntregasPage() {
                         </button>
                       )}
                       <a href={`/entregas/etiquetas/entrega/${e.id}`} target="_blank" rel="noopener" title="Etiqueta"
-                        className="text-slate-300 hover:text-sky-600"><Printer className="h-4 w-4" /></a>
+                        className="text-slate-300 hover:text-capul-600"><Printer className="h-4 w-4" /></a>
                     </div>
                   </td>
                 </tr>

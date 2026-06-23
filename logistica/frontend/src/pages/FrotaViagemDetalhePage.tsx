@@ -60,7 +60,7 @@ export function FrotaViagemDetalhePage() {
     return (
       <div className="p-8">
         <p className="text-rose-600">{erro || 'Viagem não encontrada.'}</p>
-        <button onClick={voltar} className="mt-3 inline-flex items-center gap-1 text-sm text-sky-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Voltar</button>
+        <button onClick={voltar} className="mt-3 inline-flex items-center gap-1 text-sm text-capul-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Voltar</button>
       </div>
     );
   }
@@ -74,7 +74,7 @@ export function FrotaViagemDetalhePage() {
       <button onClick={voltar} className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Voltar para Controle de Frota</button>
 
       {/* Cabeçalho da viagem */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Viagem #{v.numero} · {v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</h2>
@@ -97,7 +97,7 @@ export function FrotaViagemDetalhePage() {
         </Secao>
       )}
       {(emCurso || despesas.length > 0) && (
-        <Secao cor="border-l-sky-400">
+        <Secao cor="border-l-capul-400">
           {despesas.length > 0 && (
             <div className="mb-4">
               <p className="mb-2 text-sm font-semibold text-slate-700">Despesas lançadas ({despesas.length})</p>

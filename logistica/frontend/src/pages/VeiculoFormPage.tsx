@@ -125,7 +125,7 @@ export function VeiculoFormPage() {
     }
   }
 
-  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
+  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none';
   const lbl = 'block text-xs font-medium text-slate-500';
 
   if (carregando) return <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>;
@@ -137,9 +137,9 @@ export function VeiculoFormPage() {
         <ArrowLeft className="h-4 w-4" /> Voltar para Frota
       </Link>
 
-      <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+      <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white shadow-sm p-5">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
-          <Truck className="h-5 w-5 text-sky-600" /> {modoEdicao ? `Editar veículo ${placa}` : 'Novo veículo'}
+          <Truck className="h-5 w-5 text-capul-600" /> {modoEdicao ? `Editar veículo ${placa}` : 'Novo veículo'}
         </h2>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -190,7 +190,7 @@ export function VeiculoFormPage() {
         <div className="flex items-center justify-end gap-2">
           <Link to="/veiculos" className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancelar</Link>
           <button type="submit" disabled={salvando}
-            className="flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+            className="flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
             {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
             {modoEdicao ? 'Salvar alterações' : 'Cadastrar veículo'}
           </button>

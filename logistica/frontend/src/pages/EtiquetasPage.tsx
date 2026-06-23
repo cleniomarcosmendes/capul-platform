@@ -97,7 +97,7 @@ export function EtiquetasPage({ modo }: { modo: 'viagem' | 'entrega' }) {
           {cab.viagemNumero ? `Viagem #${cab.viagemNumero} · ` : ''}{itens.length} etiqueta(s)
         </span>
         <button onClick={() => window.print()} disabled={!itens.length}
-          className={`${btn} bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50`}>
+          className={`${btn} bg-capul-600 text-white hover:bg-capul-700 disabled:opacity-50`}>
           <Printer className="h-4 w-4" /> Imprimir
         </button>
       </div>

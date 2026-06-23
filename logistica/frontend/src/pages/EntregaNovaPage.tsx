@@ -82,7 +82,7 @@ function GateOperador({ onOk }: { onOk: (nome: string) => void }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6">
       <h2 className="text-lg font-semibold text-slate-800">Identifique-se para cadastrar entregas</h2>
       <p className="mt-1 text-sm text-slate-500">
         Este é um login compartilhado. Informe sua matrícula e senha do portal RH —
@@ -115,7 +115,7 @@ function GateOperador({ onOk }: { onOk: (nome: string) => void }) {
           type="button"
           onClick={() => void validar()}
           disabled={validando}
-          className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50"
         >
           {validando ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Entrar
         </button>
@@ -615,7 +615,7 @@ export function EntregaNovaPage() {
   }
 
 
-  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
+  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none';
   const lbl = 'block text-xs font-medium text-slate-500';
 
   // Login PADRAO ainda não identificado → bloqueia o form e pede matrícula+senha.
@@ -632,14 +632,14 @@ export function EntregaNovaPage() {
       {ehPadrao && operadorNome && (
         <div className="mb-3 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm">
           <span className="text-emerald-800">Operador: <b>{operadorNome}</b></span>
-          <button type="button" onClick={() => { limparOperador(); setOperadorNome(null); }} className="font-medium text-sky-600 hover:underline">
+          <button type="button" onClick={() => { limparOperador(); setOperadorNome(null); }} className="font-medium text-capul-600 hover:underline">
             Trocar operador
           </button>
         </div>
       )}
       {DirtyDialog}
       {/* Formulário */}
-      <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+      <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white shadow-sm p-5">
         <h2 className="text-lg font-semibold text-slate-800">
           {modoEdicao ? `Editar entrega${numeroEdicao ? ` #${numeroEdicao}` : ''}` : 'Nova entrega'}
         </h2>
@@ -651,7 +651,7 @@ export function EntregaNovaPage() {
         <div className="flex items-center gap-2">
           {TIPOS.map((t) => (
             <button type="button" key={t.v} disabled={modoEdicao} onClick={() => { setTipoCliente(t.v); setMsgMat(null); }}
-              className={`rounded-lg border px-3 py-1.5 text-sm ${tipoCliente === t.v ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600'}`}>
+              className={`rounded-lg border px-3 py-1.5 text-sm ${tipoCliente === t.v ? 'border-capul-500 bg-capul-50 text-capul-700' : 'border-slate-300 text-slate-600'}`}>
               {t.label}
             </button>
           ))}
@@ -718,7 +718,7 @@ export function EntregaNovaPage() {
                   (c.enderecos.length ? c.enderecos : [undefined]).map((end, i) => (
                     <button type="button" key={`c-${c.id}-${i}`} onMouseDown={(e) => e.preventDefault()}
                       onClick={() => aplicarCliente(c, end)}
-                      className="block w-full px-3 py-2 text-left text-sm hover:bg-sky-50">
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-capul-50">
                       <div className="font-medium text-slate-700">{c.nome} {c.telefone ? <span className="text-xs text-slate-400">· {maskTelefone(c.telefone)}</span> : null}</div>
                       {end && <div className="text-xs text-slate-500">{end.logradouro}{end.numero ? `, ${end.numero}` : ''}{end.bairro ? ` — ${end.bairro}` : ''}{end.cidade ? `, ${end.cidade}` : ''}{end.uf ? `/${end.uf}` : ''}</div>}
                     </button>
@@ -727,7 +727,7 @@ export function EntregaNovaPage() {
                 {sugestoes.historicoEntregas.map((h, i) => (
                   <button type="button" key={`h-${i}`} onMouseDown={(e) => e.preventDefault()}
                     onClick={() => aplicarHistorico(h)}
-                    className="block w-full border-t border-slate-50 px-3 py-2 text-left text-sm hover:bg-sky-50">
+                    className="block w-full border-t border-slate-50 px-3 py-2 text-left text-sm hover:bg-capul-50">
                     <div className="font-medium text-slate-700">{h.destinatarioNome} <span className="text-[11px] text-slate-400">(do histórico)</span></div>
                     <div className="text-xs text-slate-500">{h.endLogradouro}{h.endNumero ? `, ${h.endNumero}` : ''}{h.endBairro ? ` — ${h.endBairro}` : ''}</div>
                   </button>
@@ -735,7 +735,7 @@ export function EntregaNovaPage() {
                 {(sugestoes.protheus?.clientes ?? []).map((p, i) => (
                   <button type="button" key={`p-${p.matricula}-${i}`} onMouseDown={(e) => e.preventDefault()}
                     onClick={() => aplicarClienteProtheus(p)}
-                    className="block w-full border-t border-slate-50 px-3 py-2 text-left text-sm hover:bg-sky-50">
+                    className="block w-full border-t border-slate-50 px-3 py-2 text-left text-sm hover:bg-capul-50">
                     <div className="font-medium text-slate-700">{p.nome} <span className="text-[11px] text-emerald-600">(Protheus · {p.matricula})</span>{p.telefone ? <span className="text-xs text-slate-400"> · {maskTelefone(p.telefone)}</span> : null}</div>
                     {p.enderecos[0] && <div className="text-xs text-slate-500">{p.enderecos[0].logradouro}{p.enderecos[0].bairro ? ` — ${p.enderecos[0].bairro}` : ''}{p.enderecos[0].cidade ? `, ${p.enderecos[0].cidade}` : ''}</div>}
                   </button>
@@ -751,7 +751,7 @@ export function EntregaNovaPage() {
             <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {enderecosSugeridos.map((e, i) => (
                 <button type="button" key={i} onClick={() => aplicarEndereco(e, i)}
-                  className={`rounded-lg border p-3 text-left transition-colors ${enderecoSelIdx === i ? 'border-sky-500 bg-sky-50 ring-1 ring-sky-200' : 'border-slate-300 hover:bg-slate-50'}`}>
+                  className={`rounded-lg border p-3 text-left transition-colors ${enderecoSelIdx === i ? 'border-capul-500 bg-capul-50 ring-1 ring-capul-200' : 'border-slate-300 hover:bg-slate-50'}`}>
                   <div className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-slate-400" />
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{e.rotulo}</span>
@@ -765,7 +765,7 @@ export function EntregaNovaPage() {
                 </button>
               ))}
               <button type="button" onClick={enderecoNovo}
-                className={`flex items-center justify-center gap-1.5 rounded-lg border border-dashed p-3 text-sm font-medium ${enderecoSelIdx === -1 ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
+                className={`flex items-center justify-center gap-1.5 rounded-lg border border-dashed p-3 text-sm font-medium ${enderecoSelIdx === -1 ? 'border-capul-500 bg-capul-50 text-capul-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'}`}>
                 <Plus className="h-4 w-4" /> Novo endereço
               </button>
             </div>
@@ -781,7 +781,7 @@ export function EntregaNovaPage() {
           {/* CEP primeiro: ao completar 8 dígitos o ViaCEP preenche o endereço
               e o operador só completa o número. */}
           <div className="col-span-2">
-            <label className={lbl}>CEP {buscandoCep && <span className="text-sky-600">(buscando…)</span>}</label>
+            <label className={lbl}>CEP {buscandoCep && <span className="text-capul-600">(buscando…)</span>}</label>
             <input
               value={cep}
               onChange={(e) => {
@@ -842,7 +842,7 @@ export function EntregaNovaPage() {
         {(travaCep.logradouro || travaCep.bairro || travaCep.cidade || travaCep.uf) && (
           <p className="-mt-2 text-xs text-slate-500">
             Endereço preenchido pelo CEP (base dos Correios) — complete número/complemento.{' '}
-            <button type="button" onClick={() => setTravaCep(TRAVA_CEP_OFF)} className="font-medium text-sky-700 hover:underline">
+            <button type="button" onClick={() => setTravaCep(TRAVA_CEP_OFF)} className="font-medium text-capul-700 hover:underline">
               ✎ Corrigir manualmente
             </button>
           </p>
@@ -864,7 +864,7 @@ export function EntregaNovaPage() {
                   // Enter no nº NÃO adiciona linha — leva ao Valor (mesmo padrão de TAB).
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget.nextElementSibling as HTMLInputElement | null)?.focus(); } }}
                   onChange={(e) => setCupons((p) => p.map((x, j) => j === i ? { ...x, numeroCupom: e.target.value } : x))}
-                  className="w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
+                  className="w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none" />
                 <input
                   ref={i === cupons.length - 1 ? ultimoValorRef : undefined}
                   placeholder="0,00"
@@ -872,7 +872,7 @@ export function EntregaNovaPage() {
                   // Enter no valor adiciona outro cupom — addCupom valida nº+valor antes.
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCupom(); } }}
                   onChange={(e) => setCupons((p) => p.map((x, j) => j === i ? { ...x, valor: maskMoeda(e.target.value) } : x))}
-                  className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none" />
+                  className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none" />
                 <button type="button" onClick={() => setCupons((p) => p.length > 1 ? p.filter((_, j) => j !== i) : [{ numeroCupom: '', valor: '' }])}
                   className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
               </div>
@@ -880,7 +880,7 @@ export function EntregaNovaPage() {
           </div>
           <div className="mt-2 flex items-center justify-between">
             <button type="button" onClick={addCupom}
-              className="flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom</button>
+              className="flex items-center gap-1 text-xs font-medium text-capul-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom</button>
             <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
           </div>
           <p className="mt-1 text-[11px] text-slate-400">Enter no nº vai para o valor; Enter no valor adiciona outro cupom (precisa nº + valor). O cadastro só é gravado no botão “Salvar entrega”.</p>
@@ -899,7 +899,7 @@ export function EntregaNovaPage() {
                 type="button"
                 key={o.v}
                 onClick={() => { setOrigemVenda(o.v); setDirty(true); }}
-                className={`rounded-lg border px-3 py-1.5 text-sm ${origemVenda === o.v ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-300 text-slate-600'}`}
+                className={`rounded-lg border px-3 py-1.5 text-sm ${origemVenda === o.v ? 'border-capul-500 bg-capul-50 text-capul-700' : 'border-slate-300 text-slate-600'}`}
               >
                 {o.label}
               </button>
@@ -921,7 +921,7 @@ export function EntregaNovaPage() {
         </div>
 
         <button type="submit" disabled={salvando}
-          className="flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+          className="flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
           {modoEdicao ? 'Salvar alterações' : 'Salvar entrega'}
         </button>

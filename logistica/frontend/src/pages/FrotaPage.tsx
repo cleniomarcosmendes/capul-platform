@@ -37,7 +37,7 @@ export interface TipoDespesa { id: string; nome: string }
 export interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
 
 export const SIT_META: Record<string, { label: string; cls: string }> = {
-  EM_CURSO: { label: 'Em curso', cls: 'bg-sky-100 text-sky-700' },
+  EM_CURSO: { label: 'Em curso', cls: 'bg-capul-100 text-capul-700' },
   CONCLUIDA: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
   CANCELADA: { label: 'Cancelada', cls: 'bg-rose-100 text-rose-700' },
   RASCUNHO: { label: 'Rascunho', cls: 'bg-slate-100 text-slate-600' },
@@ -110,7 +110,7 @@ export function FrotaPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <Fuel className="h-6 w-6 text-sky-600" />
+        <Fuel className="h-6 w-6 text-capul-600" />
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Controle de Frota</h2>
           <p className="text-sm text-slate-500">Saída e retorno de veículos — o condutor se identifica com matrícula e senha.</p>
@@ -119,7 +119,7 @@ export function FrotaPage() {
 
       <SaidaForm veiculos={veiculos} onDone={carregar} />
 
-      <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h3 className="text-sm font-semibold text-slate-700">Viagens de frota</h3>
           <select
@@ -174,7 +174,7 @@ interface DeptoItem { id: string; nome: string }
 function PassoHeader({ n, titulo, hint, ativo = true }: { n: number; titulo: string; hint?: string; ativo?: boolean }) {
   return (
     <div className="mb-3 flex items-center gap-2.5">
-      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${ativo ? 'bg-sky-600' : 'bg-slate-300'}`}>{n}</span>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${ativo ? 'bg-capul-600' : 'bg-slate-300'}`}>{n}</span>
       <div>
         <h4 className="text-base font-semibold text-slate-800">{titulo}</h4>
         {hint && <p className="text-xs text-slate-500">{hint}</p>}
@@ -324,7 +324,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     return (
       <button
         onClick={() => setAberto(true)}
-        className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2.5 text-base font-semibold text-white hover:bg-sky-700"
+        className="inline-flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2.5 text-base font-semibold text-white hover:bg-capul-700"
       >
         <LogOut className="h-5 w-5" /> Registrar saída
       </button>
@@ -332,7 +332,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-base font-semibold text-slate-800">Registrar saída de veículo</h3>
         <button onClick={() => { reset(); setAberto(false); }} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
@@ -342,7 +342,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         {ehGestorPortaria && (
           <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-xs font-medium">
             <button onClick={() => { setModo('CONDUTOR'); reset(); }}
-              className={`rounded-md px-3 py-1.5 ${modo === 'CONDUTOR' ? 'bg-sky-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+              className={`rounded-md px-3 py-1.5 ${modo === 'CONDUTOR' ? 'bg-capul-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
               Condutor (matrícula + senha)
             </button>
             <button onClick={() => { setModo('PORTARIA'); reset(); }}
@@ -432,9 +432,9 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               {resultados.map((c) => (
                 <li key={c.matricula}>
                   <button onClick={() => setCondutorSel(c)}
-                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 ${condutorSel?.matricula === c.matricula ? 'bg-sky-50' : ''}`}>
+                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 ${condutorSel?.matricula === c.matricula ? 'bg-capul-50' : ''}`}>
                     <span><span className="font-medium text-slate-800">{c.nome}</span><span className="text-slate-400"> · {c.matricula}{c.cc ? ` · CC ${c.cc}` : ''}</span></span>
-                    {condutorSel?.matricula === c.matricula && <span className="shrink-0 text-xs font-medium text-sky-700">✓</span>}
+                    {condutorSel?.matricula === c.matricula && <span className="shrink-0 text-xs font-medium text-capul-700">✓</span>}
                   </button>
                 </li>
               ))}
@@ -531,7 +531,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <button
           onClick={() => void registrar()}
           disabled={salvando || !podeAvancar || !veiculoId || kmInicial === ''}
-          className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-6 py-3 text-base font-semibold text-white hover:bg-sky-700 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-capul-600 px-6 py-3 text-base font-semibold text-white hover:bg-capul-700 disabled:opacity-50"
         >
           {salvando ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />} Registrar saída
         </button>
@@ -678,7 +678,7 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
                   {p.local ?? p.planejadoLocal ?? '—'}
                   {p.latitude != null && p.longitude != null && (
                     <a href={`https://www.google.com/maps?q=${p.latitude},${p.longitude}`} target="_blank" rel="noopener noreferrer"
-                      title={`Abrir no mapa (${p.latitude}, ${p.longitude})`} className="ml-1.5 text-xs text-sky-600 hover:underline">📍 mapa</a>
+                      title={`Abrir no mapa (${p.latitude}, ${p.longitude})`} className="ml-1.5 text-xs text-capul-600 hover:underline">📍 mapa</a>
                   )}
                 </td>
                 <td className="py-1 pr-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.cls}`}>{meta.label}</span></td>
@@ -724,7 +724,7 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
             <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Registrar parada agora (local)" maxLength={120} className="min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
             <input type="number" value={km} onChange={(e) => setKm(e.target.value)} placeholder="KM" className="w-24 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
             <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação" maxLength={255} className="min-w-[10rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-            <button onClick={() => void adicionar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+            <button onClick={() => void adicionar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
               {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
             </button>
           </div>
@@ -733,7 +733,7 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
             <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha — entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a viagem.</p>
             <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
             <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50">
+            <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-capul-300 px-3 py-1.5 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
               {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Planejar paradas
             </button>
           </details>
@@ -949,7 +949,7 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
 
   return (
     <div className="space-y-3">
-      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><Banknote className="h-4 w-4 text-sky-600" /> Lançar despesa — viagem #{v.numero}</p>
+      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><Banknote className="h-4 w-4 text-capul-600" /> Lançar despesa — viagem #{v.numero}</p>
       <p className="text-xs text-slate-500">Condutor <b>{v.condutorNome ?? '—'}</b> (da saída); entra como <b>pendente</b> até o supervisor validar.</p>
       <div className="flex flex-wrap items-end gap-4">
         <div className="w-52">
@@ -987,7 +987,7 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
-        <button onClick={() => void lancar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+        <button onClick={() => void lancar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} Lançar despesa
         </button>
       </div>

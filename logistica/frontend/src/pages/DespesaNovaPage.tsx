@@ -271,7 +271,7 @@ export function DespesaNovaPage() {
     }
   }
 
-  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none';
+  const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none';
   const lbl = 'block text-xs font-medium text-slate-500';
 
   return (
@@ -282,7 +282,7 @@ export function DespesaNovaPage() {
         <ArrowLeft className="h-4 w-4" /> Voltar para Despesas
       </button>
 
-      <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+      <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white shadow-sm p-5">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">{modoEdicao ? 'Editar despesa' : 'Lançar despesa'}</h2>
           <p className="text-sm text-slate-500">
@@ -313,7 +313,7 @@ export function DespesaNovaPage() {
               <div>
                 <p className="text-xs text-slate-400">Recibo</p>
                 {info.temComprovante ? (
-                  <button type="button" onClick={() => void verRecibo()} className="mt-0.5 inline-flex items-center gap-1 rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-100">
+                  <button type="button" onClick={() => void verRecibo()} className="mt-0.5 inline-flex items-center gap-1 rounded border border-capul-200 bg-capul-50 px-1.5 py-0.5 text-xs font-medium text-capul-700 hover:bg-capul-100">
                     <Paperclip className="h-3 w-3" /> Ver recibo
                   </button>
                 ) : <p className="font-medium text-slate-500">Sem recibo</p>}
@@ -385,7 +385,7 @@ export function DespesaNovaPage() {
               className={`${inp} disabled:bg-slate-100 disabled:text-slate-500`} />
             {!rateio && (
               <label className="mt-2 flex items-center gap-2 text-sm text-slate-600">
-                <input type="checkbox" checked={semNota} onChange={(e) => { setSemNota(e.target.checked); if (e.target.checked) setNumeroDocumento(''); }} className="h-4 w-4 accent-sky-600" />
+                <input type="checkbox" checked={semNota} onChange={(e) => { setSemNota(e.target.checked); if (e.target.checked) setNumeroDocumento(''); }} className="h-4 w-4 accent-capul-600" />
                 Sem nota fiscal <span className="text-xs text-slate-400">(ex.: nota de débito, sem documento)</span>
               </label>
             )}
@@ -409,7 +409,7 @@ export function DespesaNovaPage() {
 
         {!modoEdicao && (
           <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" checked={rateio} onChange={(e) => toggleRateio(e.target.checked)} className="h-4 w-4 accent-sky-600" />
+            <input type="checkbox" checked={rateio} onChange={(e) => toggleRateio(e.target.checked)} className="h-4 w-4 accent-capul-600" />
             Ratear esta nota em vários tipos de despesa
             <span className="text-xs text-slate-400">— ex.: uma nota com pneu + alinhamento no mesmo veículo</span>
           </label>
@@ -436,7 +436,7 @@ export function DespesaNovaPage() {
             </div>
             <div className="mt-2 flex items-center justify-between">
               <button type="button" onClick={() => setLinhas((ls) => [...ls, { tipoDespesaId: '', valor: '' }])}
-                className="text-sm font-medium text-sky-600 hover:underline">+ Adicionar linha</button>
+                className="text-sm font-medium text-capul-600 hover:underline">+ Adicionar linha</button>
               <span className="text-sm text-slate-600">Total: <b>{linhas.reduce((s, l) => s + (l.valor ? parseMoeda(l.valor) : 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</b></span>
             </div>
           </div>
@@ -465,7 +465,7 @@ export function DespesaNovaPage() {
         <div className="flex justify-end gap-2">
           <button type="button" onClick={() => guardedNavigate('/despesas')} className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">Cancelar</button>
           <button type="submit" disabled={salvando}
-            className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+            className="inline-flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
             {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Banknote className="h-4 w-4" />} {modoEdicao ? 'Salvar alterações' : 'Lançar despesa'}
           </button>
         </div>

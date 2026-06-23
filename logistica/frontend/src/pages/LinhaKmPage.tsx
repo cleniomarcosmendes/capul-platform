@@ -58,14 +58,14 @@ export function LinhaKmPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Gauge className="h-6 w-6 text-sky-600" />
+          <Gauge className="h-6 w-6 text-capul-600" />
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Linha do KM</h2>
             <p className="text-sm text-slate-500">Prestação de contas do odômetro: KM em viagens × não apontadas, por veículo.</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none">
+          <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none">
             <option value="">Todos os veículos</option>
             {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>)}
           </select>
@@ -79,7 +79,7 @@ export function LinhaKmPage() {
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
         <span className="inline-flex items-center gap-1.5">
-          <span className="flex"><span className="h-2.5 w-2 rounded-l bg-sky-500" /><span className="h-2.5 w-2 bg-indigo-500" /><span className="h-2.5 w-2 rounded-r bg-emerald-500" /></span>
+          <span className="flex"><span className="h-2.5 w-2 rounded-l bg-capul-500" /><span className="h-2.5 w-2 bg-indigo-500" /><span className="h-2.5 w-2 rounded-r bg-emerald-500" /></span>
           Viagens (cores alternam por viagem)
         </span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded" style={{ backgroundImage: HACHURA }} /> Não apontadas (lacuna de odômetro)</span>
@@ -95,13 +95,13 @@ export function LinhaKmPage() {
       ) : (
         <div className="space-y-4">
           {exibidas.map((l) => (
-            <div key={l.veiculoId} className="rounded-xl border border-slate-200 bg-white p-4">
+            <div key={l.veiculoId} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Car className="h-4 w-4 text-sky-600" /> {l.placa}{l.modelo ? <span className="font-normal text-slate-400"> · {l.modelo}</span> : null}
+                  <Car className="h-4 w-4 text-capul-600" /> {l.placa}{l.modelo ? <span className="font-normal text-slate-400"> · {l.modelo}</span> : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                  <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-sky-500" /> Viagens: <b>{fmtKm(l.kmViagens)} km</b></span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-capul-500" /> Viagens: <b>{fmtKm(l.kmViagens)} km</b></span>
                   <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded" style={{ backgroundImage: HACHURA }} /> Não apontadas: <b>{fmtKm(l.kmNaoApontadas)} km</b></span>
                   <span className="text-slate-400">{l.qtdViagens} viagem{l.qtdViagens === 1 ? '' : 's'}</span>
                 </div>

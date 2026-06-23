@@ -99,7 +99,7 @@ export function RomaneioPage() {
         </button>
         <span className="text-sm text-slate-500">{v ? `Romaneio da Viagem #${v.numero}` : ''}</span>
         <button onClick={() => window.print()} disabled={!v || paradas.length === 0}
-          className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+          className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
           <Printer className="h-4 w-4" /> Imprimir
         </button>
       </div>
