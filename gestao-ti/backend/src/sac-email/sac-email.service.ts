@@ -52,12 +52,18 @@ export class SacEmailService {
     const senha = (process.env.SAC_IMAP_PASSWORD ?? '').trim();
     const port = Number(process.env.SAC_IMAP_PORT ?? 993);
     const secure = (process.env.SAC_IMAP_TLS ?? 'true') !== 'false';
+    // Validação do certificado TLS. Default true (seguro). Setar
+    // SAC_IMAP_TLS_REJECT_UNAUTHORIZED=false quando o servidor IMAP apresenta
+    // cert que não bate com o hostname (ex.: imap.capul.com.br servido com cert
+    // *.vertip.net do provedor) — mesma lógica do SMTP_TLS_REJECT_UNAUTHORIZED do e-mail.
+    const rejectUnauthorized = (process.env.SAC_IMAP_TLS_REJECT_UNAUTHORIZED ?? 'true') !== 'false';
     return {
       origem: 'ambiente' as const,
       host: host || null,
       port,
       user: user || null,
       secure,
+      rejectUnauthorized,
       senhaConfigurada: !!senha,
       configurada: !!(host && user && senha),
     };
@@ -91,6 +97,9 @@ export class SacEmailService {
       port: info.port,
       secure: info.secure,
       auth: { user: info.user as string, pass: (process.env.SAC_IMAP_PASSWORD ?? '').trim() },
+      // tls.rejectUnauthorized=false permite cert que não bate com o hostname
+      // (provedor serve *.vertip.net em imap.capul.com.br). Ver conexaoInfo().
+      tls: { rejectUnauthorized: info.rejectUnauthorized },
       logger: false,
       socketTimeout: 20_000,
     });

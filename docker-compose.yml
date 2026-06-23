@@ -407,6 +407,7 @@ services:
       SAC_IMAP_USER: ${SAC_IMAP_USER:-}
       SAC_IMAP_PASSWORD: ${SAC_IMAP_PASSWORD:-}
       SAC_IMAP_TLS: ${SAC_IMAP_TLS:-true}
+      SAC_IMAP_TLS_REJECT_UNAUTHORIZED: ${SAC_IMAP_TLS_REJECT_UNAUTHORIZED:-true}
     # Porta NAO exposta — acesso via Nginx reverse proxy
     volumes:
       - uploads_data:/app/uploads
