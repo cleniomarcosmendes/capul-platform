@@ -17,15 +17,7 @@ import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
 import PasswordInput from '../../components/PasswordInput';
 import type { Equipe, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
-
-// Máscara de telefone BR (progressiva): (38) 9999-9999 ou (38) 99999-9999.
-function maskTelefone(v: string): string {
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 2) return d.replace(/^(\d*)/, '($1');
-  if (d.length <= 6) return d.replace(/^(\d{2})(\d*)/, '($1) $2');
-  if (d.length <= 10) return d.replace(/^(\d{2})(\d{4})(\d*)/, '($1) $2-$3');
-  return d.replace(/^(\d{2})(\d{5})(\d*)/, '($1) $2-$3');
-}
+import { maskTelefone } from '../../lib/telefone';
 
 export function ChamadoCreatePage() {
   const navigate = useNavigate();
@@ -369,15 +361,17 @@ export function ChamadoCreatePage() {
         equipeAtualId,
         visibilidade: podeEscolherVisibilidade ? visibilidade : 'PUBLICO',
         prioridade,
-        softwareId: softwareId || undefined,
-        softwareModuloId: softwareModuloId || undefined,
-        softwareNome: softwareNome || undefined,
-        moduloNome: moduloNome || undefined,
+        // Campos de TI (software/módulo/IP/filial-depto do solicitante) não se aplicam
+        // a chamado de SAC (cliente externo) — não enviar quando ehSac.
+        softwareId: !ehSac && softwareId ? softwareId : undefined,
+        softwareModuloId: !ehSac && softwareModuloId ? softwareModuloId : undefined,
+        softwareNome: !ehSac && softwareNome ? softwareNome : undefined,
+        moduloNome: !ehSac && moduloNome ? moduloNome : undefined,
         catalogoServicoId: catalogoServicoId || undefined,
         projetoId: projetoIdParam || undefined,
-        filialId: (!isUsuarioFinal && filialId && filialId !== usuario?.filialAtual?.id) ? filialId : undefined,
-        departamentoId: (!isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
-        ipMaquina: ipMaquina || undefined,
+        filialId: (!ehSac && !isUsuarioFinal && filialId && filialId !== usuario?.filialAtual?.id) ? filialId : undefined,
+        departamentoId: (!ehSac && !isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
+        ipMaquina: !ehSac && ipMaquina ? ipMaquina : undefined,
         ativoId: ativoId || undefined,
         matriculaColaborador: isUsuarioPadrao && matriculaColaborador ? matriculaColaborador.trim() : undefined,
         nomeColaborador: isUsuarioPadrao && nomeColaborador ? nomeColaborador.trim() : undefined,
@@ -684,8 +678,8 @@ export function ChamadoCreatePage() {
             </div>
           )}
 
-          {/* Filial e Departamento — somente para tecnicos */}
-          {!isUsuarioFinal && (
+          {/* Filial e Departamento — somente para tecnicos; oculto no SAC (cliente externo) */}
+          {!isUsuarioFinal && !ehSac && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
               <p className="text-xs text-slate-500">Altere caso esteja abrindo em nome de outro setor/filial</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -754,6 +748,7 @@ export function ChamadoCreatePage() {
             </div>
           )}
 
+          {!ehSac && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">IP da Maquina (acesso remoto)</label>
             <input
@@ -765,6 +760,7 @@ export function ChamadoCreatePage() {
             />
             <p className="text-xs text-slate-400 mt-1">Informe o IP da sua maquina para acesso remoto (ex: 192.168.1.100)</p>
           </div>
+          )}
 
           {catalogos.length > 0 && (
             <div>
@@ -782,6 +778,7 @@ export function ChamadoCreatePage() {
             </div>
           )}
 
+          {!ehSac && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Software (opcional)</label>
@@ -815,6 +812,7 @@ export function ChamadoCreatePage() {
               </select>
             </div>
           </div>
+          )}
 
           {/* SAC (Fase 1) — dados do cliente externo (o colaborador registra em nome dele) */}
           {ehSac && (

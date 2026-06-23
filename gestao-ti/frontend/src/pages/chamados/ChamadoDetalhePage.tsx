@@ -21,6 +21,7 @@ import { ChatBubbleList, type ChatEvent } from '../../components/ChatBubbleList'
 import { ComentarioTexto } from '../../components/ComentarioTexto';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
+import { maskTelefone } from '../../lib/telefone';
 
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
@@ -838,7 +839,7 @@ export function ChamadoDetalhePage() {
                         className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-capul-600" />
                       <input type="email" value={cliEmail} onChange={(e) => setCliEmail(e.target.value)} maxLength={150} placeholder="E-mail do cliente"
                         className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-capul-600" />
-                      <input value={cliTel} onChange={(e) => setCliTel(e.target.value)} maxLength={40} placeholder="Telefone"
+                      <input value={cliTel} onChange={(e) => setCliTel(maskTelefone(e.target.value))} maxLength={16} placeholder="(38) 99999-9999"
                         className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-capul-600" />
                       <div className="flex gap-2">
                         <button onClick={salvarDadosCliente} disabled={salvandoCliente}
