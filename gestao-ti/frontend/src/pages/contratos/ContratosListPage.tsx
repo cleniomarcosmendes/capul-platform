@@ -89,9 +89,9 @@ export function ContratosListPage() {
     if (!search) return contratos;
     const s = search.toLowerCase();
     return contratos.filter((c) =>
-      c.titulo.toLowerCase().includes(s) ||
+      c.titulo?.toLowerCase().includes(s) ||
       (c.descricao?.toLowerCase().includes(s)) ||
-      c.fornecedor.toLowerCase().includes(s) ||
+      c.fornecedor?.toLowerCase().includes(s) ||
       String(c.numero).includes(s) ||
       (c.numeroContrato && c.numeroContrato.toLowerCase().includes(s)) ||
       (c.codigoFornecedor && c.codigoFornecedor.toLowerCase().includes(s))
@@ -103,8 +103,8 @@ export function ContratosListPage() {
       let va: string | number, vb: string | number;
       switch (sortKey) {
         case 'numero': va = a.numero; vb = b.numero; break;
-        case 'titulo': va = a.titulo.toLowerCase(); vb = b.titulo.toLowerCase(); break;
-        case 'fornecedor': va = a.fornecedor.toLowerCase(); vb = b.fornecedor.toLowerCase(); break;
+        case 'titulo': va = (a.titulo ?? '').toLowerCase(); vb = (b.titulo ?? '').toLowerCase(); break;
+        case 'fornecedor': va = (a.fornecedor ?? '').toLowerCase(); vb = (b.fornecedor ?? '').toLowerCase(); break;
         case 'valorTotal': va = Number(a.valorTotal); vb = Number(b.valorTotal); break;
         case 'dataFim': va = a.dataFim; vb = b.dataFim; break;
         case 'status': va = a.status; vb = b.status; break;
