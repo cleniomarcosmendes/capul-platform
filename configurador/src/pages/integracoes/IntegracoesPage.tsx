@@ -15,7 +15,7 @@ import {
 } from '../../services/integracao.service';
 import {
   Plus, Plug, Pencil, Trash2, TestTube2, Check, X, Loader2, AlertTriangle, Shield,
-  FileText, HardDrive, Users, ArrowLeftRight,
+  FileText, HardDrive, Users, ArrowLeftRight, Truck,
 } from 'lucide-react';
 
 const AMBIENTES = ['PRODUCAO', 'HOMOLOGACAO'] as const;
@@ -26,12 +26,14 @@ const MODULO_LABEL: Record<ModuloConsumidor, string> = {
   FISCAL: 'Fiscal',
   GESTAO_TI: 'Gestão TI',
   INVENTARIO: 'Inventário',
+  LOGISTICA: 'Logística',
 };
 
 const MODULO_ICON: Record<ModuloConsumidor, typeof FileText> = {
   FISCAL: FileText,
   GESTAO_TI: Users,
   INVENTARIO: HardDrive,
+  LOGISTICA: Truck,
 };
 
 function StatusBadge({ result }: { result: TesteConexaoResult }) {

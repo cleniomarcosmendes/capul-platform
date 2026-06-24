@@ -1,7 +1,7 @@
 import { coreApi } from './api';
 
-export type ModuloConsumidor = 'FISCAL' | 'GESTAO_TI' | 'INVENTARIO';
-export const MODULOS_CONSUMIDORES: readonly ModuloConsumidor[] = ['FISCAL', 'GESTAO_TI', 'INVENTARIO'] as const;
+export type ModuloConsumidor = 'FISCAL' | 'GESTAO_TI' | 'INVENTARIO' | 'LOGISTICA';
+export const MODULOS_CONSUMIDORES: readonly ModuloConsumidor[] = ['FISCAL', 'GESTAO_TI', 'INVENTARIO', 'LOGISTICA'] as const;
 
 export interface IntegracaoApi {
   id: string;
