@@ -316,6 +316,9 @@ async function main() {
     // abertura de Chamado por usuário PADRAO (prova de identidade). A matrícula é a
     // CHAPA numérica (ex.: 002873) — o backend normaliza a E-prefixada antes de enviar.
     { modulo: 'GESTAO_TI' as const, ambiente: 'PRODUCAO' as const, operacao: 'loginPortal', url: `${BASE_PRD}/loginPortal`, metodo: 'POST' as const, timeoutMs: 15000 },
+    // 21/06/2026 — SAC: autofill nome/telefone do cliente no chamado (SA1). Reusa o
+    // endpoint DEDICADO da Logística (clienteEndereco). E-mail é sempre manual.
+    { modulo: 'GESTAO_TI' as const, ambiente: 'PRODUCAO' as const, operacao: 'clienteSac', url: `${BASE_PRD}/LOGISTICA/clienteEndereco`, metodo: 'GET' as const, timeoutMs: 10000 },
   ];
 
   const endpointsGestaoTiHlg = endpointsGestaoTiPrd.map((ep) => ({
@@ -379,9 +382,28 @@ async function main() {
         },
       },
     });
-    console.log(`Integracao PROTHEUS criada: ${integracao.nome} (${todosEndpoints.length} endpoints = 5 Inv + 2 TI + 4 Fiscal, x 2 ambientes)`);
+    console.log(`Integracao PROTHEUS criada: ${integracao.nome} (${todosEndpoints.length} endpoints, x 2 ambientes)`);
   } else {
-    console.log(`Integracao PROTHEUS existente: ${integracao.nome}`);
+    // PROTHEUS já existia: reconcilia endpoints FALTANTES (idempotente). Sem isto,
+    // endpoints novos (ex.: clienteEndereco/clienteSac) nunca entram em ambiente
+    // que já tinha a integração (HOM/PROD) — só apareciam na criação inicial.
+    // update:{} preserva ajustes feitos no Configurador (url/ativo). Cria só o que
+    // falta; ativo só no PRODUCAO p/ respeitar o índice "um ativo por (modulo,operacao)".
+    let criados = 0;
+    for (const ep of todosEndpoints) {
+      const existe = await prisma.integracaoApiEndpoint.findUnique({
+        where: { integracaoId_modulo_ambiente_operacao: {
+          integracaoId: integracao.id, modulo: ep.modulo, ambiente: ep.ambiente, operacao: ep.operacao } },
+        select: { id: true },
+      });
+      if (!existe) {
+        await prisma.integracaoApiEndpoint.create({
+          data: { ...ep, ativo: ep.ambiente === 'PRODUCAO', integracaoId: integracao.id },
+        });
+        criados++;
+      }
+    }
+    console.log(`Integracao PROTHEUS existente: ${integracao.nome} — ${criados} endpoint(s) faltante(s) criado(s).`);
   }
 
   console.log('\nSeed executado com sucesso!');

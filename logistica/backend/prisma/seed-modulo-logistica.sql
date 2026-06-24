@@ -48,3 +48,7 @@ FROM (VALUES
   ('Outros',          'Despesas diversas')
 ) AS t(nome, descricao)
 ON CONFLICT (nome) DO NOTHING;
+
+-- NB: o endpoint Protheus `clienteEndereco` (e os demais PROTHEUS) é semeado/
+-- reconciliado pelo seed do auth-gateway (prisma/seed.ts) — fonte única da
+-- integração PROTHEUS e seus endpoints. Não duplicar aqui.
