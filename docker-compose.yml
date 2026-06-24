@@ -694,7 +694,9 @@ services:
   # o `osrm-prep` (baixa o extract OSM + processa ~minutos). Depois:
   #   docker compose --profile osrm up -d osrm
   # e no .env: OSRM_URL=http://osrm:5000
-  # Região default = Minas Gerais (Geofabrik). Trocar via OSRM_REGION/OSRM_PBF_URL.
+  # Região default = SUDESTE (contém Minas Gerais/Unaí). O Geofabrik atual só
+  # serve macro-regiões do Brasil — o extract por estado (minas-gerais) redireciona
+  # pra raiz e baixa HTML. Trocar via OSRM_REGION + OSRM_PBF_URL (devem casar).
   # ──────────────────────────────────────────────────────────────────────────
   osrm-prep:
     image: ghcr.io/project-osrm/osrm-backend:v5.27.1
@@ -705,12 +707,22 @@ services:
       - |
         set -e
         cd /data
-        REGION="${OSRM_REGION:-minas-gerais}"
+        REGION="${OSRM_REGION:-sudeste}"
         if [ -f "$$REGION.osrm.mldgr" ]; then echo ">> $$REGION ja processado — nada a fazer."; exit 0; fi
         command -v wget >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq wget)
         if [ ! -f "$$REGION.osm.pbf" ]; then
           echo ">> baixando extract OSM ($$REGION)..."
-          wget -O "$$REGION.osm.pbf" "${OSRM_PBF_URL:-https://download.geofabrik.de/south-america/brazil/minas-gerais-latest.osm.pbf}"
+          wget -O "$$REGION.osm.pbf" "${OSRM_PBF_URL:-https://download.geofabrik.de/south-america/brazil/sudeste-latest.osm.pbf}"
+        fi
+        # Guarda: extract real tem centenas de MB. < 1MB = HTML de erro (região
+        # inexistente no Geofabrik / redirect pra raiz). Falha com mensagem clara
+        # e remove o lixo p/ o retry rebaixar — em vez do erro críptico do osmium.
+        SZ=$$(stat -c%s "$$REGION.osm.pbf")
+        if [ "$$SZ" -lt 1000000 ]; then
+          echo ">> ERRO: download veio com $$SZ bytes (< 1MB) — provavelmente HTML de erro."
+          echo ">> A regiao '$$REGION' nao existe nesse Geofabrik OU a OSRM_PBF_URL esta errada."
+          echo ">> Confira OSRM_REGION/OSRM_PBF_URL (use macro-regiao: sudeste/sul/nordeste/...)."
+          rm -f "$$REGION.osm.pbf"; exit 1
         fi
         echo ">> osrm-extract..."   && osrm-extract -p /opt/car.lua "$$REGION.osm.pbf"
         echo ">> osrm-partition..." && osrm-partition "$$REGION.osrm"
@@ -724,7 +736,7 @@ services:
     image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     container_name: capul-osrm
     profiles: ["osrm"]
-    command: ["osrm-routed", "--algorithm", "mld", "/data/${OSRM_REGION:-minas-gerais}.osrm"]
+    command: ["osrm-routed", "--algorithm", "mld", "/data/${OSRM_REGION:-sudeste}.osrm"]
     volumes:
       - osrm_data:/data
     # Porta 5000 só interna (logistica-backend chama http://osrm:5000). Em DEV,
