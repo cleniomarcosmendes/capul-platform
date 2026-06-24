@@ -697,7 +697,7 @@ services:
   # Região default = Minas Gerais (Geofabrik). Trocar via OSRM_REGION/OSRM_PBF_URL.
   # ──────────────────────────────────────────────────────────────────────────
   osrm-prep:
-    image: osrm/osrm-backend:v5.27.1
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     container_name: capul-osrm-prep
     profiles: ["osrm-prep"]
     entrypoint: ["/bin/bash", "-c"]
@@ -721,7 +721,7 @@ services:
     logging: *default-logging
 
   osrm:
-    image: osrm/osrm-backend:v5.27.1
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     container_name: capul-osrm
     profiles: ["osrm"]
     command: ["osrm-routed", "--algorithm", "mld", "/data/${OSRM_REGION:-minas-gerais}.osrm"]
