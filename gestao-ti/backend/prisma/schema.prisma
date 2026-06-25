@@ -369,6 +369,40 @@ model SacEmailAnexo {
   @@schema("gestao_ti")
 }
 
+/// Config singleton (id=1) do lembrete de chamado parado (gestão de inatividade).
+/// Um job diário varre chamados não-finalizados e avisa quem está segurando o
+/// chamado (técnico p/ os da equipe; solicitante p/ PENDENTE_USUARIO), escala p/
+/// a equipe ao passar do limiar/SLA, e fecha PENDENTE_USUARIO sem resposta.
+model ChamadoLembreteConfig {
+  id                          Int       @id @default(1)
+  /// Nasce DESLIGADO — feature outward-facing (e-mail + auto-fechamento). O
+  /// admin liga conscientemente após revisar um dry-run (executar-agora?dryRun).
+  enabled                     Boolean   @default(false)
+  /// Dias parado (sem interação) p/ lembrar o TÉCNICO (chamado da equipe).
+  diasInatividadeEquipe       Int       @default(3) @map("dias_inatividade_equipe")
+  /// Dias parado p/ lembrar o SOLICITANTE (PENDENTE_USUARIO).
+  diasInatividadeSolicitante  Int       @default(3) @map("dias_inatividade_solicitante")
+  /// Dias parado p/ ESCALAR (avisar a equipe além do técnico).
+  diasEscala                  Int       @default(7) @map("dias_escala")
+  /// Não reenvia lembrete antes deste intervalo.
+  intervaloReenvioDias        Int       @default(3) @map("intervalo_reenvio_dias")
+  /// Teto de lembretes por chamado.
+  maxLembretes                Int       @default(3) @map("max_lembretes")
+  /// Auto-fecha PENDENTE_USUARIO após os lembretes.
+  autoFechar                  Boolean   @default(true) @map("auto_fechar")
+  /// Dias após o último lembrete p/ fechar PENDENTE_USUARIO sem resposta.
+  diasAutoFechamento          Int       @default(3) @map("dias_auto_fechamento")
+  /// Hora do dia (0-23) em que a varredura roda.
+  horaExecucao                Int       @default(8) @map("hora_execucao")
+  lastRunAt                   DateTime? @map("last_run_at")
+  lastResumo                  String?   @map("last_resumo")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
+  updatedBy                   String?   @map("updated_by")
+
+  @@map("chamado_lembrete_config")
+  @@schema("gestao_ti")
+}
+
 enum StatusChamado {
   ABERTO
   EM_ATENDIMENTO
@@ -488,6 +522,9 @@ model Chamado {
   softwareNome       String?       @map("software_nome")
   moduloNome         String?       @map("modulo_nome")
   dataLimiteSla      DateTime?     @map("data_limite_sla")
+  // Lembrete de chamado parado (gestão de inatividade) — ver ChamadoLembreteConfig.
+  ultimoLembreteEm   DateTime?     @map("ultimo_lembrete_em")
+  lembretesEnviados  Int           @default(0) @map("lembretes_enviados")
   dataResolucao      DateTime?     @map("data_resolucao")
   dataFechamento     DateTime?     @map("data_fechamento")
   notaSatisfacao     Int?          @map("nota_satisfacao")
