@@ -92,9 +92,28 @@ export class CccClient {
     }
     const isCpf = digits.length === 11;
     const tagDoc = isCpf ? `<CPF>${digits}</CPF>` : `<CNPJ>${digits}</CNPJ>`;
-    const ufUpper = uf.toUpperCase();
-    const tpAmb = ambiente === 'PRODUCAO' ? '1' : '2';
+    return this.executarConsCad(tagDoc, uf, ambiente, `${isCpf ? 'CPF' : 'CNPJ'} ${digits.slice(0, 6)}…`);
+  }
 
+  /**
+   * Consulta o CCC por INSCRIÇÃO ESTADUAL. Necessária quando a UF NÃO aceita
+   * consulta por CPF (ex.: produtor rural em PR) — a IE vem do vínculo Protheus.
+   * A IE só pode ser consultada na própria UF que a emitiu.
+   */
+  async consultarPorIe(ie: string, uf: string, ambiente: AmbienteSefazStr): Promise<CccConsultaRaw> {
+    const digits = ie.replace(/\D/g, '');
+    if (!digits) throw new Error(`IE inválida: ${ie}`);
+    return this.executarConsCad(`<IE>${digits}</IE>`, uf, ambiente, `IE ${digits.slice(0, 6)}…`);
+  }
+
+  /** Núcleo do CadConsultaCadastro4 — recebe o documento já como tag (CPF/CNPJ/IE). */
+  private async executarConsCad(
+    tagDoc: string,
+    uf: string,
+    ambiente: AmbienteSefazStr,
+    label: string,
+  ): Promise<CccConsultaRaw> {
+    const ufUpper = uf.toUpperCase();
     const url = getCccUrl(ufUpper, ambiente);
     const agent = await this.agentService.getAgent();
     const consCad = `<ConsCad xmlns="http://www.portalfiscal.inf.br/nfe" versao="2.00"><infCons><xServ>CONS-CAD</xServ><UF>${ufUpper}</UF>${tagDoc}</infCons></ConsCad>`;
@@ -105,7 +124,7 @@ export class CccClient {
     const inner = `<nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/CadConsultaCadastro4">${consCad}</nfeDadosMsg>`;
     const envelope = buildSoapEnvelope(inner);
 
-    this.logger.log(`CCC: ${isCpf ? 'CPF' : 'CNPJ'} ${digits.slice(0, 6)}… UF=${ufUpper} ambiente=${ambiente}`);
+    this.logger.log(`CCC: ${label} UF=${ufUpper} ambiente=${ambiente}`);
 
     // Camada 4 Plano v2.0 §6.2 — limite diário global de consultas SEFAZ.
     // Lança 429 LIMITE_DIARIO_ATINGIDO se o contador estourou o teto.

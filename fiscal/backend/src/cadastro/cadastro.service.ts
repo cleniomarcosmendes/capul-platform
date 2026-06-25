@@ -413,12 +413,30 @@ export class CadastroService {
       );
     }
 
+    // 3b) Para CPF, várias UFs (ex.: PR) NÃO aceitam consulta por CPF no CCC —
+    //     só por IE. Quando o vínculo Protheus tem a inscrição da UF, consultamos
+    //     POR IE (acha produtor rural). CNPJ segue por CNPJ (traz TODAS as IEs do
+    //     CNPJ na UF — necessário pra auditoria).
+    const consultaEhCpf = cnpjDigits.length === 11;
+    const iePorUf = new Map<string, string>();
+    if (consultaEhCpf) {
+      for (const v of vinculos) {
+        if (v.uf && v.inscricaoEstadual && /\d/.test(v.inscricaoEstadual) && !iePorUf.has(v.uf)) {
+          iePorUf.set(v.uf, v.inscricaoEstadual);
+        }
+      }
+    }
+
     // 4) Consulta SEFAZ em paralelo (allSettled — se uma UF cair, as outras
     //    continuam). Cada UF tem sua própria chave no dedup/circuit breaker.
     const resultados = await Promise.allSettled(
-      ufsParaConsultar.map((ufAlvo) =>
-        this.ccc.consultarPorCnpj(cnpjDigits, ufAlvo, ambienteStr).then((raw) => ({ uf: ufAlvo, raw })),
-      ),
+      ufsParaConsultar.map((ufAlvo) => {
+        const ie = iePorUf.get(ufAlvo);
+        const consulta = ie
+          ? this.ccc.consultarPorIe(ie, ufAlvo, ambienteStr)
+          : this.ccc.consultarPorCnpj(cnpjDigits, ufAlvo, ambienteStr);
+        return consulta.then((raw) => ({ uf: ufAlvo, raw }));
+      }),
     );
 
     const ufsComFalha: Array<{ uf: string; erro: string }> = [];
