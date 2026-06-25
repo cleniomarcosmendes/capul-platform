@@ -94,6 +94,8 @@ export interface SacEmailTriagemItem {
   subject: string | null;
   corpoTexto: string | null;
   motivo: string | null;
+  /** Quando é resposta a um chamado existente que caiu na triagem (MATCHED+anexo). */
+  sacNumero: number | null;
   recebidoEm: string | null;
   processadoEm: string;
   anexos: SacEmailTriagemAnexo[];
@@ -140,8 +142,8 @@ export const sacEmailService = {
     return data;
   },
 
-  async vincularTriagem(id: string, numero: number): Promise<{ ok: boolean; chamadoId: string; anexos: number }> {
-    const { data } = await gestaoApi.post(`/sac-email/triagem/${id}/vincular`, { numero });
+  async vincularTriagem(id: string, numero: number, incluirAnexos = false): Promise<{ ok: boolean; chamadoId: string; anexos: number; anexosQuarentena: number }> {
+    const { data } = await gestaoApi.post(`/sac-email/triagem/${id}/vincular`, { numero, incluirAnexos });
     return data;
   },
 
@@ -156,8 +158,8 @@ export const sacEmailService = {
     return data;
   },
 
-  async abrirTriagem(id: string, equipeId: string): Promise<{ ok: boolean; numero: number; anexos: number }> {
-    const { data } = await gestaoApi.post(`/sac-email/triagem/${id}/abrir`, { equipeId });
+  async abrirTriagem(id: string, equipeId: string, incluirAnexos = false): Promise<{ ok: boolean; numero: number; anexos: number; anexosQuarentena: number }> {
+    const { data } = await gestaoApi.post(`/sac-email/triagem/${id}/abrir`, { equipeId, incluirAnexos });
     return data;
   },
 };

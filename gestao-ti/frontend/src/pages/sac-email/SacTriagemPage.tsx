@@ -27,6 +27,8 @@ export function SacTriagemPage() {
   const [triando, setTriando] = useState<string | null>(null);
   const [equipesSac, setEquipesSac] = useState<SacEquipe[]>([]);
   const [abrirEq, setAbrirEq] = useState<Record<string, string>>({});
+  // Anexo do cliente NÃO entra por padrão (segurança) — operador marca p/ incluir.
+  const [incluirAnexos, setIncluirAnexos] = useState<Record<string, boolean>>({});
 
   function carregar() {
     sacEmailService.getConfig().then(setResp).catch(() => undefined);
@@ -65,8 +67,8 @@ export function SacTriagemPage() {
     }
     setTriando(item.id);
     try {
-      const r = await sacEmailService.abrirTriagem(item.id, eq);
-      toast('success', `Chamado de SAC #${r.numero} aberto${r.anexos ? ` (+${r.anexos} anexo[s])` : ''}.`);
+      const r = await sacEmailService.abrirTriagem(item.id, eq, incluirAnexos[item.id] === true);
+      toast('success', `Chamado de SAC #${r.numero} aberto${r.anexos ? ` (+${r.anexos} anexo[s] incluído[s])` : ''}${r.anexosQuarentena ? ` · ${r.anexosQuarentena} em quarentena` : ''}.`);
       carregar();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -84,8 +86,8 @@ export function SacTriagemPage() {
     }
     setTriando(item.id);
     try {
-      const r = await sacEmailService.vincularTriagem(item.id, num);
-      toast('success', `Vinculado ao chamado #${num}${r.anexos ? ` (+${r.anexos} anexo[s])` : ''}.`);
+      const r = await sacEmailService.vincularTriagem(item.id, num, incluirAnexos[item.id] === true);
+      toast('success', `Vinculado ao chamado #${num}${r.anexos ? ` (+${r.anexos} anexo[s] incluído[s])` : ''}${r.anexosQuarentena ? ` · ${r.anexosQuarentena} em quarentena` : ''}.`);
       carregar();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -170,6 +172,11 @@ export function SacTriagemPage() {
                         <div className="min-w-0">
                           <div className="text-sm text-slate-700 font-medium truncate">{it.subject || '(sem assunto)'}</div>
                           <div className="text-xs text-slate-500">De: {it.fromAddr ?? '—'} · {new Date(it.processadoEm).toLocaleString('pt-BR')}</div>
+                          {it.sacNumero != null && (
+                            <div className="text-[11px] mt-1 inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                              ↳ resposta ao chamado #{it.sacNumero} — caiu na triagem por ter anexo
+                            </div>
+                          )}
                         </div>
                         {it.anexos.length > 0 && (
                           <span className="inline-flex items-center gap-1 text-xs text-slate-500 shrink-0">
@@ -183,10 +190,20 @@ export function SacTriagemPage() {
                     </div>
                     {/* Ações (direita em telas grandes; empilha embaixo no mobile) */}
                     <div className="mt-3 lg:mt-0 lg:w-96 lg:shrink-0 lg:border-l lg:border-slate-100 lg:pl-4 space-y-2">
+                      {it.anexos.length > 0 && (
+                        <label className="flex items-start gap-2 text-xs bg-amber-50 border border-amber-200 rounded p-2 cursor-pointer">
+                          <input type="checkbox" className="mt-0.5" checked={incluirAnexos[it.id] === true}
+                            onChange={(e) => setIncluirAnexos((m) => ({ ...m, [it.id]: e.target.checked }))} />
+                          <span className="text-amber-800">
+                            Incluir {it.anexos.length} anexo(s) no chamado — <strong>externo, não verificado</strong>. Por padrão fica em <strong>quarentena</strong> (segurança contra vírus); só marque se avaliou.
+                            <span className="block text-amber-700/80 truncate">{it.anexos.map((a) => a.nomeOriginal).join(', ')}</span>
+                          </span>
+                        </label>
+                      )}
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-slate-500">Vincular ao chamado nº</span>
                         <input
-                          value={vincNum[it.id] ?? ''}
+                          value={vincNum[it.id] ?? (it.sacNumero != null ? String(it.sacNumero) : '')}
                           onChange={(e) => setVincNum((m) => ({ ...m, [it.id]: e.target.value.replace(/\D/g, '') }))}
                           placeholder="ex.: 1405"
                           className="w-24 border border-slate-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-capul-600"

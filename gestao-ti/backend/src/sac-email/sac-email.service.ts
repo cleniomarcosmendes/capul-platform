@@ -233,7 +233,11 @@ export class SacEmailService {
                 tratado = true;
               } else {
                 const r = await this.classificar(parsed);
-                const ehTriagem = r.resultado === 'UNMATCHED';
+                // SEGURANÇA: e-mail do cliente COM anexo SEMPRE passa por triagem
+                // (revisão do anexo antes de entrar), inclusive resposta a chamado
+                // existente (MATCHED). Sem anexo, MATCHED entra direto no chamado.
+                const temAnexo = (parsed.attachments ?? []).length > 0;
+                const ehTriagem = r.resultado === 'UNMATCHED' || (r.resultado === 'MATCHED' && temAnexo);
 
                 // Reivindica o messageId PRIMEIRO (constraint unique = dedupe
                 // atômico) — antes dos efeitos colaterais, pra um "Buscar agora"
@@ -245,9 +249,13 @@ export class SacEmailService {
                       messageId: key,
                       fromAddr: parsed.from?.value?.[0]?.address ?? null,
                       subject: (parsed.subject ?? '').slice(0, 500) || null,
+                      // Mantém sacNumero/chamadoId mesmo na triagem (MATCHED+anexo)
+                      // → a triagem já sugere o chamado-alvo no "Vincular".
                       sacNumero: r.sacNumero,
                       chamadoId: r.chamadoId,
-                      resultado: r.resultado,
+                      // Em triagem o resultado fica UNMATCHED até o operador vincular
+                      // (mesmo sabendo o nº) — semântica limpa p/ a fila de triagem.
+                      resultado: ehTriagem ? 'UNMATCHED' : r.resultado,
                       motivo: r.motivo,
                       recebidoEm: parsed.date ?? null,
                       corpoTexto: ehTriagem ? this.corpoDoEmail(parsed) || null : null,
@@ -267,19 +275,26 @@ export class SacEmailService {
 
                 if (nova) {
                   // Donos do messageId — efeitos colaterais agora são seguros.
-                  let resultado = r.resultado as 'MATCHED' | 'UNMATCHED' | 'SKIPPED_AUTO' | 'SKIPPED_OWN' | 'ERROR';
+                  // Na triagem (UNMATCHED ou MATCHED+anexo) o resultado fica UNMATCHED.
+                  let resultado = (ehTriagem ? 'UNMATCHED' : r.resultado) as 'MATCHED' | 'UNMATCHED' | 'SKIPPED_AUTO' | 'SKIPPED_OWN' | 'ERROR';
                   let motivo = r.motivo;
-                  if (r.resultado === 'MATCHED' && r.chamadoId) {
+                  if (ehTriagem) {
+                    // Anexo do cliente fica em QUARENTENA p/ revisão na triagem.
+                    await this.salvarAnexosTriagem(nova.id, parsed);
+                    if (r.resultado === 'MATCHED') {
+                      motivo = `resposta ao chamado #${r.sacNumero} com anexo → enviada à TRIAGEM (revisão de segurança)`;
+                      await this.prisma.sacEmailIngestao.update({ where: { id: nova.id }, data: { motivo } });
+                    }
+                  } else if (r.resultado === 'MATCHED' && r.chamadoId) {
+                    // Resposta SEM anexo → entra direto no chamado (baixo risco).
                     try {
-                      const ing = await this.ingerirNoChamado(r.chamadoId, parsed, sistemaId);
-                      motivo = `comentário criado${ing.anexos ? ` (+${ing.anexos} anexo[s])` : ''}`;
+                      await this.ingerirNoChamado(r.chamadoId, parsed, sistemaId);
+                      motivo = 'comentário criado';
                     } catch (err) {
                       resultado = 'ERROR';
                       motivo = `falha ao ingerir no chamado: ${(err as Error).message}`;
                     }
                     await this.prisma.sacEmailIngestao.update({ where: { id: nova.id }, data: { resultado, motivo } });
-                  } else if (ehTriagem) {
-                    await this.salvarAnexosTriagem(nova.id, parsed);
                   }
                   if (resultado === 'MATCHED') resumo.matched++;
                   else if (resultado === 'UNMATCHED') resumo.unmatched++;
@@ -427,6 +442,7 @@ export class SacEmailService {
     const fromAddr = parsed.from?.value?.[0]?.address ?? 'desconhecido';
     const corpo = this.corpoDoEmail(parsed) || '(sem corpo)';
 
+    // Só chega aqui resposta SEM anexo (com anexo vai pra triagem — segurança).
     await this.prisma.historicoChamado.create({
       data: {
         tipo: 'COMENTARIO',
@@ -436,27 +452,6 @@ export class SacEmailService {
         usuarioId: sistemaId,
       },
     });
-
-    // Anexos do e-mail → AnexoChamado (mesma whitelist/teto do chamado).
-    let anexos = 0;
-    for (const att of parsed.attachments ?? []) {
-      const originalname = att.filename || 'anexo';
-      const mimetype = att.contentType || 'application/octet-stream';
-      const g = this.gravarAnexoBuffer(originalname, mimetype, att.content);
-      if (!g) continue;
-      await this.prisma.anexoChamado.create({
-        data: {
-          nomeOriginal: originalname,
-          nomeArquivo: g.nomeArquivo,
-          mimeType: mimetype,
-          tamanho: att.content.length,
-          descricao: 'Anexo recebido do cliente (SAC e-mail)',
-          chamadoId,
-          usuarioId: sistemaId,
-        },
-      });
-      anexos++;
-    }
 
     // Notifica o técnico responsável (se houver) — não é o usuário de sistema.
     if (chamado.tecnicoId && chamado.tecnicoId !== sistemaId) {
@@ -471,7 +466,7 @@ export class SacEmailService {
         .catch(() => undefined);
     }
 
-    return { anexos };
+    return { anexos: 0 };
   }
 
   /** Valida (whitelist + 10MB) e grava um buffer no UPLOADS_DIR. null se inválido. */
@@ -520,7 +515,7 @@ export class SacEmailService {
    * (corpo preservado, autoria do usuário-sistema) + leva os anexos preservados
    * pro chamado e marca a triagem como RESOLVIDA.
    */
-  async vincularTriagem(ingestaoId: string, numero: number, userId: string) {
+  async vincularTriagem(ingestaoId: string, numero: number, userId: string, incluirAnexos = false) {
     const ing = await this.prisma.sacEmailIngestao.findUnique({
       where: { id: ingestaoId },
       include: { anexos: true },
@@ -538,35 +533,45 @@ export class SacEmailService {
     const sistemaId = await this.getSistemaSacUserId();
     if (!sistemaId) throw new BadRequestException('Usuário de sistema do SAC ausente — rode o seed.');
 
+    // Anexos: SÓ entram no chamado se o operador marcar "incluir" (revisão de
+    // segurança). Default = NÃO incluir (ficam na quarentena, ligados à ingestão).
+    const nA = (ing.anexos ?? []).length;
+    const notaAnexo = nA === 0 ? '' : incluirAnexos
+      ? `\n📎 ${nA} anexo(s) do cliente INCLUÍDO(S) no chamado pelo atendente.`
+      : `\n📎 ${nA} anexo(s) do cliente NÃO incluído(s) (mantidos em quarentena — externo, não verificado).`;
+
     const corpo = (ing.corpoTexto ?? '').trim() || '(sem corpo)';
     await this.prisma.historicoChamado.create({
       data: {
         tipo: 'COMENTARIO',
-        descricao: `📨 Cliente (${ing.fromAddr ?? 'desconhecido'}) respondeu por e-mail (via triagem):\n${corpo}`,
+        descricao: `📨 Cliente (${ing.fromAddr ?? 'desconhecido'}) respondeu por e-mail (via triagem):\n${corpo}${notaAnexo}`,
         publico: true,
         chamadoId: chamado.id,
         usuarioId: sistemaId,
       },
     });
-    // Leva os anexos preservados pro chamado (mesmo arquivo no disco).
-    for (const a of ing.anexos) {
-      await this.prisma.anexoChamado.create({
-        data: {
-          nomeOriginal: a.nomeOriginal,
-          nomeArquivo: a.nomeArquivo,
-          mimeType: a.mimeType,
-          tamanho: a.tamanho,
-          descricao: 'Anexo do cliente (SAC e-mail — triagem)',
-          chamadoId: chamado.id,
-          usuarioId: sistemaId,
-        },
-      });
+    let anexosIncluidos = 0;
+    if (incluirAnexos) {
+      for (const a of ing.anexos ?? []) {
+        await this.prisma.anexoChamado.create({
+          data: {
+            nomeOriginal: a.nomeOriginal,
+            nomeArquivo: a.nomeArquivo,
+            mimeType: a.mimeType,
+            tamanho: a.tamanho,
+            descricao: 'Anexo do cliente (SAC e-mail — incluído na triagem)',
+            chamadoId: chamado.id,
+            usuarioId: sistemaId,
+          },
+        });
+        anexosIncluidos++;
+      }
     }
     await this.prisma.sacEmailIngestao.update({
       where: { id: ingestaoId },
       data: { triagemStatus: 'RESOLVIDO', triadoEm: new Date(), triadoPor: userId, chamadoVinculadoId: chamado.id, resultado: 'MATCHED', chamadoId: chamado.id },
     });
-    return { ok: true, chamadoId: chamado.id, anexos: ing.anexos.length };
+    return { ok: true, chamadoId: chamado.id, anexos: anexosIncluidos, anexosQuarentena: incluirAnexos ? 0 : nA };
   }
 
   /** Equipes de ATENDIMENTO ao SAC (atendeSac) — opções do "abrir novo chamado". */
@@ -583,7 +588,7 @@ export class SacEmailService {
    * sem chamado). Solicitante = usuário-sistema; corpo do e-mail vira a descrição;
    * anexos preservados entram no chamado. Marca a triagem como RESOLVIDA.
    */
-  async abrirTriagem(ingestaoId: string, equipeId: string, userId: string, filialId: string) {
+  async abrirTriagem(ingestaoId: string, equipeId: string, userId: string, filialId: string, incluirAnexos = false) {
     const ing = await this.prisma.sacEmailIngestao.findUnique({ where: { id: ingestaoId }, include: { anexos: true } });
     if (!ing) throw new NotFoundException('Item de triagem não encontrado.');
     if (ing.triagemStatus !== 'PENDENTE') throw new BadRequestException('Este item já foi tratado.');
@@ -621,35 +626,44 @@ export class SacEmailService {
       select: { id: true, numero: true },
     });
 
+    const anexosIng = ing.anexos ?? [];
+    const nA = anexosIng.length;
+    const notaAnexo = nA === 0 ? '' : incluirAnexos
+      ? ` ${nA} anexo(s) do cliente incluído(s).`
+      : ` ${nA} anexo(s) do cliente em quarentena (não incluídos — externo, não verificado).`;
     await this.prisma.historicoChamado.create({
       data: {
         tipo: 'ABERTURA',
-        descricao: `Chamado de SAC aberto a partir de e-mail de ${ing.fromAddr ?? 'desconhecido'} (triagem).`,
+        descricao: `Chamado de SAC aberto a partir de e-mail de ${ing.fromAddr ?? 'desconhecido'} (triagem).${notaAnexo}`,
         publico: true,
         chamadoId: chamado.id,
         usuarioId: sistemaId,
       },
     });
 
-    for (const a of ing.anexos) {
-      await this.prisma.anexoChamado.create({
-        data: {
-          nomeOriginal: a.nomeOriginal,
-          nomeArquivo: a.nomeArquivo,
-          mimeType: a.mimeType,
-          tamanho: a.tamanho,
-          descricao: 'Anexo do cliente (SAC e-mail — triagem)',
-          chamadoId: chamado.id,
-          usuarioId: sistemaId,
-        },
-      });
+    let anexosIncluidos = 0;
+    if (incluirAnexos) {
+      for (const a of ing.anexos ?? []) {
+        await this.prisma.anexoChamado.create({
+          data: {
+            nomeOriginal: a.nomeOriginal,
+            nomeArquivo: a.nomeArquivo,
+            mimeType: a.mimeType,
+            tamanho: a.tamanho,
+            descricao: 'Anexo do cliente (SAC e-mail — incluído na triagem)',
+            chamadoId: chamado.id,
+            usuarioId: sistemaId,
+          },
+        });
+        anexosIncluidos++;
+      }
     }
 
     await this.prisma.sacEmailIngestao.update({
       where: { id: ingestaoId },
       data: { triagemStatus: 'RESOLVIDO', triadoEm: new Date(), triadoPor: userId, chamadoVinculadoId: chamado.id, resultado: 'MATCHED', chamadoId: chamado.id, sacNumero: chamado.numero },
     });
-    return { ok: true, chamadoId: chamado.id, numero: chamado.numero, anexos: ing.anexos.length };
+    return { ok: true, chamadoId: chamado.id, numero: chamado.numero, anexos: anexosIncluidos, anexosQuarentena: incluirAnexos ? 0 : nA };
   }
 
   /** Descarta um e-mail de triagem (spam/irrelevante). */

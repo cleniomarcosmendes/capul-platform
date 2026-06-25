@@ -106,7 +106,7 @@ describe('SacEmailService (SAC Fase 3)', () => {
     prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });
     prisma.usuario.findFirst.mockResolvedValue({ id: 'sys-1' });
 
-    const r = await service.vincularTriagem('ing-1', 1405, 'user-1');
+    const r = await service.vincularTriagem('ing-1', 1405, 'user-1', true);
     expect(r.ok).toBe(true);
     expect(r.anexos).toBe(1);
     expect(prisma.historicoChamado.create).toHaveBeenCalledWith(
@@ -141,7 +141,7 @@ describe('SacEmailService (SAC Fase 3)', () => {
     prisma.usuario.findFirst.mockResolvedValue({ id: 'sys-1' });
     prisma.chamado.create.mockResolvedValue({ id: 'ch-new', numero: 1500 });
 
-    const r = await service.abrirTriagem('ing-1', 'eq-sac', 'user-1', 'fil-1');
+    const r = await service.abrirTriagem('ing-1', 'eq-sac', 'user-1', 'fil-1', true);
     expect(r).toMatchObject({ ok: true, numero: 1500, anexos: 1 });
     expect(prisma.chamado.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({
@@ -339,6 +339,32 @@ describe('SacEmailService (SAC Fase 3)', () => {
     it('só citação (sem resposta nova) → salvaguarda devolve o texto bruto', () => {
       const so = '> tudo citado\n> nada novo';
       expect(strip(so)).toBe(so);
+    });
+  });
+
+  describe('vincularTriagem — anexo do cliente em quarentena (default não inclui)', () => {
+    beforeEach(() => {
+      prisma.sacEmailIngestao.findUnique.mockResolvedValue({
+        id: 'ing-1', triagemStatus: 'PENDENTE', fromAddr: 'cli@x.com', corpoTexto: 'oi',
+        anexos: [{ nomeOriginal: 'a.pdf', nomeArquivo: 'x.pdf', mimeType: 'application/pdf', tamanho: 10 }],
+      });
+      prisma.chamado.findUnique.mockResolvedValue({ id: 'ch-1', equipeAtualId: 'eq-1' });
+      prisma.equipe.findUnique.mockResolvedValue({ atendeSac: true });
+      prisma.usuario.findFirst.mockResolvedValue({ id: 'sis-1' }); // sistema_sac
+    });
+
+    it('default (sem incluir): NÃO cria anexo no chamado — fica em quarentena', async () => {
+      const r = await service.vincularTriagem('ing-1', 1405, 'op-1');
+      expect(prisma.anexoChamado.create).not.toHaveBeenCalled();
+      expect(r.anexos).toBe(0);
+      expect(r.anexosQuarentena).toBe(1);
+    });
+
+    it('incluirAnexos=true: cria o anexo no chamado', async () => {
+      const r = await service.vincularTriagem('ing-1', 1405, 'op-1', true);
+      expect(prisma.anexoChamado.create).toHaveBeenCalledTimes(1);
+      expect(r.anexos).toBe(1);
+      expect(r.anexosQuarentena).toBe(0);
     });
   });
 });

@@ -55,8 +55,8 @@ export class SacEmailController {
 
   @Post('triagem/:id/vincular')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  vincularTriagem(@Param('id') id: string, @Body('numero') numero: number, @CurrentUser() user: JwtPayload) {
-    return this.service.vincularTriagem(id, Number(numero), user.sub);
+  vincularTriagem(@Param('id') id: string, @Body('numero') numero: number, @Body('incluirAnexos') incluirAnexos: boolean, @CurrentUser() user: JwtPayload) {
+    return this.service.vincularTriagem(id, Number(numero), user.sub, incluirAnexos === true);
   }
 
   @Post('triagem/:id/descartar')
@@ -73,7 +73,7 @@ export class SacEmailController {
 
   @Post('triagem/:id/abrir')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  abrirTriagem(@Param('id') id: string, @Body('equipeId') equipeId: string, @CurrentUser() user: JwtPayload) {
-    return this.service.abrirTriagem(id, equipeId, user.sub, user.filialId);
+  abrirTriagem(@Param('id') id: string, @Body('equipeId') equipeId: string, @Body('incluirAnexos') incluirAnexos: boolean, @CurrentUser() user: JwtPayload) {
+    return this.service.abrirTriagem(id, equipeId, user.sub, user.filialId, incluirAnexos === true);
   }
 }
