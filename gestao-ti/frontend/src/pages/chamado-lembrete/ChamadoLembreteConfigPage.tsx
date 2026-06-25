@@ -138,9 +138,9 @@ export function ChamadoLembreteConfigPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                     <Stat label="Lembrar técnico" n={previa.lembrarTecnico.length} nums={previa.lembrarTecnico} />
                     <Stat label="Lembrar solicitante" n={previa.lembrarSolicitante.length} nums={previa.lembrarSolicitante} />
+                    <Stat label="Lembrar cliente (SAC)" n={previa.lembrarClienteSac.length} nums={previa.lembrarClienteSac} />
                     <Stat label="Escalar à equipe" n={previa.escalados.length} nums={previa.escalados} />
                     <Stat label="Fechar por inatividade" n={previa.fechados.length} nums={previa.fechados} danger />
-                    <Stat label="SAC (pulados)" n={previa.sacPulados} />
                     <Stat label="Sem destinatário" n={previa.semDestino} />
                   </div>
                 </div>

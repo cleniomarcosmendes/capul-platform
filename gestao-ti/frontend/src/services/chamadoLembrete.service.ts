@@ -35,9 +35,9 @@ export interface VarreduraResumo {
   motivo?: string;
   lembrarTecnico: number[];
   lembrarSolicitante: number[];
+  lembrarClienteSac: number[];
   escalados: number[];
   fechados: number[];
-  sacPulados: number;
   semDestino: number;
 }
 

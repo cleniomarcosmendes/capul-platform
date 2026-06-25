@@ -17,9 +17,9 @@ export interface ResumoVarredura {
   motivo?: string;
   lembrarTecnico: number[];
   lembrarSolicitante: number[];
+  lembrarClienteSac: number[];
   escalados: number[];
   fechados: number[];
-  sacPulados: number;
   semDestino: number;
 }
 
@@ -92,8 +92,8 @@ export class ChamadoLembreteService {
     const dryRun = !!opts.dryRun;
     const cfg = await this.getConfigRow();
     const r: ResumoVarredura = {
-      ok: true, dryRun, lembrarTecnico: [], lembrarSolicitante: [],
-      escalados: [], fechados: [], sacPulados: 0, semDestino: 0,
+      ok: true, dryRun, lembrarTecnico: [], lembrarSolicitante: [], lembrarClienteSac: [],
+      escalados: [], fechados: [], semDestino: 0,
     };
     if (!cfg.enabled && !dryRun) return { ...r, ok: false, motivo: 'desabilitado' };
 
@@ -127,9 +127,10 @@ export class ChamadoLembreteService {
         const ultima = ultimaPorId.get(c.id) ?? c.updatedAt;
         const diasParado = (agora.getTime() - ultima.getTime()) / DIA_MS;
 
-        // SAC (cliente externo) — lembrete ao cliente fica pra Fase 1b (usa a saída
-        // própria do SAC). Aqui só tratamos chamados internos.
-        if (c.equipeAtual.atendeSac && c.clienteEmail) { r.sacPulados++; continue; }
+        // SAC = chamado de equipe atendeSac COM e-mail do cliente externo. Quando
+        // aguarda o cliente (PENDENTE_USUARIO), o lembrete vai pro CLIENTE pela
+        // saída própria do SAC; quando aguarda a equipe, segue o fluxo do técnico.
+        const ehSac = c.equipeAtual.atendeSac && !!c.clienteEmail;
 
         if (c.status === 'PENDENTE_USUARIO') {
           if (diasParado < cfg.diasInatividadeSolicitante) continue;
@@ -139,15 +140,20 @@ export class ChamadoLembreteService {
             && (agora.getTime() - c.ultimoLembreteEm.getTime()) / DIA_MS >= cfg.diasAutoFechamento;
           if (cfg.autoFechar && esgotou && venceuPosLembrete) {
             r.fechados.push(c.numero);
-            if (!dryRun) await this.fecharPorInatividade(c.id, c.numero);
+            if (!dryRun) await this.fecharPorInatividade(c.id, c.numero, ehSac ? c.clienteEmail : null);
             continue;
           }
           if (c.lembretesEnviados >= cfg.maxLembretes) continue;
           if (!podeReenviar(c.ultimoLembreteEm)) continue;
-          const destino = c.solicitante?.email ? [c.solicitanteId] : [];
-          if (destino.length === 0) { r.semDestino++; continue; }
-          r.lembrarSolicitante.push(c.numero);
-          if (!dryRun) { await this.enviarLembrete(c, destino, 'SOLICITANTE', false, Math.floor(diasParado)); await this.registrarLembrete(c.id); }
+          if (ehSac) {
+            r.lembrarClienteSac.push(c.numero);
+            if (!dryRun) { await this.enviarLembreteClienteSac(c, c.clienteEmail!, Math.floor(diasParado)); await this.registrarLembrete(c.id); }
+          } else {
+            const destino = c.solicitante?.email ? [c.solicitanteId] : [];
+            if (destino.length === 0) { r.semDestino++; continue; }
+            r.lembrarSolicitante.push(c.numero);
+            if (!dryRun) { await this.enviarLembrete(c, destino, 'SOLICITANTE', false, Math.floor(diasParado)); await this.registrarLembrete(c.id); }
+          }
         } else {
           if (diasParado < cfg.diasInatividadeEquipe) continue;
           if (c.lembretesEnviados >= cfg.maxLembretes) continue;
@@ -171,7 +177,7 @@ export class ChamadoLembreteService {
   private async finalizar(r: ResumoVarredura, cfgId: number, dryRun: boolean): Promise<ResumoVarredura> {
     if (!dryRun) {
       const resumo = `lembretes técnico=${r.lembrarTecnico.length} solicitante=${r.lembrarSolicitante.length}`
-        + ` escalados=${r.escalados.length} fechados=${r.fechados.length} sacPulados=${r.sacPulados}`;
+        + ` clienteSac=${r.lembrarClienteSac.length} escalados=${r.escalados.length} fechados=${r.fechados.length}`;
       this.logger.log(`Varredura de lembretes: ${resumo}`);
       await this.prisma.chamadoLembreteConfig.update({
         where: { id: cfgId }, data: { lastRunAt: new Date(), lastResumo: resumo },
@@ -202,6 +208,21 @@ export class ChamadoLembreteService {
     });
   }
 
+  /**
+   * Lembrete ao CLIENTE externo do SAC (PENDENTE_USUARIO). Sai pela caixa do SAC
+   * (enviarExterno → sac:true) com `[SAC-n]` no assunto, então a resposta do
+   * cliente volta pro poller e reativa o chamado.
+   */
+  private async enviarLembreteClienteSac(c: { numero: number; titulo: string }, clienteEmail: string, diasParado: number): Promise<void> {
+    const html = '<div style="font-family:system-ui,-apple-system,sans-serif;color:#0f172a">'
+      + `<p style="margin:0 0 12px">Olá! O seu atendimento <strong>[SAC-${c.numero}]</strong> está aguardando a <strong>sua resposta</strong> há ${diasParado} dia(s).</p>`
+      + `<p style="margin:0 0 12px"><strong>${this.esc(c.titulo)}</strong></p>`
+      + '<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0">'
+      + `<p style="font-size:12px;color:#64748b;margin:0">CAPUL — Atendimento ao Cliente (SAC). Responda este e-mail para continuar. Sem retorno, o atendimento será encerrado por inatividade.</p>`
+      + '</div>';
+    await this.email.enviarExterno(clienteEmail, `[SAC-${c.numero}] ${c.titulo}`, html);
+  }
+
   /** Marca o lembrete enviado (timestamp + contador) — anti-spam/teto. */
   private async registrarLembrete(chamadoId: string): Promise<void> {
     await this.prisma.chamado.update({
@@ -210,7 +231,7 @@ export class ChamadoLembreteService {
     });
   }
 
-  private async fecharPorInatividade(chamadoId: string, numero: number): Promise<void> {
+  private async fecharPorInatividade(chamadoId: string, numero: number, clienteEmailSac: string | null): Promise<void> {
     const sistemaId = await this.getSistemaUserId();
     if (!sistemaId) { this.logger.warn(`Auto-fechamento #${numero} pulado — usuário de sistema ausente`); return; }
     await this.prisma.$transaction([
@@ -221,10 +242,17 @@ export class ChamadoLembreteService {
       this.prisma.historicoChamado.create({
         data: {
           tipo: 'FECHADO', publico: true, chamadoId, usuarioId: sistemaId,
-          descricao: '🔒 Chamado FECHADO automaticamente por inatividade (sem resposta do solicitante após os lembretes).',
+          descricao: '🔒 Chamado FECHADO automaticamente por inatividade (sem resposta após os lembretes).',
         },
       }),
     ]);
+    // SAC: avisa o cliente do encerramento (pela caixa do SAC; pode reabrir respondendo).
+    if (clienteEmailSac) {
+      const html = '<div style="font-family:system-ui,-apple-system,sans-serif;color:#0f172a">'
+        + `<p style="margin:0 0 12px">O seu atendimento <strong>[SAC-${numero}]</strong> foi <strong>encerrado por inatividade</strong> (sem retorno após os lembretes).</p>`
+        + `<p style="font-size:12px;color:#64748b;margin:0">CAPUL — Atendimento ao Cliente (SAC). Se ainda precisar, responda este e-mail que reabriremos o atendimento.</p></div>`;
+      await this.email.enviarExterno(clienteEmailSac, `[SAC-${numero}] Atendimento encerrado por inatividade`, html);
+    }
   }
 
   private esc(s: string): string {
