@@ -308,7 +308,7 @@ export class ProtheusService {
    */
   async buscarClienteSac(
     matricula: string,
-  ): Promise<{ matricula: string; nome: string; telefone: string | null; cpfCnpj: string | null } | null> {
+  ): Promise<{ matricula: string; nome: string; telefone: string | null; email: string | null; cpfCnpj: string | null } | null> {
     const ep = await this.resolveEndpoint('clienteSac');
     if (!ep) return null;
 
@@ -325,6 +325,10 @@ export class ProtheusService {
     if (!it) return null;
     const contatos = Array.isArray(it.contatos) ? (it.contatos as Array<Record<string, unknown>>) : [];
     const telefone = contatos.map((c) => norm(c.numero)).find((n) => n) ?? null;
-    return { matricula: norm(it.matricula) || mat, nome: norm(it.nome), telefone, cpfCnpj: norm(it.cpfcnpj) || null };
+    // E-mail (chave `email` na SA1 — Protheus passou a devolver 25/06). Minúsculo
+    // p/ consistência; só aceita se tiver cara de e-mail (a SA1 às vezes traz lixo).
+    const emailRaw = norm(it.email).toLowerCase();
+    const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw) ? emailRaw : null;
+    return { matricula: norm(it.matricula) || mat, nome: norm(it.nome), telefone, email, cpfCnpj: norm(it.cpfcnpj) || null };
   }
 }

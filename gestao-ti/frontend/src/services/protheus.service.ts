@@ -28,6 +28,7 @@ export interface ClienteSacProtheus {
   matricula: string;
   nome: string | null;
   telefone?: string | null;
+  email?: string | null;
   cpfCnpj?: string | null;
 }
 

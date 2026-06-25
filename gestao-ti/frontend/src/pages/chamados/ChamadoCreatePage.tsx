@@ -212,8 +212,13 @@ export function ChamadoCreatePage() {
       if (r.encontrado && r.nome) {
         setClienteNome(r.nome);
         if (r.telefone) setClienteTelefone(maskTelefone(r.telefone));
+        if (r.email) setClienteEmail(r.email);
         setDirty(true);
-        setClienteBuscaMsg({ ok: true, texto: `Cliente: ${r.nome}${r.cpfCnpj ? ` · ${r.cpfCnpj}` : ''}. Informe o e-mail.` });
+        setClienteBuscaMsg({
+          ok: true,
+          texto: `Cliente: ${r.nome}${r.cpfCnpj ? ` · ${r.cpfCnpj}` : ''}.`
+            + (r.email ? '' : ' Informe o e-mail.'),
+        });
       } else {
         setClienteBuscaMsg({ ok: false, texto: 'Matrícula não encontrada — preencha os dados manualmente.' });
       }
