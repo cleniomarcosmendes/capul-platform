@@ -244,6 +244,18 @@ services:
       # Opt-in p/ aceitar certificado TLS quando hostname não bate com CN/SAN
       # (ex.: smtp.capul.com.br aponta pra inbox1.vertip.net). Default seguro: true.
       SMTP_TLS_REJECT_UNAUTHORIZED: ${SMTP_TLS_REJECT_UNAUTHORIZED:-true}
+      # SAÍDA específica do SAC — a resposta ao cliente sai da CAIXA DO SAC (mesma
+      # da entrada), pra tréplica voltar pro poller. SAC_SMTP_FROM = endereço do
+      # SAC (ex.: sac@capul.com.br). Conta SMTP dedicada (opcional, recomendada):
+      # SAC_SMTP_HOST/USER/PASSWORD = a mesma caixa do SAC_IMAP_*, no servidor SMTP.
+      # Sem SAC_SMTP_HOST: usa o SMTP geral mas força Reply-To=SAC_SMTP_FROM.
+      SAC_SMTP_FROM: ${SAC_SMTP_FROM:-}
+      SAC_SMTP_HOST: ${SAC_SMTP_HOST:-}
+      SAC_SMTP_PORT: ${SAC_SMTP_PORT:-587}
+      SAC_SMTP_USER: ${SAC_SMTP_USER:-}
+      SAC_SMTP_PASSWORD: ${SAC_SMTP_PASSWORD:-}
+      SAC_SMTP_SECURE: ${SAC_SMTP_SECURE:-false}
+      SAC_SMTP_TLS_REJECT_UNAUTHORIZED: ${SAC_SMTP_TLS_REJECT_UNAUTHORIZED:-true}
     # Porta NAO exposta — acesso via Nginx reverse proxy
     depends_on:
       postgres:

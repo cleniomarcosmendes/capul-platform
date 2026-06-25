@@ -2,6 +2,7 @@ import { Body, Controller, Post } from '@nestjs/common';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsEmail,
   IsOptional,
   IsString,
@@ -53,6 +54,14 @@ class SendEmailDto {
   @IsOptional()
   @IsEmail()
   replyTo?: string;
+
+  @IsOptional()
+  @IsEmail()
+  from?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  sac?: boolean;
 
   @IsOptional()
   @IsArray()

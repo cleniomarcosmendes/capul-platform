@@ -145,7 +145,10 @@ export class EmailEnvolvidosService {
       const res = await fetch(`${AUTH_GATEWAY_URL}/api/v1/internal/email/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: [realTo], subject: realSubject, html, attachments: anexos.length ? anexos : undefined }),
+        // sac:true → o gateway usa o remetente PRÓPRIO do SAC (From/Reply-To =
+        // caixa do SAC; conta SMTP dedicada se SAC_SMTP_* estiver setado). É o que
+        // faz a resposta sair do e-mail de ENTRADA e a tréplica voltar pro SAC.
+        body: JSON.stringify({ to: [realTo], subject: realSubject, html, sac: true, attachments: anexos.length ? anexos : undefined }),
         // Anexos em base64 podem deixar o POST mais pesado — timeout maior.
         signal: AbortSignal.timeout(anexos.length ? 30_000 : 15_000),
       });
