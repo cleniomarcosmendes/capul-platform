@@ -39,6 +39,7 @@ import {
   Inbox,
   MessageSquareText,
   Settings,
+  BellRing,
   X,
 } from 'lucide-react';
 
@@ -95,6 +96,7 @@ const menuItems: MenuItem[] = [
   { label: 'Conf. Equipes', icon: Users, path: '/gestao-ti/equipes', roles: MANAGERS, funcionalidade: 'EQUIPE' },
   { label: 'Catalogo de Servicos', icon: BookOpen, path: '/gestao-ti/catalogo', roles: MANAGERS, funcionalidade: 'CATALOGO_SERVICO' },
   { label: 'SLA', icon: Clock, path: '/gestao-ti/sla', roles: MANAGERS, funcionalidade: 'SLA' },
+  { label: 'Lembretes de chamado', icon: BellRing, path: '/gestao-ti/chamado-lembrete', roles: MANAGERS, funcionalidade: 'PAINEL_GESTAO_CHAMADO' },
   { label: 'Horarios de Trabalho', icon: Timer, path: '/gestao-ti/horarios-trabalho', roles: MANAGERS, funcionalidade: 'HORARIO_TRABALHO' },
   { label: 'Importar Dados', icon: Upload, path: '/gestao-ti/importar', roles: MANAGERS, funcionalidade: 'IMPORTAR_DADOS' },
   { section: 'CADASTROS', roles: MANAGERS },

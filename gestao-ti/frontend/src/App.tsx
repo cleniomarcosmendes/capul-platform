@@ -20,6 +20,7 @@ import { OrdemServicoFormPage } from './pages/ordens-servico/OrdemServicoFormPag
 
 import { CatalogoServicosPage } from './pages/catalogo/CatalogoServicosPage';
 import { SlaPage } from './pages/sla/SlaPage';
+import { ChamadoLembreteConfigPage } from './pages/chamado-lembrete/ChamadoLembreteConfigPage';
 import { SoftwaresListPage } from './pages/portfolio/SoftwaresListPage';
 import { SoftwareFormPage } from './pages/portfolio/SoftwareFormPage';
 import { SoftwareDetalhePage } from './pages/portfolio/SoftwareDetalhePage';
@@ -177,6 +178,7 @@ function AppRoutes() {
         <Route path="horarios-trabalho" element={<HorariosTrabalhoPage />} />
         <Route path="catalogo" element={<CatalogoServicosPage />} />
         <Route path="sla" element={<SlaPage />} />
+        <Route path="chamado-lembrete" element={<ChamadoLembreteConfigPage />} />
         <Route path="departamentos" element={<DepartamentosPage />} />
         <Route path="centros-custo" element={<CentrosCustoPage />} />
         <Route path="naturezas" element={<NaturezasPage />} />
