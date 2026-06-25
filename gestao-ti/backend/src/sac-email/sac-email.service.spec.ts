@@ -304,4 +304,41 @@ describe('SacEmailService (SAC Fase 3)', () => {
     expect(r.resultado).toBe('UNMATCHED');
     expect(r.motivo).toMatch(/não é um chamado de SAC/i);
   });
+
+  describe('extrairRespostaNova (strip de citação/assinatura)', () => {
+    const strip = (t: string) => (service as any).extrairRespostaNova(t) as string;
+
+    it('Gmail PT-BR: mantém só a resposta nova, corta "Em … escreveu:" + citação + assinatura', () => {
+      const email = [
+        'clenio resposta 1730 - gmail reposta',
+        '',
+        'Em qui., 25 de jun. de 2026 às 17:33, <testeplatform@capul.com.br> escreveu:',
+        '',
+        '> clenio teste email correto',
+        '> Protocolo [SAC-1730].',
+        '',
+        '-- ',
+        'Clenio Marcos Mendes',
+        '38 2102-5125',
+      ].join('\n');
+      expect(strip(email)).toBe('clenio resposta 1730 - gmail reposta');
+    });
+
+    it('corta linhas citadas ">" mesmo sem o cabeçalho "escreveu:"', () => {
+      expect(strip('minha resposta\n\n> texto antigo\n> mais antigo')).toBe('minha resposta');
+    });
+
+    it('remove a assinatura após "-- "', () => {
+      expect(strip('resposta\n-- \nFulano\ntel')).toBe('resposta');
+    });
+
+    it('e-mail novo (sem citação) fica intacto', () => {
+      expect(strip('Quero abrir uma reclamação sobre o produto X.')).toBe('Quero abrir uma reclamação sobre o produto X.');
+    });
+
+    it('só citação (sem resposta nova) → salvaguarda devolve o texto bruto', () => {
+      const so = '> tudo citado\n> nada novo';
+      expect(strip(so)).toBe(so);
+    });
+  });
 });

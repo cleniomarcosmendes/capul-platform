@@ -369,16 +369,43 @@ export class SacEmailService {
   /** Texto do corpo do e-mail (prefere text/plain; senão tira tags do HTML). */
   private corpoDoEmail(parsed: ParsedMail): string {
     const txt = (parsed.text ?? '').trim();
-    if (txt) return txt.slice(0, 5000);
-    const html = parsed.html || '';
-    return html
+    const bruto = txt || (parsed.html || '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<br\s*\/?>(?=)/gi, '\n')
       .replace(/<\/p>/gi, '\n')
       .replace(/<[^>]+>/g, '')
       .replace(/&nbsp;/g, ' ')
-      .trim()
-      .slice(0, 5000);
+      .trim();
+    return this.extrairRespostaNova(bruto).slice(0, 5000);
+  }
+
+  /**
+   * Mantém só a RESPOSTA NOVA do cliente — corta o histórico citado (linhas `>`,
+   * "Em <data> … escreveu:" / "On … wrote:", "Mensagem original", separador do
+   * Outlook) e a assinatura (delimitador `-- `). Heurística: corta na 1ª marca
+   * de citação encontrada. Salvaguarda: se sobrar vazio, devolve o texto bruto
+   * (melhor texto a mais que perder a resposta).
+   */
+  private extrairRespostaNova(texto: string): string {
+    if (!texto) return texto;
+    const linhas = texto.replace(/\r\n/g, '\n').split('\n');
+    const marcas = [
+      /^\s*Em\s.+escreveu:\s*$/i,                              // PT-BR Gmail
+      /^\s*On\s.+wrote:\s*$/i,                                 // EN Gmail
+      /^\s*-{2,}\s*(Mensagem original|Original Message)\s*-{2,}/i,
+      /^\s*_{10,}\s*$/,                                        // separador Outlook
+      /^\s*>+/,                                                // linha citada
+    ];
+    let corte = linhas.length;
+    for (let i = 0; i < linhas.length; i++) {
+      if (marcas.some((re) => re.test(linhas[i]!))) { corte = i; break; }
+    }
+    let res = linhas.slice(0, corte);
+    // Assinatura: tudo após a linha "-- " (delimitador RFC 3676).
+    const sig = res.findIndex((l) => /^--\s*$/.test(l));
+    if (sig >= 0) res = res.slice(0, sig);
+    const limpo = res.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    return limpo || texto.trim();
   }
 
   /**
