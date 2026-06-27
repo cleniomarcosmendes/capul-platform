@@ -162,6 +162,10 @@ export class DashboardService {
     return this.indicadores.getInvestimentoAnalitico(mes, ano, user, role);
   }
 
+  getInvestimentoEvolucao(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    return this.indicadores.getInvestimentoEvolucao(mes, ano, user, role);
+  }
+
   getInvestimentoDocumentos(
     mes: number, ano: number,
     dimensao: 'centroCusto' | 'tipoProduto' | 'departamento',

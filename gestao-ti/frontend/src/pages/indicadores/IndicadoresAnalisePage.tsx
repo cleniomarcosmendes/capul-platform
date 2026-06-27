@@ -3,8 +3,11 @@ import { Header } from '../../layouts/Header';
 import { gestaoApi } from '../../services/api';
 import {
   DollarSign, ChevronLeft, ChevronRight, Building2, Package, Layers, Loader2, X,
-  FileText, Receipt, Ticket, AlertTriangle, Users, KeyRound, Activity, Clock,
+  FileText, Receipt, Ticket, AlertTriangle, Users, KeyRound, Activity, Clock, TrendingUp,
 } from 'lucide-react';
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine,
+} from 'recharts';
 
 // Indicadores — Análise (apresentação à direção). Cada indicador mostra o valor
 // do mês AGRUPADO por dimensões (reconciliando com o total); clicar num grupo
@@ -16,6 +19,7 @@ interface AnaliticoInvest {
   totalInvestimento: number; totalNFs: number; totalParcelas: number;
   porCentroCusto: Grupo[]; porTipoProduto: Grupo[]; porDepartamento: Grupo[];
 }
+interface EvolucaoPonto { ano: number; mes: number; totalInvestimento: number; totalNFs: number; totalParcelas: number }
 interface AnaliticoChamados { totalAbertos: number; porSetor: Grupo[]; porPrioridade: Grupo[]; porEquipe: Grupo[] }
 interface AnaliticoGenerico {
   total: number; metrica: 'contagem' | 'horas'; titulo: string;
@@ -30,7 +34,10 @@ type Indicador = 'investimento' | 'chamados' | 'licencas' | 'disponibilidade' | 
 interface DrillSel { indicador: Indicador; metrica: 'contagem' | 'horas' | 'moeda'; dimensao: string; titulo: string; grupo: Grupo }
 
 const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const mesAbrev = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const brlCompacto = (v: number) =>
+  v >= 1000 ? `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}k` : v.toLocaleString('pt-BR');
 const num = (v: number) => v.toLocaleString('pt-BR');
 const hrs = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h`;
 const RESIDUO = new Set(['__nf_resid', '__parc_resid', '__parc_norateio', '__contrato', '__nc', '__sd', '__se', '__sf', '__ss', '__sc', '__sm']);
@@ -58,6 +65,7 @@ export function IndicadoresAnalisePage() {
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
   const [invest, setInvest] = useState<AnaliticoInvest | null>(null);
+  const [evolucao, setEvolucao] = useState<EvolucaoPonto[] | null>(null);
   const [cham, setCham] = useState<AnaliticoChamados | null>(null);
   const [gen, setGen] = useState<AnaliticoGenerico | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,7 +79,10 @@ export function IndicadoresAnalisePage() {
     setLoading(true);
     const params = { mes: String(mes), ano: String(ano) };
     if (indicador === 'investimento') {
-      gestaoApi.get('/dashboard/investimento-analitico', { params }).then((r) => setInvest(r.data)).finally(() => setLoading(false));
+      Promise.all([
+        gestaoApi.get('/dashboard/investimento-analitico', { params }),
+        gestaoApi.get('/dashboard/investimento-evolucao', { params }),
+      ]).then(([a, e]) => { setInvest(a.data); setEvolucao(e.data); }).finally(() => setLoading(false));
     } else if (indicador === 'chamados') {
       gestaoApi.get('/dashboard/chamados-analitico', { params }).then((r) => setCham(r.data)).finally(() => setLoading(false));
     } else {
@@ -124,7 +135,14 @@ export function IndicadoresAnalisePage() {
 
         {loading ? (
           <div className="flex items-center gap-2 p-8 text-sm text-slate-500"><Loader2 className="w-4 h-4 animate-spin" /> Carregando…</div>
-        ) : vazio ? (
+        ) : (
+        <>
+        {indicador === 'investimento' && evolucao && evolucao.length > 0 && (
+          <div className="mb-5">
+            <EvolucaoInvestimento dados={evolucao} mesSel={mes} anoSel={ano} onSelecionar={(m, a) => { setMes(m); setAno(a); }} />
+          </div>
+        )}
+        {vazio ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">Sem dados em {meses[mes - 1]} {ano}.</div>
         ) : indicador === 'investimento' && invest ? (
           <div className="space-y-5">
@@ -160,10 +178,74 @@ export function IndicadoresAnalisePage() {
             <Nota>Clique num item para ver os registros. Escopo restrito ao workspace.</Nota>
           </div>
         ) : null}
+        </>
+        )}
       </div>
 
       {drill && <DrillModal sel={drill} rows={rows} loading={rowsLoading} onClose={() => setDrill(null)} />}
     </>
+  );
+}
+
+// Gráfico de tendência: investimento total nos últimos 12 meses. Cada ponto
+// reconcilia com a manchete daquele mês; clicar navega até o mês.
+type EvoData = EvolucaoPonto & { rotulo: string; atual: boolean };
+function EvolucaoInvestimento({ dados, mesSel, anoSel, onSelecionar }: {
+  dados: EvolucaoPonto[]; mesSel: number; anoSel: number; onSelecionar: (mes: number, ano: number) => void;
+}) {
+  const data: EvoData[] = dados.map((p) => ({
+    ...p,
+    rotulo: `${mesAbrev[p.mes - 1]}/${String(p.ano).slice(2)}`,
+    atual: p.mes === mesSel && p.ano === anoSel,
+  }));
+  const media = data.length ? data.reduce((s, p) => s + p.totalInvestimento, 0) / data.length : 0;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <TrendingUp className="h-4 w-4 text-capul-600" /> Evolução do investimento (12 meses)
+        <span className="ml-auto text-xs font-normal text-slate-400">Clique num mês para abrir o detalhamento</span>
+      </div>
+      <ResponsiveContainer width="100%" height={240}>
+        <AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}
+          onClick={(state: unknown) => {
+            const p = (state as { activePayload?: { payload: EvoData }[] })?.activePayload?.[0]?.payload;
+            if (p) onSelecionar(p.mes, p.ano);
+          }}
+          style={{ cursor: 'pointer' }}>
+          <defs>
+            <linearGradient id="gradInvest" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#006838" stopOpacity={0.25} />
+              <stop offset="100%" stopColor="#006838" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+          <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={brlCompacto} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={48} />
+          <Tooltip content={<TooltipInvest />} />
+          {media > 0 && <ReferenceLine y={media} stroke="#cbd5e1" strokeDasharray="4 4" />}
+          <Area type="monotone" dataKey="totalInvestimento" stroke="#006838" strokeWidth={2}
+            fill="url(#gradInvest)" dot={<DotInvest />} activeDot={{ r: 5, fill: '#006838' }} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function DotInvest({ cx, cy, payload }: { cx?: number; cy?: number; payload?: EvoData }) {
+  if (cx == null || cy == null) return null;
+  const atual = payload?.atual;
+  return <circle cx={cx} cy={cy} r={atual ? 5 : 3} fill={atual ? '#006838' : '#fff'} stroke="#006838" strokeWidth={2} />;
+}
+
+function TooltipInvest({ active, payload }: { active?: boolean; payload?: { payload: EvoData }[] }) {
+  if (!active || !payload?.length) return null;
+  const p = payload[0].payload;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
+      <p className="mb-1 font-semibold capitalize text-slate-700">{p.rotulo}</p>
+      <p className="font-bold text-capul-700">{brl(p.totalInvestimento)}</p>
+      <p className="text-slate-500">NFs {brl(p.totalNFs)} · Contratos {brl(p.totalParcelas)}</p>
+    </div>
   );
 }
 

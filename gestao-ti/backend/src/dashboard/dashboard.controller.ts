@@ -310,6 +310,21 @@ export class DashboardController {
     return this.service.getInvestimentoAnalitico(m, a, user, role);
   }
 
+  // Evolução 12 meses do investimento total (gráfico de tendência da Análise).
+  // Reconcilia com o analítico mês a mês.
+  @Get('investimento-evolucao')
+  @Roles(...MANAGERS)
+  getInvestimentoEvolucao(
+    @Query('mes') mes: string,
+    @Query('ano') ano: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getInvestimentoEvolucao(m, a, user, role);
+  }
+
   // Drill-down: documentos (NFs/parcelas) que compõem um grupo do analítico.
   @Get('investimento-analitico/documentos')
   @Roles(...MANAGERS)

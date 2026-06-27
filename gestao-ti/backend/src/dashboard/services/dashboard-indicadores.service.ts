@@ -211,6 +211,64 @@ export class DashboardIndicadoresService {
   }
 
   /**
+   * Evolução do investimento nos últimos 12 meses (terminando no mês de
+   * referência) — gráfico de tendência da tela "Indicadores — Análise". Usa
+   * EXATAMENTE os mesmos filtros do total-manchete (NF por dataLancamento +
+   * status≠CANCELADA; Parcela PAGA por dataPagamento; escopo workspace), então
+   * cada ponto reconcilia com getInvestimentoAnalitico daquele mês. Para ser
+   * barato, roda só DUAS queries na janela inteira e agrega por mês em memória.
+   */
+  async getInvestimentoEvolucao(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    const windowInicio = new Date(ano, mes - 12, 1);
+    const windowFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const parcelaDeptoWhere =
+      deptoIds === null ? {} : { contrato: { departamentoId: { in: deptoIds } } };
+    const nfDeptoWhere = applyDepartamentoFilter({}, user, role);
+
+    const [parcelas, nfs] = await Promise.all([
+      this.prisma.parcelaContrato.findMany({
+        where: { status: 'PAGA', dataPagamento: { gte: windowInicio, lte: windowFim }, ...parcelaDeptoWhere },
+        select: { valor: true, dataPagamento: true },
+      }),
+      this.prisma.notaFiscal.findMany({
+        where: { status: { not: 'CANCELADA' }, dataLancamento: { gte: windowInicio, lte: windowFim }, ...nfDeptoWhere },
+        select: { valorTotal: true, dataLancamento: true },
+      }),
+    ]);
+
+    // 12 baldes ordenados (mais antigo → mês de referência). A chave ano-mês usa
+    // a mesma interpretação de mês da janela do analítico, garantindo o batimento.
+    const buckets = new Map<string, { ano: number; mes: number; totalNFs: number; totalParcelas: number }>();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(ano, mes - 1 - i, 1);
+      buckets.set(`${d.getFullYear()}-${d.getMonth() + 1}`, {
+        ano: d.getFullYear(), mes: d.getMonth() + 1, totalNFs: 0, totalParcelas: 0,
+      });
+    }
+    const chave = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}`;
+
+    for (const nf of nfs) {
+      const b = buckets.get(chave(nf.dataLancamento));
+      if (b) b.totalNFs += Number(nf.valorTotal);
+    }
+    for (const p of parcelas) {
+      if (!p.dataPagamento) continue;
+      const b = buckets.get(chave(p.dataPagamento));
+      if (b) b.totalParcelas += Number(p.valor);
+    }
+
+    const cents = (n: number) => Math.round(n * 100) / 100;
+    return [...buckets.values()].map((b) => ({
+      ano: b.ano,
+      mes: b.mes,
+      totalNFs: cents(b.totalNFs),
+      totalParcelas: cents(b.totalParcelas),
+      totalInvestimento: cents(b.totalNFs + b.totalParcelas),
+    }));
+  }
+
+  /**
    * Drill-down: os DOCUMENTOS (NFs/parcelas de contrato) que compõem um grupo
    * específico do investimento analítico. `valor` é a parcela do documento
    * ATRIBUÍDA àquele grupo — mesma regra de atribuição do agrupamento, então a
