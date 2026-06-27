@@ -325,6 +325,23 @@ export class DashboardController {
     return this.service.getInvestimentoEvolucao(m, a, user, role);
   }
 
+  // Evolução 12 meses do investimento QUEBRADA por dimensão (empilhado). As
+  // faixas somam o total do mês (top 6 + "Outros") → reconcilia com o analítico.
+  @Get('investimento-evolucao-dimensao')
+  @Roles(...MANAGERS)
+  getInvestimentoEvolucaoDimensao(
+    @Query('mes') mes: string,
+    @Query('ano') ano: string,
+    @Query('dimensao') dimensao: 'centroCusto' | 'tipoProduto' | 'departamento',
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    const dim = ['centroCusto', 'tipoProduto', 'departamento'].includes(dimensao) ? dimensao : 'centroCusto';
+    return this.service.getInvestimentoEvolucaoDimensao(m, a, dim, user, role);
+  }
+
   // Drill-down: documentos (NFs/parcelas) que compõem um grupo do analítico.
   @Get('investimento-analitico/documentos')
   @Roles(...MANAGERS)

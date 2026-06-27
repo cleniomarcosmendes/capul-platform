@@ -166,6 +166,14 @@ export class DashboardService {
     return this.indicadores.getInvestimentoEvolucao(mes, ano, user, role);
   }
 
+  getInvestimentoEvolucaoDimensao(
+    mes: number, ano: number,
+    dimensao: 'centroCusto' | 'tipoProduto' | 'departamento',
+    user?: JwtPayload, role?: string,
+  ) {
+    return this.indicadores.getInvestimentoEvolucaoDimensao(mes, ano, dimensao, user, role);
+  }
+
   getInvestimentoDocumentos(
     mes: number, ano: number,
     dimensao: 'centroCusto' | 'tipoProduto' | 'departamento',

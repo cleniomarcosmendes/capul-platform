@@ -6,7 +6,7 @@ import {
   FileText, Receipt, Ticket, AlertTriangle, Users, KeyRound, Activity, Clock, TrendingUp,
 } from 'lucide-react';
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine,
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine, Legend,
 } from 'recharts';
 
 // Indicadores — Análise (apresentação à direção). Cada indicador mostra o valor
@@ -20,6 +20,10 @@ interface AnaliticoInvest {
   porCentroCusto: Grupo[]; porTipoProduto: Grupo[]; porDepartamento: Grupo[];
 }
 interface EvolucaoPonto { ano: number; mes: number; totalInvestimento: number; totalNFs: number; totalParcelas: number }
+interface EvolucaoDimSerie { key: string; label: string }
+interface EvolucaoDimPonto { ano: number; mes: number; valores: Record<string, number> }
+interface EvolucaoDim { dimensao: string; series: EvolucaoDimSerie[]; pontos: EvolucaoDimPonto[] }
+type DimChart = 'total' | 'centroCusto' | 'tipoProduto' | 'departamento';
 interface AnaliticoChamados { totalAbertos: number; porSetor: Grupo[]; porPrioridade: Grupo[]; porEquipe: Grupo[] }
 interface AnaliticoGenerico {
   total: number; metrica: 'contagem' | 'horas'; titulo: string;
@@ -66,6 +70,9 @@ export function IndicadoresAnalisePage() {
   const [ano, setAno] = useState(now.getFullYear());
   const [invest, setInvest] = useState<AnaliticoInvest | null>(null);
   const [evolucao, setEvolucao] = useState<EvolucaoPonto[] | null>(null);
+  const [dimChart, setDimChart] = useState<DimChart>('total');
+  const [evolDim, setEvolDim] = useState<EvolucaoDim | null>(null);
+  const [evolDimLoading, setEvolDimLoading] = useState(false);
   const [cham, setCham] = useState<AnaliticoChamados | null>(null);
   const [gen, setGen] = useState<AnaliticoGenerico | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +97,15 @@ export function IndicadoresAnalisePage() {
       gestaoApi.get(`/dashboard/${cfg.endpoint}`, { params }).then((r) => setGen(r.data)).finally(() => setLoading(false));
     }
   }, [indicador, mes, ano]);
+
+  // Evolução quebrada por dimensão (gráfico empilhado). 'total' usa a série
+  // simples já carregada; as demais buscam o endpoint da dimensão escolhida.
+  useEffect(() => {
+    if (indicador !== 'investimento' || dimChart === 'total') { setEvolDim(null); return; }
+    setEvolDimLoading(true);
+    gestaoApi.get('/dashboard/investimento-evolucao-dimensao', { params: { mes: String(mes), ano: String(ano), dimensao: dimChart } })
+      .then((r) => setEvolDim(r.data)).finally(() => setEvolDimLoading(false));
+  }, [indicador, dimChart, mes, ano]);
 
   const prevMes = () => (mes === 1 ? (setMes(12), setAno(ano - 1)) : setMes(mes - 1));
   const nextMes = () => (mes === 12 ? (setMes(1), setAno(ano + 1)) : setMes(mes + 1));
@@ -139,7 +155,8 @@ export function IndicadoresAnalisePage() {
         <>
         {indicador === 'investimento' && evolucao && evolucao.length > 0 && (
           <div className="mb-5">
-            <EvolucaoInvestimento dados={evolucao} mesSel={mes} anoSel={ano} onSelecionar={(m, a) => { setMes(m); setAno(a); }} />
+            <EvolucaoInvestimento dados={evolucao} dim={evolDim} dimChart={dimChart} setDimChart={setDimChart}
+              dimLoading={evolDimLoading} mesSel={mes} anoSel={ano} onSelecionar={(m, a) => { setMes(m); setAno(a); }} />
           </div>
         )}
         {vazio ? (
@@ -190,43 +207,124 @@ export function IndicadoresAnalisePage() {
 // Gráfico de tendência: investimento total nos últimos 12 meses. Cada ponto
 // reconcilia com a manchete daquele mês; clicar navega até o mês.
 type EvoData = EvolucaoPonto & { rotulo: string; atual: boolean };
-function EvolucaoInvestimento({ dados, mesSel, anoSel, onSelecionar }: {
+const corSerie = (key: string, idx: number) =>
+  RESIDUO.has(key) || key === '__outros' ? '#cbd5e1' : CORES[idx % CORES.length];
+
+const cliqueMes = (onSelecionar: (mes: number, ano: number) => void) => (state: unknown) => {
+  const p = (state as { activePayload?: { payload: { mes: number; ano: number } }[] })?.activePayload?.[0]?.payload;
+  if (p) onSelecionar(p.mes, p.ano);
+};
+
+function EvolucaoInvestimento({ dados, dim, dimChart, setDimChart, dimLoading, mesSel, anoSel, onSelecionar }: {
+  dados: EvolucaoPonto[]; dim: EvolucaoDim | null; dimChart: DimChart; setDimChart: (d: DimChart) => void;
+  dimLoading: boolean; mesSel: number; anoSel: number; onSelecionar: (mes: number, ano: number) => void;
+}) {
+  const opcoes: { k: DimChart; label: string }[] = [
+    { k: 'total', label: 'Total' }, { k: 'centroCusto', label: 'Centro de custo' },
+    { k: 'tipoProduto', label: 'Tipo de produto' }, { k: 'departamento', label: 'Departamento' },
+  ];
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <TrendingUp className="h-4 w-4 text-capul-600" /> Evolução do investimento (12 meses)
+        </span>
+        <div className="ml-auto flex flex-wrap gap-1">
+          {opcoes.map((o) => (
+            <button key={o.k} onClick={() => setDimChart(o.k)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${dimChart === o.k ? 'bg-capul-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {dimChart === 'total' ? (
+        <GraficoTotal dados={dados} mesSel={mesSel} anoSel={anoSel} onSelecionar={onSelecionar} />
+      ) : dimLoading || !dim ? (
+        <div className="flex h-[300px] items-center justify-center text-sm text-slate-400"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando…</div>
+      ) : (
+        <GraficoEmpilhado dim={dim} mesSel={mesSel} anoSel={anoSel} onSelecionar={onSelecionar} />
+      )}
+      <p className="mt-2 text-xs text-slate-400">
+        {dimChart === 'total' ? 'Linha tracejada = média dos 12 meses. ' : 'Faixas empilhadas somam o total do mês (top 6 + “Outros”). '}
+        Clique num mês para abrir o detalhamento.
+      </p>
+    </div>
+  );
+}
+
+function GraficoTotal({ dados, mesSel, anoSel, onSelecionar }: {
   dados: EvolucaoPonto[]; mesSel: number; anoSel: number; onSelecionar: (mes: number, ano: number) => void;
 }) {
   const data: EvoData[] = dados.map((p) => ({
-    ...p,
-    rotulo: `${mesAbrev[p.mes - 1]}/${String(p.ano).slice(2)}`,
-    atual: p.mes === mesSel && p.ano === anoSel,
+    ...p, rotulo: `${mesAbrev[p.mes - 1]}/${String(p.ano).slice(2)}`, atual: p.mes === mesSel && p.ano === anoSel,
   }));
   const media = data.length ? data.reduce((s, p) => s + p.totalInvestimento, 0) / data.length : 0;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-        <TrendingUp className="h-4 w-4 text-capul-600" /> Evolução do investimento (12 meses)
-        <span className="ml-auto text-xs font-normal text-slate-400">Clique num mês para abrir o detalhamento</span>
-      </div>
-      <ResponsiveContainer width="100%" height={240}>
-        <AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}
-          onClick={(state: unknown) => {
-            const p = (state as { activePayload?: { payload: EvoData }[] })?.activePayload?.[0]?.payload;
-            if (p) onSelecionar(p.mes, p.ano);
-          }}
-          style={{ cursor: 'pointer' }}>
-          <defs>
-            <linearGradient id="gradInvest" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#006838" stopOpacity={0.25} />
-              <stop offset="100%" stopColor="#006838" stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-          <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-          <YAxis tickFormatter={brlCompacto} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={48} />
-          <Tooltip content={<TooltipInvest />} />
-          {media > 0 && <ReferenceLine y={media} stroke="#cbd5e1" strokeDasharray="4 4" />}
-          <Area type="monotone" dataKey="totalInvestimento" stroke="#006838" strokeWidth={2}
-            fill="url(#gradInvest)" dot={<DotInvest />} activeDot={{ r: 5, fill: '#006838' }} />
-        </AreaChart>
-      </ResponsiveContainer>
+    <ResponsiveContainer width="100%" height={260}>
+      <AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }} onClick={cliqueMes(onSelecionar)} style={{ cursor: 'pointer' }}>
+        <defs>
+          <linearGradient id="gradInvest" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#006838" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="#006838" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+        <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={brlCompacto} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={48} />
+        <Tooltip content={<TooltipInvest />} />
+        {media > 0 && <ReferenceLine y={media} stroke="#cbd5e1" strokeDasharray="4 4" />}
+        <Area type="monotone" dataKey="totalInvestimento" stroke="#006838" strokeWidth={2}
+          fill="url(#gradInvest)" dot={<DotInvest />} activeDot={{ r: 5, fill: '#006838' }} />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function GraficoEmpilhado({ dim, mesSel, anoSel, onSelecionar }: {
+  dim: EvolucaoDim; mesSel: number; anoSel: number; onSelecionar: (mes: number, ano: number) => void;
+}) {
+  let ci = 0;
+  const cor: Record<string, string> = {};
+  dim.series.forEach((s) => { cor[s.key] = corSerie(s.key, ci); if (!RESIDUO.has(s.key) && s.key !== '__outros') ci++; });
+  const data = dim.pontos.map((p) => ({
+    rotulo: `${mesAbrev[p.mes - 1]}/${String(p.ano).slice(2)}`, mes: p.mes, ano: p.ano,
+    atual: p.mes === mesSel && p.ano === anoSel, ...p.valores,
+  }));
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }} onClick={cliqueMes(onSelecionar)} style={{ cursor: 'pointer' }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+        <XAxis dataKey="rotulo" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={brlCompacto} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={48} />
+        <Tooltip content={<TooltipEmpilhado series={dim.series} />} />
+        <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+        {dim.series.map((s) => (
+          <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stackId="inv"
+            stroke={cor[s.key]} fill={cor[s.key]} fillOpacity={0.85} strokeWidth={1} />
+        ))}
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function TooltipEmpilhado({ active, payload, series }: {
+  active?: boolean; payload?: { dataKey: string; value: number; color: string; payload: { rotulo: string } }[]; series: EvolucaoDimSerie[];
+}) {
+  if (!active || !payload?.length) return null;
+  const total = payload.reduce((s, e) => s + (e.value || 0), 0);
+  const labelOf = (k: string) => series.find((s) => s.key === k)?.label ?? k;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-md">
+      <p className="mb-1 font-semibold capitalize text-slate-700">{payload[0].payload.rotulo}</p>
+      <p className="mb-1 font-bold text-capul-700">Total {brl(total)}</p>
+      {payload.slice().reverse().filter((e) => e.value > 0).map((e) => (
+        <p key={e.dataKey} className="flex items-center gap-1.5 text-slate-600">
+          <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: e.color }} />
+          <span className="truncate">{labelOf(e.dataKey)}</span>
+          <span className="ml-auto pl-2 font-medium">{brl(e.value)}</span>
+        </p>
+      ))}
     </div>
   );
 }

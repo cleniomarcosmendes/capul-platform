@@ -269,6 +269,135 @@ export class DashboardIndicadoresService {
   }
 
   /**
+   * Evolução do investimento nos últimos 12 meses QUEBRADA por uma dimensão
+   * (centroCusto | tipoProduto | departamento) — gráfico empilhado da Análise.
+   * Mesma atribuição/baldes do getInvestimentoAnalitico (inclui resíduos), então
+   * a soma das faixas em cada mês reconcilia com o total daquele mês. Mantém as
+   * TOP 6 faixas (pelo total dos 12 meses) e agrega o resto em "Outros" — sem
+   * perder valor (continua reconciliando). Uma só leva de queries na janela.
+   */
+  async getInvestimentoEvolucaoDimensao(
+    mes: number, ano: number,
+    dimensao: 'centroCusto' | 'tipoProduto' | 'departamento',
+    user?: JwtPayload, role?: string,
+  ) {
+    const windowInicio = new Date(ano, mes - 12, 1);
+    const windowFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const parcelaDeptoWhere =
+      deptoIds === null ? {} : { contrato: { departamentoId: { in: deptoIds } } };
+    const nfDeptoWhere = applyDepartamentoFilter({}, user, role);
+
+    const [parcelas, nfs] = await Promise.all([
+      this.prisma.parcelaContrato.findMany({
+        where: { status: 'PAGA', dataPagamento: { gte: windowInicio, lte: windowFim }, ...parcelaDeptoWhere },
+        include: {
+          contrato: { select: { departamentoId: true, departamento: { select: { nome: true } } } },
+          rateioItens: { include: { centroCusto: { select: { id: true, codigo: true, nome: true } } } },
+        },
+      }),
+      this.prisma.notaFiscal.findMany({
+        where: { status: { not: 'CANCELADA' }, dataLancamento: { gte: windowInicio, lte: windowFim }, ...nfDeptoWhere },
+        include: {
+          departamento: { select: { id: true, nome: true } },
+          itens: {
+            include: {
+              produto: { include: { tipoProduto: { select: { id: true, descricao: true } } } },
+              centroCusto: { select: { id: true, codigo: true, nome: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const cents = (n: number) => Math.round(n * 100) / 100;
+    // índice de mês 0..11 (mais antigo → referência)
+    const monthIndex = new Map<string, number>();
+    const monthKeys: { ano: number; mes: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(ano, mes - 1 - i, 1);
+      monthIndex.set(`${d.getFullYear()}-${d.getMonth() + 1}`, 11 - i);
+      monthKeys.push({ ano: d.getFullYear(), mes: d.getMonth() + 1 });
+    }
+    const mkey = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}`;
+
+    const series = new Map<string, { label: string; total: number; porMes: number[] }>();
+    const addS = (key: string, label: string, mi: number, valor: number) => {
+      const cur = series.get(key) ?? { label, total: 0, porMes: new Array(12).fill(0) };
+      cur.porMes[mi] += valor;
+      cur.total += valor;
+      series.set(key, cur);
+    };
+
+    for (const nf of nfs) {
+      const mi = monthIndex.get(mkey(nf.dataLancamento));
+      if (mi === undefined) continue;
+      const v = Number(nf.valorTotal);
+      if (dimensao === 'departamento') {
+        addS(nf.departamento?.id ?? '__sd', nf.departamento?.nome ?? 'Sem departamento', mi, v);
+        continue;
+      }
+      let somaItens = 0;
+      for (const it of nf.itens) {
+        const iv = Number(it.valorTotal);
+        somaItens += iv;
+        if (dimensao === 'centroCusto') {
+          addS(it.centroCustoId, `${it.centroCusto.codigo} · ${it.centroCusto.nome}`, mi, iv);
+        } else {
+          const t = it.produto.tipoProduto;
+          addS(t?.id ?? '__nc', t?.descricao ?? 'Não classificado', mi, iv);
+        }
+      }
+      const resid = cents(v - somaItens);
+      if (Math.abs(resid) >= 0.01) addS('__nf_resid', 'NFs — valor não detalhado em itens', mi, resid);
+    }
+
+    for (const p of parcelas) {
+      if (!p.dataPagamento) continue;
+      const mi = monthIndex.get(mkey(p.dataPagamento));
+      if (mi === undefined) continue;
+      const v = Number(p.valor);
+      if (dimensao === 'departamento') {
+        addS(p.contrato.departamentoId ?? '__sd', p.contrato.departamento?.nome ?? 'Sem departamento', mi, v);
+      } else if (dimensao === 'tipoProduto') {
+        addS('__contrato', 'Contratos/serviços (sem produto)', mi, v);
+      } else if (p.rateioItens.length) {
+        let somaR = 0;
+        for (const ri of p.rateioItens) {
+          const rv = Number(ri.valorCalculado);
+          somaR += rv;
+          addS(ri.centroCustoId, `${ri.centroCusto.codigo} · ${ri.centroCusto.nome}`, mi, rv);
+        }
+        const residR = cents(v - somaR);
+        if (Math.abs(residR) >= 0.01) addS('__parc_resid', 'Contratos — rateio incompleto', mi, residR);
+      } else {
+        addS('__parc_norateio', 'Contratos — sem rateio de centro de custo', mi, v);
+      }
+    }
+
+    // TOP 6 por total; o resto agrega em "Outros" (sem perder valor → reconcilia)
+    const ordered = [...series.entries()].sort((a, b) => b[1].total - a[1].total);
+    const TOP = 6;
+    const top = ordered.slice(0, TOP);
+    const rest = ordered.slice(TOP);
+    const outros = new Array(12).fill(0);
+    for (const [, v] of rest) for (let i = 0; i < 12; i++) outros[i] += v.porMes[i];
+
+    const seriesOut = top.map(([key, v]) => ({ key, label: v.label }));
+    const pontos = monthKeys.map((mk, i) => {
+      const valores: Record<string, number> = {};
+      for (const [key, v] of top) valores[key] = cents(v.porMes[i]);
+      return { ano: mk.ano, mes: mk.mes, valores };
+    });
+    if (rest.length && outros.some((x) => Math.abs(x) >= 0.01)) {
+      seriesOut.push({ key: '__outros', label: 'Outros' });
+      pontos.forEach((p, i) => { p.valores['__outros'] = cents(outros[i]); });
+    }
+
+    return { dimensao, series: seriesOut, pontos };
+  }
+
+  /**
    * Drill-down: os DOCUMENTOS (NFs/parcelas de contrato) que compõem um grupo
    * específico do investimento analítico. `valor` é a parcela do documento
    * ATRIBUÍDA àquele grupo — mesma regra de atribuição do agrupamento, então a
