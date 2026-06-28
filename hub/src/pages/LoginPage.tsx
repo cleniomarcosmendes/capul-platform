@@ -24,17 +24,18 @@ export default function LoginPage() {
     try {
       await doLogin(login, senha);
       navigate('/');
-    } catch (err: any) {
-      if (err?.message === 'MFA_REQUIRED' && err?.mfaToken) {
-        setMfaToken(err.mfaToken);
+    } catch (err: unknown) {
+      const e = err as { message?: string; mfaToken?: string; response?: { data?: { message?: string | string[] } } };
+      if (e?.message === 'MFA_REQUIRED' && e?.mfaToken) {
+        setMfaToken(e.mfaToken);
         setMfaStep(true);
         setMfaCode('');
         setTimeout(() => mfaInputRef.current?.focus(), 100);
         return;
       }
       const msg =
-        err?.response?.data?.message?.[0] ||
-        err?.response?.data?.message ||
+        e?.response?.data?.message?.[0] ||
+        e?.response?.data?.message ||
         'Erro ao fazer login';
       setErro(typeof msg === 'string' ? msg : 'Credenciais invalidas');
     }
@@ -50,8 +51,9 @@ export default function LoginPage() {
       if (response.usuario) {
         window.location.href = '/';
       }
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || 'Codigo invalido';
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string | string[] } } };
+      const msg = e?.response?.data?.message || 'Codigo invalido';
       setErro(typeof msg === 'string' ? msg : 'Codigo invalido');
       setMfaCode('');
       mfaInputRef.current?.focus();

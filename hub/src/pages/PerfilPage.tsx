@@ -86,12 +86,10 @@ export default function PerfilPage() {
       setSenhaAtual('');
       setNovaSenha('');
       setConfirmSenha('');
-    } catch (err: any) {
-      setErro(
-        err?.response?.data?.message?.[0] ||
-          err?.response?.data?.message ||
-          'Erro ao alterar senha',
-      );
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string | string[] } } };
+      const m = e?.response?.data?.message;
+      setErro((Array.isArray(m) ? m[0] : m) || 'Erro ao alterar senha');
     } finally {
       setLoading(false);
     }

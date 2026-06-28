@@ -41,6 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUsuario(null);
         });
     }
+    // Verificação de sessão na montagem (uma vez); não depende de `usuario`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = useCallback(async (loginStr: string, senha: string) => {
@@ -49,8 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await authService.login(loginStr, senha);
       if (response.mfaRequired) {
         // Lançar com mfaToken para o LoginPage tratar
-        const err = new Error('MFA_REQUIRED');
-        (err as any).mfaToken = response.mfaToken;
+        const err = new Error('MFA_REQUIRED') as Error & { mfaToken?: string };
+        err.mfaToken = response.mfaToken;
         throw err;
       }
       setUsuario(response.usuario);
@@ -126,6 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Hook colocado ao provider (padrão de contexto); o disable cobre o Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
