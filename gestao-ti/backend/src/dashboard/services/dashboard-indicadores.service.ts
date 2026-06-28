@@ -375,9 +375,9 @@ export class DashboardIndicadoresService {
       }
     }
 
-    // TOP 6 por total; o resto agrega em "Outros" (sem perder valor → reconcilia)
+    // TOP 10 por total; o resto agrega em "Outros" (sem perder valor → reconcilia)
     const ordered = [...series.entries()].sort((a, b) => b[1].total - a[1].total);
-    const TOP = 6;
+    const TOP = 10;
     const top = ordered.slice(0, TOP);
     const rest = ordered.slice(TOP);
     const outros = new Array(12).fill(0);

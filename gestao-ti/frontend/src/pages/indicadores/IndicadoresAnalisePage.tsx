@@ -246,7 +246,7 @@ function EvolucaoInvestimento({ dados, dim, dimChart, setDimChart, dimLoading, m
         <GraficoEmpilhado dim={dim} mesSel={mesSel} anoSel={anoSel} onSelecionar={onSelecionar} />
       )}
       <p className="mt-2 text-xs text-slate-400">
-        {dimChart === 'total' ? 'Linha tracejada = média dos 12 meses. ' : 'Faixas empilhadas somam o total do mês (top 6 + “Outros”). '}
+        {dimChart === 'total' ? 'Linha tracejada = média dos 12 meses. ' : 'Faixas empilhadas somam o total do mês (top 10 + “Outros”). '}
         Clique num mês para abrir o detalhamento.
       </p>
     </div>
