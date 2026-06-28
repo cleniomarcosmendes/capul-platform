@@ -196,7 +196,7 @@ export function PainelFrotaPage() {
                       key={v.id}
                       onClick={clicavel ? () => navigate(`/frota/viagens/${c!.id}`) : undefined}
                       className={`hover:bg-slate-50 ${clicavel ? 'cursor-pointer hover:bg-capul-50/60' : ''}`}
-                      title={clicavel ? 'Abrir viagem' : undefined}
+                      title={clicavel ? 'Abrir rota' : undefined}
                     >
                       <td className="px-4 py-2 font-medium text-slate-800">{v.placa}</td>
                       <td className="px-4 py-2 text-slate-600">{[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}</td>
@@ -272,7 +272,7 @@ export function PainelFrotaPage() {
             Na rua agora ({emCurso.length})
           </div>
           {emCurso.length === 0 ? (
-            <div className="py-10 text-center text-sm text-slate-400">Nenhum veículo em viagem.</div>
+            <div className="py-10 text-center text-sm text-slate-400">Nenhum veículo em rota.</div>
           ) : (
             <ul className="divide-y divide-slate-100">
               {emCurso.map((v) => (
@@ -281,7 +281,7 @@ export function PainelFrotaPage() {
                     type="button"
                     onClick={() => navigate(v.tipo === 'FROTA' ? `/frota/viagens/${v.id}` : `/viagens/${v.id}`)}
                     className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-capul-50/60"
-                    title="Abrir viagem"
+                    title="Abrir rota"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ export function PainelFrotaPage() {
           </div>
           <div className="grid grid-cols-1 gap-4 px-4 pb-4 sm:grid-cols-2">
             <RankingBox titulo="Uso por veículo (km)" itens={indicadores.rankingVeiculo.map((r) => ({ nome: r.placa, val: `${r.km.toLocaleString('pt-BR')} km` }))} />
-            <RankingBox titulo="Uso por departamento" itens={indicadores.rankingDepartamento.map((r) => ({ nome: r.departamento, val: `${r.viagens} viagem(ns)` }))} />
+            <RankingBox titulo="Uso por departamento" itens={indicadores.rankingDepartamento.map((r) => ({ nome: r.departamento, val: `${r.viagens} rota(s)` }))} />
           </div>
         </div>
       </div>

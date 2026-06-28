@@ -38,7 +38,7 @@ export function EtiquetaEntrega({
 
       {(sequencia || viagemNumero || placa) && (
         <div className="etq-viagem">
-          {viagemNumero ? `Viagem #${viagemNumero}` : ''}
+          {viagemNumero ? `Rota #${viagemNumero}` : ''}
           {placa ? ` · ${placa}` : ''}
           {sequencia ? ` · parada ${sequencia}${totalParadas ? `/${totalParadas}` : ''}` : ''}
         </div>

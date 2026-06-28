@@ -327,7 +327,7 @@ export class FrotaService {
       .filter((v) => v.kmInicial != null && v.kmFinal != null && v.kmFinal > v.kmInicial)
       .map((v) => ({
         tipo: 'viagem' as const, kmInicio: v.kmInicial!, kmFim: v.kmFinal!, km: v.kmFinal! - v.kmInicial!,
-        label: v.observacoesSaida?.trim() || `Viagem #${v.numero}`,
+        label: v.observacoesSaida?.trim() || `Rota #${v.numero}`,
         viagemNumero: v.numero, data: v.dataHoraSaida?.toISOString() ?? null, condutor: v.condutorNome,
       }))
       .sort((a, b) => a.kmInicio - b.kmInicio);

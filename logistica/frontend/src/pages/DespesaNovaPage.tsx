@@ -306,7 +306,7 @@ export function DespesaNovaPage() {
               <InfoItem rotulo="Lançada em" valor={fmtDateTime(info.criadoEm)} />
               <InfoItem rotulo="Nota / documento" valor={info.semNota ? 'Sem nota (S/N)' : (info.numeroDocumento || '—')} />
               {info.viagemNumero != null && (
-                <InfoItem rotulo="Viagem vinculada" valor={`#${info.viagemNumero}${info.viagemFinalidade ? ` · ${info.viagemFinalidade}` : ''}${info.viagemCondutor ? ` · ${info.viagemCondutor}` : ''}`} />
+                <InfoItem rotulo="Rota vinculada" valor={`#${info.viagemNumero}${info.viagemFinalidade ? ` · ${info.viagemFinalidade}` : ''}${info.viagemCondutor ? ` · ${info.viagemCondutor}` : ''}`} />
               )}
               {info.situacao === 'APROVADA' && <InfoItem rotulo="Aprovada em" valor={fmtDateTime(info.aprovadoEm)} />}
               {info.situacao === 'CONTESTADA' && <InfoItem rotulo="Motivo da contestação" valor={info.motivoContestacao ?? '—'} />}

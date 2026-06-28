@@ -79,7 +79,7 @@ export function RomaneioPage() {
     setLoading(true);
     logisticaApi.get<ViagemR>(`/viagens/${id}`)
       .then((r) => setV(r.data))
-      .catch(() => setErro('Não foi possível carregar a viagem.'))
+      .catch(() => setErro('Não foi possível carregar a rota.'))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -97,7 +97,7 @@ export function RomaneioPage() {
         <button onClick={() => history.back()} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
-        <span className="text-sm text-slate-500">{v ? `Romaneio da Viagem #${v.numero}` : ''}</span>
+        <span className="text-sm text-slate-500">{v ? `Romaneio da Rota #${v.numero}` : ''}</span>
         <button onClick={() => window.print()} disabled={!v || paradas.length === 0}
           className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
           <Printer className="h-4 w-4" /> Imprimir
@@ -107,13 +107,13 @@ export function RomaneioPage() {
       {loading ? (
         <div className="flex items-center gap-2 p-8 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
       ) : erro || !v ? (
-        <div className="p-8 text-sm text-red-600">{erro ?? 'Viagem não encontrada.'}</div>
+        <div className="p-8 text-sm text-red-600">{erro ?? 'Rota não encontrada.'}</div>
       ) : (
         <div style={S.folha}>
           <div style={S.head}>
             <div>
               <div style={S.brand}>CAPUL · LOGÍSTICA</div>
-              <div style={S.title}>Romaneio de Viagem #{v.numero}</div>
+              <div style={S.title}>Romaneio de Rota #{v.numero}</div>
               <div style={S.filial}>{nome(filiais, v.filialId)}</div>
             </div>
             <div style={S.meta}>
@@ -124,7 +124,7 @@ export function RomaneioPage() {
           </div>
 
           {paradas.length === 0 ? (
-            <div className="text-sm text-slate-500">Viagem sem entregas.</div>
+            <div className="text-sm text-slate-500">Rota sem entregas.</div>
           ) : (
             <table style={S.table}>
               <thead>

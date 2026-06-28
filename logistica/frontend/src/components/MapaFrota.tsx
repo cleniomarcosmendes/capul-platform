@@ -152,8 +152,8 @@ export function MapaFrota() {
         {erro
           ? 'Não foi possível atualizar as posições agora — tentando de novo.'
           : semGps > 0
-            ? `${semGps} viagem(ns) em curso sem GPS recebido ainda (app fechado ou sem sinal).`
-            : 'Atualiza automaticamente. Localização ativa só durante a viagem.'}
+            ? `${semGps} rota(s) em curso sem GPS recebido ainda (app fechado ou sem sinal).`
+            : 'Atualiza automaticamente. Localização ativa só durante a rota.'}
       </div>
     </div>
   );

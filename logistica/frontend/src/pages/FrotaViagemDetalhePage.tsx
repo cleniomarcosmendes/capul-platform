@@ -44,7 +44,7 @@ export function FrotaViagemDetalhePage() {
       setDespesas(d.data);
       setErro('');
     } catch (e) {
-      setErro(errMsg(e, 'Viagem não encontrada.'));
+      setErro(errMsg(e, 'Rota não encontrada.'));
     } finally {
       setLoading(false);
     }
@@ -59,7 +59,7 @@ export function FrotaViagemDetalhePage() {
   if (erro || !viagem) {
     return (
       <div className="p-8">
-        <p className="text-rose-600">{erro || 'Viagem não encontrada.'}</p>
+        <p className="text-rose-600">{erro || 'Rota não encontrada.'}</p>
         <button onClick={voltar} className="mt-3 inline-flex items-center gap-1 text-sm text-capul-600 hover:underline"><ArrowLeft className="h-4 w-4" /> Voltar</button>
       </div>
     );
@@ -77,7 +77,7 @@ export function FrotaViagemDetalhePage() {
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-800">Viagem #{v.numero} · {v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</h2>
+            <h2 className="text-lg font-semibold text-slate-800">Rota #{v.numero} · {v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</h2>
             <p className="text-sm text-slate-500">Condutor: {v.condutorNome ?? '—'}{v.condutorMatricula ? ` · ${v.condutorMatricula}` : ''}</p>
           </div>
           <span className={`rounded-full px-3 py-1 text-sm font-medium ${sit.cls}`}>{sit.label}</span>

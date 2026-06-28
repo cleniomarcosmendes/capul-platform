@@ -29,7 +29,7 @@ export function coresPorSegmento(segmentos: SegKm[]): (string | null)[] {
 }
 
 export function LinhaKmBarra({ linha, altura = 'h-7' }: { linha: LinhaKm; altura?: string }) {
-  if (linha.segmentos.length === 0) return <p className="text-xs text-slate-400">Sem viagens com KM apontado no período.</p>;
+  if (linha.segmentos.length === 0) return <p className="text-xs text-slate-400">Sem rotas com KM apontado no período.</p>;
 
   const span = Math.max(linha.kmMax - linha.kmMin, 1);
   const pos = (km: number) => ((km - linha.kmMin) / span) * 100;

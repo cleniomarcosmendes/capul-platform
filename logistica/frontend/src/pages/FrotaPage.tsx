@@ -100,7 +100,7 @@ export function FrotaPage() {
       setViagens(v.data);
       setVeiculos(frota.data.filter((x) => x.situacao === 'DISPONIVEL'));
     } catch (e) {
-      toast('error', errMsg(e, 'Falha ao carregar viagens de frota.'));
+      toast('error', errMsg(e, 'Falha ao carregar rotas de frota.'));
     } finally {
       setLoading(false);
     }
@@ -121,7 +121,7 @@ export function FrotaPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-700">Viagens de frota</h3>
+          <h3 className="text-sm font-semibold text-slate-700">Rotas de frota</h3>
           <select
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
@@ -138,7 +138,7 @@ export function FrotaPage() {
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
         ) : viagens.length === 0 ? (
-          <div className="py-12 text-center text-sm text-slate-400">Nenhuma viagem de frota.</div>
+          <div className="py-12 text-center text-sm text-slate-400">Nenhuma rota de frota.</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
@@ -408,7 +408,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         {modo === 'PORTARIA' && (
         <div>
           <PassoHeader n={1} titulo="Condutor (pela portaria)" />
-          <p className="mb-2 text-xs text-amber-700">Exceção: a viagem é apontada ao condutor <b>sem a senha dele</b> — fica registrada sob a sua responsabilidade.</p>
+          <p className="mb-2 text-xs text-amber-700">Exceção: a rota é apontada ao condutor <b>sem a senha dele</b> — fica registrada sob a sua responsabilidade.</p>
           <div className="flex max-w-md gap-1">
             <input
               value={nomeBusca}
@@ -521,7 +521,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                 placeholder={'Um local por linha — ex.:\nCliente A\nFornecedor B\nBanco Centro'}
                 className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
-              <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha. As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") durante a viagem.</p>
+              <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha. As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") durante a rota.</p>
             </div>
           </div>
         </div>
@@ -655,7 +655,7 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-slate-500">Paradas da viagem #{v.numero} — caderno digital da rota. Planeje as visitas (opcional) e dê baixa em cada uma; o retorno é o que fecha a viagem.</p>
+      <p className="text-xs text-slate-500">Paradas da rota #{v.numero} — caderno digital do percurso. Planeje as visitas (opcional) e dê baixa em cada uma; o retorno é o que fecha a rota.</p>
 
       {loading ? (
         <div className="flex items-center gap-2 py-3 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
@@ -730,7 +730,7 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
           </div>
           <details className="border-t border-slate-200 pt-3">
             <summary className="cursor-pointer text-sm font-medium text-slate-600">Planejar visitas (opcional)</summary>
-            <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha — entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a viagem.</p>
+            <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha — entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a rota.</p>
             <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
             <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-capul-300 px-3 py-1.5 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
@@ -802,7 +802,7 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
       const pend = ps.filter((p) => p.status === 'PLANEJADA').length;
       if (pend > 0) {
         const ok = await confirm('Paradas planejadas sem baixa',
-          `Há ${pend} parada(s) planejada(s) sem check-in. Concluir a viagem mesmo assim?`,
+          `Há ${pend} parada(s) planejada(s) sem check-in. Concluir a rota mesmo assim?`,
           { confirmLabel: 'Concluir', variant: 'warning' });
         if (!ok) return;
       }
@@ -823,7 +823,7 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
 
   return (
     <div className="space-y-3">
-      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><LogIn className="h-4 w-4 text-emerald-600" /> Registrar retorno — viagem #{v.numero}</p>
+      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><LogIn className="h-4 w-4 text-emerald-600" /> Registrar retorno — rota #{v.numero}</p>
       <p className="text-xs text-slate-500">Só o condutor que iniciou pode fechar (matrícula + senha).</p>
       <div className="flex flex-wrap items-start gap-4">
         <div className="w-56">
@@ -949,7 +949,7 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
 
   return (
     <div className="space-y-3">
-      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><Banknote className="h-4 w-4 text-capul-600" /> Lançar despesa — viagem #{v.numero}</p>
+      <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><Banknote className="h-4 w-4 text-capul-600" /> Lançar despesa — rota #{v.numero}</p>
       <p className="text-xs text-slate-500">Condutor <b>{v.condutorNome ?? '—'}</b> (da saída); entra como <b>pendente</b> até o supervisor validar.</p>
       <div className="flex flex-wrap items-end gap-4">
         <div className="w-52">
@@ -1012,10 +1012,10 @@ export function AjusteForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: ()
         observacoesChegada: obsChegada.trim() || undefined,
         concluir,
       });
-      toast('success', concluir ? 'Viagem ajustada e fechada.' : 'Viagem ajustada.');
+      toast('success', concluir ? 'Rota ajustada e fechada.' : 'Rota ajustada.');
       onDone();
     } catch (e) {
-      toast('error', errMsg(e, 'Falha ao ajustar viagem.'));
+      toast('error', errMsg(e, 'Falha ao ajustar rota.'));
     } finally {
       setSalvando(false);
     }
@@ -1023,7 +1023,7 @@ export function AjusteForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: ()
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-amber-700">Ajuste de gestor — use quando o condutor não fechou a viagem corretamente.</p>
+      <p className="text-xs text-amber-700">Ajuste de gestor — use quando o condutor não fechou a rota corretamente.</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="text-xs text-slate-600">KM saída
           <input type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
@@ -1037,7 +1037,7 @@ export function AjusteForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: ()
       </div>
       <label className="flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" checked={concluir} onChange={(e) => setConcluir(e.target.checked)} />
-        Fechar a viagem (concluir) com o KM de retorno informado
+        Fechar a rota (concluir) com o KM de retorno informado
       </label>
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>

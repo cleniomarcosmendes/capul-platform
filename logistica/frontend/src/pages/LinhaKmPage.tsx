@@ -61,7 +61,7 @@ export function LinhaKmPage() {
           <Gauge className="h-6 w-6 text-capul-600" />
           <div>
             <h2 className="text-lg font-semibold text-slate-800">Linha do KM</h2>
-            <p className="text-sm text-slate-500">Prestação de contas do odômetro: KM em viagens × não apontadas, por veículo.</p>
+            <p className="text-sm text-slate-500">Prestação de contas do odômetro: KM em rotas × não apontadas, por veículo.</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -80,7 +80,7 @@ export function LinhaKmPage() {
       <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
         <span className="inline-flex items-center gap-1.5">
           <span className="flex"><span className="h-2.5 w-2 rounded-l bg-capul-500" /><span className="h-2.5 w-2 bg-indigo-500" /><span className="h-2.5 w-2 rounded-r bg-emerald-500" /></span>
-          Viagens (cores alternam por viagem)
+          Rotas (cores alternam por rota)
         </span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded" style={{ backgroundImage: HACHURA }} /> Não apontadas (lacuna de odômetro)</span>
         {noMesAtual && <span className="text-slate-400">A faixa inclui a lacuna até o KM atual do veículo.</span>}
@@ -90,7 +90,7 @@ export function LinhaKmPage() {
         <div className="flex items-center justify-center gap-2 py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
       ) : exibidas.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">
-          Sem viagens com KM apontado em {MESES[mes - 1]} / {ano}.
+          Sem rotas com KM apontado em {MESES[mes - 1]} / {ano}.
         </div>
       ) : (
         <div className="space-y-4">
@@ -101,9 +101,9 @@ export function LinhaKmPage() {
                   <Car className="h-4 w-4 text-capul-600" /> {l.placa}{l.modelo ? <span className="font-normal text-slate-400"> · {l.modelo}</span> : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                  <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-capul-500" /> Viagens: <b>{fmtKm(l.kmViagens)} km</b></span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded bg-capul-500" /> Rotas: <b>{fmtKm(l.kmViagens)} km</b></span>
                   <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded" style={{ backgroundImage: HACHURA }} /> Não apontadas: <b>{fmtKm(l.kmNaoApontadas)} km</b></span>
-                  <span className="text-slate-400">{l.qtdViagens} viagem{l.qtdViagens === 1 ? '' : 's'}</span>
+                  <span className="text-slate-400">{l.qtdViagens} rota{l.qtdViagens === 1 ? '' : 's'}</span>
                 </div>
               </div>
               <LinhaKmBarra linha={l} altura={umVeiculo ? 'h-9' : 'h-7'} />
@@ -117,7 +117,7 @@ export function LinhaKmPage() {
                       <tr key={i} className={s.tipo === 'gap' ? 'bg-slate-50/60' : 'hover:bg-slate-50'}>
                         <td className="px-3 py-2">{s.tipo === 'gap'
                           ? <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundImage: HACHURA }} /><span className="italic text-slate-400">{s.label}</span></span>
-                          : <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: cor! }} /><span className="font-medium text-slate-700">Viagem #{s.viagemNumero}</span></span>}</td>
+                          : <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded" style={{ backgroundColor: cor! }} /><span className="font-medium text-slate-700">Rota #{s.viagemNumero}</span></span>}</td>
                         <td className="px-3 py-2 text-slate-500">{s.tipo === 'gap' ? '—' : fmtDate(s.data)}</td>
                         <td className="px-3 py-2 text-slate-500">{s.tipo === 'gap' ? '—' : (s.condutor ?? '—')}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-slate-600">{fmtKm(s.kmInicio)} – {fmtKm(s.kmFim)}</td>
@@ -130,7 +130,7 @@ export function LinhaKmPage() {
             </div>
           ))}
           {!umVeiculo && semDados > 0 && (
-            <p className="text-xs text-slate-400">{semDados} veículo{semDados === 1 ? '' : 's'} sem viagens com KM apontado neste mês {semDados === 1 ? 'foi omitido' : 'foram omitidos'}.</p>
+            <p className="text-xs text-slate-400">{semDados} veículo{semDados === 1 ? '' : 's'} sem rotas com KM apontado neste mês {semDados === 1 ? 'foi omitido' : 'foram omitidos'}.</p>
           )}
         </div>
       )}
@@ -162,7 +162,7 @@ function abrirRelatorioLinhaKm(linhas: LinhaKm[], periodo: string, veicLabel: st
         <thead><tr><th>Trecho</th><th>Data</th><th>Condutor</th><th class="r">Faixa de KM</th><th class="r">KM</th></tr></thead>
         <tbody>${l.segmentos.map((s, i) => `
           <tr class="${s.tipo}">
-            <td>${s.tipo === 'gap' ? `<span class="dot gap"></span><i>${esc(s.label)}</i>` : `<span class="dot" style="background:${cores[i]}"></span>Viagem #${esc(s.viagemNumero)}`}</td>
+            <td>${s.tipo === 'gap' ? `<span class="dot gap"></span><i>${esc(s.label)}</i>` : `<span class="dot" style="background:${cores[i]}"></span>Rota #${esc(s.viagemNumero)}`}</td>
             <td>${s.tipo === 'gap' ? '—' : esc(dt(s.data))}</td>
             <td>${s.tipo === 'gap' ? '—' : esc(s.condutor ?? '—')}</td>
             <td class="r num">${esc(fmtKm(s.kmInicio))} – ${esc(fmtKm(s.kmFim))}</td>
@@ -173,7 +173,7 @@ function abrirRelatorioLinhaKm(linhas: LinhaKm[], periodo: string, veicLabel: st
       <div class="veic">
         <div class="vhead">
           <b>${esc(l.placa)}</b>${l.modelo ? ` · <span class="muted">${esc(l.modelo)}</span>` : ''}
-          <span class="tot">Viagens: <b>${esc(fmtKm(l.kmViagens))} km</b> · Não apontadas: <b>${esc(fmtKm(l.kmNaoApontadas))} km</b> · ${esc(l.qtdViagens)} viagem(ns)</span>
+          <span class="tot">Rotas: <b>${esc(fmtKm(l.kmViagens))} km</b> · Não apontadas: <b>${esc(fmtKm(l.kmNaoApontadas))} km</b> · ${esc(l.qtdViagens)} rota(s)</span>
         </div>
         <div class="bar">${segs}</div>
         <div class="kmlabels"><span>${esc(fmtKm(l.kmMin))} km</span><span>${esc(fmtKm(l.kmMax))} km</span></div>
@@ -213,8 +213,8 @@ function abrirRelatorioLinhaKm(linhas: LinhaKm[], periodo: string, veicLabel: st
   <h1>Linha do KM — Frota</h1>
   <p class="sub">CAPUL · Logística · gerado em ${esc(new Date().toLocaleString('pt-BR'))}</p>
   <div class="filtros"><span>Período: ${esc(periodo)}</span><span>Veículo: ${esc(veicLabel)}</span></div>
-  <div class="legenda"><i class="lv"></i> Viagens (KM apontado) &nbsp;&nbsp; <i class="lg"></i> Não apontadas (lacuna de odômetro)${mesCorrente ? ' — inclui a lacuna até o KM atual' : ''}</div>
-  ${blocos || '<p class="muted">Sem viagens com KM apontado no período.</p>'}
+  <div class="legenda"><i class="lv"></i> Rotas (KM apontado) &nbsp;&nbsp; <i class="lg"></i> Não apontadas (lacuna de odômetro)${mesCorrente ? ' — inclui a lacuna até o KM atual' : ''}</div>
+  ${blocos || '<p class="muted">Sem rotas com KM apontado no período.</p>'}
   <script>window.onload=function(){window.print()}</script>
 </body></html>`;
 
