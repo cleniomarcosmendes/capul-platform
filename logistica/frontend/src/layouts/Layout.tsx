@@ -26,7 +26,7 @@ const navItems: NavEntry[] = [
   { section: 'ENTREGAS', roles: ENTREGA },
   { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, roles: ENTREGA },
   { to: '/entregas', label: 'Entregas', icon: ClipboardList, end: true, roles: ENTREGA },
-  { to: '/viagens', label: 'Viagens', icon: Route, roles: ENTREGA },
+  { to: '/viagens', label: 'Rotas de Entrega', icon: Route, roles: ENTREGA },
   { to: '/comprovantes', label: 'Comprovantes', icon: FileCheck, roles: ENTREGA },
   { to: '/clientes', label: 'Endereços', icon: MapPin, roles: ENTREGA },
 

@@ -151,7 +151,7 @@ export function ComprovantesPage() {
                           : <span className="text-xs text-slate-400">sem prova</span>}
                         {e.status === 'NAO_ENTREGUE' && (
                           <button onClick={() => void novaTentativa(e)} disabled={reabrindo === e.id}
-                            title="Volta a entrega pra fila de pendentes para montar nova viagem"
+                            title="Volta a entrega pra fila de pendentes para montar nova rota"
                             className="inline-flex items-center gap-1 rounded-lg border border-amber-400 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50">
                             {reabrindo === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : '♻'} Nova tentativa
                           </button>

@@ -147,7 +147,7 @@ export function MontarViagemPage() {
       navigate(`/viagens/${data.id}`, { state: { otimizada: rotaOtimizada } });
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao montar viagem.');
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao montar rota.');
       setMontando(false);
     }
   }
@@ -159,17 +159,17 @@ export function MontarViagemPage() {
     <div className="space-y-4">
       {DirtyDialog}
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="h-4 w-4" /> Voltar para Viagens
+        <ArrowLeft className="h-4 w-4" /> Voltar para Rotas de Entrega
       </Link>
       <div>
-        <h2 className="text-lg font-semibold text-slate-800">Montar viagem</h2>
+        <h2 className="text-lg font-semibold text-slate-800">Montar rota</h2>
         <p className="text-sm text-slate-500">Adicione as entregas à rota, ordene (sugestão ou manual) e escolha quem leva.</p>
       </div>
 
       {/* Veículo e motorista no TOPO (pedido 12/06 — com rota longa o card de
           baixo afundava; aqui fica sempre visível, igual ao detalhe). */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
-        <p className="mb-3 text-xs text-slate-500">Veículo e motorista são <strong>opcionais agora</strong> — a viagem salva em preparação e você define depois; o <strong>despacho</strong> exige os dois.</p>
+        <p className="mb-3 text-xs text-slate-500">Veículo e motorista são <strong>opcionais agora</strong> — a rota salva em preparação e você define depois; o <strong>despacho</strong> exige os dois.</p>
         <div className="grid grid-cols-2 items-end gap-3 lg:grid-cols-12">
           <div className="lg:col-span-4">
             <label className={lbl}>Veículo (disponível)</label>
@@ -266,7 +266,7 @@ export function MontarViagemPage() {
         <div className="space-y-4">
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-              <span>Rota da viagem ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)</span>
+              <span>Sequência de paradas ({rota.length} {rota.length === 1 ? 'entrega' : 'entregas'} · {volumesRota} vol)</span>
               <button onClick={() => void sugerirOrdem()} disabled={sugerindo || rota.length < 2 || rotaOtimizada}
                 title={rota.length < 2 ? 'Adicione ao menos 2 entregas' : rotaOtimizada ? 'Rota já otimizada — mude a composição/ordem para recalcular' : 'Calcula o melhor percurso a partir da filial'}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-capul-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-capul-700 disabled:cursor-not-allowed disabled:bg-slate-300">

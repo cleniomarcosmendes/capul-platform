@@ -221,12 +221,12 @@ export function ViagemDetalhePage() {
   };
 
   async function despachar() {
-    const km = await prompt('Despachar viagem', 'KM inicial do veículo (odômetro) — opcional. Deixe em branco se não for registrar.', { placeholder: 'KM atual no painel', confirmLabel: 'Despachar' });
+    const km = await prompt('Despachar rota', 'KM inicial do veículo (odômetro) — opcional. Deixe em branco se não for registrar.', { placeholder: 'KM atual no painel', confirmLabel: 'Despachar' });
     if (km === null) return; // cancelou
     await acao(() => logisticaApi.post(`/viagens/${id}/despachar`, { kmInicial: parseKm(km) }), 'Falha ao despachar.');
   }
   async function concluir() {
-    const km = await prompt('Concluir viagem', 'Entregas ainda EM VIAGEM serão baixadas sem prova e o veículo liberado. KM final do veículo (odômetro) — opcional.', { placeholder: 'KM final no painel', confirmLabel: 'Concluir', variant: 'warning' });
+    const km = await prompt('Concluir rota', 'Entregas ainda EM VIAGEM serão baixadas sem prova e o veículo liberado. KM final do veículo (odômetro) — opcional.', { placeholder: 'KM final no painel', confirmLabel: 'Concluir', variant: 'warning' });
     if (km === null) return; // cancelou
     await acao(() => logisticaApi.post(`/viagens/${id}/concluir`, { kmFinal: parseKm(km) }), 'Falha ao concluir.');
   }
@@ -258,7 +258,7 @@ export function ViagemDetalhePage() {
   if (loading) return <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>;
   if (!v) return (
     <div className="space-y-4">
-      {naoEncontrada && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">Viagem não encontrada.</div>}
+      {naoEncontrada && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">Rota não encontrada.</div>}
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ArrowLeft className="h-4 w-4" /> Voltar</Link>
     </div>
   );
@@ -273,12 +273,12 @@ export function ViagemDetalhePage() {
   return (
     <div className="space-y-4">
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="h-4 w-4" /> Voltar para Viagens
+        <ArrowLeft className="h-4 w-4" /> Voltar para Rotas de Entrega
       </Link>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-slate-800">Viagem #{v.numero}</h2>
+          <h2 className="text-lg font-semibold text-slate-800">Rota #{v.numero}</h2>
           <span className={`rounded px-2 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -295,8 +295,8 @@ export function ViagemDetalhePage() {
           {v.situacao === 'RASCUNHO' && (
             <>
               <button onClick={() => setConfirmacao({
-                  titulo: 'Descartar viagem',
-                  mensagem: `Descartar a viagem #${v.numero}? As entregas voltam para a fila de pendentes.`,
+                  titulo: 'Descartar rota',
+                  mensagem: `Descartar a rota #${v.numero}? As entregas voltam para a fila de pendentes.`,
                   acao: descartar,
                 })} disabled={busy}
                 className="flex items-center gap-1.5 rounded-lg border border-rose-300 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50">
@@ -325,7 +325,7 @@ export function ViagemDetalhePage() {
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
           {(!v.veiculoId || !v.motoristaId) && (
             <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Viagem salva sem {!v.veiculoId && !v.motoristaId ? 'veículo e motorista' : !v.veiculoId ? 'veículo' : 'motorista'} — defina e salve para poder despachar.
+              Rota salva sem {!v.veiculoId && !v.motoristaId ? 'veículo e motorista' : !v.veiculoId ? 'veículo' : 'motorista'} — defina e salve para poder despachar.
             </p>
           )}
           <div className="grid grid-cols-2 items-end gap-3 lg:grid-cols-12">
@@ -436,7 +436,7 @@ export function ViagemDetalhePage() {
             )}
           </div>
           {filaFiltrada.length === 0 ? (
-            <div className="p-4 text-sm text-slate-500">{pendentesFora.length === 0 ? 'Nenhuma entrega pendente fora desta viagem.' : 'Tudo que casa com o filtro já está na rota.'}</div>
+            <div className="p-4 text-sm text-slate-500">{pendentesFora.length === 0 ? 'Nenhuma entrega pendente fora desta rota.' : 'Tudo que casa com o filtro já está na rota.'}</div>
           ) : (
             <ul className="divide-y divide-slate-100">
               {filaFiltrada.map((e) => (
@@ -473,7 +473,7 @@ export function ViagemDetalhePage() {
           )}
         </div>
         {v.paradas.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500">Sem entregas nesta viagem.</div>
+          <div className="p-6 text-sm text-slate-500">Sem entregas nesta rota.</div>
         ) : !ehRascunho ? (
           /* Execução (em curso/concluída): GRID — uma entrega por linha,
              ação no fim (pedido Clenio 12/06). */
@@ -590,9 +590,9 @@ export function ViagemDetalhePage() {
                   {v.situacao === 'RASCUNHO' && p.entrega && (
                     <button onClick={() => setConfirmacao({
                         titulo: 'Remover entrega',
-                        mensagem: `Remover a entrega #${p.entrega!.numero} (${p.entrega!.destinatarioNome}) desta viagem? Ela volta para a fila.`,
+                        mensagem: `Remover a entrega #${p.entrega!.numero} (${p.entrega!.destinatarioNome}) desta rota? Ela volta para a fila.`,
                         acao: async () => { await removerEntrega(p.entrega!.id); },
-                      })} disabled={busy} title="Remover da viagem"
+                      })} disabled={busy} title="Remover da rota"
                       className="text-slate-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                   )}
                   {v.situacao === 'EM_CURSO' && p.entrega && p.entrega.status === 'EM_VIAGEM' && (

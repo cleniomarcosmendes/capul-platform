@@ -180,7 +180,7 @@ export function EntregasPage() {
                 <th className={th}><button onClick={() => toggleSort('quantidadeVolumes')} className={btnSort}>Vol. <SortIcon col="quantidadeVolumes" /></button></th>
                 <th className={th}><button onClick={() => toggleSort('totalCupons')} className={btnSort}>Valor <SortIcon col="totalCupons" /></button></th>
                 <th className={th}><button onClick={() => toggleSort('origemVenda')} className={btnSort}>Origem <SortIcon col="origemVenda" /></button></th>
-                <th className={th}><button onClick={() => toggleSort('viagemNumero')} className={btnSort}>Viagem <SortIcon col="viagemNumero" /></button></th>
+                <th className={th}><button onClick={() => toggleSort('viagemNumero')} className={btnSort}>Rota <SortIcon col="viagemNumero" /></button></th>
                 <th className={th}><button onClick={() => toggleSort('status')} className={btnSort}>Status <SortIcon col="status" /></button></th>
                 <th className={th}></th>
               </tr>
@@ -208,7 +208,7 @@ export function EntregasPage() {
                     <div className="flex items-center justify-end gap-2">
                       {e.status === 'NAO_ENTREGUE' && (
                         <button onClick={() => void novaTentativa(e)} disabled={reabrindo === e.id}
-                          title="Volta pra fila para nova viagem"
+                          title="Volta pra fila para nova rota"
                           className="rounded border border-amber-400 px-1.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50">
                           {reabrindo === e.id ? '…' : '♻'}
                         </button>

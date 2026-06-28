@@ -71,7 +71,7 @@ export function HomePage() {
           className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 shadow-sm transition-shadow hover:shadow-md"
         >
           <Route className="h-7 w-7 text-capul-600" />
-          <div className="mt-3 font-medium text-slate-800">Viagens</div>
+          <div className="mt-3 font-medium text-slate-800">Rotas de Entrega</div>
           <div className="text-xs text-slate-500">Montar rota, despachar e baixar</div>
         </Link>
       </div>

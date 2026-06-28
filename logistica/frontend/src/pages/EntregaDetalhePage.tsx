@@ -203,7 +203,7 @@ export function EntregaDetalhePage() {
           <h3 className="mb-3 text-sm font-semibold text-slate-700">Rota e baixa</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
             {e.viagemNumero != null && (
-              <div><span className={lbl}>Viagem</span>
+              <div><span className={lbl}>Rota</span>
                 <div className="text-slate-700">
                   <Link to="/viagens" className="text-capul-700 hover:underline">#{e.viagemNumero}</Link>
                   {e.viagemSituacao ? ` · ${e.viagemSituacao}` : ''}

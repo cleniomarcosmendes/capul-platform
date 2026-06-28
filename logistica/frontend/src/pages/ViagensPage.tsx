@@ -85,11 +85,11 @@ export function ViagensPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Viagens</h2>
-          <p className="text-sm text-slate-500">Clique numa viagem para ver as paradas, despachar e dar baixas.</p>
+          <h2 className="text-lg font-semibold text-slate-800">Rotas de Entrega</h2>
+          <p className="text-sm text-slate-500">Clique numa rota para ver as paradas, despachar e dar baixas.</p>
         </div>
         <Link to="/viagens/montar" className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
-          <Truck className="h-4 w-4" /> Montar viagem
+          <Truck className="h-4 w-4" /> Montar rota
         </Link>
       </div>
 
@@ -110,7 +110,7 @@ export function ViagensPage() {
         {loading ? (
           <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>
         ) : ordenadas.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500">Nenhuma viagem{situacaoSel ? ' nessa situação' : ''}.</div>
+          <div className="p-6 text-sm text-slate-500">Nenhuma rota{situacaoSel ? ' nessa situação' : ''}.</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
@@ -148,7 +148,7 @@ export function ViagensPage() {
           </table>
         )}
       </div>
-      <p className="text-xs text-slate-400">{ordenadas.length} viagem{ordenadas.length === 1 ? '' : 'ns'} · clique no cabeçalho para ordenar</p>
+      <p className="text-xs text-slate-400">{ordenadas.length} rota{ordenadas.length === 1 ? '' : 's'} · clique no cabeçalho para ordenar</p>
     </div>
   );
 }
