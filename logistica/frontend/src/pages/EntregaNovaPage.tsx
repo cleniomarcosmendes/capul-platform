@@ -4,7 +4,7 @@ import { Loader2, Plus, Trash2, Package, Search, MapPin, Eraser } from 'lucide-r
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 import PasswordInput from '../components/PasswordInput';
 import { getOperador, setOperador, limparOperador } from '../lib/operadorSessao';
 import { maskTelefone, maskCep, onlyDigits, UFS, maskMoeda, parseMoeda, moedaParaInput } from '../utils/format';
@@ -254,7 +254,7 @@ export function EntregaNovaPage() {
       finally { setBuscando(false); }
     }, 400);
     return () => clearTimeout(t);
-  }, [telefone]);
+  }, [telefone, modoEdicao]);
 
   // Setter de campo de endereço. MANTÉM o vínculo com o endereço salvo: editar
   // os campos CORRIGE esse cadastro (da nossa base) na próxima gravação — útil

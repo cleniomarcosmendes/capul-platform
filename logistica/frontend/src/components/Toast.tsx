@@ -1,11 +1,11 @@
-import { useEffect, useState, useCallback, useRef, createContext, useContext } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { ToastContext, type ToastType } from './toast-context';
 
 // Toast/Confirm/Prompt centralizado — portado do Gestão-TI (12/06) para
 // alinhar o padrão de feedback do módulo aos demais (Fiscal/Workspace).
 // Paleta adaptada de `capul-*` para `sky-*` (cor do módulo Logística).
-
-type ToastType = 'success' | 'error' | 'warning' | 'info';
+// O contexto e o hook useToast ficam em ./toast-context (Fast Refresh).
 
 interface ToastItem {
   id: number;
@@ -33,18 +33,6 @@ interface PromptState {
   multiline?: boolean;
   resolve: (value: string | null) => void;
 }
-
-interface ToastContextType {
-  toast: (type: ToastType, message: string) => void;
-  confirm: (title: string, message: string, options?: { confirmLabel?: string; cancelLabel?: string; variant?: 'danger' | 'warning' | 'default' }) => Promise<boolean>;
-  prompt: (title: string, message: string, options?: { placeholder?: string; confirmLabel?: string; cancelLabel?: string; variant?: 'danger' | 'warning' | 'default'; required?: boolean; multiline?: boolean }) => Promise<string | null>;
-}
-
-const ToastContext = createContext<ToastContextType>({
-  toast: () => {},
-  confirm: () => Promise.resolve(false),
-  prompt: () => Promise.resolve(null),
-});
 
 const icons: Record<ToastType, typeof Info> = {
   success: CheckCircle,
@@ -185,6 +173,8 @@ function ConfirmModal({ state, onClose }: { state: ConfirmState; onClose: (v: bo
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
+    // Listener global de ESC, ligado uma vez (efeito de montagem).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const VariantIcon = variant === 'danger' ? XCircle : variant === 'warning' ? AlertTriangle : Info;
@@ -257,6 +247,8 @@ function PromptModal({ state, onClose }: { state: PromptState; onClose: (v: stri
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
+    // Listener global de ESC, ligado uma vez (efeito de montagem).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const VariantIcon = variant === 'danger' ? XCircle : variant === 'warning' ? AlertTriangle : Info;
@@ -321,8 +313,4 @@ function PromptModal({ state, onClose }: { state: PromptState; onClose: (v: stri
       </div>
     </div>
   );
-}
-
-export function useToast() {
-  return useContext(ToastContext);
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowLeft, ArrowUp, Loader2, Plus, Sparkles, Truck, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 

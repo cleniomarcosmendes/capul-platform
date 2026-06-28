@@ -5,9 +5,9 @@ import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import {
   ParadasPanel, RetornoForm, DespesaCondutorForm, AjusteForm,
-  SIT_META, fmtDateTime, errMsg,
   type ViagemFrota, type TipoDespesa,
 } from './FrotaPage';
+import { SIT_META, fmtDateTime, errMsg } from './frota-utils';
 
 interface DespesaViagem { id: string; tipo: string; valor: number; fornecedor: string | null; situacao: string; dataDespesa: string }
 

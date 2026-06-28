@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Filter, Loader2, MapPin, Package, RefreshCw, Tag, TrendingUp, Users, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 
 // Análise das entregas (apresentação à gestão): nº de entregas do mês AGRUPADO
 // por origem/status/motorista/bairro (reconcilia com o total); clicar num grupo

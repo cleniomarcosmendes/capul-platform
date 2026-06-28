@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Car, ChevronRight, CircleDot, Loader2, MapPin, RefreshCw, TrendingUp, Wrench, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 import { MapaFrota } from '../components/MapaFrota';
 
 // Painel tempo real da frota (monitoramento com recorte interno). "Tempo real"

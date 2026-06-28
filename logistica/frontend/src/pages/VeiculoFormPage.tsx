@@ -4,7 +4,7 @@ import { ArrowLeft, Loader2, Truck, Wrench } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { maskPlaca } from '../utils/format';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
@@ -81,7 +81,7 @@ export function VeiculoFormPage() {
         toast('error', 'Veículo não encontrado.');
       } finally { setCarregando(false); }
     })();
-  }, [id]);
+  }, [id, toast]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();

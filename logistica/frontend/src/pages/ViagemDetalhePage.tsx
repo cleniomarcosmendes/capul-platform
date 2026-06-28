@@ -6,7 +6,7 @@ import {
 import { logisticaApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BaixaDialog } from '../components/BaixaDialog';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 import { maskTelefone } from '../utils/format';
 
 // Detalhe da viagem (padrão workspace): paradas na ordem da rota + ações por

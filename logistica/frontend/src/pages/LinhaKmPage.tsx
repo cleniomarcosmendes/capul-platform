@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Car, ChevronLeft, ChevronRight, Gauge, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { logisticaApi } from '../services/api';
-import { useToast } from '../components/Toast';
-import { LinhaKmBarra, coresPorSegmento, fmtKm, HACHURA, type LinhaKm } from '../components/LinhaKmBarra';
+import { useToast } from '../components/toast-context';
+import { LinhaKmBarra } from '../components/LinhaKmBarra';
+import { coresPorSegmento, fmtKm, HACHURA, type LinhaKm } from '../components/linhaKm';
 
 // Página dedicada "Linha do KM" (prestação de contas do odômetro). Espelha o
 // layout do Acompanhamento do Workspace: filtro de mês + veículo (um ou todos)

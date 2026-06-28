@@ -62,10 +62,12 @@ export function MapaFrota() {
       maxZoom: 19,
     }).addTo(map);
     mapRef.current = map;
+    // Cópia local da ref para o cleanup (a ref pode mudar antes dele rodar).
+    const markers = markersRef.current;
     return () => {
       map.remove();
       mapRef.current = null;
-      markersRef.current.clear();
+      markers.clear();
       fezFit.current = false;
     };
   }, []);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Banknote, Check, Loader2, Paperclip, Pencil, Plus, Printer, Tag, Trash2, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 
 // Despesas da frota (Fase 2) com governança em 3 níveis. Padrão workspace:
@@ -104,7 +104,10 @@ function DespesasTab() {
       setLoading(false);
     }
   };
-  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, [mes, ano, situacao, veiculoFiltro]);
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mes, ano, situacao, veiculoFiltro]);
 
   const toggleSort = (col: SortCol) => {
     if (col === sortCol) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -415,7 +418,10 @@ function FornecedoresTab() {
     try { const { data } = await logisticaApi.get<FornecedorDespesa[]>('/despesas/fornecedores'); setFornecedores(data); }
     catch (e) { toast('error', errMsg(e, 'Falha ao carregar fornecedores.')); } finally { setLoading(false); }
   };
-  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -551,7 +557,8 @@ function LocaisTab() {
     coreApi.get<CoreItem[]>('/filiais').then((r) => setFiliais(r.data)).catch(() => {});
     coreApi.get<CoreItem[]>('/departamentos').then((r) => setDeptos(r.data)).catch(() => {});
     logisticaApi.get<VeiculoItem[]>('/veiculos').then((r) => setVeiculos(r.data)).catch(() => {});
-  /* eslint-disable-next-line */ }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filialNome = (id?: string | null) => (id ? labelCore(filiais.find((f) => f.id === id)) : 'Todas');
   const deptoNome = (id?: string | null) => (id ? labelCore(deptos.find((d) => d.id === id)) : '');
@@ -731,7 +738,10 @@ function TiposTab() {
     try { const { data } = await logisticaApi.get<TipoDespesa[]>('/despesas/tipos'); setTipos(data); }
     catch (e) { toast('error', errMsg(e, 'Falha ao carregar tipos.')); } finally { setLoading(false); }
   };
-  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, Pencil, Phone, Printer } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 import { maskTelefone, maskCep } from '../utils/format';
 
 // Detalhe da Entrega (padrão workspace — página, não modal): seções de

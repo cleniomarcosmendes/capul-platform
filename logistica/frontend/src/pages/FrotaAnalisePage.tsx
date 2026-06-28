@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, Banknote, Building2, Car, ChevronLeft, ChevronRight, Filter, Gauge, KeyRound, Layers, Loader2, RefreshCw, Tag, Target, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 
 // Análise das despesas da frota (apresentação à gestão): custo do mês AGRUPADO
 // por veículo/tipo/fornecedor/departamento (reconcilia com o total); clicar num

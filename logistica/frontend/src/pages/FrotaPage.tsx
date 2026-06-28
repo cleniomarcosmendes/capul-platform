@@ -2,10 +2,11 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Banknote, Fuel, Loader2, LogIn, LogOut, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/toast-context';
 import PasswordInput from '../components/PasswordInput';
 import { useAuth } from '../contexts/AuthContext';
 import { maskMoeda, parseMoeda } from '../utils/format';
+import { SIT_META, fmtDateTime, errMsg } from './frota-utils';
 
 // Controle de FROTA (terminal da portaria). O CONDUTOR se identifica por
 // matrícula+senha (Protheus, só funcionário ativo) — diferente da ENTREGA, em
@@ -35,20 +36,6 @@ const PARADA_META: Record<string, { label: string; cls: string }> = {
 interface VeiculoDisp { id: string; placa: string; modelo?: string | null; situacao: string; kmAtual: number }
 export interface TipoDespesa { id: string; nome: string }
 export interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
-
-export const SIT_META: Record<string, { label: string; cls: string }> = {
-  EM_CURSO: { label: 'Em curso', cls: 'bg-capul-100 text-capul-700' },
-  CONCLUIDA: { label: 'Concluída', cls: 'bg-emerald-100 text-emerald-700' },
-  CANCELADA: { label: 'Cancelada', cls: 'bg-rose-100 text-rose-700' },
-  RASCUNHO: { label: 'Rascunho', cls: 'bg-slate-100 text-slate-600' },
-};
-
-export const fmtDateTime = (s?: string | null) =>
-  s ? new Date(s).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
-export const errMsg = (e: unknown, fb: string) => {
-  const m = (e as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
-  return Array.isArray(m) ? m.join(', ') : (typeof m === 'string' ? m : fb);
-};
 
 /** Atalho que adiciona um local CADASTRADO ao textarea de rota (mantém digitação
  *  livre). Escopado pela filial + veículo selecionado + depto solicitante: a
@@ -105,7 +92,10 @@ export function FrotaPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, [filtro]);
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtro]);
 
   return (
     <div className="space-y-5">
@@ -589,7 +579,10 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
       setLoading(false);
     }
   };
-  useEffect(() => { void carregar(); /* eslint-disable-next-line */ }, [v.id]);
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v.id]);
 
   const adicionar = async () => {
     if (!local.trim()) { toast('warning', 'Informe o local da parada.'); return; }
