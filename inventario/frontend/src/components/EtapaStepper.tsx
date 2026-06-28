@@ -55,6 +55,8 @@ export function EtapaStepper({ steps, currentStep, showFutureSteps = true }: Eta
 
 // === Definição das etapas pré-prontas ===
 
+// Hook/presets colocados ao componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export const ETAPAS_INVENTARIO: EtapaItem[] = [
   { key: 'EM_PREPARACAO', label: 'Em Preparação' },
   { key: 'EM_CONTAGEM',   label: 'Em Contagem' },
@@ -63,6 +65,8 @@ export const ETAPAS_INVENTARIO: EtapaItem[] = [
   { key: 'INTEGRADO',     label: 'Integrado' },
 ];
 
+// Hook/presets colocados ao componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export const ETAPAS_LISTA: EtapaItem[] = [
   { key: 'PREPARACAO',  label: 'Preparação' },
   { key: 'ABERTA',      label: 'Aberta' },

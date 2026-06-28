@@ -10,9 +10,9 @@ export function Header({ title }: { title: string }) {
   const [apiAmbiente, setApiAmbiente] = useState<string | null>(null);
 
   useEffect(() => {
-    coreApi.get('/integracoes')
+    coreApi.get<{ codigo: string; ambiente: string }[]>('/integracoes')
       .then(({ data }) => {
-        const protheus = data.find((i: any) => i.codigo === 'PROTHEUS');
+        const protheus = data.find((i) => i.codigo === 'PROTHEUS');
         if (protheus) setApiAmbiente(protheus.ambiente);
       })
       .catch(() => {});

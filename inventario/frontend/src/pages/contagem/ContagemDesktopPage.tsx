@@ -86,6 +86,7 @@ export function ContagemDesktopPage() {
     setEditingId(product.id);
     setEditValue('');
     setTimeout(() => setHighlightId(null), 2000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
 
   // Save a count for a product (cycle-aware)
@@ -105,6 +106,7 @@ export function ContagemDesktopPage() {
     } finally {
       setSavingId(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateProduct, countCycleKey, currentCycle]);
 
   async function handleHandoff() {
@@ -141,6 +143,7 @@ export function ContagemDesktopPage() {
     } as Partial<CountingListProduct>);
     setLotProduct(null);
     toast.success(`Contagem por lote salva (${currentCycle}o ciclo) — ${lotCounts.length} lote(s).`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotProduct, updateProduct, countCycleKey, currentCycle]);
 
   // Handle click on counting cell — open lot modal or inline edit

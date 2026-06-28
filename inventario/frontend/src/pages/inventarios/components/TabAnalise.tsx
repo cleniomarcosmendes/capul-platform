@@ -240,7 +240,7 @@ function buildLotDetails(product: CountingListProduct, cycleNumber?: number): Lo
   for (const sl of snapshotLots) {
     const lotNum = sl.lot_number || sl.b8_lotectl;
     const counted = countedMap.get(lotNum) ?? null;
-    const sysQty = sl.system_qty ?? (sl as any).quantity ?? 0;
+    const sysQty = sl.system_qty ?? (sl as { quantity?: number }).quantity ?? 0;
     lots.push({
       lot_number: lotNum,
       b8_lotefor: sl.b8_lotefor ?? '',
@@ -301,7 +301,7 @@ function buildLotDetailsFinal(product: CountingListProduct): LotDetailFinal[] {
     const lotNum = sl.lot_number || sl.b8_lotectl;
     allLotNumbers.add(lotNum);
     snapshotMap.set(lotNum, {
-      system_qty: sl.system_qty ?? (sl as any).quantity ?? 0,
+      system_qty: sl.system_qty ?? (sl as { quantity?: number }).quantity ?? 0,
       b8_lotefor: sl.b8_lotefor ?? '',
     });
   }
@@ -487,6 +487,7 @@ function CycleAnalysis({ products, cycleNumber }: { products: CountingListProduc
       // (criticidade fica visivel pelas colunas Variacao % e Situacao).
       return a.product_code.localeCompare(b.product_code, 'pt-BR', { numeric: true });
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, cycleNumber]);
 
   const stats = useMemo(() => {

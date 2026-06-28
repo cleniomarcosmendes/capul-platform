@@ -118,7 +118,10 @@ export default function ComparacaoPage({ embedded = false }: ComparacaoPageProps
     }
   }, [invAId, invBId]);
 
-  useEffect(() => { if (invAId && invBId) loadData(); }, [loadData]);
+  useEffect(() => {
+    if (invAId && invBId) loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadData]);
 
   const items = useMemo(() => {
     if (!result) return [];

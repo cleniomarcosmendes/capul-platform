@@ -8,6 +8,8 @@ interface SidebarContext {
   toggleSidebar: () => void;
 }
 
+// Hook/presets colocados ao componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useSidebarToggle() {
   return useOutletContext<SidebarContext>();
 }

@@ -35,7 +35,10 @@ export function ProdutosPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { loadData(page, busca); }, [page, loadData]);
+  useEffect(() => {
+    loadData(page, busca);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, loadData]);
 
   function handleSearch() {
     setPage(1);

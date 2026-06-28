@@ -50,7 +50,10 @@ export default function IntegracoesPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [statusFilter]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   const filtered = typeFilter
     ? items.filter((i) => i.integration_type === typeFilter)

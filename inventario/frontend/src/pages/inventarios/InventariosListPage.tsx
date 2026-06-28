@@ -60,7 +60,10 @@ export function InventariosListPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadData(); }, [page, statusFilter, warehouseFilter]);
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, statusFilter, warehouseFilter]);
 
   const { sortedRows, sortKey, sortDir, handleSort } = useTableSort(inventarios, 'created_at', 'desc');
 

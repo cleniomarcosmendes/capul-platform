@@ -85,6 +85,7 @@ export function ContagemMobilePage() {
     } else {
       toast.warning(`Produto "${code}" nao encontrado.`);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
 
   // Advance to next pending after save. Returns true if moved, false if stayed.
@@ -159,6 +160,7 @@ export function ContagemMobilePage() {
     } finally {
       setSaving(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProduct, quantity, observation, currentIndex, products, updateProduct, countCycleKey, isLotProduct, getCountedQty, stats.pending]);
 
   // Save lot-based count
@@ -185,6 +187,7 @@ export function ContagemMobilePage() {
     } else {
       advanceToNext();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProduct, updateProduct, countCycleKey, currentIndex, products, getCountedQty, stats.pending]);
 
   function handleClear() {

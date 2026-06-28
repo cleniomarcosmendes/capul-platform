@@ -97,6 +97,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Hook/presets colocados ao componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useToast() {
   const ctx = useContext(ToastContext);
   if (!ctx) throw new Error('useToast must be used within ToastProvider');

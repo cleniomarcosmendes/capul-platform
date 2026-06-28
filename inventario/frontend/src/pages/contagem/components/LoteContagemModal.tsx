@@ -141,6 +141,7 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
         firstInputRef.current.focus();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, lots.length]);
 
   const updateLotQty = useCallback((index: number, value: string) => {
