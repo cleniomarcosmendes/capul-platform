@@ -221,13 +221,13 @@ export function IndicadoresPage() {
             </div>
             {ind.km.viagens === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-slate-400">
-                Nenhuma viagem com hodômetro registrado no mês.<br />
-                <span className="text-xs">Informe o KM ao despachar e ao concluir a viagem para alimentar este indicador.</span>
+                Nenhuma rota com hodômetro registrada no mês.<br />
+                <span className="text-xs">Informe o KM ao despachar e ao concluir a rota para alimentar este indicador.</span>
               </p>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
-                  <StatTexto icon={Gauge} cor="text-indigo-600" bg="bg-indigo-50" valor={fmtKm(ind.km.total)} rotulo="KM rodados no mês" sub={`${ind.km.viagens} viagem(ns) com hodômetro`} />
+                  <StatTexto icon={Gauge} cor="text-indigo-600" bg="bg-indigo-50" valor={fmtKm(ind.km.total)} rotulo="KM rodados no mês" sub={`${ind.km.viagens} rota(s) com hodômetro`} />
                   <StatTexto icon={Boxes} cor="text-capul-600" bg="bg-capul-50" valor={ind.km.porEntrega != null ? `${ind.km.porEntrega.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km` : '—'} rotulo="KM por entrega" sub="eficiência da rota" />
                 </div>
                 <div className="grid grid-cols-1 gap-0 border-t border-slate-100 sm:grid-cols-2">

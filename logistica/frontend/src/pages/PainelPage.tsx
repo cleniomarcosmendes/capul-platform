@@ -112,7 +112,7 @@ export function PainelPage() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Stat icon={Package} cor="text-amber-600" bg="bg-amber-50" valor={c.entregasPendentes} rotulo="Pendentes" />
               <Stat icon={Truck} cor="text-capul-600" bg="bg-capul-50" valor={c.entregasEmViagem} rotulo="Em viagem" />
-              <Stat icon={Route} cor="text-indigo-600" bg="bg-indigo-50" valor={c.viagensEmCurso} rotulo="Viagens em curso" />
+              <Stat icon={Route} cor="text-indigo-600" bg="bg-indigo-50" valor={c.viagensEmCurso} rotulo="Rotas em curso" />
               <Stat icon={Car} cor="text-slate-600" bg="bg-slate-100" valor={c.veiculosEmUso} rotulo="Veíc. em uso" sub={`${c.veiculosDisponiveis} disp.`} />
             </div>
           </div>
@@ -160,7 +160,7 @@ export function PainelPage() {
                   dir={<span><b>{f.total}</b> <span className="text-slate-400">({f.pendentes} pend · {f.emViagem} em viagem)</span></span>} />
               ))}
             </Tabela>
-            <Tabela titulo="Viagens por veículo">
+            <Tabela titulo="Rotas por veículo">
               {data.porVeiculo.length === 0 ? <Vazio /> : data.porVeiculo.map((v) => (
                 <Linha key={v.veiculoId} esq={<span className="font-mono">{v.placa}</span>} dir={<b>{v.viagens}</b>} />
               ))}
@@ -172,7 +172,7 @@ export function PainelPage() {
                   dir={<b>{o.total}</b>} />
               ))}
             </Tabela>
-            <Tabela titulo="Viagens por motorista">
+            <Tabela titulo="Rotas por motorista">
               {data.porMotorista.length === 0 ? <Vazio /> : data.porMotorista.map((m) => (
                 <Linha key={m.motoristaId} esq={m.nomeMotorista || nomeUsuario(m.motoristaId)} dir={<b>{m.viagens}</b>} />
               ))}
