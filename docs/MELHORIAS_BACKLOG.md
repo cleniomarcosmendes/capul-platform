@@ -17,6 +17,23 @@ esquecer — e sem poluir a conversa principal.
 
 ---
 
+## Qualidade / Tooling — ESLint dos frontends
+
+### 🔎 2026-06-28 — Alinhar TODOS os frontends à config ESLint calibrada (logística é a referência)
+- **Contexto:** a logística era o único frontend sem ESLint (script `lint` sem pacote/config).
+  Ao configurar, descobri que os demais frontends (gestao-ti, fiscal, inventario, hub,
+  configurador) **falham as regras novas do `eslint-plugin-react-hooks` v7 às dezenas** —
+  são as regras da era **React Compiler** (`static-components`, `set-state-in-effect`,
+  `immutability`, `purity`, `preserve-manual-memoization`, `refs`). O **gestao-ti viola 144x**.
+  A plataforma **não adotou o React Compiler** → essas regras são falsos-positivos sobre
+  padrões usados de propósito.
+- **Decisão:** config CALIBRADA (em `logistica/frontend/eslint.config.js`) — regras clássicas
+  de hooks (`rules-of-hooks`=erro, `exhaustive-deps`=warn) + `no-unused-vars` com
+  `ignoreRestSiblings`/`^_`. **Logística está 0 erros / 0 warnings** (commit `ea96e08`).
+- **Tarefa:** rolar a mesma config para os outros 5 frontends e zerar cada um (fixes reais:
+  split de não-componentes p/ Fast Refresh, deps estáveis, `no-explicit-any` tipado/justificado).
+  **Em andamento (28/06).** Atualizar status conforme cada módulo for fechado.
+
 ## ⭐ Logística Fase 2 (Frota/Portaria) — pendências da spec (ATACAR 15/06)
 
 Itens abertos do `Especificacao_Fase2_Frota_Portaria_Capul.docx` após a entrega do
