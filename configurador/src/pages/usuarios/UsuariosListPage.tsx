@@ -31,6 +31,7 @@ export function UsuariosListPage() {
 
   useEffect(() => {
     carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filialId]);
 
   async function carregar() {

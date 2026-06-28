@@ -88,13 +88,14 @@ export function BackupDrPage() {
     try {
       const result = await fn();
       setTestResults((prev) => ({ ...prev, [key]: result }));
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string };
       setTestResults((prev) => ({
         ...prev,
         [key]: {
           ok: false,
-          message: err?.response?.data?.message || 'Erro ao executar teste',
-          detail: err?.message,
+          message: e?.response?.data?.message || 'Erro ao executar teste',
+          detail: e?.message,
         },
       }));
     }

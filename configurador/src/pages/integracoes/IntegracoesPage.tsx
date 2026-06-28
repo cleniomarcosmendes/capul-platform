@@ -426,7 +426,7 @@ export function IntegracoesPage() {
           descricao: formDescricao || undefined,
           tipoAuth: formTipoAuth,
           authConfig: formAuthConfig || undefined,
-        } as any);
+        });
       } else {
         await integracaoService.criar({
           codigo: formCodigo.toUpperCase(),
@@ -434,7 +434,7 @@ export function IntegracoesPage() {
           descricao: formDescricao || undefined,
           tipoAuth: formTipoAuth,
           authConfig: formAuthConfig || undefined,
-        } as any);
+        });
       }
       setShowForm(false);
       toast.success(editingId ? 'Integracao atualizada' : 'Integracao criada');
@@ -516,7 +516,7 @@ export function IntegracoesPage() {
           url: epUrl,
           metodo: epMetodo,
           timeoutMs: parseInt(epTimeout),
-        } as any);
+        });
       } else {
         await integracaoService.adicionarEndpoint(showEpForm, {
           modulo: epModulo,
@@ -526,7 +526,7 @@ export function IntegracoesPage() {
           url: epUrl,
           metodo: epMetodo,
           timeoutMs: parseInt(epTimeout),
-        } as any);
+        });
       }
       setShowEpForm(null);
       setEditingEpId(null);
@@ -564,9 +564,10 @@ export function IntegracoesPage() {
         timeoutMs: ep.timeoutMs,
       });
       setTestResults((prev) => ({ ...prev, [ep.id]: result }));
-    } catch (err: any) {
-      const status = err?.response?.status || 0;
-      const msg = err?.response?.data?.message || err?.message || 'Erro na requisicao';
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { message?: unknown } }; message?: string };
+      const status = e?.response?.status || 0;
+      const msg = e?.response?.data?.message || e?.message || 'Erro na requisicao';
       setTestResults((prev) => ({ ...prev, [ep.id]: { sucesso: false, status, statusText: typeof msg === 'string' ? msg : JSON.stringify(msg), duracao: 0, url: ep.url } }));
     } finally { setTestingId(null); }
   }
@@ -618,7 +619,7 @@ export function IntegracoesPage() {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tipo Autenticacao</label>
-                <select value={formTipoAuth} onChange={(e) => setFormTipoAuth(e.target.value as any)}
+                <select value={formTipoAuth} onChange={(e) => setFormTipoAuth(e.target.value as typeof formTipoAuth)}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600">
                   {TIPOS_AUTH.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
@@ -659,7 +660,7 @@ export function IntegracoesPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Ambiente</label>
-                <select value={epAmbiente} onChange={(e) => setEpAmbiente(e.target.value as any)} disabled={!!editingEpId}
+                <select value={epAmbiente} onChange={(e) => setEpAmbiente(e.target.value as typeof epAmbiente)} disabled={!!editingEpId}
                   className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs disabled:bg-slate-100">
                   {AMBIENTES.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
@@ -671,7 +672,7 @@ export function IntegracoesPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Metodo</label>
-                <select value={epMetodo} onChange={(e) => setEpMetodo(e.target.value as any)}
+                <select value={epMetodo} onChange={(e) => setEpMetodo(e.target.value as typeof epMetodo)}
                   className="w-full border border-slate-300 rounded px-2 py-1.5 text-xs">
                   {METODOS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>

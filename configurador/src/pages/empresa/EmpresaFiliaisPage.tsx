@@ -161,8 +161,9 @@ export function EmpresaFiliaisPage() {
       }
       setShowFilialModal(false);
       carregar();
-    } catch (err: any) {
-      setErroFilial(err?.response?.data?.message || 'Erro ao salvar filial');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      setErroFilial(e?.response?.data?.message || 'Erro ao salvar filial');
     } finally {
       setSavingFilial(false);
     }

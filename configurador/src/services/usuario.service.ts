@@ -83,12 +83,12 @@ export const usuarioService = {
     return data;
   },
 
-  async getPreferencias(id: string): Promise<Record<string, any>> {
+  async getPreferencias(id: string): Promise<Record<string, unknown>> {
     const { data } = await coreApi.get(`/usuarios/${id}/preferencias`);
     return data ?? {};
   },
 
-  async atualizarPreferencias(id: string, patch: Record<string, any>): Promise<Record<string, any>> {
+  async atualizarPreferencias(id: string, patch: Record<string, unknown>): Promise<Record<string, unknown>> {
     const { data } = await coreApi.patch(`/usuarios/${id}/preferencias`, patch);
     return data;
   },

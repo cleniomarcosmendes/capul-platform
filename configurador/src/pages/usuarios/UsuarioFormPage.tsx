@@ -103,6 +103,7 @@ export function UsuarioFormPage() {
 
   useEffect(() => {
     carregarDados();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdicao]);
 
   useEffect(() => {
@@ -143,7 +144,6 @@ export function UsuarioFormPage() {
   // (o backend já barra via guard; aqui evita 403 e UI vazia).
   useEffect(() => {
     if (isEdicao && isAdminConfig && id) carregarCaps(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdicao, isAdminConfig]);
 
   async function carregarCaps(uid: string) {
@@ -441,7 +441,7 @@ export function UsuarioFormPage() {
         });
         navigate('/configurador/usuarios');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErro(extrairMensagemErro(err));
     } finally {
       setSaving(false);
@@ -1072,19 +1072,20 @@ export function UsuarioFormPage() {
  * A lógica anterior usava `message?.[0] || message || fallback`, que para strings caía na
  * primeira letra ("U" em "Username…"). Além disso não distinguia erro de rede de 500.
  */
-function extrairMensagemErro(err: any): string {
-  const msg = err?.response?.data?.message;
+function extrairMensagemErro(err: unknown): string {
+  const e = err as { response?: { status: number; data?: { message?: unknown; error?: unknown } }; code?: string; message?: string };
+  const msg = e?.response?.data?.message;
   if (Array.isArray(msg) && msg.length > 0) return msg.join('; ');
   if (typeof msg === 'string' && msg.length > 0) return msg;
 
-  const errorField = err?.response?.data?.error;
+  const errorField = e?.response?.data?.error;
   if (typeof errorField === 'string' && errorField.length > 0) return errorField;
 
-  if (!err?.response) {
-    return `Sem resposta do servidor (${err?.code || err?.message || 'erro de rede'}). Verifique a conexão ou tente novamente.`;
+  if (!e?.response) {
+    return `Sem resposta do servidor (${e?.code || e?.message || 'erro de rede'}). Verifique a conexão ou tente novamente.`;
   }
 
-  const status = err.response.status;
+  const status = e.response.status;
   if (status === 401) return 'Sessão expirada. Faça login novamente.';
   if (status === 403) return 'Você não tem permissão para esta operação.';
   if (status === 409) return 'Conflito: username ou email já existente.';

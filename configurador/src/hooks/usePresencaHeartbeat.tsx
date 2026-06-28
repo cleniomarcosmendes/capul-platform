@@ -26,6 +26,8 @@ const HEARTBEAT_INTERVAL_MS = 60_000;
  * Se chamada falhar (rede, 401, etc), degrada silenciosamente — heartbeat
  * nao deve quebrar a UI.
  */
+// Hook colocado ao provider/componente (padrão de contexto); disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePresencaHeartbeat(autenticado: boolean): {
   aviso: AvisoAtivo | null;
 } {

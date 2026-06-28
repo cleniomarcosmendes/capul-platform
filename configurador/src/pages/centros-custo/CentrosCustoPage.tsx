@@ -70,6 +70,7 @@ export function CentrosCustoPage() {
 
   useEffect(() => {
     if (filialId) carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filialId]);
 
   async function carregar() {
