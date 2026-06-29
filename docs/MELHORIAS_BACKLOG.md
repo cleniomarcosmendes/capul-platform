@@ -19,7 +19,13 @@ esquecer — e sem poluir a conversa principal.
 
 ## Qualidade / Tooling — ESLint dos frontends
 
-### 🔎 2026-06-28 — Alinhar TODOS os frontends à config ESLint calibrada (logística é a referência)
+### ✅ 2026-06-28 — Alinhar TODOS os frontends à config ESLint calibrada [FEITO]
+- **Concluído no mesmo dia:** os 6 frontends ficaram **0 erros / 0 warnings** — logística
+  `ea96e08`, hub `48115c5`, configurador `41a2009`, inventario `85fff02`, fiscal `0cb0447`
+  (criou config), gestao-ti `92a74d6` (o maior: 144 problemas→0). Build de cada um verde.
+  Ver `memory/project_eslint_calibrado_plataforma.md`. _(Contexto original abaixo.)_
+
+### 🔎 2026-06-28 — [original] Alinhar TODOS os frontends à config ESLint calibrada (logística é a referência)
 - **Contexto:** a logística era o único frontend sem ESLint (script `lint` sem pacote/config).
   Ao configurar, descobri que os demais frontends (gestao-ti, fiscal, inventario, hub,
   configurador) **falham as regras novas do `eslint-plugin-react-hooks` v7 às dezenas** —
