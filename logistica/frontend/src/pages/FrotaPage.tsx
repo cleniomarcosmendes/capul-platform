@@ -4,6 +4,7 @@ import { Banknote, Fuel, Loader2, LogIn, LogOut, Paperclip, Plus, Search, Settin
 import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import PasswordInput from '../components/PasswordInput';
+import { BuscaClienteParada } from '../components/BuscaClienteParada';
 import { useAuth } from '../contexts/AuthContext';
 import { maskMoeda, parseMoeda } from '../utils/format';
 import { SIT_META, fmtDateTime, errMsg } from './frota-utils';
@@ -506,12 +507,16 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                   filialId={usuario?.filialAtual?.id} veiculoId={veiculoId || undefined} departamentoId={departamentoSolicitanteId || undefined}
                   onPick={(n) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${n}` : n))} />
               </div>
+              <div className="mb-2">
+                <BuscaClienteParada disabled={!podeAvancar}
+                  onAdd={(r) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${r}` : r))} />
+              </div>
               <textarea
                 value={planejadasTxt} onChange={(e) => setPlanejadasTxt(e.target.value)} disabled={!podeAvancar} rows={3}
                 placeholder={'Um local por linha — ex.:\nCliente A\nFornecedor B\nBanco Centro'}
                 className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
-              <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha. As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") durante a rota.</p>
+              <p className="mt-1 text-xs text-slate-400"><b>Buscar cliente</b> traz o endereço da propriedade (matrícula/telefone); ou use o cadastro de locais; ou digite um por linha (inclui prospect). As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") durante a rota.</p>
             </div>
           </div>
         </div>
@@ -723,7 +728,8 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
           </div>
           <details className="border-t border-slate-200 pt-3">
             <summary className="cursor-pointer text-sm font-medium text-slate-600">Planejar visitas (opcional)</summary>
-            <p className="mt-1 text-xs text-slate-400">Escolha do cadastro (atalho) ou digite um por linha — entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a rota.</p>
+            <p className="mt-1 text-xs text-slate-400"><b>Buscar cliente</b> traz o endereço da propriedade; ou use o cadastro de locais; ou digite um por linha (inclui prospect). Entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a rota.</p>
+            <div className="mt-2"><BuscaClienteParada onAdd={(r) => setPlanejados((t) => (t.trim() ? `${t}\n${r}` : r))} /></div>
             <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
             <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-capul-300 px-3 py-1.5 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
