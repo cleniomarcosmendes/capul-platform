@@ -7,12 +7,15 @@ import { VeiculoService } from './veiculo.service.js';
 import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 
 @Controller('veiculos')
-// Cadastro/gestão de veículo é tarefa de frota: GESTOR_FROTA incluído.
-@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+// Leitura (listar/obter) liberada também ao REGISTRADOR_FROTA — precisa enxergar
+// veículos disponíveis pra registrar a saída. ESCRITA (criar/editar/excluir) tem
+// @Roles próprio SEM ele (gestão de cadastro é de gestor/admin).
+@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA')
 export class VeiculoController {
   constructor(private readonly veiculos: VeiculoService) {}
 
   @Post()
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   criar(@Body() dto: CreateVeiculoDto, @CurrentUser() user: JwtPayload) {
     // Gestor de frota/entrega/admin cadastra em qualquer filial; operador só na própria.
     if (!podeVerOutrasFiliais(user)) assertMesmaFilial(user, dto.filialId);
@@ -27,9 +30,12 @@ export class VeiculoController {
     @Query('incluirInativos') incluirInativos?: string,
     @Query('departamentoLotacaoId') departamentoLotacaoId?: string,
     @Query('busca') busca?: string,
+    @Query('todasFiliais') todasFiliais?: string,
   ) {
     return this.veiculos.list({
-      filialId: resolverFilialLeitura(user, filialId),
+      // Frota é recurso COMPARTILHADO: a saída precisa enxergar veículos livres de
+      // qualquer filial/departamento → `todasFiliais=true` ignora o escopo de filial.
+      filialId: todasFiliais === 'true' ? undefined : resolverFilialLeitura(user, filialId),
       situacao,
       incluirInativos: incluirInativos === 'true',
       departamentoLotacaoId,
@@ -43,12 +49,14 @@ export class VeiculoController {
   }
 
   @Patch(':id')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   atualizar(@Param('id') id: string, @Body() dto: UpdateVeiculoDto, @CurrentUser() user: JwtPayload) {
     // Quem vê todas as filiais edita veículo de qualquer filial (escopo undefined).
     return this.veiculos.update(id, dto, user.sub, podeVerOutrasFiliais(user) ? undefined : user.filialId);
   }
 
   @Delete(':id')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   remover(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.veiculos.remove(id, podeVerOutrasFiliais(user) ? undefined : user.filialId);
   }

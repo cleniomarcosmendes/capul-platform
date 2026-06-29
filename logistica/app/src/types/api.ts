@@ -62,6 +62,10 @@ export interface VeiculoFrota {
   placa: string;
   modelo?: string | null;
   kmAtual: number;
+  filialId?: string | null;
+  departamentoLotacaoId?: string | null;
+  filialNome?: string | null;
+  departamentoNome?: string | null;
 }
 
 export interface ViagemFrota {

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { doRefresh, loginRequest, setAccessToken, setOnAuthFailure } from '../api/client';
 import { getDeviceId } from './deviceId';
 import { clearTokens, getRefresh, saveTokens } from './storage';
-import { papelLogistica, tipoUsuario, departamentoUsuario } from '../lib/jwt';
+import { papelLogistica, tipoUsuario, departamentoUsuario, filialUsuario } from '../lib/jwt';
 
 type Status = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -14,8 +14,10 @@ interface AuthState {
   // Tipo do usuário: 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico). Decide se
   // a saída de frota pede matrícula+senha (PADRAO) ou usa o próprio login (INDIVIDUAL).
   tipo: string | null;
-  // Departamento (lotação) — filtra os veículos na saída de frota.
+  // Departamento (lotação) e filial do login — usados como filtro PADRÃO da
+  // saída de frota (nasce no setor do usuário; ele pode escolher outro).
   departamentoId: string | null;
+  filialId: string | null;
   login: (login: string, senha: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -27,12 +29,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<string | null>(null);
   const [tipo, setTipo] = useState<string | null>(null);
   const [departamentoId, setDepartamentoId] = useState<string | null>(null);
+  const [filialId, setFilialId] = useState<string | null>(null);
 
-  // Deriva role/tipo/departamento de um access token (ou limpa, se null).
+  // Deriva role/tipo/departamento/filial de um access token (ou limpa, se null).
   const aplicarToken = useCallback((access: string | null) => {
     setRole(papelLogistica(access));
     setTipo(tipoUsuario(access));
     setDepartamentoId(departamentoUsuario(access));
+    setFilialId(filialUsuario(access));
   }, []);
 
   const logout = useCallback(async () => {
@@ -91,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [aplicarToken]);
 
   return (
-    <AuthContext.Provider value={{ status, role, tipo, departamentoId, login, logout }}>
+    <AuthContext.Provider value={{ status, role, tipo, departamentoId, filialId, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

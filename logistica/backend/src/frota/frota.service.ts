@@ -91,10 +91,13 @@ export class FrotaService {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
 
+    // Frota é recurso COMPARTILHADO: o condutor pode usar veículo de qualquer
+    // filial/departamento. A viagem é registrada na filial do login (contexto
+    // operacional); o veículo é só emprestado e volta DISPONÍVEL no retorno.
     const veiculo = await this.prisma.veiculo.findFirst({
-      where: { id: dados.veiculoId, filialId, ativo: true },
+      where: { id: dados.veiculoId, ativo: true },
     });
-    if (!veiculo) throw new NotFoundException('Veículo não encontrado nesta filial.');
+    if (!veiculo) throw new NotFoundException('Veículo não encontrado.');
     if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
       throw new BadRequestException(`Veículo indisponível (situação: ${veiculo.situacao}).`);
     }

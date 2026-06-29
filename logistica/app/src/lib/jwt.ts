@@ -6,6 +6,7 @@ interface JwtPayload {
   modulos?: { codigo: string; role: string }[];
   tipo?: string;
   departamentoId?: string;
+  filialId?: string;
 }
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -82,4 +83,8 @@ export function tipoUsuario(accessToken: string | null): string | null {
 /** Departamento (lotação) do usuário — usado p/ filtrar veículos na saída de frota. */
 export function departamentoUsuario(accessToken: string | null): string | null {
   return decodePayload(accessToken)?.departamentoId ?? null;
+}
+
+export function filialUsuario(accessToken: string | null): string | null {
+  return decodePayload(accessToken)?.filialId ?? null;
 }

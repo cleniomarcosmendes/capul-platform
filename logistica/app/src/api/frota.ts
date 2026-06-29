@@ -25,12 +25,14 @@ export async function validarCondutor(matricula: string, senha: string): Promise
 /** Veículos disponíveis da filial (pra escolher na saída). Filtra por departamento
  *  de lotação e/ou busca (placa/modelo/marca) quando informado. */
 export async function veiculosDisponiveis(
-  opts: { departamentoLotacaoId?: string; busca?: string } = {},
+  opts: { busca?: string } = {},
 ): Promise<VeiculoFrota[]> {
   const { data } = await api.get<VeiculoFrota[]>(`${LOGISTICA_BASE}/veiculos`, {
     params: {
       situacao: 'DISPONIVEL',
-      ...(opts.departamentoLotacaoId ? { departamentoLotacaoId: opts.departamentoLotacaoId } : {}),
+      // Frota é compartilhável: lista DISPONÍVEIS de QUALQUER filial/departamento.
+      // O filtro "Filial · Departamento" da tela estreita a escolha (client-side).
+      todasFiliais: 'true',
       ...(opts.busca?.trim() ? { busca: opts.busca.trim() } : {}),
     },
   });
