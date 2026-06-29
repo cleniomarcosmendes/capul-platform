@@ -395,7 +395,6 @@ export function CteRecebidosPage() {
   // totalPages===1, prendendo o usuário em "Nenhum CT-e encontrado".
   // `page` fora das deps de propósito — evita loop. Só inconsistenciaFiltro
   // já resetava inline; agora a regra vale para todos os filtros.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setPage(1);
   }, [
@@ -797,7 +796,7 @@ export function CteRecebidosPage() {
               <label className="block text-xs text-gray-600 mb-1">Papel da Capul</label>
               <select
                 value={papel}
-                onChange={(e) => setPapel(e.target.value as any)}
+                onChange={(e) => setPapel(e.target.value as typeof papel)}
                 className="w-full px-3 py-1.5 border rounded text-sm"
               >
                 {PAPEL_OPTIONS.map((p) => (
@@ -811,7 +810,7 @@ export function CteRecebidosPage() {
               <label className="block text-xs text-gray-600 mb-1">Tipo de documento</label>
               <select
                 value={schema}
-                onChange={(e) => setSchema(e.target.value as any)}
+                onChange={(e) => setSchema(e.target.value as typeof schema)}
                 className="w-full px-3 py-1.5 border rounded text-sm"
               >
                 {SCHEMA_OPTIONS.map((s) => (
@@ -825,7 +824,7 @@ export function CteRecebidosPage() {
               <label className="block text-xs text-gray-600 mb-1">Ambiente SEFAZ</label>
               <select
                 value={ambiente}
-                onChange={(e) => setAmbiente(e.target.value as any)}
+                onChange={(e) => setAmbiente(e.target.value as typeof ambiente)}
                 className="w-full px-3 py-1.5 border rounded text-sm"
               >
                 <option value="">Todos</option>
@@ -837,7 +836,7 @@ export function CteRecebidosPage() {
               <label className="block text-xs text-gray-600 mb-1">Status Protheus</label>
               <select
                 value={protheusStatus}
-                onChange={(e) => setProtheusStatus(e.target.value as any)}
+                onChange={(e) => setProtheusStatus(e.target.value as typeof protheusStatus)}
                 className="w-full px-3 py-1.5 border rounded text-sm"
               >
                 <option value="">Todos</option>
@@ -856,7 +855,7 @@ export function CteRecebidosPage() {
               <select
                 value={inconsistenciaFiltro}
                 onChange={(e) => {
-                  setInconsistenciaFiltro(e.target.value as any);
+                  setInconsistenciaFiltro(e.target.value as typeof inconsistenciaFiltro);
                   setPage(1);
                 }}
                 className="w-full px-3 py-1.5 border rounded text-sm"

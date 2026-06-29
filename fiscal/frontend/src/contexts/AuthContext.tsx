@@ -134,12 +134,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Hook/helper colocado ao provider/componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth precisa de AuthProvider');
   return ctx;
 }
 
+// Hook/helper colocado ao provider/componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function hasMinRole(userRole: RoleFiscal | null, min: RoleFiscal): boolean {
   if (!userRole) return false;
   const hierarchy: Record<RoleFiscal, number> = {

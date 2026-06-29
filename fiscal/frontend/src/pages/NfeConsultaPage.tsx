@@ -299,8 +299,8 @@ export function NfeConsultaPage() {
           `${data.eventos.length} evento(s) na timeline · ${data.quantidadeRecebidaUtil} vieram do SPED156/SPED150 nesta chamada.`,
         );
       }
-    } catch (err: any) {
-      const body = err?.response?.data;
+    } catch (err: unknown) {
+      const body = (err as { response?: { data?: { erro?: string; mensagem?: string } } })?.response?.data;
       if (body?.erro === 'EVENTOSNFE_NAO_DISPONIVEL') {
         toast.info(
           'Endpoint /eventosNfe ainda não publicado',
