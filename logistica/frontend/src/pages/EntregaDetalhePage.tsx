@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, Pencil, Phone, Printer } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -43,6 +43,11 @@ const TIPO_LABEL: Record<string, string> = { IDENTIFICADO: 'Com matrícula', REC
 export function EntregaDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Volta para o LOCAL DE ORIGEM (Monitor da Frota → rota, lista de Entregas,
+  // detalhe da rota…). `location.key === 'default'` = abriu direto por link
+  // (sem histórico no app) → cai no fallback da lista de Entregas.
+  const voltar = () => { if (location.key !== 'default') navigate(-1); else navigate('/entregas'); };
   const [e, setE] = useState<Entrega | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -95,15 +100,15 @@ export function EntregaDetalhePage() {
   if (!e) return (
     <div className="space-y-4">
       {naoEncontrado && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">Entrega não encontrada.</div>}
-      <Link to="/entregas" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ArrowLeft className="h-4 w-4" /> Voltar</Link>
+      <button onClick={voltar} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ArrowLeft className="h-4 w-4" /> Voltar</button>
     </div>
   );
 
   return (
     <div className="max-w-3xl space-y-4">
-      <Link to="/entregas" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="h-4 w-4" /> Voltar para Entregas
-      </Link>
+      <button onClick={voltar} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+        <ArrowLeft className="h-4 w-4" /> Voltar
+      </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
