@@ -102,7 +102,7 @@ export function FrotaPage() {
       <div className="flex items-center gap-3">
         <Fuel className="h-6 w-6 text-capul-600" />
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Controle de Frota</h2>
+          <h2 className="text-lg font-semibold text-slate-800">Saída de Veículos</h2>
           <p className="text-sm text-slate-500">Saída e retorno de veículos — o condutor se identifica com matrícula e senha.</p>
         </div>
       </div>

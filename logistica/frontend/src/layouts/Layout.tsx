@@ -31,7 +31,7 @@ const navItems: NavEntry[] = [
   { to: '/clientes', label: 'Endereços', icon: MapPin, roles: ENTREGA },
 
   { section: 'FROTA', roles: FROTA_OP },
-  { to: '/frota', label: 'Controle de Frota', icon: Fuel, end: true, roles: FROTA_OP },
+  { to: '/frota', label: 'Saída de Veículos', icon: Fuel, end: true, roles: FROTA_OP },
   { to: '/frota/painel', label: 'Monitor da Frota', icon: CircleDot, roles: GESTORES },
   { to: '/despesas', label: 'Custos da Frota', icon: Banknote, roles: FROTA_OP },
   { to: '/frota/linha-km', label: 'Linha do KM', icon: Gauge, roles: GESTORES },

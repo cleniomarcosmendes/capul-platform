@@ -71,7 +71,7 @@ export function FrotaViagemDetalhePage() {
 
   return (
     <div className="space-y-5">
-      <button onClick={voltar} className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Voltar para Controle de Frota</button>
+      <button onClick={voltar} className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-800"><ArrowLeft className="h-4 w-4" /> Voltar para Saída de Veículos</button>
 
       {/* Cabeçalho da viagem */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6">
