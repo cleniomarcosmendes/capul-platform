@@ -23,7 +23,7 @@ export function FrotaViagemDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { logisticaRole } = useAuth();
-  const podeAjustar = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+  const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
 
   const [viagem, setViagem] = useState<ViagemFrota | null>(null);
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
@@ -68,6 +68,8 @@ export function FrotaViagemDetalhePage() {
   const v = viagem;
   const sit = SIT_META[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
   const emCurso = v.situacao === 'EM_CURSO';
+  // Gestor opera qualquer viagem; demais só a própria (registrante/supervisor). Senão, só leitura.
+  const podeOperar = ehGestor || !!v.ehMinha;
 
   return (
     <div className="space-y-5">
@@ -91,7 +93,12 @@ export function FrotaViagemDetalhePage() {
         {v.localSaida && <p className="mt-3 text-sm text-slate-500">Local de saída: {v.localSaida}</p>}
       </div>
 
-      {emCurso && (
+      {!podeOperar && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+          👁️ Somente leitura — você não é o responsável por esta operação. Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem alterá-la.
+        </div>
+      )}
+      {emCurso && podeOperar && (
         <Secao cor="border-l-emerald-400">
           <RetornoForm v={v} onClose={voltar} onDone={() => void carregar()} />
         </Secao>
@@ -120,13 +127,13 @@ export function FrotaViagemDetalhePage() {
               </div>
             </div>
           )}
-          {emCurso && <DespesaCondutorForm v={v} tipos={tipos} onClose={voltar} onDone={() => void carregar()} />}
+          {emCurso && podeOperar && <DespesaCondutorForm v={v} tipos={tipos} onClose={voltar} onDone={() => void carregar()} />}
         </Secao>
       )}
       <Secao cor="border-l-slate-300">
-        <ParadasPanel v={v} onChanged={() => void carregar()} />
+        <ParadasPanel v={v} podeEditar={podeOperar} onChanged={() => void carregar()} />
       </Secao>
-      {emCurso && podeAjustar && (
+      {emCurso && podeOperar && (
         <Secao cor="border-l-amber-400">
           <AjusteForm v={v} onClose={voltar} onDone={() => void carregar()} />
         </Secao>

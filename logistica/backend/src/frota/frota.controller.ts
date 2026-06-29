@@ -63,13 +63,13 @@ export class FrotaController {
   /** Lista viagens de frota da filial (filtro de situação opcional). */
   @Get('viagens')
   listar(@CurrentUser() user: JwtPayload, @Query('situacao') situacao?: StatusViagem) {
-    return this.frota.listar(user.filialId!, situacao);
+    return this.frota.listar(user, situacao);
   }
 
   /** Detalhe de uma viagem de frota (página de operações). */
   @Get('viagens/:id')
   obterViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.frota.obterViagem(id, user.filialId!);
+    return this.frota.obterViagem(id, user);
   }
 
   /** Despesas lançadas na viagem (lista da tela de detalhe). */

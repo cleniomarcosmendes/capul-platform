@@ -22,6 +22,8 @@ export interface ViagemFrota {
   finalidade?: string | null; localSaida?: string | null;
   dataHoraSaida?: string | null; dataHoraChegada?: string | null;
   paradas?: number;
+  // "Minha operação" (do backend): registrante da saída OU supervisor do veículo.
+  ehMinha?: boolean;
 }
 export interface ParadaFrota {
   id: string; sequencia: number; local: string | null; km?: number | null;
@@ -558,7 +560,7 @@ function LinhaViagem({ v }: { v: ViagemFrota }) {
 }
 
 // ---- Grid de paradas (pontos de rota / "caderno" da viagem) ----
-export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () => void }) {
+export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFrota; podeEditar?: boolean; onChanged: () => void }) {
   const { toast } = useToast();
   const [paradas, setParadas] = useState<ParadaFrota[]>([]);
   const [loading, setLoading] = useState(true);
@@ -571,7 +573,8 @@ export function ParadasPanel({ v, onChanged }: { v: ViagemFrota; onChanged: () =
   const [checkinId, setCheckinId] = useState<string | null>(null);
   const [checkinKm, setCheckinKm] = useState('');
   const [checkinObs, setCheckinObs] = useState('');
-  const editavel = v.situacao !== 'CANCELADA';
+  // Edita só quem opera a viagem (gestor ou dono) e desde que não cancelada.
+  const editavel = podeEditar && v.situacao !== 'CANCELADA';
 
   const carregar = async () => {
     setLoading(true);

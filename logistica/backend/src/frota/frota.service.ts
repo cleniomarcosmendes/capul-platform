@@ -268,9 +268,10 @@ export class FrotaService {
     if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
 
     const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
-    const ehSupervisor = v.veiculo?.supervisorId === user.sub;
-    if (!ehGestor && !ehSupervisor) {
-      throw new ForbiddenException('Apenas gestor de frota ou o supervisor do veículo podem ajustar.');
+    // Dono da operação (registrante OU supervisor do veículo) também ajusta a SUA.
+    const ehDono = v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub;
+    if (!ehGestor && !ehDono) {
+      throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem ajustar.');
     }
 
     const kmFinal = dto.kmFinal ?? v.kmFinal ?? undefined;
@@ -748,10 +749,10 @@ export class FrotaService {
   }
 
   /** Lista as viagens de FROTA da filial (com nome do veículo). */
-  async listar(filialId: string, situacao?: StatusViagem) {
+  async listar(user: JwtPayload, situacao?: StatusViagem) {
     const viagens = await this.prisma.viagem.findMany({
-      where: { tipo: TipoViagem.FROTA, filialId, ...(situacao ? { situacao } : {}) },
-      include: { veiculo: { select: { placa: true, modelo: true } }, _count: { select: { paradas: true } } },
+      where: { tipo: TipoViagem.FROTA, filialId: user.filialId!, ...(situacao ? { situacao } : {}) },
+      include: { veiculo: { select: { placa: true, modelo: true, supervisorId: true } }, _count: { select: { paradas: true } } },
       orderBy: { criadoEm: 'desc' },
       take: 200,
     });
@@ -764,6 +765,8 @@ export class FrotaService {
       finalidade: v.observacoesSaida, localSaida: v.localSaida,
       dataHoraSaida: v.dataHoraSaida, dataHoraChegada: v.dataHoraChegada,
       paradas: v._count.paradas,
+      // "Minha operação": quem registrou a saída OU o supervisor do veículo.
+      ehMinha: v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub,
     }));
   }
 
@@ -787,10 +790,10 @@ export class FrotaService {
   }
 
   /** Uma viagem de FROTA por id (detalhe — mesma forma do listar). */
-  async obterViagem(id: string, filialId: string) {
+  async obterViagem(id: string, user: JwtPayload) {
     const v = await this.prisma.viagem.findFirst({
-      where: { id, tipo: TipoViagem.FROTA, filialId },
-      include: { veiculo: { select: { placa: true, modelo: true } }, _count: { select: { paradas: true } } },
+      where: { id, tipo: TipoViagem.FROTA, filialId: user.filialId! },
+      include: { veiculo: { select: { placa: true, modelo: true, supervisorId: true } }, _count: { select: { paradas: true } } },
     });
     if (!v) throw new NotFoundException('Viagem de frota não encontrada.');
     return {
@@ -802,6 +805,8 @@ export class FrotaService {
       finalidade: v.observacoesSaida, localSaida: v.localSaida,
       dataHoraSaida: v.dataHoraSaida, dataHoraChegada: v.dataHoraChegada,
       paradas: v._count.paradas,
+      // "Minha operação": quem registrou a saída OU o supervisor do veículo.
+      ehMinha: v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub,
     };
   }
 }
