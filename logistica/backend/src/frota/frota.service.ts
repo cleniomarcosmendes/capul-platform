@@ -319,16 +319,17 @@ export class FrotaService {
    */
   private montarLinhaKm(
     veiculo: { id: string; placa: string; modelo: string | null; kmAtual: number },
-    viagens: Array<{ numero: number; kmInicial: number | null; kmFinal: number | null; observacoesSaida: string | null; dataHoraSaida: Date | null; condutorNome: string | null }>,
+    viagens: Array<{ numero: number; kmInicial: number | null; kmFinal: number | null; observacoesSaida: string | null; dataHoraSaida: Date | null; dataHoraChegada: Date | null; condutorNome: string | null }>,
     incluirAteKmAtual: boolean,
   ) {
-    type Seg = { tipo: 'viagem' | 'gap'; kmInicio: number; kmFim: number; km: number; label: string; viagemNumero?: number; data?: string | null; condutor?: string | null };
+    type Seg = { tipo: 'viagem' | 'gap'; kmInicio: number; kmFim: number; km: number; label: string; viagemNumero?: number; data?: string | null; dataChegada?: string | null; condutor?: string | null };
     const segViagens: Seg[] = viagens
       .filter((v) => v.kmInicial != null && v.kmFinal != null && v.kmFinal > v.kmInicial)
       .map((v) => ({
         tipo: 'viagem' as const, kmInicio: v.kmInicial!, kmFim: v.kmFinal!, km: v.kmFinal! - v.kmInicial!,
         label: v.observacoesSaida?.trim() || `Rota #${v.numero}`,
-        viagemNumero: v.numero, data: v.dataHoraSaida?.toISOString() ?? null, condutor: v.condutorNome,
+        viagemNumero: v.numero, data: v.dataHoraSaida?.toISOString() ?? null,
+        dataChegada: v.dataHoraChegada?.toISOString() ?? null, condutor: v.condutorNome,
       }))
       .sort((a, b) => a.kmInicio - b.kmInicio);
 
@@ -387,7 +388,7 @@ export class FrotaService {
       if (mes && ano) where.dataHoraSaida = { gte: new Date(Date.UTC(ano, mes - 1, 1)), lt: new Date(Date.UTC(ano, mes, 1)) };
       const viagens = await this.prisma.viagem.findMany({
         where,
-        select: { numero: true, kmInicial: true, kmFinal: true, observacoesSaida: true, dataHoraSaida: true, condutorNome: true },
+        select: { numero: true, kmInicial: true, kmFinal: true, observacoesSaida: true, dataHoraSaida: true, dataHoraChegada: true, condutorNome: true },
         orderBy: { kmInicial: 'asc' },
       });
       linhas.push({

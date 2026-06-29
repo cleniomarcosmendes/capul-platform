@@ -6,7 +6,7 @@
 export interface SegKm {
   tipo: 'viagem' | 'gap';
   kmInicio: number; kmFim: number; km: number; label: string;
-  viagemNumero?: number; data?: string | null; condutor?: string | null;
+  viagemNumero?: number; data?: string | null; dataChegada?: string | null; condutor?: string | null;
 }
 export interface LinhaKm {
   veiculoId: string; placa: string; modelo?: string | null; kmAtual: number;

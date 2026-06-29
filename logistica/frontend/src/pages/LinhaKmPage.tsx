@@ -25,8 +25,10 @@ function lacunasDoVeiculo(segmentos: LinhaKm['segmentos']) {
   for (let i = 0; i < segmentos.length; i++) {
     const s = segmentos[i];
     if (s.tipo !== 'gap') continue;
+    // Limite inferior preciso = RETORNO do trecho anterior (dataChegada);
+    // fallback pra saída se a chegada não estiver registrada.
     let prevNum: number | undefined; let prevData: string | null = null;
-    for (let j = i - 1; j >= 0; j--) { if (segmentos[j].tipo === 'viagem') { prevNum = segmentos[j].viagemNumero; prevData = segmentos[j].data ?? null; break; } }
+    for (let j = i - 1; j >= 0; j--) { if (segmentos[j].tipo === 'viagem') { prevNum = segmentos[j].viagemNumero; prevData = segmentos[j].dataChegada ?? segmentos[j].data ?? null; break; } }
     let nextNum: number | undefined; let nextData: string | null = null;
     for (let j = i + 1; j < segmentos.length; j++) { if (segmentos[j].tipo === 'viagem') { nextNum = segmentos[j].viagemNumero; nextData = segmentos[j].data ?? null; break; } }
     out.push({ kmInicio: s.kmInicio, kmFim: s.kmFim, km: s.km, prevNum, prevData, nextNum, nextData, ateAtual: (s.label || '').includes('atual') });
@@ -94,8 +96,8 @@ function PendenciasKm({ linhas, mesLabel, loading }: { linhas: LinhaKm[]; mesLab
                       <tr key={gi} className="bg-slate-50/40 text-xs text-slate-500">
                         <td className="px-4 py-1.5 pl-11">
                           {g.ateAtual
-                            ? <>Após <b className="font-medium text-slate-600">Rota #{g.prevNum}</b>{g.prevData ? ` (${fmtDate(g.prevData)})` : ''} — até o KM atual</>
-                            : <>Entre <b className="font-medium text-slate-600">Rota #{g.prevNum}</b>{g.prevData ? ` (${fmtDate(g.prevData)})` : ''} e <b className="font-medium text-slate-600">Rota #{g.nextNum}</b>{g.nextData ? ` (${fmtDate(g.nextData)})` : ''}</>}
+                            ? <>Após o retorno da <b className="font-medium text-slate-600">Rota #{g.prevNum}</b>{g.prevData ? ` (${fmtDate(g.prevData)})` : ''} — até o KM atual</>
+                            : <>Entre o retorno da <b className="font-medium text-slate-600">Rota #{g.prevNum}</b>{g.prevData ? ` (${fmtDate(g.prevData)})` : ''} e a saída da <b className="font-medium text-slate-600">Rota #{g.nextNum}</b>{g.nextData ? ` (${fmtDate(g.nextData)})` : ''}</>}
                         </td>
                         <td className="px-4 py-1.5 text-right tabular-nums font-medium text-amber-700">{fmtKm(g.km)} km</td>
                         <td className="px-4 py-1.5 text-center tabular-nums text-slate-400" colSpan={2}>KM {fmtKm(g.kmInicio)} – {fmtKm(g.kmFim)}</td>
