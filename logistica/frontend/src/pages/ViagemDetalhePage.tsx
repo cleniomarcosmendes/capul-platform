@@ -57,6 +57,9 @@ export function ViagemDetalhePage() {
   const [busy, setBusy] = useState(false);
   const { toast, prompt, confirm } = useToast();
   const location = useLocation();
+  // Volta para o LOCAL DE ORIGEM (Monitor da Frota, lista de Rotas de Entrega…)
+  // via histórico; se abriu direto por link (sem histórico no app), fallback /viagens.
+  const voltar = () => { if (location.key !== 'default') navigate(-1); else navigate('/viagens'); };
   const [naoEncontrada, setNaoEncontrada] = useState(false);
   // Última ordem sugerida — botão "Sugerir melhor rota" desabilita enquanto a
   // rota atual for igual a ela; qualquer mudança (add/remover/mover) reabilita.
@@ -259,7 +262,7 @@ export function ViagemDetalhePage() {
   if (!v) return (
     <div className="space-y-4">
       {naoEncontrada && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">Rota não encontrada.</div>}
-      <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ArrowLeft className="h-4 w-4" /> Voltar</Link>
+      <button onClick={voltar} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ArrowLeft className="h-4 w-4" /> Voltar</button>
     </div>
   );
 
@@ -272,9 +275,9 @@ export function ViagemDetalhePage() {
 
   return (
     <div className="space-y-4">
-      <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="h-4 w-4" /> Voltar para Rotas de Entrega
-      </Link>
+      <button onClick={voltar} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+        <ArrowLeft className="h-4 w-4" /> Voltar
+      </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
