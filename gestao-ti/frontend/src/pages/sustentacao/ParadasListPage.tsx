@@ -87,6 +87,7 @@ export function ParadasListPage() {
 
   useEffect(() => {
     loadParadas();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroSoftware, filtroTipo, filtroImpacto, filtroStatus, filtroMotivo, page, pageSize]);
 
   useEffect(() => { setPage(1); }, [filtroSoftware, filtroTipo, filtroImpacto, filtroStatus, filtroMotivo, pageSize]);

@@ -10,7 +10,7 @@ import { contratoService } from '../../services/contrato.service';
 import { compraService } from '../../services/compra.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft } from 'lucide-react';
-import type { Software, Contrato, UsuarioCore, Projeto, TipoProjetoConfig } from '../../types';
+import type { Software, Contrato, UsuarioCore, Projeto, TipoProjetoConfig, TipoProjeto } from '../../types';
 import { isWorkspaceModulo } from '../../lib/workspace-modulo';
 import { DepartamentoField } from '../../components/DepartamentoField';
 
@@ -73,8 +73,8 @@ export function ProjetoFormPage() {
     // ADMIN, GESTOR_TI, SUPORTE_TI (staff TI) + USUARIO_CHAVE (negócio liderando projeto).
     coreService.listarUsuarios().then((users) => {
       const rolesElegiveis = ['ADMIN', 'GESTOR', 'SUPORTE', 'USUARIO_CHAVE'];
-      const elegiveis = users.filter((u: any) =>
-        u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesElegiveis.includes(p.roleModulo?.codigo))
+      const elegiveis = users.filter((u) =>
+        u.permissoes?.some((p) => isWorkspaceModulo(p.modulo?.codigo) && rolesElegiveis.includes(p.roleModulo?.codigo))
       );
       setUsuarios(elegiveis);
     }).catch(() => {});
@@ -105,6 +105,7 @@ export function ProjetoFormPage() {
       }).catch(() => setError('Erro ao carregar projeto'))
         .finally(() => setLoadingData(false));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdit]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -119,7 +120,7 @@ export function ProjetoFormPage() {
 
     const payload = {
       nome,
-      tipo: (isExternoRole ? 'STAKEHOLDER' : 'OUTRO') as any,
+      tipo: (isExternoRole ? 'STAKEHOLDER' : 'OUTRO') as TipoProjeto,
       tipoProjetoId: tipoProjetoId || undefined,
       modo: 'COMPLETO' as const,
       projetoPaiId: projetoPaiId || undefined,

@@ -197,6 +197,7 @@ export function ContratoDetalhePage() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [id]);
 
   async function handleStatus(status: StatusContrato) {
@@ -1772,6 +1773,7 @@ function TabRateioProjeto({ contrato, canManage, toast }: Omit<TabProps, 'onRelo
 
   useEffect(() => {
     if (selectedParcelaId) carregarRateio();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedParcelaId]);
 
   async function carregarRateio() {

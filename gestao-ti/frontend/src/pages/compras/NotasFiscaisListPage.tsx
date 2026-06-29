@@ -55,6 +55,7 @@ export function NotasFiscaisListPage() {
 
   useEffect(() => {
     loadNotas();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterFornecedorId, filterStatus, filterCentroCustoId, filterEquipeId, filterDataInicio, filterDataFim]);
 
   async function loadNotas() {

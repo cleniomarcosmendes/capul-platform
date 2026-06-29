@@ -104,6 +104,7 @@ export function ProjetosListPage() {
   useEffect(() => {
     if (!usuario?.id) return; // Aguardar auth
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario?.id, filtroStatus, filtroSoftware, apenasRaiz, meusProjetos, searchDebounced, page, pageSize]);
 
   // Volta pra página 1 quando filtro muda.

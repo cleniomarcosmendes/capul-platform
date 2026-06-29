@@ -181,6 +181,7 @@ function ConfirmModal({ state, onClose }: { state: ConfirmState; onClose: (v: bo
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const VariantIcon = variant === 'danger' ? XCircle : variant === 'warning' ? AlertTriangle : Info;
@@ -253,6 +254,7 @@ function PromptModal({ state, onClose }: { state: PromptState; onClose: (v: stri
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const VariantIcon = variant === 'danger' ? XCircle : variant === 'warning' ? AlertTriangle : Info;
@@ -319,6 +321,8 @@ function PromptModal({ state, onClose }: { state: PromptState; onClose: (v: stri
   );
 }
 
+// Hook/helper colocado ao provider/componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useToast() {
   return useContext(ToastContext);
 }

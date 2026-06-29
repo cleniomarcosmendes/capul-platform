@@ -94,6 +94,7 @@ export function OrdensServicoPage() {
       .finally(() => setLoading(false));
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadOrdens(); }, [filterStatus, page, pageSize]);
   // Mudar filtro volta pra página 1 (evita ficar numa página fora do range).
   useEffect(() => { setPage(1); }, [filterStatus, pageSize]);
@@ -104,8 +105,8 @@ export function OrdensServicoPage() {
       // não devem ser atribuíveis como técnico de OS. Mesma lógica de ChamadosListPage.
       coreService.listarUsuarios().then((users) => {
         const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
-        const staff = users.filter((u: any) =>
-          u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo))
+        const staff = users.filter((u) =>
+          u.permissoes?.some((p) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo))
         );
         setTecnicos(staff);
       }).catch(() => {});
@@ -607,7 +608,7 @@ export function OrdensServicoPage() {
                           <tr key={c.id} className="hover:bg-slate-50 cursor-pointer"
                             onClick={() => {
                               const next = new Set(chamadosSelecionados);
-                              next.has(c.id) ? next.delete(c.id) : next.add(c.id);
+                              if (next.has(c.id)) next.delete(c.id); else next.add(c.id);
                               setChamadosSelecionados(next);
                             }}>
                             <td className="px-3 py-2">

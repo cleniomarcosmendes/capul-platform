@@ -87,6 +87,7 @@ export function RelatorioOsPage() {
     setDataFim(`${y}-${m}-${String(new Date(y, now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`);
     // Não-manager: fixar no próprio ID
     if (!isManager && usuario?.id) setTecnicoId(usuario.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const gerar = useCallback(() => {

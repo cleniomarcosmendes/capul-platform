@@ -136,6 +136,7 @@ export function IndicadoresPage() {
 
   useEffect(() => {
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mes, ano, tiposParada]);
 
   async function loadData() {

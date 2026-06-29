@@ -81,6 +81,7 @@ export function CatalogoServicosPage() {
       .then(setItems).catch(() => {}).finally(() => setLoading(false));
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadItems(); }, [filterEquipe]);
   useEffect(() => { equipeService.listar('ATIVO').then(setEquipes).catch(() => {}); }, []);
 

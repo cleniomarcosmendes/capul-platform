@@ -9,7 +9,7 @@ import {
   ArrowLeft, ChevronRight, Paperclip, Download, Trash2, Send, ClipboardList, Clock, Plus, CheckCircle, Circle, Loader,
   Edit3, X, MessageSquare,
 } from 'lucide-react';
-import type { PendenciaProjeto, StatusPendencia, AnexoPendenciaItem, MembroProjeto } from '../../types';
+import type { PendenciaProjeto, StatusPendencia, PrioridadePendencia, AnexoPendenciaItem, MembroProjeto } from '../../types';
 import { formatDateBR } from '../../utils/date';
 import { abrirAnexoOuBaixar } from '../../utils/anexo';
 import { MentionInput } from '../../components/MentionInput';
@@ -92,6 +92,7 @@ export function PendenciaDetalhePage() {
     if (projetoId && pendenciaId) {
       loadData();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetoId, pendenciaId]);
 
   async function loadData() {
@@ -140,7 +141,7 @@ export function PendenciaDetalhePage() {
       await projetoService.atualizarPendencia(projetoId!, pendencia.id, {
         titulo: editTitulo.trim(),
         descricao: editDescricao.trim() || undefined,
-        prioridade: editPrioridade as any,
+        prioridade: editPrioridade as PrioridadePendencia,
         responsavelId: editResponsavelId,
         dataLimite: editDataLimite || undefined,
       });
@@ -159,8 +160,9 @@ export function PendenciaDetalhePage() {
       await projetoService.atualizarPendencia(projetoId!, pendencia.id, { status: newStatus, emailEnvolvidos });
       toast('success', 'Status atualizado');
       loadData();
-    } catch (err: any) {
-      toast('error', err?.response?.data?.message || 'Erro ao atualizar status');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast('error', e?.response?.data?.message || 'Erro ao atualizar status');
     }
   }
 

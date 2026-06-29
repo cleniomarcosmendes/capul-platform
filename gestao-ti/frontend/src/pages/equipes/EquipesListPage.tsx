@@ -46,6 +46,7 @@ export function EquipesListPage() {
 
   useEffect(() => {
     carregarEquipes();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroStatus]);
 
   async function carregarEquipes() {

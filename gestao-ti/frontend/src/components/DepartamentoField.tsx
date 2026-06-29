@@ -103,6 +103,7 @@ export function DepartamentoField({
     const cadastroId = usuario?.departamento?.id;
     const cadastroNaLista = cadastroId && opcoes.some((d) => d.id === cadastroId);
     onChange(cadastroNaLista ? cadastroId! : opcoes[0].id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, opcoes, isOversight, loadingTodos, usuario, onChange]);
 
   // ─── Render ─────────────────────────────────────────────────────

@@ -103,6 +103,7 @@ export function ContratoFormPage() {
       }).catch(() => setError('Erro ao carregar contrato'))
         .finally(() => setLoadingData(false));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdit]);
 
   async function handleSubmit(e: React.FormEvent) {

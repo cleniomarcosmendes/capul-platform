@@ -20,6 +20,8 @@ const HEARTBEAT_INTERVAL_MS = 60_000;
  *
  * Retorna o aviso ativo da plataforma (se houver).
  */
+// Hook/helper colocado ao provider/componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePresencaHeartbeat(autenticado: boolean): {
   aviso: AvisoAtivo | null;
 } {

@@ -126,6 +126,7 @@ export function ChamadosListPage() {
       }
       setDefaultsApplied(true);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gestaoTiRole, isStaffTI, defaultsApplied]);
   const [filterFilial, setFilterFilial] = useState<string>(savedFilters?.filterFilial ?? '');
   const [filterDepartamento, setFilterDepartamento] = useState(savedFilters?.filterDepartamento ?? '');
@@ -160,14 +161,15 @@ export function ChamadosListPage() {
     }
     coreService.listarDepartamentos().then(setDepartamentos).catch(() => {});
     if (!isUsuarioFinal) {
-      coreService.listarUsuarios().then((users: any[]) => {
+      coreService.listarUsuarios().then((users) => {
         const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
         const tecnicos = users.filter((u) =>
-          u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo))
+          u.permissoes?.some((p) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo))
         );
         setTecnicos(tecnicos);
       }).catch(() => {});
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gestaoTiRole, usuario]);
 
   // Ordenação por clique no header (10/05/2026). Default null = backend usa

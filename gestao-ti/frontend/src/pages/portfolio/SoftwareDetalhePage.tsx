@@ -78,6 +78,7 @@ export function SoftwareDetalhePage() {
       .finally(() => setLoading(false));
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { reload(); }, [id]);
 
   if (loading) {
@@ -287,6 +288,7 @@ function TabLicencas({ software, isAdmin, onReload }: { software: Software; isAd
       .finally(() => setLoadingLic(false));
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadLicencas(); }, [software.id]);
 
   // S11 — carregar fornecedores cadastrados uma vez.

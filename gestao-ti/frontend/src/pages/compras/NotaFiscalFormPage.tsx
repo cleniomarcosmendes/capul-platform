@@ -142,6 +142,7 @@ export function NotaFiscalFormPage() {
       }).catch(() => toast('error', 'Erro ao carregar nota fiscal'))
         .finally(() => setLoading(false));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Opcoes para SearchSelect

@@ -65,6 +65,7 @@ export function NotificacoesPage() {
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchNotificacoes(); }, [filtro]);
 
   async function handleMarcarTodasLidas() {

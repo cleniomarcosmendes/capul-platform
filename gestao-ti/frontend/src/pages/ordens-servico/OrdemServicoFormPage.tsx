@@ -35,8 +35,8 @@ export function OrdemServicoFormPage() {
       .listarUsuarios()
       .then((users) => {
         const rolesStaff = ['ADMIN', 'GESTOR', 'SUPORTE'];
-        const staff = users.filter((u: any) =>
-          u.permissoes?.some((p: any) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo)),
+        const staff = users.filter((u) =>
+          u.permissoes?.some((p) => isWorkspaceModulo(p.modulo?.codigo) && rolesStaff.includes(p.roleModulo?.codigo)),
         );
         setTecnicos(staff);
       })

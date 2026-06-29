@@ -234,6 +234,7 @@ export function ProjetoDetalhePage() {
 
   useEffect(() => {
     if (id) loadProjeto();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function loadProjeto() {
@@ -841,6 +842,7 @@ function TabEquipe({ projetoId, canManage, onEditingChange }: { projetoId: strin
   useEffect(() => {
     loadMembros();
     coreService.listarUsuarios().then(setUsuarios).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetoId]);
 
   async function loadMembros() {
@@ -2149,6 +2151,7 @@ function TabCotacoes({ projetoId, canManage, onEditingChange }: { projetoId: str
     return () => onEditingChange?.(false);
   }, [showForm, onEditingChange]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projetoId]);
 
   async function load() {
@@ -2390,6 +2393,7 @@ function TabCustosDetalhados({ projetoId, canManage, onEditingChange }: { projet
     return () => onEditingChange?.(false);
   }, [showForm, onEditingChange]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projetoId]);
 
   async function load() {
@@ -2487,6 +2491,7 @@ function TabRiscos({ projetoId, canManage, onEditingChange }: { projetoId: strin
   useEffect(() => {
     load();
     coreService.listarUsuarios().then(setUsuarios).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetoId]);
 
   async function load() {
@@ -2627,6 +2632,7 @@ function TabDependencias({ projetoId, canManage, onEditingChange }: { projetoId:
   useEffect(() => {
     load();
     projetoService.listar().then(setProjetos).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetoId]);
 
   async function load() {
@@ -2758,6 +2764,7 @@ function TabAnexos({ projetoId, canAdd, canManage }: { projetoId: string; canAdd
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projetoId]);
 
   async function load() {
@@ -2861,6 +2868,7 @@ function TabChamados({ projetoId, canManage }: { projetoId: string; canManage: b
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projetoId]);
 
   async function load() {
@@ -2963,6 +2971,7 @@ function TabUsuariosChave({ projetoId, canManage, onEditingChange }: { projetoId
     return () => onEditingChange?.(false);
   }, [showForm, onEditingChange]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [projetoId]);
 
   async function load() {
@@ -3135,6 +3144,7 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto, onEditingChange
   // Membros + Usuarios-chave para select de responsavel
   const [responsaveis, setResponsaveis] = useState<{ id: string; nome: string }[]>([]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); loadResponsaveis(); }, [projetoId]);
 
   async function load() {
@@ -3169,6 +3179,7 @@ function TabPendencias({ projetoId, projetoNumero, isSubProjeto, onEditingChange
     } catch { /* empty */ }
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [filtroStatus, filtroPrioridade]);
 
   function handleSearchKeyDown(e: React.KeyboardEvent) {
@@ -3385,6 +3396,7 @@ function ModalVincularChamadosProjeto({ projetoId, itensVinculados, onDone, onCl
     }).catch(() => {
       toast('error', 'Erro ao carregar chamados');
     }).finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtrados = chamados.filter((c) => {

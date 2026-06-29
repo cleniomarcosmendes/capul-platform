@@ -60,6 +60,7 @@ export function NotaFiscalDetalhePage() {
 
   useEffect(() => {
     if (id) carregar();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function carregar() {

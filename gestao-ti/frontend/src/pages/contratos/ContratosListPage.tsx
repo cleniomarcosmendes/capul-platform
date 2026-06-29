@@ -61,6 +61,7 @@ export function ContratosListPage() {
 
   useEffect(() => {
     loadContratos();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterTipoContratoId, filterStatus, filterVencendo, page, pageSize]);
 
   // Volta pra página 1 ao mudar filtro.

@@ -248,6 +248,7 @@ export function ChamadoCreatePage() {
       }
       ativoService.listar({ status: 'ATIVO' }).then(setAtivosList).catch(() => {});
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUsuarioFinal]);
 
   // Pre-preencher filial/depto do usuario logado
@@ -313,6 +314,7 @@ export function ChamadoCreatePage() {
     }
     setSoftwareModuloId('');
     setModuloNome('');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [softwareId]);
 
   useEffect(() => {

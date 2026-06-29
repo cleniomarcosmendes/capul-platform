@@ -96,6 +96,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// Hook/helper colocado ao provider/componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useWorkspace(): WorkspaceContextType {
   const ctx = useContext(WorkspaceContext);
   if (!ctx) throw new Error('useWorkspace deve ser usado dentro de <WorkspaceProvider>');
@@ -107,6 +109,8 @@ export function useWorkspace(): WorkspaceContextType {
  * a partir do user atual (precisa do user.id que vem do JWT decodificado).
  * Retorna null se: sem token, sem user, sem ativo salvo.
  */
+// Hook/helper colocado ao provider/componente; disable do Fast Refresh.
+// eslint-disable-next-line react-refresh/only-export-components
 export function getWorkspaceAtivoFromStorage(): string | null {
   try {
     const tok = localStorage.getItem('accessToken');

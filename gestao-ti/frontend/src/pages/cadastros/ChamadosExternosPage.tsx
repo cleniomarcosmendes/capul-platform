@@ -49,6 +49,7 @@ export function ChamadosExternosPage() {
   useEffect(() => {
     void carregar();
     void carregarSoftwares();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroAno, filtroMes]);
 
   async function carregar() {
