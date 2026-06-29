@@ -38,7 +38,10 @@ export class CadastroController {
   ) {}
 
   // ---------- Busca unificada ----------
+  // Também usada no planejamento de visitas da Saída de Veículos (frota) → libera
+  // os papéis de frota para a LEITURA (cadastro/escrita de cliente segue entrega).
   @Get('busca')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA')
   buscaUnificada(@Query('termo') termo: string, @CurrentUser() user: JwtPayload) {
     return this.busca.buscaUnificada(termo ?? '', filialDoUsuario(user));
   }
