@@ -13,8 +13,11 @@ export class RastreamentoController {
     private readonly purga: RastreamentoPurgaService,
   ) {}
 
-  /** App envia um ping de GPS da viagem em curso (foreground). */
+  /** App envia um ping de GPS da viagem em curso (foreground). Quem dirige/entrega
+   *  manda a própria posição: inclui os logins de campo ENTREGADOR (entregas) e
+   *  REGISTRADOR_FROTA (frota), além dos operadores/gestores. */
   @Post('posicao')
+  @Roles('ENTREGADOR', 'REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   registrar(@Body() dto: RegistrarPosicaoDto, @CurrentUser() user: JwtPayload) {
     return this.rastreamento.registrar(dto, user);
   }
