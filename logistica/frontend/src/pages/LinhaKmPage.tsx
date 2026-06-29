@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Car, ChevronLeft, ChevronRight, Gauge, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
@@ -18,16 +18,34 @@ type Visao = 'linha' | 'pendencias';
 
 const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
 
+// Deriva CADA lacuna (gap) de um veículo: faixa de KM + período aproximado
+// (entre o trecho anterior e o próximo com KM; ou "até o KM atual" na última).
+function lacunasDoVeiculo(segmentos: LinhaKm['segmentos']) {
+  const out: { kmInicio: number; kmFim: number; km: number; prevNum?: number; prevData: string | null; nextNum?: number; nextData: string | null; ateAtual: boolean }[] = [];
+  for (let i = 0; i < segmentos.length; i++) {
+    const s = segmentos[i];
+    if (s.tipo !== 'gap') continue;
+    let prevNum: number | undefined; let prevData: string | null = null;
+    for (let j = i - 1; j >= 0; j--) { if (segmentos[j].tipo === 'viagem') { prevNum = segmentos[j].viagemNumero; prevData = segmentos[j].data ?? null; break; } }
+    let nextNum: number | undefined; let nextData: string | null = null;
+    for (let j = i + 1; j < segmentos.length; j++) { if (segmentos[j].tipo === 'viagem') { nextNum = segmentos[j].viagemNumero; nextData = segmentos[j].data ?? null; break; } }
+    out.push({ kmInicio: s.kmInicio, kmFim: s.kmFim, km: s.km, prevNum, prevData, nextNum, nextData, ateAtual: (s.label || '').includes('atual') });
+  }
+  return out;
+}
+
 // Visão "Pendências de KM": agrega os buracos (km não apontado) por
 // departamento → veículo, ordenado pelos piores. Cobrança do hodômetro.
-// Reusa o que o backend já calcula (kmNaoApontadas + segmentos de gap).
+// Clicar num veículo abre CADA lacuna (faixa de KM + período).
 function PendenciasKm({ linhas, mesLabel, loading }: { linhas: LinhaKm[]; mesLabel: string; loading: boolean }) {
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setAbertos((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   if (loading) return <div className="flex items-center justify-center gap-2 py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>;
   const comGap = linhas.filter((l) => l.kmNaoApontadas > 0);
   if (comGap.length === 0) {
     return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">Nenhum KM não apontado em {mesLabel}. 🎉</div>;
   }
-  type Item = { veiculoId: string; placa: string; modelo?: string | null; km: number; nLacunas: number; maior: number };
+  type Item = { veiculoId: string; placa: string; modelo?: string | null; km: number; nLacunas: number; maior: number; segmentos: LinhaKm['segmentos'] };
   const porDepto = new Map<string, { nome: string; itens: Item[]; total: number }>();
   for (const l of comGap) {
     const gaps = l.segmentos.filter((s) => s.tipo === 'gap');
@@ -35,7 +53,7 @@ function PendenciasKm({ linhas, mesLabel, loading }: { linhas: LinhaKm[]; mesLab
     const nome = l.departamentoNome || '— sem departamento —';
     const key = l.departamentoLotacaoId || nome;
     const grp = porDepto.get(key) ?? { nome, itens: [], total: 0 };
-    grp.itens.push({ veiculoId: l.veiculoId, placa: l.placa, modelo: l.modelo, km: l.kmNaoApontadas, nLacunas: gaps.length, maior });
+    grp.itens.push({ veiculoId: l.veiculoId, placa: l.placa, modelo: l.modelo, km: l.kmNaoApontadas, nLacunas: gaps.length, maior, segmentos: l.segmentos });
     grp.total += l.kmNaoApontadas;
     porDepto.set(key, grp);
   }
@@ -57,14 +75,35 @@ function PendenciasKm({ linhas, mesLabel, loading }: { linhas: LinhaKm[]; mesLab
               <tr><th className="px-4 py-2">Veículo</th><th className="px-4 py-2 text-right">KM não apontado</th><th className="px-4 py-2 text-center">Lacunas</th><th className="px-4 py-2 text-right">Maior lacuna</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {d.itens.map((v) => (
-                <tr key={v.veiculoId} className="hover:bg-slate-50">
-                  <td className="px-4 py-2"><span className="inline-flex items-center gap-2"><Car className="h-4 w-4 text-capul-600" /> <span className="font-medium text-slate-700">{v.placa}</span>{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</span></td>
-                  <td className="px-4 py-2 text-right tabular-nums font-semibold text-amber-700">{fmtKm(v.km)} km</td>
-                  <td className="px-4 py-2 text-center tabular-nums text-slate-600">{v.nLacunas}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-600">{fmtKm(v.maior)} km</td>
-                </tr>
-              ))}
+              {d.itens.map((v) => {
+                const aberto = abertos.has(v.veiculoId);
+                return (
+                  <Fragment key={v.veiculoId}>
+                    <tr onClick={() => toggle(v.veiculoId)} className="cursor-pointer hover:bg-slate-50">
+                      <td className="px-4 py-2">
+                        <span className="inline-flex items-center gap-2">
+                          <ChevronRight className={`h-3.5 w-3.5 text-slate-400 transition-transform ${aberto ? 'rotate-90' : ''}`} />
+                          <Car className="h-4 w-4 text-capul-600" /> <span className="font-medium text-slate-700">{v.placa}</span>{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums font-semibold text-amber-700">{fmtKm(v.km)} km</td>
+                      <td className="px-4 py-2 text-center tabular-nums text-slate-600">{v.nLacunas}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-600">{fmtKm(v.maior)} km</td>
+                    </tr>
+                    {aberto && lacunasDoVeiculo(v.segmentos).map((g, gi) => (
+                      <tr key={gi} className="bg-slate-50/40 text-xs text-slate-500">
+                        <td className="px-4 py-1.5 pl-11">
+                          {g.ateAtual
+                            ? <>Após <b className="font-medium text-slate-600">Rota #{g.prevNum}</b>{g.prevData ? ` (${fmtDate(g.prevData)})` : ''} — até o KM atual</>
+                            : <>Entre <b className="font-medium text-slate-600">Rota #{g.prevNum}</b>{g.prevData ? ` (${fmtDate(g.prevData)})` : ''} e <b className="font-medium text-slate-600">Rota #{g.nextNum}</b>{g.nextData ? ` (${fmtDate(g.nextData)})` : ''}</>}
+                        </td>
+                        <td className="px-4 py-1.5 text-right tabular-nums font-medium text-amber-700">{fmtKm(g.km)} km</td>
+                        <td className="px-4 py-1.5 text-center tabular-nums text-slate-400" colSpan={2}>KM {fmtKm(g.kmInicio)} – {fmtKm(g.kmFim)}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
