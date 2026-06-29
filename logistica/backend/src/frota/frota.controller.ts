@@ -8,7 +8,10 @@ import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDt
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
 @Controller('frota')
-@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+// REGISTRADOR_FROTA (login PADRÃO compartilhado) herda só os endpoints operacionais
+// desta classe (saída/retorno/condutor/paradas). Os administrativos têm @Roles
+// próprio SEM ele (getAllAndOverride substitui, não soma) → seguem bloqueados.
+@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA')
 export class FrotaController {
   constructor(private readonly frota: FrotaService) {}
 
@@ -89,6 +92,8 @@ export class FrotaController {
 
   /** Linha do KM (hodômetro) da frota no mês: uma linha por veículo (ou de um só). Página /frota/linha-km. */
   @Get('hodometro')
+  // Relatório de gestão — fora do REGISTRADOR_FROTA (mantém os papéis originais da classe).
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   hodometro(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('ano') ano?: string, @Query('veiculoId') veiculoId?: string, @Query('departamentoId') departamentoId?: string) {
     return this.frota.hodometroFrota(user, mes ? parseInt(mes, 10) : undefined, ano ? parseInt(ano, 10) : undefined, veiculoId || undefined, departamentoId || undefined);
   }

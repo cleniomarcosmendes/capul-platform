@@ -27,7 +27,8 @@ FROM (VALUES
   ('OPERADOR_ENTREGA', 'Operador de Entregas', 'Cadastra entregas, monta viagens, imprime etiquetas'),
   ('ENTREGADOR',       'Entregador',           'App do entregador (Fase 1b)'),
   ('GESTOR_FROTA',     'Gestor de Frota',      'Controle de frota: viagens, veículos, ajustes e indicadores'),
-  ('REGISTRADOR_ENTREGA', 'Registrador de Entregas', 'Caixa: só inclui e altera entregas (identifica-se por matrícula+senha)')
+  ('REGISTRADOR_ENTREGA', 'Registrador de Entregas', 'Caixa: só inclui e altera entregas (identifica-se por matrícula+senha)'),
+  ('REGISTRADOR_FROTA', 'Registrador de Frota', 'Login compartilhado: só registra saída/retorno de veículo (condutor por matrícula+senha); não administra a frota')
 ) AS r(codigo, nome, descricao)
 CROSS JOIN core.modulos_sistema m
 WHERE m.codigo = 'LOGISTICA'

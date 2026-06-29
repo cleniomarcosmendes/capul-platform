@@ -8,7 +8,7 @@ const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 // Entitlement por role (espelha a RBAC do backend — roles.guard.ts: ADMIN sempre).
-const ROLES_FROTA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'ADMIN'];
+const ROLES_FROTA = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'ADMIN'];
 const ROLES_ENTREGA = ['ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'ADMIN'];
 
 /**

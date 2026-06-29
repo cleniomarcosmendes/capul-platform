@@ -130,6 +130,8 @@ export class DespesaController {
 
   /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). Recibo opcional. */
   @Post('viagem')
+  // Operacional: o REGISTRADOR_FROTA pode lançar na viagem (vira PENDENTE → supervisor aprova).
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
   lancarNaViagem(
     @Body() dto: LancarDespesaViagemDto,
