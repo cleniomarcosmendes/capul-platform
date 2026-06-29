@@ -12,10 +12,66 @@ import { coresPorSegmento, fmtKm, HACHURA, type LinhaKm } from '../components/li
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-interface VeiculoOpt { id: string; placa: string; modelo?: string | null }
+interface VeiculoOpt { id: string; placa: string; modelo?: string | null; departamentoLotacaoId?: string; departamentoNome?: string | null }
 interface Resp { mes: number | null; ano: number | null; veiculos: LinhaKm[] }
+type Visao = 'linha' | 'pendencias';
 
 const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR') : '—');
+
+// Visão "Pendências de KM": agrega os buracos (km não apontado) por
+// departamento → veículo, ordenado pelos piores. Cobrança do hodômetro.
+// Reusa o que o backend já calcula (kmNaoApontadas + segmentos de gap).
+function PendenciasKm({ linhas, mesLabel, loading }: { linhas: LinhaKm[]; mesLabel: string; loading: boolean }) {
+  if (loading) return <div className="flex items-center justify-center gap-2 py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>;
+  const comGap = linhas.filter((l) => l.kmNaoApontadas > 0);
+  if (comGap.length === 0) {
+    return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">Nenhum KM não apontado em {mesLabel}. 🎉</div>;
+  }
+  type Item = { veiculoId: string; placa: string; modelo?: string | null; km: number; nLacunas: number; maior: number };
+  const porDepto = new Map<string, { nome: string; itens: Item[]; total: number }>();
+  for (const l of comGap) {
+    const gaps = l.segmentos.filter((s) => s.tipo === 'gap');
+    const maior = gaps.reduce((m, g) => Math.max(m, g.km), 0);
+    const nome = l.departamentoNome || '— sem departamento —';
+    const key = l.departamentoLotacaoId || nome;
+    const grp = porDepto.get(key) ?? { nome, itens: [], total: 0 };
+    grp.itens.push({ veiculoId: l.veiculoId, placa: l.placa, modelo: l.modelo, km: l.kmNaoApontadas, nLacunas: gaps.length, maior });
+    grp.total += l.kmNaoApontadas;
+    porDepto.set(key, grp);
+  }
+  const deptos = [...porDepto.values()].sort((a, b) => b.total - a.total);
+  deptos.forEach((d) => d.itens.sort((a, b) => b.km - a.km));
+  const totalGeral = deptos.reduce((a, d) => a + d.total, 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-500">{comGap.length} veículo{comGap.length === 1 ? '' : 's'} com KM não apontado em {mesLabel} — total <b className="text-slate-700">{fmtKm(totalGeral)} km</b>. Use para cobrar o apontamento do hodômetro.</p>
+      {deptos.map((d) => (
+        <div key={d.nome} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+            <h3 className="text-sm font-semibold text-slate-700">{d.nome}</h3>
+            <span className="text-xs text-slate-500">Total: <b className="text-amber-700">{fmtKm(d.total)} km</b> não apontados</span>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr><th className="px-4 py-2">Veículo</th><th className="px-4 py-2 text-right">KM não apontado</th><th className="px-4 py-2 text-center">Lacunas</th><th className="px-4 py-2 text-right">Maior lacuna</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {d.itens.map((v) => (
+                <tr key={v.veiculoId} className="hover:bg-slate-50">
+                  <td className="px-4 py-2"><span className="inline-flex items-center gap-2"><Car className="h-4 w-4 text-capul-600" /> <span className="font-medium text-slate-700">{v.placa}</span>{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</span></td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold text-amber-700">{fmtKm(v.km)} km</td>
+                  <td className="px-4 py-2 text-center tabular-nums text-slate-600">{v.nLacunas}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-slate-600">{fmtKm(v.maior)} km</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function LinhaKmPage() {
   const { toast } = useToast();
@@ -23,9 +79,18 @@ export function LinhaKmPage() {
   const [mes, setMes] = useState(agora.getMonth() + 1);
   const [ano, setAno] = useState(agora.getFullYear());
   const [veiculoId, setVeiculoId] = useState(''); // '' = todos
+  const [departamentoId, setDepartamentoId] = useState(''); // '' = todos
   const [veiculos, setVeiculos] = useState<VeiculoOpt[]>([]);
   const [linhas, setLinhas] = useState<LinhaKm[]>([]);
   const [loading, setLoading] = useState(true);
+  const [visao, setVisao] = useState<Visao>('linha');
+
+  // Departamentos (únicos) da lista de veículos — alimentam o filtro.
+  const departamentos = Array.from(
+    new Map(veiculos.filter((v) => v.departamentoLotacaoId).map((v) => [v.departamentoLotacaoId!, v.departamentoNome || '—'])).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+  // Veículos do departamento selecionado (filtra o dropdown de veículo).
+  const veiculosFiltrados = departamentoId ? veiculos.filter((v) => v.departamentoLotacaoId === departamentoId) : veiculos;
 
   const noMesAtual = ano === agora.getFullYear() && mes === agora.getMonth() + 1;
   const passoMes = (delta: number) => { const d = new Date(ano, mes - 1 + delta, 1); setMes(d.getMonth() + 1); setAno(d.getFullYear()); };
@@ -37,12 +102,12 @@ export function LinhaKmPage() {
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await logisticaApi.get<Resp>('/frota/hodometro', { params: { mes, ano, veiculoId: veiculoId || undefined } });
+      const { data } = await logisticaApi.get<Resp>('/frota/hodometro', { params: { mes, ano, veiculoId: veiculoId || undefined, departamentoId: departamentoId || undefined } });
       setLinhas(data.veiculos);
     } catch {
       toast('error', 'Falha ao carregar a linha do KM.');
     } finally { setLoading(false); }
-  }, [mes, ano, veiculoId, toast]);
+  }, [mes, ano, veiculoId, departamentoId, toast]);
   useEffect(() => { void carregar(); }, [carregar]);
 
   const umVeiculo = !!veiculoId;
@@ -66,9 +131,17 @@ export function LinhaKmPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {departamentos.length > 0 && (
+            <select value={departamentoId}
+              onChange={(e) => { setDepartamentoId(e.target.value); setVeiculoId(''); }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none">
+              <option value="">Todos os departamentos</option>
+              {departamentos.map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
+            </select>
+          )}
           <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none">
-            <option value="">Todos os veículos</option>
-            {veiculos.map((v) => <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>)}
+            <option value="">{departamentoId ? 'Veículos do depto' : 'Todos os veículos'}</option>
+            {veiculosFiltrados.map((v) => <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>)}
           </select>
           <button onClick={() => passoMes(-1)} className="rounded-lg border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-50"><ChevronLeft className="h-4 w-4" /></button>
           <span className="min-w-[9.5rem] text-center text-sm font-medium text-slate-700">{MESES[mes - 1]} / {ano}</span>
@@ -87,7 +160,14 @@ export function LinhaKmPage() {
         {noMesAtual && <span className="text-slate-400">A faixa inclui a lacuna até o KM atual do veículo.</span>}
       </div>
 
-      {loading ? (
+      <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
+        <button onClick={() => setVisao('linha')} className={`rounded-md px-3 py-1.5 font-medium ${visao === 'linha' ? 'bg-capul-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Linha visual</button>
+        <button onClick={() => setVisao('pendencias')} className={`rounded-md px-3 py-1.5 font-medium ${visao === 'pendencias' ? 'bg-capul-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Pendências de KM</button>
+      </div>
+
+      {visao === 'pendencias' ? (
+        <PendenciasKm linhas={linhas} mesLabel={`${MESES[mes - 1]} / ${ano}`} loading={loading} />
+      ) : loading ? (
         <div className="flex items-center justify-center gap-2 py-20 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
       ) : exibidas.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-400">

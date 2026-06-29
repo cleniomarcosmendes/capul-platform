@@ -362,15 +362,20 @@ export class FrotaService {
    * filial). Sem mês → considera todas as viagens e inclui a lacuna até o KM
    * atual; com mês passado, recorta no mês e não projeta até o KM atual.
    */
-  async hodometroFrota(user: JwtPayload, mes?: number, ano?: number, veiculoId?: string) {
+  async hodometroFrota(user: JwtPayload, mes?: number, ano?: number, veiculoId?: string, departamentoId?: string) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
 
     const veiculos = await this.prisma.veiculo.findMany({
-      where: { filialId, ...(veiculoId ? { id: veiculoId } : {}) },
-      select: { id: true, placa: true, modelo: true, kmAtual: true },
+      where: {
+        filialId,
+        ...(veiculoId ? { id: veiculoId } : {}),
+        ...(departamentoId ? { departamentoLotacaoId: departamentoId } : {}),
+      },
+      select: { id: true, placa: true, modelo: true, kmAtual: true, departamentoLotacaoId: true },
       orderBy: { placa: 'asc' },
     });
+    const nomesDepto = await this.core.nomesDepartamentos(veiculos.map((v) => v.departamentoLotacaoId));
 
     const agora = new Date();
     const semMes = !mes || !ano;
@@ -385,7 +390,11 @@ export class FrotaService {
         select: { numero: true, kmInicial: true, kmFinal: true, observacoesSaida: true, dataHoraSaida: true, condutorNome: true },
         orderBy: { kmInicial: 'asc' },
       });
-      linhas.push(this.montarLinhaKm(v, viagens, mesCorrente));
+      linhas.push({
+        ...this.montarLinhaKm(v, viagens, mesCorrente),
+        departamentoLotacaoId: v.departamentoLotacaoId,
+        departamentoNome: nomesDepto.get(v.departamentoLotacaoId) ?? null,
+      });
     }
     return { mes: mes ?? null, ano: ano ?? null, veiculos: linhas };
   }

@@ -12,6 +12,7 @@ export interface LinhaKm {
   veiculoId: string; placa: string; modelo?: string | null; kmAtual: number;
   kmMin: number; kmMax: number; kmViagens: number; kmNaoApontadas: number;
   qtdViagens: number; segmentos: SegKm[];
+  departamentoLotacaoId?: string; departamentoNome?: string | null;
 }
 
 export const fmtKm = (n: number) => n.toLocaleString('pt-BR');
