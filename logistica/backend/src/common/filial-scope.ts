@@ -19,7 +19,9 @@ export function filialDoUsuario(user: JwtPayload): string {
 
 export function podeVerOutrasFiliais(user: JwtPayload): boolean {
   const role = user?.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
-  return role === 'ADMIN' || role === 'GESTOR_ENTREGA';
+  // GESTOR_FROTA administra a frota da empresa toda (cadastra/edita veículos de
+  // qualquer filial) — só alcança o veículo; entrega/viagem barram esse papel no guard.
+  return role === 'ADMIN' || role === 'GESTOR_ENTREGA' || role === 'GESTOR_FROTA';
 }
 
 /** Escrita: a filial-alvo informada precisa ser a do usuário. */

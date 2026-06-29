@@ -49,7 +49,11 @@ export function VeiculoFormPage() {
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog: DirtyDialog } = useUnsavedChanges(dirty);
   const { toast } = useToast();
-  const { usuario } = useAuth();
+  const { usuario, logisticaRole } = useAuth();
+  // Gestor de frota/entrega e admin gerem a frota da empresa toda → escolhem a
+  // filial. Operador fica travado na própria (o backend recusa escrita fora dela).
+  // Só no cadastro: em edição o filialId não entra no PATCH (não se troca a filial do veículo).
+  const podeEscolherFilial = !modoEdicao && ['ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA'].includes(logisticaRole ?? '');
 
   // Filial é SEMPRE a do usuário: a escrita é escopada à filial do token para
   // TODOS os perfis (assertMesmaFilial no backend). No cadastro ela nasce travada
@@ -182,10 +186,17 @@ export function VeiculoFormPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div><label className={lbl}>Filial</label>
-            <input
-              value={(() => { const f = filiais.find((x) => x.id === filialId); return f ? labelCore(f) : (usuario?.filialAtual?.nome ?? '—'); })()}
-              disabled className={`${inp} bg-slate-100 text-slate-500`} title="O veículo é cadastrado na sua filial ativa" /></div>
+          <div><label className={lbl}>Filial{podeEscolherFilial ? ' *' : ''}</label>
+            {podeEscolherFilial ? (
+              <select value={filialId} onChange={(e) => setFilialId(e.target.value)} className={inp}>
+                <option value="">—</option>
+                {filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}
+              </select>
+            ) : (
+              <input
+                value={(() => { const f = filiais.find((x) => x.id === filialId); return f ? labelCore(f) : (usuario?.filialAtual?.nome ?? '—'); })()}
+                disabled className={`${inp} bg-slate-100 text-slate-500`} title="O veículo é cadastrado na sua filial ativa" />
+            )}</div>
           <div><label className={lbl}>Departamento de lotação *</label>
             <select value={departamentoLotacaoId} onChange={(e) => setDepartamentoId(e.target.value)} className={inp}><option value="">—</option>{departamentos.map((d) => <option key={d.id} value={d.id}>{labelCore(d)}</option>)}</select></div>
           <div><label className={lbl}>Supervisor responsável *</label>
