@@ -5,6 +5,7 @@ import { coreApi, logisticaApi } from '../services/api';
 import { maskPlaca } from '../utils/format';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useToast } from '../components/toast-context';
+import { useAuth } from '../contexts/AuthContext';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
@@ -48,17 +49,34 @@ export function VeiculoFormPage() {
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog: DirtyDialog } = useUnsavedChanges(dirty);
   const { toast } = useToast();
+  const { usuario } = useAuth();
+
+  // Filial é SEMPRE a do usuário: a escrita é escopada à filial do token para
+  // TODOS os perfis (assertMesmaFilial no backend). No cadastro ela nasce travada
+  // na filial ativa (só o nome é exibido); em edição vem do próprio veículo.
+  useEffect(() => {
+    coreApi.get<CoreItem[]>('/filiais').then((r) => setFiliais(r.data)).catch(() => {});
+  }, []);
 
   useEffect(() => {
+    if (modoEdicao) return;
+    const fa = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
+    if (fa) setFilialId(fa);
+  }, [modoEdicao, usuario]);
+
+  // Departamento de lotação e supervisor são escopados à filial efetiva — o
+  // seletor não pode oferecer opções de outra filial (gerava lotação cruzada e a
+  // mensagem "Operação fora da sua filial"). Refaz a busca quando a filial muda.
+  useEffect(() => {
+    if (!filialId) { setDepartamentos([]); setUsuarios([]); return; }
     void (async () => {
-      const [f, d, u] = await Promise.all([
-        coreApi.get<CoreItem[]>('/filiais').catch(() => ({ data: [] })),
-        coreApi.get<CoreItem[]>('/departamentos').catch(() => ({ data: [] })),
-        coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
+      const [d, u] = await Promise.all([
+        coreApi.get<CoreItem[]>('/departamentos', { params: { filialId } }).catch(() => ({ data: [] })),
+        coreApi.get<CoreItem[]>('/usuarios', { params: { filialId } }).catch(() => ({ data: [] })),
       ]);
-      setFiliais(f.data); setDepartamentos(d.data); setUsuarios(u.data);
+      setDepartamentos(d.data); setUsuarios(u.data);
     })();
-  }, []);
+  }, [filialId]);
 
   useEffect(() => {
     if (!id) return;
@@ -164,8 +182,10 @@ export function VeiculoFormPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div><label className={lbl}>Filial *</label>
-            <select value={filialId} onChange={(e) => setFilialId(e.target.value)} className={inp}><option value="">—</option>{filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}</select></div>
+          <div><label className={lbl}>Filial</label>
+            <input
+              value={(() => { const f = filiais.find((x) => x.id === filialId); return f ? labelCore(f) : (usuario?.filialAtual?.nome ?? '—'); })()}
+              disabled className={`${inp} bg-slate-100 text-slate-500`} title="O veículo é cadastrado na sua filial ativa" /></div>
           <div><label className={lbl}>Departamento de lotação *</label>
             <select value={departamentoLotacaoId} onChange={(e) => setDepartamentoId(e.target.value)} className={inp}><option value="">—</option>{departamentos.map((d) => <option key={d.id} value={d.id}>{labelCore(d)}</option>)}</select></div>
           <div><label className={lbl}>Supervisor responsável *</label>
