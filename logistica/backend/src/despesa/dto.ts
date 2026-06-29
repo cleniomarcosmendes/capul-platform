@@ -87,6 +87,14 @@ export class LancarDespesaViagemDto {
   @IsString() @IsNotEmpty()
   viagemId!: string;
 
+  // Login PADRÃO (compartilhado): identifica o condutor no RH p/ lançar a despesa
+  // (o backend valida e confere que é o condutor da viagem). INDIVIDUAL não usa.
+  @IsOptional() @IsString()
+  matricula?: string;
+
+  @IsOptional() @IsString()
+  senha?: string;
+
   @IsString() @IsNotEmpty()
   tipoDespesaId!: string;
 

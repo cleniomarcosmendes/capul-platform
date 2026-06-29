@@ -19,6 +19,7 @@ import {
 import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
 import { useRastreamento } from '../lib/useRastreamento';
+import { useAuth } from '../auth/AuthContext';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -300,6 +301,13 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
 }
 
 function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () => void }) {
+  const { tipo } = useAuth();
+  // PADRAO (login compartilhado): exige re-identificar o condutor (matrícula+senha)
+  // que iniciou a viagem — accountability. INDIVIDUAL já é a pessoa autenticada.
+  const ehIndividual = tipo === 'INDIVIDUAL';
+  const [matricula, setMatricula] = useState(viagem.condutorMatricula ?? '');
+  const [senha, setSenha] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [tipoId, setTipoId] = useState('');
   const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
@@ -316,7 +324,8 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
     void (async () => { try { setFornecedores(await fornecedoresDespesa()); } catch { /* vazio */ } })();
   }, []);
 
-  const podeLancar = !!tipoId && valor !== '' && parseMoeda(valor) > 0 && !salvando;
+  const credOk = ehIndividual || (!!matricula.trim() && !!senha);
+  const podeLancar = !!tipoId && valor !== '' && parseMoeda(valor) > 0 && credOk && !salvando;
 
   async function tirarFoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -328,14 +337,26 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   async function lancar() {
     if (!podeLancar) return;
     setSalvando(true);
-    const payload = { viagemId: viagem.id, tipoDespesaId: tipoId, valor: parseMoeda(valor), fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined, numeroDocumento: semNota ? undefined : (numeroDocumento.trim() || undefined), semNota: semNota || undefined, idempotencyKey: uuid() };
+    const payload = {
+      viagemId: viagem.id,
+      ...(ehIndividual ? {} : { matricula: matricula.trim(), senha }),
+      tipoDespesaId: tipoId, valor: parseMoeda(valor),
+      fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined,
+      numeroDocumento: semNota ? undefined : (numeroDocumento.trim() || undefined),
+      semNota: semNota || undefined, idempotencyKey: uuid(),
+    };
     try {
       await lancarDespesaViagem(payload, fotoUri ?? undefined);
       Alert.alert('Despesa lançada', 'Entrou como pendente de validação do supervisor.', [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Despesa R$ ${valor}`, acao: { tipo: 'despesa', viagemId: viagem.id, payload, fotoUri: fotoUri ?? null } });
-        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: onPronto }]);
+        if (!ehIndividual) {
+          // PADRÃO: não persistir a senha offline — exige conexão p/ validar o condutor.
+          Alert.alert('Sem conexão', 'Com login compartilhado, lançar despesa exige internet para validar o condutor. Tente de novo com sinal.');
+        } else {
+          await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Despesa R$ ${valor}`, acao: { tipo: 'despesa', viagemId: viagem.id, payload, fotoUri: fotoUri ?? null } });
+          Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: onPronto }]);
+        }
       } else {
         const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
         Alert.alert('Não foi possível lançar', String(msg || 'Tente novamente.'));
@@ -346,6 +367,20 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   return (
     <View style={styles.painel}>
       <Text style={styles.dica}>Despesa do condutor {viagem.condutorNome ?? ''} — entra como pendente.</Text>
+      {!ehIndividual && (
+        <>
+          <Text style={styles.dica}>Login compartilhado — confirme matrícula + senha do condutor da viagem.</Text>
+          <Text style={styles.label}>Matrícula</Text>
+          <TextInput style={styles.input} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!salvando} />
+          <Text style={styles.label}>Senha do portal RH</Text>
+          <View style={styles.senhaWrap}>
+            <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!salvando} />
+            <TouchableOpacity style={styles.olho} onPress={() => setMostrarSenha((v) => !v)} hitSlop={10}>
+              <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
       <Text style={styles.label}>Tipo de despesa</Text>
       <View style={styles.chips}>
         {tipos.map((t) => (

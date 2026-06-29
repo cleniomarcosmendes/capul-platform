@@ -144,6 +144,10 @@ export async function fornecedoresDespesa(): Promise<FornecedorDespesa[]> {
 
 export interface DespesaViagemPayload {
   viagemId: string;
+  // Login PADRÃO (compartilhado): condutor re-identifica matrícula+senha do RH
+  // (o backend valida e confere que é o condutor da viagem). INDIVIDUAL não envia.
+  matricula?: string;
+  senha?: string;
   tipoDespesaId: string;
   valor: number;
   fornecedorId?: string;
@@ -157,13 +161,15 @@ export interface DespesaViagemPayload {
 }
 
 /**
- * Lançar despesa na viagem em curso → PENDENTE (herda o condutor da viagem,
- * sem pedir senha de novo). Foto do cupom OPCIONAL (multipart). Caso de uso
- * mais forte do mobile: o motorista fotografa o recibo na rua.
+ * Lançar despesa na viagem em curso → PENDENTE. Login PADRÃO re-identifica o
+ * condutor (matrícula+senha); INDIVIDUAL herda o próprio login. Foto do cupom
+ * OPCIONAL (multipart). Caso de uso mais forte do mobile: fotografar o recibo na rua.
  */
 export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUri?: string): Promise<void> {
   const form = new FormData();
   form.append('viagemId', p.viagemId);
+  if (p.matricula) form.append('matricula', p.matricula);
+  if (p.senha) form.append('senha', p.senha);
   form.append('tipoDespesaId', p.tipoDespesaId);
   form.append('valor', String(p.valor));
   if (p.fornecedorId) form.append('fornecedorId', p.fornecedorId);

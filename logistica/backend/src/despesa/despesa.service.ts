@@ -1,10 +1,11 @@
 import {
-  BadRequestException, ForbiddenException, Injectable, NotFoundException,
+  BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma, StatusDespesa, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CofreStorageService } from '../cofre/cofre-storage.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
+import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertPodeOperarViagem } from '../common/frota-perms.js';
 import {
@@ -15,6 +16,9 @@ import {
 } from './dto.js';
 
 const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
+
+/** Matrícula → chapa E-prefixada do portal (igual frota/auth): 'E'+5 díg zero-pad. */
+const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
 
 /** Rótulos de finalidade do veículo (Análise da Frota). */
 const FINALIDADE_LABEL: Record<string, string> = { ENTREGA: 'Entrega', PASSEIO: 'Passeio', SERVICO: 'Serviço' };
@@ -46,6 +50,7 @@ export class DespesaService {
     private readonly prisma: PrismaService,
     private readonly storage: CofreStorageService,
     private readonly core: CoreLookupService,
+    private readonly condutor: ProtheusCondutorService,
   ) {}
 
   /**
@@ -254,8 +259,25 @@ export class DespesaService {
     });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
     if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
-    // Só registrante da saída / supervisor do veículo / gestão da frota podem lançar.
-    assertPodeOperarViagem(user, v);
+    // Login PADRÃO é compartilhado: exige re-identificar o condutor (matrícula+senha
+    // do RH) e que seja o MESMO que iniciou a viagem — accountability, igual ao
+    // retorno. INDIVIDUAL já é a pessoa autenticada → mantém a regra de operação.
+    if (user.tipo === 'PADRAO') {
+      if (!dto.matricula || !dto.senha) {
+        throw new BadRequestException('Informe matrícula e senha do condutor para lançar a despesa.');
+      }
+      const r = await this.condutor.validar(dto.matricula, dto.senha);
+      if (r.status === 'INDISPONIVEL') {
+        throw new ServiceUnavailableException('Portal do RH indisponível. Tente novamente em instantes.');
+      }
+      if (r.status !== 'VALIDO') throw new BadRequestException('Matrícula ou senha inválidas.');
+      if (chapa(r.matricula) !== chapa(v.condutorMatricula ?? '')) {
+        throw new ForbiddenException('Só o condutor da viagem pode lançar despesa nela. Para corrigir, peça ao gestor de frota.');
+      }
+    } else {
+      // Só registrante da saída / supervisor do veículo / gestão da frota podem lançar.
+      assertPodeOperarViagem(user, v);
+    }
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('Só dá pra lançar despesa em viagem em curso.');
     if (!v.veiculoId) throw new BadRequestException('Viagem sem veículo.');
 
