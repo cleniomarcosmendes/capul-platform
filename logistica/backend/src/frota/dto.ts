@@ -100,11 +100,13 @@ export class SaidaPortariaDto {
 }
 
 export class RetornoFrotaDto {
-  @IsString() @IsNotEmpty() @MaxLength(20)
-  matricula!: string;
+  // PADRÃO usa o token de condutor (header) → matrícula/senha ficam opcionais.
+  // INDIVIDUAL/fallback ainda envia matrícula+senha (validado no service).
+  @IsOptional() @IsString() @MaxLength(20)
+  matricula?: string;
 
-  @IsString() @IsNotEmpty()
-  senha!: string;
+  @IsOptional() @IsString()
+  senha?: string;
 
   @IsInt() @Min(0)
   kmFinal!: number;

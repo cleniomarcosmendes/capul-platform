@@ -22,6 +22,17 @@ export async function validarCondutor(matricula: string, senha: string): Promise
   return data;
 }
 
+export type AutenticacaoCondutor =
+  | { valida: true; token: string; expiraEmSeg: number; condutorNome: string }
+  | { valida: false; motivo: 'CREDENCIAIS_INVALIDAS' | 'INDISPONIVEL' | 'NAO_E_O_CONDUTOR' };
+
+/** Gate do login PADRÃO: identifica o condutor da viagem (matrícula+senha) e
+ *  devolve o token que libera operar a viagem. SEMPRE 200 (resultado no corpo). */
+export async function autenticarCondutor(viagemId: string, matricula: string, senha: string): Promise<AutenticacaoCondutor> {
+  const { data } = await api.post<AutenticacaoCondutor>(`${LOGISTICA_BASE}/frota/viagens/${viagemId}/autenticar-condutor`, { matricula, senha });
+  return data;
+}
+
 /** Veículos disponíveis da filial (pra escolher na saída). Filtra por departamento
  *  de lotação e/ou busca (placa/modelo/marca) quando informado. */
 export async function veiculosDisponiveis(
@@ -74,8 +85,9 @@ export async function registrarSaidaIndividual(p: SaidaIndividualPayload): Promi
 }
 
 export interface RetornoPayload {
-  matricula: string;
-  senha: string;
+  // PADRÃO usa o token de condutor (header) → matrícula/senha opcionais.
+  matricula?: string;
+  senha?: string;
   kmFinal: number;
   observacoes?: string;
 }
@@ -144,10 +156,6 @@ export async function fornecedoresDespesa(): Promise<FornecedorDespesa[]> {
 
 export interface DespesaViagemPayload {
   viagemId: string;
-  // Login PADRÃO (compartilhado): condutor re-identifica matrícula+senha do RH
-  // (o backend valida e confere que é o condutor da viagem). INDIVIDUAL não envia.
-  matricula?: string;
-  senha?: string;
   tipoDespesaId: string;
   valor: number;
   fornecedorId?: string;
@@ -168,8 +176,6 @@ export interface DespesaViagemPayload {
 export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUri?: string): Promise<void> {
   const form = new FormData();
   form.append('viagemId', p.viagemId);
-  if (p.matricula) form.append('matricula', p.matricula);
-  if (p.senha) form.append('senha', p.senha);
   form.append('tipoDespesaId', p.tipoDespesaId);
   form.append('valor', String(p.valor));
   if (p.fornecedorId) form.append('fornecedorId', p.fornecedorId);

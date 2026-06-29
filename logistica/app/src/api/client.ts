@@ -17,11 +17,22 @@ export function setAccessToken(token: string | null) {
   accessToken = token;
 }
 
+// Token de CONDUTOR da viagem aberta (login PADRÃO): prova quem opera a viagem
+// sem repetir matrícula+senha por ação. Setado no gate; limpo ao sair da viagem.
+let condutorToken: string | null = null;
+export function setCondutorToken(token: string | null) {
+  condutorToken = token;
+}
+export function getCondutorToken(): string | null {
+  return condutorToken;
+}
+
 export const api = axios.create({ baseURL: API_URL, timeout: 20_000 });
 
-// Anexa o Bearer (quando houver) em toda request.
+// Anexa o Bearer (quando houver) + o token de condutor (na viagem) em toda request.
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (accessToken) config.headers.set('Authorization', `Bearer ${accessToken}`);
+  if (condutorToken) config.headers.set('X-Condutor-Token', condutorToken);
   return config;
 });
 

@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { assertPodeOperarViagem } from '../common/frota-perms.js';
+import { CondutorTokenService } from '../common/condutor-token.service.js';
 import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
@@ -27,7 +27,31 @@ export class FrotaService {
     private readonly prisma: PrismaService,
     private readonly condutor: ProtheusCondutorService,
     private readonly core: CoreLookupService,
+    private readonly condutorToken: CondutorTokenService,
   ) {}
+
+  /**
+   * Gate do login PADRÃO: ao abrir uma viagem em curso, o condutor se identifica
+   * (matrícula+senha do RH) UMA vez. Se for o condutor que iniciou a viagem,
+   * emite o token que libera parada/despesa/retorno sem repetir o loginPortal.
+   * SEMPRE 200 com {valida, motivo?} (a senha errada nunca vira 401/403 que
+   * derruba a sessão do app).
+   */
+  async autenticarCondutor(viagemId: string, matricula: string, senha: string, user: JwtPayload) {
+    const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
+    if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
+    if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A viagem não está em curso.');
+
+    const r = await this.condutor.validar(matricula, senha);
+    if (r.status === 'INDISPONIVEL') return { valida: false as const, motivo: 'INDISPONIVEL' as const };
+    if (r.status !== 'VALIDO') return { valida: false as const, motivo: 'CREDENCIAIS_INVALIDAS' as const };
+    if (chapa(r.matricula) !== chapa(v.condutorMatricula ?? '')) {
+      return { valida: false as const, motivo: 'NAO_E_O_CONDUTOR' as const };
+    }
+    const { token, expiraEmSeg } = this.condutorToken.emitir(v.id, r.matricula);
+    return { valida: true as const, token, expiraEmSeg, condutorNome: r.nome };
+  }
 
   /** Passo 1 da saída: identifica o condutor pelo nome (antes da senha). */
   async buscarCondutor(matricula: string) {
@@ -212,15 +236,24 @@ export class FrotaService {
   }
 
   /** Registrar RETORNO (só o próprio condutor). Veículo → DISPONIVEL + km atualizado. */
-  async registrarRetorno(id: string, dto: RetornoFrotaDto, user: JwtPayload) {
+  async registrarRetorno(id: string, dto: RetornoFrotaDto, user: JwtPayload, condutorToken?: string) {
     const v = await this.prisma.viagem.findUnique({ where: { id } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
     if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A viagem não está em curso.');
 
-    const cond = await this.validarOuErro(dto.matricula, dto.senha);
-    if (chapa(cond.matricula) !== chapa(v.condutorMatricula ?? '')) {
-      throw new ForbiddenException('Só o condutor que iniciou pode fechar a viagem. Para corrigir, peça ao gestor de frota.');
+    // PADRÃO (login compartilhado): o token de condutor (do gate ao abrir a viagem)
+    // já provou que é o condutor que iniciou. INDIVIDUAL/fallback: matrícula+senha.
+    if (user.tipo === 'PADRAO' && condutorToken) {
+      this.condutorToken.verificar(condutorToken, v.id);
+    } else {
+      if (!dto.matricula || !dto.senha) {
+        throw new BadRequestException('Informe matrícula e senha do condutor para fechar a viagem.');
+      }
+      const cond = await this.validarOuErro(dto.matricula, dto.senha);
+      if (chapa(cond.matricula) !== chapa(v.condutorMatricula ?? '')) {
+        throw new ForbiddenException('Só o condutor que iniciou pode fechar a viagem. Para corrigir, peça ao gestor de frota.');
+      }
     }
     if (dto.kmFinal < (v.kmInicial ?? 0)) {
       throw new BadRequestException(`KM final (${dto.kmFinal}) menor que o KM de saída (${v.kmInicial}).`);
@@ -567,9 +600,9 @@ export class FrotaService {
   }
 
   /** Adiciona uma parada REALIZADA (ad-hoc) ao log da viagem (não em cancelada). */
-  async adicionarParada(id: string, dto: AddParadaDto, user: JwtPayload) {
+  async adicionarParada(id: string, dto: AddParadaDto, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
-    assertPodeOperarViagem(user, v);
+    this.condutorToken.assertOpera(user, v, condutorToken);
     if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
     // Idempotência (fila offline): se já chegou com essa chave, devolve a existente.
     if (dto.idempotencyKey) {
@@ -595,9 +628,9 @@ export class FrotaService {
   }
 
   /** Planeja N paradas (status PLANEJADA) — visitas que o condutor pretende fazer. */
-  async planejarParadas(id: string, dto: PlanejarParadasDto, user: JwtPayload) {
+  async planejarParadas(id: string, dto: PlanejarParadasDto, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
-    assertPodeOperarViagem(user, v);
+    this.condutorToken.assertOpera(user, v, condutorToken);
     if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
     const locais = dto.locais.map((l) => l.trim()).filter(Boolean);
     if (locais.length === 0) throw new BadRequestException('Informe ao menos um local.');
@@ -611,9 +644,9 @@ export class FrotaService {
   }
 
   /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */
-  async checkinParada(id: string, paradaId: string, dto: CheckinParadaDto, user: JwtPayload) {
+  async checkinParada(id: string, paradaId: string, dto: CheckinParadaDto, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
-    assertPodeOperarViagem(user, v);
+    this.condutorToken.assertOpera(user, v, condutorToken);
     if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada.');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
@@ -634,9 +667,9 @@ export class FrotaService {
   }
 
   /** Marca uma parada planejada como PULADA (visita não realizada). */
-  async pularParada(id: string, paradaId: string, user: JwtPayload) {
+  async pularParada(id: string, paradaId: string, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
-    assertPodeOperarViagem(user, v);
+    this.condutorToken.assertOpera(user, v, condutorToken);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
     return this.prisma.parada.update({
@@ -646,9 +679,9 @@ export class FrotaService {
   }
 
   /** Remove uma parada do log da viagem. */
-  async removerParada(id: string, paradaId: string, user: JwtPayload) {
+  async removerParada(id: string, paradaId: string, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
-    assertPodeOperarViagem(user, v);
+    this.condutorToken.assertOpera(user, v, condutorToken);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
     await this.prisma.parada.delete({ where: { id: paradaId } });

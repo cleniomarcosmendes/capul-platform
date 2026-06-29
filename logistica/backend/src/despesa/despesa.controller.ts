@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Delete, Get, Header, Param, Patch, Post, Query,
+  Body, Controller, Delete, Get, Header, Headers, Param, Patch, Post, Query,
   StreamableFile, UploadedFile, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -142,8 +142,9 @@ export class DespesaController {
     @Body() dto: LancarDespesaViagemDto,
     @CurrentUser() user: JwtPayload,
     @UploadedFile() comprovante?: Express.Multer.File,
+    @Headers('x-condutor-token') condutorToken?: string,
   ) {
-    return this.despesas.lancarNaViagem(dto, user, reciboDe(comprovante));
+    return this.despesas.lancarNaViagem(dto, user, reciboDe(comprovante), condutorToken);
   }
 
   /** Download do recibo (foto/PDF do cupom) — escopo gestor/supervisor do veículo. */

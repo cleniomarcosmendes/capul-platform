@@ -5,6 +5,7 @@ import {
   adicionarParadaFrota, checkinParadaFrota, pularParadaFrota, lancarDespesaViagem,
   type ParadaPayload, type CheckinPayload, type DespesaViagemPayload,
 } from '../api/frota';
+import { getCondutorToken, setCondutorToken } from '../api/client';
 
 /**
  * Fila offline da FROTA (Fase 2d). O condutor roda com sinal ruim: as ações DO
@@ -17,11 +18,13 @@ import {
  * igual à fila de baixas: sucesso → remove; erro de NEGÓCIO (4xx ≠ 401/408/429)
  * → remove e reporta; rede/5xx/401 → mantém.
  */
+// `condutorToken`: prova do condutor (login PADRÃO) capturada no enfileiramento —
+// reaplicada no reenvio, pois o token global pode estar limpo quando a fila roda.
 export type AcaoFrota =
-  | { tipo: 'parada'; viagemId: string; payload: ParadaPayload }
-  | { tipo: 'checkin'; viagemId: string; paradaId: string; payload: CheckinPayload }
-  | { tipo: 'pular'; viagemId: string; paradaId: string }
-  | { tipo: 'despesa'; viagemId: string; payload: DespesaViagemPayload; fotoUri: string | null };
+  | { tipo: 'parada'; viagemId: string; payload: ParadaPayload; condutorToken?: string }
+  | { tipo: 'checkin'; viagemId: string; paradaId: string; payload: CheckinPayload; condutorToken?: string }
+  | { tipo: 'pular'; viagemId: string; paradaId: string; condutorToken?: string }
+  | { tipo: 'despesa'; viagemId: string; payload: DespesaViagemPayload; fotoUri: string | null; condutorToken?: string };
 
 export interface ItemFrota {
   id: string;          // idempotencyKey (parada/despesa) ou uuid local (checkin/pular)
@@ -68,11 +71,19 @@ export async function enfileirarFrota(item: { id: string; rotulo: string; acao: 
 }
 
 async function enviar(acao: AcaoFrota): Promise<void> {
-  switch (acao.tipo) {
-    case 'parada': return adicionarParadaFrota(acao.viagemId, acao.payload);
-    case 'checkin': return checkinParadaFrota(acao.viagemId, acao.paradaId, acao.payload);
-    case 'pular': return pularParadaFrota(acao.viagemId, acao.paradaId);
-    case 'despesa': return lancarDespesaViagem(acao.payload, acao.fotoUri ?? undefined);
+  // Reaplica o token de condutor capturado no enfileiramento (o global pode estar
+  // limpo agora). Restaura o valor anterior após o envio — a fila roda em série.
+  const anterior = getCondutorToken();
+  if (acao.condutorToken !== undefined) setCondutorToken(acao.condutorToken);
+  try {
+    switch (acao.tipo) {
+      case 'parada': return await adicionarParadaFrota(acao.viagemId, acao.payload);
+      case 'checkin': return await checkinParadaFrota(acao.viagemId, acao.paradaId, acao.payload);
+      case 'pular': return await pularParadaFrota(acao.viagemId, acao.paradaId);
+      case 'despesa': return await lancarDespesaViagem(acao.payload, acao.fotoUri ?? undefined);
+    }
+  } finally {
+    setCondutorToken(anterior);
   }
 }
 

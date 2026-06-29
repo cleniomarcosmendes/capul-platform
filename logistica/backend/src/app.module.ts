@@ -11,6 +11,7 @@ import { PrismaCofreModule } from './prisma/prisma-cofre.module.js';
 import { CofreModule } from './cofre/cofre.module.js';
 import { CoreModule } from './core/core.module.js';
 import { ProtheusModule } from './protheus/protheus.module.js';
+import { CondutorTokenModule } from './common/condutor-token.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { HealthModule } from './health/health.module.js';
 import { CadastroModule } from './cadastro/cadastro.module.js';
@@ -65,6 +66,7 @@ import { RolesGuard } from './common/guards/roles.guard.js';
     CofreModule,
     CoreModule,
     ProtheusModule,
+    CondutorTokenModule,
     AuthModule,
     HealthModule,
     CadastroModule,

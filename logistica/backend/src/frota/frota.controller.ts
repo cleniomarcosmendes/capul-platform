@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
 import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
@@ -25,6 +25,13 @@ export class FrotaController {
   @Post('condutor/validar')
   validarCondutor(@Body() dto: ValidarCondutorDto) {
     return this.frota.validarCondutor(dto.matricula, dto.senha);
+  }
+
+  /** Gate do login PADRÃO: identifica o condutor da viagem (matrícula+senha) e
+   *  devolve um token curto que libera operar a viagem. SEMPRE 200 {valida,...}. */
+  @Post('viagens/:id/autenticar-condutor')
+  autenticarCondutor(@Param('id') id: string, @Body() dto: ValidarCondutorDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.autenticarCondutor(id, dto.matricula, dto.senha, user);
   }
 
   /** Registrar saída de veículo (PADRAO: condutor valida matrícula+senha). */
@@ -73,8 +80,8 @@ export class FrotaController {
 
   /** Registrar retorno (só o próprio condutor). */
   @Post('viagens/:id/retorno')
-  retorno(@Param('id') id: string, @Body() dto: RetornoFrotaDto, @CurrentUser() user: JwtPayload) {
-    return this.frota.registrarRetorno(id, dto, user);
+  retorno(@Param('id') id: string, @Body() dto: RetornoFrotaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
+    return this.frota.registrarRetorno(id, dto, user, condutorToken);
   }
 
   /** Ajuste/fechamento por gestor de frota ou supervisor do veículo. */
@@ -146,30 +153,30 @@ export class FrotaController {
   }
 
   @Post('viagens/:id/paradas')
-  adicionarParada(@Param('id') id: string, @Body() dto: AddParadaDto, @CurrentUser() user: JwtPayload) {
-    return this.frota.adicionarParada(id, dto, user);
+  adicionarParada(@Param('id') id: string, @Body() dto: AddParadaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
+    return this.frota.adicionarParada(id, dto, user, condutorToken);
   }
 
   /** Planeja N paradas (visitas) — status PLANEJADA. */
   @Post('viagens/:id/paradas/planejar')
-  planejarParadas(@Param('id') id: string, @Body() dto: PlanejarParadasDto, @CurrentUser() user: JwtPayload) {
-    return this.frota.planejarParadas(id, dto, user);
+  planejarParadas(@Param('id') id: string, @Body() dto: PlanejarParadasDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
+    return this.frota.planejarParadas(id, dto, user, condutorToken);
   }
 
   /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional). */
   @Patch('viagens/:id/paradas/:paradaId/checkin')
-  checkinParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @Body() dto: CheckinParadaDto, @CurrentUser() user: JwtPayload) {
-    return this.frota.checkinParada(id, paradaId, dto, user);
+  checkinParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @Body() dto: CheckinParadaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
+    return this.frota.checkinParada(id, paradaId, dto, user, condutorToken);
   }
 
   /** Marca uma parada planejada como PULADA. */
   @Patch('viagens/:id/paradas/:paradaId/pular')
-  pularParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload) {
-    return this.frota.pularParada(id, paradaId, user);
+  pularParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
+    return this.frota.pularParada(id, paradaId, user, condutorToken);
   }
 
   @Delete('viagens/:id/paradas/:paradaId')
-  removerParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload) {
-    return this.frota.removerParada(id, paradaId, user);
+  removerParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
+    return this.frota.removerParada(id, paradaId, user, condutorToken);
   }
 }

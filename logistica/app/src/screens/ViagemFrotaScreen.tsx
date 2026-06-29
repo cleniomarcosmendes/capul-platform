@@ -10,9 +10,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import {
   listarViagensFrota, registrarRetorno, tiposDespesa, lancarDespesaViagem,
-  fornecedoresDespesa, adicionarParadaFrota, listarParadasFrota,
+  fornecedoresDespesa, adicionarParadaFrota, listarParadasFrota, autenticarCondutor,
   checkinParadaFrota, pularParadaFrota, type FornecedorDespesa, type ParadaFrotaItem,
 } from '../api/frota';
+import { setCondutorToken, getCondutorToken } from '../api/client';
 import {
   enfileirarFrota, processarFilaFrota, contarPendentesFrota, onFilaFrotaChange, ehErroDeRede,
 } from '../offline/filaFrota';
@@ -40,10 +41,18 @@ async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: n
 /** Detalhe de uma viagem de frota EM CURSO: registrar retorno OU lançar despesa. */
 export function ViagemFrotaScreen({ route, navigation }: Props) {
   const { viagemId } = route.params;
+  const { tipo } = useAuth();
+  // PADRÃO (login compartilhado): exige identificar o condutor UMA vez ao abrir a
+  // viagem (gate) → token cobre parada/despesa/retorno. INDIVIDUAL já é a pessoa.
+  const ehIndividual = tipo === 'INDIVIDUAL';
+  const [condutorOk, setCondutorOk] = useState(ehIndividual);
   const [viagem, setViagem] = useState<ViagemFrota | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [aba, setAba] = useState<Aba>(null);
   const [pendentes, setPendentes] = useState(0);
+
+  // Limpa o token de condutor ao sair da viagem (não vaza p/ outra viagem/sessão).
+  useEffect(() => () => setCondutorToken(null), []);
 
   const carregar = useCallback(async () => {
     try {
@@ -94,22 +103,75 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
         {viagem.finalidade ? <Text style={styles.linhaInfo}>Finalidade: {viagem.finalidade}</Text> : null}
       </View>
 
-      <View style={styles.acoes}>
-        <TouchableOpacity style={[styles.acao, aba === 'parada' && styles.acaoOn]} onPress={() => setAba(aba === 'parada' ? null : 'parada')}>
-          <Text style={[styles.acaoTxt, aba === 'parada' && styles.acaoTxtOn]}>📍 Parada</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.acao, aba === 'retorno' && styles.acaoOn]} onPress={() => setAba(aba === 'retorno' ? null : 'retorno')}>
-          <Text style={[styles.acaoTxt, aba === 'retorno' && styles.acaoTxtOn]}>🏁 Retorno</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.acao, aba === 'despesa' && styles.acaoOn]} onPress={() => setAba(aba === 'despesa' ? null : 'despesa')}>
-          <Text style={[styles.acaoTxt, aba === 'despesa' && styles.acaoTxtOn]}>💸 Despesa</Text>
+      {!condutorOk ? (
+        <GateCondutor viagem={viagem} onOk={() => setCondutorOk(true)} />
+      ) : (
+        <>
+          <View style={styles.acoes}>
+            <TouchableOpacity style={[styles.acao, aba === 'parada' && styles.acaoOn]} onPress={() => setAba(aba === 'parada' ? null : 'parada')}>
+              <Text style={[styles.acaoTxt, aba === 'parada' && styles.acaoTxtOn]}>📍 Parada</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.acao, aba === 'retorno' && styles.acaoOn]} onPress={() => setAba(aba === 'retorno' ? null : 'retorno')}>
+              <Text style={[styles.acaoTxt, aba === 'retorno' && styles.acaoTxtOn]}>🏁 Retorno</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.acao, aba === 'despesa' && styles.acaoOn]} onPress={() => setAba(aba === 'despesa' ? null : 'despesa')}>
+              <Text style={[styles.acaoTxt, aba === 'despesa' && styles.acaoTxtOn]}>💸 Despesa</Text>
+            </TouchableOpacity>
+          </View>
+
+          {aba === 'parada' && <ParadaForm viagem={viagem} onRegistrada={() => void carregar()} />}
+          {aba === 'retorno' && <RetornoForm viagem={viagem} ehIndividual={ehIndividual} onPronto={() => navigation.goBack()} />}
+          {aba === 'despesa' && <DespesaForm viagem={viagem} onPronto={() => { setAba(null); void carregar(); }} />}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+/** Gate do login PADRÃO: identifica o condutor da viagem (matrícula+senha) UMA
+ *  vez. Com sucesso, seta o token de condutor e libera as ações da viagem. */
+function GateCondutor({ viagem, onOk }: { viagem: ViagemFrota; onOk: () => void }) {
+  const [matricula, setMatricula] = useState(viagem.condutorMatricula ?? '');
+  const [senha, setSenha] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [validando, setValidando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  async function identificar() {
+    if (!matricula.trim() || !senha) return;
+    setValidando(true); setErro('');
+    try {
+      const r = await autenticarCondutor(viagem.id, matricula.trim(), senha);
+      if (r.valida) { setCondutorToken(r.token); onOk(); }
+      else setErro(
+        r.motivo === 'NAO_E_O_CONDUTOR' ? 'Esta matrícula não é a do condutor que iniciou a viagem.'
+        : r.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível. Tente novamente em instantes.'
+        : 'Matrícula ou senha inválidas.',
+      );
+    } catch {
+      setErro('Falha ao validar. Verifique a conexão.');
+    } finally { setValidando(false); }
+  }
+
+  const pode = !!matricula.trim() && !!senha && !validando;
+  return (
+    <View style={styles.painel}>
+      <Text style={styles.passo}>Identifique o condutor</Text>
+      <Text style={styles.dica}>Login compartilhado: confirme a matrícula + senha do condutor desta viagem ({viagem.condutorNome ?? '—'}) para registrar parada, despesa ou retorno.</Text>
+      <Text style={styles.label}>Matrícula</Text>
+      <TextInput style={styles.input} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!validando} />
+      <Text style={styles.label}>Senha do portal RH</Text>
+      <View style={styles.senhaWrap}>
+        <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!validando} />
+        <TouchableOpacity style={styles.olho} onPress={() => setMostrarSenha((v) => !v)} hitSlop={10}>
+          <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
         </TouchableOpacity>
       </View>
-
-      {aba === 'parada' && <ParadaForm viagem={viagem} onRegistrada={() => void carregar()} />}
-      {aba === 'retorno' && <RetornoForm viagem={viagem} onPronto={() => navigation.goBack()} />}
-      {aba === 'despesa' && <DespesaForm viagem={viagem} onPronto={() => { setAba(null); void carregar(); }} />}
-    </ScrollView>
+      {erro ? <Text style={styles.err}>{erro}</Text> : null}
+      <TouchableOpacity style={[styles.registrar, !pode && styles.registrarOff]} onPress={identificar} disabled={!pode}>
+        {validando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Identificar e liberar</Text>}
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -142,7 +204,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
       await carregar(); onRegistrada();
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarFrota({ id: uuid(), rotulo: `Check-in: ${rotulo}`, acao: { tipo: 'checkin', viagemId: viagem.id, paradaId: pid, payload } });
+        await enfileirarFrota({ id: uuid(), rotulo: `Check-in: ${rotulo}`, acao: { tipo: 'checkin', viagemId: viagem.id, paradaId: pid, payload, condutorToken: getCondutorToken() ?? undefined } });
         setCheckinId(null); setCkKm(''); setCkObs(''); onRegistrada();
         Alert.alert('Salvo offline', 'Sem sinal — o check-in vai sincronizar quando a conexão voltar.');
       } else {
@@ -156,7 +218,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
     try { await pularParadaFrota(viagem.id, pid); await carregar(); onRegistrada(); }
     catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarFrota({ id: uuid(), rotulo: `Pular: ${rotulo}`, acao: { tipo: 'pular', viagemId: viagem.id, paradaId: pid } });
+        await enfileirarFrota({ id: uuid(), rotulo: `Pular: ${rotulo}`, acao: { tipo: 'pular', viagemId: viagem.id, paradaId: pid, condutorToken: getCondutorToken() ?? undefined } });
         onRegistrada();
         Alert.alert('Salvo offline', 'Sem sinal — vai sincronizar quando a conexão voltar.');
       } else { Alert.alert('Erro', 'Não foi possível pular a parada.'); }
@@ -177,7 +239,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
       Alert.alert('Parada registrada', 'Pode registrar a próxima quando chegar.');
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Parada: ${payload.local}`, acao: { tipo: 'parada', viagemId: viagem.id, payload } });
+        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Parada: ${payload.local}`, acao: { tipo: 'parada', viagemId: viagem.id, payload, condutorToken: getCondutorToken() ?? undefined } });
         setLocal(''); setKm(''); setObs(''); onRegistrada();
         Alert.alert('Salvo offline', 'Sem sinal — a parada vai sincronizar quando a conexão voltar.');
       } else {
@@ -235,7 +297,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
   );
 }
 
-function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () => void }) {
+function RetornoForm({ viagem, ehIndividual, onPronto }: { viagem: ViagemFrota; ehIndividual: boolean; onPronto: () => void }) {
   const [matricula, setMatricula] = useState(viagem.condutorMatricula ?? '');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -243,12 +305,17 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
 
-  const podeRegistrar = !!matricula.trim() && !!senha && kmFinal !== '' && Number(kmFinal) >= 0 && !salvando;
+  // PADRÃO já se identificou no gate (token via header) → só pede KM. INDIVIDUAL confirma matrícula+senha.
+  const credOk = ehIndividual ? (!!matricula.trim() && !!senha) : true;
+  const podeRegistrar = credOk && kmFinal !== '' && Number(kmFinal) >= 0 && !salvando;
 
   async function executar() {
     setSalvando(true);
     try {
-      await registrarRetorno(viagem.id, { matricula: matricula.trim(), senha, kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined });
+      await registrarRetorno(viagem.id, {
+        ...(ehIndividual ? { matricula: matricula.trim(), senha } : {}),
+        kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined,
+      });
       Alert.alert('Retorno registrado', `${viagem.placa} de volta.`, [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
       const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
@@ -279,16 +346,22 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
 
   return (
     <View style={styles.painel}>
-      <Text style={styles.dica}>Só o condutor que iniciou fecha a viagem — confirme matrícula + senha.</Text>
-      <Text style={styles.label}>Matrícula</Text>
-      <TextInput style={styles.input} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!salvando} />
-      <Text style={styles.label}>Senha do portal RH</Text>
-      <View style={styles.senhaWrap}>
-        <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!salvando} />
-        <TouchableOpacity style={styles.olho} onPress={() => setMostrarSenha((v) => !v)} hitSlop={10}>
-          <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
-        </TouchableOpacity>
-      </View>
+      {ehIndividual ? (
+        <>
+          <Text style={styles.dica}>Só o condutor que iniciou fecha a viagem — confirme matrícula + senha.</Text>
+          <Text style={styles.label}>Matrícula</Text>
+          <TextInput style={styles.input} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!salvando} />
+          <Text style={styles.label}>Senha do portal RH</Text>
+          <View style={styles.senhaWrap}>
+            <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!salvando} />
+            <TouchableOpacity style={styles.olho} onPress={() => setMostrarSenha((v) => !v)} hitSlop={10}>
+              <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <Text style={styles.dica}>Condutor {viagem.condutorNome ?? ''} identificado — informe o KM final para fechar a viagem.</Text>
+      )}
       <Text style={styles.label}>KM final (odômetro)</Text>
       <TextInput style={styles.input} value={kmFinal} onChangeText={setKmFinal} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Observações (opcional)</Text>
@@ -301,13 +374,8 @@ function RetornoForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
 }
 
 function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () => void }) {
-  const { tipo } = useAuth();
-  // PADRAO (login compartilhado): exige re-identificar o condutor (matrícula+senha)
-  // que iniciou a viagem — accountability. INDIVIDUAL já é a pessoa autenticada.
-  const ehIndividual = tipo === 'INDIVIDUAL';
-  const [matricula, setMatricula] = useState(viagem.condutorMatricula ?? '');
-  const [senha, setSenha] = useState('');
-  const [mostrarSenha, setMostrarSenha] = useState(false);
+  // A identidade do condutor já foi resolvida ao abrir a viagem (gate PADRÃO →
+  // token no header; INDIVIDUAL = próprio login). Aqui não se pede senha de novo.
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [tipoId, setTipoId] = useState('');
   const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
@@ -324,8 +392,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
     void (async () => { try { setFornecedores(await fornecedoresDespesa()); } catch { /* vazio */ } })();
   }, []);
 
-  const credOk = ehIndividual || (!!matricula.trim() && !!senha);
-  const podeLancar = !!tipoId && valor !== '' && parseMoeda(valor) > 0 && credOk && !salvando;
+  const podeLancar = !!tipoId && valor !== '' && parseMoeda(valor) > 0 && !salvando;
 
   async function tirarFoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -339,7 +406,6 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
     setSalvando(true);
     const payload = {
       viagemId: viagem.id,
-      ...(ehIndividual ? {} : { matricula: matricula.trim(), senha }),
       tipoDespesaId: tipoId, valor: parseMoeda(valor),
       fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined,
       numeroDocumento: semNota ? undefined : (numeroDocumento.trim() || undefined),
@@ -350,13 +416,8 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
       Alert.alert('Despesa lançada', 'Entrou como pendente de validação do supervisor.', [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
       if (ehErroDeRede(e)) {
-        if (!ehIndividual) {
-          // PADRÃO: não persistir a senha offline — exige conexão p/ validar o condutor.
-          Alert.alert('Sem conexão', 'Com login compartilhado, lançar despesa exige internet para validar o condutor. Tente de novo com sinal.');
-        } else {
-          await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Despesa R$ ${valor}`, acao: { tipo: 'despesa', viagemId: viagem.id, payload, fotoUri: fotoUri ?? null } });
-          Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: onPronto }]);
-        }
+        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Despesa R$ ${valor}`, acao: { tipo: 'despesa', viagemId: viagem.id, payload, fotoUri: fotoUri ?? null, condutorToken: getCondutorToken() ?? undefined } });
+        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: onPronto }]);
       } else {
         const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
         Alert.alert('Não foi possível lançar', String(msg || 'Tente novamente.'));
@@ -367,20 +428,6 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   return (
     <View style={styles.painel}>
       <Text style={styles.dica}>Despesa do condutor {viagem.condutorNome ?? ''} — entra como pendente.</Text>
-      {!ehIndividual && (
-        <>
-          <Text style={styles.dica}>Login compartilhado — confirme matrícula + senha do condutor da viagem.</Text>
-          <Text style={styles.label}>Matrícula</Text>
-          <TextInput style={styles.input} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!salvando} />
-          <Text style={styles.label}>Senha do portal RH</Text>
-          <View style={styles.senhaWrap}>
-            <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!salvando} />
-            <TouchableOpacity style={styles.olho} onPress={() => setMostrarSenha((v) => !v)} hitSlop={10}>
-              <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
       <Text style={styles.label}>Tipo de despesa</Text>
       <View style={styles.chips}>
         {tipos.map((t) => (
@@ -446,6 +493,8 @@ const styles = StyleSheet.create({
   acaoTxtOn: { color: '#fff' },
   painel: { backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 },
   label: { fontSize: 13, fontWeight: '600', color: '#475569', marginTop: 8 },
+  passo: { fontSize: 15, fontWeight: '800', color: CAPUL },
+  err: { fontSize: 13, fontWeight: '600', color: '#b91c1c', marginTop: 4 },
   dica: { fontSize: 12, color: '#64748b', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#fff' },
   senhaWrap: { justifyContent: 'center' },
