@@ -4,21 +4,26 @@ import { logisticaApi } from '../services/api';
 
 // Busca de cliente para a ROTA PLANEJADA (Saída de Veículos / Planejar visitas).
 // Reusa o mesmo motor da Entrega (`GET /cadastro/busca`): matrícula/telefone/nome
-// → cliente + endereço da propriedade (Protheus SA1) ou cliente local. Ao escolher,
-// devolve um rótulo legível "Nome (matrícula) — endereço · município" que vira a
-// parada planejada. Quem é prospect ("sem cadastro") segue digitando livre no
-// textarea ao lado.
+// → cliente + endereço(s) da propriedade (Protheus SA1) ou cliente local. Um
+// cliente pode ter VÁRIOS endereços (sede, fazenda…) → lista UMA LINHA POR ENDEREÇO
+// para seleção. Ao escolher, devolve o rótulo "Nome (matrícula) — endereço · município"
+// que vira a parada planejada. Prospect ("sem cadastro") segue digitando livre ao lado.
 
-interface EnderecoP { logradouro: string; bairro: string | null; cidade: string | null; uf: string | null }
+interface EnderecoP {
+  logradouro: string; complemento?: string | null; bairro: string | null;
+  cidade: string | null; uf: string | null; cep?: string | null; rotulo?: string | null;
+}
 interface ClienteProtheus { matricula: string; nome: string; enderecos: EnderecoP[] }
-interface EnderecoLocal { logradouro: string; bairro?: string | null; cidade?: string | null; uf?: string | null }
+interface EnderecoLocal {
+  logradouro: string; complemento?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null;
+}
 interface ClienteLocal { id: string; nome: string; enderecos: EnderecoLocal[] }
 interface BuscaResp { clientesLocais: ClienteLocal[]; protheus?: { clientes: ClienteProtheus[] } }
 
-function fmtEnd(e?: { logradouro?: string; bairro?: string | null; cidade?: string | null; uf?: string | null }): string {
+function fmtEnd(e?: { logradouro?: string; complemento?: string | null; bairro?: string | null; cidade?: string | null; uf?: string | null } | null): string {
   if (!e) return '';
   const cidade = e.cidade ? (e.uf ? `${e.cidade}/${e.uf}` : e.cidade) : '';
-  return [e.logradouro, e.bairro, cidade].filter(Boolean).join(', ');
+  return [e.logradouro, e.complemento, e.bairro, cidade].filter(Boolean).join(', ');
 }
 
 export function BuscaClienteParada({ onAdd, disabled }: { onAdd: (rotulo: string) => void; disabled?: boolean }) {
@@ -48,7 +53,16 @@ export function BuscaClienteParada({ onAdd, disabled }: { onAdd: (rotulo: string
 
   const protheus = resp?.protheus?.clientes ?? [];
   const locais = resp?.clientesLocais ?? [];
-  const temAlgo = protheus.length > 0 || locais.length > 0;
+  // Expande para UMA linha por endereço (cliente sem endereço entra com 1 linha só).
+  const linhasP = protheus.flatMap((c) => {
+    const ends = c.enderecos.length ? c.enderecos : [null];
+    return ends.map((end) => ({ nome: c.nome, matricula: c.matricula, end }));
+  });
+  const linhasL = locais.flatMap((c) => {
+    const ends = c.enderecos.length ? c.enderecos : [null];
+    return ends.map((end, ei) => ({ key: `${c.id}-${ei}`, nome: c.nome, end }));
+  });
+  const temAlgo = linhasP.length > 0 || linhasL.length > 0;
 
   return (
     <div className="relative">
@@ -74,35 +88,34 @@ export function BuscaClienteParada({ onAdd, disabled }: { onAdd: (rotulo: string
             </div>
           ) : (
             <ul className="divide-y divide-slate-100 text-sm">
-              {protheus.map((c, i) => {
-                const end = c.enderecos[0];
-                const rotulo = `${c.nome} (${c.matricula})${fmtEnd(end) ? ` — ${fmtEnd(end)}` : ''}`;
+              {linhasP.map((r, i) => {
+                const rotulo = `${r.nome} (${r.matricula})${fmtEnd(r.end) ? ` — ${fmtEnd(r.end)}` : ''}`;
                 return (
                   <li key={`p${i}`}>
                     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher(rotulo)}
                       className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-capul-50">
                       <User className="mt-0.5 h-4 w-4 shrink-0 text-capul-600" />
                       <span className="min-w-0">
-                        <span className="font-medium text-slate-700">{c.nome}</span>
-                        <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{c.matricula}</span>
-                        {fmtEnd(end) && <span className="block text-xs text-slate-500">{fmtEnd(end)}</span>}
+                        <span className="font-medium text-slate-700">{r.nome}</span>
+                        <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{r.matricula}</span>
+                        {r.end?.rotulo && <span className="ml-1 text-[10px] text-slate-400">{r.end.rotulo}</span>}
+                        {fmtEnd(r.end) && <span className="block text-xs text-slate-500">{fmtEnd(r.end)}</span>}
                       </span>
                     </button>
                   </li>
                 );
               })}
-              {locais.map((c) => {
-                const end = c.enderecos[0];
-                const rotulo = `${c.nome}${fmtEnd(end) ? ` — ${fmtEnd(end)}` : ''}`;
+              {linhasL.map((r) => {
+                const rotulo = `${r.nome}${fmtEnd(r.end) ? ` — ${fmtEnd(r.end)}` : ''}`;
                 return (
-                  <li key={`l${c.id}`}>
+                  <li key={`l${r.key}`}>
                     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher(rotulo)}
                       className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-capul-50">
                       <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                       <span className="min-w-0">
-                        <span className="font-medium text-slate-700">{c.nome}</span>
+                        <span className="font-medium text-slate-700">{r.nome}</span>
                         <span className="ml-1 text-[10px] text-slate-400">cadastro local</span>
-                        {fmtEnd(end) && <span className="block text-xs text-slate-500">{fmtEnd(end)}</span>}
+                        {fmtEnd(r.end) && <span className="block text-xs text-slate-500">{fmtEnd(r.end)}</span>}
                       </span>
                     </button>
                   </li>
