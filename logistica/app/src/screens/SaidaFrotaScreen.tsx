@@ -6,6 +6,7 @@ import { isAxiosError } from 'axios';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../auth/AuthContext';
+import { SelectBusca } from '../components/SelectBusca';
 import {
   buscarCondutor, validarCondutor, veiculosDisponiveis, registrarSaida, registrarSaidaIndividual,
   listarLocaisParada, type LocalParada,
@@ -38,7 +39,6 @@ export function SaidaFrotaScreen({ navigation }: Props) {
   // --- Veículo e saída ---
   const [veiculos, setVeiculos] = useState<VeiculoFrota[]>([]);
   const [carregandoVeiculos, setCarregandoVeiculos] = useState(true);
-  const [busca, setBusca] = useState('');
   // Filtro "Filial · Departamento" (nasce no setor do usuário; ele troca se quiser).
   const [filtroFD, setFiltroFD] = useState('');
   const [fdAberto, setFdAberto] = useState(false);
@@ -65,23 +65,22 @@ export function SaidaFrotaScreen({ navigation }: Props) {
     : [];
 
   // Frota é compartilhável: carrega DISPONÍVEIS de qualquer filial/departamento.
-  // A busca (placa) também procura na empresa toda. O recorte por setor é local.
+  // O recorte por setor (filtro abaixo) e a busca por placa/modelo (no seletor) são locais.
   useEffect(() => {
     let ativo = true;
-    const t = setTimeout(async () => {
+    void (async () => {
       setCarregandoVeiculos(true);
       try {
-        const termo = busca.trim();
-        const lista = await veiculosDisponiveis(termo ? { busca: termo } : {});
+        const lista = await veiculosDisponiveis();
         if (ativo) setVeiculos(lista);
       } catch {
         if (ativo) setVeiculos([]);
       } finally {
         if (ativo) setCarregandoVeiculos(false);
       }
-    }, 300);
-    return () => { ativo = false; clearTimeout(t); };
-  }, [busca]);
+    })();
+    return () => { ativo = false; };
+  }, []);
 
   // --- Filtro Filial · Departamento (chave por IDs; rótulo por nomes) ---
   const chaveFD = (v: VeiculoFrota) => `${v.filialId ?? ''}|${v.departamentoLotacaoId ?? ''}`;
@@ -240,17 +239,6 @@ export function SaidaFrotaScreen({ navigation }: Props) {
             {ehIndividual ? 'Veículo e saída' : '2. Veículo e saída'}
           </Text>
 
-          <Text style={styles.label}>Buscar veículo (placa / modelo)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Digite a placa para procurar outro veículo"
-            value={busca}
-            onChangeText={setBusca}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            editable={!salvando}
-          />
-
           {opcoesFD.length > 1 ? (
             <>
               <Text style={styles.label}>Filial · Departamento</Text>
@@ -280,30 +268,27 @@ export function SaidaFrotaScreen({ navigation }: Props) {
             <View style={styles.veicVazio}>
               <Text style={styles.veicVazioTit}>Nenhum veículo disponível</Text>
               <Text style={styles.veicVazioSub}>
-                {busca.trim()
-                  ? `Nada encontrado para "${busca.trim()}". Limpe a busca para ver os demais.`
-                  : filtroValido
-                    ? 'Nenhum veículo livre nesta filial/departamento. Toque no filtro acima para ver outros.'
-                    : 'Não há veículo livre no momento (todos em uso ou nenhum cadastrado).'}
+                {filtroValido
+                  ? 'Nenhum veículo livre nesta filial/departamento. Toque no filtro acima para ver outros.'
+                  : 'Não há veículo livre no momento (todos em uso ou nenhum cadastrado).'}
               </Text>
             </View>
           ) : (
-            <View style={styles.chips}>
-              {veiculosFiltrados.map((v) => (
-                <TouchableOpacity
-                  key={v.id}
-                  style={[styles.chip, veiculoId === v.id && styles.chipOn]}
-                  onPress={() => { setVeiculoId(v.id); setKm(String(v.kmAtual)); }}
-                >
-                  <Text style={[styles.chipTxt, veiculoId === v.id && styles.chipTxtOn]}>{v.placa}{v.modelo ? ` · ${v.modelo}` : ''}</Text>
-                  {(v.filialNome || v.departamentoNome) ? (
-                    <Text style={[styles.chipSub, veiculoId === v.id && styles.chipTxtOn]} numberOfLines={1}>
-                      {[v.filialNome, v.departamentoNome].filter(Boolean).join(' · ')}
-                    </Text>
-                  ) : null}
-                </TouchableOpacity>
-              ))}
-            </View>
+            <SelectBusca
+              valor={veiculoId}
+              opcoes={veiculosFiltrados.map((v) => ({
+                id: v.id,
+                nome: `${v.placa}${v.modelo ? ` · ${v.modelo}` : ''}`,
+                subtitulo: [v.filialNome, v.departamentoNome].filter(Boolean).join(' · ') || undefined,
+              }))}
+              onChange={(id) => {
+                const v = veiculosFiltrados.find((x) => x.id === id);
+                setVeiculoId(id);
+                if (v) setKm(String(v.kmAtual));
+              }}
+              placeholder="Selecione o veículo"
+              editable={!salvando}
+            />
           )}
 
           <Text style={styles.label}>KM inicial (odômetro)</Text>

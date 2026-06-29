@@ -14,6 +14,7 @@ import {
   checkinParadaFrota, pularParadaFrota, type FornecedorDespesa, type ParadaFrotaItem,
 } from '../api/frota';
 import { setCondutorToken, getCondutorToken } from '../api/client';
+import { SelectBusca } from '../components/SelectBusca';
 import {
   enfileirarFrota, processarFilaFrota, contarPendentesFrota, onFilaFrotaChange, ehErroDeRede,
 } from '../offline/filaFrota';
@@ -429,25 +430,26 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
     <View style={styles.painel}>
       <Text style={styles.dica}>Despesa do condutor {viagem.condutorNome ?? ''} — entra como pendente.</Text>
       <Text style={styles.label}>Tipo de despesa</Text>
-      <View style={styles.chips}>
-        {tipos.map((t) => (
-          <TouchableOpacity key={t.id} style={[styles.chip, tipoId === t.id && styles.chipOn]} onPress={() => setTipoId(t.id)}>
-            <Text style={[styles.chipTxt, tipoId === t.id && styles.chipTxtOn]}>{t.nome}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <SelectBusca
+        valor={tipoId}
+        opcoes={tipos.map((t) => ({ id: t.id, nome: t.nome }))}
+        onChange={setTipoId}
+        placeholder="Selecione o tipo"
+        editable={!salvando}
+      />
       <Text style={styles.label}>Valor (R$)</Text>
       <TextInput style={styles.input} value={valor} onChangeText={(t) => setValor(maskMoeda(t))} keyboardType="decimal-pad" placeholder="0,00" editable={!salvando} />
       {fornecedores.length > 0 && (
         <>
           <Text style={styles.label}>Fornecedor (cadastrado)</Text>
-          <View style={styles.chips}>
-            {fornecedores.map((f) => (
-              <TouchableOpacity key={f.id} style={[styles.chip, fornecedorId === f.id && styles.chipOn]} onPress={() => setFornecedorId(fornecedorId === f.id ? '' : f.id)}>
-                <Text style={[styles.chipTxt, fornecedorId === f.id && styles.chipTxtOn]}>{f.nome}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <SelectBusca
+            valor={fornecedorId}
+            opcoes={fornecedores.map((f) => ({ id: f.id, nome: f.nome }))}
+            onChange={setFornecedorId}
+            placeholder="Selecione o fornecedor (opcional)"
+            permiteLimpar
+            editable={!salvando}
+          />
         </>
       )}
       <Text style={styles.label}>Fornecedor (livre, se não cadastrado)</Text>
