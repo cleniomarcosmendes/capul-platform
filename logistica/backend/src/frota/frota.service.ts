@@ -604,7 +604,7 @@ export class FrotaService {
   async adicionarParada(id: string, dto: AddParadaDto, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
     this.condutorToken.assertOpera(user, v, condutorToken);
-    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A rota não está em curso — não é possível alterar paradas.');
     // Idempotência (fila offline): se já chegou com essa chave, devolve a existente.
     if (dto.idempotencyKey) {
       const ja = await this.prisma.parada.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
@@ -632,7 +632,7 @@ export class FrotaService {
   async planejarParadas(id: string, dto: PlanejarParadasDto, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
     this.condutorToken.assertOpera(user, v, condutorToken);
-    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada não recebe paradas.');
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A rota não está em curso — não é possível alterar paradas.');
     const locais = dto.locais.map((l) => l.trim()).filter(Boolean);
     if (locais.length === 0) throw new BadRequestException('Informe ao menos um local.');
     let seq = await this.proximaSequencia(id);
@@ -648,7 +648,7 @@ export class FrotaService {
   async checkinParada(id: string, paradaId: string, dto: CheckinParadaDto, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
     this.condutorToken.assertOpera(user, v, condutorToken);
-    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada.');
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A rota não está em curso — não é possível alterar paradas.');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
     return this.prisma.parada.update({
@@ -671,6 +671,7 @@ export class FrotaService {
   async pularParada(id: string, paradaId: string, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
     this.condutorToken.assertOpera(user, v, condutorToken);
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A rota não está em curso — não é possível alterar paradas.');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
     return this.prisma.parada.update({
@@ -683,6 +684,7 @@ export class FrotaService {
   async removerParada(id: string, paradaId: string, user: JwtPayload, condutorToken?: string) {
     const v = await this.viagemDaFilial(id, user);
     this.condutorToken.assertOpera(user, v, condutorToken);
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A rota não está em curso — não é possível alterar paradas.');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
     await this.prisma.parada.delete({ where: { id: paradaId } });

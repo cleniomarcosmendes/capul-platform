@@ -573,8 +573,9 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
   const [checkinId, setCheckinId] = useState<string | null>(null);
   const [checkinKm, setCheckinKm] = useState('');
   const [checkinObs, setCheckinObs] = useState('');
-  // Edita só quem opera a viagem (gestor ou dono) e desde que não cancelada.
-  const editavel = podeEditar && v.situacao !== 'CANCELADA';
+  // Edita só quem opera (gestor ou dono) e SÓ com a rota EM CURSO — depois de
+  // concluída/cancelada o caderno fica em modo leitura (sem check-in/add/remover).
+  const editavel = podeEditar && v.situacao === 'EM_CURSO';
 
   const carregar = async () => {
     setLoading(true);
@@ -657,6 +658,9 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
   return (
     <div className="space-y-3">
       <p className="text-xs text-slate-500">Paradas da rota #{v.numero} — caderno digital do percurso. Planeje as visitas (opcional) e dê baixa em cada uma; o retorno é o que fecha a rota.</p>
+      {podeEditar && v.situacao !== 'EM_CURSO' && (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">🔒 Rota {SIT_META[v.situacao]?.label?.toLowerCase() ?? 'encerrada'} — paradas em modo leitura (sem alterações).</p>
+      )}
 
       {loading ? (
         <div className="flex items-center gap-2 py-3 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
@@ -879,11 +883,11 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
           {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
         </div>
         <div className={`w-40 ${podeAvancar ? '' : 'opacity-60'}`}>
-          <label className="mb-1 block text-sm font-medium text-slate-600">KM de retorno</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">KM de retorno <span className="text-rose-500">*</span></label>
           <input
             ref={kmRef}
             type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} disabled={!podeAvancar}
-            placeholder={`saída ${v.kmInicial ?? '—'}`}
+            placeholder={`ex.: ≥ ${v.kmInicial ?? 0}`}
             className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
           />
         </div>
@@ -896,7 +900,12 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
           />
         </div>
       </div>
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-3">
+        {(!podeAvancar || kmFinal === '') && (
+          <span className="text-xs font-medium text-amber-600">
+            {!podeAvancar ? '⤷ Valide a matrícula e a senha do condutor.' : '⤷ Informe o KM de retorno para concluir.'}
+          </span>
+        )}
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
         <button onClick={() => void registrar()} disabled={salvando || !podeAvancar || kmFinal === ''} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Registrar retorno
