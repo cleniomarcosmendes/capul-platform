@@ -256,7 +256,8 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
 
       {planejadas.length > 0 && (
         <>
-          <Text style={[styles.label, { marginTop: 4 }]}>Visitas planejadas ({planejadas.length})</Text>
+          <Text style={[styles.passo, { marginTop: 4 }]}>🗓️ Visitas planejadas ({planejadas.length})</Text>
+          <Text style={styles.dicaMini}>Visitas que você já sabia — toque em "Cheguei aqui" ao chegar (ou "Pular").</Text>
           {planejadas.map((p, i) => (
             <View key={p.id} style={[styles.paradaCard, i === 0 && styles.paradaCardProx]}>
               {i === 0 && <Text style={styles.proxTag}>PRÓXIMA PARADA</Text>}
@@ -284,7 +285,9 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
         </>
       )}
 
-      <Text style={[styles.label, { marginTop: 12 }]}>Registrar parada agora</Text>
+      <Text style={[styles.passo, { marginTop: 16 }]}>➕ Registrar parada agora</Text>
+      <Text style={styles.dicaMini}>Parada no improviso — entra como realizada na hora (com GPS).</Text>
+      <Text style={styles.label}>Local</Text>
       <TextInput style={styles.input} value={local} onChangeText={setLocal} maxLength={120} placeholder="Ex.: Posto BR, Cliente X, Oficina…" editable={!salvando} />
       <Text style={styles.label}>KM atual (opcional)</Text>
       <TextInput style={styles.input} value={km} onChangeText={setKm} keyboardType="numeric" editable={!salvando} />
