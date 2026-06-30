@@ -732,7 +732,7 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
             <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
             <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
             <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-capul-300 px-3 py-1.5 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
-              {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Planejar paradas
+              {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar Parada
             </button>
           </details>
           {/* Forma 2 (na hora) — parada AVULSA feita no improviso → entra já como realizada. */}
