@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Settings } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -30,6 +30,9 @@ export function FrotaViagemDetalhePage() {
   const [despesas, setDespesas] = useState<DespesaViagem[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
+  // Ajuste de gestor = exceção (corrigir KM / forçar fecho) → nasce recolhido,
+  // pra não competir com o "Registrar retorno" (caminho normal de fecho).
+  const [mostrarAjuste, setMostrarAjuste] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!id) return;
@@ -134,9 +137,19 @@ export function FrotaViagemDetalhePage() {
         <ParadasPanel v={v} podeEditar={podeOperar} onChanged={() => void carregar()} />
       </Secao>
       {emCurso && podeOperar && (
-        <Secao cor="border-l-amber-400">
-          <AjusteForm v={v} onClose={voltar} onDone={() => void carregar()} />
-        </Secao>
+        mostrarAjuste ? (
+          <Secao cor="border-l-amber-400">
+            <AjusteForm v={v} onClose={() => setMostrarAjuste(false)} onDone={() => void carregar()} />
+          </Secao>
+        ) : (
+          <button
+            onClick={() => setMostrarAjuste(true)}
+            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-amber-700"
+            title="Corrigir KM ou forçar o fecho quando o condutor não fechou a rota"
+          >
+            <Settings className="h-4 w-4" /> Ajuste de gestor — corrigir KM / forçar fecho (exceção)
+          </button>
+        )
       )}
     </div>
   );

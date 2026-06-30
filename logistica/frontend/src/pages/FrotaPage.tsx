@@ -721,17 +721,23 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
 
       {editavel && (
         <>
-          <div className="flex flex-wrap items-end gap-2 border-t border-slate-200 pt-3">
-            <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Registrar parada agora (local)" maxLength={120} className="min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-            <input type="number" value={km} onChange={(e) => setKm(e.target.value)} placeholder="KM" className="w-24 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-            <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação" maxLength={255} className="min-w-[10rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-            <button onClick={() => void adicionar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
-              {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
-            </button>
+          {/* Forma 1 — parada AVULSA feita no improviso → entra já como realizada. */}
+          <div className="border-t border-slate-200 pt-3">
+            <p className="text-sm font-medium text-slate-600">➕ Registrar parada agora</p>
+            <p className="mb-2 text-xs text-slate-400">Parada feita no improviso — entra como <b>realizada</b> na hora (com o KM informado).</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <input value={local} onChange={(e) => setLocal(e.target.value)} placeholder="Local da parada" maxLength={120} className="min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+              <input type="number" value={km} onChange={(e) => setKm(e.target.value)} placeholder="KM" className="w-24 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+              <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação" maxLength={255} className="min-w-[10rem] flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+              <button onClick={() => void adicionar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
+                {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar
+              </button>
+            </div>
           </div>
+          {/* Forma 2 — visitas PLANEJADAS de antemão → recebem "Cheguei" durante a rota. */}
           <details className="border-t border-slate-200 pt-3">
-            <summary className="cursor-pointer text-sm font-medium text-slate-600">Planejar visitas (opcional)</summary>
-            <p className="mt-1 text-xs text-slate-400"><b>Buscar cliente</b> traz o endereço da propriedade; ou use o cadastro de locais; ou digite um por linha (inclui prospect). Entram como <b>planejadas</b> e você dá baixa ("Cheguei") durante a rota.</p>
+            <summary className="cursor-pointer text-sm font-medium text-slate-600">🗓️ Planejar visitas (antecipado, opcional)</summary>
+            <p className="mt-1 text-xs text-slate-400">Visitas que o condutor <b>já sabe</b> que vai fazer. Entram como <b>planejadas</b> e recebem o "<b>Cheguei</b>" na hora. <b>Buscar cliente</b> traz o endereço da propriedade; ou use o cadastro de locais; ou digite um por linha (inclui prospect).</p>
             <div className="mt-2"><BuscaClienteParada onAdd={(r) => setPlanejados((t) => (t.trim() ? `${t}\n${r}` : r))} /></div>
             <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
             <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
