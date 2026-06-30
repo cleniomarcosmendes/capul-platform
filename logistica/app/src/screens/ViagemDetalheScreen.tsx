@@ -14,7 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { obterViagem, iniciarEntrega, encerrarEntrega } from '../api/viagens';
-import { abrirGoogleMaps, abrirWaze, enderecoTexto, ligar } from '../lib/navegar';
+import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, MAX_PARADAS_MAPS } from '../lib/navegar';
 import { useRastreamento } from '../lib/useRastreamento';
 import type { Parada, Viagem } from '../types/api';
 
@@ -120,6 +120,24 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     { id: 'TODAS', rotulo: `Todas (${paradas.length})` },
   ];
 
+  // Rota completa no Google Maps com as paradas PENDENTES, na ordem da rota.
+  const entregasPendentes = paradas
+    .filter((p) => p.entrega?.status === 'EM_VIAGEM')
+    .map((p) => p.entrega!);
+  function abrirRotaCompleta() {
+    if (entregasPendentes.length === 0) { Alert.alert('Rota', 'Não há entregas pendentes.'); return; }
+    const lista = entregasPendentes.slice(0, MAX_PARADAS_MAPS);
+    if (entregasPendentes.length > MAX_PARADAS_MAPS) {
+      Alert.alert(
+        'Rota completa',
+        `O Google Maps aceita até ${MAX_PARADAS_MAPS} paradas por vez. Vou abrir as primeiras ${MAX_PARADAS_MAPS}; depois abra de novo para o restante.`,
+        [{ text: 'Abrir', onPress: () => void abrirRotaGoogleMaps(lista) }, { text: 'Cancelar', style: 'cancel' }],
+      );
+      return;
+    }
+    void abrirRotaGoogleMaps(lista);
+  }
+
   return (
     <FlatList
       contentContainerStyle={styles.lista}
@@ -136,6 +154,12 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
             {viagem.veiculo?.placa ?? 'sem veículo'} · {paradas.length} parada
             {paradas.length === 1 ? '' : 's'}
           </Text>
+
+          {entregasPendentes.length > 1 && (
+            <TouchableOpacity style={styles.rotaCompleta} onPress={abrirRotaCompleta}>
+              <Text style={styles.rotaCompletaTxt}>🗺️ Rota completa no Google Maps ({entregasPendentes.length} paradas)</Text>
+            </TouchableOpacity>
+          )}
 
           {viagem.situacao === 'EM_CURSO' && (
             <View style={styles.kmBox}>
@@ -273,6 +297,8 @@ const styles = StyleSheet.create({
   erro: { color: '#dc2626', fontSize: 15, textAlign: 'center' },
   lista: { padding: 12, gap: 10 },
   cabecalho: { color: '#475569', fontSize: 14, marginBottom: 8 },
+  rotaCompleta: { backgroundColor: '#1d4ed8', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, alignItems: 'center', marginBottom: 10 },
+  rotaCompletaTxt: { color: '#fff', fontWeight: '700', fontSize: 13 },
   kmBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 12, marginBottom: 10, gap: 8 },
   kmAcoes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   kmInfo: { fontSize: 13, fontWeight: '600', color: '#475569' },

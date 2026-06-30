@@ -26,6 +26,26 @@ export function abrirGoogleMaps(e: Entrega) {
   return Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${q}`);
 }
 
+// Google Maps aceita ~9 paradas intermediárias + o destino na URL `dir`.
+export const MAX_PARADAS_MAPS = 10;
+
+/**
+ * Abre o Google Maps com a ROTA COMPLETA (várias paradas, na ordem da lista):
+ * origem = localização atual (omitida), waypoints = intermediárias, destino = a
+ * última. O Waze não suporta multi-parada — por isso só o Maps. A lista já deve
+ * vir capada em MAX_PARADAS_MAPS pelo chamador.
+ */
+export function abrirRotaGoogleMaps(entregas: Entrega[]) {
+  if (entregas.length === 0) return;
+  if (entregas.length === 1) return abrirGoogleMaps(entregas[0]);
+  const pts = entregas.map((e) => encodeURIComponent(enderecoTexto(e)));
+  const destination = pts[pts.length - 1];
+  const waypoints = pts.slice(0, -1).join('|');
+  return Linking.openURL(
+    `https://www.google.com/maps/dir/?api=1&destination=${destination}&waypoints=${waypoints}&travelmode=driving`,
+  );
+}
+
 /** Liga pro contato da entrega (o telefone é por endereço). */
 export function ligar(telefone: string) {
   const num = telefone.replace(/[^\d+]/g, '');
