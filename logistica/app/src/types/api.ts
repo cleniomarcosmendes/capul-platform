@@ -41,7 +41,9 @@ export interface Viagem {
   motoristaId: string;
   criadoEm: string;
   totalVolumes?: number;
-  veiculo?: { placa: string; modelo?: string | null } | null;
+  kmInicial?: number | null;
+  kmFinal?: number | null;
+  veiculo?: { placa: string; modelo?: string | null; kmAtual?: number } | null;
   paradas?: Parada[];
 }
 

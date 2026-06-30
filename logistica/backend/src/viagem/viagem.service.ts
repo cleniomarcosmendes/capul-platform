@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { CreateViagemDto, DespacharViagemDto, ConcluirViagemDto } from './dto.js';
+import { CreateViagemDto, DespacharViagemDto, ConcluirViagemDto, IniciarViagemDto } from './dto.js';
 
 @Injectable()
 export class ViagemService {
@@ -176,7 +176,7 @@ export class ViagemService {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: {
-        veiculo: { select: { placa: true, modelo: true } },
+        veiculo: { select: { placa: true, modelo: true, kmAtual: true } },
         paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } },
       },
     });
@@ -262,6 +262,31 @@ export class ViagemService {
    * de entrega real (foto/assinatura/GPS) é da Fase 1b — aqui é baixa manual no
    * balcão pra fechar o ciclo operacional. Exige viagem EM_CURSO.
    */
+  /**
+   * "Iniciar entrega" (app): o motorista registra o KM de SAÍDA na hora (no
+   * painel do veículo). A viagem já está EM_CURSO (despachada no balcão); aqui só
+   * grava o hodômetro de saída — base pra calcular o KM rodado no encerramento.
+   */
+  async iniciar(id: string, dto: IniciarViagemDto, userFilialId?: string) {
+    const v = await this.prisma.viagem.findUnique({
+      where: { id },
+      include: { veiculo: { select: { kmAtual: true } } },
+    });
+    if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao !== StatusViagem.EM_CURSO) {
+      throw new BadRequestException(`Só registra o KM de saída em viagem EM_CURSO (atual: ${v.situacao}).`);
+    }
+    if (v.veiculo && dto.kmInicial < v.veiculo.kmAtual) {
+      throw new BadRequestException(`KM de saída (${dto.kmInicial}) menor que o KM atual do veículo (${v.veiculo.kmAtual}).`);
+    }
+    return this.prisma.viagem.update({
+      where: { id },
+      data: { kmInicial: dto.kmInicial },
+      include: { paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } } },
+    });
+  }
+
   async concluir(id: string, userFilialId?: string, userId?: string, dto?: ConcluirViagemDto) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },

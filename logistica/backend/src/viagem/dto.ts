@@ -30,6 +30,12 @@ export class ConcluirViagemDto {
   @IsOptional() @IsInt() @Min(0) kmFinal?: number;
 }
 
+/** "Iniciar entrega" no app: o motorista informa o KM de saída (no painel do
+ *  veículo). Obrigatório — é o ponto de captura do hodômetro. */
+export class IniciarViagemDto {
+  @IsInt() @Min(0) kmInicial!: number;
+}
+
 /** Payload da sugestão de ordem de rota (Fase 1c). */
 export class SugerirOrdemDto {
   @IsString() @MaxLength(40)

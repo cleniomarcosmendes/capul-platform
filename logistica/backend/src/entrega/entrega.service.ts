@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { Prisma, SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
+import { Prisma, StatusEntrega } from '@prisma/client';
 import { carimbarProvaEntrega, fmtGeo } from './watermark.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
@@ -638,7 +638,6 @@ export class EntregaService {
     }
 
     const novoStatus = entregue ? StatusEntrega.ENTREGUE : StatusEntrega.NAO_ENTREGUE;
-    const viagemId = e.parada?.viagemId ?? null;
 
     const atualizada = await this.prisma.$transaction(async (tx) => {
       const upd = await tx.entrega.update({
@@ -657,38 +656,13 @@ export class EntregaService {
         include: { cupons: true },
       });
 
-      if (viagemId) await this.concluirViagemSeTudoBaixado(tx, viagemId);
+      // Auto-conclusão DESLIGADA (30/06): a rota agora é encerrada explicitamente
+      // ("Encerrar entrega" no app / "Concluir" no balcão) para capturar o KM de
+      // chegada no painel do veículo. Ver ViagemService.concluir / .iniciar.
       return upd;
     });
 
     return this.comTotal(atualizada);
-  }
-
-  /**
-   * Se todas as entregas das paradas de uma viagem EM_CURSO ficaram terminais,
-   * conclui a viagem e libera o veículo. Roda dentro da transação da baixa.
-   */
-  private async concluirViagemSeTudoBaixado(tx: Prisma.TransactionClient, viagemId: string) {
-    const viagem = await tx.viagem.findUnique({
-      where: { id: viagemId },
-      select: {
-        situacao: true,
-        veiculoId: true,
-        paradas: { select: { entrega: { select: { status: true } } } },
-      },
-    });
-    if (!viagem || viagem.situacao !== StatusViagem.EM_CURSO) return;
-    const entregas = viagem.paradas.map((p) => p.entrega).filter((x): x is { status: StatusEntrega } => !!x);
-    const todasBaixadas = entregas.length > 0 && entregas.every((e) => TERMINAIS.includes(e.status));
-    if (!todasBaixadas) return;
-
-    await tx.viagem.update({
-      where: { id: viagemId },
-      data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date() },
-    });
-    if (viagem.veiculoId) {
-      await tx.veiculo.update({ where: { id: viagem.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
-    }
   }
 
   // ---------- helpers ----------

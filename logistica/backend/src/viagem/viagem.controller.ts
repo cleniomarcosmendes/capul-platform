@@ -5,7 +5,7 @@ import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { ViagemService } from './viagem.service.js';
 import { RotaService } from '../rota/rota.service.js';
-import { AdicionarEntregasDto, ConcluirViagemDto, CreateViagemDto, DespacharViagemDto, ReordenarViagemDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
+import { AdicionarEntregasDto, ConcluirViagemDto, CreateViagemDto, DespacharViagemDto, IniciarViagemDto, ReordenarViagemDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
 
 @Controller('viagens')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
@@ -81,7 +81,17 @@ export class ViagemController {
     return this.viagens.despachar(id, dto, user.filialId);
   }
 
+  /** "Iniciar entrega" (app): o entregador registra o KM de saída na hora. */
+  @Post(':id/iniciar')
+  @Roles('ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
+  iniciar(@Param('id') id: string, @Body() dto: IniciarViagemDto, @CurrentUser() user: JwtPayload) {
+    return this.viagens.iniciar(id, dto, user.filialId);
+  }
+
+  /** "Encerrar entrega" (app) / Concluir (balcão): registra o KM de chegada e
+   *  fecha a rota (libera o veículo + atualiza o odômetro). ENTREGADOR liberado. */
   @Post(':id/concluir')
+  @Roles('ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   concluir(@Param('id') id: string, @Body() dto: ConcluirViagemDto, @CurrentUser() user: JwtPayload) {
     return this.viagens.concluir(id, user.filialId, user.sub, dto);
   }

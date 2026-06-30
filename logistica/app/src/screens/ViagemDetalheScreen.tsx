@@ -1,16 +1,19 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { isAxiosError } from 'axios';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
-import { obterViagem } from '../api/viagens';
+import { obterViagem, iniciarEntrega, encerrarEntrega } from '../api/viagens';
 import { abrirGoogleMaps, abrirWaze, enderecoTexto, ligar } from '../lib/navegar';
 import { useRastreamento } from '../lib/useRastreamento';
 import type { Parada, Viagem } from '../types/api';
@@ -26,6 +29,10 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [filtro, setFiltro] = useState<Filtro>('PENDENTES');
+  // "Iniciar/Encerrar entrega" — captura do KM (hodômetro) no painel do veículo.
+  const [acaoKm, setAcaoKm] = useState<null | 'iniciar' | 'encerrar'>(null);
+  const [kmInput, setKmInput] = useState('');
+  const [salvandoKm, setSalvandoKm] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -46,6 +53,42 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
 
   // Rastreamento foreground enquanto a viagem está em curso (Fase A).
   const { rastreando } = useRastreamento(viagemId, viagem?.situacao === 'EM_CURSO');
+
+  function abrirAcaoKm(acao: 'iniciar' | 'encerrar') {
+    // Sugere o KM com base no odômetro do veículo (mantido por todas as viagens);
+    // no encerrar, parte do KM de saída desta rota.
+    const base = acao === 'iniciar'
+      ? (viagem?.veiculo?.kmAtual ?? viagem?.kmInicial)
+      : (viagem?.kmInicial ?? viagem?.veiculo?.kmAtual);
+    setKmInput(base != null ? String(base) : '');
+    setAcaoKm(acao);
+  }
+
+  async function confirmarKm() {
+    if (!viagem || kmInput === '') return;
+    const km = Number(kmInput);
+    if (!Number.isFinite(km) || km < 0) { Alert.alert('KM', 'Informe um KM válido.'); return; }
+    if (acaoKm === 'encerrar' && viagem.kmInicial != null && km < viagem.kmInicial) {
+      Alert.alert('KM de retorno', `O KM de retorno (${km}) é menor que o KM de saída (${viagem.kmInicial}).`);
+      return;
+    }
+    setSalvandoKm(true);
+    try {
+      if (acaoKm === 'iniciar') {
+        await iniciarEntrega(viagem.id, km);
+        setAcaoKm(null);
+        await carregar();
+      } else {
+        await encerrarEntrega(viagem.id, km);
+        Alert.alert('Entrega encerrada', 'Rota concluída e veículo liberado.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      }
+    } catch (e) {
+      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+      Alert.alert('Não foi possível', String(msg || 'Tente novamente.'));
+    } finally {
+      setSalvandoKm(false);
+    }
+  }
 
   if (carregando) {
     return (
@@ -93,6 +136,41 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
             {viagem.veiculo?.placa ?? 'sem veículo'} · {paradas.length} parada
             {paradas.length === 1 ? '' : 's'}
           </Text>
+
+          {viagem.situacao === 'EM_CURSO' && (
+            <View style={styles.kmBox}>
+              {acaoKm ? (
+                <>
+                  <Text style={styles.kmTitulo}>{acaoKm === 'iniciar' ? '🚚 KM de saída' : '🏁 KM de retorno'}</Text>
+                  <Text style={styles.kmDica}>
+                    {acaoKm === 'iniciar'
+                      ? 'Leia o hodômetro do painel ao sair.'
+                      : `Leia o hodômetro ao chegar (≥ ${viagem.kmInicial ?? 0}).`}
+                  </Text>
+                  <TextInput style={styles.kmInput} value={kmInput} onChangeText={setKmInput} keyboardType="numeric" placeholder="KM no painel" editable={!salvandoKm} />
+                  <View style={styles.kmBtns}>
+                    <TouchableOpacity style={[styles.kmConfirmar, salvandoKm && { opacity: 0.5 }]} onPress={() => void confirmarKm()} disabled={salvandoKm}>
+                      {salvandoKm ? <ActivityIndicator color="#fff" /> : <Text style={styles.kmConfirmarTxt}>{acaoKm === 'iniciar' ? 'Iniciar entrega' : 'Encerrar entrega'}</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.kmCancelar} onPress={() => setAcaoKm(null)} disabled={salvandoKm}><Text style={styles.kmCancelarTxt}>Cancelar</Text></TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.kmAcoes}>
+                  {viagem.kmInicial == null ? (
+                    <TouchableOpacity style={styles.kmBtnIniciar} onPress={() => abrirAcaoKm('iniciar')}>
+                      <Text style={styles.kmBtnIniciarTxt}>🚚 Iniciar entrega (KM)</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.kmInfo}>🚚 KM de saída: {viagem.kmInicial}</Text>
+                  )}
+                  <TouchableOpacity style={styles.kmBtnEncerrar} onPress={() => abrirAcaoKm('encerrar')}>
+                    <Text style={styles.kmBtnEncerrarTxt}>🏁 Encerrar entrega (KM)</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
           <View style={styles.filtros}>
             {chips.map((c) => (
               <TouchableOpacity
@@ -195,6 +273,21 @@ const styles = StyleSheet.create({
   erro: { color: '#dc2626', fontSize: 15, textAlign: 'center' },
   lista: { padding: 12, gap: 10 },
   cabecalho: { color: '#475569', fontSize: 14, marginBottom: 8 },
+  kmBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 12, marginBottom: 10, gap: 8 },
+  kmAcoes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  kmInfo: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  kmBtnIniciar: { backgroundColor: CAPUL, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  kmBtnIniciarTxt: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  kmBtnEncerrar: { borderWidth: 1, borderColor: '#1d4ed8', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  kmBtnEncerrarTxt: { color: '#1d4ed8', fontWeight: '700', fontSize: 13 },
+  kmTitulo: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
+  kmDica: { fontSize: 12, color: '#64748b' },
+  kmInput: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, backgroundColor: '#fff' },
+  kmBtns: { flexDirection: 'row', gap: 8 },
+  kmConfirmar: { flex: 1, backgroundColor: CAPUL, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  kmConfirmarTxt: { color: '#fff', fontWeight: '700' },
+  kmCancelar: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
+  kmCancelarTxt: { color: '#475569', fontWeight: '600' },
   rastreioBanner: { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', borderWidth: 1, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginBottom: 8 },
   rastreioTxt: { color: '#047857', fontSize: 12, fontWeight: '600' },
   filtros: { flexDirection: 'row', gap: 8, marginBottom: 10 },

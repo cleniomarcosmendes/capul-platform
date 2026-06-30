@@ -97,9 +97,10 @@ describe('EntregaService', () => {
       const r = await svc.baixar('e1', { resultado: 'ENTREGUE', tipoProva: 'FOTO' } as any, { buffer: Buffer.from('img'), mimetype: 'image/jpeg', size: 3 }, userF1);
       expect(cofre.gravar).toHaveBeenCalledWith(expect.objectContaining({ entregaId: 'e1', entregaNumero: 9, filialId: 'f1', cupom: 'C1', tipo: 'FOTO' }));
       expect(r.temComprovante).toBe(true);
-      // auto-conclusão: todas baixadas → conclui viagem + libera veículo
-      expect(prisma.viagem.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ situacao: 'CONCLUIDA' }) }));
-      expect(prisma.veiculo.update).toHaveBeenCalledWith(expect.objectContaining({ data: { situacao: 'DISPONIVEL' } }));
+      // Auto-conclusão DESLIGADA (30/06): a baixa NÃO fecha mais a viagem — o
+      // encerramento é explícito (ViagemService.concluir) p/ capturar o KM final.
+      expect(prisma.viagem.update).not.toHaveBeenCalled();
+      expect(prisma.veiculo.update).not.toHaveBeenCalled();
     });
 
     it('não conclui a viagem se ainda há entrega pendente de baixa', async () => {
