@@ -721,7 +721,21 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
 
       {editavel && (
         <>
-          {/* Forma 1 — parada AVULSA feita no improviso → entra já como realizada. */}
+          {/* Forma 1 (antecipado) — visitas PLANEJADAS de antemão → recebem "Cheguei". */}
+          <details
+            className="border-t border-slate-200 pt-3"
+            onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void carregar(); }}
+          >
+            <summary className="cursor-pointer text-sm font-medium text-slate-600">🗓️ Planejar visitas (antecipado, opcional)</summary>
+            <p className="mt-1 text-xs text-slate-400">Visitas que o condutor <b>já sabe</b> que vai fazer. Entram como <b>planejadas</b> e recebem o "<b>Cheguei</b>" na hora. <b>Buscar cliente</b> traz o endereço da propriedade; ou use o cadastro de locais; ou digite um por linha (inclui prospect).</p>
+            <div className="mt-2"><BuscaClienteParada onAdd={(r) => setPlanejados((t) => (t.trim() ? `${t}\n${r}` : r))} /></div>
+            <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
+            <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-capul-300 px-3 py-1.5 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
+              {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Planejar paradas
+            </button>
+          </details>
+          {/* Forma 2 (na hora) — parada AVULSA feita no improviso → entra já como realizada. */}
           <div className="border-t border-slate-200 pt-3">
             <p className="text-sm font-medium text-slate-600">➕ Registrar parada agora</p>
             <p className="mb-2 text-xs text-slate-400">Parada feita no improviso — entra como <b>realizada</b> na hora (com o KM informado).</p>
@@ -734,17 +748,6 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
               </button>
             </div>
           </div>
-          {/* Forma 2 — visitas PLANEJADAS de antemão → recebem "Cheguei" durante a rota. */}
-          <details className="border-t border-slate-200 pt-3">
-            <summary className="cursor-pointer text-sm font-medium text-slate-600">🗓️ Planejar visitas (antecipado, opcional)</summary>
-            <p className="mt-1 text-xs text-slate-400">Visitas que o condutor <b>já sabe</b> que vai fazer. Entram como <b>planejadas</b> e recebem o "<b>Cheguei</b>" na hora. <b>Buscar cliente</b> traz o endereço da propriedade; ou use o cadastro de locais; ou digite um por linha (inclui prospect).</p>
-            <div className="mt-2"><BuscaClienteParada onAdd={(r) => setPlanejados((t) => (t.trim() ? `${t}\n${r}` : r))} /></div>
-            <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
-            <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-capul-300 px-3 py-1.5 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
-              {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Planejar paradas
-            </button>
-          </details>
         </>
       )}
     </div>
