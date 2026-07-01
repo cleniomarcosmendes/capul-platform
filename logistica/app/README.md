@@ -36,11 +36,26 @@ Role necessária: **ENTREGADOR** (módulo LOGISTICA). Conta de teste em DEV:
 4. **Windows/WSL**: rode o Metro pelo **PowerShell do Windows** (não pelo WSL —
    o `/mnt/c` trava o Metro e a rede NAT do WSL esconde a 8081 do celular).
    `node_modules` instalado pelo Windows (`npm ci`); não rodar npm pelo WSL aqui.
-4. Gerar/instalar o **dev build nativo**: `npm run android` (`expo run:android`,
+5. Gerar/instalar o **dev build nativo**: `npm run android` (`expo run:android`,
    requer JDK 17 + Android SDK). Sob New Architecture o app usa config nativa
    (background location + foreground service) que o **Expo Go não fornece** — o
    dev build é obrigatório. Depois, o Metro sobe com `npx expo start` e o dev
    client conecta pelo QR. APK de distribuição: `npm run build:apk` (EAS).
+6. **Windows — limite de 260 caracteres (MAX_PATH)**: a compilação C++ da New
+   Architecture (ninja/CMake) estoura o `MAX_PATH` no caminho longo deste repo
+   (`ninja: Filename longer than 260 characters`). O ninja do Android SDK não
+   é `longPathAware`, então ligar `LongPathsEnabled` no registro **não basta**.
+   Solução: **encurtar o caminho com um drive virtual** antes de compilar
+   (mapeie a pasta `logistica`, não a raiz do drive — o autolinking do Expo
+   quebra na raiz):
+   ```powershell
+   subst X: "C:\...\capul-platform\logistica"   # app vira X:\app
+   X:; cd \app
+   $env:EXPO_PUBLIC_API_URL = "http://<IP-da-LAN>:8085"
+   npx expo run:android                          # compila + instala no device
+   ```
+   O `subst` vale só para a sessão (refaça após reboot); alternativa permanente
+   é mover o repo para um caminho curto (ex.: `C:\dev\capul-platform`).
 
 ## Notas
 - `deviceId` é gerado uma vez e guardado no SecureStore; o backend amarra a
