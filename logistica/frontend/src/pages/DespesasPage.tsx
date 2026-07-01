@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 // já entra APROVADA; lançamento do motorista (matrícula+senha, na tela de Frota)
 // entra PENDENTE e exige validação aqui.
 
-interface TipoDespesa { id: string; nome: string; descricao?: string | null; ativo: boolean; requerAprovacao: boolean }
+interface TipoDespesa { id: string; nome: string; descricao?: string | null; ativo: boolean; requerAprovacao: boolean; categoria: 'VEICULO' | 'INDIVIDUO' }
 interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
 interface LocalParada { id: string; nome: string; ativo: boolean; filialId?: string | null; departamentoId?: string | null; veiculoId?: string | null }
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
@@ -726,11 +726,13 @@ function TiposTab() {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [requerAprovacao, setRequerAprovacao] = useState(true);
+  const [categoria, setCategoria] = useState<'VEICULO' | 'INDIVIDUO'>('VEICULO');
   const [salvando, setSalvando] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState('');
   const [editDescricao, setEditDescricao] = useState('');
   const [editRequer, setEditRequer] = useState(true);
+  const [editCategoria, setEditCategoria] = useState<'VEICULO' | 'INDIVIDUO'>('VEICULO');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const carregar = async () => {
@@ -747,12 +749,12 @@ function TiposTab() {
     e.preventDefault();
     if (!nome.trim()) { toast('warning', 'Informe o nome.'); return; }
     setSalvando(true);
-    try { await logisticaApi.post('/despesas/tipos', { nome: nome.trim(), descricao: descricao.trim() || undefined, requerAprovacao }); setNome(''); setDescricao(''); setRequerAprovacao(true); setShowForm(false); toast('success', 'Tipo de despesa criado.'); await carregar(); }
+    try { await logisticaApi.post('/despesas/tipos', { nome: nome.trim(), descricao: descricao.trim() || undefined, requerAprovacao, categoria }); setNome(''); setDescricao(''); setRequerAprovacao(true); setCategoria('VEICULO'); setShowForm(false); toast('success', 'Tipo de despesa criado.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao criar tipo.')); } finally { setSalvando(false); }
   };
   const salvarEdicao = async () => {
     if (!editId || !editNome.trim()) return;
-    try { await logisticaApi.patch(`/despesas/tipos/${editId}`, { nome: editNome.trim(), descricao: editDescricao.trim() || undefined, requerAprovacao: editRequer }); toast('success', 'Tipo atualizado.'); setEditId(null); await carregar(); }
+    try { await logisticaApi.patch(`/despesas/tipos/${editId}`, { nome: editNome.trim(), descricao: editDescricao.trim() || undefined, requerAprovacao: editRequer, categoria: editCategoria }); toast('success', 'Tipo atualizado.'); setEditId(null); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
   const toggle = async (t: TipoDespesa) => {
@@ -788,6 +790,15 @@ function TiposTab() {
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500" />
             </div>
           </div>
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Categoria</label>
+            <select value={categoria} onChange={(e) => setCategoria(e.target.value as 'VEICULO' | 'INDIVIDUO')}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500 sm:w-72">
+              <option value="VEICULO">Veículo (combustível, manutenção…)</option>
+              <option value="INDIVIDUO">Indivíduo (alimentação, hospedagem…)</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-400">Indivíduo = despesa da pessoa (sem veículo): fica fora da Análise da Frota e entra na prestação de contas (RDV) do supervisor.</p>
+          </div>
           <label className="mb-4 flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={requerAprovacao} onChange={(e) => setRequerAprovacao(e.target.checked)} className="h-4 w-4 accent-capul-600" />
             Exige aprovação do supervisor/gestor
@@ -814,6 +825,7 @@ function TiposTab() {
               <tr className="bg-slate-50">
                 <th className={thCad}><button onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')} className={btnSortCad}>Nome <SortIcon active dir={sortDir} /></button></th>
                 <th className={thCad}>Descrição</th>
+                <th className={thCad}>Categoria</th>
                 <th className={thCad}>Aprovação</th>
                 <th className={thCad}>Status</th>
                 <th className={thCad}>Ações</th>
@@ -826,6 +838,7 @@ function TiposTab() {
                     <>
                       <td className="px-6 py-3"><input value={editNome} onChange={(e) => setEditNome(e.target.value)} maxLength={60} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
                       <td className="px-6 py-3"><input value={editDescricao} onChange={(e) => setEditDescricao(e.target.value)} maxLength={255} className="w-full rounded border border-slate-300 px-2 py-1 text-sm" /></td>
+                      <td className="px-6 py-3"><select value={editCategoria} onChange={(e) => setEditCategoria(e.target.value as 'VEICULO' | 'INDIVIDUO')} className="rounded border border-slate-300 px-2 py-1 text-sm"><option value="VEICULO">Veículo</option><option value="INDIVIDUO">Indivíduo</option></select></td>
                       <td className="px-6 py-3"><label className="flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={editRequer} onChange={(e) => setEditRequer(e.target.checked)} className="h-4 w-4 accent-capul-600" /> Exige</label></td>
                       <td className="px-6 py-3"><span className={pill(t.ativo)}>{t.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-3">
@@ -838,9 +851,14 @@ function TiposTab() {
                   ) : (
                     <>
                       <td className="px-6 py-4">
-                        <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); }} className="text-left font-medium text-capul-700 hover:underline">{t.nome}</button>
+                        <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); setEditCategoria(t.categoria); }} className="text-left font-medium text-capul-700 hover:underline">{t.nome}</button>
                       </td>
                       <td className="px-6 py-4 text-slate-500">{t.descricao ?? '—'}</td>
+                      <td className="px-6 py-4">
+                        {t.categoria === 'INDIVIDUO'
+                          ? <span className="rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-700">Indivíduo</span>
+                          : <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">Veículo</span>}
+                      </td>
                       <td className="px-6 py-4">
                         {t.requerAprovacao
                           ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">Exige aprovação</span>
@@ -849,7 +867,7 @@ function TiposTab() {
                       <td className="px-6 py-4"><span className={pill(t.ativo)}>{t.ativo ? 'Ativo' : 'Inativo'}</span></td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); }} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
+                          <button onClick={() => { setEditId(t.id); setEditNome(t.nome); setEditDescricao(t.descricao ?? ''); setEditRequer(t.requerAprovacao); setEditCategoria(t.categoria); }} className="flex items-center gap-1 text-xs text-capul-600 hover:underline"><Pencil className="h-3.5 w-3.5" /> Editar</button>
                           <button onClick={() => void toggle(t)} className="text-xs text-capul-600 hover:underline">{t.ativo ? 'Inativar' : 'Ativar'}</button>
                         </div>
                       </td>

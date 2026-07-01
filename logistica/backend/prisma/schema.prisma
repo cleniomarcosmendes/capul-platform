@@ -109,6 +109,15 @@ enum StatusDespesa {
   @@schema("logistica")
 }
 
+// Categoria da despesa (Fase 2 — módulo Supervisores/RDV): despesa do VEÍCULO
+// (combustível, manutenção…) ou do INDIVÍDUO (alimentação, hospedagem — sem
+// veículo). INDIVÍDUO não entra nos relatórios por veículo; a RDV soma as duas.
+enum CategoriaDespesa {
+  VEICULO
+  INDIVIDUO
+  @@schema("logistica")
+}
+
 // Status de uma parada de frota. Ad-hoc/legado nasce REALIZADA (default);
 // parada planejada nasce PLANEJADA e vira REALIZADA no check-in (ou PULADA).
 enum StatusParada {
@@ -255,6 +264,9 @@ model TipoDespesa {
   id        String           @id @default(uuid())
   nome      String           @unique
   descricao String?
+  // Fase 2: VEÍCULO (default — combustível, manutenção…) ou INDIVÍDUO (alimentação,
+  // hospedagem — despesa da pessoa, sem veículo, entra só na RDV).
+  categoria CategoriaDespesa @default(VEICULO)
   ativo     Boolean          @default(true)
   // Se true, a despesa lançada pelo motorista na viagem nasce PENDENTE e exige
   // validação do supervisor/gestor. Se false (ex.: Abastecimento), entra direto
@@ -289,8 +301,10 @@ model FornecedorDespesa {
 model DespesaVeiculo {
   id            String        @id @default(uuid())
   filialId      String        @map("filial_id")
-  veiculoId     String        @map("veiculo_id")
-  veiculo       Veiculo       @relation(fields: [veiculoId], references: [id])
+  // OPCIONAL a partir da Fase 2: despesa de INDIVÍDUO (alimentação/hospedagem do
+  // supervisor) não tem veículo. Despesa de VEÍCULO continua exigindo (no service).
+  veiculoId     String?       @map("veiculo_id")
+  veiculo       Veiculo?      @relation(fields: [veiculoId], references: [id])
   viagemId      String?       @map("viagem_id")
   viagem        Viagem?       @relation(fields: [viagemId], references: [id])
   tipoDespesaId String        @map("tipo_despesa_id")

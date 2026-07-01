@@ -87,6 +87,7 @@ export class DespesaService {
         nome: dto.nome.trim(),
         descricao: dto.descricao?.trim() || null,
         requerAprovacao: dto.requerAprovacao ?? true,
+        categoria: dto.categoria ?? 'VEICULO',
       },
     });
   }
@@ -100,6 +101,7 @@ export class DespesaService {
         nome: dto.nome?.trim() ?? undefined,
         descricao: dto.descricao !== undefined ? (dto.descricao.trim() || null) : undefined,
         requerAprovacao: dto.requerAprovacao ?? undefined,
+        categoria: dto.categoria ?? undefined,
         ativo: dto.ativo ?? undefined,
       },
     });
@@ -138,8 +140,15 @@ export class DespesaService {
     return vs.map((v) => v.id);
   }
 
-  /** Pode gerir (lançar direto/aprovar/contestar) despesa do veículo? */
-  private async assertPodeGerirVeiculo(veiculoId: string, user: JwtPayload, role?: string) {
+  /** Pode gerir (lançar direto/aprovar/contestar) a despesa? Despesa de INDIVÍDUO
+   *  (sem veículo) só o gestor/admin gere; despesa de veículo, gestor OU supervisor. */
+  private async assertPodeGerirVeiculo(veiculoId: string | null, user: JwtPayload, role?: string) {
+    if (!veiculoId) {
+      if (!ehGestor(role)) {
+        throw new ForbiddenException('Apenas o gestor de frota pode gerir despesa de indivíduo.');
+      }
+      return null;
+    }
     const veiculo = await this.prisma.veiculo.findFirst({ where: { id: veiculoId, filialId: user.filialId } });
     if (!veiculo) throw new NotFoundException('Veículo não encontrado nesta filial.');
     if (!ehGestor(role) && veiculo.supervisorId !== user.sub) {
@@ -214,6 +223,8 @@ export class DespesaService {
   /** Lançamento direto por supervisor/gestor → já APROVADA. */
   async lancarDireto(dto: LancarDespesaDto, user: JwtPayload, role?: string, recibo?: ReciboBinario) {
     const veiculo = await this.assertPodeGerirVeiculo(dto.veiculoId, user, role);
+    // Lançamento direto é sempre por veículo (INDIVÍDUO entra pela viagem).
+    if (!veiculo) throw new BadRequestException('Informe o veículo da despesa.');
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     if (dto.viagemId) await this.assertViagemDoVeiculo(dto.viagemId, veiculo.id, user.filialId!);
@@ -259,10 +270,15 @@ export class DespesaService {
     // registrante/supervisor/gestão. Regra única em CondutorTokenService.assertOpera.
     this.condutorToken.assertOpera(user, v, condutorToken);
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('Só dá pra lançar despesa em viagem em curso.');
-    if (!v.veiculoId) throw new BadRequestException('Viagem sem veículo.');
 
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
+
+    // Despesa de VEÍCULO usa o veículo da viagem; de INDIVÍDUO (alimentação etc.)
+    // não tem veículo — entra só na RDV, fora dos relatórios por veículo.
+    const ehIndividuo = tipo.categoria === 'INDIVIDUO';
+    if (!ehIndividuo && !v.veiculoId) throw new BadRequestException('Viagem sem veículo.');
+    const veiculoIdDespesa = ehIndividuo ? null : v.veiculoId;
 
     // Idempotência (fila offline): se já chegou com essa chave, devolve a existente.
     if (dto.idempotencyKey) {
@@ -271,7 +287,8 @@ export class DespesaService {
     }
 
     const { numeroDocumento, semNota } = this.normalizaDoc(dto);
-    await this.assertDocumentoUnico(v.filialId, v.veiculoId, numeroDocumento, tipo.id);
+    // Dedup por documento é por (veículo, doc, tipo) — só faz sentido com veículo.
+    if (veiculoIdDespesa) await this.assertDocumentoUnico(v.filialId, veiculoIdDespesa, numeroDocumento, tipo.id);
 
     // Tipo sem exigência de aprovação (ex.: Abastecimento) entra direto APROVADA;
     // os demais nascem PENDENTE e aguardam o supervisor/gestor.
@@ -279,7 +296,7 @@ export class DespesaService {
     const despesa = await this.prisma.despesaVeiculo.create({
       data: {
         filialId: v.filialId,
-        veiculoId: v.veiculoId,
+        veiculoId: veiculoIdDespesa,
         viagemId: v.id,
         tipoDespesaId: tipo.id,
         valor: new Prisma.Decimal(dto.valor),
@@ -307,6 +324,8 @@ export class DespesaService {
    */
   async ratear(dto: RatearDespesaDto, user: JwtPayload, role?: string, recibo?: ReciboBinario) {
     const veiculo = await this.assertPodeGerirVeiculo(dto.veiculoId, user, role);
+    // Rateio de nota é sempre por veículo (INDIVÍDUO entra pela viagem).
+    if (!veiculo) throw new BadRequestException('Informe o veículo da despesa.');
     if (dto.viagemId) await this.assertViagemDoVeiculo(dto.viagemId, veiculo.id, user.filialId!);
     if (!dto.itens?.length) throw new BadRequestException('Adicione ao menos um tipo de despesa ao rateio.');
 
@@ -462,7 +481,8 @@ export class DespesaService {
       const norm = this.normalizaDoc({ numeroDocumento: dto.numeroDocumento ?? d.numeroDocumento ?? undefined, semNota: dto.semNota ?? d.semNota });
       numeroDocumento = norm.numeroDocumento;
       semNota = norm.semNota;
-      await this.assertDocumentoUnico(d.filialId, d.veiculoId, numeroDocumento, dto.tipoDespesaId ?? d.tipoDespesaId, id);
+      // Dedup por documento é por (veículo, doc, tipo) — só quando há veículo.
+      if (d.veiculoId) await this.assertDocumentoUnico(d.filialId, d.veiculoId, numeroDocumento, dto.tipoDespesaId ?? d.tipoDespesaId, id);
     }
 
     return this.prisma.despesaVeiculo.update({
@@ -512,6 +532,9 @@ export class DespesaService {
     const where: Prisma.DespesaVeiculoWhereInput = {
       filialId: user.filialId,
       situacao: StatusDespesa.APROVADA,
+      // Análise da FROTA = custo por veículo → despesa de INDIVÍDUO (sem veículo)
+      // fica FORA "de graça"; ela entra só na RDV do supervisor (Fase 3).
+      veiculoId: { not: null },
       dataDespesa: { gte: new Date(Date.UTC(ano, mes - 1, 1)), lt: new Date(Date.UTC(ano, mes, 1)) },
     };
     if (!ehGestor(role)) {
@@ -542,6 +565,9 @@ export class DespesaService {
     const where: Prisma.DespesaVeiculoWhereInput = {
       filialId: user.filialId,
       situacao: StatusDespesa.APROVADA,
+      // Análise da FROTA = custo por veículo → despesa de INDIVÍDUO (sem veículo)
+      // fica FORA "de graça"; ela entra só na RDV do supervisor (Fase 3).
+      veiculoId: { not: null },
       dataDespesa: { gte: new Date(Date.UTC(ano, mes - 1, 1)), lt: new Date(Date.UTC(ano, mes, 1)) },
     };
 
@@ -581,9 +607,9 @@ export class DespesaService {
   }
 
   // Chave/rótulo de cada despesa por dimensão (usados no agrupamento e no drill).
-  private chaveDim(d: { veiculoId: string; tipoDespesaId: string; fornecedorId: string | null; fornecedor: string | null; anormalidade?: boolean; viagem?: { departamentoSolicitanteId: string | null } | null; veiculo?: { propriedade?: string | null; porte?: string | null; finalidade?: string | null } | null }, dim: string): string {
+  private chaveDim(d: { veiculoId: string | null; tipoDespesaId: string; fornecedorId: string | null; fornecedor: string | null; anormalidade?: boolean; viagem?: { departamentoSolicitanteId: string | null } | null; veiculo?: { propriedade?: string | null; porte?: string | null; finalidade?: string | null } | null }, dim: string): string {
     switch (dim) {
-      case 'veiculo': return d.veiculoId;
+      case 'veiculo': return d.veiculoId ?? '__sem';
       case 'tipo': return d.tipoDespesaId;
       case 'fornecedor': return d.fornecedorId ?? (d.fornecedor ? `livre:${d.fornecedor}` : '__sem');
       case 'departamento': return d.viagem?.departamentoSolicitanteId ?? '__sem';

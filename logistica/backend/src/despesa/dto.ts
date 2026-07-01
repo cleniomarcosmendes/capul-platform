@@ -1,7 +1,8 @@
 import {
-  IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString,
+  IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString,
   MaxLength, Min, ValidateNested,
 } from 'class-validator';
+import { CategoriaDespesa } from '@prisma/client';
 import { plainToInstance, Transform, Type } from 'class-transformer';
 
 // ---- Tipos de despesa (cadastro, gestor de frota) ----
@@ -15,6 +16,10 @@ export class CriarTipoDespesaDto {
   // Default true (no service) — só Abastecimento e afins entram como false.
   @IsOptional() @IsBoolean()
   requerAprovacao?: boolean;
+
+  // Fase 2: VEÍCULO (default) ou INDIVÍDUO (despesa da pessoa, sem veículo).
+  @IsOptional() @IsEnum(CategoriaDespesa)
+  categoria?: CategoriaDespesa;
 }
 
 export class AtualizarTipoDespesaDto {
@@ -26,6 +31,9 @@ export class AtualizarTipoDespesaDto {
 
   @IsOptional() @IsBoolean()
   requerAprovacao?: boolean;
+
+  @IsOptional() @IsEnum(CategoriaDespesa)
+  categoria?: CategoriaDespesa;
 
   @IsOptional() @IsBoolean()
   ativo?: boolean;
