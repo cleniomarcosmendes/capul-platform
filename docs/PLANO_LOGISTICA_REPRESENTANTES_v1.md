@@ -10,10 +10,13 @@
 > 1. O papel correto é **Supervisor / Atendente Técnico** (não "representante").
 > 2. O fechamento (prestação de contas) é **MENSAL** — confirmado.
 > 3. **Um município pode ter VÁRIAS regiões** (relação N:N Região↔Município) — confirmado.
-> 4. O supervisor/atendente técnico **fica responsável por UM veículo** → o vínculo
->    colaborador↔veículo (com **troca**) **JÁ EXISTE**: `veiculo.supervisorId` +
->    histórico `veiculo_supervisor_historico` (campo "Supervisor responsável" no
->    cadastro do veículo). Reaproveitar isso (ver §3.4 e §4.3).
+> 4. O supervisor/atendente técnico **fica responsável por UM veículo** → precisa de um
+>    **vínculo PRÓPRIO** colaborador↔veículo (com **troca**). **⚠️ NÃO confundir** com o
+>    `veiculo.supervisorId` atual — esse é o papel RBAC **"Supervisor"** (encarregado que
+>    *gerencia* alguns veículos), **não** o **Supervisor de Área** (que *usa* um veículo em
+>    campo). Reaproveita-se só o *padrão* (vínculo + histórico), num **campo novo** (§3.4/§4.3).
+> 5. **Papéis RBAC** (complemento): **GESTOR (GESTOR_FROTA)** gerencia TODA a frota;
+>    **Supervisor** (`Veiculo.supervisorId`) gerencia ALGUNS veículos. Ver §3.5.
 
 ## 1. Contexto
 
@@ -37,7 +40,7 @@ veículo) e o supervisor **presta contas MENSALMENTE** (RDV) e registra suas
 | Busca de cliente matrícula/telefone → endereço (Protheus SA1) | `GET /cadastro/busca?termo=` → `ProtheusClienteService.buscar()` (operação `clienteEndereco`) |
 | Cliente "não identificado"/prospect | `ClienteLocal` + `tipoCliente EVENTUAL` (Entrega) |
 | Viagem de frota (condutor matrícula+senha Protheus, paradas, despesas) | `Viagem(tipo FROTA)`, `Parada`, `DespesaVeiculo` |
-| **Vínculo supervisor↔veículo (+ troca com histórico)** | `Veiculo.supervisorId` + `veiculo_supervisor_historico`; campo "Supervisor responsável" no cadastro do veículo |
+| **Padrão de vínculo colaborador↔veículo + troca (histórico)** | `Veiculo.supervisorId` (= **encarregado do departamento**, supervisiona todos os veículos do depto) + `veiculo_supervisor_historico`. Serve de **MODELO** p/ o vínculo do **Supervisor de Área** (§4.3) — que é OUTRO campo. |
 | Despesa com foto + **fila offline + idempotência** | App Expo `logistica/app/` — `ViagemFrotaScreen` → `DespesaForm` |
 | Governança de despesa (PENDENTE→APROVADA/CONTESTADA, anormalidade) | `despesa.service` |
 | Impressão (modelo) | Romaneio / Linha do KM |
@@ -52,19 +55,30 @@ veículo) e o supervisor **presta contas MENSALMENTE** (RDV) e registra suas
    **N:N** (`RegiaoMunicipio`). A região da visita não é derivada só do município
    (que é ambíguo) — é escolhida/confirmada na visita.
 3. **Menu** da tela atual: "Controle de Frota" → **"Saída de Veículos"** (feito).
-4. **Supervisor / atendente técnico = condutor + responsável pelo veículo** (resolve
-   o item antes em aberto):
+4. **Supervisor de Área (atendente técnico) = condutor + responsável por UM veículo**
+   (resolve o item antes em aberto):
    - É um **funcionário Protheus** (matrícula+senha — como hoje na frota; a RDV usa
      matrícula 5222 / setor "Fábrica de Ração"). **Reusa o fluxo de condutor** (sem
      cadastro à parte).
-   - Fica **responsável por UM veículo** → usa o **`Veiculo.supervisorId`** que já
-     existe (com **troca** registrada em `veiculo_supervisor_historico`). Assim os
-     relatórios podem partir do veículo → seu supervisor, e a troca de responsável
-     é rastreada.
-   - **Refinamento a validar:** hoje `supervisorId` referencia `core.usuarios`
-     (usuário do sistema). Se o atendente técnico é só funcionário Protheus (matrícula,
-     sem usuário do sistema), avaliar se o vínculo passa a aceitar **matrícula Protheus**
-     ou se esses supervisores viram usuários do sistema.
+   - **⚠️ NÃO é o `Veiculo.supervisorId` atual.** Esse campo é o **encarregado**
+     (papel RBAC "Supervisor", ver §3.5) — quem **gerencia** um conjunto de veículos.
+     O **Supervisor de Área** é o colaborador que **fica com AQUELE veículo** para as
+     visitas da sua área → precisa de um **vínculo próprio** (campo novo, §4.3).
+   - Reaproveita-se o **padrão** (vínculo + histórico de troca), mas em campo novo,
+     **por matrícula Protheus** (o supervisor de área é funcionário, não necessariamente
+     usuário do sistema).
+
+### 3.5 Papéis (RBAC) do módulo Logística — complemento (Clenio, 01/07)
+
+| Papel | Escopo de gestão |
+|---|---|
+| **GESTOR (GESTOR_FROTA)** | Gerencia **TODA** a frota (todos os veículos/viagens). |
+| **Supervisor** (= `Veiculo.supervisorId`) | Gerencia **ALGUNS** veículos — os atribuídos a ele (o "encarregado"). Opera/ajusta só os SEUS. |
+| **Supervisor de Área** (Indústria/Filial 18) | **Não é papel de gestão** — é o atendente técnico que **usa** um veículo p/ visitas. Vínculo próprio (§4.3), distinto do papel acima. |
+
+> **Não confundir os dois "supervisores":** o **RBAC "Supervisor"** *gerencia* veículos
+> (subconjunto da frota); o **"Supervisor de Área"** *usa* um veículo em campo. Podem até
+> ser a mesma pessoa às vezes, mas são conceitos separados no sistema.
 
 ## 4. Modelo de dados (deltas no schema `logistica`)
 
@@ -91,12 +105,18 @@ veículo) e o supervisor **presta contas MENSALMENTE** (RDV) e registra suas
 | **`DespesaVeiculo`** | `veiculoId` → **opcional**; + `regiaoId?` — despesa de INDIVÍDUO não tem veículo |
 | **`Viagem`** | + `tipo SUPERVISOR`; + `adiantamento Decimal?`; + `regiaoId?`; + `mesReferencia` (mês da RDV) |
 
-### 4.3 Reuso do vínculo supervisor↔veículo (SEM modelo novo)
-- **Não criar** tabela de "representante × veículo" — o `Veiculo.supervisorId` já é o
-  "colaborador responsável pelo veículo", e `veiculo_supervisor_historico` já guarda as
-  **trocas** (data, de/para, quem alterou). O cadastro do veículo já tem o campo.
-- A viagem do supervisor herda o responsável do veículo (ou o condutor identificado na
-  saída, se diferente do responsável).
+### 4.3 Vínculo Supervisor de Área ↔ veículo (NOVO — ≠ `supervisorId` do depto)
+- **Dois vínculos distintos, não confundir** (ver §3.5):
+  - `Veiculo.supervisorId` (já existe) = papel RBAC **"Supervisor"** → *gerencia* um
+    conjunto de veículos. **Fica como está.**
+  - **Supervisor de Área** (novo) = o atendente técnico que **fica com AQUELE veículo**
+    para as visitas. É o vínculo que o Clenio pediu.
+- **Novo:** `Veiculo.supervisorAreaMatricula?` (+ `supervisorAreaNome?` cache do Protheus)
+  e histórico de troca próprio (mesmo **padrão** de `veiculo_supervisor_historico`).
+  Vínculo **por matrícula Protheus**. Cadastro/troca na tela do veículo, em campo separado
+  do "Supervisor responsável" (encarregado).
+- A viagem mensal do supervisor de área usa esse vínculo (o veículo já "sabe" seu
+  supervisor de área).
 
 **Integração "de graça":** Custo de Frota e Linha do KM já filtram por `veiculoId` →
 despesas de INDIVÍDUO (sem veículo) ficam **fora** desses relatórios automaticamente;
