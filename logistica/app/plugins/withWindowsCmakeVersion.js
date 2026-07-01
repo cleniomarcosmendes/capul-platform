@@ -1,4 +1,4 @@
-const { withProjectBuildGradle } = require('expo/config-plugins');
+const { withSettingsGradle } = require('expo/config-plugins');
 
 /**
  * Windows — limite de 260 caracteres (MAX_PATH).
@@ -15,8 +15,19 @@ const { withProjectBuildGradle } = require('expo/config-plugins');
  * expõe variável de ambiente para a versão de CMake (`CMAKE_VERSION` só vale ao
  * compilar o ReactAndroid do fonte), o único knob é
  * `externalNativeBuild.cmake.version`. Precisa valer para TODOS os módulos
- * nativos (app + autolinkados), então injetamos um `subprojects {}` no
- * build.gradle raiz em vez de mexer só no módulo app.
+ * nativos (app + autolinkados).
+ *
+ * IMPORTANTE — por que no `settings.gradle` e não no `build.gradle` raiz:
+ * a abordagem anterior injetava `subprojects { afterEvaluate { ... } }` no
+ * `build.gradle` raiz. Isso quebra quando o build roda com `--configure-on-demand`
+ * (flag que o `expo run:android` injeta) combinado com `org.gradle.parallel=true`:
+ * a ordem de avaliação dos projetos é reordenada e, quando o bloco `subprojects {}`
+ * do raiz executa, o `:app` já pode ter sido avaliado — aí o `afterEvaluate` nele
+ * estoura com `Cannot run Project.afterEvaluate(Closure) when the project is
+ * already evaluated`. O `settings.gradle` roda por INTEIRO antes de qualquer
+ * projeto ser avaliado, então registrar `gradle.beforeProject` ali é imune à
+ * reordenação. Usamos `plugins.withId` (reage no momento em que o plugin Android
+ * é aplicado) para dispensar `afterEvaluate` de vez.
  *
  * Aplicado SÓ no Windows: em Linux/macOS (inclusive nos builds do EAS) não há
  * MAX_PATH, o CMake padrão funciona, e o 4.1.2 pode nem estar instalado.
@@ -32,10 +43,10 @@ function withWindowsCmakeVersion(config) {
     return config;
   }
 
-  return withProjectBuildGradle(config, (config) => {
+  return withSettingsGradle(config, (config) => {
     if (config.modResults.language !== 'groovy') {
       throw new Error(
-        'withWindowsCmakeVersion: esperado build.gradle raiz em Groovy (Kotlin DSL não suportado).'
+        'withWindowsCmakeVersion: esperado settings.gradle em Groovy (Kotlin DSL não suportado).'
       );
     }
 
@@ -47,22 +58,17 @@ function withWindowsCmakeVersion(config) {
     const block = [
       '',
       MARKER,
-      '// Rerroteia TODOS os módulos nativos (app + autolinkados) para o CMake ' +
-        CMAKE_VERSION + ' (ninja',
-      '// 1.12.1, longPathAware), evitando o estouro de MAX_PATH (260) na compilação C++ da',
-      '// New Architecture no Windows. Ver plugins/withWindowsCmakeVersion.js.',
-      'subprojects { subproject ->',
-      '  afterEvaluate {',
-      '    if (subproject.plugins.hasPlugin("com.android.library") || subproject.plugins.hasPlugin("com.android.application")) {',
-      '      subproject.android {',
-      '        externalNativeBuild {',
-      '          cmake {',
-      '            version "' + CMAKE_VERSION + '"',
-      '          }',
-      '        }',
-      '      }',
-      '    }',
+      '// Fixa o CMake ' + CMAKE_VERSION + ' (ninja 1.12.1, longPathAware) em TODOS os módulos',
+      '// nativos (app + autolinkados), evitando o estouro de MAX_PATH (260) na compilação C++',
+      '// da New Architecture no Windows. Registrado no settings.gradle (roda antes de qualquer',
+      '// projeto ser avaliado) para ser imune a --configure-on-demand + parallel. Ver',
+      '// plugins/withWindowsCmakeVersion.js.',
+      'gradle.beforeProject { project ->',
+      '  def pinCmake = {',
+      '    project.android.externalNativeBuild.cmake.version = "' + CMAKE_VERSION + '"',
       '  }',
+      '  project.plugins.withId("com.android.application", pinCmake)',
+      '  project.plugins.withId("com.android.library", pinCmake)',
       '}',
       '',
     ].join('\n');
