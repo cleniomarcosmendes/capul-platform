@@ -20,12 +20,13 @@
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
-        "CAMERA"
+        "CAMERA",
+        "RECEIVE_BOOT_COMPLETED"
       ]
     },
     "extra": {
       "//": "API_URL — apontar pro nginx alcançável pelo celular. Em DEV use o IP da LAN da máquina (ex.: https://192.168.x.x). Sobrescreve via env EXPO_PUBLIC_API_URL.",
-      "apiUrl": "https://platform.capul.com.br"
+      "apiUrl": "https://platformhlg.capul.com.br"
     },
     "plugins": [
       "expo-asset",
