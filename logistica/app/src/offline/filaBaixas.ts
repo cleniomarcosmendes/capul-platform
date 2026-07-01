@@ -23,6 +23,7 @@ export interface BaixaPendente {
   destinatario: string;
   payload: BaixaPayload;
   fotoUri: string | null;
+  assinaturaUri: string | null;
   criadoEm: string;
   tentativas: number;
   ultimoErro: string | null;
@@ -77,21 +78,27 @@ export async function enfileirar(params: {
   destinatario: string;
   payload: BaixaPayload;
   fotoUri?: string;
+  assinaturaUri?: string;
 }): Promise<void> {
-  let fotoPersistida: string | null = null;
-  if (params.fotoUri) {
+  const key = params.payload.idempotencyKey;
+  const persistir = async (uri: string | undefined, ext: string) => {
+    if (!uri) return null;
     await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => undefined);
-    fotoPersistida = `${DIR}${params.payload.idempotencyKey}.jpg`;
-    await FileSystem.copyAsync({ from: params.fotoUri, to: fotoPersistida });
-  }
+    const dest = `${DIR}${key}.${ext}`;
+    await FileSystem.copyAsync({ from: uri, to: dest });
+    return dest;
+  };
+  const fotoPersistida = await persistir(params.fotoUri, 'jpg');
+  const assinaturaPersistida = await persistir(params.assinaturaUri, 'png');
   const itens = await ler();
   itens.push({
-    id: params.payload.idempotencyKey,
+    id: key,
     entregaId: params.entregaId,
     entregaNumero: params.entregaNumero,
     destinatario: params.destinatario,
     payload: params.payload,
     fotoUri: fotoPersistida,
+    assinaturaUri: assinaturaPersistida,
     criadoEm: new Date().toISOString(),
     tentativas: 0,
     ultimoErro: null,
@@ -122,8 +129,9 @@ export async function processarFila(): Promise<ResultadoFila> {
 
     for (const item of itens) {
       try {
-        await baixarEntrega(item.entregaId, item.payload, item.fotoUri ?? undefined);
+        await baixarEntrega(item.entregaId, item.payload, { fotoUri: item.fotoUri ?? undefined, assinaturaUri: item.assinaturaUri ?? undefined });
         await apagarFoto(item.fotoUri);
+        await apagarFoto(item.assinaturaUri);
         enviadas++;
       } catch (err) {
         const status = isAxiosError(err) ? err.response?.status : undefined;
@@ -136,6 +144,7 @@ export async function processarFila(): Promise<ResultadoFila> {
               (err.response?.data as { message?: string } | undefined)?.message) ||
             `Rejeitada pelo servidor (HTTP ${status}).`;
           await apagarFoto(item.fotoUri);
+          await apagarFoto(item.assinaturaUri);
           descartadas.push({ entregaNumero: item.entregaNumero, motivo: String(msg) });
         } else {
           manter.push({

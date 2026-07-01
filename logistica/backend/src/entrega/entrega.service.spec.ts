@@ -64,22 +64,22 @@ describe('EntregaService', () => {
   describe('baixar', () => {
     it('404 se a entrega não existe', async () => {
       prisma.entrega.findUnique.mockResolvedValue(null);
-      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, undefined, userF1)).rejects.toThrow(NotFoundException);
+      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, {}, userF1)).rejects.toThrow(NotFoundException);
     });
 
     it('403 se a entrega é de outra filial (operador)', async () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'OUTRA', cupons: [], parada: null });
-      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, undefined, userF1)).rejects.toThrow(ForbiddenException);
+      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, {}, userF1)).rejects.toThrow(ForbiddenException);
     });
 
     it('400 se a entrega não está EM_VIAGEM (ainda não despachada)', async () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'PENDENTE', filialId: 'f1', numero: 1, cupons: [], parada: null });
-      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, undefined, userF1)).rejects.toThrow(BadRequestException);
+      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, {}, userF1)).rejects.toThrow(BadRequestException);
     });
 
     it('idempotente: entrega já ENTREGUE devolve o estado atual sem regravar', async () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'ENTREGUE', filialId: 'f1', numero: 1, comprovanteId: 'cmp0', cupons: [], parada: null });
-      const r = await svc.baixar('e1', { resultado: 'ENTREGUE' } as any, { buffer: Buffer.from('x'), mimetype: 'image/jpeg', size: 1 }, userF1);
+      const r = await svc.baixar('e1', { resultado: 'ENTREGUE' } as any, { foto: { buffer: Buffer.from('x'), mimetype: 'image/jpeg', size: 1 } }, userF1);
       expect(r.status).toBe('ENTREGUE');
       expect(cofre.gravar).not.toHaveBeenCalled();
       expect(prisma.entrega.update).not.toHaveBeenCalled();
@@ -87,14 +87,14 @@ describe('EntregaService', () => {
 
     it('400 NAO_ENTREGUE sem motivo', async () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 1, cupons: [], parada: { viagemId: 'v1' } });
-      await expect(svc.baixar('e1', { resultado: 'NAO_ENTREGUE' } as any, undefined, userF1)).rejects.toThrow(BadRequestException);
+      await expect(svc.baixar('e1', { resultado: 'NAO_ENTREGUE' } as any, {}, userF1)).rejects.toThrow(BadRequestException);
     });
 
     it('ENTREGUE com prova grava no cofre e seta temComprovante/comprovanteId', async () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 9, matricula: 'E01', cupons: [{ numeroCupom: 'C1' }], parada: { viagemId: 'v1' } });
       prisma.viagem.findUnique.mockResolvedValue({ situacao: 'EM_CURSO', veiculoId: 'vc1', paradas: [{ entrega: { status: 'ENTREGUE' } }] });
       prisma.entrega.update.mockResolvedValue({ id: 'e1', status: 'ENTREGUE', temComprovante: true, comprovanteId: 'cmp1', cupons: [] });
-      const r = await svc.baixar('e1', { resultado: 'ENTREGUE', tipoProva: 'FOTO' } as any, { buffer: Buffer.from('img'), mimetype: 'image/jpeg', size: 3 }, userF1);
+      const r = await svc.baixar('e1', { resultado: 'ENTREGUE', tipoProva: 'FOTO' } as any, { foto: { buffer: Buffer.from('img'), mimetype: 'image/jpeg', size: 3 } }, userF1);
       expect(cofre.gravar).toHaveBeenCalledWith(expect.objectContaining({ entregaId: 'e1', entregaNumero: 9, filialId: 'f1', cupom: 'C1', tipo: 'FOTO' }));
       expect(r.temComprovante).toBe(true);
       // Auto-conclusão DESLIGADA (30/06): a baixa NÃO fecha mais a viagem — o
@@ -103,11 +103,20 @@ describe('EntregaService', () => {
       expect(prisma.veiculo.update).not.toHaveBeenCalled();
     });
 
+    it('aceita FOTO + ASSINATURA juntas → grava 2 comprovantes no cofre', async () => {
+      prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 9, cupons: [], parada: { viagemId: 'v1' } });
+      prisma.entrega.update.mockResolvedValue({ id: 'e1', status: 'ENTREGUE', cupons: [] });
+      await svc.baixar('e1', { resultado: 'ENTREGUE' } as any, { foto: { buffer: Buffer.from('f'), mimetype: 'image/jpeg', size: 1 }, assinatura: { buffer: Buffer.from('a'), mimetype: 'image/png', size: 1 } }, userF1);
+      expect(cofre.gravar).toHaveBeenCalledTimes(2);
+      expect(cofre.gravar).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'FOTO' }));
+      expect(cofre.gravar).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'ASSINATURA' }));
+    });
+
     it('não conclui a viagem se ainda há entrega pendente de baixa', async () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 9, cupons: [], parada: { viagemId: 'v1' } });
       prisma.viagem.findUnique.mockResolvedValue({ situacao: 'EM_CURSO', veiculoId: 'vc1', paradas: [{ entrega: { status: 'ENTREGUE' } }, { entrega: { status: 'EM_VIAGEM' } }] });
       prisma.entrega.update.mockResolvedValue({ id: 'e1', status: 'ENTREGUE', cupons: [] });
-      await svc.baixar('e1', { resultado: 'ENTREGUE', recebedorNome: 'Maria' } as any, undefined, userF1);
+      await svc.baixar('e1', { resultado: 'ENTREGUE', recebedorNome: 'Maria' } as any, {}, userF1);
       expect(prisma.viagem.update).not.toHaveBeenCalled();
       expect(prisma.veiculo.update).not.toHaveBeenCalled();
     });
@@ -115,14 +124,14 @@ describe('EntregaService', () => {
     // ── Prova flexível (meio-termo): foto opcional, mas exige ALGUMA prova ──
     it('400 ENTREGUE sem prova (foto/assinatura) e sem recebedor', async () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 9, cupons: [], parada: { viagemId: 'v1' } });
-      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, undefined, userF1)).rejects.toThrow(BadRequestException);
+      await expect(svc.baixar('e1', { resultado: 'ENTREGUE' } as any, {}, userF1)).rejects.toThrow(BadRequestException);
     });
 
     it('ENTREGUE só com recebedor (sem arquivo) baixa sem tocar o cofre', async () => {
       prisma.entrega.findUnique.mockResolvedValue({ id: 'e1', status: 'EM_VIAGEM', filialId: 'f1', numero: 9, cupons: [], parada: { viagemId: 'v1' } });
       prisma.viagem.findUnique.mockResolvedValue({ situacao: 'EM_CURSO', veiculoId: 'vc1', paradas: [{ entrega: { status: 'EM_VIAGEM' } }] });
       prisma.entrega.update.mockResolvedValue({ id: 'e1', status: 'ENTREGUE', temComprovante: false, cupons: [] });
-      const r = await svc.baixar('e1', { resultado: 'ENTREGUE', recebedorNome: 'João Portaria' } as any, undefined, userF1);
+      const r = await svc.baixar('e1', { resultado: 'ENTREGUE', recebedorNome: 'João Portaria' } as any, {}, userF1);
       expect(cofre.gravar).not.toHaveBeenCalled();
       expect(r.status).toBe('ENTREGUE');
     });

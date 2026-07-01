@@ -53,16 +53,9 @@ export function BaixaScreen({ route, navigation }: Props) {
   const idempotencyKey = useRef(uuid()).current;
 
   const entregue = resultado === 'ENTREGUE';
-  // A prova binária é ÚNICA por baixa: foto OU assinatura.
-  const provaUri = fotoUri ?? assinaturaUri;
-  const tipoProva: 'FOTO' | 'ASSINATURA' | undefined = fotoUri
-    ? 'FOTO'
-    : assinaturaUri
-      ? 'ASSINATURA'
-      : undefined;
-  // Prova flexível (meio-termo): foto/assinatura OPCIONAIS, mas a entrega
-  // precisa de ao menos UMA prova — binária OU quem recebeu (lastro de cobrança).
-  const temProva = !!provaUri || !!recebedor.trim();
+  // Foto E assinatura são PERMITIDAS juntas (não são mais exclusivas). A entrega
+  // precisa de AO MENOS UMA prova — binária (foto/assinatura) OU quem recebeu.
+  const temProva = !!fotoUri || !!assinaturaUri || !!recebedor.trim();
   const podeConfirmar = !enviando && (entregue ? temProva : !!motivo.trim());
 
   async function tirarFoto() {
@@ -74,19 +67,17 @@ export function BaixaScreen({ route, navigation }: Props) {
     const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
     if (!r.canceled && r.assets[0]?.uri) {
       setFotoUri(r.assets[0].uri);
-      setAssinaturaUri(null); // prova binária única
     }
   }
 
   // Recebe a assinatura como data URL base64, salva como PNG em file:// e usa
-  // como prova (mesmo fluxo da foto, inclusive offline). Limpa a foto.
+  // como prova (mesmo fluxo da foto, inclusive offline). Coexiste com a foto.
   async function salvarAssinatura(dataUrl: string) {
     try {
       const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
       const path = `${FileSystem.cacheDirectory}assinatura-${idempotencyKey}.png`;
       await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
       setAssinaturaUri(path);
-      setFotoUri(null);
     } catch {
       Alert.alert('Assinatura', 'Não foi possível salvar a assinatura. Tente novamente.');
     } finally {
@@ -97,19 +88,19 @@ export function BaixaScreen({ route, navigation }: Props) {
   async function confirmar() {
     setEnviando(true);
     const geo = await capturarGeo();
+    const provas = entregue
+      ? { fotoUri: fotoUri ?? undefined, assinaturaUri: assinaturaUri ?? undefined }
+      : undefined;
     const payload: BaixaPayload = {
       resultado,
       idempotencyKey,
       ...(entregue
-        ? {
-            ...(tipoProva ? { tipoProva } : {}),
-            recebedorNome: recebedor.trim() || undefined,
-          }
+        ? { recebedorNome: recebedor.trim() || undefined }
         : { motivo: motivo.trim() }),
       ...geo,
     };
     try {
-      await baixarEntrega(entregaId, payload, entregue ? provaUri ?? undefined : undefined);
+      await baixarEntrega(entregaId, payload, provas);
       Alert.alert('Baixa registrada', `Entrega #${entregaNumero} — ${destinatario}.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -130,7 +121,8 @@ export function BaixaScreen({ route, navigation }: Props) {
           entregaNumero,
           destinatario,
           payload,
-          fotoUri: entregue ? provaUri ?? undefined : undefined,
+          fotoUri: entregue ? fotoUri ?? undefined : undefined,
+          assinaturaUri: entregue ? assinaturaUri ?? undefined : undefined,
         });
         Alert.alert(
           'Sem conexão — baixa guardada',
@@ -168,33 +160,36 @@ export function BaixaScreen({ route, navigation }: Props) {
 
       {entregue ? (
         <>
-          <Text style={styles.dica}>Registre ao menos uma prova: foto, assinatura ou quem recebeu.</Text>
-          <Text style={styles.label}>Prova (opcional)</Text>
-          {provaUri ? (
-            <View>
-              <Image
-                source={{ uri: provaUri }}
-                style={tipoProva === 'ASSINATURA' ? styles.assinatura : styles.foto}
-                resizeMode={tipoProva === 'ASSINATURA' ? 'contain' : 'cover'}
-              />
-              <TouchableOpacity
-                style={styles.refazer}
-                onPress={() => { setFotoUri(null); setAssinaturaUri(null); }}
-                disabled={enviando}
-              >
-                <Text style={styles.refazerTxt}>Remover {tipoProva === 'ASSINATURA' ? 'assinatura' : 'foto'}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.provaBotoes}>
+          <Text style={styles.dica}>Registre ao menos uma prova: foto, assinatura ou quem recebeu. Pode registrar as duas (foto + assinatura).</Text>
+          <Text style={styles.label}>Provas (opcional)</Text>
+          <View style={{ gap: 8, marginTop: 2 }}>
+            {/* Foto — independente da assinatura */}
+            {fotoUri ? (
+              <View>
+                <Image source={{ uri: fotoUri }} style={styles.foto} resizeMode="cover" />
+                <TouchableOpacity style={styles.refazer} onPress={() => setFotoUri(null)} disabled={enviando}>
+                  <Text style={styles.refazerTxt}>Remover foto</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
               <TouchableOpacity style={styles.btnProva} onPress={tirarFoto} disabled={enviando}>
                 <Text style={styles.btnFotoTxt}>📷 Tirar foto</Text>
               </TouchableOpacity>
+            )}
+            {/* Assinatura — independente da foto */}
+            {assinaturaUri ? (
+              <View>
+                <Image source={{ uri: assinaturaUri }} style={styles.assinatura} resizeMode="contain" />
+                <TouchableOpacity style={styles.refazer} onPress={() => setAssinaturaUri(null)} disabled={enviando}>
+                  <Text style={styles.refazerTxt}>Remover assinatura</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
               <TouchableOpacity style={styles.btnProva} onPress={() => setMostrarAssinatura(true)} disabled={enviando}>
-                <Text style={styles.btnFotoTxt}>✍️ Assinatura</Text>
+                <Text style={styles.btnFotoTxt}>✍️ Coletar assinatura</Text>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
+          </View>
 
           <Text style={styles.label}>Quem recebeu (opcional)</Text>
           <TextInput

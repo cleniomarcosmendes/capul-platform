@@ -548,7 +548,7 @@ export class EntregaService {
    * Após a baixa, se TODAS as entregas da viagem ficaram terminais, a viagem
    * é concluída (EM_CURSO → CONCLUIDA) e o veículo liberado (→ DISPONIVEL).
    */
-  async baixar(id: string, dto: BaixarEntregaDto, prova: ProvaBinaria | undefined, user: JwtPayload) {
+  async baixar(id: string, dto: BaixarEntregaDto, provas: { foto?: ProvaBinaria; assinatura?: ProvaBinaria }, user: JwtPayload) {
     const e = await this.prisma.entrega.findUnique({
       where: { id },
       include: { cupons: true, parada: { select: { viagemId: true } } },
@@ -570,70 +570,75 @@ export class EntregaService {
     if (!entregue && !dto.motivo?.trim()) {
       throw new BadRequestException('Informe o motivo da não-entrega.');
     }
-    // Prova flexível (meio-termo): ENTREGUE exige AO MENOS UMA prova — arquivo
-    // (foto/assinatura) OU quem recebeu. A foto deixou de ser obrigatória, mas
-    // não se baixa "no vazio": preserva o lastro de cobrança (cofre, 5 anos).
-    if (entregue && !prova && !dto.recebedorNome?.trim()) {
+    // Prova flexível: ENTREGUE exige AO MENOS UMA prova — foto E/OU assinatura
+    // (as duas são permitidas) OU quem recebeu. Não se baixa "no vazio":
+    // preserva o lastro de cobrança (cofre, 5 anos).
+    const temProvaBinaria = !!provas.foto || !!provas.assinatura;
+    if (entregue && !temProvaBinaria && !dto.recebedorNome?.trim()) {
       throw new BadRequestException(
         'Informe uma prova de entrega: foto, assinatura ou quem recebeu.',
       );
     }
 
-    // Grava a prova no COFRE (banco isolado + object store) ANTES de fechar a
-    // baixa — se o cofre falhar, a baixa não acontece (a prova é o ativo).
+    // Grava a(s) prova(s) no COFRE (banco isolado + object store) ANTES de fechar
+    // a baixa — se o cofre falhar, a baixa não acontece (a prova é o ativo). Cada
+    // prova vira um comprovante próprio (o cofre é append-only por entregaId).
     let comprovanteId: string | null = null;
     let temComprovante = false;
-    if (entregue && prova) {
+    if (entregue && temProvaBinaria) {
       const cupom = e.cupons.find((c) => c.numeroCupom)?.numeroCupom ?? null;
 
-      // FOTO: carimba metadados na própria imagem (auto-contida, anti-fraude).
-      // Best-effort — se o carimbo falhar, grava a foto original (não bloqueia
-      // a baixa). ASSINATURA não é carimbada.
-      let binario = prova.buffer;
-      let mimeType = prova.mimetype;
-      if (dto.tipoProva === 'FOTO' && prova.mimetype.startsWith('image/')) {
-        try {
-          const endereco = [
-            e.endLogradouro + (e.endNumero ? `, ${e.endNumero}` : ''),
-            e.endBairro,
-            e.endCidade && e.endUf ? `${e.endCidade}/${e.endUf}` : e.endCidade,
-          ]
-            .filter(Boolean)
-            .join(' - ');
-          const linhas = [
-            `Entrega #${e.numero} - ${e.destinatarioNome}`,
-            endereco,
-            fmtGeo(dto.geoLat, dto.geoLng) ?? '',
-            new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-          ].filter((l): l is string => !!l && l.trim().length > 0);
-          binario = await carimbarProvaEntrega(prova.buffer, linhas);
-          mimeType = 'image/jpeg';
-        } catch (err) {
-          this.logger.warn(
-            `Falha ao carimbar prova da entrega ${e.id}; gravando original. ${String(err)}`,
-          );
+      // Grava UMA prova. FOTO: carimba metadados na imagem (auto-contida,
+      // anti-fraude; best-effort). ASSINATURA não é carimbada.
+      const gravarUma = async (prova: ProvaBinaria, tipo: 'FOTO' | 'ASSINATURA') => {
+        let binario = prova.buffer;
+        let mimeType = prova.mimetype;
+        if (tipo === 'FOTO' && prova.mimetype.startsWith('image/')) {
+          try {
+            const endereco = [
+              e.endLogradouro + (e.endNumero ? `, ${e.endNumero}` : ''),
+              e.endBairro,
+              e.endCidade && e.endUf ? `${e.endCidade}/${e.endUf}` : e.endCidade,
+            ]
+              .filter(Boolean)
+              .join(' - ');
+            const linhas = [
+              `Entrega #${e.numero} - ${e.destinatarioNome}`,
+              endereco,
+              fmtGeo(dto.geoLat, dto.geoLng) ?? '',
+              new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+            ].filter((l): l is string => !!l && l.trim().length > 0);
+            binario = await carimbarProvaEntrega(prova.buffer, linhas);
+            mimeType = 'image/jpeg';
+          } catch (err) {
+            this.logger.warn(`Falha ao carimbar prova da entrega ${e.id}; gravando original. ${String(err)}`);
+          }
         }
-      }
+        const { comprovanteId: cid } = await this.cofre.gravar({
+          entregaId: e.id,
+          entregaNumero: e.numero,
+          filialId: e.filialId,
+          matricula: e.matricula,
+          cupom,
+          tipo,
+          binario,
+          mimeType,
+          geoLat: dto.geoLat ?? null,
+          geoLng: dto.geoLng ?? null,
+          entregadorId: user.sub,
+          trilha: {
+            recebedorNome: dto.recebedorNome?.trim() || null,
+            idempotencyKey: dto.idempotencyKey ?? null,
+            viagemId: e.parada?.viagemId ?? null,
+          },
+        });
+        return cid;
+      };
 
-      const { comprovanteId: cid } = await this.cofre.gravar({
-        entregaId: e.id,
-        entregaNumero: e.numero,
-        filialId: e.filialId,
-        matricula: e.matricula,
-        cupom,
-        tipo: dto.tipoProva === 'ASSINATURA' ? 'ASSINATURA' : 'FOTO',
-        binario,
-        mimeType,
-        geoLat: dto.geoLat ?? null,
-        geoLng: dto.geoLng ?? null,
-        entregadorId: user.sub,
-        trilha: {
-          recebedorNome: dto.recebedorNome?.trim() || null,
-          idempotencyKey: dto.idempotencyKey ?? null,
-          viagemId: e.parada?.viagemId ?? null,
-        },
-      });
-      comprovanteId = cid;
+      const cidAssin = provas.assinatura ? await gravarUma(provas.assinatura, 'ASSINATURA') : null;
+      const cidFoto = provas.foto ? await gravarUma(provas.foto, 'FOTO') : null;
+      // A FOTO é a prova "primária" (badge/consulta); a assinatura fica no cofre.
+      comprovanteId = cidFoto ?? cidAssin;
       temComprovante = true;
     }
 

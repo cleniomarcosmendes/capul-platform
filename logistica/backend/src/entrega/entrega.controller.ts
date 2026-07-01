@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Body, Controller, Get, Param, Patch, Post, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { StatusEntrega } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
@@ -104,16 +104,28 @@ export class EntregaController {
    */
   @Post(':id/baixar')
   @Roles('ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
-  @UseInterceptors(FileInterceptor('prova', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  // Aceita FOTO e ASSINATURA juntas (as duas são permitidas; ≥1 obrigatória no
+  // service). `prova` é o campo LEGADO (fila offline gravada antes da mudança).
+  @UseInterceptors(FileFieldsInterceptor([
+    { name: 'foto', maxCount: 1 },
+    { name: 'assinatura', maxCount: 1 },
+    { name: 'prova', maxCount: 1 },
+  ], { limits: { fileSize: 15 * 1024 * 1024 } }))
   baixar(
     @Param('id') id: string,
     @Body() dto: BaixarEntregaDto,
     @CurrentUser() user: JwtPayload,
-    @UploadedFile() prova?: Express.Multer.File,
+    @UploadedFiles() files?: { foto?: Express.Multer.File[]; assinatura?: Express.Multer.File[]; prova?: Express.Multer.File[] },
   ) {
-    const binario: ProvaBinaria | undefined = prova
-      ? { buffer: prova.buffer, mimetype: prova.mimetype, size: prova.size }
-      : undefined;
-    return this.entregas.baixar(id, dto, binario, user);
+    const toBin = (f?: Express.Multer.File): ProvaBinaria | undefined =>
+      f ? { buffer: f.buffer, mimetype: f.mimetype, size: f.size } : undefined;
+    const foto = toBin(files?.foto?.[0]);
+    const assinatura = toBin(files?.assinatura?.[0]);
+    // Legado: o campo `prova` + tipoProva do app antigo (fila offline).
+    const legado = toBin(files?.prova?.[0]);
+    return this.entregas.baixar(id, dto, {
+      foto: foto ?? (legado && dto.tipoProva !== 'ASSINATURA' ? legado : undefined),
+      assinatura: assinatura ?? (legado && dto.tipoProva === 'ASSINATURA' ? legado : undefined),
+    }, user);
   }
 }
