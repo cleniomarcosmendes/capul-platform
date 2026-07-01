@@ -43,19 +43,15 @@ Role necessária: **ENTREGADOR** (módulo LOGISTICA). Conta de teste em DEV:
    client conecta pelo QR. APK de distribuição: `npm run build:apk` (EAS).
 6. **Windows — limite de 260 caracteres (MAX_PATH)**: a compilação C++ da New
    Architecture (ninja/CMake) estoura o `MAX_PATH` no caminho longo deste repo
-   (`ninja: Filename longer than 260 characters`). O ninja do Android SDK não
-   é `longPathAware`, então ligar `LongPathsEnabled` no registro **não basta**.
-   Solução: **encurtar o caminho com um drive virtual** antes de compilar
-   (mapeie a pasta `logistica`, não a raiz do drive — o autolinking do Expo
-   quebra na raiz):
-   ```powershell
-   subst X: "C:\...\capul-platform\logistica"   # app vira X:\app
-   X:; cd \app
-   $env:EXPO_PUBLIC_API_URL = "http://<IP-da-LAN>:8085"
-   npx expo run:android                          # compila + instala no device
-   ```
-   O `subst` vale só para a sessão (refaça após reboot); alternativa permanente
-   é mover o repo para um caminho curto (ex.: `C:\dev\capul-platform`).
+   (`ninja: Filename longer than 260 characters`), porque o ninja 1.10.2 que a
+   AGP usa por padrão (CMake 3.22.1) não é `longPathAware`. **Isso já está
+   resolvido no repo** pelo config plugin `plugins/withWindowsCmakeVersion.js`,
+   que — só no Windows — fixa `cmake.version "4.1.2"` no build do app; o ninja
+   1.12.1 desse CMake ignora o 260 (prefixa `\\?\`). Não precisa de `subst`,
+   `LongPathsEnabled` nem de mover o repo. **Único pré-requisito**: ter o
+   **CMake 4.1.2** instalado (Android Studio → SDK Manager → SDK Tools → CMake;
+   a AGP também o instala sozinha no 1º build se ausente). Em Linux/macOS/EAS o
+   plugin não faz nada (lá não há MAX_PATH e o CMake padrão funciona).
 
 ## Notas
 - `deviceId` é gerado uma vez e guardado no SecureStore; o backend amarra a
