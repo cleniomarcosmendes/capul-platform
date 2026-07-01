@@ -516,11 +516,23 @@ model Parada {
   status         StatusParada @default(REALIZADA)
   planejadoLocal String?      @map("planejado_local")
   realizadaEm    DateTime?    @map("realizada_em")
+  // Visita do supervisor (Fase 3c): atividade + região + propriedade/fazenda +
+  // cliente (matrícula/sócio Protheus estruturado) + município. `observacao` = obs.
+  atividadeId      String?          @map("atividade_id")
+  atividade        AtividadeVisita? @relation(fields: [atividadeId], references: [id])
+  regiaoId         String?          @map("regiao_id")
+  regiao           Regiao?          @relation(fields: [regiaoId], references: [id])
+  clienteMatricula String?          @map("cliente_matricula")
+  clienteNome      String?          @map("cliente_nome")
+  municipio        String?
+  propriedade      String?
   // Chave de idempotência (Fase 2d offline): reenvio da fila não duplica a parada.
   idempotencyKey String?   @unique @map("idempotency_key")
   registradoEm DateTime  @default(now()) @map("registrado_em")
 
   @@index([viagemId, sequencia])
+  @@index([atividadeId])
+  @@index([regiaoId])
   @@map("parada")
   @@schema("logistica")
 }
@@ -596,6 +608,7 @@ model AtividadeVisita {
   filialId String?  @map("filial_id")
   ativo    Boolean  @default(true)
   criadoEm DateTime @default(now()) @map("criado_em")
+  visitas  Parada[]
 
   @@unique([filialId, nome])
   @@map("atividade_visita")
@@ -612,6 +625,7 @@ model Regiao {
   criadoEm   DateTime          @default(now()) @map("criado_em")
   municipios RegiaoMunicipio[]
   viagens    Viagem[]
+  visitas    Parada[]
 
   @@unique([filialId, nome])
   @@map("regiao")

@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
-import { AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto } from './dto.js';
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
@@ -61,5 +61,15 @@ export class SupervisorController {
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   concluirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.concluirViagemSupervisor(id, user);
+  }
+
+  // ---- Visitas da viagem (lançamento pelo operador/gestor) ----
+  @Post('viagens/:id/visitas')
+  adicionarVisita(@Param('id') id: string, @Body() dto: AdicionarVisitaDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.adicionarVisita(id, dto, user);
+  }
+  @Delete('viagens/:id/visitas/:paradaId')
+  removerVisita(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.removerVisita(id, paradaId, user);
   }
 }

@@ -3,7 +3,7 @@ import { Prisma, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
-import { AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, MunicipioDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, MunicipioDto } from './dto.js';
 
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
@@ -139,12 +139,66 @@ export class SupervisorService {
       where: { id },
       include: {
         regiao: { include: { municipios: { orderBy: { municipio: 'asc' } } } },
+        paradas: {
+          orderBy: { sequencia: 'asc' },
+          include: { atividade: { select: { nome: true } }, regiao: { select: { nome: true } } },
+        },
         despesas: { include: { tipoDespesa: { select: { nome: true, categoria: true } } } },
       },
     });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
     return v;
+  }
+
+  // ---- Visitas (paradas) da viagem ----
+  async adicionarVisita(viagemId: string, dto: AdicionarVisitaDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
+    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
+    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para adicionar visitas.');
+    if (dto.atividadeId) {
+      const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
+      if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
+    }
+    if (dto.regiaoId) {
+      const r = await this.prisma.regiao.findUnique({ where: { id: dto.regiaoId } });
+      if (!r || (r.filialId && r.filialId !== filialId)) throw new BadRequestException('Região inválida para esta filial.');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const seq = (await tx.parada.count({ where: { viagemId } })) + 1;
+      return tx.parada.create({
+        data: {
+          viagemId,
+          sequencia: seq,
+          atividadeId: dto.atividadeId ?? null,
+          regiaoId: dto.regiaoId ?? null,
+          clienteMatricula: dto.clienteMatricula?.trim().toUpperCase() || null,
+          clienteNome: dto.clienteNome?.trim() || null,
+          municipio: dto.municipio?.trim() || null,
+          propriedade: dto.propriedade?.trim() || null,
+          local: dto.local?.trim() || null,
+          observacao: dto.observacao?.trim() || null,
+          dataHora: dto.dataVisita ? new Date(dto.dataVisita) : new Date(),
+          status: 'REALIZADA',
+        },
+        include: { atividade: { select: { nome: true } }, regiao: { select: { nome: true } } },
+      });
+    });
+  }
+
+  async removerVisita(viagemId: string, paradaId: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const p = await this.prisma.parada.findUnique({
+      where: { id: paradaId },
+      include: { viagem: { select: { id: true, tipo: true, filialId: true, situacao: true } } },
+    });
+    if (!p || p.viagemId !== viagemId || p.viagem.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Visita não encontrada.');
+    if (p.viagem.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (p.viagem.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover visitas.');
+    await this.prisma.parada.delete({ where: { id: paradaId } });
+    return { ok: true };
   }
 
   async concluirViagemSupervisor(id: string, user: JwtPayload) {
