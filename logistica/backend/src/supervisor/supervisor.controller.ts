@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
-import { AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto } from './dto.js';
+import { AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto } from './dto.js';
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
@@ -41,5 +41,25 @@ export class SupervisorController {
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   atualizarRegiao(@Param('id') id: string, @Body() dto: AtualizarRegiaoDto, @CurrentUser() user: JwtPayload) {
     return this.svc.atualizarRegiao(id, dto, user);
+  }
+
+  // ---- Viagem mensal do supervisor ----
+  @Get('viagens')
+  viagens(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('situacao') situacao?: string) {
+    return this.svc.listarViagensSupervisor(user, mes ? Number(mes) : undefined, situacao);
+  }
+  @Get('viagens/:id')
+  viagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.obterViagemSupervisor(id, user);
+  }
+  @Post('viagens')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  criarViagem(@Body() dto: CriarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.criarViagemSupervisor(dto, user);
+  }
+  @Patch('viagens/:id/concluir')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  concluirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.concluirViagemSupervisor(id, user);
   }
 }

@@ -48,6 +48,7 @@ enum StatusEntrega {
 enum TipoViagem {
   ENTREGA
   FROTA
+  SUPERVISOR
   @@schema("logistica")
 }
 
@@ -472,6 +473,13 @@ model Viagem {
   // criadoPorId. false = condutor se auto-autenticou (matrícula+senha).
   registradaPortaria        Boolean      @default(false) @map("registrada_portaria")
   situacao                  StatusViagem @default(RASCUNHO)
+  // Viagem do SUPERVISOR (Fase 3b): container MENSAL da prestação de contas (RDV).
+  // mesReferencia = AAAAMM (ex.: 202605); adiantamento = valor liberado; região do
+  // supervisor. Reusa condutorMatricula/Nome p/ identificar o supervisor de área.
+  mesReferencia             Int?         @map("mes_referencia")
+  adiantamento              Decimal?     @db.Decimal(12, 2)
+  regiaoId                  String?      @map("regiao_id")
+  regiao                    Regiao?      @relation(fields: [regiaoId], references: [id])
   criadoEm                  DateTime     @default(now()) @map("criado_em")
   criadoPorId               String       @map("criado_por_id")
   paradas                   Parada[]
@@ -483,6 +491,7 @@ model Viagem {
   @@index([veiculoId])
   @@index([motoristaId])
   @@index([tipo])
+  @@index([regiaoId])
   @@map("viagem")
   @@schema("logistica")
 }
@@ -602,6 +611,7 @@ model Regiao {
   ativo      Boolean           @default(true)
   criadoEm   DateTime          @default(now()) @map("criado_em")
   municipios RegiaoMunicipio[]
+  viagens    Viagem[]
 
   @@unique([filialId, nome])
   @@map("regiao")
