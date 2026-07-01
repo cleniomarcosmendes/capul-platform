@@ -576,3 +576,48 @@ model GeocodeCache {
   @@map("geocode_cache")
   @@schema("logistica")
 }
+
+// ---- Catálogos do módulo Supervisores / RDV (Fase 3) ----
+
+// Atividade da visita (catálogo — a "lista fixa de tipos" da planilha Visitas).
+// filialId null = global; senão escopo da filial.
+model AtividadeVisita {
+  id       String   @id @default(uuid())
+  nome     String
+  filialId String?  @map("filial_id")
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  @@unique([filialId, nome])
+  @@map("atividade_visita")
+  @@schema("logistica")
+}
+
+// Região do supervisor (macro). Um MUNICÍPIO pode estar em VÁRIAS regiões e uma
+// região agrupa vários municípios → associação N:N em RegiaoMunicipio.
+model Regiao {
+  id         String            @id @default(uuid())
+  nome       String
+  filialId   String?           @map("filial_id")
+  ativo      Boolean           @default(true)
+  criadoEm   DateTime          @default(now()) @map("criado_em")
+  municipios RegiaoMunicipio[]
+
+  @@unique([filialId, nome])
+  @@map("regiao")
+  @@schema("logistica")
+}
+
+// N:N Região ↔ Município (um município em várias regiões e vice-versa).
+model RegiaoMunicipio {
+  id        String  @id @default(uuid())
+  regiaoId  String  @map("regiao_id")
+  regiao    Regiao  @relation(fields: [regiaoId], references: [id], onDelete: Cascade)
+  municipio String
+  uf        String? @db.VarChar(2)
+
+  @@unique([regiaoId, municipio])
+  @@index([municipio])
+  @@map("regiao_municipio")
+  @@schema("logistica")
+}
