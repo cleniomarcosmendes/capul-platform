@@ -35,7 +35,9 @@
           "isAndroidForegroundServiceEnabled": true,
           "locationAlwaysAndWhenInUsePermission": "O CAPUL Entregas usa sua localização durante a viagem (inclusive em segundo plano) para o monitoramento da rota pela gestão."
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-status-bar"
     ]
   }
 }
