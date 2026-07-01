@@ -42,16 +42,21 @@ Role necessária: **ENTREGADOR** (módulo LOGISTICA). Conta de teste em DEV:
    dev build é obrigatório. Depois, o Metro sobe com `npx expo start` e o dev
    client conecta pelo QR. APK de distribuição: `npm run build:apk` (EAS).
 6. **Windows — limite de 260 caracteres (MAX_PATH)**: a compilação C++ da New
-   Architecture (ninja/CMake) estoura o `MAX_PATH` no caminho longo deste repo
-   (`ninja: Filename longer than 260 characters`), porque o ninja 1.10.2 que a
-   AGP usa por padrão (CMake 3.22.1) não é `longPathAware`. **Isso já está
+   Architecture (ninja/CMake) estoura o `MAX_PATH` no caminho longo deste repo,
+   porque o ninja 1.10.2 que a AGP usa por padrão (CMake 3.22.1) não é
+   `longPathAware` — no módulo `app` como `Filename longer than 260 characters`
+   e nos módulos autolinkados (react-native-screens etc.) como
+   `manifest 'build.ninja' still dirty after 100 tries`. **Isso já está
    resolvido no repo** pelo config plugin `plugins/withWindowsCmakeVersion.js`,
-   que — só no Windows — fixa `cmake.version "4.1.2"` no build do app; o ninja
-   1.12.1 desse CMake ignora o 260 (prefixa `\\?\`). Não precisa de `subst`,
-   `LongPathsEnabled` nem de mover o repo. **Único pré-requisito**: ter o
-   **CMake 4.1.2** instalado (Android Studio → SDK Manager → SDK Tools → CMake;
-   a AGP também o instala sozinha no 1º build se ausente). Em Linux/macOS/EAS o
-   plugin não faz nada (lá não há MAX_PATH e o CMake padrão funciona).
+   que — só no Windows — injeta um `subprojects {}` no `build.gradle` raiz
+   fixando `cmake.version "4.1.2"` em **todos** os módulos nativos (app +
+   autolinkados); o ninja 1.12.1 desse CMake ignora o 260 (prefixa `\\?\`). Não
+   precisa de `subst`, `LongPathsEnabled` nem de mover o repo. **Único
+   pré-requisito**: ter o **CMake 4.1.2** instalado (Android Studio → SDK
+   Manager → SDK Tools → CMake; a AGP também o instala sozinha no 1º build se
+   ausente). Em Linux/macOS/EAS o plugin não faz nada (lá não há MAX_PATH e o
+   CMake padrão funciona). Validado em debug (`run:android`) e release
+   (`assembleRelease`, todas as ABIs).
 
 ## Notas
 - `deviceId` é gerado uma vez e guardado no SecureStore; o backend amarra a
