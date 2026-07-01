@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, MapPin, Truck, LogOut, ExternalLink, Package, Car, Route, BarChart3, TrendingUp, FileCheck, ClipboardList, Fuel, Banknote, CircleDot, Gauge } from 'lucide-react';
+import { Home, MapPin, Truck, LogOut, ExternalLink, Package, Car, Route, BarChart3, TrendingUp, FileCheck, ClipboardList, Fuel, Banknote, CircleDot, Gauge, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 // Grupos de role para gatear o menu (o backend é a fonte da verdade do RBAC;
@@ -36,6 +36,9 @@ const navItems: NavEntry[] = [
   { to: '/despesas', label: 'Custos da Frota', icon: Banknote, roles: FROTA_OP },
   { to: '/frota/linha-km', label: 'Linha do KM', icon: Gauge, roles: GESTORES },
   { to: '/veiculos', label: 'Veículos', icon: Car, roles: GESTORES },
+
+  { section: 'SUPERVISORES', roles: GESTORES },
+  { to: '/supervisores', label: 'Prestação de Contas (RDV)', icon: Users, roles: GESTORES },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

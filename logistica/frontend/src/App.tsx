@@ -20,6 +20,7 @@ import { ComprovantesPage } from './pages/ComprovantesPage';
 import { FrotaPage } from './pages/FrotaPage';
 import { FrotaViagemDetalhePage } from './pages/FrotaViagemDetalhePage';
 import { DespesasPage } from './pages/DespesasPage';
+import { SupervisoresPage } from './pages/SupervisoresPage';
 import { DespesaNovaPage } from './pages/DespesaNovaPage';
 import { PainelFrotaPage } from './pages/PainelFrotaPage';
 import { FrotaAnalisePage } from './pages/FrotaAnalisePage';
@@ -66,6 +67,7 @@ function Protected() {
               <Route path="/frota/painel" element={<PainelFrotaPage />} />
               <Route path="/frota/analise" element={<FrotaAnalisePage />} />
               <Route path="/frota/linha-km" element={<LinhaKmPage />} />
+              <Route path="/supervisores" element={<SupervisoresPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
               <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />
