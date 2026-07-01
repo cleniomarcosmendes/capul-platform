@@ -2,6 +2,7 @@
   "expo": {
     "name": "CAPUL Entregas",
     "slug": "capul-entregas",
+    "owner": "capul",
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "capulentregas",
@@ -37,7 +38,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-status-bar"
+      "expo-status-bar",
+      "./plugins/withWindowsCmakeVersion.js"
     ]
   }
 }
