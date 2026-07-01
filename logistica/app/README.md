@@ -9,7 +9,7 @@ App **Android** (Expo / React Native) do entregador.
   duplica) + banner "N baixas aguardando sinal".
 
 ## Stack
-- Expo SDK 52 (managed) + React Native 0.76 + TypeScript
+- Expo SDK 56 (managed, New Architecture) + React Native 0.85 + React 19.2 + TypeScript
 - React Navigation (native stack)
 - `expo-secure-store` (tokens no keystore), `axios` (refresh silencioso), `expo-linking`
 
@@ -36,7 +36,11 @@ Role necessária: **ENTREGADOR** (módulo LOGISTICA). Conta de teste em DEV:
 4. **Windows/WSL**: rode o Metro pelo **PowerShell do Windows** (não pelo WSL —
    o `/mnt/c` trava o Metro e a rede NAT do WSL esconde a 8081 do celular).
    `node_modules` instalado pelo Windows (`npm ci`); não rodar npm pelo WSL aqui.
-4. Abrir no **Expo Go** (Android) lendo o QR, ou gerar APK: `npm run build:apk` (EAS).
+4. Gerar/instalar o **dev build nativo**: `npm run android` (`expo run:android`,
+   requer JDK 17 + Android SDK). Sob New Architecture o app usa config nativa
+   (background location + foreground service) que o **Expo Go não fornece** — o
+   dev build é obrigatório. Depois, o Metro sobe com `npx expo start` e o dev
+   client conecta pelo QR. APK de distribuição: `npm run build:apk` (EAS).
 
 ## Notas
 - `deviceId` é gerado uma vez e guardado no SecureStore; o backend amarra a
