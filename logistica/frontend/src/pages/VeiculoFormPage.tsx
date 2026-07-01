@@ -43,6 +43,11 @@ export function VeiculoFormPage() {
   const [filialId, setFilialId] = useState('');
   const [departamentoLotacaoId, setDepartamentoId] = useState('');
   const [supervisorId, setSupervisorId] = useState('');
+  // Supervisor de ÁREA (atendente técnico, por matrícula Protheus) — distinto do
+  // "Supervisor responsável" (encarregado). O nome é resolvido no Protheus.
+  const [supervisorAreaMatricula, setSupAreaMat] = useState('');
+  const [supervisorAreaNome, setSupAreaNome] = useState('');
+  const [buscandoArea, setBuscandoArea] = useState(false);
   const [situacao, setSituacao] = useState('DISPONIVEL');
   const [carregando, setCarregando] = useState(modoEdicao);
   const [salvando, setSalvando] = useState(false);
@@ -90,6 +95,7 @@ export function VeiculoFormPage() {
           placa: string; modelo?: string | null; marca?: string | null; ano?: number | null;
           tipo: string; propriedade?: string; porte?: string | null; finalidade?: string | null; kmAtual: number; filialId: string; departamentoLotacaoId: string;
           supervisorId: string; situacao: string;
+          supervisorAreaMatricula?: string | null; supervisorAreaNome?: string | null;
           intervaloManutencaoKm?: number | null; kmUltimaManutencao?: number | null; kmProximaManutencao?: number | null;
         }>(`/veiculos/${id}`);
         setPlaca(v.placa); setModelo(v.modelo ?? ''); setMarca(v.marca ?? '');
@@ -99,11 +105,27 @@ export function VeiculoFormPage() {
         setKmUltima(v.kmUltimaManutencao ?? null); setKmProxima(v.kmProximaManutencao ?? null);
         setFilialId(v.filialId); setDepartamentoId(v.departamentoLotacaoId);
         setSupervisorId(v.supervisorId); setSituacao(v.situacao);
+        setSupAreaMat(v.supervisorAreaMatricula ?? ''); setSupAreaNome(v.supervisorAreaNome ?? '');
       } catch {
         toast('error', 'Veículo não encontrado.');
       } finally { setCarregando(false); }
     })();
   }, [id, toast]);
+
+  // Resolve o nome do supervisor de área pela matrícula (Protheus, mesmo endpoint
+  // do condutor). Só GESTOR_FROTA etc. chegam aqui (têm acesso a /frota/condutor).
+  async function buscarSupervisorArea() {
+    const m = supervisorAreaMatricula.trim();
+    if (!m) { setSupAreaNome(''); return; }
+    setBuscandoArea(true);
+    try {
+      const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: m });
+      setSupAreaNome(data.nome);
+    } catch {
+      setSupAreaNome('');
+      toast('warning', 'Matrícula do supervisor de área não encontrada no Protheus.');
+    } finally { setBuscandoArea(false); }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -126,6 +148,9 @@ export function VeiculoFormPage() {
       intervaloManutencaoKm: intervaloManutencaoKm ? parseInt(intervaloManutencaoKm) : undefined,
       departamentoLotacaoId,
       supervisorId,
+      // Supervisor de área: em edição '' remove o vínculo; no cadastro vazio = não envia.
+      supervisorAreaMatricula: supervisorAreaMatricula.trim() || (modoEdicao ? '' : undefined),
+      supervisorAreaNome: supervisorAreaNome.trim() || undefined,
       ...(modoEdicao ? { situacao } : {}),
     };
     try {
@@ -199,8 +224,28 @@ export function VeiculoFormPage() {
             )}</div>
           <div><label className={lbl}>Departamento de lotação *</label>
             <select value={departamentoLotacaoId} onChange={(e) => setDepartamentoId(e.target.value)} className={inp}><option value="">—</option>{departamentos.map((d) => <option key={d.id} value={d.id}>{labelCore(d)}</option>)}</select></div>
-          <div><label className={lbl}>Supervisor responsável *</label>
+          <div><label className={lbl}>Supervisor responsável * <span className="font-normal normal-case text-slate-400">(encarregado)</span></label>
             <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={inp}><option value="">—</option>{usuarios.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}</select></div>
+        </div>
+
+        <div>
+          <label className={lbl}>Supervisor de Área — atendente técnico (opcional)</label>
+          <div className="mt-1 flex items-start gap-2">
+            <input
+              value={supervisorAreaMatricula}
+              onChange={(e) => { setSupAreaMat(e.target.value.toUpperCase()); setSupAreaNome(''); }}
+              onBlur={() => void buscarSupervisorArea()}
+              placeholder="Matrícula Protheus (ex.: E05222)"
+              maxLength={20}
+              className="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono uppercase focus:border-capul-500 focus:outline-none"
+            />
+            <button type="button" onClick={() => void buscarSupervisorArea()} disabled={buscandoArea || !supervisorAreaMatricula.trim()}
+              className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+              {buscandoArea ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
+            </button>
+            {supervisorAreaNome && <span className="self-center text-sm font-medium text-emerald-700">👤 {supervisorAreaNome}</span>}
+          </div>
+          <p className="mt-1 text-xs text-slate-400">Colaborador que fica com <b>este veículo</b> para as visitas (funcionário Protheus, por matrícula). Diferente do "Supervisor responsável" (encarregado que gerencia). A troca fica registrada no histórico.</p>
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">

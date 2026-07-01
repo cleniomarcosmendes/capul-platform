@@ -62,6 +62,8 @@ export class VeiculoService {
             kmProximaManutencao: dto.kmProximaManutencao ?? null,
             departamentoLotacaoId: dto.departamentoLotacaoId,
             supervisorId: dto.supervisorId,
+            supervisorAreaMatricula: dto.supervisorAreaMatricula?.trim().toUpperCase() || null,
+            supervisorAreaNome: dto.supervisorAreaNome?.trim() || null,
           },
         });
         await tx.veiculoSupervisorHistorico.create({
@@ -72,6 +74,18 @@ export class VeiculoService {
             alteradoPorId: criadoPorId,
           },
         });
+        // Supervisor de área definido no cadastro → 1ª entrada do histórico.
+        if (v.supervisorAreaMatricula) {
+          await tx.veiculoSupervisorAreaHistorico.create({
+            data: {
+              veiculoId: v.id,
+              matriculaAnterior: null,
+              matriculaNova: v.supervisorAreaMatricula,
+              nomeNovo: v.supervisorAreaNome,
+              alteradoPorId: criadoPorId,
+            },
+          });
+        }
         return v;
       });
     } catch (e) {
@@ -147,6 +161,11 @@ export class VeiculoService {
     ]);
 
     const trocaSupervisor = dto.supervisorId && dto.supervisorId !== atual.supervisorId;
+    // Supervisor de área (matrícula): undefined = não mexe; '' = remover; senão troca.
+    const novaMatriculaArea = dto.supervisorAreaMatricula === undefined
+      ? undefined
+      : dto.supervisorAreaMatricula.trim().toUpperCase() || null;
+    const trocaArea = novaMatriculaArea !== undefined && novaMatriculaArea !== atual.supervisorAreaMatricula;
 
     return this.prisma.$transaction(async (tx) => {
       const v = await tx.veiculo.update({
@@ -170,6 +189,10 @@ export class VeiculoService {
           kmProximaManutencao: dto.kmProximaManutencao,
           departamentoLotacaoId: dto.departamentoLotacaoId,
           supervisorId: dto.supervisorId,
+          ...(novaMatriculaArea !== undefined ? {
+            supervisorAreaMatricula: novaMatriculaArea,
+            supervisorAreaNome: novaMatriculaArea ? (dto.supervisorAreaNome?.trim() || null) : null,
+          } : {}),
           ativo: dto.ativo,
         },
       });
@@ -179,6 +202,18 @@ export class VeiculoService {
             veiculoId: id,
             supervisorAnteriorId: atual.supervisorId,
             supervisorNovoId: dto.supervisorId!,
+            alteradoPorId,
+          },
+        });
+      }
+      // Troca do supervisor de área (registra quando atribui/muda p/ uma matrícula).
+      if (trocaArea && novaMatriculaArea) {
+        await tx.veiculoSupervisorAreaHistorico.create({
+          data: {
+            veiculoId: id,
+            matriculaAnterior: atual.supervisorAreaMatricula,
+            matriculaNova: novaMatriculaArea,
+            nomeNovo: dto.supervisorAreaNome?.trim() || null,
             alteradoPorId,
           },
         });

@@ -196,15 +196,22 @@ model Veiculo {
   kmProximaManutencao   Int?            @map("km_proxima_manutencao")
   departamentoLotacaoId String          @map("departamento_lotacao_id")
   supervisorId          String          @map("supervisor_id")
+  // Supervisor de ÁREA (atendente técnico da Indústria/Filial 18) que fica com o
+  // veículo p/ as visitas — funcionário Protheus (por MATRÍCULA). DISTINTO do
+  // supervisorId (encarregado que GERENCIA o veículo). Ver PLANO_LOGISTICA_REPRESENTANTES_v1.
+  supervisorAreaMatricula String?       @map("supervisor_area_matricula")
+  supervisorAreaNome      String?       @map("supervisor_area_nome")
   ativo                 Boolean         @default(true)
   criadoEm              DateTime        @default(now()) @map("criado_em")
   viagens               Viagem[]
   historicoSupervisor   VeiculoSupervisorHistorico[]
+  historicoSupervisorArea VeiculoSupervisorAreaHistorico[]
   despesas              DespesaVeiculo[]
 
   @@unique([filialId, placa])
   @@index([filialId, situacao])
   @@index([supervisorId])
+  @@index([supervisorAreaMatricula])
   @@index([departamentoLotacaoId])
   @@map("veiculo")
   @@schema("logistica")
@@ -221,6 +228,22 @@ model VeiculoSupervisorHistorico {
 
   @@index([veiculoId])
   @@map("veiculo_supervisor_historico")
+  @@schema("logistica")
+}
+
+// Histórico de troca do Supervisor de ÁREA do veículo (por matrícula Protheus).
+model VeiculoSupervisorAreaHistorico {
+  id                  String   @id @default(uuid())
+  veiculoId           String   @map("veiculo_id")
+  veiculo             Veiculo  @relation(fields: [veiculoId], references: [id])
+  matriculaAnterior   String?  @map("matricula_anterior")
+  matriculaNova       String   @map("matricula_nova")
+  nomeNovo            String?  @map("nome_novo")
+  alteradoEm          DateTime @default(now()) @map("alterado_em")
+  alteradoPorId       String   @map("alterado_por_id")
+
+  @@index([veiculoId])
+  @@map("veiculo_supervisor_area_historico")
   @@schema("logistica")
 }
 
