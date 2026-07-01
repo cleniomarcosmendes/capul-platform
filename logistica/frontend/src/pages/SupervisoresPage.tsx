@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Check, Loader2, MapPin, Plus, Route, Tag, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
@@ -46,6 +47,7 @@ export function SupervisoresPage() {
 // ---------------- Viagens mensais ----------------
 function ViagensTab() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [viagens, setViagens] = useState<ViagemSup[]>([]);
   const [regioes, setRegioes] = useState<Regiao[]>([]);
   const [loading, setLoading] = useState(true);
@@ -160,8 +162,8 @@ function ViagensTab() {
             <thead><tr className="bg-slate-50"><th className={th}>#</th><th className={th}>Mês</th><th className={th}>Região</th><th className={th}>Supervisor</th><th className={th}>Adiantamento</th><th className={th}>Visitas / Despesas</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {viagens.map((v) => (
-                <tr key={v.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-medium text-slate-700">{v.numero}</td>
+                <tr key={v.id} onClick={() => navigate(`/supervisores/viagens/${v.id}`)} className="cursor-pointer hover:bg-slate-50">
+                  <td className="px-4 py-3 font-medium text-capul-700">{v.numero}</td>
                   <td className="px-4 py-3">{fmtMes(v.mesReferencia)}</td>
                   <td className="px-4 py-3">{v.regiao?.nome ?? '—'}</td>
                   <td className="px-4 py-3">{v.condutorNome ?? '—'}</td>
@@ -169,7 +171,7 @@ function ViagensTab() {
                   <td className="px-4 py-3 text-slate-500">{v._count?.paradas ?? 0} / {v._count?.despesas ?? 0}</td>
                   <td className="px-4 py-3"><span className={statusPill(v.situacao)}>{v.situacao === 'CONCLUIDA' ? 'Concluída' : 'Em curso'}</span></td>
                   <td className="px-4 py-3">
-                    {v.situacao !== 'CONCLUIDA' && <button onClick={() => void concluir(v)} className="text-xs text-capul-600 hover:underline">Concluir</button>}
+                    {v.situacao !== 'CONCLUIDA' && <button onClick={(e) => { e.stopPropagation(); void concluir(v); }} className="text-xs text-capul-600 hover:underline">Concluir</button>}
                   </td>
                 </tr>
               ))}
