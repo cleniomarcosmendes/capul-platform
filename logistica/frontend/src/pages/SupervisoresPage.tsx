@@ -144,8 +144,8 @@ function ViagensTab() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor (matrícula + senha)</label>
               <div className="flex items-start gap-2">
-                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} placeholder="Matrícula" maxLength={20} className={`${inp} font-mono uppercase`} />
-                <input type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setNome(''); }} placeholder="Senha do portal" autoComplete="off" className={inp} />
+                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarSupervisor(); } }} placeholder="Matrícula" maxLength={20} className={`${inp} font-mono uppercase`} />
+                <input type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setNome(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarSupervisor(); } }} placeholder="Senha do portal" autoComplete="off" className={inp} />
                 <button type="button" onClick={() => void validarSupervisor()} disabled={buscando || !matricula.trim() || !senha} className="mt-0.5 inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                   {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Validar'}
                 </button>

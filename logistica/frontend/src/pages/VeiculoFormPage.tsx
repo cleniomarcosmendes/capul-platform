@@ -288,6 +288,7 @@ export function VeiculoFormPage() {
               value={supervisorAreaMatricula}
               onChange={(e) => { setSupAreaMat(e.target.value.toUpperCase()); setSupAreaNome(''); }}
               onBlur={() => void buscarSupervisorArea()}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarSupervisorArea(); } }}
               placeholder="Matrícula Protheus (ex.: E05222)"
               maxLength={20}
               className="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono uppercase focus:border-capul-500 focus:outline-none"
