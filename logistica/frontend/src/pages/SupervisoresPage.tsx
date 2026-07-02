@@ -56,6 +56,7 @@ function ViagensTab() {
   const [regiaoId, setRegiaoId] = useState('');
   const [adiantamento, setAdiantamento] = useState('');
   const [matricula, setMatricula] = useState('');
+  const [senha, setSenha] = useState('');
   const [nome, setNome] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -75,17 +76,23 @@ function ViagensTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const buscarSupervisor = async () => {
+  // Valida o supervisor por matrícula+SENHA (loginPortal do Protheus). Responde
+  // 200 {valida,nome,motivo} — nunca 401 (não desloga). Mostra o nome se válido.
+  const validarSupervisor = async () => {
     const m = matricula.trim();
-    if (!m) { setNome(''); return; }
+    if (!m || !senha) { setNome(''); return; }
     setBuscando(true);
-    try { const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: m }); setNome(data.nome); }
-    catch { setNome(''); toast('warning', 'Matrícula não encontrada no Protheus.'); } finally { setBuscando(false); }
+    try {
+      const { data } = await logisticaApi.post<{ valida: boolean; nome?: string; motivo?: string }>('/frota/condutor/validar', { matricula: m, senha });
+      if (data.valida && data.nome) { setNome(data.nome); toast('success', `Supervisor validado: ${data.nome}`); }
+      else { setNome(''); toast('warning', data.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível.' : 'Matrícula ou senha inválidas.'); }
+    } catch { setNome(''); toast('error', 'Falha ao validar o supervisor.'); } finally { setBuscando(false); }
   };
 
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mes) { toast('warning', 'Informe o mês de referência.'); return; }
+    if (matricula.trim() && !senha) { toast('warning', 'Informe a senha do supervisor (ou limpe a matrícula).'); return; }
     const mesRef = Number(mes.replace('-', '')); // "2026-05" → 202605
     setSalvando(true);
     try {
@@ -94,10 +101,10 @@ function ViagensTab() {
         regiaoId: regiaoId || undefined,
         adiantamento: adiantamento ? Number(adiantamento) : undefined,
         supervisorMatricula: matricula.trim() || undefined,
-        supervisorNome: nome.trim() || undefined,
+        supervisorSenha: senha || undefined,
       });
       toast('success', 'Viagem mensal criada.');
-      setShowForm(false); setMes(''); setRegiaoId(''); setAdiantamento(''); setMatricula(''); setNome('');
+      setShowForm(false); setMes(''); setRegiaoId(''); setAdiantamento(''); setMatricula(''); setSenha(''); setNome('');
       await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao criar viagem.')); } finally { setSalvando(false); }
   };
@@ -135,14 +142,17 @@ function ViagensTab() {
               <input type="number" step="0.01" min="0" value={adiantamento} onChange={(e) => setAdiantamento(e.target.value)} placeholder="0,00" className={inp} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor (matrícula)</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor (matrícula + senha)</label>
               <div className="flex items-start gap-2">
-                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} onBlur={() => void buscarSupervisor()} placeholder="ex.: E05222" maxLength={20} className={`${inp} font-mono uppercase`} />
-                <button type="button" onClick={() => void buscarSupervisor()} disabled={buscando || !matricula.trim()} className="mt-0.5 inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                  {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
+                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} placeholder="Matrícula" maxLength={20} className={`${inp} font-mono uppercase`} />
+                <input type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setNome(''); }} placeholder="Senha do portal" autoComplete="off" className={inp} />
+                <button type="button" onClick={() => void validarSupervisor()} disabled={buscando || !matricula.trim() || !senha} className="mt-0.5 inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                  {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Validar'}
                 </button>
               </div>
-              {nome && <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome}</p>}
+              {nome
+                ? <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome} — validado</p>
+                : <p className="mt-1 text-xs text-slate-400">O supervisor confirma com a senha do portal (matrícula Protheus).</p>}
             </div>
           </div>
           <div className="mt-4 flex gap-3">

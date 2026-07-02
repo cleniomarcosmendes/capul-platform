@@ -1,6 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
 import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, MunicipioDto } from './dto.js';
@@ -12,7 +13,10 @@ import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAti
  */
 @Injectable()
 export class SupervisorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly condutor: ProtheusCondutorService,
+  ) {}
 
   // ---- Atividades ----
   listarAtividades(user: JwtPayload, somenteAtivas?: boolean) {
@@ -90,6 +94,21 @@ export class SupervisorService {
       const v = await this.prisma.veiculo.findFirst({ where: { id: dto.veiculoId, filialId } });
       if (!v) throw new BadRequestException('Veículo não encontrado nesta filial.');
     }
+
+    // Supervisor identifica-se por matrícula+senha (Protheus loginPortal), como o
+    // condutor da frota. Se veio matrícula, a senha é obrigatória e validada aqui
+    // (400 se inválida — não 401, que deslogaria). O nome vem do Protheus (fonte).
+    let supMatricula: string | null = null;
+    let supNome: string | null = null;
+    if (dto.supervisorMatricula?.trim()) {
+      if (!dto.supervisorSenha?.trim()) throw new BadRequestException('Informe a senha do supervisor.');
+      const r = await this.condutor.validar(dto.supervisorMatricula.trim(), dto.supervisorSenha);
+      if (r.status === 'INDISPONIVEL') throw new ServiceUnavailableException('Portal do RH indisponível. Tente novamente em instantes.');
+      if (r.status !== 'VALIDO') throw new BadRequestException('Matrícula ou senha do supervisor inválidas.');
+      supMatricula = r.matricula ?? dto.supervisorMatricula.trim().toUpperCase();
+      supNome = r.nome ?? null;
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const contador = await tx.contadorSequencial.upsert({
         where: { filialId_escopo: { filialId, escopo: 'VIAGEM' } },
@@ -106,8 +125,8 @@ export class SupervisorService {
           adiantamento: dto.adiantamento != null ? new Prisma.Decimal(dto.adiantamento) : null,
           regiaoId: dto.regiaoId ?? null,
           veiculoId: dto.veiculoId ?? null,
-          condutorMatricula: dto.supervisorMatricula?.trim().toUpperCase() || null,
-          condutorNome: dto.supervisorNome?.trim() || null,
+          condutorMatricula: supMatricula,
+          condutorNome: supNome,
           dataHoraSaida: new Date(),
           criadoPorId: user.sub,
         },

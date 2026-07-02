@@ -33,8 +33,10 @@ export class CriarViagemSupervisorDto {
   @IsOptional() @IsString() @MaxLength(40) regiaoId?: string;
   @IsOptional() @IsNumber() @Min(0) adiantamento?: number;
   @IsOptional() @IsString() @MaxLength(40) veiculoId?: string;
-  // Supervisor de área (funcionário Protheus) dono da viagem.
+  // Supervisor de área (funcionário Protheus) dono da viagem — identifica-se por
+  // matrícula+senha (loginPortal). O nome é resolvido no Protheus (não confiar no client).
   @IsOptional() @IsString() @MaxLength(20) supervisorMatricula?: string;
+  @IsOptional() @IsString() supervisorSenha?: string;
   @IsOptional() @IsString() @MaxLength(120) supervisorNome?: string;
 }
 
