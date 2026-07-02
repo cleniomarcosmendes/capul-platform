@@ -46,12 +46,19 @@ const desde = (s?: string | null) => {
 };
 
 export function PainelFrotaPage() {
-  const { toast, confirm } = useToast();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const [data, setData] = useState<PainelFrota | null>(null);
   const [loading, setLoading] = useState(true);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
   const [busyManut, setBusyManut] = useState<string | null>(null);
+  // Mini-form de manutenção (abre por veículo no alerta de revisão preventiva).
+  const [manutId, setManutId] = useState<string | null>(null);
+  const [mKm, setMKm] = useState('');
+  const [mTipo, setMTipo] = useState<'PREVENTIVA' | 'CORRETIVA'>('PREVENTIVA');
+  const [mCusto, setMCusto] = useState('');
+  const [mMotivo, setMMotivo] = useState('');
+  const [mReiniciar, setMReiniciar] = useState(true);
   // Drill-down dos cards de situação: clicar mostra QUAIS veículos (busca sob
   // demanda em /veiculos, não infla o polling de 30s).
   const [drill, setDrill] = useState<{ situacao: string; label: string } | null>(null);
@@ -92,17 +99,21 @@ export function PainelFrotaPage() {
     }
   }, [toast]);
 
+  const abrirManut = (m: { id: string; kmAtual: number }) => {
+    setManutId(m.id); setMKm(String(m.kmAtual)); setMTipo('PREVENTIVA'); setMCusto(''); setMMotivo(''); setMReiniciar(true);
+  };
   const registrarManutencao = async (veiculoId: string, placa: string) => {
-    const ok = await confirm(
-      'Registrar manutenção',
-      `Confirmar manutenção do veículo ${placa}? A próxima revisão será reagendada (km atual + intervalo).`,
-      { confirmLabel: 'Registrar', variant: 'default' },
-    );
-    if (!ok) return;
     setBusyManut(veiculoId);
     try {
-      await logisticaApi.post(`/frota/veiculos/${veiculoId}/manutencao`, {});
+      await logisticaApi.post(`/frota/veiculos/${veiculoId}/manutencao`, {
+        tipo: mTipo,
+        km: mKm ? parseInt(mKm) : undefined,
+        custo: mCusto ? Number(mCusto) : undefined,
+        observacao: mMotivo.trim() || undefined,
+        reiniciarCiclo: mReiniciar,
+      });
       toast('success', `Manutenção do ${placa} registrada.`);
+      setManutId(null);
       await carregar(true);
     } catch (e) {
       const m = (e as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
@@ -244,18 +255,48 @@ export function PainelFrotaPage() {
           </p>
           <div className="space-y-1.5">
             {alertas.manutencaoPreventiva.map((m) => (
-              <div key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <span className="font-medium text-slate-800">{m.placa}{m.modelo ? <span className="font-normal text-slate-400"> · {m.modelo}</span> : null}</span>
-                <span className="tabular-nums text-slate-600">{m.kmAtual.toLocaleString('pt-BR')} / {m.kmProxima.toLocaleString('pt-BR')} km</span>
-                {m.vencida ? (
-                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">vencida há {Math.abs(m.faltam).toLocaleString('pt-BR')} km</span>
-                ) : (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">faltam {m.faltam.toLocaleString('pt-BR')} km</span>
+              <div key={m.id}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <span className="font-medium text-slate-800">{m.placa}{m.modelo ? <span className="font-normal text-slate-400"> · {m.modelo}</span> : null}</span>
+                  <span className="tabular-nums text-slate-600">{m.kmAtual.toLocaleString('pt-BR')} / {m.kmProxima.toLocaleString('pt-BR')} km</span>
+                  {m.vencida ? (
+                    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">vencida há {Math.abs(m.faltam).toLocaleString('pt-BR')} km</span>
+                  ) : (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">faltam {m.faltam.toLocaleString('pt-BR')} km</span>
+                  )}
+                  <button onClick={() => (manutId === m.id ? setManutId(null) : abrirManut(m))} disabled={busyManut === m.id}
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-orange-300 bg-white px-2 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50">
+                    <Wrench className="h-3 w-3" /> Registrar manutenção
+                  </button>
+                </div>
+
+                {manutId === m.id && (
+                  <div className="mt-2 rounded-lg border border-orange-200 bg-white p-3">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">Tipo</label>
+                        <select value={mTipo} onChange={(e) => { const t = e.target.value as 'PREVENTIVA' | 'CORRETIVA'; setMTipo(t); setMReiniciar(t === 'PREVENTIVA'); }} className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                          <option value="PREVENTIVA">Preventiva (do ciclo)</option>
+                          <option value="CORRETIVA">Corretiva / excepcional</option>
+                        </select>
+                      </div>
+                      <div><label className="mb-1 block text-xs font-medium text-slate-500">KM na manutenção</label><input type="number" min={0} value={mKm} onChange={(e) => setMKm(e.target.value)} className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+                      <div><label className="mb-1 block text-xs font-medium text-slate-500">Custo (R$)</label><input type="number" step="0.01" min={0} value={mCusto} onChange={(e) => setMCusto(e.target.value)} placeholder="opcional" className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+                    </div>
+                    <input value={mMotivo} onChange={(e) => setMMotivo(e.target.value)} maxLength={255} placeholder="Motivo / observação" className="mt-2 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+                    <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+                      <input type="checkbox" checked={mReiniciar} onChange={(e) => setMReiniciar(e.target.checked)} className="h-4 w-4 accent-capul-600" />
+                      Reiniciar o ciclo preventivo (próxima = km + intervalo)
+                      <span className="text-slate-400">— numa corretiva, marque só se já incluiu a revisão</span>
+                    </label>
+                    <div className="mt-2 flex gap-2">
+                      <button onClick={() => void registrarManutencao(m.id, m.placa)} disabled={busyManut === m.id} className="inline-flex items-center gap-1 rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50">
+                        {busyManut === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null} Salvar manutenção
+                      </button>
+                      <button onClick={() => setManutId(null)} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+                    </div>
+                  </div>
                 )}
-                <button onClick={() => void registrarManutencao(m.id, m.placa)} disabled={busyManut === m.id}
-                  className="ml-auto inline-flex items-center gap-1 rounded-lg border border-orange-300 bg-white px-2 py-1 text-xs text-orange-700 hover:bg-orange-100 disabled:opacity-50">
-                  {busyManut === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wrench className="h-3 w-3" />} Registrar manutenção
-                </button>
               </div>
             ))}
           </div>
