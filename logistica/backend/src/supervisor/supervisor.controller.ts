@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, LancarDespesaSupervisorDto } from './dto.js';
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
@@ -71,5 +71,21 @@ export class SupervisorController {
   @Delete('viagens/:id/visitas/:paradaId')
   removerVisita(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload) {
     return this.svc.removerVisita(id, paradaId, user);
+  }
+
+  // ---- Despesas da viagem (compõem a RDV) ----
+  @Post('viagens/:id/despesas')
+  lancarDespesa(@Param('id') id: string, @Body() dto: LancarDespesaSupervisorDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.lancarDespesa(id, dto, user);
+  }
+  @Delete('viagens/:id/despesas/:despesaId')
+  removerDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.removerDespesa(id, despesaId, user);
+  }
+
+  // ---- RDV (Relatório de Despesas de Viagem) ----
+  @Get('viagens/:id/rdv')
+  rdv(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.rdv(id, user);
   }
 }

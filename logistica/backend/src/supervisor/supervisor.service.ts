@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, MunicipioDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, LancarDespesaSupervisorDto, MunicipioDto } from './dto.js';
 
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
@@ -199,7 +199,7 @@ export class SupervisorService {
           propriedade: dto.propriedade?.trim() || null,
           local: dto.local?.trim() || null,
           observacao: dto.observacao?.trim() || null,
-          dataHora: dto.dataVisita ? new Date(dto.dataVisita) : new Date(),
+          dataHora: this.parseData(dto.dataVisita),
           status: 'REALIZADA',
         },
         include: { atividade: { select: { nome: true } }, regiao: { select: { nome: true } } },
@@ -231,6 +231,135 @@ export class SupervisorService {
       data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date() },
       include: { regiao: { select: { id: true, nome: true } } },
     });
+  }
+
+  // ---- Despesas da viagem do supervisor (compõem a RDV) ----
+  async lancarDespesa(viagemId: string, dto: LancarDespesaSupervisorDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
+    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
+    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para lançar despesas.');
+    const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
+    if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
+    // INDIVÍDUO não tem veículo; VEÍCULO usa o veículo da viagem (se houver).
+    const veiculoId = tipo.categoria === 'INDIVIDUO' ? null : v.veiculoId;
+    return this.prisma.despesaVeiculo.create({
+      data: {
+        filialId,
+        veiculoId,
+        viagemId,
+        tipoDespesaId: tipo.id,
+        valor: new Prisma.Decimal(dto.valor),
+        dataDespesa: this.parseData(dto.data),
+        fornecedor: dto.fornecedor?.trim() || null,
+        observacao: dto.observacao?.trim() || null,
+        // Lançada pelo gestor na prestação de contas → já APROVADA.
+        situacao: 'APROVADA',
+        aprovadoEm: new Date(),
+        aprovadoPorId: user.sub,
+        criadoPorId: user.sub,
+      },
+      include: { tipoDespesa: { select: { nome: true, categoria: true } } },
+    });
+  }
+
+  async removerDespesa(viagemId: string, despesaId: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const d = await this.prisma.despesaVeiculo.findUnique({
+      where: { id: despesaId },
+      include: { viagem: { select: { tipo: true, filialId: true, situacao: true } } },
+    });
+    if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
+    if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    if (d.viagem?.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover despesas.');
+    await this.prisma.despesaVeiculo.delete({ where: { id: despesaId } });
+    return { ok: true };
+  }
+
+  /**
+   * RDV (Relatório de Despesas de Viagem): agrega DIA × TIPO de despesa, com o
+   * município do dia (das visitas), totais por tipo/categoria e o SALDO contra o
+   * adiantamento. Espelha a planilha "RDV Maio".
+   */
+  async rdv(viagemId: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.prisma.viagem.findUnique({
+      where: { id: viagemId },
+      include: {
+        veiculo: { select: { placa: true, modelo: true } },
+        regiao: { select: { nome: true } },
+        despesas: { include: { tipoDespesa: { select: { id: true, nome: true, categoria: true } } } },
+        paradas: { select: { dataHora: true, municipio: true } },
+      },
+    });
+    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
+    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+
+    const diaDe = (d: Date | null) => (d ? new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) : '—');
+
+    // Colunas = tipos distintos usados nas despesas (ordem por nome).
+    const tiposMap = new Map<string, { id: string; nome: string; categoria: string }>();
+    for (const d of v.despesas) {
+      if (d.tipoDespesa) tiposMap.set(d.tipoDespesa.id, { id: d.tipoDespesa.id, nome: d.tipoDespesa.nome, categoria: d.tipoDespesa.categoria });
+    }
+    const tipos = [...tiposMap.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    // Municípios por dia (das visitas).
+    const munsPorDia = new Map<string, Set<string>>();
+    for (const p of v.paradas) {
+      if (!p.municipio) continue;
+      const dia = diaDe(p.dataHora);
+      if (!munsPorDia.has(dia)) munsPorDia.set(dia, new Set());
+      munsPorDia.get(dia)!.add(p.municipio);
+    }
+
+    // Grade dia × tipo.
+    const diasMap = new Map<string, { valores: Record<string, number>; total: number }>();
+    const totaisPorTipo: Record<string, number> = {};
+    const totaisPorCategoria = { VEICULO: 0, INDIVIDUO: 0 };
+    let total = 0;
+    for (const d of v.despesas) {
+      const dia = diaDe(d.dataDespesa);
+      const tid = d.tipoDespesaId;
+      const val = Number(d.valor);
+      if (!diasMap.has(dia)) diasMap.set(dia, { valores: {}, total: 0 });
+      const linha = diasMap.get(dia)!;
+      linha.valores[tid] = (linha.valores[tid] ?? 0) + val;
+      linha.total += val;
+      totaisPorTipo[tid] = (totaisPorTipo[tid] ?? 0) + val;
+      const cat = d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'INDIVIDUO' : 'VEICULO';
+      totaisPorCategoria[cat] += val;
+      total += val;
+    }
+    const dias = [...diasMap.entries()]
+      .map(([data, o]) => ({ data, municipios: [...(munsPorDia.get(data) ?? [])], valores: o.valores, total: o.total }))
+      .sort((a, b) => a.data.localeCompare(b.data));
+
+    const adiantamento = v.adiantamento != null ? Number(v.adiantamento) : 0;
+    // saldo > 0 = sobra do adiantamento (a devolver à CAPUL); < 0 = a reembolsar.
+    const saldo = adiantamento - total;
+
+    return {
+      viagem: { id: v.id, numero: v.numero, mesReferencia: v.mesReferencia, situacao: v.situacao },
+      supervisor: { matricula: v.condutorMatricula, nome: v.condutorNome },
+      veiculo: v.veiculo,
+      regiao: v.regiao,
+      tipos,
+      dias,
+      totaisPorTipo,
+      totaisPorCategoria,
+      total,
+      adiantamento,
+      saldo,
+    };
+  }
+
+  /** Parseia data do formulário. Date-only ("YYYY-MM-DD") vira MEIO-DIA em SP p/
+   *  não recuar 1 dia no fuso (UTC midnight → dia anterior no Brasil). */
+  private parseData(s?: string): Date {
+    if (!s) return new Date();
+    return s.includes('T') ? new Date(s) : new Date(`${s}T12:00:00-03:00`);
   }
 
   /** Normaliza + dedup (por município, case-insensitive) a lista N:N. */

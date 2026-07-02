@@ -53,3 +53,12 @@ export class AdicionarVisitaDto {
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
   @IsOptional() @IsDateString() dataVisita?: string;
 }
+
+// ---- Despesa da viagem do supervisor (compõe a RDV) ----
+export class LancarDespesaSupervisorDto {
+  @IsString() @IsNotEmpty() @MaxLength(40) tipoDespesaId!: string;
+  @IsNumber() @Min(0.01) valor!: number;
+  @IsOptional() @IsDateString() data?: string;
+  @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;
+  @IsOptional() @IsString() @MaxLength(500) observacao?: string;
+}
