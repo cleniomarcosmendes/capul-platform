@@ -2,7 +2,7 @@ import {
   BadRequestException, ForbiddenException, Injectable, NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { Prisma, StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa, StatusParada } from '@prisma/client';
+import { Prisma, StatusViagem, TipoViagem, SituacaoVeiculo, StatusDespesa, StatusParada, TipoManutencao } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
@@ -310,18 +310,50 @@ export class FrotaService {
 
     const km = dto.km ?? veiculo.kmAtual;
     if (km < 0) throw new BadRequestException('KM inválido.');
+    const tipo = dto.tipo ?? TipoManutencao.PREVENTIVA;
+    // Reinicia o ciclo preventivo? Default: sim p/ PREVENTIVA, não p/ CORRETIVA
+    // (conserto pontual não conta como revisão) — mas o gestor pode forçar.
+    const reiniciar = dto.reiniciarCiclo ?? tipo === TipoManutencao.PREVENTIVA;
     const intervalo = dto.intervaloKm ?? veiculo.intervaloManutencaoKm ?? null;
-    const proxima = intervalo != null ? km + intervalo : null;
+    const proxima = reiniciar && intervalo != null ? km + intervalo : null;
+    const dataManutencao = dto.data ? new Date(dto.data) : new Date();
 
-    return this.prisma.veiculo.update({
-      where: { id: veiculoId },
-      data: {
-        kmUltimaManutencao: km,
-        kmProximaManutencao: proxima,
-        // Se o intervalo veio na chamada, persiste como o padrão do veículo.
-        ...(dto.intervaloKm != null ? { intervaloManutencaoKm: dto.intervaloKm } : {}),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.manutencaoVeiculo.create({
+        data: {
+          veiculoId,
+          tipo,
+          km,
+          dataManutencao,
+          motivo: dto.observacao?.trim() || null,
+          custo: dto.custo != null ? new Prisma.Decimal(dto.custo) : null,
+          reiniciouCiclo: reiniciar,
+          kmProximaGerada: reiniciar ? proxima : null,
+          registradoPorId: user.sub,
+        },
+      });
+      // Só mexe no ciclo preventivo do veículo quando reinicia.
+      if (reiniciar) {
+        return tx.veiculo.update({
+          where: { id: veiculoId },
+          data: {
+            kmUltimaManutencao: km,
+            kmProximaManutencao: proxima,
+            ...(dto.intervaloKm != null ? { intervaloManutencaoKm: dto.intervaloKm } : {}),
+          },
+        });
+      }
+      // Corretiva sem reiniciar: registra o histórico e não altera o ciclo.
+      return tx.veiculo.findUnique({ where: { id: veiculoId } });
     });
+  }
+
+  /** Histórico de manutenções do veículo (mais recente primeiro). */
+  async listarManutencoes(veiculoId: string, user: JwtPayload) {
+    const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId }, select: { filialId: true } });
+    if (!veiculo) throw new NotFoundException('Veículo não encontrado.');
+    if (veiculo.filialId !== user.filialId) throw new ForbiddenException('Veículo de outra filial.');
+    return this.prisma.manutencaoVeiculo.findMany({ where: { veiculoId }, orderBy: { dataManutencao: 'desc' } });
   }
 
   private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string }) {

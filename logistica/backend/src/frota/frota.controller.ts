@@ -90,11 +90,18 @@ export class FrotaController {
     return this.frota.ajustarPorGestor(id, dto, user, roleLogistica(user));
   }
 
-  /** Registrar manutenção feita no veículo — reseta o alerta preventivo por KM. */
+  /** Registrar manutenção (preventiva do ciclo ou corretiva/excepcional). */
   @Post('veiculos/:id/manutencao')
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   registrarManutencao(@Param('id') id: string, @Body() dto: RegistrarManutencaoDto, @CurrentUser() user: JwtPayload) {
     return this.frota.registrarManutencao(id, dto, user, roleLogistica(user));
+  }
+
+  /** Histórico de manutenções do veículo. */
+  @Get('veiculos/:id/manutencoes')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  listarManutencoes(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.frota.listarManutencoes(id, user);
   }
 
   /** Linha do KM (hodômetro) da frota no mês: uma linha por veículo (ou de um só). Página /frota/linha-km. */

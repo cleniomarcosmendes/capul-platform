@@ -217,6 +217,7 @@ model Veiculo {
   historicoSupervisor   VeiculoSupervisorHistorico[]
   historicoSupervisorArea VeiculoSupervisorAreaHistorico[]
   despesas              DespesaVeiculo[]
+  manutencoes           ManutencaoVeiculo[]
 
   @@unique([filialId, placa])
   @@index([filialId, situacao])
@@ -224,6 +225,35 @@ model Veiculo {
   @@index([supervisorAreaMatricula])
   @@index([departamentoLotacaoId])
   @@map("veiculo")
+  @@schema("logistica")
+}
+
+// Manutenção do veículo (Fase — manutenção): PREVENTIVA (do ciclo por KM) ou
+// CORRETIVA/excepcional (fora do ciclo — quebra, acidente, conserto pontual).
+enum TipoManutencao {
+  PREVENTIVA
+  CORRETIVA
+  @@schema("logistica")
+}
+
+// Histórico de manutenções do veículo. Cada registro pode (ou não) REINICIAR o
+// ciclo preventivo — quando reinicia, grava a próxima revisão (km + intervalo).
+model ManutencaoVeiculo {
+  id              String         @id @default(uuid())
+  veiculoId       String         @map("veiculo_id")
+  veiculo         Veiculo        @relation(fields: [veiculoId], references: [id])
+  tipo            TipoManutencao @default(PREVENTIVA)
+  km              Int
+  dataManutencao  DateTime       @map("data_manutencao")
+  motivo          String?
+  custo           Decimal?       @db.Decimal(12, 2)
+  reiniciouCiclo  Boolean        @default(false) @map("reiniciou_ciclo")
+  kmProximaGerada Int?           @map("km_proxima_gerada")
+  registradoPorId String         @map("registrado_por_id")
+  criadoEm        DateTime       @default(now()) @map("criado_em")
+
+  @@index([veiculoId, dataManutencao])
+  @@map("manutencao_veiculo")
   @@schema("logistica")
 }
 

@@ -59,7 +59,11 @@ export class VeiculoService {
             capacidadeCarga: dto.capacidadeCarga?.trim() || null,
             situacao: dto.situacao ?? 'DISPONIVEL',
             intervaloManutencaoKm: dto.intervaloManutencaoKm ?? null,
-            kmProximaManutencao: dto.kmProximaManutencao ?? null,
+            // Auto-agenda a 1ª revisão a partir do intervalo (km atual + intervalo).
+            // Sem manutenção registrada ainda → base = km atual do cadastro.
+            kmProximaManutencao: dto.intervaloManutencaoKm
+              ? (dto.kmAtual ?? 0) + dto.intervaloManutencaoKm
+              : null,
             departamentoLotacaoId: dto.departamentoLotacaoId,
             supervisorId: dto.supervisorId,
             supervisorAreaMatricula: dto.supervisorAreaMatricula?.trim().toUpperCase() || null,
@@ -167,6 +171,14 @@ export class VeiculoService {
       : dto.supervisorAreaMatricula.trim().toUpperCase() || null;
     const trocaArea = novaMatriculaArea !== undefined && novaMatriculaArea !== atual.supervisorAreaMatricula;
 
+    // Re-agenda a próxima revisão quando o intervalo vier no update. Base = km da
+    // última manutenção (se já houve) ou o km atual do veículo. Intervalo 0 = sem
+    // agendamento. undefined (não veio) = não mexe no que já está.
+    const baseKmManut = atual.kmUltimaManutencao ?? (dto.kmAtual ?? atual.kmAtual);
+    const proximaManut = dto.intervaloManutencaoKm != null
+      ? (dto.intervaloManutencaoKm > 0 ? baseKmManut + dto.intervaloManutencaoKm : null)
+      : undefined;
+
     return this.prisma.$transaction(async (tx) => {
       const v = await tx.veiculo.update({
         where: { id },
@@ -186,7 +198,7 @@ export class VeiculoService {
           capacidadeCarga: dto.capacidadeCarga?.trim(),
           situacao: dto.situacao,
           intervaloManutencaoKm: dto.intervaloManutencaoKm,
-          kmProximaManutencao: dto.kmProximaManutencao,
+          kmProximaManutencao: proximaManut,
           departamentoLotacaoId: dto.departamentoLotacaoId,
           supervisorId: dto.supervisorId,
           ...(novaMatriculaArea !== undefined ? {

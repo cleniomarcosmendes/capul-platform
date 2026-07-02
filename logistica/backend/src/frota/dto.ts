@@ -1,4 +1,5 @@
-import { ArrayNotEmpty, IsArray, IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { TipoManutencao } from '@prisma/client';
 
 export class BuscarCondutorDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
@@ -207,6 +208,21 @@ export class RegistrarManutencaoDto {
 
   @IsOptional() @IsString() @MaxLength(255)
   observacao?: string;
+
+  // PREVENTIVA (do ciclo por KM) ou CORRETIVA/excepcional. Default PREVENTIVA.
+  @IsOptional() @IsEnum(TipoManutencao)
+  tipo?: TipoManutencao;
+
+  @IsOptional() @IsNumber() @Min(0)
+  custo?: number;
+
+  // Reinicia o ciclo preventivo (próxima = km + intervalo)? Se omitido, o service
+  // usa true p/ PREVENTIVA e false p/ CORRETIVA.
+  @IsOptional() @IsBoolean()
+  reiniciarCiclo?: boolean;
+
+  @IsOptional() @IsDateString()
+  data?: string;
 }
 
 /** Ajuste/fechamento por GESTOR_FROTA ou supervisor do veículo (sem senha do condutor). */
