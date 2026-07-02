@@ -55,6 +55,7 @@ export function VeiculoFormPage() {
   const [mReiniciar, setMReiniciar] = useState(true);
   const [salvandoManut, setSalvandoManut] = useState(false);
   const [filialId, setFilialId] = useState('');
+  const [filialOriginal, setFilialOriginal] = useState('');
   const [departamentoLotacaoId, setDepartamentoId] = useState('');
   const [supervisorId, setSupervisorId] = useState('');
   // Supervisor de ÁREA (atendente técnico, por matrícula Protheus) — distinto do
@@ -117,7 +118,7 @@ export function VeiculoFormPage() {
         setPorte(v.porte ?? ''); setFinalidade(v.finalidade ?? ''); setKmAtual(String(v.kmAtual ?? 0));
         setIntervalo(v.intervaloManutencaoKm != null ? String(v.intervaloManutencaoKm) : '');
         setKmUltima(v.kmUltimaManutencao ?? null); setKmProxima(v.kmProximaManutencao ?? null);
-        setFilialId(v.filialId); setDepartamentoId(v.departamentoLotacaoId);
+        setFilialId(v.filialId); setFilialOriginal(v.filialId); setDepartamentoId(v.departamentoLotacaoId);
         setSupervisorId(v.supervisorId); setSituacao(v.situacao);
         setSupAreaMat(v.supervisorAreaMatricula ?? ''); setSupAreaNome(v.supervisorAreaNome ?? '');
       } catch {
@@ -268,10 +269,15 @@ export function VeiculoFormPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div><label className={lbl}>Filial{podeEscolherFilial ? ' *' : ''}</label>
             {podeEscolherFilial ? (
-              <select value={filialId} onChange={(e) => setFilialId(e.target.value)} className={inp}>
-                <option value="">—</option>
-                {filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}
-              </select>
+              <>
+                <select value={filialId} onChange={(e) => setFilialId(e.target.value)} className={inp}>
+                  <option value="">—</option>
+                  {filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}
+                </select>
+                {modoEdicao && !!filialOriginal && filialId !== filialOriginal && (
+                  <p className="mt-1 text-xs font-medium text-amber-600">⚠️ Filial trocada — re-selecione o departamento e o supervisor (são específicos da filial). A troca é bloqueada se houver viagem em curso.</p>
+                )}
+              </>
             ) : (
               <input
                 value={(() => { const f = filiais.find((x) => x.id === filialId); return f ? labelCore(f) : (usuario?.filialAtual?.nome ?? '—'); })()}
