@@ -22,6 +22,8 @@ import { FrotaViagemDetalhePage } from './pages/FrotaViagemDetalhePage';
 import { DespesasPage } from './pages/DespesasPage';
 import { SupervisoresPage } from './pages/SupervisoresPage';
 import { SupervisorViagemPage } from './pages/SupervisorViagemPage';
+import { SupervisorRdvPrintPage } from './pages/SupervisorRdvPrintPage';
+import { SupervisorVisitasPrintPage } from './pages/SupervisorVisitasPrintPage';
 import { DespesaNovaPage } from './pages/DespesaNovaPage';
 import { PainelFrotaPage } from './pages/PainelFrotaPage';
 import { FrotaAnalisePage } from './pages/FrotaAnalisePage';
@@ -70,6 +72,8 @@ function Protected() {
               <Route path="/frota/linha-km" element={<LinhaKmPage />} />
               <Route path="/supervisores" element={<SupervisoresPage />} />
               <Route path="/supervisores/viagens/:id" element={<SupervisorViagemPage />} />
+              <Route path="/supervisores/viagens/:id/rdv" element={<SupervisorRdvPrintPage />} />
+              <Route path="/supervisores/viagens/:id/visitas" element={<SupervisorVisitasPrintPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
               <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, MapPin, Plus, Search, Trash2, User } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Plus, Printer, Search, Trash2, User } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { errMsg } from './frota-utils';
@@ -107,17 +107,27 @@ export function SupervisorViagemPage() {
   const [observacao, setObs] = useState('');
   const [dataVisita, setDataVisita] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // form da despesa
+  const [tipos, setTipos] = useState<{ id: string; nome: string; categoria: string; ativo?: boolean }[]>([]);
+  const [showDesp, setShowDesp] = useState(false);
+  const [dTipo, setDTipo] = useState('');
+  const [dValor, setDValor] = useState('');
+  const [dData, setDData] = useState('');
+  const [dFornecedor, setDForn] = useState('');
+  const [dObs, setDObs] = useState('');
+  const [salvandoDesp, setSalvandoDesp] = useState(false);
 
   const carregar = async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const [d, a, r] = await Promise.all([
+      const [d, a, r, t] = await Promise.all([
         logisticaApi.get<ViagemDetalhe>(`/supervisor/viagens/${id}`),
         logisticaApi.get<Atividade[]>('/supervisor/atividades', { params: { ativos: true } }),
         logisticaApi.get<Regiao[]>('/supervisor/regioes', { params: { ativos: true } }),
+        logisticaApi.get<{ id: string; nome: string; categoria: string; ativo?: boolean }[]>('/despesas/tipos'),
       ]);
-      setV(d.data); setAtividades(a.data); setRegioes(r.data);
+      setV(d.data); setAtividades(a.data); setRegioes(r.data); setTipos(t.data.filter((x) => x.ativo !== false));
       if (d.data.regiao?.id && !regiaoId) setRegiaoId(d.data.regiao.id);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a viagem.')); } finally { setLoading(false); }
   };
@@ -159,6 +169,25 @@ export function SupervisorViagemPage() {
     catch (e) { toast('error', errMsg(e, 'Falha ao concluir.')); }
   };
 
+  const lancarDespesa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dTipo || !dValor) { toast('warning', 'Escolha o tipo e informe o valor.'); return; }
+    setSalvandoDesp(true);
+    try {
+      await logisticaApi.post(`/supervisor/viagens/${id}/despesas`, {
+        tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined,
+        fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined,
+      });
+      toast('success', 'Despesa lançada.');
+      setShowDesp(false); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs('');
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao lançar despesa.')); } finally { setSalvandoDesp(false); }
+  };
+  const removerDespesa = async (dId: string) => {
+    try { await logisticaApi.delete(`/supervisor/viagens/${id}/despesas/${dId}`); toast('success', 'Despesa removida.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
+  };
+
   if (loading) return <div className="p-6 text-slate-500">Carregando…</div>;
   if (!v) return <div className="p-6 text-slate-500">Viagem não encontrada.</div>;
 
@@ -175,7 +204,11 @@ export function SupervisorViagemPage() {
             <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${concluida ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`}>{concluida ? 'Concluída' : 'Em curso'}</span>
           </p>
         </div>
-        {!concluida && <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir mês</button>}
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate(`/supervisores/viagens/${id}/rdv`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> RDV</button>
+          <button onClick={() => navigate(`/supervisores/viagens/${id}/visitas`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> Visitas</button>
+          {!concluida && <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir mês</button>}
+        </div>
       </div>
 
       {!concluida && (
@@ -224,13 +257,39 @@ export function SupervisorViagemPage() {
         </table>
       </div>
 
-      <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">Despesas do mês ({v.despesas.length}) <span className="text-xs font-normal text-slate-400">— lançadas na Frota/Custos; total {brl(totalDespesas)}</span></h2>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">Despesas do mês ({v.despesas.length}) <span className="text-xs font-normal text-slate-400">— total {brl(totalDespesas)}</span></h2>
+        {!concluida && <button onClick={() => setShowDesp(!showDesp)} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-capul-700"><Plus className="h-3.5 w-3.5" /> Nova despesa</button>}
+      </div>
+
+      {showDesp && !concluida && (
+        <form onSubmit={lancarDespesa} className="mb-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-slate-500">Tipo *</label>
+              <select value={dTipo} onChange={(e) => setDTipo(e.target.value)} className={inp}>
+                <option value="">—</option>
+                {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome} ({t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'})</option>)}
+              </select>
+            </div>
+            <div><label className="mb-1 block text-xs font-medium text-slate-500">Valor (R$) *</label><input type="number" step="0.01" min="0" value={dValor} onChange={(e) => setDValor(e.target.value)} className={inp} /></div>
+            <div><label className="mb-1 block text-xs font-medium text-slate-500">Data</label><input type="date" value={dData} onChange={(e) => setDData(e.target.value)} className={inp} /></div>
+            <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Fornecedor</label><input value={dFornecedor} onChange={(e) => setDForn(e.target.value)} maxLength={120} className={inp} /></div>
+            <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={dObs} onChange={(e) => setDObs(e.target.value)} maxLength={500} className={inp} /></div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button type="submit" disabled={salvandoDesp} className="rounded-lg bg-capul-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvandoDesp ? 'Salvando…' : 'Lançar despesa'}</button>
+            <button type="button" onClick={() => setShowDesp(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+          </div>
+        </form>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full">
-          <thead><tr className="bg-slate-50"><th className={th}>Data</th><th className={th}>Tipo</th><th className={th}>Categoria</th><th className={th}>Valor</th><th className={th}>Situação</th></tr></thead>
+          <thead><tr className="bg-slate-50"><th className={th}>Data</th><th className={th}>Tipo</th><th className={th}>Categoria</th><th className={th}>Valor</th><th className={th}>Situação</th><th className={th}></th></tr></thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {v.despesas.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Nenhuma despesa lançada nesta viagem.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Nenhuma despesa lançada nesta viagem.</td></tr>
             ) : v.despesas.map((d) => (
               <tr key={d.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3">{fmtData(d.dataDespesa)}</td>
@@ -238,6 +297,7 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3 text-slate-500">{d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'}</td>
                 <td className="px-4 py-3">{brl(d.valor)}</td>
                 <td className="px-4 py-3 text-slate-500">{d.situacao}</td>
+                <td className="px-4 py-3">{!concluida && <button onClick={() => void removerDespesa(d.id)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>}</td>
               </tr>
             ))}
           </tbody>
