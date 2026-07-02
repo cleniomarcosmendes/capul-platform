@@ -50,6 +50,8 @@ export class CreateVeiculoDto {
 }
 
 export class UpdateVeiculoDto {
+  // Troca de filial (só gestor/admin; bloqueada se houver viagem em curso).
+  @IsOptional() @IsString() @MaxLength(40) filialId?: string;
   @IsOptional() @IsString() @MinLength(1) @MaxLength(10) placa?: string;
   @IsOptional() @IsString() @MaxLength(20) renavam?: string;
   @IsOptional() @IsString() @MaxLength(30) chassi?: string;

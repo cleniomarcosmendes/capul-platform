@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, SituacaoVeiculo } from '@prisma/client';
+import { Prisma, SituacaoVeiculo, StatusViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
@@ -158,6 +158,20 @@ export class VeiculoService {
     if (!atual) throw new NotFoundException('Veículo não encontrado.');
     if (userFilialId && atual.filialId !== userFilialId) throw new ForbiddenException('Veículo de outra filial.');
 
+    // Troca de FILIAL (só gestor/admin — quem tem userFilialId=undefined via
+    // podeVerOutrasFiliais). Bloqueada se houver viagem em curso; valida a filial
+    // de destino e a colisão de placa. O histórico fica na filial de origem.
+    const trocaFilial = !!dto.filialId && dto.filialId !== atual.filialId;
+    if (trocaFilial) {
+      if (userFilialId) throw new ForbiddenException('Apenas gestor de frota ou admin pode trocar a filial do veículo.');
+      await this.core.validarFilial(dto.filialId!);
+      const emCurso = await this.prisma.viagem.count({ where: { veiculoId: id, situacao: StatusViagem.EM_CURSO } });
+      if (emCurso > 0) throw new BadRequestException('Não é possível trocar a filial: o veículo tem viagem em curso.');
+      const placaAlvo = dto.placa?.trim().toUpperCase() ?? atual.placa;
+      const colisao = await this.prisma.veiculo.findFirst({ where: { filialId: dto.filialId!, placa: placaAlvo, id: { not: id } } });
+      if (colisao) throw new BadRequestException(`Já existe um veículo com a placa ${placaAlvo} na filial de destino.`);
+    }
+
     // Valida FKs do core que vierem no update.
     await Promise.all([
       dto.departamentoLotacaoId ? this.core.validarDepartamento(dto.departamentoLotacaoId) : Promise.resolve(),
@@ -183,6 +197,7 @@ export class VeiculoService {
       const v = await tx.veiculo.update({
         where: { id },
         data: {
+          filialId: trocaFilial ? dto.filialId : undefined,
           placa: dto.placa?.trim().toUpperCase(),
           renavam: dto.renavam?.trim(),
           chassi: dto.chassi?.trim().toUpperCase(),

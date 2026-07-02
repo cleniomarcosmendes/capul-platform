@@ -70,9 +70,9 @@ export function VeiculoFormPage() {
   const { toast } = useToast();
   const { usuario, logisticaRole } = useAuth();
   // Gestor de frota/entrega e admin gerem a frota da empresa toda → escolhem a
-  // filial. Operador fica travado na própria (o backend recusa escrita fora dela).
-  // Só no cadastro: em edição o filialId não entra no PATCH (não se troca a filial do veículo).
-  const podeEscolherFilial = !modoEdicao && ['ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA'].includes(logisticaRole ?? '');
+  // filial (inclusive TROCAR na edição; o backend bloqueia se houver viagem em
+  // curso). Operador fica travado na própria (o backend recusa escrita fora dela).
+  const podeEscolherFilial = ['ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA'].includes(logisticaRole ?? '');
 
   // Filial é SEMPRE a do usuário: a escrita é escopada à filial do token para
   // TODOS os perfis (assertMesmaFilial no backend). No cadastro ela nasce travada
@@ -208,9 +208,11 @@ export function VeiculoFormPage() {
     };
     try {
       if (modoEdicao) {
-        // filialId não entra no PATCH (não se muda a filial do veículo; o
-        // UpdateVeiculoDto não tem o campo e o ValidationPipe rejeitaria).
-        const { filialId: _filial, ...edit } = payload;
+        // O filialId só vai no PATCH quando o usuário pode escolher a filial
+        // (gestor/admin) — é a troca de filial. Operador nunca envia (o campo
+        // fica travado e o backend recusaria escrita fora da própria filial).
+        const { filialId: _filial, ...semFilial } = payload;
+        const edit = podeEscolherFilial ? payload : semFilial;
         await logisticaApi.patch(`/veiculos/${id}`, edit);
       } else {
         await logisticaApi.post('/veiculos', payload);
