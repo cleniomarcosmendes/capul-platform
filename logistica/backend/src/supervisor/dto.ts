@@ -62,3 +62,17 @@ export class LancarDespesaSupervisorDto {
   @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
 }
+
+// ---- Administração (Fase 5): correções do gestor ----
+export class EditarViagemSupervisorDto {
+  @IsOptional() @IsNumber() @Min(0) adiantamento?: number;
+  @IsOptional() @IsString() @MaxLength(40) regiaoId?: string;
+}
+export class EditarDespesaSupervisorDto {
+  @IsOptional() @IsString() @MaxLength(40) tipoDespesaId?: string;
+  @IsOptional() @IsNumber() @Min(0.01) valor?: number;
+  @IsOptional() @IsDateString() data?: string;
+  @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;
+  @IsOptional() @IsString() @MaxLength(500) observacao?: string;
+}
+// Edição de visita reusa o AdicionarVisitaDto (todos os campos já opcionais).

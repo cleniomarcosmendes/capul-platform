@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto } from './dto.js';
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
@@ -61,6 +61,26 @@ export class SupervisorController {
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   concluirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.concluirViagemSupervisor(id, user);
+  }
+
+  // ---- Administração (Fase 5): correções do gestor ----
+  @Patch('viagens/:id')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  editarViagem(@Param('id') id: string, @Body() dto: EditarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.editarViagem(id, dto, user);
+  }
+  @Patch('viagens/:id/reabrir')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  reabrirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.reabrirViagem(id, user);
+  }
+  @Patch('viagens/:id/visitas/:paradaId')
+  editarVisita(@Param('id') id: string, @Param('paradaId') paradaId: string, @Body() dto: AdicionarVisitaDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.editarVisita(id, paradaId, dto, user);
+  }
+  @Patch('viagens/:id/despesas/:despesaId')
+  editarDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Body() dto: EditarDespesaSupervisorDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.editarDespesa(id, despesaId, dto, user);
   }
 
   // ---- Visitas da viagem (lançamento pelo operador/gestor) ----

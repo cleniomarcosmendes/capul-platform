@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, LancarDespesaSupervisorDto, MunicipioDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto, MunicipioDto } from './dto.js';
 
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
@@ -275,6 +275,105 @@ export class SupervisorService {
     if (d.viagem?.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover despesas.');
     await this.prisma.despesaVeiculo.delete({ where: { id: despesaId } });
     return { ok: true };
+  }
+
+  // ---- Administração (Fase 5): correções do gestor ----
+  async editarViagem(id: string, dto: EditarViagemSupervisorDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
+    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
+    if (dto.regiaoId) {
+      const r = await this.prisma.regiao.findUnique({ where: { id: dto.regiaoId } });
+      if (!r || (r.filialId && r.filialId !== filialId)) throw new BadRequestException('Região inválida para esta filial.');
+    }
+    return this.prisma.viagem.update({
+      where: { id },
+      data: {
+        adiantamento: dto.adiantamento !== undefined ? new Prisma.Decimal(dto.adiantamento) : undefined,
+        regiaoId: dto.regiaoId !== undefined ? (dto.regiaoId || null) : undefined,
+      },
+      include: { regiao: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async reabrirViagem(id: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
+    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao !== StatusViagem.CONCLUIDA) return v;
+    return this.prisma.viagem.update({
+      where: { id },
+      data: { situacao: StatusViagem.EM_CURSO, dataHoraChegada: null },
+      include: { regiao: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async editarVisita(viagemId: string, paradaId: string, dto: AdicionarVisitaDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const p = await this.prisma.parada.findUnique({
+      where: { id: paradaId },
+      include: { viagem: { select: { tipo: true, filialId: true, situacao: true } } },
+    });
+    if (!p || p.viagemId !== viagemId || p.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Visita não encontrada.');
+    if (p.viagem.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (p.viagem.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
+    if (dto.atividadeId) {
+      const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
+      if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
+    }
+    if (dto.regiaoId) {
+      const r = await this.prisma.regiao.findUnique({ where: { id: dto.regiaoId } });
+      if (!r || (r.filialId && r.filialId !== filialId)) throw new BadRequestException('Região inválida para esta filial.');
+    }
+    return this.prisma.parada.update({
+      where: { id: paradaId },
+      data: {
+        atividadeId: dto.atividadeId !== undefined ? (dto.atividadeId || null) : undefined,
+        regiaoId: dto.regiaoId !== undefined ? (dto.regiaoId || null) : undefined,
+        clienteMatricula: dto.clienteMatricula !== undefined ? (dto.clienteMatricula.trim().toUpperCase() || null) : undefined,
+        clienteNome: dto.clienteNome !== undefined ? (dto.clienteNome.trim() || null) : undefined,
+        municipio: dto.municipio !== undefined ? (dto.municipio.trim() || null) : undefined,
+        propriedade: dto.propriedade !== undefined ? (dto.propriedade.trim() || null) : undefined,
+        observacao: dto.observacao !== undefined ? (dto.observacao.trim() || null) : undefined,
+        dataHora: dto.dataVisita !== undefined ? this.parseData(dto.dataVisita) : undefined,
+      },
+      include: { atividade: { select: { nome: true } }, regiao: { select: { nome: true } } },
+    });
+  }
+
+  async editarDespesa(viagemId: string, despesaId: string, dto: EditarDespesaSupervisorDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const d = await this.prisma.despesaVeiculo.findUnique({
+      where: { id: despesaId },
+      include: { viagem: { select: { tipo: true, filialId: true, situacao: true, veiculoId: true } } },
+    });
+    if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
+    if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    if (d.viagem.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
+    // Trocar o tipo reclassifica a categoria → recalcula se tem veículo.
+    let tipoId: string | undefined;
+    let veiculoId: string | null | undefined;
+    if (dto.tipoDespesaId) {
+      const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
+      if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
+      tipoId = tipo.id;
+      veiculoId = tipo.categoria === 'INDIVIDUO' ? null : d.viagem.veiculoId;
+    }
+    return this.prisma.despesaVeiculo.update({
+      where: { id: despesaId },
+      data: {
+        tipoDespesaId: tipoId,
+        veiculoId,
+        valor: dto.valor !== undefined ? new Prisma.Decimal(dto.valor) : undefined,
+        dataDespesa: dto.data !== undefined ? this.parseData(dto.data) : undefined,
+        fornecedor: dto.fornecedor !== undefined ? (dto.fornecedor.trim() || null) : undefined,
+        observacao: dto.observacao !== undefined ? (dto.observacao.trim() || null) : undefined,
+      },
+      include: { tipoDespesa: { select: { nome: true, categoria: true } } },
+    });
   }
 
   /**
