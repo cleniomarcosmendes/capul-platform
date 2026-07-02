@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, MapPin, Plus, Printer, Search, Trash2, User } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Pencil, Plus, Printer, Search, Trash2, User } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { errMsg } from './frota-utils';
@@ -10,9 +10,10 @@ interface Regiao { id: string; nome: string; ativo: boolean }
 interface Visita {
   id: string; sequencia: number; clienteMatricula?: string | null; clienteNome?: string | null;
   municipio?: string | null; propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
+  atividadeId?: string | null; regiaoId?: string | null;
   atividade?: { nome: string } | null; regiao?: { nome: string } | null;
 }
-interface DespesaV { id: string; valor: number | string; situacao: string; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null }
+interface DespesaV { id: string; valor: number | string; situacao: string; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null }
 interface ViagemDetalhe {
   id: string; numero: number; situacao: string; mesReferencia?: number | null; adiantamento?: string | number | null;
   condutorNome?: string | null; condutorMatricula?: string | null;
@@ -116,6 +117,12 @@ export function SupervisorViagemPage() {
   const [dFornecedor, setDForn] = useState('');
   const [dObs, setDObs] = useState('');
   const [salvandoDesp, setSalvandoDesp] = useState(false);
+  // administração (Fase 5)
+  const [editVisitaId, setEditVisitaId] = useState<string | null>(null);
+  const [editDespId, setEditDespId] = useState<string | null>(null);
+  const [showEditViagem, setShowEditViagem] = useState(false);
+  const [eAdiant, setEAdiant] = useState('');
+  const [eRegiao, setERegiao] = useState('');
 
   const carregar = async () => {
     if (!id) return;
@@ -138,26 +145,35 @@ export function SupervisorViagemPage() {
 
   const concluida = v?.situacao === 'CONCLUIDA';
 
-  const limparForm = () => { setCliMat(''); setCliNome(''); setMunicipio(''); setAtividadeId(''); setPropriedade(''); setObs(''); setDataVisita(''); };
+  const limparForm = () => { setCliMat(''); setCliNome(''); setMunicipio(''); setAtividadeId(''); setPropriedade(''); setObs(''); setDataVisita(''); setEditVisitaId(null); };
+  const abrirEdicaoVisita = (p: Visita) => {
+    setEditVisitaId(p.id);
+    setCliMat(p.clienteMatricula ?? ''); setCliNome(p.clienteNome ?? ''); setMunicipio(p.municipio ?? '');
+    setAtividadeId(p.atividadeId ?? ''); setRegiaoId(p.regiaoId ?? ''); setPropriedade(p.propriedade ?? ''); setObs(p.observacao ?? '');
+    setDataVisita(p.dataHora ? new Date(p.dataHora).toISOString().slice(0, 10) : '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const adicionar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clienteNome.trim()) { toast('warning', 'Informe o cliente (busque ou digite o nome para prospect).'); return; }
     setSalvando(true);
+    const body = {
+      atividadeId: atividadeId || undefined,
+      regiaoId: regiaoId || undefined,
+      clienteMatricula: clienteMatricula.trim() || undefined,
+      clienteNome: clienteNome.trim(),
+      municipio: municipio.trim() || undefined,
+      propriedade: propriedade.trim() || undefined,
+      observacao: observacao.trim() || undefined,
+      dataVisita: dataVisita || undefined,
+    };
     try {
-      await logisticaApi.post(`/supervisor/viagens/${id}/visitas`, {
-        atividadeId: atividadeId || undefined,
-        regiaoId: regiaoId || undefined,
-        clienteMatricula: clienteMatricula.trim() || undefined,
-        clienteNome: clienteNome.trim(),
-        municipio: municipio.trim() || undefined,
-        propriedade: propriedade.trim() || undefined,
-        observacao: observacao.trim() || undefined,
-        dataVisita: dataVisita || undefined,
-      });
-      toast('success', 'Visita registrada.');
+      if (editVisitaId) await logisticaApi.patch(`/supervisor/viagens/${id}/visitas/${editVisitaId}`, body);
+      else await logisticaApi.post(`/supervisor/viagens/${id}/visitas`, body);
+      toast('success', editVisitaId ? 'Visita atualizada.' : 'Visita registrada.');
       limparForm(); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao registrar visita.')); } finally { setSalvando(false); }
+    } catch (e) { toast('error', errMsg(e, 'Falha ao salvar visita.')); } finally { setSalvando(false); }
   };
 
   const remover = async (visita: Visita) => {
@@ -168,20 +184,35 @@ export function SupervisorViagemPage() {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/concluir`); toast('success', 'Viagem concluída.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao concluir.')); }
   };
+  const reabrir = async () => {
+    try { await logisticaApi.patch(`/supervisor/viagens/${id}/reabrir`); toast('success', 'Viagem reaberta para correção.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao reabrir.')); }
+  };
+  const abrirEditViagem = () => { setEAdiant(v?.adiantamento != null ? String(v.adiantamento) : ''); setERegiao(v?.regiao?.id ?? ''); setShowEditViagem(true); };
+  const salvarViagem = async () => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}`, { adiantamento: eAdiant ? Number(eAdiant) : 0, regiaoId: eRegiao || '' });
+      toast('success', 'Viagem atualizada.'); setShowEditViagem(false); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao editar a viagem.')); }
+  };
 
+  const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); };
+  const abrirEdicaoDesp = (d: DespesaV) => {
+    setEditDespId(d.id); setShowDesp(true);
+    setDTipo(d.tipoDespesaId ?? ''); setDValor(String(d.valor)); setDForn(d.fornecedor ?? ''); setDObs(d.observacao ?? '');
+    setDData(d.dataDespesa ? new Date(d.dataDespesa).toISOString().slice(0, 10) : '');
+  };
   const lancarDespesa = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dTipo || !dValor) { toast('warning', 'Escolha o tipo e informe o valor.'); return; }
     setSalvandoDesp(true);
+    const body = { tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined, fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined };
     try {
-      await logisticaApi.post(`/supervisor/viagens/${id}/despesas`, {
-        tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined,
-        fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined,
-      });
-      toast('success', 'Despesa lançada.');
-      setShowDesp(false); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs('');
-      await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao lançar despesa.')); } finally { setSalvandoDesp(false); }
+      if (editDespId) await logisticaApi.patch(`/supervisor/viagens/${id}/despesas/${editDespId}`, body);
+      else await logisticaApi.post(`/supervisor/viagens/${id}/despesas`, body);
+      toast('success', editDespId ? 'Despesa atualizada.' : 'Despesa lançada.');
+      limparDesp(); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao salvar despesa.')); } finally { setSalvandoDesp(false); }
   };
   const removerDespesa = async (dId: string) => {
     try { await logisticaApi.delete(`/supervisor/viagens/${id}/despesas/${dId}`); toast('success', 'Despesa removida.'); await carregar(); }
@@ -207,13 +238,30 @@ export function SupervisorViagemPage() {
         <div className="flex items-center gap-2">
           <button onClick={() => navigate(`/supervisores/viagens/${id}/rdv`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> RDV</button>
           <button onClick={() => navigate(`/supervisores/viagens/${id}/visitas`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> Visitas</button>
-          {!concluida && <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir mês</button>}
+          {!concluida && <button onClick={abrirEditViagem} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Pencil className="h-4 w-4" /> Editar</button>}
+          {!concluida
+            ? <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir mês</button>
+            : <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">Reabrir para corrigir</button>}
         </div>
       </div>
 
+      {showEditViagem && !concluida && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">Editar viagem</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><label className="mb-1 block text-xs font-medium text-slate-500">Adiantamento (R$)</label><input type="number" step="0.01" min="0" value={eAdiant} onChange={(e) => setEAdiant(e.target.value)} className={inp} /></div>
+            <div><label className="mb-1 block text-xs font-medium text-slate-500">Região</label><select value={eRegiao} onChange={(e) => setERegiao(e.target.value)} className={inp}><option value="">—</option>{regioes.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}</select></div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button onClick={() => void salvarViagem()} className="rounded-lg bg-capul-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-capul-700">Salvar</button>
+            <button onClick={() => setShowEditViagem(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+          </div>
+        </div>
+      )}
+
       {!concluida && (
         <form onSubmit={adicionar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Nova visita</h2>
+          <h2 className="mb-4 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : 'Nova visita'}</h2>
           <div className="mb-3">
             <label className="mb-1 block text-xs font-medium text-slate-500">Cliente</label>
             <BuscaCliente onPick={(c) => { setCliMat(c.matricula ?? ''); setCliNome(c.nome); if (c.municipio) setMunicipio(c.municipio); }} />
@@ -228,7 +276,8 @@ export function SupervisorViagemPage() {
           </div>
           <div className="mt-3"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={observacao} onChange={(e) => setObs(e.target.value)} maxLength={500} className={inp} /></div>
           <div className="mt-4 flex gap-3">
-            <button type="submit" disabled={salvando} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50"><Plus className="h-4 w-4" /> {salvando ? 'Salvando…' : 'Registrar visita'}</button>
+            <button type="submit" disabled={salvando} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50"><Plus className="h-4 w-4" /> {salvando ? 'Salvando…' : editVisitaId ? 'Salvar visita' : 'Registrar visita'}</button>
+            {editVisitaId && <button type="button" onClick={limparForm} className="self-center text-sm text-slate-500 hover:text-slate-700">Cancelar edição</button>}
             {clienteMatricula && <span className="self-center text-xs text-slate-400">Matrícula: <b className="font-mono">{clienteMatricula}</b></span>}
           </div>
         </form>
@@ -250,7 +299,12 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3 text-slate-500">{p.propriedade ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">{p.atividade?.nome ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-400">{p.observacao ?? '—'}</td>
-                <td className="px-4 py-3">{!concluida && <button onClick={() => void remover(p)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>}</td>
+                <td className="px-4 py-3">{!concluida && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => abrirEdicaoVisita(p)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => void remover(p)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                )}</td>
               </tr>
             ))}
           </tbody>
@@ -259,11 +313,12 @@ export function SupervisorViagemPage() {
 
       <div className="mb-2 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">Despesas do mês ({v.despesas.length}) <span className="text-xs font-normal text-slate-400">— total {brl(totalDespesas)}</span></h2>
-        {!concluida && <button onClick={() => setShowDesp(!showDesp)} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-capul-700"><Plus className="h-3.5 w-3.5" /> Nova despesa</button>}
+        {!concluida && <button onClick={() => { if (showDesp) { limparDesp(); } else { limparDesp(); setShowDesp(true); } }} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-capul-700"><Plus className="h-3.5 w-3.5" /> Nova despesa</button>}
       </div>
 
       {showDesp && !concluida && (
         <form onSubmit={lancarDespesa} className="mb-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{editDespId ? 'Editar despesa' : 'Nova despesa'}</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-slate-500">Tipo *</label>
@@ -278,8 +333,8 @@ export function SupervisorViagemPage() {
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={dObs} onChange={(e) => setDObs(e.target.value)} maxLength={500} className={inp} /></div>
           </div>
           <div className="mt-3 flex gap-2">
-            <button type="submit" disabled={salvandoDesp} className="rounded-lg bg-capul-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvandoDesp ? 'Salvando…' : 'Lançar despesa'}</button>
-            <button type="button" onClick={() => setShowDesp(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+            <button type="submit" disabled={salvandoDesp} className="rounded-lg bg-capul-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvandoDesp ? 'Salvando…' : editDespId ? 'Salvar despesa' : 'Lançar despesa'}</button>
+            <button type="button" onClick={limparDesp} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
           </div>
         </form>
       )}
@@ -297,7 +352,12 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3 text-slate-500">{d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'}</td>
                 <td className="px-4 py-3">{brl(d.valor)}</td>
                 <td className="px-4 py-3 text-slate-500">{d.situacao}</td>
-                <td className="px-4 py-3">{!concluida && <button onClick={() => void removerDespesa(d.id)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>}</td>
+                <td className="px-4 py-3">{!concluida && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => abrirEdicaoDesp(d)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => void removerDespesa(d.id)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                )}</td>
               </tr>
             ))}
           </tbody>
