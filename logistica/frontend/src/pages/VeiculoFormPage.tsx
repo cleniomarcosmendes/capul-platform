@@ -11,6 +11,10 @@ import { useAuth } from '../contexts/AuthContext';
 // /veiculos/:id/editar no MESMO componente.
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
+interface Manutencao {
+  id: string; tipo: 'PREVENTIVA' | 'CORRETIVA'; km: number; dataManutencao: string;
+  motivo?: string | null; custo?: string | number | null; reiniciouCiclo: boolean; kmProximaGerada?: number | null;
+}
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
 
 const TIPOS = ['CARRO', 'UTILITARIO', 'CAMINHAO', 'OUTRO'];
@@ -40,6 +44,16 @@ export function VeiculoFormPage() {
   const [intervaloManutencaoKm, setIntervalo] = useState('');
   const [kmUltimaManutencao, setKmUltima] = useState<number | null>(null);
   const [kmProximaManutencao, setKmProxima] = useState<number | null>(null);
+  // Painel de manutenção (registrar + histórico) — só em edição.
+  const [manutencoes, setManutencoes] = useState<Manutencao[]>([]);
+  const [showManut, setShowManut] = useState(false);
+  const [mTipo, setMTipo] = useState<'PREVENTIVA' | 'CORRETIVA'>('PREVENTIVA');
+  const [mKm, setMKm] = useState('');
+  const [mData, setMData] = useState('');
+  const [mCusto, setMCusto] = useState('');
+  const [mMotivo, setMMotivo] = useState('');
+  const [mReiniciar, setMReiniciar] = useState(true);
+  const [salvandoManut, setSalvandoManut] = useState(false);
   const [filialId, setFilialId] = useState('');
   const [departamentoLotacaoId, setDepartamentoId] = useState('');
   const [supervisorId, setSupervisorId] = useState('');
@@ -111,6 +125,45 @@ export function VeiculoFormPage() {
       } finally { setCarregando(false); }
     })();
   }, [id, toast]);
+
+  // Histórico de manutenções (só em edição).
+  const carregarManutencoes = async () => {
+    if (!id) return;
+    try { const { data } = await logisticaApi.get<Manutencao[]>(`/frota/veiculos/${id}/manutencoes`); setManutencoes(data); }
+    catch { /* silencioso — histórico é complementar */ }
+  };
+  useEffect(() => {
+    void carregarManutencoes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Registra manutenção: usa a resposta (veículo atualizado) p/ refletir km última/
+  // próxima na hora, e recarrega o histórico.
+  async function registrarManutencao() {
+    if (!id) return;
+    setSalvandoManut(true);
+    try {
+      const { data: v } = await logisticaApi.post<{ kmUltimaManutencao?: number | null; kmProximaManutencao?: number | null }>(
+        `/frota/veiculos/${id}/manutencao`,
+        {
+          tipo: mTipo,
+          km: mKm ? parseInt(mKm) : undefined,
+          custo: mCusto ? Number(mCusto) : undefined,
+          observacao: mMotivo.trim() || undefined,
+          data: mData || undefined,
+          reiniciarCiclo: mReiniciar,
+        },
+      );
+      setKmUltima(v.kmUltimaManutencao ?? kmUltimaManutencao);
+      setKmProxima(v.kmProximaManutencao ?? kmProximaManutencao);
+      toast('success', 'Manutenção registrada.');
+      setShowManut(false); setMKm(''); setMData(''); setMCusto(''); setMMotivo('');
+      await carregarManutencoes();
+    } catch (e) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast('error', msg || 'Falha ao registrar manutenção.');
+    } finally { setSalvandoManut(false); }
+  }
 
   // Resolve o nome do supervisor de área pela matrícula (Protheus, mesmo endpoint
   // do condutor). Só GESTOR_FROTA etc. chegam aqui (têm acesso a /frota/condutor).
@@ -260,7 +313,69 @@ export function VeiculoFormPage() {
             <div><label className={lbl}>Próxima revisão (km)</label>
               <input value={kmProximaManutencao != null ? kmProximaManutencao.toLocaleString('pt-BR') : '—'} disabled className={`${inp} bg-slate-100 text-slate-500`} /></div>
           </div>
-          <p className="mt-2 text-xs text-slate-400">A próxima revisão é recalculada ao registrar a manutenção no Monitor da Frota (última + intervalo).</p>
+          <p className="mt-2 text-xs text-slate-400">A próxima revisão nasce do intervalo (km atual + intervalo) e é recalculada a cada manutenção que reinicia o ciclo.</p>
+
+          {modoEdicao ? (
+            <div className="mt-3 border-t border-slate-200 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Manutenções ({manutencoes.length})</span>
+                <button type="button" onClick={() => { setShowManut(!showManut); setMKm(kmAtual || ''); }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-50">
+                  <Wrench className="h-3.5 w-3.5" /> Registrar manutenção
+                </button>
+              </div>
+
+              {showManut && (
+                <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50/60 p-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className={lbl}>Tipo</label>
+                      <select value={mTipo} onChange={(e) => { const t = e.target.value as 'PREVENTIVA' | 'CORRETIVA'; setMTipo(t); setMReiniciar(t === 'PREVENTIVA'); }} className={inp}>
+                        <option value="PREVENTIVA">Preventiva (do ciclo)</option>
+                        <option value="CORRETIVA">Corretiva / excepcional</option>
+                      </select>
+                    </div>
+                    <div><label className={lbl}>KM na manutenção</label><input type="number" min={0} value={mKm} onChange={(e) => setMKm(e.target.value)} placeholder={kmAtual || '0'} className={inp} /></div>
+                    <div><label className={lbl}>Data</label><input type="date" value={mData} onChange={(e) => setMData(e.target.value)} className={inp} /></div>
+                    <div><label className={lbl}>Custo (R$)</label><input type="number" step="0.01" min={0} value={mCusto} onChange={(e) => setMCusto(e.target.value)} placeholder="opcional" className={inp} /></div>
+                    <div className="sm:col-span-2"><label className={lbl}>Motivo / observação</label><input value={mMotivo} onChange={(e) => setMMotivo(e.target.value)} maxLength={255} className={inp} placeholder="ex.: revisão dos 10 mil / troca de correia" /></div>
+                  </div>
+                  <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+                    <input type="checkbox" checked={mReiniciar} onChange={(e) => setMReiniciar(e.target.checked)} className="h-4 w-4 accent-capul-600" />
+                    Reiniciar o ciclo preventivo (próxima = km + intervalo)
+                    <span className="text-xs text-slate-400">— numa corretiva, marque só se já incluiu a revisão</span>
+                  </label>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" onClick={() => void registrarManutencao()} disabled={salvandoManut}
+                      className="rounded-lg bg-orange-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50">{salvandoManut ? 'Salvando…' : 'Salvar manutenção'}</button>
+                    <button type="button" onClick={() => setShowManut(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                  </div>
+                </div>
+              )}
+
+              {manutencoes.length > 0 && (
+                <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-slate-50 text-left text-slate-500"><th className="px-3 py-2">Data</th><th className="px-3 py-2">Tipo</th><th className="px-3 py-2">KM</th><th className="px-3 py-2">Custo</th><th className="px-3 py-2">Ciclo</th><th className="px-3 py-2">Motivo</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {manutencoes.map((m) => (
+                        <tr key={m.id}>
+                          <td className="px-3 py-2">{new Date(m.dataManutencao).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</td>
+                          <td className="px-3 py-2">{m.tipo === 'PREVENTIVA' ? 'Preventiva' : 'Corretiva'}</td>
+                          <td className="px-3 py-2 tabular-nums">{m.km.toLocaleString('pt-BR')}</td>
+                          <td className="px-3 py-2">{m.custo != null ? Number(m.custo).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+                          <td className="px-3 py-2">{m.reiniciouCiclo ? <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-emerald-700">reiniciou</span> : <span className="text-slate-400">—</span>}</td>
+                          <td className="px-3 py-2 text-slate-500">{m.motivo ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-slate-400">Salve o veículo para registrar manutenções.</p>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2">
