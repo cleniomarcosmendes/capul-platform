@@ -11,6 +11,8 @@ import { BaixaScreen } from '../screens/BaixaScreen';
 import { FrotaHomeScreen } from '../screens/FrotaHomeScreen';
 import { SaidaFrotaScreen } from '../screens/SaidaFrotaScreen';
 import { ViagemFrotaScreen } from '../screens/ViagemFrotaScreen';
+import { SupervisorHomeScreen } from '../screens/SupervisorHomeScreen';
+import { SupervisorViagemScreen } from '../screens/SupervisorViagemScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -21,6 +23,8 @@ export type RootStackParamList = {
   FrotaHome: undefined;
   SaidaFrota: undefined;
   ViagemFrota: { viagemId: string; numero: number };
+  SupervisorHome: undefined;
+  SupervisorViagem: { viagemId: string; numero: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -84,6 +88,17 @@ export function RootNavigator() {
             <Stack.Screen
               name="ViagemFrota"
               component={ViagemFrotaScreen}
+              options={({ route }) => ({ title: `Viagem #${route.params.numero}` })}
+            />
+            {/* Supervisores / RDV */}
+            <Stack.Screen
+              name="SupervisorHome"
+              component={SupervisorHomeScreen}
+              options={{ title: 'Supervisores' }}
+            />
+            <Stack.Screen
+              name="SupervisorViagem"
+              component={SupervisorViagemScreen}
               options={({ route }) => ({ title: `Viagem #${route.params.numero}` })}
             />
           </>

@@ -10,6 +10,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 // Entitlement por role (espelha a RBAC do backend — roles.guard.ts: ADMIN sempre).
 const ROLES_FROTA = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'ADMIN'];
 const ROLES_ENTREGA = ['ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'ADMIN'];
+const ROLES_SUPERVISOR = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'ADMIN'];
 
 /**
  * Tela-lançador: o usuário escolhe entre Entregas e Frota. Cada card só fica
@@ -20,6 +21,7 @@ export function HomeScreen({ navigation }: Props) {
   const { logout, role } = useAuth();
   const podeEntrega = !!role && ROLES_ENTREGA.includes(role);
   const podeFrota = !!role && ROLES_FROTA.includes(role);
+  const podeSupervisor = !!role && ROLES_SUPERVISOR.includes(role);
 
   return (
     <View style={styles.container}>
@@ -38,6 +40,13 @@ export function HomeScreen({ navigation }: Props) {
         descricao="Saída/retorno de veículo, paradas e despesas"
         habilitado={podeFrota}
         onPress={() => navigation.navigate('FrotaHome')}
+      />
+      <Card
+        emoji="🧭"
+        nome="Supervisores"
+        descricao="Visitas e despesas da viagem mensal (RDV)"
+        habilitado={podeSupervisor}
+        onPress={() => navigation.navigate('SupervisorHome')}
       />
 
       <Text style={styles.rodape}>Você pode voltar aqui a qualquer momento para trocar.</Text>
