@@ -5,7 +5,7 @@ import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.j
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto, MunicipioDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto, MunicipioDto } from './dto.js';
 
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
@@ -570,6 +570,85 @@ export class SupervisorService {
       total,
       adiantamento,
       saldo,
+    };
+  }
+
+  // ---- Adiantamentos (mensais, vários por supervisor/mês) ----
+  async lancarAdiantamento(dto: LancarAdiantamentoDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const sup = await this.prisma.supervisor.findUnique({ where: { id: dto.supervisorId } });
+    if (!sup || sup.filialId !== filialId) throw new BadRequestException('Supervisor inválido para esta filial.');
+    if (dto.mesReferencia % 100 < 1 || dto.mesReferencia % 100 > 12) throw new BadRequestException('Mês de referência inválido (AAAAMM).');
+    return this.prisma.adiantamento.create({
+      data: {
+        supervisorId: dto.supervisorId, mesReferencia: dto.mesReferencia,
+        valor: new Prisma.Decimal(dto.valor), dataAdiantamento: this.parseData(dto.data),
+        observacao: dto.observacao?.trim() || null, lancadoPorId: user.sub,
+      },
+    });
+  }
+  async listarAdiantamentos(user: JwtPayload, supervisorId: string, mes: number) {
+    const filialId = filialDoUsuario(user);
+    const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
+    if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
+    return this.prisma.adiantamento.findMany({ where: { supervisorId, mesReferencia: mes }, orderBy: { dataAdiantamento: 'asc' } });
+  }
+  async removerAdiantamento(id: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true } } } });
+    if (!a || a.supervisor.filialId !== filialId) throw new NotFoundException('Adiantamento não encontrado.');
+    await this.prisma.adiantamento.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /** RDV MENSAL: agrega TODOS os planejamentos do supervisor no mês (despesas
+   *  aprovadas, dia × tipo) + os adiantamentos → saldo. */
+  async rdvMensal(supervisorId: string, mes: number, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
+    if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
+
+    const planejamentos = await this.prisma.viagem.findMany({
+      where: { filialId, tipo: TipoViagem.SUPERVISOR, supervisorRegistroId: supervisorId, mesReferencia: mes },
+      include: {
+        despesas: { where: { situacao: 'APROVADA' }, include: { tipoDespesa: { select: { id: true, nome: true, categoria: true } } } },
+        paradas: { select: { dataHora: true, municipio: true } },
+      },
+    });
+    const despesas = planejamentos.flatMap((p) => p.despesas);
+    const paradas = planejamentos.flatMap((p) => p.paradas);
+    const diaDe = (d: Date | null) => (d ? new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) : '—');
+
+    const tiposMap = new Map<string, { id: string; nome: string; categoria: string }>();
+    for (const d of despesas) if (d.tipoDespesa) tiposMap.set(d.tipoDespesa.id, { id: d.tipoDespesa.id, nome: d.tipoDespesa.nome, categoria: d.tipoDespesa.categoria });
+    const tipos = [...tiposMap.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    const munsPorDia = new Map<string, Set<string>>();
+    for (const p of paradas) { if (!p.municipio) continue; const dia = diaDe(p.dataHora); if (!munsPorDia.has(dia)) munsPorDia.set(dia, new Set()); munsPorDia.get(dia)!.add(p.municipio); }
+
+    const diasMap = new Map<string, { valores: Record<string, number>; total: number }>();
+    const totaisPorTipo: Record<string, number> = {};
+    const totaisPorCategoria = { VEICULO: 0, INDIVIDUO: 0 };
+    let total = 0;
+    for (const d of despesas) {
+      const dia = diaDe(d.dataDespesa); const tid = d.tipoDespesaId; const val = Number(d.valor);
+      if (!diasMap.has(dia)) diasMap.set(dia, { valores: {}, total: 0 });
+      const linha = diasMap.get(dia)!; linha.valores[tid] = (linha.valores[tid] ?? 0) + val; linha.total += val;
+      totaisPorTipo[tid] = (totaisPorTipo[tid] ?? 0) + val;
+      totaisPorCategoria[d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'INDIVIDUO' : 'VEICULO'] += val;
+      total += val;
+    }
+    const dias = [...diasMap.entries()].map(([data, o]) => ({ data, municipios: [...(munsPorDia.get(data) ?? [])], valores: o.valores, total: o.total })).sort((a, b) => a.data.localeCompare(b.data));
+
+    const adiantamentos = await this.prisma.adiantamento.findMany({ where: { supervisorId, mesReferencia: mes }, orderBy: { dataAdiantamento: 'asc' } });
+    const totalAdiantamento = adiantamentos.reduce((s, a) => s + Number(a.valor), 0);
+    const saldo = totalAdiantamento - total; // >0 devolver à CAPUL; <0 reembolsar
+
+    return {
+      supervisor: { id: sup.id, matricula: sup.matricula, nome: sup.nome },
+      mesReferencia: mes, planejamentos: planejamentos.length,
+      tipos, dias, totaisPorTipo, totaisPorCategoria, total,
+      adiantamentos, totalAdiantamento, saldo,
     };
   }
 

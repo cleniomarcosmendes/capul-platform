@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
@@ -97,6 +97,26 @@ export class SupervisorController {
   @Get('coordenador/planejamentos')
   planejamentosCoordenador(@CurrentUser() user: JwtPayload, @Query('status') status?: string) {
     return this.svc.listarPlanejamentosCoordenador(user, status);
+  }
+
+  // ---- Adiantamentos (mensais, vários) + RDV mensal ----
+  @Get('adiantamentos')
+  adiantamentos(@CurrentUser() user: JwtPayload, @Query('supervisorId') supervisorId: string, @Query('mes') mes: string) {
+    return this.svc.listarAdiantamentos(user, supervisorId, Number(mes));
+  }
+  @Post('adiantamentos')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR')
+  lancarAdiantamento(@Body() dto: LancarAdiantamentoDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.lancarAdiantamento(dto, user);
+  }
+  @Delete('adiantamentos/:id')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR')
+  removerAdiantamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.removerAdiantamento(id, user);
+  }
+  @Get('rdv-mensal')
+  rdvMensal(@CurrentUser() user: JwtPayload, @Query('supervisorId') supervisorId: string, @Query('mes') mes: string) {
+    return this.svc.rdvMensal(supervisorId, Number(mes), user);
   }
 
   // ---- Administração (Fase 5): correções do gestor ----
