@@ -9,7 +9,7 @@ interface Visita {
 }
 interface Detalhe {
   numero: number; mesReferencia?: number | null; condutorNome?: string | null; condutorMatricula?: string | null;
-  regiao?: { nome: string } | null; paradas: Visita[];
+  paradas: Visita[];
 }
 
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
@@ -39,7 +39,7 @@ export function SupervisorVisitasPrintPage() {
 
       <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>RELATÓRIO DE VISITAS</h2>
       <p style={{ textAlign: 'center', margin: '0 0 12px', fontSize: 12 }}>
-        Viagem #{v.numero} · Mês {fmtMes(v.mesReferencia)} · Supervisor: {v.condutorNome ?? '—'}{v.regiao ? ` · Região: ${v.regiao.nome}` : ''}
+        Viagem #{v.numero} · Mês {fmtMes(v.mesReferencia)} · Supervisor: {v.condutorNome ?? '—'}
       </p>
 
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>

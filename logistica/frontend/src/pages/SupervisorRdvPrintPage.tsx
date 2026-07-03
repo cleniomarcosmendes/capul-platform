@@ -6,7 +6,6 @@ interface Rdv {
   viagem: { numero: number; mesReferencia?: number | null; situacao: string };
   supervisor: { matricula?: string | null; nome?: string | null };
   veiculo?: { placa: string; modelo?: string | null } | null;
-  regiao?: { nome: string } | null;
   tipos: { id: string; nome: string; categoria: string }[];
   dias: { data: string; municipios: string[]; valores: Record<string, number>; total: number }[];
   totaisPorTipo: Record<string, number>;
@@ -47,7 +46,7 @@ export function SupervisorRdvPrintPage() {
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>
           <tr><td style={cell}><b>Funcionário:</b> {r.supervisor.nome ?? '—'}</td><td style={cell}><b>Matrícula:</b> {r.supervisor.matricula ?? '—'}</td></tr>
-          <tr><td style={cell}><b>Veículo:</b> {r.veiculo ? `${r.veiculo.placa}${r.veiculo.modelo ? ` (${r.veiculo.modelo})` : ''}` : '—'}</td><td style={cell}><b>Região:</b> {r.regiao?.nome ?? '—'}</td></tr>
+          <tr><td style={cell}><b>Veículo:</b> {r.veiculo ? `${r.veiculo.placa}${r.veiculo.modelo ? ` (${r.veiculo.modelo})` : ''}` : '—'}</td><td style={cell}></td></tr>
         </tbody>
       </table>
 

@@ -5,7 +5,7 @@ import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.j
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto, MunicipioDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
@@ -84,53 +84,12 @@ export class SupervisorService {
     });
   }
 
-  // ---- Regiões ----
-  listarRegioes(user: JwtPayload, somenteAtivas?: boolean) {
-    const filialId = filialDoUsuario(user);
-    return this.prisma.regiao.findMany({
-      where: { OR: [{ filialId }, { filialId: null }], ...(somenteAtivas ? { ativo: true } : {}) },
-      orderBy: { nome: 'asc' },
-      include: { municipios: { orderBy: { municipio: 'asc' } } },
-    });
-  }
-  async criarRegiao(dto: CriarRegiaoDto, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
-    const nome = dto.nome.trim();
-    const ja = await this.prisma.regiao.findFirst({ where: { filialId, nome } });
-    if (ja) throw new BadRequestException('Já existe uma região com esse nome.');
-    return this.prisma.regiao.create({
-      data: { nome, filialId, municipios: { create: this.normalizaMunicipios(dto.municipios) } },
-      include: { municipios: { orderBy: { municipio: 'asc' } } },
-    });
-  }
-  async atualizarRegiao(id: string, dto: AtualizarRegiaoDto, user: JwtPayload) {
-    const r = await this.prisma.regiao.findUnique({ where: { id } });
-    if (!r) throw new NotFoundException('Região não encontrada.');
-    if (r.filialId && r.filialId !== user.filialId) throw new BadRequestException('Região de outra filial.');
-    return this.prisma.$transaction(async (tx) => {
-      // Se veio a lista de municípios, SUBSTITUI (replace) — a N:N é gerida pela região.
-      if (dto.municipios) {
-        await tx.regiaoMunicipio.deleteMany({ where: { regiaoId: id } });
-        const ms = this.normalizaMunicipios(dto.municipios);
-        if (ms.length) await tx.regiaoMunicipio.createMany({ data: ms.map((m) => ({ ...m, regiaoId: id })) });
-      }
-      return tx.regiao.update({
-        where: { id },
-        data: { nome: dto.nome?.trim() ?? undefined, ativo: dto.ativo ?? undefined },
-        include: { municipios: { orderBy: { municipio: 'asc' } } },
-      });
-    });
-  }
 
   // ---- Viagem mensal do supervisor (container da RDV) ----
   async criarViagemSupervisor(dto: CriarViagemSupervisorDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const mm = dto.mesReferencia % 100;
     if (mm < 1 || mm > 12) throw new BadRequestException('Mês de referência inválido — use AAAAMM (ex.: 202605).');
-    if (dto.regiaoId) {
-      const r = await this.prisma.regiao.findUnique({ where: { id: dto.regiaoId } });
-      if (!r || (r.filialId && r.filialId !== filialId)) throw new BadRequestException('Região inválida para esta filial.');
-    }
     if (dto.veiculoId) {
       const v = await this.prisma.veiculo.findFirst({ where: { id: dto.veiculoId, filialId } });
       if (!v) throw new BadRequestException('Veículo não encontrado nesta filial.');
@@ -265,7 +224,6 @@ export class SupervisorService {
       },
       orderBy: [{ mesReferencia: 'desc' }, { numero: 'desc' }],
       include: {
-        regiao: { select: { id: true, nome: true } },
         _count: { select: { paradas: true, despesas: true } },
       },
     });
@@ -276,10 +234,9 @@ export class SupervisorService {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: {
-        regiao: { include: { municipios: { orderBy: { municipio: 'asc' } } } },
         paradas: {
           orderBy: { sequencia: 'asc' },
-          include: { atividade: { select: { nome: true } }, regiao: { select: { nome: true } } },
+          include: { atividade: { select: { nome: true } } },
         },
         despesas: { include: { tipoDespesa: { select: { nome: true, categoria: true } } } },
       },
@@ -300,10 +257,6 @@ export class SupervisorService {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
     }
-    if (dto.regiaoId) {
-      const r = await this.prisma.regiao.findUnique({ where: { id: dto.regiaoId } });
-      if (!r || (r.filialId && r.filialId !== filialId)) throw new BadRequestException('Região inválida para esta filial.');
-    }
     return this.prisma.$transaction(async (tx) => {
       const seq = (await tx.parada.count({ where: { viagemId } })) + 1;
       return tx.parada.create({
@@ -311,7 +264,6 @@ export class SupervisorService {
           viagemId,
           sequencia: seq,
           atividadeId: dto.atividadeId ?? null,
-          regiaoId: dto.regiaoId ?? null,
           clienteMatricula: dto.clienteMatricula?.trim().toUpperCase() || null,
           clienteNome: dto.clienteNome?.trim() || null,
           municipio: dto.municipio?.trim() || null,
@@ -321,7 +273,7 @@ export class SupervisorService {
           dataHora: this.parseData(dto.dataVisita),
           status: 'REALIZADA',
         },
-        include: { atividade: { select: { nome: true } }, regiao: { select: { nome: true } } },
+        include: { atividade: { select: { nome: true } } },
       });
     });
   }
@@ -348,7 +300,6 @@ export class SupervisorService {
     return this.prisma.viagem.update({
       where: { id },
       data: { situacao: StatusViagem.CONCLUIDA, statusPlanejamento: 'CONCLUIDO', dataHoraChegada: new Date() },
-      include: { regiao: { select: { id: true, nome: true } } },
     });
   }
 
@@ -403,17 +354,11 @@ export class SupervisorService {
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
-    if (dto.regiaoId) {
-      const r = await this.prisma.regiao.findUnique({ where: { id: dto.regiaoId } });
-      if (!r || (r.filialId && r.filialId !== filialId)) throw new BadRequestException('Região inválida para esta filial.');
-    }
     return this.prisma.viagem.update({
       where: { id },
       data: {
         adiantamento: dto.adiantamento !== undefined ? new Prisma.Decimal(dto.adiantamento) : undefined,
-        regiaoId: dto.regiaoId !== undefined ? (dto.regiaoId || null) : undefined,
       },
-      include: { regiao: { select: { id: true, nome: true } } },
     });
   }
 
@@ -426,7 +371,6 @@ export class SupervisorService {
     return this.prisma.viagem.update({
       where: { id },
       data: { situacao: StatusViagem.EM_CURSO, statusPlanejamento: 'EM_EXECUCAO', dataHoraChegada: null },
-      include: { regiao: { select: { id: true, nome: true } } },
     });
   }
 
@@ -443,15 +387,10 @@ export class SupervisorService {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
     }
-    if (dto.regiaoId) {
-      const r = await this.prisma.regiao.findUnique({ where: { id: dto.regiaoId } });
-      if (!r || (r.filialId && r.filialId !== filialId)) throw new BadRequestException('Região inválida para esta filial.');
-    }
     return this.prisma.parada.update({
       where: { id: paradaId },
       data: {
         atividadeId: dto.atividadeId !== undefined ? (dto.atividadeId || null) : undefined,
-        regiaoId: dto.regiaoId !== undefined ? (dto.regiaoId || null) : undefined,
         clienteMatricula: dto.clienteMatricula !== undefined ? (dto.clienteMatricula.trim().toUpperCase() || null) : undefined,
         clienteNome: dto.clienteNome !== undefined ? (dto.clienteNome.trim() || null) : undefined,
         municipio: dto.municipio !== undefined ? (dto.municipio.trim() || null) : undefined,
@@ -459,7 +398,7 @@ export class SupervisorService {
         observacao: dto.observacao !== undefined ? (dto.observacao.trim() || null) : undefined,
         dataHora: dto.dataVisita !== undefined ? this.parseData(dto.dataVisita) : undefined,
       },
-      include: { atividade: { select: { nome: true } }, regiao: { select: { nome: true } } },
+      include: { atividade: { select: { nome: true } } },
     });
   }
 
@@ -506,7 +445,6 @@ export class SupervisorService {
       where: { id: viagemId },
       include: {
         veiculo: { select: { placa: true, modelo: true } },
-        regiao: { select: { nome: true } },
         despesas: { include: { tipoDespesa: { select: { id: true, nome: true, categoria: true } } } },
         paradas: { select: { dataHora: true, municipio: true } },
       },
@@ -562,7 +500,6 @@ export class SupervisorService {
       viagem: { id: v.id, numero: v.numero, mesReferencia: v.mesReferencia, situacao: v.situacao },
       supervisor: { matricula: v.condutorMatricula, nome: v.condutorNome },
       veiculo: v.veiculo,
-      regiao: v.regiao,
       tipos,
       dias,
       totaisPorTipo,
@@ -659,18 +596,4 @@ export class SupervisorService {
     return s.includes('T') ? new Date(s) : new Date(`${s}T12:00:00-03:00`);
   }
 
-  /** Normaliza + dedup (por município, case-insensitive) a lista N:N. */
-  private normalizaMunicipios(ms?: MunicipioDto[]) {
-    const seen = new Set<string>();
-    const out: { municipio: string; uf: string | null }[] = [];
-    for (const m of ms ?? []) {
-      const municipio = m.municipio.trim();
-      if (!municipio) continue;
-      const k = municipio.toLowerCase();
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push({ municipio, uf: m.uf?.trim().toUpperCase() || null });
-    }
-    return out;
-  }
 }

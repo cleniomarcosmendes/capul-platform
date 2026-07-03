@@ -6,18 +6,17 @@ import { useToast } from '../components/toast-context';
 import { errMsg } from './frota-utils';
 
 interface Atividade { id: string; nome: string; ativo: boolean }
-interface Regiao { id: string; nome: string; ativo: boolean }
 interface Visita {
   id: string; sequencia: number; clienteMatricula?: string | null; clienteNome?: string | null;
   municipio?: string | null; propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
-  atividadeId?: string | null; regiaoId?: string | null;
-  atividade?: { nome: string } | null; regiao?: { nome: string } | null;
+  atividadeId?: string | null;
+  atividade?: { nome: string } | null;
 }
 interface DespesaV { id: string; valor: number | string; situacao: string; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null }
 interface ViagemDetalhe {
   id: string; numero: number; situacao: string; mesReferencia?: number | null; adiantamento?: string | number | null;
   condutorNome?: string | null; condutorMatricula?: string | null;
-  regiao?: { id: string; nome: string } | null; paradas: Visita[]; despesas: DespesaV[];
+  paradas: Visita[]; despesas: DespesaV[];
 }
 
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
@@ -96,14 +95,12 @@ export function SupervisorViagemPage() {
   const { toast } = useToast();
   const [v, setV] = useState<ViagemDetalhe | null>(null);
   const [atividades, setAtividades] = useState<Atividade[]>([]);
-  const [regioes, setRegioes] = useState<Regiao[]>([]);
   const [loading, setLoading] = useState(true);
   // form da visita
   const [clienteMatricula, setCliMat] = useState('');
   const [clienteNome, setCliNome] = useState('');
   const [municipio, setMunicipio] = useState('');
   const [atividadeId, setAtividadeId] = useState('');
-  const [regiaoId, setRegiaoId] = useState('');
   const [propriedade, setPropriedade] = useState('');
   const [observacao, setObs] = useState('');
   const [dataVisita, setDataVisita] = useState('');
@@ -122,20 +119,17 @@ export function SupervisorViagemPage() {
   const [editDespId, setEditDespId] = useState<string | null>(null);
   const [showEditViagem, setShowEditViagem] = useState(false);
   const [eAdiant, setEAdiant] = useState('');
-  const [eRegiao, setERegiao] = useState('');
 
   const carregar = async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const [d, a, r, t] = await Promise.all([
+      const [d, a, t] = await Promise.all([
         logisticaApi.get<ViagemDetalhe>(`/supervisor/viagens/${id}`),
         logisticaApi.get<Atividade[]>('/supervisor/atividades', { params: { ativos: true } }),
-        logisticaApi.get<Regiao[]>('/supervisor/regioes', { params: { ativos: true } }),
         logisticaApi.get<{ id: string; nome: string; categoria: string; ativo?: boolean }[]>('/despesas/tipos'),
       ]);
-      setV(d.data); setAtividades(a.data); setRegioes(r.data); setTipos(t.data.filter((x) => x.ativo !== false));
-      if (d.data.regiao?.id && !regiaoId) setRegiaoId(d.data.regiao.id);
+      setV(d.data); setAtividades(a.data); setTipos(t.data.filter((x) => x.ativo !== false));
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a viagem.')); } finally { setLoading(false); }
   };
   useEffect(() => {
@@ -149,7 +143,7 @@ export function SupervisorViagemPage() {
   const abrirEdicaoVisita = (p: Visita) => {
     setEditVisitaId(p.id);
     setCliMat(p.clienteMatricula ?? ''); setCliNome(p.clienteNome ?? ''); setMunicipio(p.municipio ?? '');
-    setAtividadeId(p.atividadeId ?? ''); setRegiaoId(p.regiaoId ?? ''); setPropriedade(p.propriedade ?? ''); setObs(p.observacao ?? '');
+    setAtividadeId(p.atividadeId ?? ''); setPropriedade(p.propriedade ?? ''); setObs(p.observacao ?? '');
     setDataVisita(p.dataHora ? new Date(p.dataHora).toISOString().slice(0, 10) : '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -160,7 +154,6 @@ export function SupervisorViagemPage() {
     setSalvando(true);
     const body = {
       atividadeId: atividadeId || undefined,
-      regiaoId: regiaoId || undefined,
       clienteMatricula: clienteMatricula.trim() || undefined,
       clienteNome: clienteNome.trim(),
       municipio: municipio.trim() || undefined,
@@ -188,10 +181,10 @@ export function SupervisorViagemPage() {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/reabrir`); toast('success', 'Viagem reaberta para correção.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao reabrir.')); }
   };
-  const abrirEditViagem = () => { setEAdiant(v?.adiantamento != null ? String(v.adiantamento) : ''); setERegiao(v?.regiao?.id ?? ''); setShowEditViagem(true); };
+  const abrirEditViagem = () => { setEAdiant(v?.adiantamento != null ? String(v.adiantamento) : ''); setShowEditViagem(true); };
   const salvarViagem = async () => {
     try {
-      await logisticaApi.patch(`/supervisor/viagens/${id}`, { adiantamento: eAdiant ? Number(eAdiant) : 0, regiaoId: eRegiao || '' });
+      await logisticaApi.patch(`/supervisor/viagens/${id}`, { adiantamento: eAdiant ? Number(eAdiant) : 0 });
       toast('success', 'Viagem atualizada.'); setShowEditViagem(false); await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao editar a viagem.')); }
   };
@@ -231,7 +224,7 @@ export function SupervisorViagemPage() {
         <div>
           <h1 className="text-2xl font-semibold text-slate-800">Viagem #{v.numero} · {fmtMes(v.mesReferencia)}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {v.regiao?.nome ?? 'Sem região'} · Supervisor: {v.condutorNome ?? '—'} · Adiantamento: {brl(v.adiantamento)}
+            Supervisor: {v.condutorNome ?? '—'} · Adiantamento: {brl(v.adiantamento)}
             <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${concluida ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`}>{concluida ? 'Concluída' : 'Em curso'}</span>
           </p>
         </div>
@@ -250,7 +243,6 @@ export function SupervisorViagemPage() {
           <h2 className="mb-3 text-sm font-semibold text-slate-700">Editar viagem</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Adiantamento (R$)</label><input type="number" step="0.01" min="0" value={eAdiant} onChange={(e) => setEAdiant(e.target.value)} className={inp} /></div>
-            <div><label className="mb-1 block text-xs font-medium text-slate-500">Região</label><select value={eRegiao} onChange={(e) => setERegiao(e.target.value)} className={inp}><option value="">—</option>{regioes.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}</select></div>
           </div>
           <div className="mt-3 flex gap-2">
             <button onClick={() => void salvarViagem()} className="rounded-lg bg-capul-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-capul-700">Salvar</button>
@@ -271,7 +263,6 @@ export function SupervisorViagemPage() {
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Município</label><input value={municipio} onChange={(e) => setMunicipio(e.target.value)} maxLength={120} className={inp} /></div>
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Propriedade / fazenda</label><input value={propriedade} onChange={(e) => setPropriedade(e.target.value)} maxLength={120} className={inp} /></div>
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Atividade</label><select value={atividadeId} onChange={(e) => setAtividadeId(e.target.value)} className={inp}><option value="">—</option>{atividades.map((a) => <option key={a.id} value={a.id}>{a.nome}</option>)}</select></div>
-            <div><label className="mb-1 block text-xs font-medium text-slate-500">Região</label><select value={regiaoId} onChange={(e) => setRegiaoId(e.target.value)} className={inp}><option value="">—</option>{regioes.map((r) => <option key={r.id} value={r.id}>{r.nome}</option>)}</select></div>
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Data da visita</label><input type="date" value={dataVisita} onChange={(e) => setDataVisita(e.target.value)} className={inp} /></div>
           </div>
           <div className="mt-3"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={observacao} onChange={(e) => setObs(e.target.value)} maxLength={500} className={inp} /></div>
