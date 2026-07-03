@@ -23,6 +23,7 @@ import { DespesasPage } from './pages/DespesasPage';
 import { SupervisoresPage } from './pages/SupervisoresPage';
 import { SupervisorViagemPage } from './pages/SupervisorViagemPage';
 import { SupervisorRdvPrintPage } from './pages/SupervisorRdvPrintPage';
+import { SupervisorRdvMensalPrintPage } from './pages/SupervisorRdvMensalPrintPage';
 import { SupervisorVisitasPrintPage } from './pages/SupervisorVisitasPrintPage';
 import { DespesaNovaPage } from './pages/DespesaNovaPage';
 import { PainelFrotaPage } from './pages/PainelFrotaPage';
@@ -74,6 +75,7 @@ function Protected() {
               <Route path="/supervisores/viagens/:id" element={<SupervisorViagemPage />} />
               <Route path="/supervisores/viagens/:id/rdv" element={<SupervisorRdvPrintPage />} />
               <Route path="/supervisores/viagens/:id/visitas" element={<SupervisorVisitasPrintPage />} />
+              <Route path="/supervisores/rdv-mensal/:supervisorId/:mes" element={<SupervisorRdvMensalPrintPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
               <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />

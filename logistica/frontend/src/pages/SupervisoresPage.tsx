@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Plus, Route, Tag, Users, X } from 'lucide-react';
+import { Check, Loader2, Plus, Printer, Route, Tag, Users, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,6 +17,8 @@ interface ViagemSup {
 }
 
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
+const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+const fmtData = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const th = 'px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500';
 const inp = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500';
 const pill = (ativo: boolean) => `rounded-full px-2 py-1 text-xs font-medium ${ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`;
@@ -33,23 +35,23 @@ const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
 };
 const statusPlan = (s?: string | null) => STATUS_PLAN[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 
-const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', coordenacao: 'Coordenação (aprovar)', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
+const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', coordenacao: 'Coordenação (aprovar)', fechamento: 'Fechamento (RDV)', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
 
 export function SupervisoresPage() {
-  const [tab, setTab] = useState<'viagens' | 'coordenacao' | 'atividades' | 'equipe'>('viagens');
+  const [tab, setTab] = useState<'viagens' | 'coordenacao' | 'fechamento' | 'atividades' | 'equipe'>('viagens');
   return (
     <div className="p-6">
       <h1 className="text-2xl font-semibold text-slate-800">Supervisores</h1>
       <p className="mb-6 text-sm text-slate-500">Prestação de contas mensal (RDV) e catálogos das visitas — Indústria de Ração.</p>
       <div className="mb-6 flex gap-1 border-b border-slate-200">
-        {(['viagens', 'coordenacao', 'atividades', 'equipe'] as const).map((t) => (
+        {(['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${tab === t ? 'border-capul-600 text-capul-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
             {TAB_LABEL[t]}
           </button>
         ))}
       </div>
-      {tab === 'viagens' ? <ViagensTab /> : tab === 'coordenacao' ? <CoordenacaoTab /> : tab === 'atividades' ? <AtividadesTab /> : <EquipeTab />}
+      {tab === 'viagens' ? <ViagensTab /> : tab === 'coordenacao' ? <CoordenacaoTab /> : tab === 'fechamento' ? <FechamentoTab /> : tab === 'atividades' ? <AtividadesTab /> : <EquipeTab />}
     </div>
   );
 }
@@ -461,6 +463,126 @@ function CoordenacaoTab() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------- Fechamento mensal (adiantamentos + RDV agregada) ----------------
+interface SupItem { id: string; nome: string; matricula: string }
+interface Adiant { id: string; valor: number | string; dataAdiantamento: string; observacao?: string | null }
+interface RdvMensal { total: number; totalAdiantamento: number; saldo: number; planejamentos: number; totaisPorCategoria: { VEICULO: number; INDIVIDUO: number } }
+
+function FechamentoTab() {
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [sups, setSups] = useState<SupItem[]>([]);
+  const [supId, setSupId] = useState('');
+  const [mesInput, setMesInput] = useState('');
+  const mes = mesInput ? Number(mesInput.replace('-', '')) : 0;
+  const [adiantamentos, setAdiantamentos] = useState<Adiant[]>([]);
+  const [rdv, setRdv] = useState<RdvMensal | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [valor, setValor] = useState('');
+  const [data, setData] = useState('');
+  const [obs, setObs] = useState('');
+
+  useEffect(() => {
+    logisticaApi.get<SupItem[]>('/supervisor/supervisores', { params: { ativos: true } }).then((r) => setSups(r.data)).catch(() => { /* silencioso */ });
+  }, []);
+
+  const carregar = async () => {
+    if (!supId || !mes) { setAdiantamentos([]); setRdv(null); return; }
+    setLoading(true);
+    try {
+      const [a, r] = await Promise.all([
+        logisticaApi.get<Adiant[]>('/supervisor/adiantamentos', { params: { supervisorId: supId, mes } }),
+        logisticaApi.get<RdvMensal>('/supervisor/rdv-mensal', { params: { supervisorId: supId, mes } }),
+      ]);
+      setAdiantamentos(a.data); setRdv(r.data);
+    } catch (e) { toast('error', errMsg(e, 'Falha ao carregar o fechamento.')); } finally { setLoading(false); }
+  };
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supId, mes]);
+
+  const lancar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supId || !mes) { toast('warning', 'Selecione o supervisor e o mês.'); return; }
+    if (!valor || Number(valor) <= 0) { toast('warning', 'Informe o valor do adiantamento.'); return; }
+    try {
+      await logisticaApi.post('/supervisor/adiantamentos', { supervisorId: supId, mesReferencia: mes, valor: Number(valor), data: data || undefined, observacao: obs.trim() || undefined });
+      toast('success', 'Adiantamento lançado.'); setValor(''); setData(''); setObs(''); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao lançar adiantamento.')); }
+  };
+  const remover = async (aid: string) => {
+    try { await logisticaApi.delete(`/supervisor/adiantamentos/${aid}`); toast('success', 'Adiantamento removido.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
+  };
+
+  return (
+    <div>
+      <p className="mb-4 text-sm text-slate-500">Fechamento mensal por supervisor: lance os adiantamentos (pode haver vários) e veja a RDV agregada do mês (todos os planejamentos). Saldo = adiantamentos − despesas aprovadas.</p>
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor</label>
+          <select value={supId} onChange={(e) => setSupId(e.target.value)} className={inp}>
+            <option value="">Selecione…</option>
+            {sups.map((s) => <option key={s.id} value={s.id}>{s.nome} ({s.matricula})</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Mês</label>
+          <input type="month" value={mesInput} onChange={(e) => setMesInput(e.target.value)} className={inp} />
+        </div>
+      </div>
+
+      {supId && mes ? (
+        loading ? <div className="py-8 text-center text-slate-500">Carregando…</div> : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">Adiantamentos do mês</h3>
+              {adiantamentos.length === 0 ? <p className="text-sm text-slate-400">Nenhum adiantamento.</p> : (
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-slate-100">
+                    {adiantamentos.map((a) => (
+                      <tr key={a.id}>
+                        <td className="py-2">{fmtData(a.dataAdiantamento)}</td>
+                        <td className="py-2 font-medium">{brl(a.valor)}</td>
+                        <td className="py-2 text-slate-500">{a.observacao ?? ''}</td>
+                        <td className="py-2 text-right"><button onClick={() => void remover(a.id)} className="text-xs text-rose-600 hover:underline">Remover</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <form onSubmit={lancar} className="mt-3 border-t border-slate-100 pt-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" step="0.01" min="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor R$" className={inp} />
+                  <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={inp} />
+                </div>
+                <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional)" maxLength={255} className={`${inp} mt-2`} />
+                <button type="submit" className="mt-2 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700">Lançar adiantamento</button>
+              </form>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-700">RDV do mês (agregada)</h3>
+                <button onClick={() => navigate(`/supervisores/rdv-mensal/${supId}/${mes}`)} className="inline-flex items-center gap-1 text-xs text-capul-600 hover:underline"><Printer className="h-3.5 w-3.5" /> Imprimir RDV</button>
+              </div>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between"><dt className="text-slate-500">Planejamentos no mês</dt><dd>{rdv?.planejamentos ?? 0}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Despesas de veículo</dt><dd>{brl(rdv?.totaisPorCategoria.VEICULO ?? 0)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Despesas de indivíduo</dt><dd>{brl(rdv?.totaisPorCategoria.INDIVIDUO ?? 0)}</dd></div>
+                <div className="flex justify-between border-t border-slate-100 pt-2 font-medium"><dt>Total de despesas</dt><dd>{brl(rdv?.total ?? 0)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Adiantamentos</dt><dd>{brl(rdv?.totalAdiantamento ?? 0)}</dd></div>
+                <div className="flex justify-between rounded-lg bg-slate-50 px-2 py-2 font-semibold"><dt>{(rdv?.saldo ?? 0) >= 0 ? 'A devolver à CAPUL' : 'A reembolsar'}</dt><dd>{brl(Math.abs(rdv?.saldo ?? 0))}</dd></div>
+              </dl>
+            </div>
+          </div>
+        )
+      ) : <p className="py-8 text-center text-sm text-slate-400">Selecione o supervisor e o mês.</p>}
     </div>
   );
 }
