@@ -14,7 +14,8 @@ interface Visita {
 }
 interface DespesaV { id: string; valor: number | string; situacao: string; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null }
 interface ViagemDetalhe {
-  id: string; numero: number; situacao: string; mesReferencia?: number | null; adiantamento?: string | number | null;
+  id: string; numero: number; situacao: string; statusPlanejamento?: string | null; comentarioCoordenador?: string | null;
+  mesReferencia?: number | null;
   condutorNome?: string | null; condutorMatricula?: string | null;
   paradas: Visita[]; despesas: DespesaV[];
 }
@@ -22,6 +23,16 @@ interface ViagemDetalhe {
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
 const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const fmtData = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
+const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
+  RASCUNHO: { label: 'Rascunho', cls: 'bg-slate-100 text-slate-600' },
+  ENVIADO: { label: 'Enviado (aguarda coordenador)', cls: 'bg-amber-100 text-amber-700' },
+  APROVADO: { label: 'Aprovado', cls: 'bg-emerald-100 text-emerald-700' },
+  AJUSTADO: { label: 'Ajustado (revisar)', cls: 'bg-sky-100 text-sky-700' },
+  REJEITADO: { label: 'Rejeitado', cls: 'bg-rose-100 text-rose-700' },
+  EM_EXECUCAO: { label: 'Em execução', cls: 'bg-indigo-100 text-indigo-700' },
+  CONCLUIDO: { label: 'Concluído', cls: 'bg-slate-100 text-slate-600' },
+};
+const statusPlan = (s?: string | null) => STATUS_PLAN[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 const th = 'px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500';
 const inp = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500';
 
@@ -117,8 +128,6 @@ export function SupervisorViagemPage() {
   // administração (Fase 5)
   const [editVisitaId, setEditVisitaId] = useState<string | null>(null);
   const [editDespId, setEditDespId] = useState<string | null>(null);
-  const [showEditViagem, setShowEditViagem] = useState(false);
-  const [eAdiant, setEAdiant] = useState('');
 
   const carregar = async () => {
     if (!id) return;
@@ -181,12 +190,13 @@ export function SupervisorViagemPage() {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/reabrir`); toast('success', 'Viagem reaberta para correção.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao reabrir.')); }
   };
-  const abrirEditViagem = () => { setEAdiant(v?.adiantamento != null ? String(v.adiantamento) : ''); setShowEditViagem(true); };
-  const salvarViagem = async () => {
-    try {
-      await logisticaApi.patch(`/supervisor/viagens/${id}`, { adiantamento: eAdiant ? Number(eAdiant) : 0 });
-      toast('success', 'Viagem atualizada.'); setShowEditViagem(false); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao editar a viagem.')); }
+  const enviar = async () => {
+    try { await logisticaApi.patch(`/supervisor/viagens/${id}/enviar`); toast('success', 'Enviado ao coordenador.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao enviar.')); }
+  };
+  const iniciar = async () => {
+    try { await logisticaApi.patch(`/supervisor/viagens/${id}/iniciar`); toast('success', 'Execução iniciada.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao iniciar.')); }
   };
 
   const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); };
@@ -222,34 +232,28 @@ export function SupervisorViagemPage() {
       <button onClick={() => navigate('/supervisores')} className="mb-4 flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ArrowLeft className="h-4 w-4" /> Voltar</button>
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-800">Viagem #{v.numero} · {fmtMes(v.mesReferencia)}</h1>
+          <h1 className="text-2xl font-semibold text-slate-800">Planejamento #{v.numero} · {fmtMes(v.mesReferencia)}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Supervisor: {v.condutorNome ?? '—'} · Adiantamento: {brl(v.adiantamento)}
-            <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${concluida ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`}>{concluida ? 'Concluída' : 'Em curso'}</span>
+            Supervisor: {v.condutorNome ?? '—'}
+            <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${statusPlan(v.statusPlanejamento).cls}`}>{statusPlan(v.statusPlanejamento).label}</span>
           </p>
+          {v.comentarioCoordenador && (v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') && (
+            <p className="mt-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs text-sky-800"><b>Coordenador:</b> {v.comentarioCoordenador}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => navigate(`/supervisores/viagens/${id}/rdv`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> RDV</button>
           <button onClick={() => navigate(`/supervisores/viagens/${id}/visitas`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> Visitas</button>
-          {!concluida && <button onClick={abrirEditViagem} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Pencil className="h-4 w-4" /> Editar</button>}
-          {!concluida
-            ? <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir mês</button>
-            : <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">Reabrir para corrigir</button>}
+          {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') &&
+            <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">Enviar ao coordenador</button>}
+          {v.statusPlanejamento === 'APROVADO' &&
+            <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Iniciar execução</button>}
+          {v.statusPlanejamento === 'EM_EXECUCAO' &&
+            <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir</button>}
+          {v.statusPlanejamento === 'CONCLUIDO' &&
+            <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">Reabrir para corrigir</button>}
         </div>
       </div>
-
-      {showEditViagem && !concluida && (
-        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-slate-700">Editar viagem</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div><label className="mb-1 block text-xs font-medium text-slate-500">Adiantamento (R$)</label><input type="number" step="0.01" min="0" value={eAdiant} onChange={(e) => setEAdiant(e.target.value)} className={inp} /></div>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button onClick={() => void salvarViagem()} className="rounded-lg bg-capul-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-capul-700">Salvar</button>
-            <button onClick={() => setShowEditViagem(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
-          </div>
-        </div>
-      )}
 
       {!concluida && (
         <form onSubmit={adicionar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

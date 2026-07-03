@@ -11,19 +11,29 @@ import { errMsg } from './frota-utils';
 
 interface Atividade { id: string; nome: string; ativo: boolean; filialId?: string | null }
 interface ViagemSup {
-  id: string; numero: number; situacao: string; mesReferencia?: number | null;
-  adiantamento?: string | number | null; condutorNome?: string | null; condutorMatricula?: string | null;
+  id: string; numero: number; situacao: string; statusPlanejamento?: string | null; mesReferencia?: number | null;
+  condutorNome?: string | null; condutorMatricula?: string | null;
   _count?: { paradas: number; despesas: number };
 }
 
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
-const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const th = 'px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500';
 const inp = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500';
 const pill = (ativo: boolean) => `rounded-full px-2 py-1 text-xs font-medium ${ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`;
-const statusPill = (s: string) => `rounded-full px-2 py-1 text-xs font-medium ${s === 'CONCLUIDA' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`;
 
-const TAB_LABEL: Record<string, string> = { viagens: 'Viagens mensais', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
+// Ciclo do planejamento (rótulo + cor).
+const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
+  RASCUNHO: { label: 'Rascunho', cls: 'bg-slate-100 text-slate-600' },
+  ENVIADO: { label: 'Enviado (aguarda coordenador)', cls: 'bg-amber-100 text-amber-700' },
+  APROVADO: { label: 'Aprovado', cls: 'bg-emerald-100 text-emerald-700' },
+  AJUSTADO: { label: 'Ajustado (revisar)', cls: 'bg-sky-100 text-sky-700' },
+  REJEITADO: { label: 'Rejeitado', cls: 'bg-rose-100 text-rose-700' },
+  EM_EXECUCAO: { label: 'Em execução', cls: 'bg-indigo-100 text-indigo-700' },
+  CONCLUIDO: { label: 'Concluído', cls: 'bg-slate-100 text-slate-600' },
+};
+const statusPlan = (s?: string | null) => STATUS_PLAN[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
+
+const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
 
 export function SupervisoresPage() {
   const [tab, setTab] = useState<'viagens' | 'atividades' | 'equipe'>('viagens');
@@ -52,7 +62,6 @@ function ViagensTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [mes, setMes] = useState('');
-  const [adiantamento, setAdiantamento] = useState('');
   const [matricula, setMatricula] = useState('');
   const [senha, setSenha] = useState('');
   const [nome, setNome] = useState('');
@@ -64,7 +73,7 @@ function ViagensTab() {
     try {
       const v = await logisticaApi.get<ViagemSup[]>('/supervisor/viagens');
       setViagens(v.data);
-    } catch (e) { toast('error', errMsg(e, 'Falha ao carregar viagens.')); } finally { setLoading(false); }
+    } catch (e) { toast('error', errMsg(e, 'Falha ao carregar planejamentos.')); } finally { setLoading(false); }
   };
   useEffect(() => {
     void carregar();
@@ -93,27 +102,22 @@ function ViagensTab() {
     try {
       await logisticaApi.post('/supervisor/viagens', {
         mesReferencia: mesRef,
-        adiantamento: adiantamento ? Number(adiantamento) : undefined,
         supervisorMatricula: matricula.trim() || undefined,
         supervisorSenha: senha || undefined,
       });
-      toast('success', 'Viagem mensal criada.');
-      setShowForm(false); setMes(''); setAdiantamento(''); setMatricula(''); setSenha(''); setNome('');
+      toast('success', 'Planejamento criado.');
+      setShowForm(false); setMes(''); setMatricula(''); setSenha(''); setNome('');
       await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao criar viagem.')); } finally { setSalvando(false); }
+    } catch (e) { toast('error', errMsg(e, 'Falha ao criar planejamento.')); } finally { setSalvando(false); }
   };
 
-  const concluir = async (v: ViagemSup) => {
-    try { await logisticaApi.patch(`/supervisor/viagens/${v.id}/concluir`); toast('success', 'Viagem concluída.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao concluir.')); }
-  };
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <p className="text-sm text-slate-500">Uma viagem por mês/supervisor, com adiantamento. Ao fechar, gera a RDV.</p>
+        <p className="text-sm text-slate-500">O supervisor cria o planejamento (visitas) e envia ao coordenador para aprovação; depois executa e presta contas.</p>
         <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
-          <Plus className="h-4 w-4" /> Nova viagem
+          <Plus className="h-4 w-4" /> Novo planejamento
         </button>
       </div>
 
@@ -123,10 +127,6 @@ function ViagensTab() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Mês de referência *</label>
               <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} required className={inp} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Adiantamento (R$)</label>
-              <input type="number" step="0.01" min="0" value={adiantamento} onChange={(e) => setAdiantamento(e.target.value)} placeholder="0,00" className={inp} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor (matrícula + senha)</label>
@@ -143,7 +143,7 @@ function ViagensTab() {
             </div>
           </div>
           <div className="mt-4 flex gap-3">
-            <button type="submit" disabled={salvando} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Criar viagem'}</button>
+            <button type="submit" disabled={salvando} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Criar planejamento'}</button>
             <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
           </div>
         </form>
@@ -152,23 +152,20 @@ function ViagensTab() {
       {loading ? (
         <div className="py-12 text-center text-slate-500">Carregando…</div>
       ) : viagens.length === 0 ? (
-        <div className="py-12 text-center"><Route className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhuma viagem de supervisor</p></div>
+        <div className="py-12 text-center"><Route className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhum planejamento</p></div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full">
-            <thead><tr className="bg-slate-50"><th className={th}>#</th><th className={th}>Mês</th><th className={th}>Supervisor</th><th className={th}>Adiantamento</th><th className={th}>Visitas / Despesas</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
+            <thead><tr className="bg-slate-50"><th className={th}>#</th><th className={th}>Mês</th><th className={th}>Supervisor</th><th className={th}>Visitas / Despesas</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {viagens.map((v) => (
                 <tr key={v.id} onClick={() => navigate(`/supervisores/viagens/${v.id}`)} className="cursor-pointer hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-capul-700">{v.numero}</td>
                   <td className="px-4 py-3">{fmtMes(v.mesReferencia)}</td>
                   <td className="px-4 py-3">{v.condutorNome ?? '—'}</td>
-                  <td className="px-4 py-3">{brl(v.adiantamento)}</td>
                   <td className="px-4 py-3 text-slate-500">{v._count?.paradas ?? 0} / {v._count?.despesas ?? 0}</td>
-                  <td className="px-4 py-3"><span className={statusPill(v.situacao)}>{v.situacao === 'CONCLUIDA' ? 'Concluída' : 'Em curso'}</span></td>
-                  <td className="px-4 py-3">
-                    {v.situacao !== 'CONCLUIDA' && <button onClick={(e) => { e.stopPropagation(); void concluir(v); }} className="text-xs text-capul-600 hover:underline">Concluir</button>}
-                  </td>
+                  <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${statusPlan(v.statusPlanejamento).cls}`}>{statusPlan(v.statusPlanejamento).label}</span></td>
+                  <td className="px-4 py-3 text-xs text-capul-600">Abrir →</td>
                 </tr>
               ))}
             </tbody>
