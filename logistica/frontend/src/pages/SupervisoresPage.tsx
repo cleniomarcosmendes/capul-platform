@@ -33,23 +33,23 @@ const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
 };
 const statusPlan = (s?: string | null) => STATUS_PLAN[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 
-const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
+const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', coordenacao: 'Coordenação (aprovar)', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
 
 export function SupervisoresPage() {
-  const [tab, setTab] = useState<'viagens' | 'atividades' | 'equipe'>('viagens');
+  const [tab, setTab] = useState<'viagens' | 'coordenacao' | 'atividades' | 'equipe'>('viagens');
   return (
     <div className="p-6">
       <h1 className="text-2xl font-semibold text-slate-800">Supervisores</h1>
       <p className="mb-6 text-sm text-slate-500">Prestação de contas mensal (RDV) e catálogos das visitas — Indústria de Ração.</p>
       <div className="mb-6 flex gap-1 border-b border-slate-200">
-        {(['viagens', 'atividades', 'equipe'] as const).map((t) => (
+        {(['viagens', 'coordenacao', 'atividades', 'equipe'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${tab === t ? 'border-capul-600 text-capul-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
             {TAB_LABEL[t]}
           </button>
         ))}
       </div>
-      {tab === 'viagens' ? <ViagensTab /> : tab === 'atividades' ? <AtividadesTab /> : <EquipeTab />}
+      {tab === 'viagens' ? <ViagensTab /> : tab === 'coordenacao' ? <CoordenacaoTab /> : tab === 'atividades' ? <AtividadesTab /> : <EquipeTab />}
     </div>
   );
 }
@@ -386,6 +386,79 @@ function EquipeTab() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------- Coordenação (aprovar/ajustar/rejeitar planejamentos) ----------------
+interface PlanejamentoCoord {
+  id: string; numero: number; mesReferencia?: number | null; statusPlanejamento?: string | null;
+  supervisorRegistro?: { nome: string; matricula: string } | null;
+  _count?: { paradas: number; despesas: number };
+}
+function CoordenacaoTab() {
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [itens, setItens] = useState<PlanejamentoCoord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [decidindo, setDecidindo] = useState<{ id: string; tipo: 'AJUSTADO' | 'REJEITADO' } | null>(null);
+  const [comentario, setComentario] = useState('');
+
+  const carregar = async () => {
+    setLoading(true);
+    try { const { data } = await logisticaApi.get<PlanejamentoCoord[]>('/supervisor/coordenador/planejamentos'); setItens(data); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao carregar planejamentos.')); } finally { setLoading(false); }
+  };
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const decidir = async (id: string, decisao: 'APROVADO' | 'AJUSTADO' | 'REJEITADO', coment?: string) => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/decidir`, { decisao, comentario: coment });
+      toast('success', decisao === 'APROVADO' ? 'Planejamento aprovado.' : decisao === 'AJUSTADO' ? 'Devolvido para ajuste.' : 'Planejamento rejeitado.');
+      setDecidindo(null); setComentario(''); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao decidir.')); }
+  };
+
+  return (
+    <div>
+      <p className="mb-6 text-sm text-slate-500">Planejamentos dos seus supervisores. Aprove, <b>ajuste</b> (devolve com um comentário) ou rejeite os que estão <b>Enviados</b>.</p>
+      {loading ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
+        <div className="py-12 text-center"><Users className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhum planejamento sob sua coordenação</p></div>
+      ) : (
+        <div className="space-y-3">
+          {itens.map((p) => (
+            <div key={p.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <button onClick={() => navigate(`/supervisores/viagens/${p.id}`)} className="font-medium text-capul-700 hover:underline">#{p.numero}</button>
+                <span className="text-sm text-slate-600">{fmtMes(p.mesReferencia)}</span>
+                <span className="text-sm font-medium text-slate-700">{p.supervisorRegistro?.nome ?? '—'}</span>
+                <span className="text-xs text-slate-400">{p._count?.paradas ?? 0} visita(s) · {p._count?.despesas ?? 0} despesa(s)</span>
+                <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusPlan(p.statusPlanejamento).cls}`}>{statusPlan(p.statusPlanejamento).label}</span>
+                {p.statusPlanejamento === 'ENVIADO' && (
+                  <div className="ml-auto flex items-center gap-2">
+                    <button onClick={() => void decidir(p.id, 'APROVADO')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700">Aprovar</button>
+                    <button onClick={() => { setDecidindo({ id: p.id, tipo: 'AJUSTADO' }); setComentario(''); }} className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100">Ajustar</button>
+                    <button onClick={() => { setDecidindo({ id: p.id, tipo: 'REJEITADO' }); setComentario(''); }} className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100">Rejeitar</button>
+                  </div>
+                )}
+              </div>
+              {decidindo?.id === p.id && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Comentário para o supervisor ({decidindo.tipo === 'AJUSTADO' ? 'ajuste' : 'rejeição'}) *</label>
+                  <textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} maxLength={500} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Explique o que ajustar / o motivo…" />
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => { if (!comentario.trim()) { toast('warning', 'Informe o comentário.'); return; } void decidir(p.id, decidindo.tipo, comentario.trim()); }} className="rounded-lg bg-capul-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-capul-700">Confirmar {decidindo.tipo === 'AJUSTADO' ? 'ajuste' : 'rejeição'}</button>
+                    <button onClick={() => { setDecidindo(null); setComentario(''); }} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
