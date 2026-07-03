@@ -234,6 +234,7 @@ export class SupervisorService {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: {
+        supervisorRegistro: { select: { id: true, nome: true, coordenadorId: true } },
         paradas: {
           orderBy: { sequencia: 'asc' },
           include: { atividade: { select: { nome: true } } },
@@ -354,11 +355,35 @@ export class SupervisorService {
         dataDespesa: this.parseData(dto.data),
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
-        // Lançada pelo gestor na prestação de contas → já APROVADA.
-        situacao: 'APROVADA',
-        aprovadoEm: new Date(),
-        aprovadoPorId: user.sub,
+        // Redesenho 6d: despesa do supervisor nasce PENDENTE — o coordenador
+        // aprova/rejeita (comprovante é opcional). Só APROVADA entra na RDV.
+        situacao: 'PENDENTE',
         criadoPorId: user.sub,
+      },
+      include: { tipoDespesa: { select: { nome: true, categoria: true } } },
+    });
+  }
+
+  /** Decisão do coordenador sobre a despesa (6d): APROVADA ou CONTESTADA (rejeita,
+   *  com motivo). Só o coordenador do supervisor (ou gestor) decide. */
+  async decidirDespesa(viagemId: string, despesaId: string, decisao: 'APROVADA' | 'CONTESTADA', motivo: string | undefined, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const d = await this.prisma.despesaVeiculo.findUnique({
+      where: { id: despesaId },
+      include: { viagem: { select: { tipo: true, filialId: true, supervisorRegistro: { select: { coordenadorId: true } } } } },
+    });
+    if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
+    if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    const ehCoordenador = d.viagem.supervisorRegistro?.coordenadorId && d.viagem.supervisorRegistro.coordenadorId === user.sub;
+    if (!this.ehGestor(user) && !ehCoordenador) throw new ForbiddenException('Apenas o coordenador do supervisor (ou o gestor) pode aprovar/rejeitar despesas.');
+    if (decisao === 'CONTESTADA' && !motivo?.trim()) throw new BadRequestException('Informe o motivo da rejeição da despesa.');
+    return this.prisma.despesaVeiculo.update({
+      where: { id: despesaId },
+      data: {
+        situacao: decisao,
+        aprovadoPorId: user.sub,
+        aprovadoEm: new Date(),
+        motivoContestacao: decisao === 'CONTESTADA' ? motivo!.trim() : null,
       },
       include: { tipoDespesa: { select: { nome: true, categoria: true } } },
     });

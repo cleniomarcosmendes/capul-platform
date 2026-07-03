@@ -65,6 +65,13 @@ export class AdicionarVisitaDto {
   @IsOptional() @IsDateString() dataVisita?: string;
 }
 
+// ---- Decisão do coordenador sobre a despesa (6d) ----
+export class DecidirDespesaDto {
+  @IsIn(['APROVADA', 'CONTESTADA'])
+  decisao!: 'APROVADA' | 'CONTESTADA';
+  @IsOptional() @IsString() @MaxLength(500) motivo?: string;
+}
+
 // ---- Apontamento da visita (6c): PLANEJADA → REALIZADA/PULADA ----
 export class ApontarVisitaDto {
   @IsIn(['REALIZADA', 'PULADA'])

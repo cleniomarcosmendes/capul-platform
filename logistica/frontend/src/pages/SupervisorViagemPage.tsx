@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, MapPin, Pencil, Plus, Printer, Search, Trash2, User } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
+import { useAuth } from '../contexts/AuthContext';
 import { errMsg } from './frota-utils';
 
 interface Atividade { id: string; nome: string; ativo: boolean }
@@ -18,13 +19,20 @@ const STATUS_VISITA: Record<string, { label: string; cls: string }> = {
   PULADA: { label: 'Pulada', cls: 'bg-slate-100 text-slate-500' },
 };
 const statusVisita = (s?: string | null) => STATUS_VISITA[s ?? 'REALIZADA'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
-interface DespesaV { id: string; valor: number | string; situacao: string; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null }
+interface DespesaV { id: string; valor: number | string; situacao: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null }
 interface ViagemDetalhe {
   id: string; numero: number; situacao: string; statusPlanejamento?: string | null; comentarioCoordenador?: string | null;
   mesReferencia?: number | null;
   condutorNome?: string | null; condutorMatricula?: string | null;
+  supervisorRegistro?: { id: string; nome: string; coordenadorId?: string | null } | null;
   paradas: Visita[]; despesas: DespesaV[];
 }
+const STATUS_DESPESA: Record<string, { label: string; cls: string }> = {
+  PENDENTE: { label: 'Pendente', cls: 'bg-amber-100 text-amber-700' },
+  APROVADA: { label: 'Aprovada', cls: 'bg-emerald-100 text-emerald-700' },
+  CONTESTADA: { label: 'Rejeitada', cls: 'bg-rose-100 text-rose-700' },
+};
+const statusDespesa = (s?: string | null) => STATUS_DESPESA[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
 const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -110,7 +118,10 @@ export function SupervisorViagemPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { usuario, logisticaRole } = useAuth();
   const [v, setV] = useState<ViagemDetalhe | null>(null);
+  const [rejDesp, setRejDesp] = useState<string | null>(null); // id da despesa em rejeição
+  const [motivoRej, setMotivoRej] = useState('');
   const [atividades, setAtividades] = useState<Atividade[]>([]);
   const [loading, setLoading] = useState(true);
   // form da visita
@@ -153,6 +164,9 @@ export function SupervisorViagemPage() {
   }, [id]);
 
   const concluida = v?.situacao === 'CONCLUIDA';
+  // Quem aprova/rejeita despesa: gestor/admin OU o coordenador deste supervisor.
+  const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'ADMIN';
+  const podeAprovarDespesa = ehGestor || (!!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id);
 
   const limparForm = () => { setCliMat(''); setCliNome(''); setMunicipio(''); setAtividadeId(''); setPropriedade(''); setObs(''); setDataVisita(''); setEditVisitaId(null); };
   const abrirEdicaoVisita = (p: Visita) => {
@@ -230,6 +244,13 @@ export function SupervisorViagemPage() {
   const removerDespesa = async (dId: string) => {
     try { await logisticaApi.delete(`/supervisor/viagens/${id}/despesas/${dId}`); toast('success', 'Despesa removida.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
+  };
+  const decidirDespesa = async (dId: string, decisao: 'APROVADA' | 'CONTESTADA', motivo?: string) => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/despesas/${dId}/decidir`, { decisao, motivo });
+      toast('success', decisao === 'APROVADA' ? 'Despesa aprovada.' : 'Despesa rejeitada.');
+      setRejDesp(null); setMotivoRej(''); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao decidir a despesa.')); }
   };
 
   if (loading) return <div className="p-6 text-slate-500">Carregando…</div>;
@@ -363,13 +384,33 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3 font-medium text-slate-700">{d.tipoDespesa?.nome ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">{d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'}</td>
                 <td className="px-4 py-3">{brl(d.valor)}</td>
-                <td className="px-4 py-3 text-slate-500">{d.situacao}</td>
-                <td className="px-4 py-3">{!concluida && (
+                <td className="px-4 py-3">
+                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusDespesa(d.situacao).cls}`}>{statusDespesa(d.situacao).label}</span>
+                  {d.situacao === 'CONTESTADA' && d.motivoContestacao && <span className="ml-1 text-xs text-rose-600" title={d.motivoContestacao}>ⓘ</span>}
+                </td>
+                <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <button onClick={() => abrirEdicaoDesp(d)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => void removerDespesa(d.id)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                    {podeAprovarDespesa && d.situacao === 'PENDENTE' && (
+                      <>
+                        <button onClick={() => void decidirDespesa(d.id, 'APROVADA')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Aprovar</button>
+                        <button onClick={() => { setRejDesp(d.id); setMotivoRej(''); }} className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 hover:bg-rose-100">Rejeitar</button>
+                      </>
+                    )}
+                    {!concluida && (
+                      <>
+                        <button onClick={() => abrirEdicaoDesp(d)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
+                        <button onClick={() => void removerDespesa(d.id)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                      </>
+                    )}
                   </div>
-                )}</td>
+                  {rejDesp === d.id && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <input value={motivoRej} onChange={(e) => setMotivoRej(e.target.value)} maxLength={500} placeholder="Motivo da rejeição *" className="w-56 rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+                      <button onClick={() => { if (!motivoRej.trim()) { toast('warning', 'Informe o motivo.'); return; } void decidirDespesa(d.id, 'CONTESTADA', motivoRej.trim()); }} className="rounded bg-rose-600 px-2 py-1 text-xs font-medium text-white hover:bg-rose-700">Confirmar</button>
+                      <button onClick={() => { setRejDesp(null); setMotivoRej(''); }} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
