@@ -630,6 +630,25 @@ model GeocodeCache {
 
 // ---- Catálogos do módulo Supervisores / RDV (Fase 3) ----
 
+// Supervisor de Área (atendente técnico da Indústria) — cadastro que segura o
+// VÍNCULO com o Coordenador. `matricula` = funcionário Protheus; `coordenadorId`
+// = usuário do sistema (core.usuarios, sem FK cross-schema) que aprova os seus
+// planejamentos/despesas. Cadastrado pelo "supervisor de departamento" (RBAC).
+model Supervisor {
+  id            String   @id @default(uuid())
+  matricula     String
+  nome          String
+  filialId      String   @map("filial_id")
+  coordenadorId String?  @map("coordenador_id")
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  @@unique([filialId, matricula])
+  @@index([coordenadorId])
+  @@map("supervisor")
+  @@schema("logistica")
+}
+
 // Atividade da visita (catálogo — a "lista fixa de tipos" da planilha Visitas).
 // filialId null = global; senão escopo da filial.
 model AtividadeVisita {

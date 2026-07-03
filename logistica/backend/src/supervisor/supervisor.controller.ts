@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto } from './dto.js';
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
@@ -10,6 +10,23 @@ import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAti
 @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'OPERADOR_ENTREGA', 'REGISTRADOR_FROTA')
 export class SupervisorController {
   constructor(private readonly svc: SupervisorService) {}
+
+  // ---- Cadastro de Supervisor de Área + vínculo (Fase 6a) ----
+  // Escrita: gestor / "supervisor de departamento" monta o time. Leitura liberada.
+  @Get('supervisores')
+  supervisores(@CurrentUser() user: JwtPayload, @Query('ativos') ativos?: string) {
+    return this.svc.listarSupervisores(user, ativos === 'true');
+  }
+  @Post('supervisores')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR')
+  criarSupervisor(@Body() dto: CriarSupervisorDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.criarSupervisor(dto, user);
+  }
+  @Patch('supervisores/:id')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR')
+  atualizarSupervisor(@Param('id') id: string, @Body() dto: AtualizarSupervisorDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.atualizarSupervisor(id, dto, user);
+  }
 
   // ---- Atividades ----
   @Get('atividades')

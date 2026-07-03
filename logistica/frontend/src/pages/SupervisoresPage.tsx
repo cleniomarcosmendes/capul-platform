@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, MapPin, Plus, Route, Tag, X } from 'lucide-react';
-import { logisticaApi } from '../services/api';
+import { Check, Loader2, MapPin, Plus, Route, Tag, Users, X } from 'lucide-react';
+import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
+import { useAuth } from '../contexts/AuthContext';
 import { errMsg } from './frota-utils';
 
 // Módulo Supervisores / RDV (Fase 3b): viagem mensal (prestação de contas) +
@@ -25,21 +26,23 @@ const inp = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:o
 const pill = (ativo: boolean) => `rounded-full px-2 py-1 text-xs font-medium ${ativo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`;
 const statusPill = (s: string) => `rounded-full px-2 py-1 text-xs font-medium ${s === 'CONCLUIDA' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`;
 
+const TAB_LABEL: Record<string, string> = { viagens: 'Viagens mensais', atividades: 'Atividades', regioes: 'Regiões', equipe: 'Equipe (supervisores)' };
+
 export function SupervisoresPage() {
-  const [tab, setTab] = useState<'viagens' | 'atividades' | 'regioes'>('viagens');
+  const [tab, setTab] = useState<'viagens' | 'atividades' | 'regioes' | 'equipe'>('viagens');
   return (
     <div className="p-6">
       <h1 className="text-2xl font-semibold text-slate-800">Supervisores</h1>
       <p className="mb-6 text-sm text-slate-500">Prestação de contas mensal (RDV) e catálogos das visitas — Indústria de Ração.</p>
       <div className="mb-6 flex gap-1 border-b border-slate-200">
-        {(['viagens', 'atividades', 'regioes'] as const).map((t) => (
+        {(['viagens', 'atividades', 'regioes', 'equipe'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${tab === t ? 'border-capul-600 text-capul-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-            {t === 'viagens' ? 'Viagens mensais' : t === 'atividades' ? 'Atividades' : 'Regiões'}
+            {TAB_LABEL[t]}
           </button>
         ))}
       </div>
-      {tab === 'viagens' ? <ViagensTab /> : tab === 'atividades' ? <AtividadesTab /> : <RegioesTab />}
+      {tab === 'viagens' ? <ViagensTab /> : tab === 'atividades' ? <AtividadesTab /> : tab === 'regioes' ? <RegioesTab /> : <EquipeTab />}
     </div>
   );
 }
@@ -374,6 +377,145 @@ function RegioesTab() {
                       <button onClick={() => abrirEdicao(r)} className="text-xs text-capul-600 hover:underline">Editar</button>
                       <button onClick={() => void toggle(r)} className="text-xs text-capul-600 hover:underline">{r.ativo ? 'Inativar' : 'Ativar'}</button>
                     </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------- Equipe (supervisores + vínculo com coordenador) ----------------
+interface Supervisor { id: string; matricula: string; nome: string; coordenadorId?: string | null; coordenadorNome?: string | null; ativo: boolean }
+interface CoreUser { id: string; nome?: string; nomeFantasia?: string }
+
+function EquipeTab() {
+  const { toast } = useToast();
+  const { usuario } = useAuth();
+  const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
+  const [itens, setItens] = useState<Supervisor[]>([]);
+  const [usuarios, setUsuarios] = useState<CoreUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [matricula, setMatricula] = useState('');
+  const [nome, setNome] = useState('');
+  const [coordenadorId, setCoordenadorId] = useState('');
+  const [buscando, setBuscando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editCoord, setEditCoord] = useState('');
+
+  const carregar = async () => {
+    setLoading(true);
+    try {
+      const [s, u] = await Promise.all([
+        logisticaApi.get<Supervisor[]>('/supervisor/supervisores'),
+        filialId ? coreApi.get<CoreUser[]>('/usuarios', { params: { filialId } }) : Promise.resolve({ data: [] as CoreUser[] }),
+      ]);
+      setItens(s.data); setUsuarios(u.data);
+    } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a equipe.')); } finally { setLoading(false); }
+  };
+  useEffect(() => {
+    void carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filialId]);
+
+  const nomeUser = (u: CoreUser) => u.nome ?? u.nomeFantasia ?? u.id;
+  const buscarNome = async () => {
+    const m = matricula.trim();
+    if (!m) { setNome(''); return; }
+    setBuscando(true);
+    try { const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: m }); setNome(data.nome); }
+    catch { setNome(''); toast('warning', 'Matrícula não encontrada no Protheus.'); } finally { setBuscando(false); }
+  };
+  const criar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!matricula.trim() || !nome.trim()) { toast('warning', 'Informe a matrícula e busque o nome.'); return; }
+    setSalvando(true);
+    try {
+      await logisticaApi.post('/supervisor/supervisores', { matricula: matricula.trim(), nome: nome.trim(), coordenadorId: coordenadorId || undefined });
+      toast('success', 'Supervisor cadastrado.');
+      setShowForm(false); setMatricula(''); setNome(''); setCoordenadorId('');
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao cadastrar.')); } finally { setSalvando(false); }
+  };
+  const salvarEdicao = async (id: string) => {
+    try { await logisticaApi.patch(`/supervisor/supervisores/${id}`, { coordenadorId: editCoord }); toast('success', 'Vínculo atualizado.'); setEditId(null); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
+  };
+  const toggle = async (s: Supervisor) => {
+    try { await logisticaApi.patch(`/supervisor/supervisores/${s.id}`, { ativo: !s.ativo }); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
+  };
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <p className="text-sm text-slate-500">Cadastre os supervisores de área e vincule cada um ao seu <b>coordenador</b> (quem aprova planejamentos e despesas).</p>
+        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700"><Plus className="h-4 w-4" /> Novo supervisor</button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Matrícula (Protheus) *</label>
+              <div className="flex gap-2">
+                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} onBlur={() => void buscarNome()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarNome(); } }} placeholder="ex.: E05222" maxLength={20} className={`${inp} font-mono uppercase`} />
+                <button type="button" onClick={() => void buscarNome()} disabled={buscando || !matricula.trim()} className="mt-1 shrink-0 rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">{buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}</button>
+              </div>
+              {nome && <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome}</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Coordenador</label>
+              <select value={coordenadorId} onChange={(e) => setCoordenadorId(e.target.value)} className={inp}>
+                <option value="">— (sem coordenador)</option>
+                {usuarios.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="mt-4 flex gap-3">
+            <button type="submit" disabled={salvando} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Cadastrar'}</button>
+            <button type="button" onClick={() => setShowForm(false)} className="text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+          </div>
+        </form>
+      )}
+
+      {loading ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
+        <div className="py-12 text-center"><Users className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhum supervisor cadastrado</p></div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full">
+            <thead><tr className="bg-slate-50"><th className={th}>Matrícula</th><th className={th}>Nome</th><th className={th}>Coordenador</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {itens.map((s) => (
+                <tr key={s.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 font-mono text-slate-700">{s.matricula}</td>
+                  <td className="px-4 py-3 font-medium text-slate-700">{s.nome}</td>
+                  <td className="px-4 py-3">
+                    {editId === s.id ? (
+                      <select value={editCoord} onChange={(e) => setEditCoord(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
+                        <option value="">— (sem)</option>
+                        {usuarios.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
+                      </select>
+                    ) : (s.coordenadorNome ?? <span className="text-slate-400">— sem coordenador</span>)}
+                  </td>
+                  <td className="px-4 py-3"><span className={pill(s.ativo)}>{s.ativo ? 'Ativo' : 'Inativo'}</span></td>
+                  <td className="px-4 py-3">
+                    {editId === s.id ? (
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => void salvarEdicao(s.id)} className="text-emerald-600 hover:text-emerald-800" title="Salvar"><Check className="h-4 w-4" /></button>
+                        <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => { setEditId(s.id); setEditCoord(s.coordenadorId ?? ''); }} className="text-xs text-capul-600 hover:underline">Vincular/editar</button>
+                        <button onClick={() => void toggle(s)} className="text-xs text-capul-600 hover:underline">{s.ativo ? 'Inativar' : 'Ativar'}</button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

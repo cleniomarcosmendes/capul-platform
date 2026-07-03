@@ -2,9 +2,10 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException,
 import { Prisma, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
+import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, CriarAtividadeDto, CriarRegiaoDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto, MunicipioDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto, MunicipioDto } from './dto.js';
 
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
@@ -16,7 +17,47 @@ export class SupervisorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly condutor: ProtheusCondutorService,
+    private readonly core: CoreLookupService,
   ) {}
+
+  // ---- Cadastro de Supervisor de Área + vínculo com o coordenador (Fase 6a) ----
+  async listarSupervisores(user: JwtPayload, somenteAtivos?: boolean) {
+    const filialId = filialDoUsuario(user);
+    const lista = await this.prisma.supervisor.findMany({
+      where: { filialId, ...(somenteAtivos ? { ativo: true } : {}) },
+      orderBy: { nome: 'asc' },
+    });
+    const coordIds = [...new Set(lista.map((s) => s.coordenadorId).filter((x): x is string => !!x))];
+    const nomes = coordIds.length ? await this.core.nomesUsuarios(coordIds) : new Map<string, string>();
+    return lista.map((s) => ({ ...s, coordenadorNome: s.coordenadorId ? (nomes.get(s.coordenadorId) ?? null) : null }));
+  }
+
+  async criarSupervisor(dto: CriarSupervisorDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const matricula = dto.matricula.trim().toUpperCase();
+    const ja = await this.prisma.supervisor.findFirst({ where: { filialId, matricula } });
+    if (ja) throw new BadRequestException('Já existe um supervisor com essa matrícula nesta filial.');
+    if (dto.coordenadorId) await this.core.validarUsuario(dto.coordenadorId, 'Coordenador');
+    return this.prisma.supervisor.create({
+      data: { matricula, nome: dto.nome.trim(), filialId, coordenadorId: dto.coordenadorId || null },
+    });
+  }
+
+  async atualizarSupervisor(id: string, dto: AtualizarSupervisorDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const s = await this.prisma.supervisor.findUnique({ where: { id } });
+    if (!s) throw new NotFoundException('Supervisor não encontrado.');
+    if (s.filialId !== filialId) throw new ForbiddenException('Supervisor de outra filial.');
+    if (dto.coordenadorId) await this.core.validarUsuario(dto.coordenadorId, 'Coordenador');
+    return this.prisma.supervisor.update({
+      where: { id },
+      data: {
+        nome: dto.nome?.trim() ?? undefined,
+        coordenadorId: dto.coordenadorId !== undefined ? (dto.coordenadorId || null) : undefined,
+        ativo: dto.ativo ?? undefined,
+      },
+    });
+  }
 
   // ---- Atividades ----
   listarAtividades(user: JwtPayload, somenteAtivas?: boolean) {

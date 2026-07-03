@@ -1,6 +1,20 @@
 import { IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
+// ---- Cadastro de Supervisor de Área + vínculo com o coordenador (Fase 6a) ----
+export class CriarSupervisorDto {
+  @IsString() @IsNotEmpty() @MaxLength(20) matricula!: string;
+  @IsString() @IsNotEmpty() @MaxLength(120) nome!: string;
+  // Usuário do sistema (core.usuarios) que coordena este supervisor. Opcional.
+  @IsOptional() @IsString() @MaxLength(40) coordenadorId?: string;
+}
+export class AtualizarSupervisorDto {
+  @IsOptional() @IsString() @MaxLength(120) nome?: string;
+  // '' = desvincular o coordenador; senão troca.
+  @IsOptional() @IsString() @MaxLength(40) coordenadorId?: string;
+  @IsOptional() @IsBoolean() ativo?: boolean;
+}
+
 // ---- Atividade de visita (catálogo) ----
 export class CriarAtividadeDto {
   @IsString() @IsNotEmpty() @MaxLength(80) nome!: string;
