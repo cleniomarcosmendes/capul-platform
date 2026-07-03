@@ -1,5 +1,21 @@
-import { IsArray, IsBoolean, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+
+// ---- Workflow do planejamento (coordenador decide) ----
+export class DecidirPlanejamentoDto {
+  @IsIn(['APROVADO', 'AJUSTADO', 'REJEITADO'])
+  decisao!: 'APROVADO' | 'AJUSTADO' | 'REJEITADO';
+  @IsOptional() @IsString() @MaxLength(500) comentario?: string;
+}
+
+// ---- Adiantamento (mensal, vários) ----
+export class LancarAdiantamentoDto {
+  @IsString() @IsNotEmpty() @MaxLength(40) supervisorId!: string;
+  @IsInt() @Min(200001) @Max(209912) mesReferencia!: number;
+  @IsNumber() @Min(0.01) valor!: number;
+  @IsOptional() @IsDateString() data?: string;
+  @IsOptional() @IsString() @MaxLength(255) observacao?: string;
+}
 
 // ---- Cadastro de Supervisor de Área + vínculo com o coordenador (Fase 6a) ----
 export class CriarSupervisorDto {

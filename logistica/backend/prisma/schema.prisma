@@ -60,6 +60,19 @@ enum StatusViagem {
   @@schema("logistica")
 }
 
+// Ciclo do PLANEJAMENTO do supervisor (redesenho 6b): o supervisor planeja e
+// envia; o coordenador aprova/ajusta/rejeita; depois executa e conclui.
+enum StatusPlanejamento {
+  RASCUNHO
+  ENVIADO
+  APROVADO
+  AJUSTADO
+  REJEITADO
+  EM_EXECUCAO
+  CONCLUIDO
+  @@schema("logistica")
+}
+
 enum SituacaoVeiculo {
   DISPONIVEL
   EM_USO
@@ -507,9 +520,19 @@ model Viagem {
   // mesReferencia = AAAAMM (ex.: 202605); adiantamento = valor liberado; região do
   // supervisor. Reusa condutorMatricula/Nome p/ identificar o supervisor de área.
   mesReferencia             Int?         @map("mes_referencia")
+  // OBSOLETOS (redesenho 6b): adiantamento vira a tabela Adiantamento (mensal, N);
+  // regiaoId descartado (município vem do cliente Protheus). Removidos em cleanup.
   adiantamento              Decimal?     @db.Decimal(12, 2)
   regiaoId                  String?      @map("regiao_id")
   regiao                    Regiao?      @relation(fields: [regiaoId], references: [id])
+  // Planejamento do supervisor: ciclo de aprovação próprio + vínculo ao Supervisor
+  // cadastrado (que leva ao coordenador que aprova).
+  statusPlanejamento        StatusPlanejamento? @map("status_planejamento")
+  supervisorRegistroId      String?      @map("supervisor_registro_id")
+  supervisorRegistro        Supervisor?  @relation(fields: [supervisorRegistroId], references: [id])
+  aprovadoPorId             String?      @map("aprovado_por_id")
+  aprovadoEm                DateTime?    @map("aprovado_em")
+  comentarioCoordenador     String?      @map("comentario_coordenador")
   criadoEm                  DateTime     @default(now()) @map("criado_em")
   criadoPorId               String       @map("criado_por_id")
   paradas                   Parada[]
@@ -522,6 +545,7 @@ model Viagem {
   @@index([motoristaId])
   @@index([tipo])
   @@index([regiaoId])
+  @@index([supervisorRegistroId])
   @@map("viagem")
   @@schema("logistica")
 }
@@ -642,10 +666,30 @@ model Supervisor {
   coordenadorId String?  @map("coordenador_id")
   ativo         Boolean  @default(true)
   criadoEm      DateTime @default(now()) @map("criado_em")
+  planejamentos Viagem[]
+  adiantamentos Adiantamento[]
 
   @@unique([filialId, matricula])
   @@index([coordenadorId])
   @@map("supervisor")
+  @@schema("logistica")
+}
+
+// Adiantamento do supervisor (redesenho 6b): MENSAL, pode haver VÁRIOS. O saldo
+// da RDV = Σ adiantamentos − Σ despesas aprovadas do mês/supervisor.
+model Adiantamento {
+  id              String     @id @default(uuid())
+  supervisorId    String     @map("supervisor_id")
+  supervisor      Supervisor @relation(fields: [supervisorId], references: [id])
+  mesReferencia   Int        @map("mes_referencia")
+  valor           Decimal    @db.Decimal(12, 2)
+  dataAdiantamento DateTime  @map("data_adiantamento")
+  observacao      String?
+  lancadoPorId    String     @map("lancado_por_id")
+  criadoEm        DateTime   @default(now()) @map("criado_em")
+
+  @@index([supervisorId, mesReferencia])
+  @@map("adiantamento")
   @@schema("logistica")
 }
 

@@ -2,12 +2,12 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarRegiaoDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarRegiaoDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarDespesaSupervisorDto } from './dto.js';
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
 @Controller('supervisor')
-@Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'OPERADOR_ENTREGA', 'REGISTRADOR_FROTA')
+@Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'OPERADOR_ENTREGA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR')
 export class SupervisorController {
   constructor(private readonly svc: SupervisorService) {}
 
@@ -78,6 +78,25 @@ export class SupervisorController {
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   concluirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.concluirViagemSupervisor(id, user);
+  }
+
+  // ---- Workflow do planejamento (6b) ----
+  @Patch('viagens/:id/enviar')
+  enviarPlanejamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.enviarPlanejamento(id, user);
+  }
+  @Patch('viagens/:id/decidir')
+  decidirPlanejamento(@Param('id') id: string, @Body() dto: DecidirPlanejamentoDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.decidirPlanejamento(id, dto.decisao, dto.comentario, user);
+  }
+  @Patch('viagens/:id/iniciar')
+  iniciarExecucao(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.iniciarExecucao(id, user);
+  }
+  // Caixa de entrada do coordenador (planejamentos dos seus supervisores).
+  @Get('coordenador/planejamentos')
+  planejamentosCoordenador(@CurrentUser() user: JwtPayload, @Query('status') status?: string) {
+    return this.svc.listarPlanejamentosCoordenador(user, status);
   }
 
   // ---- Administração (Fase 5): correções do gestor ----

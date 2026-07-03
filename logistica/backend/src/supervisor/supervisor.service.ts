@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { Prisma, StatusViagem, TipoViagem } from '@prisma/client';
+import { Prisma, StatusPlanejamento, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
@@ -150,6 +150,14 @@ export class SupervisorService {
       supNome = r.nome ?? null;
     }
 
+    // Vincula ao Supervisor cadastrado (leva ao coordenador que aprova). Se não
+    // estiver cadastrado, o planejamento nasce sem coordenador (não roteia).
+    let supervisorRegistroId: string | null = null;
+    if (supMatricula) {
+      const reg = await this.prisma.supervisor.findFirst({ where: { filialId, matricula: supMatricula, ativo: true } });
+      supervisorRegistroId = reg?.id ?? null;
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const contador = await tx.contadorSequencial.upsert({
         where: { filialId_escopo: { filialId, escopo: 'VIAGEM' } },
@@ -162,17 +170,87 @@ export class SupervisorService {
           filialId,
           tipo: TipoViagem.SUPERVISOR,
           situacao: StatusViagem.EM_CURSO,
+          // Planejamento nasce RASCUNHO (o supervisor envia p/ aprovação depois).
+          statusPlanejamento: 'RASCUNHO',
+          supervisorRegistroId,
           mesReferencia: dto.mesReferencia,
-          adiantamento: dto.adiantamento != null ? new Prisma.Decimal(dto.adiantamento) : null,
-          regiaoId: dto.regiaoId ?? null,
           veiculoId: dto.veiculoId ?? null,
           condutorMatricula: supMatricula,
           condutorNome: supNome,
           dataHoraSaida: new Date(),
           criadoPorId: user.sub,
         },
-        include: { regiao: { select: { id: true, nome: true } } },
+        include: { supervisorRegistro: { select: { id: true, nome: true, coordenadorId: true } } },
       });
+    });
+  }
+
+  /** Role da Logística no token (p/ checar gestor/admin). */
+  private roleLog(user: JwtPayload): string | undefined {
+    return user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
+  }
+  private ehGestor(user: JwtPayload): boolean {
+    const r = this.roleLog(user);
+    return r === 'GESTOR_FROTA' || r === 'GESTOR_ENTREGA' || r === 'ADMIN';
+  }
+
+  // ---- Workflow do planejamento (supervisor envia · coordenador decide) ----
+  private async planejamentoOuErro(id: string, filialId: string) {
+    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true } } } });
+    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Planejamento não encontrado.');
+    if (v.filialId !== filialId) throw new ForbiddenException('Planejamento de outra filial.');
+    return v;
+  }
+
+  async enviarPlanejamento(id: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.planejamentoOuErro(id, filialId);
+    if (!['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '')) {
+      throw new BadRequestException('Só envia planejamento em rascunho, ajustado ou rejeitado.');
+    }
+    return this.prisma.viagem.update({ where: { id }, data: { statusPlanejamento: 'ENVIADO' } });
+  }
+
+  async decidirPlanejamento(id: string, decisao: 'APROVADO' | 'AJUSTADO' | 'REJEITADO', comentario: string | undefined, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.planejamentoOuErro(id, filialId);
+    if (v.statusPlanejamento !== 'ENVIADO') throw new BadRequestException('Só decide planejamento que foi ENVIADO para aprovação.');
+    // Só o coordenador do supervisor (ou gestor/admin) decide.
+    const ehCoordenador = v.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === user.sub;
+    if (!this.ehGestor(user) && !ehCoordenador) {
+      throw new ForbiddenException('Apenas o coordenador do supervisor (ou o gestor) pode aprovar/ajustar/rejeitar.');
+    }
+    if (decisao !== 'APROVADO' && !comentario?.trim()) throw new BadRequestException('Informe o comentário do ajuste/rejeição.');
+    return this.prisma.viagem.update({
+      where: { id },
+      data: { statusPlanejamento: decisao, aprovadoPorId: user.sub, aprovadoEm: new Date(), comentarioCoordenador: comentario?.trim() || null },
+    });
+  }
+
+  async iniciarExecucao(id: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.planejamentoOuErro(id, filialId);
+    if (!['APROVADO', 'AJUSTADO'].includes(v.statusPlanejamento ?? '')) {
+      throw new BadRequestException('Só inicia execução de planejamento aprovado/ajustado.');
+    }
+    return this.prisma.viagem.update({ where: { id }, data: { statusPlanejamento: 'EM_EXECUCAO' } });
+  }
+
+  /** Planejamentos que caem pro coordenador logado (via vínculo), por status. */
+  listarPlanejamentosCoordenador(user: JwtPayload, status?: string) {
+    const filialId = filialDoUsuario(user);
+    return this.prisma.viagem.findMany({
+      where: {
+        filialId,
+        tipo: TipoViagem.SUPERVISOR,
+        supervisorRegistro: { coordenadorId: user.sub },
+        ...(status ? { statusPlanejamento: status as StatusPlanejamento } : {}),
+      },
+      orderBy: [{ mesReferencia: 'desc' }, { numero: 'desc' }],
+      include: {
+        supervisorRegistro: { select: { id: true, nome: true, matricula: true } },
+        _count: { select: { paradas: true, despesas: true } },
+      },
     });
   }
 
@@ -269,7 +347,7 @@ export class SupervisorService {
     if (v.situacao === StatusViagem.CONCLUIDA) return v;
     return this.prisma.viagem.update({
       where: { id },
-      data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date() },
+      data: { situacao: StatusViagem.CONCLUIDA, statusPlanejamento: 'CONCLUIDO', dataHoraChegada: new Date() },
       include: { regiao: { select: { id: true, nome: true } } },
     });
   }
@@ -347,7 +425,7 @@ export class SupervisorService {
     if (v.situacao !== StatusViagem.CONCLUIDA) return v;
     return this.prisma.viagem.update({
       where: { id },
-      data: { situacao: StatusViagem.EM_CURSO, dataHoraChegada: null },
+      data: { situacao: StatusViagem.EM_CURSO, statusPlanejamento: 'EM_EXECUCAO', dataHoraChegada: null },
       include: { regiao: { select: { id: true, nome: true } } },
     });
   }
