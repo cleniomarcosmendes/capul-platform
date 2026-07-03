@@ -7,11 +7,17 @@ import { errMsg } from './frota-utils';
 
 interface Atividade { id: string; nome: string; ativo: boolean }
 interface Visita {
-  id: string; sequencia: number; clienteMatricula?: string | null; clienteNome?: string | null;
+  id: string; sequencia: number; status?: string | null; clienteMatricula?: string | null; clienteNome?: string | null;
   municipio?: string | null; propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
   atividadeId?: string | null;
   atividade?: { nome: string } | null;
 }
+const STATUS_VISITA: Record<string, { label: string; cls: string }> = {
+  PLANEJADA: { label: 'Planejada', cls: 'bg-amber-100 text-amber-700' },
+  REALIZADA: { label: 'Realizada', cls: 'bg-emerald-100 text-emerald-700' },
+  PULADA: { label: 'Pulada', cls: 'bg-slate-100 text-slate-500' },
+};
+const statusVisita = (s?: string | null) => STATUS_VISITA[s ?? 'REALIZADA'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 interface DespesaV { id: string; valor: number | string; situacao: string; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null }
 interface ViagemDetalhe {
   id: string; numero: number; situacao: string; statusPlanejamento?: string | null; comentarioCoordenador?: string | null;
@@ -182,6 +188,10 @@ export function SupervisorViagemPage() {
     try { await logisticaApi.delete(`/supervisor/viagens/${id}/visitas/${visita.id}`); toast('success', 'Visita removida.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
   };
+  const apontar = async (visita: Visita, status: 'REALIZADA' | 'PULADA') => {
+    try { await logisticaApi.patch(`/supervisor/viagens/${id}/visitas/${visita.id}/apontar`, { status }); toast('success', status === 'REALIZADA' ? 'Visita realizada.' : 'Visita pulada.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao apontar a visita.')); }
+  };
   const concluir = async () => {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/concluir`); toast('success', 'Viagem concluída.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao concluir.')); }
@@ -281,10 +291,10 @@ export function SupervisorViagemPage() {
       <h2 className="mb-2 text-sm font-semibold text-slate-700">Visitas ({v.paradas.length})</h2>
       <div className="mb-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full">
-          <thead><tr className="bg-slate-50"><th className={th}>#</th><th className={th}>Data</th><th className={th}>Cliente</th><th className={th}>Município</th><th className={th}>Propriedade</th><th className={th}>Atividade</th><th className={th}>Obs</th><th className={th}></th></tr></thead>
+          <thead><tr className="bg-slate-50"><th className={th}>#</th><th className={th}>Data</th><th className={th}>Cliente</th><th className={th}>Município</th><th className={th}>Propriedade</th><th className={th}>Atividade</th><th className={th}>Status</th><th className={th}>Obs</th><th className={th}></th></tr></thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {v.paradas.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Nenhuma visita ainda.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">Nenhuma visita ainda.</td></tr>
             ) : v.paradas.map((p) => (
               <tr key={p.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-slate-500">{p.sequencia}</td>
@@ -293,9 +303,16 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3 text-slate-500">{p.municipio ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">{p.propriedade ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">{p.atividade?.nome ?? '—'}</td>
+                <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${statusVisita(p.status).cls}`}>{statusVisita(p.status).label}</span></td>
                 <td className="px-4 py-3 text-slate-400">{p.observacao ?? '—'}</td>
                 <td className="px-4 py-3">{!concluida && (
                   <div className="flex items-center gap-2">
+                    {v.statusPlanejamento === 'EM_EXECUCAO' && p.status === 'PLANEJADA' && (
+                      <>
+                        <button onClick={() => void apontar(p, 'REALIZADA')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100" title="Marcar como realizada">Realizar</button>
+                        <button onClick={() => void apontar(p, 'PULADA')} className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-50" title="Não realizada">Pular</button>
+                      </>
+                    )}
                     <button onClick={() => abrirEdicaoVisita(p)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => void remover(p)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
                   </div>

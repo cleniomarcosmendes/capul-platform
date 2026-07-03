@@ -65,6 +65,15 @@ export class AdicionarVisitaDto {
   @IsOptional() @IsDateString() dataVisita?: string;
 }
 
+// ---- Apontamento da visita (6c): PLANEJADA → REALIZADA/PULADA ----
+export class ApontarVisitaDto {
+  @IsIn(['REALIZADA', 'PULADA'])
+  status!: 'REALIZADA' | 'PULADA';
+  @IsOptional() @IsString() @MaxLength(40) atividadeId?: string;
+  @IsOptional() @IsString() @MaxLength(500) observacao?: string;
+  @IsOptional() @IsDateString() dataVisita?: string;
+}
+
 // ---- Despesa da viagem do supervisor (compõe a RDV) ----
 export class LancarDespesaSupervisorDto {
   @IsString() @IsNotEmpty() @MaxLength(40) tipoDespesaId!: string;

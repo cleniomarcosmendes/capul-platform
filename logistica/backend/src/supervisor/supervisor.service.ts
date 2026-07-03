@@ -5,7 +5,7 @@ import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.j
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
@@ -257,6 +257,10 @@ export class SupervisorService {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
     }
+    // Na fase de PLANEJAMENTO (rascunho/ajustado/rejeitado) a visita nasce
+    // PLANEJADA; durante a EXECUÇÃO ela é uma exceção (cliente incluído em campo)
+    // e nasce REALIZADA.
+    const emPlanejamento = ['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '');
     return this.prisma.$transaction(async (tx) => {
       const seq = (await tx.parada.count({ where: { viagemId } })) + 1;
       return tx.parada.create({
@@ -271,10 +275,36 @@ export class SupervisorService {
           local: dto.local?.trim() || null,
           observacao: dto.observacao?.trim() || null,
           dataHora: this.parseData(dto.dataVisita),
-          status: 'REALIZADA',
+          status: emPlanejamento ? 'PLANEJADA' : 'REALIZADA',
         },
         include: { atividade: { select: { nome: true } } },
       });
+    });
+  }
+
+  /** Apontamento (6c): marca a visita PLANEJADA como REALIZADA (com a atividade
+   *  efetiva / obs / data) ou PULADA. Só faz sentido em execução. */
+  async apontarVisita(viagemId: string, paradaId: string, dto: ApontarVisitaDto, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
+    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Planejamento não encontrado.');
+    if (v.filialId !== filialId) throw new ForbiddenException('Planejamento de outra filial.');
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Planejamento concluído — reabra para apontar.');
+    const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
+    if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
+    if (dto.atividadeId) {
+      const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
+      if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
+    }
+    return this.prisma.parada.update({
+      where: { id: paradaId },
+      data: {
+        status: dto.status,
+        atividadeId: dto.atividadeId !== undefined ? (dto.atividadeId || null) : undefined,
+        observacao: dto.observacao !== undefined ? (dto.observacao?.trim() || null) : undefined,
+        dataHora: dto.dataVisita ? this.parseData(dto.dataVisita) : undefined,
+      },
+      include: { atividade: { select: { nome: true } } },
     });
   }
 

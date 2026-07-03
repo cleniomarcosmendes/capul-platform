@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
-import { AdicionarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
@@ -132,6 +132,11 @@ export class SupervisorController {
   @Delete('viagens/:id/visitas/:paradaId')
   removerVisita(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload) {
     return this.svc.removerVisita(id, paradaId, user);
+  }
+  // Apontamento (6c): PLANEJADA → REALIZADA/PULADA
+  @Patch('viagens/:id/visitas/:paradaId/apontar')
+  apontarVisita(@Param('id') id: string, @Param('paradaId') paradaId: string, @Body() dto: ApontarVisitaDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.apontarVisita(id, paradaId, dto, user);
   }
 
   // ---- Despesas da viagem (compõem a RDV) ----
