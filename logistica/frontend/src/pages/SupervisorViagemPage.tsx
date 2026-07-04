@@ -44,7 +44,7 @@ const foraDoMes = (d?: string, mes?: number | null) => {
 const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const fmtData = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
-  RASCUNHO: { label: 'Rascunho', cls: 'bg-slate-100 text-slate-600' },
+  RASCUNHO: { label: 'Em preparação', cls: 'bg-slate-100 text-slate-600' },
   ENVIADO: { label: 'Enviado (aguarda coordenador)', cls: 'bg-amber-100 text-amber-700' },
   APROVADO: { label: 'Aprovado', cls: 'bg-emerald-100 text-emerald-700' },
   AJUSTADO: { label: 'Ajustado (revisar)', cls: 'bg-sky-100 text-sky-700' },
