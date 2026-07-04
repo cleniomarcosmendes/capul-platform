@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Banknote, Fuel, Loader2, LogIn, LogOut, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Banknote, Fuel, Loader2, LogIn, LogOut, Paperclip, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import PasswordInput from '../components/PasswordInput';
@@ -69,6 +69,66 @@ function SeletorLocais({ onPick, disabled, filialId, veiculoId, departamentoId }
       <option value="">+ Adicionar do cadastro…</option>
       {locais.map((l) => <option key={l.id} value={l.nome}>{l.nome}</option>)}
     </select>
+  );
+}
+
+/**
+ * Editor da ROTA PLANEJADA (pontos de parada) — lista estruturada em vez do antigo
+ * textarea de linhas (redesenho pós-avaliação de UX 03/07). Barra de adicionar
+ * (buscar cliente + cadastro + digitar) separada da LISTA; cada parada tem nº de
+ * ordem, subir/descer e remover; contador no topo. `value`/`onChange` = string[].
+ */
+function RotaPlanejadaEditor({ value, onChange, disabled, filialId, veiculoId, departamentoId, ajuda }: {
+  value: string[]; onChange: (v: string[]) => void; disabled?: boolean;
+  filialId?: string; veiculoId?: string; departamentoId?: string; ajuda?: React.ReactNode;
+}) {
+  const [novo, setNovo] = useState('');
+  const add = (s: string) => { const t = s.trim(); if (t) onChange([...value, t]); };
+  const addDigitado = () => { const t = novo.trim(); if (!t) return; onChange([...value, t]); setNovo(''); };
+  const remover = (i: number) => onChange(value.filter((_, idx) => idx !== i));
+  const mover = (i: number, dir: -1 | 1) => {
+    const j = i + dir; if (j < 0 || j >= value.length) return;
+    const a = [...value]; [a[i], a[j]] = [a[j], a[i]]; onChange(a);
+  };
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <label className="block text-sm font-medium text-slate-600">Rota planejada (opcional)</label>
+        {value.length > 0 && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">{value.length} parada{value.length > 1 ? 's' : ''}</span>}
+      </div>
+      {/* Barra de adicionar (separada da lista): buscar cliente · cadastro · digitar. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-[16rem] flex-1"><BuscaClienteParada disabled={disabled} onAdd={add} /></div>
+        <SeletorLocais disabled={disabled} filialId={filialId} veiculoId={veiculoId} departamentoId={departamentoId} onPick={add} />
+      </div>
+      <div className="mt-2 flex gap-2">
+        <input value={novo} onChange={(e) => setNovo(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDigitado(); } }}
+          disabled={disabled} placeholder="Digite um local e tecle Enter (inclui prospect)…"
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100" />
+        <button type="button" onClick={addDigitado} disabled={disabled || !novo.trim()}
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+          <Plus className="h-4 w-4" /> Adicionar
+        </button>
+      </div>
+      {/* Lista dos pontos já adicionados: nº de ordem + subir/descer + remover. */}
+      {value.length === 0 ? (
+        <p className="mt-2 rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-sm text-slate-400">Nenhuma parada — busque um cliente, escolha do cadastro ou digite acima.</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+          {value.map((p, i) => (
+            <li key={`${i}-${p}`} className="flex items-center gap-2 bg-white px-3 py-2">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-capul-100 text-xs font-semibold text-capul-700">{i + 1}</span>
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-700" title={p}>{p}</span>
+              <button type="button" onClick={() => mover(i, -1)} disabled={disabled || i === 0} title="Subir" className="rounded p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+              <button type="button" onClick={() => mover(i, 1)} disabled={disabled || i === value.length - 1} title="Descer" className="rounded p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+              <button type="button" onClick={() => remover(i)} disabled={disabled} title="Remover" className="rounded p-1 text-slate-400 hover:text-red-600 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {ajuda && <p className="mt-1 text-xs text-slate-400">{ajuda}</p>}
+    </div>
   );
 }
 
@@ -193,7 +253,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [localSaida, setLocalSaida] = useState('');
   const [departamentoSolicitanteId, setDepartamentoSolicitanteId] = useState('');
   const [deptos, setDeptos] = useState<DeptoItem[]>([]);
-  const [planejadasTxt, setPlanejadasTxt] = useState(''); // rota planejada (um local por linha)
+  const [planejadas, setPlanejadas] = useState<string[]>([]); // rota planejada (pontos de parada)
   const [salvando, setSalvando] = useState(false);
   const [credOk, setCredOk] = useState(false);
   const [validandoSenha, setValidandoSenha] = useState(false);
@@ -227,7 +287,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
     setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
-    setDepartamentoSolicitanteId(''); setPlanejadasTxt('');
+    setDepartamentoSolicitanteId(''); setPlanejadas([]);
     setNomeBusca(''); setResultados([]); setBuscou(false); setCondutorSel(null);
   };
 
@@ -281,7 +341,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     }
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
     if (kmInicial === '') { toast('warning', 'Informe o KM de saída.'); return; }
-    const paradasPlanejadas = planejadasTxt.split('\n').map((l) => l.trim()).filter(Boolean);
+    const paradasPlanejadas = planejadas.map((l) => l.trim()).filter(Boolean);
     setSalvando(true);
     try {
       if (modo === 'PORTARIA') {
@@ -503,22 +563,11 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
             </div>
 
             <div className="sm:col-span-12">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <label className="block text-sm font-medium text-slate-600">Rota planejada (opcional)</label>
-                <SeletorLocais disabled={!podeAvancar}
-                  filialId={usuario?.filialAtual?.id} veiculoId={veiculoId || undefined} departamentoId={departamentoSolicitanteId || undefined}
-                  onPick={(n) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${n}` : n))} />
-              </div>
-              <div className="mb-2">
-                <BuscaClienteParada disabled={!podeAvancar}
-                  onAdd={(r) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${r}` : r))} />
-              </div>
-              <textarea
-                value={planejadasTxt} onChange={(e) => setPlanejadasTxt(e.target.value)} disabled={!podeAvancar} rows={3}
-                placeholder={'Um local por linha — ex.:\nCliente A\nFornecedor B\nBanco Centro'}
-                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
+              <RotaPlanejadaEditor
+                value={planejadas} onChange={setPlanejadas} disabled={!podeAvancar}
+                filialId={usuario?.filialAtual?.id} veiculoId={veiculoId || undefined} departamentoId={departamentoSolicitanteId || undefined}
+                ajuda={<><b>Buscar cliente</b> traz o endereço da propriedade (matrícula/telefone); ou use o cadastro de locais; ou digite e tecle Enter (inclui prospect). As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") durante a rota.</>}
               />
-              <p className="mt-1 text-xs text-slate-400"><b>Buscar cliente</b> traz o endereço da propriedade (matrícula/telefone); ou use o cadastro de locais; ou digite um por linha (inclui prospect). As visitas entram como <b>planejadas</b>; o condutor dá baixa ("Cheguei") durante a rota.</p>
             </div>
           </div>
         </div>
@@ -568,7 +617,7 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
   const [km, setKm] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const [planejados, setPlanejados] = useState('');
+  const [planejados, setPlanejados] = useState<string[]>([]);
   const [planejando, setPlanejando] = useState(false);
   const [checkinId, setCheckinId] = useState<string | null>(null);
   const [checkinKm, setCheckinKm] = useState('');
@@ -611,12 +660,12 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
 
   // Planejar várias visitas (uma por linha) → status PLANEJADA.
   const planejar = async () => {
-    const locais = planejados.split('\n').map((l) => l.trim()).filter(Boolean);
+    const locais = planejados.map((l) => l.trim()).filter(Boolean);
     if (locais.length === 0) { toast('warning', 'Informe ao menos um local (um por linha).'); return; }
     setPlanejando(true);
     try {
       await logisticaApi.post(`/frota/viagens/${v.id}/paradas/planejar`, { locais });
-      setPlanejados('');
+      setPlanejados([]);
       await carregar(); onChanged();
     } catch (e) {
       toast('error', errMsg(e, 'Falha ao planejar paradas.'));
@@ -731,12 +780,11 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
             onToggle={(e) => { if ((e.currentTarget as HTMLDetailsElement).open) void carregar(); }}
           >
             <summary className="cursor-pointer text-sm font-medium text-slate-600">🗓️ Planejar visitas (antecipado, opcional)</summary>
-            <p className="mt-1 text-xs text-slate-400">Visitas que o condutor <b>já sabe</b> que vai fazer. Entram como <b>planejadas</b> e recebem o "<b>Cheguei</b>" na hora. <b>Buscar cliente</b> traz o endereço da propriedade; ou use o cadastro de locais; ou digite um por linha (inclui prospect).</p>
-            <div className="mt-2"><BuscaClienteParada onAdd={(r) => setPlanejados((t) => (t.trim() ? `${t}\n${r}` : r))} /></div>
-            <SeletorLocais onPick={(n) => setPlanejados((t) => (t.trim() ? `${t}\n${n}` : n))} />
-            <textarea value={planejados} onChange={(e) => setPlanejados(e.target.value)} rows={3} placeholder={'Cliente A\nFornecedor B\nBanco Centro'} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <button onClick={() => void planejar()} disabled={planejando} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-capul-300 px-3 py-1.5 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
-              {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Adicionar Parada
+            <p className="mb-2 mt-1 text-xs text-slate-400">Visitas que o condutor <b>já sabe</b> que vai fazer. Entram como <b>planejadas</b> e recebem o "<b>Cheguei</b>" na hora.</p>
+            <RotaPlanejadaEditor value={planejados} onChange={setPlanejados}
+              ajuda={<><b>Buscar cliente</b> traz o endereço da propriedade; ou use o cadastro de locais; ou digite e tecle Enter (inclui prospect).</>} />
+            <button onClick={() => void planejar()} disabled={planejando || planejados.length === 0} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-capul-300 px-3 py-1.5 text-sm font-medium text-capul-700 hover:bg-capul-50 disabled:opacity-50">
+              {planejando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Planejar {planejados.length > 0 ? `${planejados.length} parada${planejados.length > 1 ? 's' : ''}` : 'paradas'}
             </button>
           </details>
           {/* Forma 2 (na hora) — parada AVULSA feita no improviso → entra já como realizada. */}
