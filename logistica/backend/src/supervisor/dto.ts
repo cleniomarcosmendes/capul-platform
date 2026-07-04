@@ -1,4 +1,5 @@
 import { IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 // ---- Workflow do planejamento (coordenador decide) ----
 export class DecidirPlanejamentoDto {
@@ -84,7 +85,7 @@ export class ApontarVisitaDto {
 // ---- Despesa da viagem do supervisor (compõe a RDV) ----
 export class LancarDespesaSupervisorDto {
   @IsString() @IsNotEmpty() @MaxLength(40) tipoDespesaId!: string;
-  @IsNumber() @Min(0.01) valor!: number;
+  @Type(() => Number) @IsNumber() @Min(0.01) valor!: number; // @Type: multipart manda string
   @IsOptional() @IsDateString() data?: string;
   @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
@@ -96,7 +97,7 @@ export class EditarViagemSupervisorDto {
 }
 export class EditarDespesaSupervisorDto {
   @IsOptional() @IsString() @MaxLength(40) tipoDespesaId?: string;
-  @IsOptional() @IsNumber() @Min(0.01) valor?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0.01) valor?: number; // @Type: multipart manda string
   @IsOptional() @IsDateString() data?: string;
   @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;

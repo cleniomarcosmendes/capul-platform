@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, MapPin, Pencil, Plus, Printer, Search, Trash2, User } from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Paperclip, Pencil, Plus, Printer, Search, Trash2, User } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,7 +19,7 @@ const STATUS_VISITA: Record<string, { label: string; cls: string }> = {
   PULADA: { label: 'Pulada', cls: 'bg-slate-100 text-slate-500' },
 };
 const statusVisita = (s?: string | null) => STATUS_VISITA[s ?? 'REALIZADA'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
-interface DespesaV { id: string; valor: number | string; situacao: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null }
+interface DespesaV { id: string; valor: number | string; situacao: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null }
 interface ViagemDetalhe {
   id: string; numero: number; situacao: string; statusPlanejamento?: string | null; comentarioCoordenador?: string | null;
   mesReferencia?: number | null;
@@ -147,6 +147,7 @@ export function SupervisorViagemPage() {
   const [dData, setDData] = useState('');
   const [dFornecedor, setDForn] = useState('');
   const [dObs, setDObs] = useState('');
+  const [dRecibo, setDRecibo] = useState<File | null>(null); // comprovante (foto/PDF) opcional
   const [salvandoDesp, setSalvandoDesp] = useState(false);
   // administração (Fase 5)
   const [editVisitaId, setEditVisitaId] = useState<string | null>(null);
@@ -229,20 +230,40 @@ export function SupervisorViagemPage() {
     catch (e) { toast('error', errMsg(e, 'Falha ao iniciar.')); }
   };
 
-  const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); };
+  const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); setDRecibo(null); };
   const abrirEdicaoDesp = (d: DespesaV) => {
     setEditDespId(d.id); setShowDesp(true);
     setDTipo(d.tipoDespesaId ?? ''); setDValor(String(d.valor)); setDForn(d.fornecedor ?? ''); setDObs(d.observacao ?? '');
-    setDData(d.dataDespesa ? new Date(d.dataDespesa).toISOString().slice(0, 10) : '');
+    setDData(d.dataDespesa ? new Date(d.dataDespesa).toISOString().slice(0, 10) : ''); setDRecibo(null);
+  };
+  const verComprovante = async (dId: string) => {
+    try {
+      const { data } = await logisticaApi.get(`/supervisor/viagens/${id}/despesas/${dId}/comprovante`, { responseType: 'blob' });
+      const url = URL.createObjectURL(data as Blob);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) { toast('error', errMsg(e, 'Falha ao abrir o comprovante.')); }
   };
   const lancarDespesa = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dTipo || !dValor) { toast('warning', 'Escolha o tipo e informe o valor.'); return; }
     setSalvandoDesp(true);
-    const body = { tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined, fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined };
+    const url = editDespId ? `/supervisor/viagens/${id}/despesas/${editDespId}` : `/supervisor/viagens/${id}/despesas`;
     try {
-      if (editDespId) await logisticaApi.patch(`/supervisor/viagens/${id}/despesas/${editDespId}`, body);
-      else await logisticaApi.post(`/supervisor/viagens/${id}/despesas`, body);
+      // Com comprovante → multipart (FormData); sem → JSON. O backend aceita os dois.
+      if (dRecibo) {
+        const fd = new FormData();
+        fd.append('tipoDespesaId', dTipo);
+        fd.append('valor', String(Number(dValor)));
+        if (dData) fd.append('data', dData);
+        if (dFornecedor.trim()) fd.append('fornecedor', dFornecedor.trim());
+        if (dObs.trim()) fd.append('observacao', dObs.trim());
+        fd.append('comprovante', dRecibo);
+        if (editDespId) await logisticaApi.patch(url, fd); else await logisticaApi.post(url, fd);
+      } else {
+        const body = { tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined, fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined };
+        if (editDespId) await logisticaApi.patch(url, body); else await logisticaApi.post(url, body);
+      }
       toast('success', editDespId ? 'Despesa atualizada.' : 'Despesa lançada.');
       limparDesp(); await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao salvar despesa.')); } finally { setSalvandoDesp(false); }
@@ -370,6 +391,19 @@ export function SupervisorViagemPage() {
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Data</label><input type="date" value={dData} onChange={(e) => setDData(e.target.value)} className={inp} />{foraDoMes(dData, v.mesReferencia) && <p className="mt-1 text-xs text-amber-600">Fora do mês do planejamento ({fmtMes(v.mesReferencia)}).</p>}</div>
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Fornecedor</label><input value={dFornecedor} onChange={(e) => setDForn(e.target.value)} maxLength={120} className={inp} /></div>
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={dObs} onChange={(e) => setDObs(e.target.value)} maxLength={500} className={inp} /></div>
+            <div className="sm:col-span-4">
+              <label className="mb-1 block text-xs font-medium text-slate-500">Comprovante (foto/PDF) — opcional</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                  <Paperclip className="h-4 w-4" /> {dRecibo ? 'Trocar arquivo' : 'Anexar comprovante'}
+                  <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => setDRecibo(e.target.files?.[0] ?? null)} />
+                </label>
+                {dRecibo && <span className="text-xs text-slate-500">{dRecibo.name} <button type="button" onClick={() => setDRecibo(null)} className="ml-1 text-rose-500 hover:text-rose-700">remover</button></span>}
+                {!dRecibo && editDespId && v.despesas.find((x) => x.id === editDespId)?.comprovanteObjectKey && (
+                  <button type="button" onClick={() => void verComprovante(editDespId)} className="text-xs text-capul-600 hover:underline">Ver comprovante atual</button>
+                )}
+              </div>
+            </div>
           </div>
           <div className="mt-3 flex gap-2">
             <button type="submit" disabled={salvandoDesp} className="rounded-lg bg-capul-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvandoDesp ? 'Salvando…' : editDespId ? 'Salvar despesa' : 'Lançar despesa'}</button>
@@ -396,6 +430,9 @@ export function SupervisorViagemPage() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
+                    {d.comprovanteObjectKey && (
+                      <button onClick={() => void verComprovante(d.id)} className="inline-flex items-center gap-1 text-slate-400 hover:text-capul-600" title="Ver comprovante"><Paperclip className="h-4 w-4" /></button>
+                    )}
                     {podeAprovarDespesa && d.situacao === 'PENDENTE' && (
                       <>
                         <button onClick={() => void decidirDespesa(d.id, 'APROVADA')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Aprovar</button>

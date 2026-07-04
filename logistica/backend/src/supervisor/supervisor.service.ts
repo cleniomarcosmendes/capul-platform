@@ -5,6 +5,8 @@ import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.j
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
+import { CofreStorageService } from '../cofre/cofre-storage.service.js';
+import type { ReciboBinario } from '../despesa/despesa.service.js';
 import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /**
@@ -18,7 +20,18 @@ export class SupervisorService {
     private readonly prisma: PrismaService,
     private readonly condutor: ProtheusCondutorService,
     private readonly core: CoreLookupService,
+    private readonly storage: CofreStorageService,
   ) {}
+
+  /** Anexa o recibo (foto/PDF) à despesa: sobe no cofre (MinIO) e grava
+   *  objectKey/hash/mime no registro. Mesmo mecanismo da frota. */
+  private async anexarReciboDespesa(despesaId: string, filialId: string, recibo: ReciboBinario) {
+    const { objectKey, hash } = await this.storage.put(recibo.buffer, { filialId, refId: despesaId, mimeType: recibo.mimetype });
+    return this.prisma.despesaVeiculo.update({
+      where: { id: despesaId },
+      data: { comprovanteObjectKey: objectKey, comprovanteHash: hash, comprovanteMime: recibo.mimetype ?? null },
+    });
+  }
 
   // ---- Cadastro de Supervisor de Área + vínculo com o coordenador (Fase 6a) ----
   async listarSupervisores(user: JwtPayload, somenteAtivos?: boolean) {
@@ -335,7 +348,7 @@ export class SupervisorService {
   }
 
   // ---- Despesas da viagem do supervisor (compõem a RDV) ----
-  async lancarDespesa(viagemId: string, dto: LancarDespesaSupervisorDto, user: JwtPayload) {
+  async lancarDespesa(viagemId: string, dto: LancarDespesaSupervisorDto, user: JwtPayload, recibo?: ReciboBinario) {
     const filialId = filialDoUsuario(user);
     const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
@@ -345,7 +358,7 @@ export class SupervisorService {
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     // INDIVÍDUO não tem veículo; VEÍCULO usa o veículo da viagem (se houver).
     const veiculoId = tipo.categoria === 'INDIVIDUO' ? null : v.veiculoId;
-    return this.prisma.despesaVeiculo.create({
+    const d = await this.prisma.despesaVeiculo.create({
       data: {
         filialId,
         veiculoId,
@@ -356,12 +369,15 @@ export class SupervisorService {
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
         // Redesenho 6d: despesa do supervisor nasce PENDENTE — o coordenador
-        // aprova/rejeita (comprovante é opcional). Só APROVADA entra na RDV.
+        // aprova/rejeita (comprovante é opcional, mas lastreia a decisão). Só
+        // APROVADA entra na RDV.
         situacao: 'PENDENTE',
         criadoPorId: user.sub,
       },
       include: { tipoDespesa: { select: { nome: true, categoria: true } } },
     });
+    if (recibo) return this.anexarReciboDespesa(d.id, filialId, recibo);
+    return d;
   }
 
   /** Decisão do coordenador sobre a despesa (6d): APROVADA ou CONTESTADA (rejeita,
@@ -398,8 +414,26 @@ export class SupervisorService {
     if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
     if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
     if (d.viagem?.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover despesas.');
+    if (d.comprovanteObjectKey) {
+      try { await this.storage.remove(d.comprovanteObjectKey); } catch { /* objeto órfão é tolerável */ }
+    }
     await this.prisma.despesaVeiculo.delete({ where: { id: despesaId } });
     return { ok: true };
+  }
+
+  /** Download do comprovante da despesa (o coordenador vê antes de decidir).
+   *  Escopo por filial: quem enxerga o planejamento enxerga o recibo. */
+  async obterReciboDespesa(viagemId: string, despesaId: string, user: JwtPayload): Promise<{ buffer: Buffer; mimeType: string }> {
+    const filialId = filialDoUsuario(user);
+    const d = await this.prisma.despesaVeiculo.findUnique({
+      where: { id: despesaId },
+      include: { viagem: { select: { tipo: true, filialId: true } } },
+    });
+    if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
+    if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    if (!d.comprovanteObjectKey) throw new NotFoundException('Esta despesa não tem comprovante anexado.');
+    const buffer = await this.storage.get(d.comprovanteObjectKey);
+    return { buffer, mimeType: d.comprovanteMime ?? 'application/octet-stream' };
   }
 
   // ---- Administração (Fase 5): correções do gestor ----
@@ -457,7 +491,7 @@ export class SupervisorService {
     });
   }
 
-  async editarDespesa(viagemId: string, despesaId: string, dto: EditarDespesaSupervisorDto, user: JwtPayload) {
+  async editarDespesa(viagemId: string, despesaId: string, dto: EditarDespesaSupervisorDto, user: JwtPayload, recibo?: ReciboBinario) {
     const filialId = filialDoUsuario(user);
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id: despesaId },
@@ -474,6 +508,13 @@ export class SupervisorService {
       if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
       tipoId = tipo.id;
       veiculoId = tipo.categoria === 'INDIVIDUO' ? null : d.viagem.veiculoId;
+    }
+    // Troca do comprovante: sobe o novo e remove o antigo (best-effort).
+    if (recibo) {
+      if (d.comprovanteObjectKey) {
+        try { await this.storage.remove(d.comprovanteObjectKey); } catch { /* órfão tolerável */ }
+      }
+      await this.anexarReciboDespesa(despesaId, filialId, recibo);
     }
     return this.prisma.despesaVeiculo.update({
       where: { id: despesaId },

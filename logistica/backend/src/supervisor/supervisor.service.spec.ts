@@ -6,6 +6,7 @@ import { createPrismaMock } from '../common/testing/prisma-mock';
 const user = (filialId: string | null = 'f1') => ({ sub: 'u1', filialId, modulos: [{ codigo: 'LOGISTICA', role: 'ADMIN' }] }) as any;
 const condutorMock = () => ({ validar: jest.fn() }) as any;
 const coreMock = () => ({}) as any;
+const storageMock = () => ({ put: jest.fn(), get: jest.fn(), remove: jest.fn() }) as any;
 
 describe('SupervisorService.rdv (RDV por planejamento)', () => {
   let prisma: any;
@@ -13,7 +14,7 @@ describe('SupervisorService.rdv (RDV por planejamento)', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new SupervisorService(prisma, condutorMock(), coreMock());
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
   });
 
   const viagemBase = {

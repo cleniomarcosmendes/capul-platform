@@ -1,8 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
+import type { ReciboBinario } from '../despesa/despesa.service.js';
 import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirDespesaDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+
+/** Converte o arquivo do multer no binário do comprovante (ou undefined). */
+const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
+  f ? { buffer: f.buffer, mimetype: f.mimetype, size: f.size } : undefined;
 
 // Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
 // escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
@@ -120,8 +126,9 @@ export class SupervisorController {
     return this.svc.editarVisita(id, paradaId, dto, user);
   }
   @Patch('viagens/:id/despesas/:despesaId')
-  editarDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Body() dto: EditarDespesaSupervisorDto, @CurrentUser() user: JwtPayload) {
-    return this.svc.editarDespesa(id, despesaId, dto, user);
+  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  editarDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Body() dto: EditarDespesaSupervisorDto, @CurrentUser() user: JwtPayload, @UploadedFile() comprovante?: Express.Multer.File) {
+    return this.svc.editarDespesa(id, despesaId, dto, user, reciboDe(comprovante));
   }
 
   // ---- Visitas da viagem (lançamento pelo operador/gestor) ----
@@ -140,13 +147,22 @@ export class SupervisorController {
   }
 
   // ---- Despesas da viagem (compõem a RDV) ----
+  // Comprovante (foto/PDF) opcional: multipart quando houver arquivo, JSON quando não.
   @Post('viagens/:id/despesas')
-  lancarDespesa(@Param('id') id: string, @Body() dto: LancarDespesaSupervisorDto, @CurrentUser() user: JwtPayload) {
-    return this.svc.lancarDespesa(id, dto, user);
+  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  lancarDespesa(@Param('id') id: string, @Body() dto: LancarDespesaSupervisorDto, @CurrentUser() user: JwtPayload, @UploadedFile() comprovante?: Express.Multer.File) {
+    return this.svc.lancarDespesa(id, dto, user, reciboDe(comprovante));
   }
   @Delete('viagens/:id/despesas/:despesaId')
   removerDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @CurrentUser() user: JwtPayload) {
     return this.svc.removerDespesa(id, despesaId, user);
+  }
+  // Download do comprovante (o coordenador vê antes de decidir).
+  @Get('viagens/:id/despesas/:despesaId/comprovante')
+  @Header('Cache-Control', 'private, no-store')
+  async comprovanteDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @CurrentUser() user: JwtPayload): Promise<StreamableFile> {
+    const { buffer, mimeType } = await this.svc.obterReciboDespesa(id, despesaId, user);
+    return new StreamableFile(buffer, { type: mimeType, disposition: `inline; filename="comprovante-${despesaId}"` });
   }
   // Decisão do coordenador sobre a despesa (6d): aprovar / rejeitar (contestar)
   @Patch('viagens/:id/despesas/:despesaId/decidir')
