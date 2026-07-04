@@ -461,39 +461,60 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         {modo === 'PORTARIA' && (
         <div>
           <PassoHeader n={1} titulo="Condutor (pela portaria)" />
-          <p className="mb-2 text-xs text-amber-700">Exceção: a rota é apontada ao condutor <b>sem a senha dele</b> — fica registrada sob a sua responsabilidade.</p>
-          <div className="flex max-w-md gap-1">
-            <input
-              value={nomeBusca}
-              onChange={(e) => { setNomeBusca(e.target.value); setBuscou(false); setCondutorSel(null); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') void buscarNome(); }}
-              placeholder="Nome do condutor (mín. 3 letras)"
-              autoComplete="off"
-              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base"
-            />
-            <button onClick={() => void buscarNome()} disabled={buscandoNome || nomeBusca.trim().length < 3}
-              title="Buscar por nome"
-              className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm hover:bg-slate-50 disabled:opacity-50">
-              {buscandoNome ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            </button>
+          <p className="mb-3 text-xs text-amber-700">Exceção: a rota é apontada ao condutor <b>sem a senha dele</b> — fica registrada sob a sua responsabilidade.</p>
+          {/* 2 colunas: busca à esquerda, resumo do condutor selecionado à direita
+              (aproveita o espaço ocioso da linha em telas largas). */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div>
+              <div className="flex gap-1">
+                <input
+                  value={nomeBusca}
+                  onChange={(e) => { setNomeBusca(e.target.value); setBuscou(false); setCondutorSel(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void buscarNome(); }}
+                  placeholder="Nome do condutor (mín. 3 letras)"
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base"
+                />
+                <button onClick={() => void buscarNome()} disabled={buscandoNome || nomeBusca.trim().length < 3}
+                  title="Buscar por nome"
+                  className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm hover:bg-slate-50 disabled:opacity-50">
+                  {buscandoNome ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </button>
+              </div>
+              {buscou && resultados.length === 0 && (
+                <p className="mt-2 text-xs text-slate-500">Nenhum funcionário encontrado (ou sem acesso ao portal RH).</p>
+              )}
+              {resultados.length > 0 && (
+                <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  {resultados.map((c) => (
+                    <li key={c.matricula}>
+                      <button onClick={() => setCondutorSel(c)}
+                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 ${condutorSel?.matricula === c.matricula ? 'bg-capul-50' : ''}`}>
+                        <span><span className="font-medium text-slate-800">{c.nome}</span><span className="text-slate-400"> · {c.matricula}{c.cc ? ` · CC ${c.cc}` : ''}</span></span>
+                        {condutorSel?.matricula === c.matricula && <span className="shrink-0 text-xs font-medium text-capul-700">✓</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              {condutorSel ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Condutor selecionado</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-800">{condutorSel.nome}</p>
+                  <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
+                    <span>Matrícula: <b className="font-mono">{condutorSel.matricula}</b></span>
+                    {condutorSel.cc && <span>Centro de custo: <b>{condutorSel.cc}</b></span>}
+                  </div>
+                </div>
+              ) : (
+                <div className="hidden h-full items-center justify-center rounded-xl border border-dashed border-slate-200 p-4 text-center text-sm text-slate-400 lg:flex">
+                  Busque e selecione o condutor à esquerda — os dados dele aparecem aqui.
+                </div>
+              )}
+            </div>
           </div>
-          {buscou && resultados.length === 0 && (
-            <p className="mt-2 text-xs text-slate-500">Nenhum funcionário encontrado (ou sem acesso ao portal RH).</p>
-          )}
-          {resultados.length > 0 && (
-            <ul className="mt-2 max-w-md divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 bg-white">
-              {resultados.map((c) => (
-                <li key={c.matricula}>
-                  <button onClick={() => setCondutorSel(c)}
-                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50 ${condutorSel?.matricula === c.matricula ? 'bg-capul-50' : ''}`}>
-                    <span><span className="font-medium text-slate-800">{c.nome}</span><span className="text-slate-400"> · {c.matricula}{c.cc ? ` · CC ${c.cc}` : ''}</span></span>
-                    {condutorSel?.matricula === c.matricula && <span className="shrink-0 text-xs font-medium text-capul-700">✓</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {condutorSel && <p className="mt-2 text-xs font-medium text-emerald-700">Selecionado: {condutorSel.nome} ({condutorSel.matricula})</p>}
         </div>
         )}
 
@@ -542,7 +563,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               />
             </div>
 
-            <div className="sm:col-span-6">
+            <div className="sm:col-span-5">
               <label className="mb-1 block text-sm font-medium text-slate-600">Departamento solicitante</label>
               <select
                 value={departamentoSolicitanteId} onChange={(e) => setDepartamentoSolicitanteId(e.target.value)} disabled={!podeAvancar}
@@ -554,7 +575,8 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               <p className="mt-1 text-xs text-slate-400">Quem pediu o veículo — alimenta o "Uso por departamento" no Monitor.</p>
             </div>
 
-            <div className="sm:col-span-6">
+            {/* col-start-8: alinha "Local" sob "Finalidade" (mesma coluna da linha de cima). */}
+            <div className="sm:col-span-5 sm:col-start-8">
               <label className="mb-1 block text-sm font-medium text-slate-600">Local de saída (opcional)</label>
               <input
                 value={localSaida} onChange={(e) => setLocalSaida(e.target.value)} maxLength={120} disabled={!podeAvancar}
