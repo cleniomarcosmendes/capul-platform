@@ -37,9 +37,11 @@ export interface TipoDespesaSup { id: string; nome: string; categoria: string; a
 export interface NovaVisita {
   atividadeId?: string; clienteNome: string;
   municipio?: string; propriedade?: string; observacao?: string; dataVisita?: string;
+  idempotencyKey?: string; // fila offline: dedup no reenvio
 }
 export interface NovaDespesa {
   tipoDespesaId: string; valor: number; data?: string; fornecedor?: string; observacao?: string;
+  idempotencyKey?: string; // fila offline: dedup no reenvio
 }
 
 const B = `${LOGISTICA_BASE}/supervisor`;
@@ -71,6 +73,7 @@ export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUri?: 
   if (body.data) form.append('data', body.data);
   if (body.fornecedor) form.append('fornecedor', body.fornecedor);
   if (body.observacao) form.append('observacao', body.observacao);
+  if (body.idempotencyKey) form.append('idempotencyKey', body.idempotencyKey);
   const isPng = fotoUri.toLowerCase().endsWith('.png');
   form.append('comprovante', {
     uri: fotoUri,

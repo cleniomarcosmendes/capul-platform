@@ -10,8 +10,12 @@ import {
   obterViagemSupervisor, adicionarVisitaApp, lancarDespesaApp, apontarVisitaApp,
   enviarPlanejamentoApp, iniciarExecucaoApp, concluirPlanejamentoApp,
   listarAtividadesSup, listarTiposDespesaSup,
-  type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup,
+  type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup, type NovaVisita, type NovaDespesa,
 } from '../api/supervisor';
+import { uuid } from '../lib/uuid';
+import {
+  enfileirarSupervisor, processarFilaSupervisor, contarPendentesSupervisor, onFilaSupervisorChange, ehErroDeRede,
+} from '../offline/filaSupervisor';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'SupervisorViagem'>;
@@ -50,6 +54,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [tipos, setTipos] = useState<TipoDespesaSup[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [agindo, setAgindo] = useState(false);
+  const [pendentes, setPendentes] = useState(0);
   // form visita
   const [cliNome, setCliNome] = useState(''); const [muni, setMuni] = useState(''); const [ativId, setAtivId] = useState('');
   const [prop, setProp] = useState(''); const [vObs, setVObs] = useState('');
@@ -70,34 +75,57 @@ export function SupervisorViagemScreen({ route }: Props) {
     let ativo = true;
     (async () => {
       setCarregando(true);
+      await processarFilaSupervisor().catch(() => undefined); // sincroniza o que ficou offline
       try { await carregar(); } catch { Alert.alert('Erro', 'Falha ao carregar o planejamento.'); }
       if (ativo) setCarregando(false);
     })();
-    return () => { ativo = false; };
+    void contarPendentesSupervisor().then(setPendentes);
+    const off = onFilaSupervisorChange(setPendentes);
+    return () => { ativo = false; off(); };
   }, [carregar]));
+
+  const sincronizar = async () => {
+    const r = await processarFilaSupervisor();
+    await carregar();
+    if (r.descartadas.length) Alert.alert('Alguns itens não entraram', r.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
+    else if (r.enviadas) Alert.alert('Sincronizado', `${r.enviadas} registro(s) enviado(s).`);
+  };
 
   const concluida = v?.situacao === 'CONCLUIDA';
   const sp = v?.statusPlanejamento ?? null;
   const emExecucao = sp === 'EM_EXECUCAO';
 
+  const limparVisita = () => { setCliNome(''); setMuni(''); setAtivId(''); setProp(''); setVObs(''); };
+
   const salvarVisita = async () => {
     if (!cliNome.trim()) { Alert.alert('Visita', 'Informe o cliente (ou prospect).'); return; }
     setSalvV(true);
+    const payload: NovaVisita = {
+      clienteNome: cliNome.trim(), municipio: muni.trim() || undefined,
+      atividadeId: ativId || undefined, propriedade: prop.trim() || undefined,
+      observacao: vObs.trim() || undefined, idempotencyKey: uuid(),
+    };
     try {
-      await adicionarVisitaApp(viagemId, {
-        clienteNome: cliNome.trim(), municipio: muni.trim() || undefined,
-        atividadeId: ativId || undefined,
-        propriedade: prop.trim() || undefined, observacao: vObs.trim() || undefined,
-      });
-      setCliNome(''); setMuni(''); setAtivId(''); setProp(''); setVObs('');
-      await carregar();
+      await adicionarVisitaApp(viagemId, payload);
+      limparVisita(); await carregar();
       Alert.alert('Pronto', 'Visita registrada.');
-    } catch (e) { Alert.alert('Erro', msg(e, 'Falha ao registrar visita.')); } finally { setSalvV(false); }
+    } catch (e) {
+      if (ehErroDeRede(e)) {
+        await enfileirarSupervisor({ id: payload.idempotencyKey!, rotulo: `Visita: ${payload.clienteNome}`, acao: { tipo: 'visita', viagemId, payload } });
+        limparVisita();
+        Alert.alert('Salvo offline', 'Sem sinal — a visita vai sincronizar quando a conexão voltar.');
+      } else { Alert.alert('Erro', msg(e, 'Falha ao registrar visita.')); }
+    } finally { setSalvV(false); }
   };
 
   const apontar = async (paradaId: string, status: 'REALIZADA' | 'PULADA') => {
     try { await apontarVisitaApp(viagemId, paradaId, status); await carregar(); }
-    catch (e) { Alert.alert('Erro', msg(e, 'Falha ao apontar a visita.')); }
+    catch (e) {
+      if (ehErroDeRede(e)) {
+        await enfileirarSupervisor({ id: uuid(), rotulo: `Apontar ${status === 'REALIZADA' ? 'realizada' : 'pulada'}`, acao: { tipo: 'apontar', viagemId, paradaId, status } });
+        Alert.alert('Salvo offline', 'Sem sinal — o apontamento vai sincronizar quando a conexão voltar.');
+      } else { Alert.alert('Erro', msg(e, 'Falha ao apontar a visita.')); }
+    }
   };
 
   const acao = async (fn: (id: string) => Promise<void>, ok: string) => {
@@ -113,18 +141,27 @@ export function SupervisorViagemScreen({ route }: Props) {
     if (!r.canceled && r.assets[0]?.uri) setFotoUri(r.assets[0].uri);
   };
 
+  const limparDespesa = () => { setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUri(null); };
+
   const salvarDespesa = async () => {
     if (!tipoId || !valor) { Alert.alert('Despesa', 'Escolha o tipo e informe o valor.'); return; }
     setSalvD(true);
+    const foto = fotoUri;
+    const payload: NovaDespesa = {
+      tipoDespesaId: tipoId, valor: Number(valor),
+      fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined, idempotencyKey: uuid(),
+    };
     try {
-      await lancarDespesaApp(viagemId, {
-        tipoDespesaId: tipoId, valor: Number(valor),
-        fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined,
-      }, fotoUri ?? undefined);
-      setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUri(null);
-      await carregar();
+      await lancarDespesaApp(viagemId, payload, foto ?? undefined);
+      limparDespesa(); await carregar();
       Alert.alert('Pronto', 'Despesa lançada (aguarda aprovação do coordenador).');
-    } catch (e) { Alert.alert('Erro', msg(e, 'Falha ao lançar despesa.')); } finally { setSalvD(false); }
+    } catch (e) {
+      if (ehErroDeRede(e)) {
+        await enfileirarSupervisor({ id: payload.idempotencyKey!, rotulo: `Despesa: ${brl(payload.valor)}`, acao: { tipo: 'despesa', viagemId, payload, fotoUri: foto ?? null } });
+        limparDespesa();
+        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.');
+      } else { Alert.alert('Erro', msg(e, 'Falha ao lançar despesa.')); }
+    } finally { setSalvD(false); }
   };
 
   if (carregando) return <View style={styles.center}><ActivityIndicator size="large" color={CAPUL} /></View>;
@@ -132,6 +169,11 @@ export function SupervisorViagemScreen({ route }: Props) {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {pendentes > 0 && (
+        <TouchableOpacity style={styles.banner} onPress={() => void sincronizar()}>
+          <Text style={styles.bannerTxt}>📴 {pendentes} registro(s) aguardando sinal — toque para reenviar</Text>
+        </TouchableOpacity>
+      )}
       <View style={styles.header}>
         <Text style={styles.hTitle}>Planejamento #{v.numero} · {fmtMes(v.mesReferencia)}</Text>
         <Text style={styles.hSub}>Supervisor: {v.condutorNome ?? '—'} · Adiant.: {brl(v.adiantamento)}</Text>
@@ -265,4 +307,6 @@ const styles = StyleSheet.create({
   apTxt: { color: '#64748b', fontWeight: '600', fontSize: 13 },
   apOk: { borderColor: '#6ee7b7', backgroundColor: '#d1fae5' },
   apOkTxt: { color: '#047857', fontWeight: '700', fontSize: 13 },
+  banner: { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 10, padding: 12 },
+  bannerTxt: { color: '#92400e', fontWeight: '700', textAlign: 'center' },
 });
