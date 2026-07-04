@@ -45,8 +45,32 @@ export async function obterViagemSupervisor(id: string): Promise<ViagemSupDetalh
 export async function adicionarVisitaApp(id: string, body: NovaVisita): Promise<void> {
   await api.post(`${B}/viagens/${id}/visitas`, body);
 }
-export async function lancarDespesaApp(id: string, body: NovaDespesa): Promise<void> {
-  await api.post(`${B}/viagens/${id}/despesas`, body);
+/**
+ * Lança a despesa do supervisor → PENDENTE (coordenador aprova/rejeita depois).
+ * Comprovante (foto do recibo) OPCIONAL — caso de uso forte no campo: fotografar
+ * na hora. Com foto → multipart; sem foto → JSON. Backend aceita os dois.
+ */
+export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUri?: string): Promise<void> {
+  if (!fotoUri) {
+    await api.post(`${B}/viagens/${id}/despesas`, body);
+    return;
+  }
+  const form = new FormData();
+  form.append('tipoDespesaId', body.tipoDespesaId);
+  form.append('valor', String(body.valor));
+  if (body.data) form.append('data', body.data);
+  if (body.fornecedor) form.append('fornecedor', body.fornecedor);
+  if (body.observacao) form.append('observacao', body.observacao);
+  const isPng = fotoUri.toLowerCase().endsWith('.png');
+  form.append('comprovante', {
+    uri: fotoUri,
+    name: isPng ? 'comprovante.png' : 'comprovante.jpg',
+    type: isPng ? 'image/png' : 'image/jpeg',
+  } as unknown as Blob);
+  await api.post(`${B}/viagens/${id}/despesas`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60_000,
+  });
 }
 export async function listarAtividadesSup(): Promise<AtividadeSup[]> {
   const { data } = await api.get<AtividadeSup[]>(`${B}/atividades`, { params: { ativos: true } });

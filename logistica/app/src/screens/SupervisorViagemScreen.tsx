@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import { isAxiosError } from 'axios';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
@@ -34,6 +35,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [salvV, setSalvV] = useState(false);
   // form despesa
   const [tipoId, setTipoId] = useState(''); const [valor, setValor] = useState(''); const [dForn, setDForn] = useState(''); const [dObs, setDObs] = useState('');
+  const [fotoUri, setFotoUri] = useState<string | null>(null); // comprovante (opcional)
   const [salvD, setSalvD] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -70,6 +72,13 @@ export function SupervisorViagemScreen({ route }: Props) {
     } catch (e) { Alert.alert('Erro', msg(e, 'Falha ao registrar visita.')); } finally { setSalvV(false); }
   };
 
+  const tirarFoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Comprovante', 'Permita o acesso à câmera para fotografar o recibo.'); return; }
+    const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
+    if (!r.canceled && r.assets[0]?.uri) setFotoUri(r.assets[0].uri);
+  };
+
   const salvarDespesa = async () => {
     if (!tipoId || !valor) { Alert.alert('Despesa', 'Escolha o tipo e informe o valor.'); return; }
     setSalvD(true);
@@ -77,8 +86,8 @@ export function SupervisorViagemScreen({ route }: Props) {
       await lancarDespesaApp(viagemId, {
         tipoDespesaId: tipoId, valor: Number(valor),
         fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined,
-      });
-      setTipoId(''); setValor(''); setDForn(''); setDObs('');
+      }, fotoUri ?? undefined);
+      setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUri(null);
       await carregar();
       Alert.alert('Pronto', 'Despesa lançada.');
     } catch (e) { Alert.alert('Erro', msg(e, 'Falha ao lançar despesa.')); } finally { setSalvD(false); }
@@ -127,6 +136,15 @@ export function SupervisorViagemScreen({ route }: Props) {
           <TextInput style={styles.input} placeholder="Valor (R$)" keyboardType="decimal-pad" value={valor} onChangeText={setValor} />
           <TextInput style={styles.input} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
           <TextInput style={styles.input} placeholder="Observação" value={dObs} onChangeText={setDObs} />
+          <Text style={styles.fLabel}>Comprovante (opcional)</Text>
+          {fotoUri ? (
+            <View>
+              <Image source={{ uri: fotoUri }} style={styles.foto} resizeMode="cover" />
+              <TouchableOpacity style={styles.refazer} onPress={() => setFotoUri(null)} disabled={salvD}><Text style={styles.refazerTxt}>Remover foto</Text></TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.btnFoto} onPress={() => void tirarFoto()} disabled={salvD}><Text style={styles.btnFotoTxt}>📷 Fotografar recibo</Text></TouchableOpacity>
+          )}
           <TouchableOpacity style={[styles.btn, salvD && styles.btnOff]} onPress={() => void salvarDespesa()} disabled={salvD}>
             <Text style={styles.btnTxt}>{salvD ? 'Salvando…' : 'Lançar despesa'}</Text>
           </TouchableOpacity>
@@ -158,6 +176,12 @@ const styles = StyleSheet.create({
   gap: { height: 8 },
   btn: { backgroundColor: CAPUL, borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
   btnOff: { opacity: 0.6 },
+  fLabel: { fontSize: 13, color: '#334155', fontWeight: '600', marginTop: 12 },
+  btnFoto: { borderWidth: 2, borderColor: CAPUL, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 24, alignItems: 'center', backgroundColor: '#fff', marginTop: 4 },
+  btnFotoTxt: { color: CAPUL, fontSize: 15, fontWeight: '700' },
+  foto: { width: '100%', height: 220, borderRadius: 12, backgroundColor: '#e2e8f0', marginTop: 4 },
+  refazer: { alignSelf: 'center', marginTop: 8 },
+  refazerTxt: { color: CAPUL, fontWeight: '600' },
   btnTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
   listTitle: { fontSize: 14, fontWeight: '700', color: '#334155', marginTop: 8 },
   vazio: { color: '#94a3b8', fontSize: 13 },
