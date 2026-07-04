@@ -36,22 +36,36 @@ const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
 const statusPlan = (s?: string | null) => STATUS_PLAN[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 
 const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', coordenacao: 'Coordenação (aprovar)', fechamento: 'Fechamento (RDV)', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
+type TabKey = 'viagens' | 'coordenacao' | 'fechamento' | 'atividades' | 'equipe';
+
+// Abas visíveis por perfil (defesa em profundidade — o backend barra as escritas):
+// Gestor/Admin = tudo · Coordenador = Planejamentos + Coordenação + Fechamento ·
+// Supervisor (e demais) = só Planejamentos.
+function abasDoPerfil(role: string | null): TabKey[] {
+  if (role === 'ADMIN' || role === 'GESTOR_ENTREGA' || role === 'GESTOR_FROTA') return ['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'];
+  if (role === 'COORDENADOR') return ['viagens', 'coordenacao', 'fechamento'];
+  return ['viagens'];
+}
 
 export function SupervisoresPage() {
-  const [tab, setTab] = useState<'viagens' | 'coordenacao' | 'fechamento' | 'atividades' | 'equipe'>('viagens');
+  const { logisticaRole } = useAuth();
+  const abas = abasDoPerfil(logisticaRole);
+  const [tab, setTab] = useState<TabKey>('viagens');
+  // Garante que a aba ativa é permitida (ex.: se o perfil muda, cai p/ a 1ª).
+  const tabAtiva = abas.includes(tab) ? tab : abas[0];
   return (
     <div className="p-6">
       <h1 className="text-2xl font-semibold text-slate-800">Supervisores</h1>
       <p className="mb-6 text-sm text-slate-500">Prestação de contas mensal (RDV) e catálogos das visitas — Indústria de Ração.</p>
       <div className="mb-6 flex gap-1 border-b border-slate-200">
-        {(['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'] as const).map((t) => (
+        {abas.map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${tab === t ? 'border-capul-600 text-capul-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${tabAtiva === t ? 'border-capul-600 text-capul-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
             {TAB_LABEL[t]}
           </button>
         ))}
       </div>
-      {tab === 'viagens' ? <ViagensTab /> : tab === 'coordenacao' ? <CoordenacaoTab /> : tab === 'fechamento' ? <FechamentoTab /> : tab === 'atividades' ? <AtividadesTab /> : <EquipeTab />}
+      {tabAtiva === 'viagens' ? <ViagensTab /> : tabAtiva === 'coordenacao' ? <CoordenacaoTab /> : tabAtiva === 'fechamento' ? <FechamentoTab /> : tabAtiva === 'atividades' ? <AtividadesTab /> : <EquipeTab />}
     </div>
   );
 }

@@ -9,6 +9,9 @@ import { useAuth } from '../contexts/AuthContext';
 const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA'];
 const GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA'];
+// Prestação de Contas (RDV): gestores + coordenador (aprova) + supervisor (planeja).
+// As ABAS internas são gateadas por perfil dentro da SupervisoresPage.
+const SUPERVISORES_MENU = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR', 'SUPERVISOR'];
 
 type NavEntry =
   | { section: string; roles?: string[] }
@@ -37,8 +40,8 @@ const navItems: NavEntry[] = [
   { to: '/frota/linha-km', label: 'Linha do KM', icon: Gauge, roles: GESTORES },
   { to: '/veiculos', label: 'Veículos', icon: Car, roles: GESTORES },
 
-  { section: 'SUPERVISORES', roles: GESTORES },
-  { to: '/supervisores', label: 'Prestação de Contas (RDV)', icon: Users, roles: GESTORES },
+  { section: 'SUPERVISORES', roles: SUPERVISORES_MENU },
+  { to: '/supervisores', label: 'Prestação de Contas (RDV)', icon: Users, roles: SUPERVISORES_MENU },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
