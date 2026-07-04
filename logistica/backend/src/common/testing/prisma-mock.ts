@@ -29,6 +29,11 @@ export function createPrismaMock(): Record<string, any> {
     clienteLocal: modelMock(),
     enderecoEntrega: modelMock(),
     contadorSequencial: modelMock(),
+    despesaVeiculo: modelMock(),
+    tipoDespesa: modelMock(),
+    supervisor: modelMock(),
+    adiantamento: modelMock(),
+    atividadeVisita: modelMock(),
     $queryRaw: jest.fn().mockResolvedValue([]),
   };
   m.$transaction = jest.fn((arg: any) => (typeof arg === 'function' ? arg(m) : Promise.all(arg)));

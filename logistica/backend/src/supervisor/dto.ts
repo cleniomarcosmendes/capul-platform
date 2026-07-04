@@ -64,6 +64,8 @@ export class AdicionarVisitaDto {
   @IsOptional() @IsString() @MaxLength(200) local?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
   @IsOptional() @IsDateString() dataVisita?: string;
+  // Fila offline do app: dedup no reenvio (chave única na parada).
+  @IsOptional() @IsString() @MaxLength(64) idempotencyKey?: string;
 }
 
 // ---- Decisão do coordenador sobre a despesa (6d) ----
@@ -89,6 +91,8 @@ export class LancarDespesaSupervisorDto {
   @IsOptional() @IsDateString() data?: string;
   @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
+  // Fila offline do app: dedup no reenvio (chave única na despesa).
+  @IsOptional() @IsString() @MaxLength(64) idempotencyKey?: string;
 }
 
 // ---- Administração (Fase 5): correções do gestor ----

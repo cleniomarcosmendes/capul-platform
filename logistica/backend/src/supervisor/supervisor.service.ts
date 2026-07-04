@@ -274,6 +274,11 @@ export class SupervisorService {
     // Na fase de PLANEJAMENTO (rascunho/ajustado/rejeitado) a visita nasce
     // PLANEJADA; durante a EXECUÇÃO ela é uma exceção (cliente incluído em campo)
     // e nasce REALIZADA.
+    // Fila offline (app): reenvio com a mesma chave não duplica a visita.
+    if (dto.idempotencyKey) {
+      const ja = await this.prisma.parada.findUnique({ where: { idempotencyKey: dto.idempotencyKey }, include: { atividade: { select: { nome: true } } } });
+      if (ja) return ja;
+    }
     const emPlanejamento = ['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '');
     return this.prisma.$transaction(async (tx) => {
       const seq = (await tx.parada.count({ where: { viagemId } })) + 1;
@@ -290,6 +295,7 @@ export class SupervisorService {
           observacao: dto.observacao?.trim() || null,
           dataHora: this.parseData(dto.dataVisita),
           status: emPlanejamento ? 'PLANEJADA' : 'REALIZADA',
+          idempotencyKey: dto.idempotencyKey ?? null,
         },
         include: { atividade: { select: { nome: true } } },
       });
@@ -354,6 +360,11 @@ export class SupervisorService {
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para lançar despesas.');
+    // Fila offline (app): reenvio com a mesma chave não duplica a despesa.
+    if (dto.idempotencyKey) {
+      const ja = await this.prisma.despesaVeiculo.findUnique({ where: { idempotencyKey: dto.idempotencyKey }, include: { tipoDespesa: { select: { nome: true, categoria: true } } } });
+      if (ja) return ja;
+    }
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     // INDIVÍDUO não tem veículo; VEÍCULO usa o veículo da viagem (se houver).
@@ -373,6 +384,7 @@ export class SupervisorService {
         // APROVADA entra na RDV.
         situacao: 'PENDENTE',
         criadoPorId: user.sub,
+        idempotencyKey: dto.idempotencyKey ?? null,
       },
       include: { tipoDespesa: { select: { nome: true, categoria: true } } },
     });

@@ -58,3 +58,29 @@ describe('SupervisorService.rdv (RDV por planejamento)', () => {
     expect(r.saldo).toBe(-600);
   });
 });
+
+// ⭐ Fila offline (app): reenvio com a mesma idempotencyKey NÃO pode duplicar.
+describe('SupervisorService idempotência (fila offline)', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+  });
+
+  it('lancarDespesa: idempotencyKey já existente → devolve a despesa e NÃO cria outra', async () => {
+    prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', veiculoId: null });
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd-existente', valor: 100, tipoDespesa: { nome: 'IPVA', categoria: 'VEICULO' } });
+    const r: any = await svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 100, idempotencyKey: 'k1' } as any, user());
+    expect(r.id).toBe('d-existente');
+    expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
+  });
+
+  it('adicionarVisita: idempotencyKey já existente → devolve a visita e NÃO cria outra', async () => {
+    prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'RASCUNHO' });
+    prisma.parada.findUnique.mockResolvedValue({ id: 'p-existente', sequencia: 1 });
+    const r: any = await svc.adicionarVisita('v1', { clienteNome: 'Fulano', idempotencyKey: 'k1' } as any, user());
+    expect(r.id).toBe('p-existente');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
