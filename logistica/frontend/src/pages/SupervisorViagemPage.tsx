@@ -63,7 +63,7 @@ interface ClienteL { id: string; nome: string; enderecos: EndP[] }
 interface BuscaResp { clientesLocais: ClienteL[]; protheus?: { clientes: ClienteP[] } }
 const fmtEnd = (e?: EndP | null) => (!e ? '' : [e.logradouro, e.bairro, e.cidade && e.uf ? `${e.cidade}/${e.uf}` : e.cidade].filter(Boolean).join(', '));
 
-function BuscaCliente({ onPick }: { onPick: (c: { matricula?: string; nome: string; municipio?: string; local?: string }) => void }) {
+function BuscaCliente({ onPick }: { onPick: (c: { matricula?: string; nome: string; municipio?: string; propriedade?: string; local?: string }) => void }) {
   const [termo, setTermo] = useState('');
   const [resp, setResp] = useState<BuscaResp | null>(null);
   const [loading, setLoading] = useState(false);
@@ -78,7 +78,7 @@ function BuscaCliente({ onPick }: { onPick: (c: { matricula?: string; nome: stri
     }, 400);
     return () => clearTimeout(h);
   }, [termo]);
-  const escolher = (c: { matricula?: string; nome: string; municipio?: string; local?: string }) => { onPick(c); setTermo(''); setResp(null); setAberto(false); };
+  const escolher = (c: { matricula?: string; nome: string; municipio?: string; propriedade?: string; local?: string }) => { onPick(c); setTermo(''); setResp(null); setAberto(false); };
   const linhasP = (resp?.protheus?.clientes ?? []).flatMap((c) => (c.enderecos.length ? c.enderecos : [null]).map((end) => ({ matricula: c.matricula, nome: c.nome, end })));
   const linhasL = (resp?.clientesLocais ?? []).flatMap((c) => (c.enderecos.length ? c.enderecos : [null]).map((end, ei) => ({ key: `${c.id}-${ei}`, nome: c.nome, end })));
   const temAlgo = linhasP.length > 0 || linhasL.length > 0;
@@ -96,7 +96,7 @@ function BuscaCliente({ onPick }: { onPick: (c: { matricula?: string; nome: stri
             <ul className="divide-y divide-slate-100 text-sm">
               {linhasP.map((r, i) => (
                 <li key={`p${i}`}>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher({ matricula: r.matricula, nome: r.nome, municipio: r.end?.cidade ?? undefined, local: fmtEnd(r.end) || undefined })}
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher({ matricula: r.matricula, nome: r.nome, municipio: r.end?.cidade ?? undefined, propriedade: r.end?.logradouro ?? undefined, local: fmtEnd(r.end) || undefined })}
                     className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-capul-50">
                     <User className="mt-0.5 h-4 w-4 shrink-0 text-capul-600" />
                     <span className="min-w-0"><span className="font-medium text-slate-700">{r.nome}</span><span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{r.matricula}</span>{fmtEnd(r.end) && <span className="block text-xs text-slate-500">{fmtEnd(r.end)}</span>}</span>
@@ -105,7 +105,7 @@ function BuscaCliente({ onPick }: { onPick: (c: { matricula?: string; nome: stri
               ))}
               {linhasL.map((r) => (
                 <li key={`l${r.key}`}>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher({ nome: r.nome, municipio: r.end?.cidade ?? undefined, local: fmtEnd(r.end) || undefined })}
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher({ nome: r.nome, municipio: r.end?.cidade ?? undefined, propriedade: r.end?.logradouro ?? undefined, local: fmtEnd(r.end) || undefined })}
                     className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-capul-50">
                     <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                     <span className="min-w-0"><span className="font-medium text-slate-700">{r.nome}</span><span className="ml-1 text-[10px] text-slate-400">cadastro local</span>{fmtEnd(r.end) && <span className="block text-xs text-slate-500">{fmtEnd(r.end)}</span>}</span>
@@ -297,7 +297,7 @@ export function SupervisorViagemPage() {
           <h2 className="mb-4 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : 'Nova visita'}</h2>
           <div className="mb-3">
             <label className="mb-1 block text-xs font-medium text-slate-500">Cliente</label>
-            <BuscaCliente onPick={(c) => { setCliMat(c.matricula ?? ''); setCliNome(c.nome); if (c.municipio) setMunicipio(c.municipio); }} />
+            <BuscaCliente onPick={(c) => { setCliMat(c.matricula ?? ''); setCliNome(c.nome); if (c.municipio) setMunicipio(c.municipio); if (c.propriedade) setPropriedade(c.propriedade); }} />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Nome do cliente / prospect *</label><input value={clienteNome} onChange={(e) => setCliNome(e.target.value)} maxLength={120} className={inp} placeholder="Selecionado acima ou digite (prospect)" /></div>
