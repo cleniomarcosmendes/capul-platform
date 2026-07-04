@@ -500,7 +500,9 @@ export class SupervisorService {
       where: { id: viagemId },
       include: {
         veiculo: { select: { placa: true, modelo: true } },
-        despesas: { include: { tipoDespesa: { select: { id: true, nome: true, categoria: true } } } },
+        // Só despesas APROVADAS entram na RDV (mesma regra da RDV mensal/Fechamento);
+        // PENDENTE/CONTESTADA não somam no relatório de prestação de contas.
+        despesas: { where: { situacao: 'APROVADA' }, include: { tipoDespesa: { select: { id: true, nome: true, categoria: true } } } },
         paradas: { select: { dataHora: true, municipio: true } },
       },
     });
