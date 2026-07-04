@@ -10,6 +10,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SupervisorHome'>;
 
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
 const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+const PLAN_LABEL: Record<string, string> = {
+  RASCUNHO: 'Em preparação', ENVIADO: 'Enviado (aguarda coordenador)', APROVADO: 'Aprovado',
+  AJUSTADO: 'Ajustado (revisar)', REJEITADO: 'Rejeitado', EM_EXECUCAO: 'Em execução', CONCLUIDO: 'Concluído',
+};
+const planLabel = (s?: string | null) => (s ? PLAN_LABEL[s] ?? s : '—');
 
 /** Viagens mensais em curso do supervisor (RDV) — registrar visitas e despesas em campo. */
 export function SupervisorHomeScreen({ navigation }: Props) {
@@ -41,8 +46,8 @@ export function SupervisorHomeScreen({ navigation }: Props) {
       ListEmptyComponent={<Text style={styles.vazio}>{erro || 'Nenhuma viagem em curso.'}</Text>}
       renderItem={({ item }) => (
         <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('SupervisorViagem', { viagemId: item.id, numero: item.numero })}>
-          <Text style={styles.cardTitle}>Viagem #{item.numero} · {fmtMes(item.mesReferencia)}</Text>
-          <Text style={styles.cardSub}>{item.regiao?.nome ?? 'Sem região'} · {item.condutorNome ?? '—'}</Text>
+          <Text style={styles.cardTitle}>Planejamento #{item.numero} · {fmtMes(item.mesReferencia)}</Text>
+          <Text style={styles.cardSub}>{item.condutorNome ?? '—'} · {planLabel(item.statusPlanejamento)}</Text>
           <Text style={styles.cardSub}>Adiantamento: {brl(item.adiantamento)} · {item._count?.paradas ?? 0} visita(s) · {item._count?.despesas ?? 0} despesa(s)</Text>
         </TouchableOpacity>
       )}
