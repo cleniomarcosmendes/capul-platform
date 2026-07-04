@@ -208,14 +208,16 @@ export class SupervisorService {
     return this.prisma.viagem.update({ where: { id }, data: { statusPlanejamento: 'EM_EXECUCAO' } });
   }
 
-  /** Planejamentos que caem pro coordenador logado (via vínculo), por status. */
+  /** Fila de aprovação: o COORDENADOR vê os planejamentos dos SEUS supervisores
+   *  (via vínculo); o GESTOR/ADMIN vê TODOS os da filial (oversight — espelha o
+   *  `decidir`, que já deixa o gestor aprovar/rejeitar qualquer um). */
   listarPlanejamentosCoordenador(user: JwtPayload, status?: string) {
     const filialId = filialDoUsuario(user);
     return this.prisma.viagem.findMany({
       where: {
         filialId,
         tipo: TipoViagem.SUPERVISOR,
-        supervisorRegistro: { coordenadorId: user.sub },
+        ...(this.ehGestor(user) ? {} : { supervisorRegistro: { coordenadorId: user.sub } }),
         ...(status ? { statusPlanejamento: status as StatusPlanejamento } : {}),
       },
       orderBy: [{ mesReferencia: 'desc' }, { numero: 'desc' }],

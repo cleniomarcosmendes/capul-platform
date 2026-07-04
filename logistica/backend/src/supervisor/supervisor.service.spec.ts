@@ -84,3 +84,27 @@ describe('SupervisorService idempotência (fila offline)', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
+
+// ⭐ Fila de aprovação (Coordenação): coordenador vê os SEUS; gestor vê TODOS da filial.
+describe('SupervisorService.listarPlanejamentosCoordenador', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  it('coordenador: filtra pelos supervisores do vínculo (coordenadorId = user.sub)', () => {
+    void svc.listarPlanejamentosCoordenador(comRole('COORDENADOR'));
+    const arg = prisma.viagem.findMany.mock.calls[0][0];
+    expect(arg.where.supervisorRegistro).toEqual({ coordenadorId: 'u1' });
+  });
+
+  it('gestor: SEM filtro de coordenador — vê todos os planejamentos da filial', () => {
+    void svc.listarPlanejamentosCoordenador(comRole('GESTOR_ENTREGA'));
+    const arg = prisma.viagem.findMany.mock.calls[0][0];
+    expect(arg.where.supervisorRegistro).toBeUndefined();
+    expect(arg.where.filialId).toBe('f1');
+  });
+});

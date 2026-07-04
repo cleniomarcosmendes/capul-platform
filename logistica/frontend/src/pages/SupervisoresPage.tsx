@@ -442,7 +442,7 @@ function CoordenacaoTab() {
 
   return (
     <div>
-      <p className="mb-6 text-sm text-slate-500">Planejamentos dos seus supervisores. Aprove, <b>ajuste</b> (devolve com um comentário) ou rejeite os que estão <b>Enviados</b>.</p>
+      <p className="mb-6 text-sm text-slate-500">Planejamentos aguardando decisão (o coordenador vê os seus supervisores; o gestor vê os da filial). Aprove, <b>ajuste</b> (devolve com um comentário) ou rejeite os que estão <b>Enviados</b>.</p>
       {loading ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
         <div className="py-12 text-center"><Users className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhum planejamento sob sua coordenação</p></div>
       ) : (
