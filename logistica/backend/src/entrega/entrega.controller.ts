@@ -21,6 +21,14 @@ export class EntregaController {
     return this.entregas.create(dto, user);
   }
 
+  /** Manutenção: re-geocodifica os pins das entregas da filial (rua→bairro→município). */
+  @Post('regeocodificar')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  regeocodificar(@CurrentUser() user: JwtPayload, @Body('filialId') filialId?: string) {
+    // Ação por FILIAL: o param escolhe (gestor multi-filial); sem ele, a do usuário.
+    return this.entregas.regeocodificarFilial(resolverFilialLeitura(user, filialId) ?? user.filialId);
+  }
+
   /** Lista (default PENDENTE = fila de montagem). Filtros: filialId, status. */
   @Get()
   listar(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string, @Query('status') status?: StatusEntrega) {

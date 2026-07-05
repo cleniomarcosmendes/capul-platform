@@ -137,6 +137,35 @@ export class EntregaService {
     return this.comTotal(entrega);
   }
 
+  /**
+   * Re-geocodifica os PINS (geo_lat/geo_lng) das entregas da filial a partir do
+   * endereço, com o geocoder atual (fallback rua→bairro→município). Manutenção
+   * pontual — útil quando o geocoder melhora e os pins antigos ficaram imprecisos
+   * ou nulos. Sobrescreve a coordenada da linha (a UI não captura pin preciso do
+   * cliente; a coordenada deriva do endereço). Cancela ficam de fora.
+   */
+  async regeocodificarFilial(filialId: string | undefined) {
+    if (!filialId) throw new BadRequestException('Filial não definida.');
+    const entregas = await this.prisma.entrega.findMany({
+      where: { filialId, status: { not: StatusEntrega.CANCELADA } },
+      select: { id: true, endLogradouro: true, endNumero: true, endBairro: true, endCidade: true, endUf: true, endCep: true },
+    });
+    let atualizadas = 0;
+    let semCoordenada = 0;
+    const porPrecisao: Record<string, number> = {};
+    for (const e of entregas) {
+      const c = await this.geocode.geocodificar({
+        logradouro: e.endLogradouro, numero: e.endNumero, bairro: e.endBairro,
+        cidade: e.endCidade, uf: e.endUf, cep: e.endCep,
+      });
+      if (!c) { semCoordenada++; continue; }
+      await this.prisma.entrega.update({ where: { id: e.id }, data: { geoLat: c.lat, geoLng: c.lng } });
+      atualizadas++;
+      porPrecisao[c.precisao] = (porPrecisao[c.precisao] ?? 0) + 1;
+    }
+    return { total: entregas.length, atualizadas, semCoordenada, porPrecisao };
+  }
+
   /** Normaliza endereço pra dedupe (APTO/AP + sem pontuação/espaços). */
   private chaveEndereco(logradouro?: string | null, cidade?: string | null) {
     return `${logradouro ?? ''} ${cidade ?? ''}`.toUpperCase().replace(/APARTAMENTO|APTO/g, 'AP').replace(/[^A-Z0-9]/g, '');
