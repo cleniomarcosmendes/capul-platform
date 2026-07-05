@@ -75,7 +75,7 @@ export class FrotaController {
   /** Despesas lançadas na viagem (lista da tela de detalhe). */
   @Get('viagens/:id/despesas')
   despesasDaViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.frota.despesasDaViagem(id, user.filialId!);
+    return this.frota.despesasDaViagem(id, user);
   }
 
   /** Registrar retorno (só o próprio condutor). */

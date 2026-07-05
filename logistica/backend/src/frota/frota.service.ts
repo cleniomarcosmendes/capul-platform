@@ -616,7 +616,7 @@ export class FrotaService {
 
   /** Lista as paradas da viagem (ordem da rota) — com status/planejamento/GPS. */
   async listarParadas(id: string, user: JwtPayload) {
-    await this.viagemDaFilial(id, user);
+    this.assertViagemVisivel(await this.viagemDaFilial(id, user), user);
     const paradas = await this.prisma.parada.findMany({
       where: { viagemId: id },
       orderBy: { sequencia: 'asc' },
@@ -783,9 +783,30 @@ export class FrotaService {
   }
 
   /** Lista as viagens de FROTA da filial (com nome do veículo). */
+  /** Gestor de Frota / ADMIN veem TODA a frota da filial (mesma governança do ajuste). */
+  private ehGestorFrota(user: JwtPayload): boolean {
+    const role = user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
+    return role === 'GESTOR_FROTA' || role === 'ADMIN';
+  }
+  /** Visibilidade de UMA viagem (leitura): gestor de frota/ADMIN veem todas; os demais
+   *  só as SUAS — quem registrou a saída (criadoPorId) ou é supervisor de área do veículo.
+   *  404 (não "403") para não vazar a existência de viagem de outro. */
+  private assertViagemVisivel(v: { criadoPorId: string; veiculo: { supervisorId: string | null } | null }, user: JwtPayload) {
+    if (this.ehGestorFrota(user)) return;
+    const ehMinha = v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub;
+    if (!ehMinha) throw new NotFoundException('Viagem de frota não encontrada.');
+  }
+
   async listar(user: JwtPayload, situacao?: StatusViagem) {
+    // Escopo: Gestor de Frota / ADMIN veem TODAS as viagens da filial; os demais
+    // (operador, registrador, gestor de entregas) só veem as SUAS — quem registrou
+    // a saída (criadoPorId) ou é supervisor de área do veículo (mesmo dono do ajuste).
+    const ehGestor = this.ehGestorFrota(user);
     const viagens = await this.prisma.viagem.findMany({
-      where: { tipo: TipoViagem.FROTA, filialId: user.filialId!, ...(situacao ? { situacao } : {}) },
+      where: {
+        tipo: TipoViagem.FROTA, filialId: user.filialId!, ...(situacao ? { situacao } : {}),
+        ...(ehGestor ? {} : { OR: [{ criadoPorId: user.sub }, { veiculo: { supervisorId: user.sub } }] }),
+      },
       include: { veiculo: { select: { placa: true, modelo: true, supervisorId: true } }, _count: { select: { paradas: true } } },
       orderBy: { criadoEm: 'desc' },
       take: 200,
@@ -805,9 +826,13 @@ export class FrotaService {
   }
 
   /** Despesas lançadas numa viagem de frota (lista da tela de detalhe). */
-  async despesasDaViagem(viagemId: string, filialId: string) {
-    const v = await this.prisma.viagem.findFirst({ where: { id: viagemId, filialId }, select: { id: true } });
+  async despesasDaViagem(viagemId: string, user: JwtPayload) {
+    const v = await this.prisma.viagem.findFirst({
+      where: { id: viagemId, filialId: user.filialId! },
+      select: { id: true, criadoPorId: true, veiculo: { select: { supervisorId: true } } },
+    });
     if (!v) throw new NotFoundException('Viagem de frota não encontrada.');
+    this.assertViagemVisivel(v, user);
     const despesas = await this.prisma.despesaVeiculo.findMany({
       where: { viagemId },
       include: { tipoDespesa: { select: { nome: true } }, fornecedorRef: { select: { nome: true } } },
@@ -830,6 +855,7 @@ export class FrotaService {
       include: { veiculo: { select: { placa: true, modelo: true, supervisorId: true } }, _count: { select: { paradas: true } } },
     });
     if (!v) throw new NotFoundException('Viagem de frota não encontrada.');
+    this.assertViagemVisivel(v, user);
     return {
       id: v.id, numero: v.numero, situacao: v.situacao,
       placa: v.veiculo?.placa ?? '—', modelo: v.veiculo?.modelo ?? null,
