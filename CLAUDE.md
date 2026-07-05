@@ -93,11 +93,14 @@ Plataforma corporativa modular com microservicos independentes:
 - Docs: `docs/PLANO_MODULO_FISCAL_v2.0.md` (plano mestre), `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` (formais)
 - **Regra critica**: NUNCA disparar consultas SEFAZ em loop ou cron nao supervisionado — risco de bloqueio do CNPJ da CAPUL (ver `memory/feedback_sefaz_nunca_em_loop.md`)
 
-### 7. Logistica / Entregas (`/entregas`) *(em desenvolvimento — Fase 1a completa; Fase 1b iniciada Jun/2026)*
+### 7. Logistica / Entregas (`/entregas`) *(em desenvolvimento — Fase 1a/1b + Supervisores/RDV e gestão de Frota; Jul/2026)*
 - Entregas domiciliares do supermercado (Unaí/MG): cadastro de entrega (balcao), montagem de viagem, frota, romaneio/etiquetas, painel
+- **Supervisores/RDV**: planejamentos + workflow de aprovação do coordenador + fechamento mensal (prestação de contas de representantes)
+- **Gestão de Frota**: saída de veículos, adiantamento/acerto de viagem, manutenção, linha do KM, custos/análise (custo de frota restrito a GESTOR_FROTA/ADMIN)
+- **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota
 - Backend NestJS 11 + Prisma 6 (schema `logistica` + `core` read-only via `$queryRaw`), porta 3003, prefixo `/api/v1/logistica`
-- Frontend React 19 + Vite 7, base `/entregas/`, porta 5177
-- Escopo por **filial** (entregas/veiculos/viagens/cadastros — filiais sao cidades diferentes); RBAC `OPERADOR_ENTREGA`/`GESTOR_ENTREGA` (ADMIN sempre)
+- Frontend React 19 + Vite 7, base `/entregas/`, porta 5177; app entregador/supervisor em Expo (`logistica/app`)
+- Escopo por **filial** (entregas/veiculos/viagens/cadastros — filiais sao cidades diferentes); **Gestor de Entregas é papel de FILIAL** (só ADMIN é global; GESTOR_FROTA cross-filial só p/ veículos). RBAC: `OPERADOR_ENTREGA`/`GESTOR_ENTREGA`/`GESTOR_FROTA`/`REGISTRADOR_FROTA`/`COORDENADOR`/`SUPERVISOR` (ADMIN sempre)
 - Cliente Protheus (SA1) por matricula/telefone/nome via `core.integracoes_api_endpoints` (interino reusa `getLimite`; ver `docs/SOLICITACAO_PROTHEUS_enderecos_SA1.md`)
 - Suite Jest + logging pino + auditoria de migrations (hardening da Fase 1a)
 - **Fase 1b** (app entregador + prova de entrega/cofre + device-sessions): plano em `C:\Arquivos-de-projeto\clenio\Sistema de Rota\007_Fase1b_Plano_PRs.md`. PR 1b.1 (device-sessions no auth-gateway) feito em branch `feat/device-sessions`
@@ -268,4 +271,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 25/06/2026*
+*Ultima atualizacao: 05/07/2026*
