@@ -18,25 +18,25 @@ describe('filial-scope', () => {
   });
 
   describe('podeVerOutrasFiliais', () => {
-    it('ADMIN e GESTOR_ENTREGA podem', () => {
+    it('ADMIN e GESTOR_FROTA podem', () => {
       expect(podeVerOutrasFiliais(user('f1', 'ADMIN'))).toBe(true);
-      expect(podeVerOutrasFiliais(user('f1', 'GESTOR_ENTREGA'))).toBe(true);
+      expect(podeVerOutrasFiliais(user('f1', 'GESTOR_FROTA'))).toBe(true);
     });
+    it('GESTOR_ENTREGA é papel de filial — não pode', () => expect(podeVerOutrasFiliais(user('f1', 'GESTOR_ENTREGA'))).toBe(false));
     it('OPERADOR_ENTREGA não pode', () => expect(podeVerOutrasFiliais(user('f1', 'OPERADOR_ENTREGA'))).toBe(false));
   });
 
   describe('assertPodeVerRegistro (leitura por id)', () => {
     it('OPERADOR vê registro da própria filial', () => expect(() => assertPodeVerRegistro(user('f1', 'OPERADOR_ENTREGA'), 'f1')).not.toThrow());
     it('OPERADOR NÃO vê registro de outra filial (403)', () => expect(() => assertPodeVerRegistro(user('f1', 'OPERADOR_ENTREGA'), 'f2')).toThrow(ForbiddenException));
-    it('ADMIN/GESTOR veem registro de qualquer filial', () => {
-      expect(() => assertPodeVerRegistro(user('f1', 'ADMIN'), 'f2')).not.toThrow();
-      expect(() => assertPodeVerRegistro(user('f1', 'GESTOR_ENTREGA'), 'f2')).not.toThrow();
-    });
+    it('GESTOR_ENTREGA NÃO vê registro de outra filial (403)', () => expect(() => assertPodeVerRegistro(user('f1', 'GESTOR_ENTREGA'), 'f2')).toThrow(ForbiddenException));
+    it('ADMIN vê registro de qualquer filial', () => expect(() => assertPodeVerRegistro(user('f1', 'ADMIN'), 'f2')).not.toThrow());
   });
 
   describe('resolverFilialLeitura', () => {
-    it('ADMIN/GESTOR respeitam o filtro pedido', () => expect(resolverFilialLeitura(user('f1', 'ADMIN'), 'f2')).toBe('f2'));
+    it('ADMIN respeita o filtro pedido', () => expect(resolverFilialLeitura(user('f1', 'ADMIN'), 'f2')).toBe('f2'));
     it('ADMIN sem filtro = todas (undefined)', () => expect(resolverFilialLeitura(user('f1', 'ADMIN'), undefined)).toBeUndefined());
+    it('GESTOR_ENTREGA fica restrito à própria filial mesmo pedindo outra', () => expect(resolverFilialLeitura(user('f1', 'GESTOR_ENTREGA'), 'f2')).toBe('f1'));
     it('OPERADOR fica restrito à própria filial mesmo pedindo outra', () => expect(resolverFilialLeitura(user('f1', 'OPERADOR_ENTREGA'), 'f2')).toBe('f1'));
   });
 });

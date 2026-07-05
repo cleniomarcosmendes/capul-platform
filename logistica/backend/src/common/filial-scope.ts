@@ -8,8 +8,8 @@ import type { JwtPayload } from './decorators/current-user.decorator.js';
  * Regra:
  *  - ESCRITA (criar/mutar): sempre na própria filial do token — bloqueia
  *    filialId divergente vindo do cliente.
- *  - LEITURA (listar/painel): própria filial; GESTOR_ENTREGA/ADMIN podem ver
- *    qualquer filial (ou todas, quando o filtro vem vazio).
+ *  - LEITURA (listar/painel): própria filial. Só ADMIN (e GESTOR_FROTA, restrito
+ *    a veículos) veem outras filiais — cada filial isola suas entregas.
  */
 
 export function filialDoUsuario(user: JwtPayload): string {
@@ -19,9 +19,13 @@ export function filialDoUsuario(user: JwtPayload): string {
 
 export function podeVerOutrasFiliais(user: JwtPayload): boolean {
   const role = user?.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
-  // GESTOR_FROTA administra a frota da empresa toda (cadastra/edita veículos de
-  // qualquer filial) — só alcança o veículo; entrega/viagem barram esse papel no guard.
-  return role === 'ADMIN' || role === 'GESTOR_ENTREGA' || role === 'GESTOR_FROTA';
+  // ADMIN = visão global da empresa. GESTOR_FROTA administra a frota da empresa
+  // toda (cadastra/edita veículos de qualquer filial) — só alcança o veículo;
+  // entrega/viagem barram esse papel no guard.
+  // GESTOR_ENTREGA é papel de FILIAL (decisão 05/07): vê só a própria filial,
+  // como o operador — cada filial isola suas entregas. A frota compartilhável de
+  // veículos usa o toggle `todasFiliais`, não este helper.
+  return role === 'ADMIN' || role === 'GESTOR_FROTA';
 }
 
 /** Escrita: a filial-alvo informada precisa ser a do usuário. */
