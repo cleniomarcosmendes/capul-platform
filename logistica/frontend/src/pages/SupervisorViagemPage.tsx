@@ -157,12 +157,17 @@ export function SupervisorViagemPage() {
     if (!id) return;
     setLoading(true);
     try {
-      const [d, a, t] = await Promise.all([
-        logisticaApi.get<ViagemDetalhe>(`/supervisor/viagens/${id}`),
+      // A VIAGEM é o primário: se falhar, a tela não abre. Os catálogos (atividades
+      // e tipos de despesa) são best-effort — uma falha secundária não pode esconder
+      // o planejamento (só desabilita os dropdowns).
+      const d = await logisticaApi.get<ViagemDetalhe>(`/supervisor/viagens/${id}`);
+      setV(d.data);
+      const [a, t] = await Promise.allSettled([
         logisticaApi.get<Atividade[]>('/supervisor/atividades', { params: { ativos: true } }),
-        logisticaApi.get<{ id: string; nome: string; categoria: string; ativo?: boolean }[]>('/despesas/tipos'),
+        logisticaApi.get<{ id: string; nome: string; categoria: string; ativo?: boolean }[]>('/supervisor/tipos-despesa'),
       ]);
-      setV(d.data); setAtividades(a.data); setTipos(t.data.filter((x) => x.ativo !== false));
+      setAtividades(a.status === 'fulfilled' ? a.value.data : []);
+      setTipos(t.status === 'fulfilled' ? t.value.data.filter((x) => x.ativo !== false) : []);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a viagem.')); } finally { setLoading(false); }
   };
   useEffect(() => {

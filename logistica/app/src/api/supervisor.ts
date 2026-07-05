@@ -99,6 +99,8 @@ export async function listarAtividadesSup(): Promise<AtividadeSup[]> {
   return data;
 }
 export async function listarTiposDespesaSup(): Promise<TipoDespesaSup[]> {
-  const { data } = await api.get<TipoDespesaSup[]>(`${LOGISTICA_BASE}/despesas/tipos`);
+  // Endpoint PRÓPRIO do supervisor (gateado pelas roles do supervisor) — desacopla
+  // do controller da frota (/despesas/tipos exigia role de frota).
+  const { data } = await api.get<TipoDespesaSup[]>(`${B}/tipos-despesa`);
   return data.filter((t) => t.ativo !== false);
 }

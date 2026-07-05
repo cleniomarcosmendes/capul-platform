@@ -39,6 +39,12 @@ export class SupervisorController {
   atividades(@CurrentUser() user: JwtPayload, @Query('ativos') ativos?: string) {
     return this.svc.listarAtividades(user, ativos === 'true');
   }
+  // Catálogo de tipos de despesa PRÓPRIO do fluxo Supervisores/RDV (herda o @Roles
+  // da classe, que inclui COORDENADOR/SUPERVISOR) — desacopla do controller da frota.
+  @Get('tipos-despesa')
+  tiposDespesa(@Query('ativos') ativos?: string) {
+    return this.svc.listarTiposDespesa(ativos !== 'false');
+  }
   @Post('atividades')
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   criarAtividade(@Body() dto: CriarAtividadeDto, @CurrentUser() user: JwtPayload) {

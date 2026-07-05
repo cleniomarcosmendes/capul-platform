@@ -80,6 +80,15 @@ export class SupervisorService {
       orderBy: { nome: 'asc' },
     });
   }
+
+  /** Tipos de despesa (catálogo) p/ o fluxo Supervisores/RDV — endpoint PRÓPRIO
+   *  (gateado pelas roles do supervisor), evitando depender do controller da frota. */
+  listarTiposDespesa(somenteAtivos?: boolean) {
+    return this.prisma.tipoDespesa.findMany({
+      where: somenteAtivos ? { ativo: true } : {},
+      orderBy: { nome: 'asc' },
+    });
+  }
   async criarAtividade(dto: CriarAtividadeDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const nome = dto.nome.trim();
