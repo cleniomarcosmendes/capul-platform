@@ -107,6 +107,8 @@ const meses = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho
 function fmtCurrency(v: number): string {
   return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 }
+// Horas no padrão pt-BR (vírgula decimal) — evita misturar "6.6h" (ponto) com R$ (vírgula).
+const fmtHoras = (v: number): string => `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h`;
 
 export function IndicadoresPage() {
   const { usuario } = useAuth();
@@ -242,10 +244,10 @@ export function IndicadoresPage() {
                   <span className="text-xs font-medium text-slate-500 uppercase">Disponibilidade</span>
                 </div>
                 <p className={`text-xl font-bold ${data.disponibilidade.disponibilidadePercent >= 99 ? 'text-green-600' : data.disponibilidade.disponibilidadePercent >= 95 ? 'text-yellow-600' : 'text-red-600'}`}>
-                  {data.disponibilidade.disponibilidadePercent}%
+                  {data.disponibilidade.disponibilidadePercent.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
                 </p>
                 <div className="mt-2 text-xs text-slate-500">
-                  <span>{data.disponibilidade.qtdParadas} parada(s) | {data.disponibilidade.horasParada}h fora</span>
+                  <span>{data.disponibilidade.qtdParadas} parada(s) | {fmtHoras(data.disponibilidade.horasParada)} fora</span>
                 </div>
               </button>
 
@@ -440,7 +442,7 @@ export function IndicadoresPage() {
                 <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Detalhamento - Disponibilidade de Sistemas</h3>
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   <div className="bg-slate-50 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-slate-800">{data.disponibilidade.horasTotais}h</p>
+                    <p className="text-2xl font-bold text-slate-800">{fmtHoras(data.disponibilidade.horasTotais)}</p>
                     <p className="text-xs text-slate-600 mt-1">Horas no Periodo (24h/dia)</p>
                   </div>
                   <div className="bg-red-50 rounded-lg p-4 text-center">
@@ -449,7 +451,7 @@ export function IndicadoresPage() {
                   </div>
                   <div className={`rounded-lg p-4 text-center ${data.disponibilidade.disponibilidadePercent >= 99 ? 'bg-green-50' : data.disponibilidade.disponibilidadePercent >= 95 ? 'bg-yellow-50' : 'bg-red-50'}`}>
                     <p className={`text-2xl font-bold ${data.disponibilidade.disponibilidadePercent >= 99 ? 'text-green-800' : data.disponibilidade.disponibilidadePercent >= 95 ? 'text-yellow-800' : 'text-red-800'}`}>
-                      {data.disponibilidade.disponibilidadePercent}%
+                      {data.disponibilidade.disponibilidadePercent.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
                     </p>
                     <p className="text-xs text-slate-600 mt-1">Disponibilidade</p>
                   </div>
@@ -505,7 +507,7 @@ export function IndicadoresPage() {
                             <tr className="bg-slate-50 border-t border-slate-200">
                               <td colSpan={3} className="px-4 py-2 text-xs font-semibold text-slate-600 text-right">Total {sw.softwareNome}:</td>
                               <td className="px-4 py-2 text-sm font-bold text-right text-red-700">
-                                {sw.linhas.reduce((s, l) => s + l.horasTotal, 0).toFixed(1)}h
+                                {fmtHoras(sw.linhas.reduce((s, l) => s + l.horasTotal, 0))}
                               </td>
                             </tr>
                           </tfoot>
@@ -595,7 +597,7 @@ export function IndicadoresPage() {
                           {lista.map((ch) => (
                             <tr key={ch.id} className="hover:bg-slate-50">
                               <td className="px-4 py-2 text-slate-500">{ch.numero}</td>
-                              <td className="px-4 py-2 font-medium text-slate-700 max-w-[300px] truncate">{ch.titulo}</td>
+                              <td className="px-4 py-2 font-medium text-slate-700 max-w-[300px] truncate" title={ch.titulo}>{ch.titulo}</td>
                               <td className="px-4 py-2 text-slate-600">{ch.equipeAtual?.sigla || '-'}</td>
                               <td className="px-4 py-2 text-slate-600">{ch.tecnico?.nome || '-'}</td>
                               <td className="px-4 py-2 text-center">
@@ -686,7 +688,7 @@ export function IndicadoresPage() {
                         {data.horasDesenvolvimento.porProjeto.map((p) => (
                           <div key={p.projeto.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-3">
                             <p className="text-sm text-slate-700">#{p.projeto.numero} - {p.projeto.nome}</p>
-                            <p className="text-sm font-bold text-indigo-600">{p.horas.toFixed(1)}h</p>
+                            <p className="text-sm font-bold text-indigo-600">{fmtHoras(p.horas)}</p>
                           </div>
                         ))}
                       </div>
@@ -701,7 +703,7 @@ export function IndicadoresPage() {
                         {data.horasDesenvolvimento.porAnalista.map((a) => (
                           <div key={a.usuario.id} className="flex items-center justify-between bg-slate-50 rounded-lg p-3">
                             <p className="text-sm text-slate-700">{a.usuario.nome}</p>
-                            <p className="text-sm font-bold text-indigo-600">{a.horas.toFixed(1)}h</p>
+                            <p className="text-sm font-bold text-indigo-600">{fmtHoras(a.horas)}</p>
                           </div>
                         ))}
                       </div>

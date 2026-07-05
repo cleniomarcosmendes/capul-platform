@@ -367,8 +367,8 @@ const Nota = ({ children }: { children: React.ReactNode }) => <p className="text
 
 function TabBtn({ ativo, onClick, icone: Icone, label }: { ativo: boolean; onClick: () => void; icone: typeof DollarSign; label: string }) {
   return (
-    <button onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${ativo ? 'bg-capul-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+    <button onClick={(e) => { onClick(); e.currentTarget.blur(); }}
+      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-capul-400 ${ativo ? 'bg-capul-600 text-white shadow-sm' : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
       <Icone className="w-4 h-4" /> {label}
     </button>
   );
@@ -402,7 +402,7 @@ function CardGrupo({ titulo, dimensao, icone: Icone, itens, total, fmt, sufixoQt
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: cor }} />
                   </div>
-                  <span className="w-20 shrink-0 text-right text-[11px] text-slate-400">{pct.toFixed(1)}%{sufixoQtd ? ` · ${g.qtd} ${sufixoQtd}` : ''}</span>
+                  <span className="w-20 shrink-0 text-right text-[11px] text-slate-400">{pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%{sufixoQtd ? ` · ${g.qtd} ${sufixoQtd}` : ''}</span>
                 </div>
               </button>
             </li>
