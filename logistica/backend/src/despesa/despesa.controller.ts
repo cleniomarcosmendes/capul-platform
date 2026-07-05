@@ -42,8 +42,10 @@ export class DespesaController {
   // ---- Tipos de despesa ----
   // Leitura liberada ao REGISTRADOR_FROTA — precisa apontar o tipo ao lançar
   // despesa na viagem (o cadastro de tipos, abaixo, segue só GESTOR_FROTA).
+  // COORDENADOR/SUPERVISOR: o fluxo Supervisores/RDV reusa este catálogo (a tela
+  // de detalhe do planejamento carrega /despesas/tipos) — senão o load dá 403.
   @Get('tipos')
-  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR', 'SUPERVISOR')
   listarTipos(@Query('ativos') ativos?: string) {
     return this.despesas.listarTipos(ativos === 'true' || ativos === '1');
   }
@@ -63,7 +65,7 @@ export class DespesaController {
   // ---- Fornecedores (cadastro próprio da logística) ----
   // Leitura liberada ao REGISTRADOR_FROTA — escolhe o fornecedor ao lançar despesa.
   @Get('fornecedores')
-  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR', 'SUPERVISOR')
   listarFornecedores(@Query('ativos') ativos?: string) {
     return this.despesas.listarFornecedores(ativos === 'true' || ativos === '1');
   }
