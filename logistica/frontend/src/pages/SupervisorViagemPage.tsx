@@ -128,6 +128,8 @@ export function SupervisorViagemPage() {
   const [v, setV] = useState<ViagemDetalhe | null>(null);
   const [rejDesp, setRejDesp] = useState<string | null>(null); // id da despesa em rejeição
   const [motivoRej, setMotivoRej] = useState('');
+  const [decPlan, setDecPlan] = useState<'AJUSTADO' | 'REJEITADO' | null>(null); // decisão do planejamento (ajuste/rejeição pedem comentário)
+  const [comPlan, setComPlan] = useState('');
   const [atividades, setAtividades] = useState<Atividade[]>([]);
   const [loading, setLoading] = useState(true);
   // form da visita
@@ -284,6 +286,15 @@ export function SupervisorViagemPage() {
       setRejDesp(null); setMotivoRej(''); await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao decidir a despesa.')); }
   };
+  // Decisão do coordenador sobre o PLANEJAMENTO (aqui no detalhe, com visitas +
+  // despesas + comprovantes à vista — não mais "às cegas" na fila da Coordenação).
+  const decidirPlanejamento = async (decisao: 'APROVADO' | 'AJUSTADO' | 'REJEITADO', comentario?: string) => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/decidir`, { decisao, comentario });
+      toast('success', decisao === 'APROVADO' ? 'Planejamento aprovado.' : decisao === 'AJUSTADO' ? 'Devolvido para ajuste.' : 'Planejamento rejeitado.');
+      setDecPlan(null); setComPlan(''); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao decidir o planejamento.')); }
+  };
 
   if (loading) return <div className="p-6 text-slate-500">Carregando…</div>;
   if (!v) return <div className="p-6 text-slate-500">Viagem não encontrada.</div>;
@@ -307,6 +318,14 @@ export function SupervisorViagemPage() {
         <div className="flex items-center gap-2">
           <button onClick={() => navigate(`/supervisores/viagens/${id}/rdv`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> RDV</button>
           <button onClick={() => navigate(`/supervisores/viagens/${id}/visitas`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> Visitas</button>
+          {/* Decisão do coordenador/gestor sobre o planejamento ENVIADO — aqui, com tudo à vista. */}
+          {v.statusPlanejamento === 'ENVIADO' && podeAprovarDespesa && (
+            <>
+              <button onClick={() => void decidirPlanejamento('APROVADO')} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Aprovar</button>
+              <button onClick={() => { setDecPlan('AJUSTADO'); setComPlan(''); }} className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100">Ajustar</button>
+              <button onClick={() => { setDecPlan('REJEITADO'); setComPlan(''); }} className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100">Rejeitar</button>
+            </>
+          )}
           {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') &&
             <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">Enviar ao coordenador</button>}
           {v.statusPlanejamento === 'APROVADO' &&
@@ -317,6 +336,24 @@ export function SupervisorViagemPage() {
             <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">Reabrir para corrigir</button>}
         </div>
       </div>
+
+      {/* Painel de decisão do coordenador (ajuste/rejeição exigem comentário). */}
+      {v.statusPlanejamento === 'ENVIADO' && podeAprovarDespesa && (
+        <div className="mb-6 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+          {decPlan ? (
+            <>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Comentário para o supervisor ({decPlan === 'AJUSTADO' ? 'ajuste' : 'rejeição'}) *</label>
+              <textarea value={comPlan} onChange={(e) => setComPlan(e.target.value)} rows={2} maxLength={500} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Explique o que ajustar / o motivo…" />
+              <div className="mt-2 flex gap-2">
+                <button onClick={() => { if (!comPlan.trim()) { toast('warning', 'Informe o comentário.'); return; } void decidirPlanejamento(decPlan, comPlan.trim()); }} className="rounded-lg bg-capul-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-capul-700">Confirmar {decPlan === 'AJUSTADO' ? 'ajuste' : 'rejeição'}</button>
+                <button onClick={() => { setDecPlan(null); setComPlan(''); }} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-sky-800">📋 <b>Revise as visitas e as despesas (valores e comprovantes) abaixo</b> antes de <b>Aprovar</b>, <b>Ajustar</b> ou <b>Rejeitar</b> — total de despesas: <b>{brl(totalDespesas)}</b>.</p>
+          )}
+        </div>
+      )}
 
       {!concluida && (
         <form onSubmit={adicionar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
