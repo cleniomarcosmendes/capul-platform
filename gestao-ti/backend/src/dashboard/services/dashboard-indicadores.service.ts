@@ -211,6 +211,92 @@ export class DashboardIndicadoresService {
   }
 
   /**
+   * Comparação do investimento do mês com o MÊS ANTERIOR — responde "por que
+   * subiu/caiu": delta total + maiores movimentações por dimensão (centro de
+   * custo / tipo / departamento) + os DOCUMENTOS (NFs/parcelas) do mês, marcando
+   * os de origem NOVA (fornecedor/contrato sem gasto no mês anterior).
+   */
+  async getInvestimentoComparativo(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    const mPrev = mes === 1 ? 12 : mes - 1;
+    const aPrev = mes === 1 ? ano - 1 : ano;
+    const [atual, anterior, docsAtual, docsAnterior] = await Promise.all([
+      this.getInvestimentoAnalitico(mes, ano, user, role),
+      this.getInvestimentoAnalitico(mPrev, aPrev, user, role),
+      this.docsInvestimentoDoMes(mes, ano, user, role),
+      this.docsInvestimentoDoMes(mPrev, aPrev, user, role),
+    ]);
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const delta = round(atual.totalInvestimento - anterior.totalInvestimento);
+
+    type G = { id: string; label: string; valor: number };
+    const movers = (a: G[], b: G[]) => {
+      const ma = new Map(a.map((g) => [g.id, g]));
+      const mb = new Map(b.map((g) => [g.id, g]));
+      return [...new Set([...ma.keys(), ...mb.keys()])]
+        .map((id) => {
+          const va = ma.get(id)?.valor ?? 0;
+          const vb = mb.get(id)?.valor ?? 0;
+          return { label: ma.get(id)?.label ?? mb.get(id)?.label ?? '—', atual: va, anterior: vb, delta: round(va - vb) };
+        })
+        .filter((x) => Math.abs(x.delta) >= 0.01)
+        .sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta))
+        .slice(0, 8);
+    };
+
+    const origensAnteriores = new Set(docsAnterior.map((d) => d.origem));
+    const documentos = docsAtual
+      .map((d) => ({ tipo: d.tipo, numero: d.numero, descricao: d.descricao, data: d.data, valor: d.valor, novo: !origensAnteriores.has(d.origem) }))
+      .sort((x, y) => y.valor - x.valor)
+      .slice(0, 30);
+
+    return {
+      atual: { mes, ano, total: atual.totalInvestimento },
+      anterior: { mes: mPrev, ano: aPrev, total: anterior.totalInvestimento },
+      delta,
+      deltaPct: anterior.totalInvestimento > 0 ? Math.round((delta / anterior.totalInvestimento) * 1000) / 10 : null,
+      movers: {
+        centroCusto: movers(atual.porCentroCusto, anterior.porCentroCusto),
+        tipoProduto: movers(atual.porTipoProduto, anterior.porTipoProduto),
+        departamento: movers(atual.porDepartamento, anterior.porDepartamento),
+      },
+      documentos,
+    };
+  }
+
+  /** Documentos de investimento do mês (NF total + parcela total) com "origem"
+   *  (fornecedor/contrato) para detectar entradas novas mês a mês. */
+  private async docsInvestimentoDoMes(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59, 999);
+    const deptoIds = getDeptoIdsDoUser(user, role);
+    const parcelaDeptoWhere = deptoIds === null ? {} : { contrato: { departamentoId: { in: deptoIds } } };
+    const nfDeptoWhere = applyDepartamentoFilter({}, user, role);
+    const [parcelas, nfs] = await Promise.all([
+      this.prisma.parcelaContrato.findMany({
+        where: { status: 'PAGA', dataPagamento: { gte: dataInicio, lte: dataFim }, ...parcelaDeptoWhere },
+        include: { contrato: { select: { numero: true, titulo: true } }, rateioItens: { select: { valorCalculado: true } } },
+      }),
+      this.prisma.notaFiscal.findMany({
+        where: { status: { not: 'CANCELADA' }, dataLancamento: { gte: dataInicio, lte: dataFim }, ...nfDeptoWhere },
+        include: { fornecedor: { select: { codigo: true, nome: true } } },
+      }),
+    ]);
+    const cents = (n: number) => Math.round(n * 100) / 100;
+    return [
+      ...nfs.map((nf) => ({
+        tipo: 'NF' as const, numero: String(nf.numero),
+        descricao: `${nf.fornecedor.codigo} - ${nf.fornecedor.nome}`,
+        data: nf.dataLancamento, valor: cents(Number(nf.valorTotal)), origem: `F:${nf.fornecedor.codigo}`,
+      })),
+      ...parcelas.map((p) => ({
+        tipo: 'PARCELA' as const, numero: `Parcela ${p.numero}`,
+        descricao: `${p.contrato.numero} - ${p.contrato.titulo}`,
+        data: p.dataPagamento, valor: cents(p.rateioItens.reduce((s, ri) => s + Number(ri.valorCalculado), 0)), origem: `C:${p.contrato.numero}`,
+      })),
+    ];
+  }
+
+  /**
    * Evolução do investimento nos últimos 12 meses (terminando no mês de
    * referência) — gráfico de tendência da tela "Indicadores — Análise". Usa
    * EXATAMENTE os mesmos filtros do total-manchete (NF por dataLancamento +

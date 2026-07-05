@@ -24,6 +24,15 @@ interface EvolucaoPonto { ano: number; mes: number; totalInvestimento: number; t
 interface EvolucaoDimSerie { key: string; label: string }
 interface EvolucaoDimPonto { ano: number; mes: number; valores: Record<string, number> }
 interface EvolucaoDim { dimensao: string; series: EvolucaoDimSerie[]; pontos: EvolucaoDimPonto[] }
+interface Mover { label: string; atual: number; anterior: number; delta: number }
+interface DocComp { tipo: 'NF' | 'PARCELA'; numero: string; descricao: string; data: string | null; valor: number; novo: boolean }
+interface Comparativo {
+  atual: { mes: number; ano: number; total: number };
+  anterior: { mes: number; ano: number; total: number };
+  delta: number; deltaPct: number | null;
+  movers: { centroCusto: Mover[]; tipoProduto: Mover[]; departamento: Mover[] };
+  documentos: DocComp[];
+}
 type DimChart = 'total' | 'centroCusto' | 'tipoProduto' | 'departamento';
 interface AnaliticoChamados { totalAbertos: number; porSetor: Grupo[]; porPrioridade: Grupo[]; porEquipe: Grupo[] }
 interface AnaliticoGenerico {
@@ -70,6 +79,7 @@ export function IndicadoresAnalisePage() {
   const [mes, setMes] = useState(now.getMonth() + 1);
   const [ano, setAno] = useState(now.getFullYear());
   const [invest, setInvest] = useState<AnaliticoInvest | null>(null);
+  const [comparativo, setComparativo] = useState<Comparativo | null>(null);
   const [evolucao, setEvolucao] = useState<EvolucaoPonto[] | null>(null);
   const [dimChart, setDimChart] = useState<DimChart>('total');
   const [evolDim, setEvolDim] = useState<EvolucaoDim | null>(null);
@@ -90,7 +100,8 @@ export function IndicadoresAnalisePage() {
       Promise.all([
         gestaoApi.get('/dashboard/investimento-analitico', { params }),
         gestaoApi.get('/dashboard/investimento-evolucao', { params }),
-      ]).then(([a, e]) => { setInvest(a.data); setEvolucao(e.data); }).finally(() => setLoading(false));
+        gestaoApi.get('/dashboard/investimento-comparativo', { params }),
+      ]).then(([a, e, c]) => { setInvest(a.data); setEvolucao(e.data); setComparativo(c.data); }).finally(() => setLoading(false));
     } else if (indicador === 'chamados') {
       gestaoApi.get('/dashboard/chamados-analitico', { params }).then((r) => setCham(r.data)).finally(() => setLoading(false));
     } else {
@@ -166,6 +177,7 @@ export function IndicadoresAnalisePage() {
           <div className="space-y-5">
             <Manchete icone={DollarSign} rotulo="Investimento total no mês" valor={brl(invest.totalInvestimento)}
               sub={`Notas fiscais ${brl(invest.totalNFs)} · Contratos/parcelas ${brl(invest.totalParcelas)}`} />
+            {comparativo && <ComparativoMesAnterior c={comparativo} />}
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               <CardGrupo titulo="Por centro de custo" dimensao="centroCusto" icone={Building2} itens={invest.porCentroCusto} total={invest.totalInvestimento} fmt={brl} sufixoQtd="docs" onSelect={abrirDrill} />
               <CardGrupo titulo="Por tipo de produto" dimensao="tipoProduto" icone={Package} itens={invest.porTipoProduto} total={invest.totalInvestimento} fmt={brl} sufixoQtd="docs" onSelect={abrirDrill} />
@@ -344,6 +356,63 @@ function TooltipInvest({ active, payload }: { active?: boolean; payload?: { payl
       <p className="mb-1 font-semibold capitalize text-slate-700">{p.rotulo}</p>
       <p className="font-bold text-capul-700">{brl(p.totalInvestimento)}</p>
       <p className="text-slate-500">NFs {brl(p.totalNFs)} · Contratos {brl(p.totalParcelas)}</p>
+    </div>
+  );
+}
+
+// "Por que subiu/caiu?" — delta vs mês anterior + maiores variações por dimensão
+// + documentos (NFs/parcelas) que puxaram, marcando os de origem NOVA.
+function ComparativoMesAnterior({ c }: { c: Comparativo }) {
+  const subiu = c.delta >= 0;
+  const mesLbl = (m: number, a: number) => `${mesAbrev[m - 1]}/${a}`;
+  const sinal = (v: number) => `${v >= 0 ? '+' : '−'}${brl(Math.abs(v))}`;
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Comparação com o mês anterior</h3>
+        <span className={`inline-flex items-center gap-1 text-lg font-bold ${subiu ? 'text-rose-600' : 'text-emerald-600'}`}>
+          <TrendingUp className={`h-4 w-4 ${subiu ? '' : 'rotate-180'}`} /> {sinal(c.delta)}
+          {c.deltaPct != null && <span className="text-sm font-medium">({subiu ? '+' : ''}{c.deltaPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)</span>}
+        </span>
+        <span className="text-sm text-slate-500">vs {mesLbl(c.anterior.mes, c.anterior.ano)} ({brl(c.anterior.total)})</span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Maiores variações</p>
+          {([['Por tipo de produto', c.movers.tipoProduto], ['Por centro de custo', c.movers.centroCusto]] as const).map(([titulo, movers]) => (
+            <div key={titulo} className="mb-3">
+              <p className="text-[11px] text-slate-400">{titulo}</p>
+              {movers.length === 0 ? <p className="py-0.5 text-xs text-slate-300 italic">sem variação</p> : movers.slice(0, 4).map((m, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 py-0.5 text-sm">
+                  <span className="truncate text-slate-600" title={m.label}>{m.label}</span>
+                  <span className={`shrink-0 font-medium tabular-nums ${m.delta >= 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{sinal(m.delta)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Documentos que puxaram (maiores do mês)</p>
+          <div className="overflow-hidden rounded-lg border border-slate-100">
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-slate-50">
+                {c.documentos.slice(0, 8).map((d, i) => (
+                  <tr key={i}>
+                    <td className="px-3 py-1.5">
+                      <span className="font-medium text-slate-700">{d.tipo === 'NF' ? `NF ${d.numero}` : d.numero}</span>
+                      {d.novo && <span className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">NOVO</span>}
+                      <span className="block truncate text-xs text-slate-400" title={d.descricao}>{d.descricao}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-right font-medium tabular-nums text-slate-700">{brl(d.valor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-400"><b>NOVO</b> = fornecedor/contrato sem gasto no mês anterior.</p>
+        </div>
+      </div>
     </div>
   );
 }

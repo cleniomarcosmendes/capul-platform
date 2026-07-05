@@ -310,6 +310,22 @@ export class DashboardController {
     return this.service.getInvestimentoAnalitico(m, a, user, role);
   }
 
+  // Indicadores — Análise: comparação do investimento com o MÊS ANTERIOR
+  // (delta + maiores movimentações por dimensão + documentos que puxaram) —
+  // responde "por que subiu/caiu".
+  @Get('investimento-comparativo')
+  @Roles(...MANAGERS)
+  getInvestimentoComparativo(
+    @Query('mes') mes: string,
+    @Query('ano') ano: string,
+    @CurrentUser() user?: JwtPayload,
+    @GestaoTiRole() role?: string,
+  ) {
+    const m = parseInt(mes, 10) || new Date().getMonth() + 1;
+    const a = parseInt(ano, 10) || new Date().getFullYear();
+    return this.service.getInvestimentoComparativo(m, a, user, role);
+  }
+
   // Evolução 12 meses do investimento total (gráfico de tendência da Análise).
   // Reconcilia com o analítico mês a mês.
   @Get('investimento-evolucao')

@@ -162,6 +162,10 @@ export class DashboardService {
     return this.indicadores.getInvestimentoAnalitico(mes, ano, user, role);
   }
 
+  getInvestimentoComparativo(mes: number, ano: number, user?: JwtPayload, role?: string) {
+    return this.indicadores.getInvestimentoComparativo(mes, ano, user, role);
+  }
+
   getInvestimentoEvolucao(mes: number, ano: number, user?: JwtPayload, role?: string) {
     return this.indicadores.getInvestimentoEvolucao(mes, ano, user, role);
   }
