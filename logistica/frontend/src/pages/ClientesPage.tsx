@@ -1,6 +1,8 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Search, Loader2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, MapPin, Search, Loader2 } from 'lucide-react';
 import { logisticaApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/toast-context';
 import { maskTelefone } from '../utils/format';
 
 interface Endereco {
@@ -46,6 +48,29 @@ export function ClientesPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const { logisticaRole } = useAuth();
+  const { toast, confirm } = useToast();
+  const [regeo, setRegeo] = useState(false);
+  // Manutenção de geocodificação: só gestores (não é ação de operador).
+  const ehGestor = logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+
+  const recalcularLocalizacoes = async () => {
+    const ok = await confirm(
+      'Recalcular localizações',
+      'Recalcula no mapa a posição de todas as entregas da sua filial a partir do endereço (rua → bairro → município). Útil quando uma entrega aparece fora do lugar. Pode levar alguns segundos.',
+      { confirmLabel: 'Recalcular' },
+    );
+    if (!ok) return;
+    setRegeo(true);
+    try {
+      const { data } = await logisticaApi.post<{ total: number; atualizadas: number; semCoordenada: number }>('/entregas/regeocodificar', {});
+      toast('success', `${data.atualizadas} de ${data.total} entregas relocalizadas${data.semCoordenada ? ` · ${data.semCoordenada} sem endereço resolvível` : ''}.`);
+    } catch {
+      toast('error', 'Não foi possível recalcular agora. Tente novamente em instantes.');
+    } finally {
+      setRegeo(false);
+    }
+  };
 
   function montarLinhas(d: BuscaResp): Linha[] {
     const out: Linha[] = [];
@@ -121,12 +146,25 @@ export function ClientesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-800">Consulta de Endereços</h2>
-        <p className="text-sm text-slate-500">
-          Busque por telefone, nome ou matrícula e veja os endereços vinculados (clientes locais, histórico e Protheus).
-          O cadastro é feito na <strong>Nova Entrega</strong>.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800">Consulta de Endereços</h2>
+          <p className="text-sm text-slate-500">
+            Busque por telefone, nome ou matrícula e veja os endereços vinculados (clientes locais, histórico e Protheus).
+            O cadastro é feito na <strong>Nova Entrega</strong>.
+          </p>
+        </div>
+        {ehGestor && (
+          <button
+            onClick={() => void recalcularLocalizacoes()}
+            disabled={regeo}
+            title="Recalcula a posição das entregas no mapa a partir do endereço (rua → bairro → município)"
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {regeo ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+            {regeo ? 'Recalculando…' : 'Recalcular localizações'}
+          </button>
+        )}
       </div>
 
       <form onSubmit={buscar} className="flex gap-2">
