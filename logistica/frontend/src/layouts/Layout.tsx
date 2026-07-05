@@ -9,11 +9,12 @@ import { useAuth } from '../contexts/AuthContext';
 const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA'];
 const GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA'];
-// Custo/análise de FROTA: domínio do Gestor de Frota (+ ADMIN via bypass) e do
-// supervisor do veículo (via escopo de dados). O Gestor de Entregas NÃO entra —
-// senão vê a tela vazia (a consulta é escopada a gestor de frota/supervisor).
-const FROTA_ANALISE = ['GESTOR_FROTA'];
-const FROTA_CUSTOS = ['OPERADOR_ENTREGA', 'GESTOR_FROTA'];
+// Custo/análise de FROTA (Custos da Frota + Análise da Frota): domínio do Gestor de
+// Frota (+ ADMIN via bypass) e do supervisor do veículo (via escopo de dados). Nem
+// Gestor de Entregas nem Operador entram — senão veem a tela vazia (a consulta é
+// escopada a gestor de frota/supervisor do veículo). O supervisor do veículo ainda
+// lança/vê despesas pelo detalhe da rota de frota.
+const FROTA_GESTAO = ['GESTOR_FROTA'];
 // Prestação de Contas (RDV): gestores + coordenador (aprova) + supervisor (planeja).
 // As ABAS internas são gateadas por perfil dentro da SupervisoresPage.
 const SUPERVISORES_MENU = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR', 'SUPERVISOR'];
@@ -29,7 +30,7 @@ const navItems: NavEntry[] = [
   { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTORES },
   { to: '/indicadores', label: 'Indicadores de Entrega', icon: TrendingUp, roles: GESTORES },
   { to: '/analise-entregas', label: 'Análise de Entregas', icon: TrendingUp, roles: GESTORES },
-  { to: '/frota/analise', label: 'Análise da Frota', icon: TrendingUp, roles: FROTA_ANALISE },
+  { to: '/frota/analise', label: 'Análise da Frota', icon: TrendingUp, roles: FROTA_GESTAO },
 
   { section: 'ENTREGAS', roles: ENTREGA },
   { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, roles: ENTREGA },
@@ -41,7 +42,7 @@ const navItems: NavEntry[] = [
   { section: 'FROTA', roles: FROTA_OP },
   { to: '/frota', label: 'Saída de Veículos', icon: Fuel, end: true, roles: FROTA_OP },
   { to: '/frota/painel', label: 'Monitor da Frota', icon: CircleDot, roles: GESTORES },
-  { to: '/despesas', label: 'Custos da Frota', icon: Banknote, roles: FROTA_CUSTOS },
+  { to: '/despesas', label: 'Custos da Frota', icon: Banknote, roles: FROTA_GESTAO },
   { to: '/frota/linha-km', label: 'Linha do KM', icon: Gauge, roles: GESTORES },
   { to: '/veiculos', label: 'Veículos', icon: Car, roles: GESTORES },
 
