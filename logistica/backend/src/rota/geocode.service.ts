@@ -14,7 +14,9 @@ export interface EnderecoGeo {
 export interface Coordenada {
   lat: number;
   lng: number;
-  precisao: 'CEP' | 'LOGRADOURO';
+  // Até onde a geocodificação chegou. LOGRADOURO/CEP = ponto preciso; BAIRRO/CIDADE
+  // = fallback aproximado (âncora na área certa quando a rua não existe no OSM).
+  precisao: 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE';
 }
 
 /**
@@ -27,7 +29,10 @@ export interface Coordenada {
  *     agressivo, cobre a maioria (todo endereço de balcão tem CEP).
  *  2. Nominatim (OpenStreetMap) como fallback por TEXTO: política pública
  *     exige User-Agent identificado e ≤1 req/s — respeitado com sleep entre
- *     chamadas. Volume é mínimo (só primeira vez de cada endereço).
+ *     chamadas. Volume é mínimo (só primeira vez de cada endereço). Tenta em
+ *     ordem decrescente de precisão — rua → bairro → município — para SEMPRE
+ *     ancorar na área certa em cidade pequena (onde a rua não está no OSM), em
+ *     vez de retornar nada ou um match frouxo que voa pro lugar errado.
  */
 @Injectable()
 export class GeocodeService {
@@ -125,21 +130,28 @@ export class GeocodeService {
     const rua = [ruaLimpa, (e.numero ?? '').trim()].filter(Boolean).join(' ');
     const bairro = (e.bairro ?? '').trim();
     const base = [e.cidade, e.uf].map((p) => (p ?? '').toString().trim()).filter(Boolean);
-    if (!rua || base.length === 0) return null; // texto pobre demais — não adianta
+    if (base.length === 0) return null; // sem nem cidade/UF não há como ancorar
 
-    // Tentativa 1 com bairro; bairro divergente do OSM derruba o match → 2ª
-    // tentativa sem ele (rua+cidade costuma bastar).
-    const consultas = [
-      [rua, bairro, ...base].filter(Boolean).join(', ') + ', Brasil',
-      ...(bairro ? [[rua, ...base].join(', ') + ', Brasil'] : []),
-    ];
+    // Consultas em ordem DECRESCENTE de precisão. Cidade pequena (a maioria da
+    // operação) costuma NÃO ter a rua no OpenStreetMap — em vez de devolver nada
+    // (entrega sem coordenada, jogada pro fim da rota) ou um match frouxo que voa
+    // pro lugar errado, cai pro BAIRRO e por fim pro MUNICÍPIO, ancorando na área
+    // certa. A `precisao` registra até onde deu — a tela/rota pode sinalizar
+    // "aproximado" para BAIRRO/CIDADE.
+    const consultas: { q: string; precisao: Coordenada['precisao'] }[] = [];
+    if (rua) {
+      consultas.push({ q: [rua, bairro, ...base].filter(Boolean).join(', ') + ', Brasil', precisao: 'LOGRADOURO' });
+      if (bairro) consultas.push({ q: [rua, ...base].join(', ') + ', Brasil', precisao: 'LOGRADOURO' });
+    }
+    if (bairro) consultas.push({ q: [bairro, ...base].join(', ') + ', Brasil', precisao: 'BAIRRO' });
+    consultas.push({ q: base.join(', ') + ', Brasil', precisao: 'CIDADE' });
 
     // Entra na fila serializada (1 req/s) e devolve o resultado desta chamada.
     const run = async (): Promise<(Coordenada & { fonte: string }) | null> => {
-      for (const consulta of consultas) {
+      for (const { q, precisao } of consultas) {
         try {
           const resp = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(consulta)}`,
+            `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(q)}`,
             {
               headers: { 'User-Agent': 'capul-platform-logistica/1.0 (TI CAPUL)' },
               signal: AbortSignal.timeout(8000),
@@ -150,7 +162,7 @@ export class GeocodeService {
             const lat = Number(data[0]?.lat);
             const lng = Number(data[0]?.lon);
             if (Number.isFinite(lat) && Number.isFinite(lng)) {
-              return { lat, lng, precisao: 'LOGRADOURO', fonte: 'NOMINATIM' };
+              return { lat, lng, precisao, fonte: 'NOMINATIM' };
             }
           }
         } catch (err) {
