@@ -37,7 +37,7 @@ const PARADA_META: Record<string, { label: string; cls: string }> = {
   REALIZADA: { label: 'Realizada', cls: 'bg-emerald-100 text-emerald-700' },
   PULADA: { label: 'Pulada', cls: 'bg-slate-200 text-slate-500' },
 };
-interface VeiculoDisp { id: string; placa: string; modelo?: string | null; situacao: string; kmAtual: number }
+interface VeiculoDisp { id: string; placa: string; modelo?: string | null; situacao: string; kmAtual: number; filialNome?: string | null; departamentoNome?: string | null }
 export interface TipoDespesa { id: string; nome: string }
 export interface FornecedorDespesa { id: string; nome: string; ativo: boolean }
 
@@ -146,7 +146,10 @@ export function FrotaPage() {
     try {
       const [v, frota] = await Promise.all([
         logisticaApi.get<ViagemFrota[]>('/frota/viagens', { params: filtro ? { situacao: filtro } : {} }),
-        logisticaApi.get<VeiculoDisp[]>('/veiculos'),
+        // Saída de Veículos = frota COMPARTILHÁVEL: veículo de passeio de qualquer
+        // filial/depto pode ser usado (comum, sem transferência). todasFiliais ignora
+        // o escopo de filial do usuário (diferente das Entregas, que são por filial).
+        logisticaApi.get<VeiculoDisp[]>('/veiculos', { params: { todasFiliais: 'true' } }),
       ]);
       setViagens(v.data);
       setVeiculos(frota.data.filter((x) => x.situacao === 'DISPONIVEL'));
@@ -539,7 +542,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               >
                 <option value="">Selecione…</option>
                 {veiculos.map((x) => (
-                  <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` — ${x.modelo}` : ''} (KM {x.kmAtual})</option>
+                  <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` — ${x.modelo}` : ''}{(x.departamentoNome || x.filialNome) ? ` · ${[x.departamentoNome, x.filialNome].filter(Boolean).join(' / ')}` : ''} (KM {x.kmAtual})</option>
                 ))}
               </select>
               {podeAvancar && veiculos.length === 0 && (
