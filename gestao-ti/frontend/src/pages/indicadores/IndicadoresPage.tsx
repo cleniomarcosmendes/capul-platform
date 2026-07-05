@@ -172,35 +172,18 @@ export function IndicadoresPage() {
     <>
       <Header title="Indicadores Estrategicos" />
       <div className="p-6">
-        {/* Seletor de periodo */}
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-6">
-          <div className="flex items-center gap-3">
-            <button onClick={prevMes} className="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="text-center min-w-[180px]">
-              <p className="text-lg font-bold text-slate-800">{meses[mes - 1]} {ano}</p>
-              <p className="text-xs text-slate-500">Planejamento Estrategico - {rotuloDepto}</p>
-            </div>
-            <button onClick={nextMes} className="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+        {/* Seletor de periodo (o filtro de "tipos de parada" mora no card Disponibilidade). */}
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={prevMes} className="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div className="text-center min-w-[180px]">
+            <p className="text-lg font-bold text-slate-800">{meses[mes - 1]} {ano}</p>
+            <p className="text-xs text-slate-500">Planejamento Estrategico - {rotuloDepto}</p>
           </div>
-          {/* Filtro de tipos de parada — pertence ao indicador de Disponibilidade.
-              Agrupado num "pill" alinhado à direita, na mesma faixa do seletor de período. */}
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
-            <span className="font-medium text-slate-600">Tipos de parada:</span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {Object.entries(tipoParadaLabel).map(([k, v]) => (
-                <button key={k} onClick={() => toggleTipoParada(k)}
-                  className={`px-2 py-0.5 rounded-full border text-xs transition-colors ${
-                    tiposParada.includes(k) ? 'bg-capul-100 border-capul-300 text-capul-700' : 'border-slate-300 text-slate-500 hover:bg-white'
-                  }`}>
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
+          <button onClick={nextMes} className="p-1.5 rounded-lg border border-slate-300 hover:bg-slate-50">
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
 
         {loading ? (
@@ -443,14 +426,30 @@ export function IndicadoresPage() {
 
             {detalhe === 'disponibilidade' && (
               <div className="bg-white rounded-xl border border-slate-200 p-6">
-                <h3 className="text-sm font-semibold text-slate-700 uppercase mb-4">Detalhamento - Disponibilidade de Sistemas</h3>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <h3 className="text-sm font-semibold text-slate-700 uppercase">Detalhamento - Disponibilidade de Sistemas</h3>
+                  {/* Filtro contextual — filtra as paradas deste painel (e o % do card). */}
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="font-medium text-slate-600">Tipos de parada:</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {Object.entries(tipoParadaLabel).map(([k, v]) => (
+                        <button key={k} onClick={() => toggleTipoParada(k)}
+                          className={`px-2 py-0.5 rounded-full border text-xs transition-colors ${
+                            tiposParada.includes(k) ? 'bg-capul-100 border-capul-300 text-capul-700' : 'border-slate-300 text-slate-500 hover:bg-slate-50'
+                          }`}>
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   <div className="bg-slate-50 rounded-lg p-4 text-center">
                     <p className="text-2xl font-bold text-slate-800">{fmtHoras(data.disponibilidade.horasTotais)}</p>
                     <p className="text-xs text-slate-600 mt-1">Horas no Periodo (24h/dia)</p>
                   </div>
                   <div className="bg-red-50 rounded-lg p-4 text-center">
-                    <p className="text-2xl font-bold text-red-800">{data.disponibilidade.horasParada}h</p>
+                    <p className="text-2xl font-bold text-red-800">{fmtHoras(data.disponibilidade.horasParada)}</p>
                     <p className="text-xs text-red-600 mt-1">Horas Indisponiveis (tipos selecionados)</p>
                   </div>
                   <div className={`rounded-lg p-4 text-center ${data.disponibilidade.disponibilidadePercent >= 99 ? 'bg-green-50' : data.disponibilidade.disponibilidadePercent >= 95 ? 'bg-yellow-50' : 'bg-red-50'}`}>
