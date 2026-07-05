@@ -55,7 +55,7 @@ export function ViagemDetalhePage() {
   const [v, setV] = useState<Viagem | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const { toast, prompt, confirm } = useToast();
+  const { toast, confirm } = useToast();
   const location = useLocation();
   // Volta para o LOCAL DE ORIGEM (Monitor da Frota, lista de Rotas de Entrega…)
   // via histórico; se abriu direto por link (sem histórico no app), fallback /viagens.
@@ -216,22 +216,17 @@ export function ViagemDetalhePage() {
     } finally { setBusy(false); }
   }
 
-  // KM como número inteiro (ou undefined). Texto vazio → sem km; lixo → undefined.
-  const parseKm = (s: string | null): number | undefined => {
-    if (s == null) return undefined;
-    const n = parseInt(s.replace(/\D/g, ''), 10);
-    return Number.isFinite(n) ? n : undefined;
-  };
-
+  // O KM NÃO é pedido no painel: o motorista registra o odômetro no app ao INICIAR
+  // e ao FINALIZAR a entrega (decisão do Clenio). Despachar/Concluir só confirmam.
   async function despachar() {
-    const km = await prompt('Despachar rota', 'KM inicial do veículo (odômetro) — opcional. Deixe em branco se não for registrar.', { placeholder: 'KM atual no painel', confirmLabel: 'Despachar' });
-    if (km === null) return; // cancelou
-    await acao(() => logisticaApi.post(`/viagens/${id}/despachar`, { kmInicial: parseKm(km) }), 'Falha ao despachar.');
+    const ok = await confirm('Despachar rota', 'O veículo fica "Em uso" e as entregas "Em viagem". O KM do odômetro é registrado pelo motorista no app, ao iniciar a entrega.', { confirmLabel: 'Despachar' });
+    if (!ok) return;
+    await acao(() => logisticaApi.post(`/viagens/${id}/despachar`, {}), 'Falha ao despachar.');
   }
   async function concluir() {
-    const km = await prompt('Concluir rota', 'Entregas ainda EM VIAGEM serão baixadas sem prova e o veículo liberado. KM final do veículo (odômetro) — opcional.', { placeholder: 'KM final no painel', confirmLabel: 'Concluir', variant: 'warning' });
-    if (km === null) return; // cancelou
-    await acao(() => logisticaApi.post(`/viagens/${id}/concluir`, { kmFinal: parseKm(km) }), 'Falha ao concluir.');
+    const ok = await confirm('Concluir rota', 'Entregas ainda EM VIAGEM serão baixadas SEM prova e o veículo liberado. (O KM é registrado pelo motorista no app ao finalizar.)', { confirmLabel: 'Concluir', variant: 'warning' });
+    if (!ok) return;
+    await acao(() => logisticaApi.post(`/viagens/${id}/concluir`, {}), 'Falha ao concluir.');
   }
   // Recarrega a fila de pendentes (a entrega removida da viagem volta a ficar
   // disponível para adicionar — sem isso ela sumia das duas listas até o refresh).
