@@ -524,7 +524,10 @@ export class FrotaService {
         select: { kmInicial: true, kmFinal: true, veiculoId: true, veiculo: { select: { placa: true } } },
       }),
       this.prisma.despesaVeiculo.findMany({
-        where: { filialId, situacao: StatusDespesa.APROVADA, dataDespesa: { gte: ini, lt: fimExcl } },
+        // ...despesaScope: custo do mês respeita o mesmo escopo das pendentes (linha
+        // acima) — Gestor de Frota/ADMIN veem a filial; demais só veículos que
+        // supervisionam. Sem isso, o custo total vazava a filial inteira no Monitor.
+        where: { filialId, situacao: StatusDespesa.APROVADA, dataDespesa: { gte: ini, lt: fimExcl }, ...despesaScope },
         select: { valor: true },
       }),
       // Viagens de frota do mês p/ ranking por departamento solicitante (pela saída).

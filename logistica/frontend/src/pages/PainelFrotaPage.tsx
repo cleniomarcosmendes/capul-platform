@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Car, ChevronRight, CircleDot, Loader2, MapPin, RefreshCw, TrendingUp, Wrench, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
+import { useAuth } from '../contexts/AuthContext';
 import { MapaFrota } from '../components/MapaFrota';
 
 // Painel tempo real da frota (monitoramento com recorte interno). "Tempo real"
@@ -47,6 +48,10 @@ const desde = (s?: string | null) => {
 
 export function PainelFrotaPage() {
   const { toast } = useToast();
+  const { logisticaRole } = useAuth();
+  // Custo de frota é do Gestor de Frota/ADMIN (mesma decisão de Custos/Análise da
+  // Frota). Demais perfis veem só o operacional (KM, rankings), não o custo.
+  const ehGestorFrota = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
   const navigate = useNavigate();
   const [data, setData] = useState<PainelFrota | null>(null);
   const [loading, setLoading] = useState(true);
@@ -352,10 +357,10 @@ export function PainelFrotaPage() {
           <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
             <TrendingUp className="h-4 w-4 text-slate-400" /> Indicadores do mês
           </div>
-          <div className="grid grid-cols-3 gap-3 p-4">
-            <Mini label="Custo total" valor={BRL(indicadores.custoTotalMes)} />
+          <div className={`grid gap-3 p-4 ${ehGestorFrota ? 'grid-cols-3' : 'grid-cols-1'}`}>
+            {ehGestorFrota && <Mini label="Custo total" valor={BRL(indicadores.custoTotalMes)} />}
             <Mini label="KM rodado" valor={`${indicadores.kmRodadoMes.toLocaleString('pt-BR')} km`} />
-            <Mini label="Custo por km" valor={indicadores.custoPorKm != null ? BRL(indicadores.custoPorKm) : '—'} />
+            {ehGestorFrota && <Mini label="Custo por km" valor={indicadores.custoPorKm != null ? BRL(indicadores.custoPorKm) : '—'} />}
           </div>
           <div className="grid grid-cols-1 gap-4 px-4 pb-4 sm:grid-cols-2">
             <RankingBox titulo="Uso por veículo (km)" itens={indicadores.rankingVeiculo.map((r) => ({ nome: r.placa, val: `${r.km.toLocaleString('pt-BR')} km` }))} />
