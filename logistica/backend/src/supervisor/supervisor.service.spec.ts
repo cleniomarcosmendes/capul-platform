@@ -108,3 +108,39 @@ describe('SupervisorService.listarPlanejamentosCoordenador', () => {
     expect(arg.where.filialId).toBe('f1');
   });
 });
+
+// ⭐ Escopo do Fechamento/RDV: coordenador só alcança os SEUS supervisores.
+describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  it('listarSupervisores coordenador: filtra por coordenadorId=user.sub', async () => {
+    prisma.supervisor.findMany.mockResolvedValue([]);
+    await svc.listarSupervisores(comRole('COORDENADOR'));
+    expect(prisma.supervisor.findMany.mock.calls[0][0].where.coordenadorId).toBe('u1');
+  });
+  it('listarSupervisores gestor: SEM filtro de coordenador', async () => {
+    prisma.supervisor.findMany.mockResolvedValue([]);
+    await svc.listarSupervisores(comRole('GESTOR_ENTREGA'));
+    expect(prisma.supervisor.findMany.mock.calls[0][0].where.coordenadorId).toBeUndefined();
+  });
+  it('rdvMensal coordenador com supervisor de OUTRO coordenador → 403', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'outro-coord' });
+    await expect(svc.rdvMensal('s1', 202607, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+  });
+  it('rdvMensal coordenador com o SEU supervisor → não barra', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'u1' });
+    prisma.viagem.findMany.mockResolvedValue([]);
+    prisma.adiantamento.findMany.mockResolvedValue([]);
+    await expect(svc.rdvMensal('s1', 202607, comRole('COORDENADOR'))).resolves.toBeDefined();
+  });
+  it('lancarAdiantamento coordenador em supervisor alheio → 403', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'outro-coord' });
+    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+  });
+});

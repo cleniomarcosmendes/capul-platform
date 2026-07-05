@@ -37,7 +37,8 @@ export class SupervisorService {
   async listarSupervisores(user: JwtPayload, somenteAtivos?: boolean) {
     const filialId = filialDoUsuario(user);
     const lista = await this.prisma.supervisor.findMany({
-      where: { filialId, ...(somenteAtivos ? { ativo: true } : {}) },
+      // Gestor vê os da filial; coordenador só os SEUS (Fechamento/RDV escopado).
+      where: { filialId, ...(this.ehGestor(user) ? {} : { coordenadorId: user.sub }), ...(somenteAtivos ? { ativo: true } : {}) },
       orderBy: { nome: 'asc' },
     });
     const coordIds = [...new Set(lista.map((s) => s.coordenadorId).filter((x): x is string => !!x))];
@@ -173,6 +174,12 @@ export class SupervisorService {
   private ehGestor(user: JwtPayload): boolean {
     const r = this.roleLog(user);
     return r === 'GESTOR_FROTA' || r === 'GESTOR_ENTREGA' || r === 'ADMIN';
+  }
+  /** Escopo do coordenador: gestor alcança qualquer supervisor da filial; o
+   *  coordenador só os SEUS (vínculo). Usado no Fechamento/RDV/adiantamentos. */
+  private assertEscopoSupervisor(sup: { coordenadorId: string | null } | null, user: JwtPayload) {
+    if (!sup || this.ehGestor(user)) return;
+    if (sup.coordenadorId !== user.sub) throw new ForbiddenException('Supervisor fora da sua coordenação.');
   }
 
   // ---- Workflow do planejamento (supervisor envia · coordenador decide) ----
@@ -636,6 +643,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: dto.supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new BadRequestException('Supervisor inválido para esta filial.');
+    this.assertEscopoSupervisor(sup, user);
     if (dto.mesReferencia % 100 < 1 || dto.mesReferencia % 100 > 12) throw new BadRequestException('Mês de referência inválido (AAAAMM).');
     return this.prisma.adiantamento.create({
       data: {
@@ -649,12 +657,14 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
+    this.assertEscopoSupervisor(sup, user);
     return this.prisma.adiantamento.findMany({ where: { supervisorId, mesReferencia: mes }, orderBy: { dataAdiantamento: 'asc' } });
   }
   async removerAdiantamento(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true } } } });
+    const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true } } } });
     if (!a || a.supervisor.filialId !== filialId) throw new NotFoundException('Adiantamento não encontrado.');
+    this.assertEscopoSupervisor(a.supervisor, user);
     await this.prisma.adiantamento.delete({ where: { id } });
     return { ok: true };
   }
@@ -665,6 +675,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
+    this.assertEscopoSupervisor(sup, user);
 
     const planejamentos = await this.prisma.viagem.findMany({
       where: { filialId, tipo: TipoViagem.SUPERVISOR, supervisorRegistroId: supervisorId, mesReferencia: mes },
