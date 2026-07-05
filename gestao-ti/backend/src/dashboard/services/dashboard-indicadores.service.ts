@@ -769,7 +769,7 @@ export class DashboardIndicadoresService {
     const f: Prisma.RegistroTempoWhereInput = dimensao === 'analista' ? { usuarioId: chave } : { atividade: { projetoId: chave } };
     const regs = await this.prisma.registroTempo.findMany({
       where: { horaInicio: { gte: dataInicio, lte: dataFim }, duracaoMinutos: { not: null, gt: 0 }, atividade: { projeto: projetoWhere }, ...f },
-      select: { id: true, horaInicio: true, duracaoMinutos: true, usuario: { select: { nome: true } }, atividade: { select: { projeto: { select: { numero: true, nome: true } } } } },
+      select: { id: true, horaInicio: true, duracaoMinutos: true, usuario: { select: { nome: true } }, atividade: { select: { projeto: { select: { id: true, numero: true, nome: true } } } } },
       orderBy: { horaInicio: 'desc' },
     });
     return regs.map((r) => ({
@@ -779,6 +779,9 @@ export class DashboardIndicadoresService {
       terciario: '',
       data: r.horaInicio,
       valor: Math.round(((r.duracaoMinutos ?? 0) / 60) * 10) / 10,
+      // link pro projeto de origem (Horas Dev é logada contra projeto, não chamado) —
+      // resolve "não achei o projeto/chamado" no detalhe do indicador.
+      projetoId: r.atividade.projeto.id,
     }));
   }
 

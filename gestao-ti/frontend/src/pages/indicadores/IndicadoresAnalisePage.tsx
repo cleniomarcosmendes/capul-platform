@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { gestaoApi } from '../../services/api';
 import {
   DollarSign, ChevronLeft, ChevronRight, Building2, Package, Layers, Loader2, X,
-  FileText, Receipt, Ticket, AlertTriangle, Users, KeyRound, Activity, Clock, TrendingUp,
+  FileText, Receipt, Ticket, AlertTriangle, Users, KeyRound, Activity, Clock, TrendingUp, ExternalLink,
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine, Legend,
@@ -31,7 +32,7 @@ interface AnaliticoGenerico {
 }
 interface DocInvest { tipo: 'NF' | 'PARCELA'; id: string; numero: string; descricao: string; data: string | null; valor: number }
 interface DocChamado { id: string; numero: number; titulo: string; status: string; prioridade: string; solicitante: string; data: string | null }
-interface DocGenerico { id: string; principal: string; secundario: string; terciario?: string; data: string | null; valor: number }
+interface DocGenerico { id: string; principal: string; secundario: string; terciario?: string; data: string | null; valor: number; projetoId?: string | null }
 type DrillRow = DocInvest | DocChamado | DocGenerico;
 
 type Indicador = 'investimento' | 'chamados' | 'licencas' | 'disponibilidade' | 'horasDev';
@@ -460,7 +461,9 @@ function DrillModal({ sel, rows, loading, onClose }: { sel: DrillSel; rows: Dril
             <tbody className="divide-y divide-slate-50">
               {(rows as DocChamado[]).map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
-                  <td className="whitespace-nowrap px-5 py-2 font-medium text-slate-700">#{c.numero}</td>
+                  <td className="whitespace-nowrap px-5 py-2 font-medium">
+                    <Link to={`/gestao-ti/chamados/${c.id}`} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-capul-700 hover:text-capul-800 hover:underline" title="Abrir chamado">#{c.numero}<ExternalLink className="h-3 w-3" /></Link>
+                  </td>
                   <td className="px-5 py-2 text-slate-700">{c.titulo}</td>
                   <td className="whitespace-nowrap px-5 py-2 text-slate-600">{c.solicitante}</td>
                   <td className="whitespace-nowrap px-5 py-2"><span className={`rounded px-1.5 py-0.5 text-xs font-medium ${PRIO_CLS[c.prioridade] ?? 'bg-slate-100 text-slate-600'}`}>{c.prioridade}</span></td>
@@ -479,7 +482,7 @@ function DrillModal({ sel, rows, loading, onClose }: { sel: DrillSel; rows: Dril
               {(rows as DocGenerico[]).map((d) => (
                 <tr key={d.id} className="hover:bg-slate-50">
                   <td className="whitespace-nowrap px-5 py-2 font-medium text-slate-700">{d.principal}</td>
-                  <td className="px-5 py-2 text-slate-600">{d.secundario}{d.terciario ? <span className="text-slate-400"> · {d.terciario}</span> : ''}</td>
+                  <td className="px-5 py-2 text-slate-600">{d.secundario}{d.terciario ? <span className="text-slate-400"> · {d.terciario}</span> : ''}{d.projetoId ? <Link to={`/gestao-ti/projetos/${d.projetoId}`} target="_blank" rel="noopener" className="ml-2 inline-flex items-center gap-0.5 text-xs text-capul-700 hover:underline" title="Abrir projeto">abrir projeto<ExternalLink className="h-3 w-3" /></Link> : ''}</td>
                   <td className="whitespace-nowrap px-5 py-2 text-slate-500">{d.data ? new Date(d.data).toLocaleDateString('pt-BR') : '—'}</td>
                   {mostraValor && <td className="whitespace-nowrap px-5 py-2 text-right font-semibold text-slate-800">{fmtVal(d.valor)}</td>}
                 </tr>
