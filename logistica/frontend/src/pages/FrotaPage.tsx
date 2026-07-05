@@ -22,6 +22,7 @@ export interface ViagemFrota {
   finalidade?: string | null; localSaida?: string | null;
   dataHoraSaida?: string | null; dataHoraChegada?: string | null;
   paradas?: number;
+  adiantamento?: number | null;
   // "Minha operação" (do backend): registrante da saída OU supervisor do veículo.
   ehMinha?: boolean;
 }

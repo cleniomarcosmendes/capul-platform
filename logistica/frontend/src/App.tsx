@@ -19,6 +19,7 @@ import { RomaneioPage } from './pages/RomaneioPage';
 import { ComprovantesPage } from './pages/ComprovantesPage';
 import { FrotaPage } from './pages/FrotaPage';
 import { FrotaViagemDetalhePage } from './pages/FrotaViagemDetalhePage';
+import { AcertoViagemPrintPage } from './pages/AcertoViagemPrintPage';
 import { DespesasPage } from './pages/DespesasPage';
 import { SupervisoresPage } from './pages/SupervisoresPage';
 import { SupervisorViagemPage } from './pages/SupervisorViagemPage';
@@ -65,6 +66,7 @@ function Protected() {
               <Route path="/entregas/:id/editar" element={<EntregaNovaPage />} />
               <Route path="/frota" element={<FrotaPage />} />
               <Route path="/frota/viagens/:id" element={<FrotaViagemDetalhePage />} />
+              <Route path="/frota/viagens/:id/acerto" element={<AcertoViagemPrintPage />} />
               <Route path="/despesas" element={<DespesasPage />} />
               <Route path="/despesas/nova" element={<DespesaNovaPage />} />
               <Route path="/despesas/:id/editar" element={<DespesaNovaPage />} />

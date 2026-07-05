@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Settings } from 'lucide-react';
+import { ArrowLeft, Loader2, Printer, Settings, Wallet } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/toast-context';
 import {
   ParadasPanel, RetornoForm, DespesaCondutorForm, AjusteForm,
   type ViagemFrota, type TipoDespesa,
@@ -22,6 +23,7 @@ const SIT_DESPESA: Record<string, string> = {
 export function FrotaViagemDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { logisticaRole } = useAuth();
   const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
 
@@ -30,6 +32,10 @@ export function FrotaViagemDetalhePage() {
   const [despesas, setDespesas] = useState<DespesaViagem[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
+  // Adiantamento (único) da viagem — editável por quem opera; base do "acerto".
+  const [editAdiant, setEditAdiant] = useState(false);
+  const [adiantVal, setAdiantVal] = useState('');
+  const [salvandoAdiant, setSalvandoAdiant] = useState(false);
   // Ajuste de gestor = exceção (corrigir KM / forçar fecho) → nasce recolhido,
   // pra não competir com o "Registrar retorno" (caminho normal de fecho).
   const [mostrarAjuste, setMostrarAjuste] = useState(false);
@@ -55,6 +61,14 @@ export function FrotaViagemDetalhePage() {
   useEffect(() => { void carregar(); }, [carregar]);
 
   const voltar = () => navigate('/frota');
+  const salvarAdiantamento = async () => {
+    setSalvandoAdiant(true);
+    try {
+      await logisticaApi.patch(`/frota/viagens/${id}`, { adiantamento: Number(adiantVal) || 0 });
+      setEditAdiant(false); await carregar();
+      toast('success', 'Adiantamento salvo.');
+    } catch (e) { toast('error', errMsg(e, 'Falha ao salvar o adiantamento.')); } finally { setSalvandoAdiant(false); }
+  };
 
   if (loading) {
     return <div className="flex items-center gap-2 p-8 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>;
@@ -85,13 +99,33 @@ export function FrotaViagemDetalhePage() {
             <h2 className="text-lg font-semibold text-slate-800">Rota #{v.numero} · {v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</h2>
             <p className="text-sm text-slate-500">Condutor: {v.condutorNome ?? '—'}{v.condutorMatricula ? ` · ${v.condutorMatricula}` : ''}</p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-sm font-medium ${sit.cls}`}>{sit.label}</span>
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full px-3 py-1 text-sm font-medium ${sit.cls}`}>{sit.label}</span>
+            <button onClick={() => navigate(`/frota/viagens/${id}/acerto`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50" title="Relatório de acerto (despesas × adiantamento)"><Printer className="h-4 w-4" /> Acerto</button>
+          </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           <Info rotulo="Saída" valor={fmtDateTime(v.dataHoraSaida)} />
           <Info rotulo="Retorno" valor={fmtDateTime(v.dataHoraChegada)} />
           <Info rotulo="KM" valor={v.kmRodado != null ? `${v.kmRodado} km` : v.kmInicial != null ? `saída ${v.kmInicial}` : '—'} />
           <Info rotulo="Finalidade / destino" valor={v.finalidade ?? '—'} />
+        </div>
+        {/* Adiantamento (único) — base do acerto; editável por quem opera, em qualquer status. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <Wallet className="h-4 w-4 text-slate-400" />
+          <span className="text-slate-500">Adiantamento:</span>
+          {editAdiant ? (
+            <>
+              <input type="number" step="0.01" min="0" value={adiantVal} onChange={(e) => setAdiantVal(e.target.value)} placeholder="0,00" className="w-32 rounded-lg border border-slate-300 px-2 py-1 text-sm" />
+              <button onClick={() => void salvarAdiantamento()} disabled={salvandoAdiant} className="rounded-lg bg-capul-600 px-3 py-1 text-xs font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvandoAdiant ? 'Salvando…' : 'Salvar'}</button>
+              <button onClick={() => setEditAdiant(false)} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+            </>
+          ) : (
+            <>
+              <b className="text-slate-700">{v.adiantamento != null ? `R$ ${v.adiantamento.toFixed(2)}` : '—'}</b>
+              {podeOperar && <button onClick={() => { setAdiantVal(v.adiantamento != null ? String(v.adiantamento) : ''); setEditAdiant(true); }} className="text-xs text-capul-600 hover:underline">editar</button>}
+            </>
+          )}
         </div>
         {v.localSaida && <p className="mt-3 text-sm text-slate-500">Local de saída: {v.localSaida}</p>}
       </div>

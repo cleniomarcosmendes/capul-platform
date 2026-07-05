@@ -239,6 +239,10 @@ export class AjusteGestorDto {
   @IsOptional() @IsString() @MaxLength(255)
   observacoesChegada?: string;
 
+  // Adiantamento (único) da viagem — base do "acerto" (despesas × adiantamento).
+  @IsOptional() @IsNumber() @Min(0)
+  adiantamento?: number;
+
   // true = fecha a viagem (CONCLUIDA) com o kmFinal informado.
   @IsOptional()
   concluir?: boolean;

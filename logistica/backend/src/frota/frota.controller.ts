@@ -78,6 +78,12 @@ export class FrotaController {
     return this.frota.despesasDaViagem(id, user);
   }
 
+  /** Acerto da viagem (despesas × adiantamento → saldo) — folha imprimível. */
+  @Get('viagens/:id/acerto')
+  acerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.frota.acertoViagem(id, user);
+  }
+
   /** Registrar retorno (só o próprio condutor). */
   @Post('viagens/:id/retorno')
   retorno(@Param('id') id: string, @Body() dto: RetornoFrotaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {

@@ -279,7 +279,7 @@ export class FrotaService {
       if (kmFinal == null) throw new BadRequestException('Informe o KM final para concluir.');
       if (kmFinal < (dto.kmInicial ?? v.kmInicial ?? 0)) throw new BadRequestException('KM final menor que o KM de saída.');
       return this.fechar(id, v.veiculoId, kmFinal, dto.observacoesChegada ?? v.observacoesChegada ?? null, {
-        kmInicial: dto.kmInicial, observacoesSaida: dto.observacoesSaida,
+        kmInicial: dto.kmInicial, observacoesSaida: dto.observacoesSaida, adiantamento: dto.adiantamento,
       });
     }
     // Só edita (sem fechar).
@@ -290,6 +290,7 @@ export class FrotaService {
         kmFinal: dto.kmFinal ?? undefined,
         observacoesSaida: dto.observacoesSaida ?? undefined,
         observacoesChegada: dto.observacoesChegada ?? undefined,
+        adiantamento: dto.adiantamento !== undefined ? new Prisma.Decimal(dto.adiantamento) : undefined,
       },
     });
   }
@@ -356,7 +357,7 @@ export class FrotaService {
     return this.prisma.manutencaoVeiculo.findMany({ where: { veiculoId }, orderBy: { dataManutencao: 'desc' } });
   }
 
-  private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string }) {
+  private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string; adiantamento?: number }) {
     return this.prisma.$transaction(async (tx) => {
       const viagem = await tx.viagem.update({
         where: { id },
@@ -367,6 +368,7 @@ export class FrotaService {
           observacoesChegada: obsChegada,
           ...(extra?.kmInicial != null ? { kmInicial: extra.kmInicial } : {}),
           ...(extra?.observacoesSaida != null ? { observacoesSaida: extra.observacoesSaida } : {}),
+          ...(extra?.adiantamento != null ? { adiantamento: new Prisma.Decimal(extra.adiantamento) } : {}),
         },
       });
       if (veiculoId) {
@@ -826,6 +828,49 @@ export class FrotaService {
   }
 
   /** Despesas lançadas numa viagem de frota (lista da tela de detalhe). */
+  /** ACERTO da viagem de frota: info + despesas + adiantamento + saldo (a pagar/receber).
+   *  Espelha a RDV, mas para UMA viagem. Escopado (assertViagemVisivel). */
+  async acertoViagem(id: string, user: JwtPayload) {
+    const v = await this.prisma.viagem.findFirst({
+      where: { id, tipo: TipoViagem.FROTA, filialId: user.filialId! },
+      include: {
+        veiculo: { select: { placa: true, modelo: true, supervisorId: true } },
+        despesas: {
+          include: { tipoDespesa: { select: { nome: true, categoria: true } }, fornecedorRef: { select: { nome: true } } },
+          orderBy: { dataDespesa: 'asc' },
+        },
+      },
+    });
+    if (!v) throw new NotFoundException('Viagem de frota não encontrada.');
+    this.assertViagemVisivel(v, user);
+
+    const despesas = v.despesas.map((d) => ({
+      id: d.id, data: d.dataDespesa, tipo: d.tipoDespesa?.nome ?? '—',
+      categoria: d.tipoDespesa?.categoria ?? 'VEICULO', valor: Number(d.valor),
+      situacao: d.situacao, fornecedor: d.fornecedorRef?.nome ?? d.fornecedor ?? null,
+      temComprovante: !!d.comprovanteObjectKey,
+    }));
+    // Só despesas APROVADAS entram no saldo (mesma regra da RDV); as demais aparecem
+    // na lista com o status, mas não somam.
+    const totalDespesas = despesas.filter((d) => d.situacao === 'APROVADA').reduce((s, d) => s + d.valor, 0);
+    const adiantamento = v.adiantamento != null ? Number(v.adiantamento) : 0;
+    // saldo > 0 = sobra do adiantamento (a devolver à empresa); < 0 = a pagar ao condutor.
+    const saldo = adiantamento - totalDespesas;
+
+    return {
+      viagem: {
+        id: v.id, numero: v.numero, situacao: v.situacao,
+        placa: v.veiculo?.placa ?? '—', modelo: v.veiculo?.modelo ?? null,
+        condutorNome: v.condutorNome, condutorMatricula: v.condutorMatricula,
+        finalidade: v.observacoesSaida, localSaida: v.localSaida,
+        dataHoraSaida: v.dataHoraSaida, dataHoraChegada: v.dataHoraChegada,
+        kmInicial: v.kmInicial, kmFinal: v.kmFinal,
+        kmRodado: v.kmFinal != null && v.kmInicial != null ? v.kmFinal - v.kmInicial : null,
+      },
+      despesas, totalDespesas, adiantamento, saldo,
+    };
+  }
+
   async despesasDaViagem(viagemId: string, user: JwtPayload) {
     const v = await this.prisma.viagem.findFirst({
       where: { id: viagemId, filialId: user.filialId! },
@@ -865,6 +910,7 @@ export class FrotaService {
       finalidade: v.observacoesSaida, localSaida: v.localSaida,
       dataHoraSaida: v.dataHoraSaida, dataHoraChegada: v.dataHoraChegada,
       paradas: v._count.paradas,
+      adiantamento: v.adiantamento != null ? Number(v.adiantamento) : null,
       // "Minha operação": quem registrou a saída OU o supervisor do veículo.
       ehMinha: v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub,
     };
