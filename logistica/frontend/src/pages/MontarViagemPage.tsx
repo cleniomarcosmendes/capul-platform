@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowLeft, ArrowUp, Loader2, Plus, Sparkles, Truck, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Loader2, MapPin, Plus, Sparkles, Truck, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,7 +26,7 @@ const SEM_BAIRRO = '__SEM__';
 const keyBairro = (b?: string | null) => (b ?? '').trim().toUpperCase() || SEM_BAIRRO;
 
 export function MontarViagemPage() {
-  const { usuario } = useAuth();
+  const { usuario, logisticaRole } = useAuth();
   const navigate = useNavigate();
   const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
 
@@ -48,7 +48,28 @@ export function MontarViagemPage() {
   const [salvou, setSalvou] = useState(false);
   // Rota em construcao nao salva = trabalho a perder (padrao workspace).
   const { ConfirmDialog: DirtyDialog, guardedNavigate } = useUnsavedChanges(rota.length > 0 && !salvou);
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
+  const [regeo, setRegeo] = useState(false);
+  // Recalcular localização é manutenção de gestor (não do operador que só monta).
+  const ehGestor = logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+
+  const recalcularLocalizacoes = async () => {
+    const ok = await confirm(
+      'Recalcular localizações',
+      'Recalcula no mapa a posição das entregas da filial a partir do endereço (rua → bairro → município). Útil quando uma entrega cai fora do lugar. Depois, use “Sugerir ordem” para ver a rota atualizada.',
+      { confirmLabel: 'Recalcular' },
+    );
+    if (!ok) return;
+    setRegeo(true);
+    try {
+      const { data } = await logisticaApi.post<{ total: number; atualizadas: number; semCoordenada: number }>('/entregas/regeocodificar', {});
+      toast('success', `${data.atualizadas} de ${data.total} entregas relocalizadas${data.semCoordenada ? ` · ${data.semCoordenada} sem endereço resolvível` : ''}. Use “Sugerir ordem” para atualizar a rota.`);
+    } catch {
+      toast('error', 'Não foi possível recalcular agora. Tente novamente em instantes.');
+    } finally {
+      setRegeo(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -161,9 +182,22 @@ export function MontarViagemPage() {
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Voltar para Rotas de Entrega
       </Link>
-      <div>
-        <h2 className="text-lg font-semibold text-slate-800">Montar rota</h2>
-        <p className="text-sm text-slate-500">Adicione as entregas à rota, ordene (sugestão ou manual) e escolha quem leva.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800">Montar rota</h2>
+          <p className="text-sm text-slate-500">Adicione as entregas à rota, ordene (sugestão ou manual) e escolha quem leva.</p>
+        </div>
+        {ehGestor && (
+          <button
+            onClick={() => void recalcularLocalizacoes()}
+            disabled={regeo}
+            title="Recalcula a posição das entregas no mapa a partir do endereço (rua → bairro → município)"
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {regeo ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+            {regeo ? 'Recalculando…' : 'Recalcular localizações'}
+          </button>
+        )}
       </div>
 
       {/* Veículo e motorista no TOPO (pedido 12/06 — com rota longa o card de
