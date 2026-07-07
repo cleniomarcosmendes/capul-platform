@@ -642,6 +642,7 @@ restore_from_prod() {
     docker compose stop \
         auth-gateway hub configurador gestao-ti-backend gestao-ti-frontend \
         inventario-backend inventario-frontend fiscal-backend fiscal-frontend \
+        logistica-backend logistica-frontend pgadmin \
         nginx 2>/dev/null || true
 
     # --- 3. Extrair APENAS dump + uploads -----------------------------------
@@ -679,8 +680,14 @@ restore_from_prod() {
 
     # --- 5. DROP + CREATE + restore -----------------------------------------
     log_info "Etapa 5/7 — restaurando banco (DROP + CREATE + pg_restore)..."
+    # Cinto-e-suspensório: os serviços já foram parados na Etapa 2, mas conexões
+    # ociosas (ex.: pgadmin) podem ter sobrado ou reconectado. Encerra as sessões
+    # remanescentes no banco-alvo (menos a nossa) e usa WITH (FORCE) no DROP
+    # (PostgreSQL 16) p/ cobrir qualquer conexão que reconecte nesta janela.
     docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d postgres \
-        -c "DROP DATABASE IF EXISTS $DB_NAME;" >/dev/null
+        -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();" >/dev/null 2>&1 || true
+    docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d postgres \
+        -c "DROP DATABASE IF EXISTS $DB_NAME WITH (FORCE);" >/dev/null
     docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d postgres \
         -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" >/dev/null
 
