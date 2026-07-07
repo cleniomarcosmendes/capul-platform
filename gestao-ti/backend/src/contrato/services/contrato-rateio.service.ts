@@ -45,7 +45,6 @@ export class ContratoRateioService {
       throw new BadRequestException('Contrato finalizado nao permite alteracao de rateio');
     }
 
-    // Validate items (don't need to compute values for template, just store config)
     if (dto.itens.length === 0) {
       throw new BadRequestException('Rateio deve ter pelo menos 1 item');
     }
@@ -56,6 +55,13 @@ export class ContratoRateioService {
     if (duplicados.length > 0) {
       throw new BadRequestException('Existem centros de custo duplicados no rateio. Remova as duplicidades antes de salvar.');
     }
+
+    // Valida a configuracao com a MESMA regra do "Simular" antes de persistir:
+    // PERCENTUAL exige soma 100%, VALOR_FIXO exige soma = valor total, PROPORCIONAL
+    // exige parametros > 0, SEM_RATEIO exige 1 item. Sem isto, um template invalido
+    // (ex.: PERCENTUAL sem percentuais) era gravado em silencio e so estourava ao
+    // simular/gerar a parcela — armazenamos so a config, mas ela precisa ser valida.
+    this.computeRateio(dto.modalidade, dto.itens, new Decimal(contrato.valorTotal.toString()));
 
     await this.prisma.$transaction(async (tx) => {
       await tx.rateioTemplate.deleteMany({ where: { contratoId } });
