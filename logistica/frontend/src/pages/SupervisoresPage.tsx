@@ -469,7 +469,7 @@ function CoordenacaoTab() {
 // ---------------- Fechamento mensal (adiantamentos + RDV agregada) ----------------
 interface SupItem { id: string; nome: string; matricula: string }
 interface Adiant { id: string; valor: number | string; dataAdiantamento: string; observacao?: string | null }
-interface RdvMensal { total: number; totalAdiantamento: number; saldo: number; planejamentos: number; totaisPorCategoria: { VEICULO: number; INDIVIDUO: number } }
+interface RdvMensal { total: number; totalAdiantamento: number; saldo: number; planejamentos: number; totaisPorCategoria: { VEICULO: number; INDIVIDUO: number }; fechado?: boolean; fechadoEm?: string | null }
 
 function FechamentoTab() {
   const { toast } = useToast();
@@ -517,6 +517,15 @@ function FechamentoTab() {
   const remover = async (aid: string) => {
     try { await logisticaApi.delete(`/supervisor/adiantamentos/${aid}`); toast('success', 'Adiantamento removido.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
+  };
+  const encerrarMes = async () => {
+    if (!supId || !mes) { toast('warning', 'Selecione o supervisor e o mês.'); return; }
+    const acao = rdv?.fechado ? 'reabrir' : 'fechar';
+    try {
+      await logisticaApi.post(`/supervisor/rdv-mensal/${acao}`, { supervisorId: supId, mesReferencia: mes });
+      toast('success', rdv?.fechado ? 'Mês reaberto — lançamentos liberados.' : 'Mês encerrado — despesas/adiantamentos travados.');
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao alterar o encerramento do mês.')); }
   };
 
   return (
@@ -578,6 +587,15 @@ function FechamentoTab() {
                 <div className="flex justify-between"><dt className="text-slate-500">Adiantamentos</dt><dd>{brl(rdv?.totalAdiantamento ?? 0)}</dd></div>
                 <div className="flex justify-between rounded-lg bg-slate-50 px-2 py-2 font-semibold"><dt>{(rdv?.saldo ?? 0) >= 0 ? 'A devolver à CAPUL' : 'A reembolsar'}</dt><dd>{brl(Math.abs(rdv?.saldo ?? 0))}</dd></div>
               </dl>
+              {rdv?.fechado && (
+                <p className="mt-3 rounded-lg bg-amber-50 px-2 py-2 text-xs font-medium text-amber-700">🔒 Mês encerrado — despesas, adiantamentos e visitas travados. Reabra para alterar.</p>
+              )}
+              <button
+                onClick={() => void encerrarMes()}
+                className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-medium ${rdv?.fechado ? 'border border-slate-300 text-slate-700 hover:bg-slate-50' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
+              >
+                {rdv?.fechado ? '🔓 Reabrir mês' : '🔒 Encerrar mês'}
+              </button>
             </div>
           </div>
         )
