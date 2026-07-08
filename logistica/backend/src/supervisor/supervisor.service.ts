@@ -130,6 +130,16 @@ export class SupervisorService {
       if (r.status !== 'VALIDO') throw new BadRequestException('Matrícula ou senha do supervisor inválidas.');
       supMatricula = r.matricula ?? dto.supervisorMatricula.trim().toUpperCase();
       supNome = r.nome ?? null;
+    } else if (this.roleLog(user) === 'SUPERVISOR') {
+      // Auto-serviço (híbrido): o próprio usuário logado É o supervisor — o JWT já
+      // autenticou, então dispensa matrícula+senha. Identifica pela matrícula do
+      // login (liga ao cadastro adiante). O gestor segue pelo ramo acima.
+      const u = await this.matriculaDoUsuario(user.sub);
+      if (!u?.matricula?.trim()) {
+        throw new BadRequestException('Seu usuário não tem matrícula cadastrada. Peça ao administrador ou informe a matrícula e a senha do supervisor.');
+      }
+      supMatricula = u.matricula.trim().toUpperCase();
+      supNome = u.nome;
     }
 
     // Vincula ao Supervisor cadastrado (leva ao coordenador que aprova). Se não
@@ -170,6 +180,13 @@ export class SupervisorService {
   /** Role da Logística no token (p/ checar gestor/admin). */
   private roleLog(user: JwtPayload): string | undefined {
     return user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
+  }
+  /** Matrícula+nome do usuário logado (core, read-only) — usado no auto-serviço do
+   *  supervisor (identifica o supervisor pelo próprio login, sem matrícula+senha). */
+  private async matriculaDoUsuario(userId: string): Promise<{ matricula: string | null; nome: string } | null> {
+    const rows = await this.prisma.$queryRaw<{ matricula: string | null; nome: string }[]>(
+      Prisma.sql`SELECT matricula, TRIM(nome) AS nome FROM "core"."usuarios" WHERE id = ${userId} LIMIT 1`);
+    return rows[0] ?? null;
   }
   private ehGestor(user: JwtPayload): boolean {
     const r = this.roleLog(user);

@@ -67,7 +67,7 @@ export class SupervisorController {
     return this.svc.obterViagemSupervisor(id, user);
   }
   @Post('viagens')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR')
   criarViagem(@Body() dto: CriarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.criarViagemSupervisor(dto, user);
   }
