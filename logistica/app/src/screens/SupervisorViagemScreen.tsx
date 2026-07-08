@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { isAxiosError } from 'axios';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
@@ -18,6 +19,17 @@ import {
 } from '../offline/filaSupervisor';
 
 const CAPUL = '#1e7d3a';
+
+/** GPS opcional (igual às paradas da frota): se negar permissão/falhar, segue sem
+ *  coordenada — não trava a visita/apontamento. */
+async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: number }> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return {};
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+  } catch { return {}; }
+}
 type Props = NativeStackScreenProps<RootStackParamList, 'SupervisorViagem'>;
 
 const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -100,10 +112,11 @@ export function SupervisorViagemScreen({ route }: Props) {
   const salvarVisita = async () => {
     if (!cliNome.trim()) { Alert.alert('Visita', 'Informe o cliente (ou prospect).'); return; }
     setSalvV(true);
+    const coords = await capturarCoordenadas();
     const payload: NovaVisita = {
       clienteNome: cliNome.trim(), municipio: muni.trim() || undefined,
       atividadeId: ativId || undefined, propriedade: prop.trim() || undefined,
-      observacao: vObs.trim() || undefined, idempotencyKey: uuid(),
+      observacao: vObs.trim() || undefined, ...coords, idempotencyKey: uuid(),
     };
     try {
       await adicionarVisitaApp(viagemId, payload);
@@ -119,10 +132,12 @@ export function SupervisorViagemScreen({ route }: Props) {
   };
 
   const apontar = async (paradaId: string, status: 'REALIZADA' | 'PULADA') => {
-    try { await apontarVisitaApp(viagemId, paradaId, status); await carregar(); }
+    // GPS só faz sentido na visita REALIZADA (onde ele esteve); PULADA não captura.
+    const coords = status === 'REALIZADA' ? await capturarCoordenadas() : {};
+    try { await apontarVisitaApp(viagemId, paradaId, status, coords); await carregar(); }
     catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarSupervisor({ id: uuid(), rotulo: `Apontar ${status === 'REALIZADA' ? 'realizada' : 'pulada'}`, acao: { tipo: 'apontar', viagemId, paradaId, status } });
+        await enfileirarSupervisor({ id: uuid(), rotulo: `Apontar ${status === 'REALIZADA' ? 'realizada' : 'pulada'}`, acao: { tipo: 'apontar', viagemId, paradaId, status, ...coords } });
         Alert.alert('Salvo offline', 'Sem sinal — o apontamento vai sincronizar quando a conexão voltar.');
       } else { Alert.alert('Erro', msg(e, 'Falha ao apontar a visita.')); }
     }

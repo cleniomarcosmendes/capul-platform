@@ -37,6 +37,7 @@ export interface TipoDespesaSup { id: string; nome: string; categoria: string; a
 export interface NovaVisita {
   atividadeId?: string; clienteNome: string;
   municipio?: string; propriedade?: string; observacao?: string; dataVisita?: string;
+  latitude?: number; longitude?: number; // GPS da visita (igual às paradas da frota)
   idempotencyKey?: string; // fila offline: dedup no reenvio
 }
 export interface NovaDespesa {
@@ -86,8 +87,8 @@ export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUri?: 
   });
 }
 /** Apontamento da visita (6c): PLANEJADA → REALIZADA ou PULADA (na execução). */
-export async function apontarVisitaApp(id: string, paradaId: string, status: 'REALIZADA' | 'PULADA'): Promise<void> {
-  await api.patch(`${B}/viagens/${id}/visitas/${paradaId}/apontar`, { status });
+export async function apontarVisitaApp(id: string, paradaId: string, status: 'REALIZADA' | 'PULADA', coords?: { latitude?: number; longitude?: number }): Promise<void> {
+  await api.patch(`${B}/viagens/${id}/visitas/${paradaId}/apontar`, { status, ...(coords ?? {}) });
 }
 /** Workflow do supervisor: enviar ao coordenador · iniciar execução · concluir. */
 export async function enviarPlanejamentoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/enviar`); }

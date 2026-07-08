@@ -64,6 +64,9 @@ export class AdicionarVisitaDto {
   @IsOptional() @IsString() @MaxLength(200) local?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
   @IsOptional() @IsDateString() dataVisita?: string;
+  // Geolocalização da visita (GPS do app, igual às paradas da frota).
+  @IsOptional() @IsNumber() latitude?: number;
+  @IsOptional() @IsNumber() longitude?: number;
   // Fila offline do app: dedup no reenvio (chave única na parada).
   @IsOptional() @IsString() @MaxLength(64) idempotencyKey?: string;
 }
@@ -82,6 +85,9 @@ export class ApontarVisitaDto {
   @IsOptional() @IsString() @MaxLength(40) atividadeId?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
   @IsOptional() @IsDateString() dataVisita?: string;
+  // GPS capturado no momento do apontamento em campo (REALIZADA).
+  @IsOptional() @IsNumber() latitude?: number;
+  @IsOptional() @IsNumber() longitude?: number;
 }
 
 // ---- Despesa da viagem do supervisor (compõe a RDV) ----

@@ -16,7 +16,7 @@ import { adicionarVisitaApp, apontarVisitaApp, lancarDespesaApp, type NovaVisita
  */
 export type AcaoSupervisor =
   | { tipo: 'visita'; viagemId: string; payload: NovaVisita }
-  | { tipo: 'apontar'; viagemId: string; paradaId: string; status: 'REALIZADA' | 'PULADA' }
+  | { tipo: 'apontar'; viagemId: string; paradaId: string; status: 'REALIZADA' | 'PULADA'; latitude?: number; longitude?: number }
   | { tipo: 'despesa'; viagemId: string; payload: NovaDespesa; fotoUri: string | null };
 
 export interface ItemSupervisor {
@@ -66,7 +66,7 @@ export async function enfileirarSupervisor(item: { id: string; rotulo: string; a
 async function enviar(acao: AcaoSupervisor): Promise<void> {
   switch (acao.tipo) {
     case 'visita': return await adicionarVisitaApp(acao.viagemId, acao.payload);
-    case 'apontar': return await apontarVisitaApp(acao.viagemId, acao.paradaId, acao.status);
+    case 'apontar': return await apontarVisitaApp(acao.viagemId, acao.paradaId, acao.status, { latitude: acao.latitude, longitude: acao.longitude });
     case 'despesa': return await lancarDespesaApp(acao.viagemId, acao.payload, acao.fotoUri ?? undefined);
   }
 }
