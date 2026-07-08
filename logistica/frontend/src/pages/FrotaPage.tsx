@@ -243,8 +243,9 @@ function PassoHeader({ n, titulo, hint, ativo = true }: { n: number; titulo: str
 function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () => void }) {
   const { toast } = useToast();
   const { logisticaRole, usuario } = useAuth();
-  // Exceção da PORTARIA (apontar por nome, sem senha) — só gestores autorizados.
-  const ehGestorPortaria = ['GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN'].includes(logisticaRole ?? '');
+  // Fluxo da PORTARIA (apontar por nome; o porteiro se identifica por matrícula+senha).
+  // Role PORTARIA (pessoal do portão) + gestores autorizados.
+  const ehGestorPortaria = ['PORTARIA', 'GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN'].includes(logisticaRole ?? '');
   const [aberto, setAberto] = useState(false);
   const [modo, setModo] = useState<'CONDUTOR' | 'PORTARIA'>('CONDUTOR');
   const [matricula, setMatricula] = useState('');
@@ -268,12 +269,17 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [buscandoNome, setBuscandoNome] = useState(false);
   const [buscou, setBuscou] = useState(false);
   const [condutorSel, setCondutorSel] = useState<CondutorBusca | null>(null);
+  // Porteiro (quem está no portão) — identifica-se por matrícula+senha (Protheus).
+  const [porteiroMatricula, setPorteiroMatricula] = useState('');
+  const [porteiroSenha, setPorteiroSenha] = useState('');
   const senhaRef = useRef<HTMLInputElement>(null);
   const veiculoRef = useRef<HTMLSelectElement>(null);
 
-  // Avança o passo 2: no modo condutor exige senha validada; na portaria, exige
-  // ter escolhido um condutor da busca por nome (sem senha).
-  const podeAvancar = modo === 'PORTARIA' ? !!condutorSel : credOk;
+  // Avança o passo 2: no modo condutor exige senha validada; na portaria, exige o
+  // condutor escolhido (por nome) + a matrícula/senha do PORTEIRO preenchidas.
+  const podeAvancar = modo === 'PORTARIA'
+    ? (!!condutorSel && porteiroMatricula.trim() !== '' && porteiroSenha.trim() !== '')
+    : credOk;
 
   // Ao resolver o nome, posiciona o cursor na senha.
   useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
@@ -293,6 +299,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
     setDepartamentoSolicitanteId(''); setPlanejadas([]);
     setNomeBusca(''); setResultados([]); setBuscou(false); setCondutorSel(null);
+    setPorteiroMatricula(''); setPorteiroSenha('');
   };
 
   // Busca condutor por NOME no Protheus (modo portaria — sem senha).
@@ -351,6 +358,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       if (modo === 'PORTARIA') {
         await logisticaApi.post('/frota/viagens/portaria', {
           condutorMatricula: condutorSel!.matricula, condutorNome: condutorSel!.nome, veiculoId,
+          porteiroMatricula: porteiroMatricula.trim(), porteiroSenha,
           kmInicial: Number(kmInicial),
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
@@ -517,6 +525,23 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                   Busque e selecione o condutor à esquerda — os dados dele aparecem aqui.
                 </div>
               )}
+            </div>
+          </div>
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+            <p className="mb-2 text-xs font-semibold text-amber-800">Identificação do PORTEIRO (quem está registrando)</p>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
+              <div className="sm:col-span-6">
+                <label className="mb-1 block text-sm font-medium text-slate-600">Matrícula do porteiro</label>
+                <input value={porteiroMatricula} onChange={(e) => setPorteiroMatricula(e.target.value)}
+                  placeholder="ex.: E00123" autoComplete="off"
+                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base" />
+              </div>
+              <div className="sm:col-span-6">
+                <label className="mb-1 block text-sm font-medium text-slate-600">Senha do porteiro</label>
+                <PasswordInput value={porteiroSenha} onChange={(e) => setPorteiroSenha(e.target.value)}
+                  autoComplete="new-password" name="frota-porteiro-senha" placeholder="Senha do portal RH"
+                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base" />
+              </div>
             </div>
           </div>
         </div>
@@ -1137,6 +1162,62 @@ export function AjusteForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: ()
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
         <button onClick={() => void salvar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings2 className="h-4 w-4" />} Salvar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Retorno pela PORTARIA: encerra a rota (KM final) SEM a senha do motorista; o
+ *  porteiro identifica-se por matrícula+senha. */
+export function RetornoPortariaForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [kmFinal, setKmFinal] = useState('');
+  const [porteiroMatricula, setPorteiroMatricula] = useState('');
+  const [porteiroSenha, setPorteiroSenha] = useState('');
+  const [obs, setObs] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  const encerrar = async () => {
+    if (kmFinal === '') { toast('warning', 'Informe o KM de retorno.'); return; }
+    if (!porteiroMatricula.trim() || !porteiroSenha.trim()) { toast('warning', 'Informe a matrícula e a senha do porteiro.'); return; }
+    setSalvando(true);
+    try {
+      await logisticaApi.post(`/frota/viagens/${v.id}/retorno-portaria`, {
+        kmFinal: Number(kmFinal),
+        porteiroMatricula: porteiroMatricula.trim(), porteiroSenha,
+        observacoes: obs.trim() || undefined,
+      });
+      toast('success', 'Rota encerrada pela portaria (sob a responsabilidade do porteiro).');
+      onDone();
+    } catch (e) {
+      toast('error', errMsg(e, 'Falha ao encerrar pela portaria.'));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-amber-700">Retorno pela portaria — encerra a rota <b>sem a senha do motorista</b>. O porteiro identifica-se abaixo (sob sua responsabilidade).</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="text-xs text-slate-600">KM de retorno
+          <input type="number" value={kmFinal} onChange={(e) => setKmFinal(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </label>
+        <label className="text-xs text-slate-600">Observações
+          <input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={255} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </label>
+        <label className="text-xs text-slate-600">Matrícula do porteiro
+          <input value={porteiroMatricula} onChange={(e) => setPorteiroMatricula(e.target.value)} autoComplete="off" placeholder="ex.: E00123" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </label>
+        <label className="text-xs text-slate-600">Senha do porteiro
+          <PasswordInput value={porteiroSenha} onChange={(e) => setPorteiroSenha(e.target.value)} autoComplete="new-password" name="frota-porteiro-retorno" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+        </label>
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
+        <button onClick={() => void encerrar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Encerrar pela portaria
         </button>
       </div>
     </div>

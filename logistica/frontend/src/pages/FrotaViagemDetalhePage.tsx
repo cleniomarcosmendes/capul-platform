@@ -5,7 +5,7 @@ import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/toast-context';
 import {
-  ParadasPanel, RetornoForm, DespesaCondutorForm, AjusteForm,
+  ParadasPanel, RetornoForm, DespesaCondutorForm, AjusteForm, RetornoPortariaForm,
   type ViagemFrota, type TipoDespesa,
 } from './FrotaPage';
 import { SIT_META, fmtDateTime, errMsg } from './frota-utils';
@@ -26,6 +26,7 @@ export function FrotaViagemDetalhePage() {
   const { toast } = useToast();
   const { logisticaRole } = useAuth();
   const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+  const ehPortaria = logisticaRole === 'PORTARIA';
 
   const [viagem, setViagem] = useState<ViagemFrota | null>(null);
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
@@ -39,6 +40,7 @@ export function FrotaViagemDetalhePage() {
   // Ajuste de gestor = exceção (corrigir KM / forçar fecho) → nasce recolhido,
   // pra não competir com o "Registrar retorno" (caminho normal de fecho).
   const [mostrarAjuste, setMostrarAjuste] = useState(false);
+  const [mostrarRetornoPortaria, setMostrarRetornoPortaria] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!id) return;
@@ -130,7 +132,7 @@ export function FrotaViagemDetalhePage() {
         {v.localSaida && <p className="mt-3 text-sm text-slate-500">Local de saída: {v.localSaida}</p>}
       </div>
 
-      {!podeOperar && (
+      {!podeOperar && !ehPortaria && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
           👁️ Somente leitura — você não é o responsável por esta operação. Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem alterá-la.
         </div>
@@ -139,6 +141,21 @@ export function FrotaViagemDetalhePage() {
         <Secao cor="border-l-emerald-400">
           <RetornoForm v={v} onClose={voltar} onDone={() => void carregar()} />
         </Secao>
+      )}
+      {emCurso && (podeOperar || ehPortaria) && (
+        mostrarRetornoPortaria ? (
+          <Secao cor="border-l-amber-400">
+            <RetornoPortariaForm v={v} onClose={() => setMostrarRetornoPortaria(false)} onDone={() => void carregar()} />
+          </Secao>
+        ) : (
+          <button
+            onClick={() => setMostrarRetornoPortaria(true)}
+            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-amber-700"
+            title="Encerrar a rota pela portaria: KM final + matrícula/senha do porteiro, sem a senha do motorista"
+          >
+            🏁 Retorno pela portaria (sem senha do motorista)
+          </button>
+        )
       )}
       {(emCurso || despesas.length > 0) && (
         <Secao cor="border-l-capul-400">
