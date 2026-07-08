@@ -73,6 +73,10 @@ export function SupervisoresPage() {
 // ---------------- Viagens mensais ----------------
 function ViagensTab() {
   const { toast } = useToast();
+  const { logisticaRole } = useAuth();
+  // Auto-serviço: o próprio supervisor logado cria seu planejamento (identificado
+  // pelo login), sem matrícula+senha. Gestor segue informando matrícula+senha.
+  const ehSupervisorLogado = logisticaRole === 'SUPERVISOR';
   const navigate = useNavigate();
   const [viagens, setViagens] = useState<ViagemSup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,14 +116,14 @@ function ViagensTab() {
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mes) { toast('warning', 'Informe o mês de referência.'); return; }
-    if (matricula.trim() && !senha) { toast('warning', 'Informe a senha do supervisor (ou limpe a matrícula).'); return; }
+    if (!ehSupervisorLogado && matricula.trim() && !senha) { toast('warning', 'Informe a senha do supervisor (ou limpe a matrícula).'); return; }
     const mesRef = Number(mes.replace('-', '')); // "2026-05" → 202605
     setSalvando(true);
     try {
       await logisticaApi.post('/supervisor/viagens', {
         mesReferencia: mesRef,
-        supervisorMatricula: matricula.trim() || undefined,
-        supervisorSenha: senha || undefined,
+        // Supervisor logado: backend identifica pelo JWT (sem matrícula+senha).
+        ...(ehSupervisorLogado ? {} : { supervisorMatricula: matricula.trim() || undefined, supervisorSenha: senha || undefined }),
       });
       toast('success', 'Planejamento criado.');
       setShowForm(false); setMes(''); setMatricula(''); setSenha(''); setNome('');
@@ -144,6 +148,11 @@ function ViagensTab() {
               <label className="mb-1 block text-sm font-medium text-slate-700">Mês de referência *</label>
               <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} required className={inp} />
             </div>
+            {ehSupervisorLogado ? (
+            <div className="flex items-end">
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">👤 Você é o supervisor — o planejamento será criado no seu nome (login). Não precisa de matrícula/senha.</p>
+            </div>
+            ) : (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor (matrícula + senha)</label>
               <div className="flex items-start gap-2">
@@ -157,6 +166,7 @@ function ViagensTab() {
                 ? <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome} — validado</p>
                 : <p className="mt-1 text-xs text-slate-400">O supervisor confirma com a senha do portal (matrícula Protheus).</p>}
             </div>
+            )}
           </div>
           <div className="mt-4 flex gap-3">
             <button type="submit" disabled={salvando} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Criar planejamento'}</button>
