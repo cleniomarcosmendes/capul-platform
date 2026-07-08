@@ -241,7 +241,12 @@ export class ChamadoCoreService {
       if (filters.visibilidade) where.visibilidade = filters.visibilidade;
       if (filters.projetoId) where.projetoId = filters.projetoId;
       if (filters.filialId) where.filialId = filters.filialId;
-      if (filters.departamentoId) where.departamentoId = filters.departamentoId;
+      // Filtro "Departamento" da tela = departamento de QUEM ABRIU o chamado
+      // (bate com a coluna "Depto" = solicitante.departamentoId). NÃO filtra pelo
+      // depto-dono do workspace (chamado.departamentoId) — senão só o depto que
+      // ATENDE (ex.: T.I.) casaria, e nenhum chamado é "dono" de Financeiro etc.
+      // O escopo por workspace é feito à parte (workspaceAtivoId).
+      if (filters.departamentoId) where.solicitante = { departamentoId: filters.departamentoId };
       if (filters.tecnicoId) where.tecnicoId = filters.tecnicoId;
 
       if (filters.dataInicio || filters.dataFim) {
