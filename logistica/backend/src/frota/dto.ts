@@ -40,6 +40,11 @@ export class SaidaFrotaDto {
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
 
+  // Vincula a saída a um planejamento RDV (viagem SUPERVISOR). Opcional; se vazio,
+  // o backend tenta auto-vincular pelo RDV do mês do condutor (pela matrícula).
+  @IsOptional() @IsString() @MaxLength(40)
+  rdvViagemId?: string;
+
   // Rota planejada (opcional): locais das visitas — nascem como PLANEJADA.
   @IsOptional() @IsArray() @IsString({ each: true })
   paradasPlanejadas?: string[];
@@ -64,6 +69,11 @@ export class SaidaIndividualDto {
 
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
+
+  // Vincula a saída a um planejamento RDV (viagem SUPERVISOR). Opcional; se vazio,
+  // o backend tenta auto-vincular pelo RDV do mês do condutor (pela matrícula).
+  @IsOptional() @IsString() @MaxLength(40)
+  rdvViagemId?: string;
 
   @IsOptional() @IsArray() @IsString({ each: true })
   paradasPlanejadas?: string[];
@@ -102,6 +112,11 @@ export class SaidaPortariaDto {
 
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
+
+  // Vincula a saída a um planejamento RDV (viagem SUPERVISOR). Opcional; se vazio,
+  // o backend tenta auto-vincular pelo RDV do mês do condutor (pela matrícula).
+  @IsOptional() @IsString() @MaxLength(40)
+  rdvViagemId?: string;
 
   @IsOptional() @IsArray() @IsString({ each: true })
   paradasPlanejadas?: string[];

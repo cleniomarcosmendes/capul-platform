@@ -271,11 +271,23 @@ export class SupervisorService {
           include: { atividade: { select: { nome: true } } },
         },
         despesas: { include: { tipoDespesa: { select: { nome: true, categoria: true } } } },
+        // Saídas de veículo (frota) vinculadas a este RDV → o KM vem daqui.
+        saidasVinculadas: {
+          orderBy: { dataHoraSaida: 'asc' },
+          select: {
+            id: true, numero: true, kmInicial: true, kmFinal: true, situacao: true,
+            dataHoraSaida: true, dataHoraChegada: true,
+            veiculo: { select: { placa: true, modelo: true } },
+          },
+        },
       },
     });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
-    return v;
+    // KM total rodado no RDV = soma dos KMs das saídas vinculadas já fechadas.
+    const kmTotalSaidas = (v.saidasVinculadas ?? []).reduce(
+      (s, sd) => s + (sd.kmFinal != null && sd.kmInicial != null ? sd.kmFinal - sd.kmInicial : 0), 0);
+    return { ...v, kmTotalSaidas };
   }
 
   // ---- Visitas (paradas) da viagem ----

@@ -538,6 +538,11 @@ model Viagem {
   comentarioCoordenador     String?      @map("comentario_coordenador")
   criadoEm                  DateTime     @default(now()) @map("criado_em")
   criadoPorId               String       @map("criado_por_id")
+  // Vínculo Saída de frota → planejamento RDV (viagem SUPERVISOR): várias saídas
+  // apontam p/ 1 RDV; o RDV soma o KM das saídas. Auto-relação na própria tabela.
+  rdvViagemId               String?      @map("rdv_viagem_id")
+  rdvViagem                 Viagem?      @relation("SaidaRdv", fields: [rdvViagemId], references: [id], onDelete: SetNull)
+  saidasVinculadas          Viagem[]     @relation("SaidaRdv")
   paradas                   Parada[]
   despesas                  DespesaVeiculo[]
   posicoes                  PosicaoVeiculo[]

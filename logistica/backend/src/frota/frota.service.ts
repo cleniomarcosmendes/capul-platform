@@ -83,6 +83,25 @@ export class FrotaService {
     return r;
   }
 
+  /** RDV (viagem SUPERVISOR) a vincular à saída: usa o explícito (validado na
+   *  filial) ou auto-vincula pelo RDV do MÊS do condutor (match por matrícula). */
+  private async resolverRdvDaSaida(filialId: string, condutorMatricula: string | null, rdvExplicito?: string): Promise<string | null> {
+    if (rdvExplicito) {
+      const v = await this.prisma.viagem.findFirst({ where: { id: rdvExplicito, tipo: TipoViagem.SUPERVISOR, filialId } });
+      return v?.id ?? null;
+    }
+    if (!condutorMatricula) return null;
+    const agora = new Date();
+    const mesRef = agora.getFullYear() * 100 + (agora.getMonth() + 1);
+    const cands = await this.prisma.viagem.findMany({
+      where: { tipo: TipoViagem.SUPERVISOR, filialId, mesReferencia: mesRef, situacao: { not: StatusViagem.CONCLUIDA } },
+      orderBy: { criadoEm: 'desc' },
+      select: { id: true, condutorMatricula: true },
+    });
+    const m = chapa(condutorMatricula);
+    return cands.find((c) => chapa(c.condutorMatricula ?? '') === m)?.id ?? null;
+  }
+
   /** Registrar SAÍDA do veículo (condutor autentica). Veículo → EM_USO. */
   async registrarSaida(dto: SaidaFrotaDto, user: JwtPayload) {
     // PADRAO: identifica o condutor por matrícula+senha do portal RH.
@@ -110,10 +129,11 @@ export class FrotaService {
     user: JwtPayload,
     condutorMatricula: string,
     condutorNome: string,
-    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: string[] },
+    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: string[]; rdvViagemId?: string },
   ) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
+    const rdvViagemId = await this.resolverRdvDaSaida(filialId, condutorMatricula, dados.rdvViagemId);
 
     // Frota é recurso COMPARTILHADO: o condutor pode usar veículo de qualquer
     // filial/departamento. A viagem é registrada na filial do login (contexto
@@ -144,6 +164,7 @@ export class FrotaService {
           veiculoId: veiculo.id,
           condutorMatricula,
           condutorNome,
+          rdvViagemId,
           departamentoSolicitanteId: dados.departamentoSolicitanteId ?? null,
           kmInicial: dados.kmInicial,
           localSaida: dados.localSaida ?? null,
@@ -209,6 +230,7 @@ export class FrotaService {
     // Porteiro identifica-se por matrícula+senha (Protheus) — accountability e
     // autorização. NÃO é a senha do motorista (que sai apontado por nome).
     const porteiro = await this.validarOuErro(dto.porteiroMatricula, dto.porteiroSenha);
+    const rdvViagemId = await this.resolverRdvDaSaida(filialId, dto.condutorMatricula, dto.rdvViagemId);
 
     const novaViagem = await this.prisma.$transaction(async (tx) => {
       const contador = await tx.contadorSequencial.upsert({
@@ -228,6 +250,7 @@ export class FrotaService {
           registradaPortaria: true,
           porteiroSaidaMatricula: porteiro.matricula,
           porteiroSaidaNome: porteiro.nome,
+          rdvViagemId,
           departamentoSolicitanteId: dto.departamentoSolicitanteId ?? null,
           kmInicial: dto.kmInicial,
           localSaida: dto.localSaida ?? null,
