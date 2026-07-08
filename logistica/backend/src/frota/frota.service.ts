@@ -193,10 +193,12 @@ export class FrotaService {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
 
+    // Frota COMPARTILHADA (igual à saída normal): veículo de qualquer filial; a
+    // viagem nasce na filial do login (contexto operacional).
     const veiculo = await this.prisma.veiculo.findFirst({
-      where: { id: dto.veiculoId, filialId, ativo: true },
+      where: { id: dto.veiculoId, ativo: true },
     });
-    if (!veiculo) throw new NotFoundException('Veículo não encontrado nesta filial.');
+    if (!veiculo) throw new NotFoundException('Veículo não encontrado.');
     if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
       throw new BadRequestException(`Veículo indisponível (situação: ${veiculo.situacao}).`);
     }
@@ -265,9 +267,11 @@ export class FrotaService {
   async ajustarPorGestor(id: string, dto: AjusteGestorDto, user: JwtPayload, role?: string) {
     const v = await this.prisma.viagem.findUnique({ where: { id }, include: { veiculo: { select: { supervisorId: true } } } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
-    if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
 
     const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    // Gestor ajusta/fecha viagem de qualquer filial (frota da empresa toda). O dono
+    // (registrante/supervisor) só a sua — que está na própria filial de qualquer forma.
+    if (!ehGestor && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
     // Dono da operação (registrante OU supervisor do veículo) também ajusta a SUA.
     const ehDono = v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub;
     if (!ehGestor && !ehDono) {
@@ -438,8 +442,10 @@ export class FrotaService {
    * atual; com mês passado, recorta no mês e não projeta até o KM atual.
    */
   async hodometroFrota(user: JwtPayload, mes?: number, ano?: number, veiculoId?: string, departamentoId?: string) {
-    const filialId = user.filialId;
-    if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
+    // Gestor de frota/ADMIN veem a Linha do KM da frota toda (cross-filial).
+    const ehGestor = this.ehGestorFrota(user);
+    if (!ehGestor && !user.filialId) throw new BadRequestException('Usuário sem filial definida.');
+    const filialId = ehGestor ? undefined : user.filialId;
 
     const veiculos = await this.prisma.veiculo.findMany({
       where: {
@@ -476,9 +482,11 @@ export class FrotaService {
 
   // ---- Painel tempo real da frota (monitoramento com recorte interno) ----
   async painelFrota(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
-    const filialId = user.filialId;
-    if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
     const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    if (!ehGestor && !user.filialId) throw new BadRequestException('Usuário sem filial definida.');
+    // Gestor de frota/ADMIN monitoram a frota da empresa toda (cross-filial):
+    // filialId undefined = sem filtro de filial nas queries abaixo. Demais: a sua.
+    const filialId = ehGestor ? undefined : user.filialId;
     const ini = new Date(Date.UTC(ano, mes - 1, 1));
     const fimExcl = new Date(Date.UTC(ano, mes, 1));
 
@@ -812,7 +820,7 @@ export class FrotaService {
     const ehGestor = this.ehGestorFrota(user);
     const viagens = await this.prisma.viagem.findMany({
       where: {
-        tipo: TipoViagem.FROTA, filialId: user.filialId!, ...(situacao ? { situacao } : {}),
+        tipo: TipoViagem.FROTA, filialId: ehGestor ? undefined : user.filialId!, ...(situacao ? { situacao } : {}),
         ...(ehGestor ? {} : { OR: [{ criadoPorId: user.sub }, { veiculo: { supervisorId: user.sub } }] }),
       },
       include: { veiculo: { select: { placa: true, modelo: true, supervisorId: true } }, _count: { select: { paradas: true } } },
@@ -838,7 +846,7 @@ export class FrotaService {
    *  Espelha a RDV, mas para UMA viagem. Escopado (assertViagemVisivel). */
   async acertoViagem(id: string, user: JwtPayload) {
     const v = await this.prisma.viagem.findFirst({
-      where: { id, tipo: TipoViagem.FROTA, filialId: user.filialId! },
+      where: { id, tipo: TipoViagem.FROTA, filialId: this.ehGestorFrota(user) ? undefined : user.filialId! },
       include: {
         veiculo: { select: { placa: true, modelo: true, supervisorId: true } },
         despesas: {
@@ -879,7 +887,7 @@ export class FrotaService {
 
   async despesasDaViagem(viagemId: string, user: JwtPayload) {
     const v = await this.prisma.viagem.findFirst({
-      where: { id: viagemId, filialId: user.filialId! },
+      where: { id: viagemId, filialId: this.ehGestorFrota(user) ? undefined : user.filialId! },
       select: { id: true, criadoPorId: true, veiculo: { select: { supervisorId: true } } },
     });
     if (!v) throw new NotFoundException('Viagem de frota não encontrada.');
@@ -902,7 +910,7 @@ export class FrotaService {
   /** Uma viagem de FROTA por id (detalhe — mesma forma do listar). */
   async obterViagem(id: string, user: JwtPayload) {
     const v = await this.prisma.viagem.findFirst({
-      where: { id, tipo: TipoViagem.FROTA, filialId: user.filialId! },
+      where: { id, tipo: TipoViagem.FROTA, filialId: this.ehGestorFrota(user) ? undefined : user.filialId! },
       include: { veiculo: { select: { placa: true, modelo: true, supervisorId: true } }, _count: { select: { paradas: true } } },
     });
     if (!v) throw new NotFoundException('Viagem de frota não encontrada.');
