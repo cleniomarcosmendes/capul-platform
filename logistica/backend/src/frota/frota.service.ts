@@ -303,8 +303,10 @@ export class FrotaService {
   async registrarManutencao(veiculoId: string, dto: RegistrarManutencaoDto, user: JwtPayload, role?: string) {
     const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
     if (!veiculo) throw new NotFoundException('Veículo não encontrado.');
-    if (veiculo.filialId !== user.filialId) throw new ForbiddenException('Veículo de outra filial.');
     const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    // Gestor administra a frota da empresa toda (mantém veículo de qualquer filial,
+    // igual ao editar-veículo, que já é cross-filial). Supervisor: só o da sua filial.
+    if (!ehGestor && veiculo.filialId !== user.filialId) throw new ForbiddenException('Veículo de outra filial.');
     if (!ehGestor && veiculo.supervisorId !== user.sub) {
       throw new ForbiddenException('Apenas gestor de frota ou o supervisor do veículo podem registrar manutenção.');
     }
@@ -353,7 +355,8 @@ export class FrotaService {
   async listarManutencoes(veiculoId: string, user: JwtPayload) {
     const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId }, select: { filialId: true } });
     if (!veiculo) throw new NotFoundException('Veículo não encontrado.');
-    if (veiculo.filialId !== user.filialId) throw new ForbiddenException('Veículo de outra filial.');
+    // Gestor vê o histórico de manutenção de qualquer filial (frota compartilhável).
+    if (!this.ehGestorFrota(user) && veiculo.filialId !== user.filialId) throw new ForbiddenException('Veículo de outra filial.');
     return this.prisma.manutencaoVeiculo.findMany({ where: { veiculoId }, orderBy: { dataManutencao: 'desc' } });
   }
 
