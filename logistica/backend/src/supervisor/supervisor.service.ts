@@ -653,7 +653,17 @@ export class SupervisorService {
       .map(([data, o]) => ({ data, municipios: [...(munsPorDia.get(data) ?? [])], valores: o.valores, total: o.total }))
       .sort((a, b) => a.data.localeCompare(b.data));
 
-    const adiantamento = v.adiantamento != null ? Number(v.adiantamento) : 0;
+    // Adiantamento migrou p/ a tabela Adiantamento (mensal, por supervisor) no
+    // redesenho 6b — v.adiantamento é OBSOLETO (fica nulo). Soma os adiantamentos
+    // do supervisor no mês (como o rdvMensal); fallback = campo legado.
+    let adiantamento = v.adiantamento != null ? Number(v.adiantamento) : 0;
+    if (v.supervisorRegistroId && v.mesReferencia != null) {
+      const advs = await this.prisma.adiantamento.findMany({
+        where: { supervisorId: v.supervisorRegistroId, mesReferencia: v.mesReferencia },
+        select: { valor: true },
+      });
+      if (advs.length) adiantamento = advs.reduce((s, a) => s + Number(a.valor), 0);
+    }
     // saldo > 0 = sobra do adiantamento (a devolver à CAPUL); < 0 = a reembolsar.
     const saldo = adiantamento - total;
 
