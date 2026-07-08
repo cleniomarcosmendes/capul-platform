@@ -26,6 +26,9 @@ interface ViagemDetalhe {
   condutorNome?: string | null; condutorMatricula?: string | null;
   supervisorRegistro?: { id: string; nome: string; coordenadorId?: string | null } | null;
   paradas: Visita[]; despesas: DespesaV[];
+  // Saídas de veículo (frota) vinculadas a este RDV → o KM vem daqui.
+  kmTotalSaidas?: number;
+  saidasVinculadas?: { id: string; numero: number; kmInicial?: number | null; kmFinal?: number | null; situacao: string; veiculo?: { placa?: string | null } | null }[];
 }
 const STATUS_DESPESA: Record<string, { label: string; cls: string }> = {
   PENDENTE: { label: 'Pendente', cls: 'bg-amber-100 text-amber-700' },
@@ -376,6 +379,32 @@ export function SupervisorViagemPage() {
             {clienteMatricula && <span className="self-center text-xs text-slate-400">Matrícula: <b className="font-mono">{clienteMatricula}</b></span>}
           </div>
         </form>
+      )}
+
+      {(v.saidasVinculadas?.length ?? 0) > 0 && (
+        <>
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            Saídas de veículo vinculadas ({v.saidasVinculadas!.length})
+            <span className="text-xs font-normal text-slate-400">— KM total no mês: <b className="text-slate-600">{v.kmTotalSaidas ?? 0} km</b></span>
+          </h2>
+          <div className="mb-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <table className="w-full">
+              <thead><tr className="bg-slate-50"><th className={th}>Saída #</th><th className={th}>Placa</th><th className={th}>KM saída</th><th className={th}>KM retorno</th><th className={th}>KM rodado</th><th className={th}>Situação</th></tr></thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {v.saidasVinculadas!.map((s) => (
+                  <tr key={s.id}>
+                    <td className="px-4 py-2 text-slate-700">#{s.numero}</td>
+                    <td className="px-4 py-2 text-slate-600">{s.veiculo?.placa ?? '—'}</td>
+                    <td className="px-4 py-2 text-slate-600">{s.kmInicial ?? '—'}</td>
+                    <td className="px-4 py-2 text-slate-600">{s.kmFinal ?? '—'}</td>
+                    <td className="px-4 py-2 font-medium text-slate-800">{s.kmFinal != null && s.kmInicial != null ? `${s.kmFinal - s.kmInicial} km` : '—'}</td>
+                    <td className="px-4 py-2 text-slate-500 text-xs">{s.situacao}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <h2 className="mb-2 text-sm font-semibold text-slate-700">Visitas ({v.paradas.length})</h2>

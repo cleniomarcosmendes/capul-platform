@@ -21,6 +21,15 @@ export class FrotaController {
     return this.frota.buscarCondutor(dto.matricula);
   }
 
+  /** RDVs (planejamentos) candidatos p/ vincular à saída: do supervisor com essa
+   *  matrícula, no mês, não concluídos. Alimenta o seletor do form de Saída (o 1º
+   *  é o auto-match). */
+  @Get('rdv-candidatos')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA')
+  rdvCandidatos(@CurrentUser() user: JwtPayload, @Query('matricula') matricula?: string) {
+    return this.frota.rdvCandidatosDoCondutor(user, matricula ?? '');
+  }
+
   /** Valida matrícula+senha — SEMPRE 200 com {valida, motivo} (nunca 401). */
   @Post('condutor/validar')
   validarCondutor(@Body() dto: ValidarCondutorDto) {

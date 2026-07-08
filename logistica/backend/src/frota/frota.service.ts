@@ -102,6 +102,24 @@ export class FrotaService {
     return cands.find((c) => chapa(c.condutorMatricula ?? '') === m)?.id ?? null;
   }
 
+  /** RDVs (SUPERVISOR) do MÊS do condutor (por matrícula), não concluídos — p/ o
+   *  seletor de vínculo no form de Saída. O 1º da lista é o auto-match. */
+  async rdvCandidatosDoCondutor(user: JwtPayload, matricula: string) {
+    const filialId = user.filialId;
+    if (!filialId || !matricula.trim()) return [];
+    const agora = new Date();
+    const mesRef = agora.getFullYear() * 100 + (agora.getMonth() + 1);
+    const cands = await this.prisma.viagem.findMany({
+      where: { tipo: TipoViagem.SUPERVISOR, filialId, mesReferencia: mesRef, situacao: { not: StatusViagem.CONCLUIDA } },
+      orderBy: { criadoEm: 'desc' },
+      select: { id: true, numero: true, mesReferencia: true, condutorMatricula: true, supervisorRegistro: { select: { nome: true } } },
+    });
+    const m = chapa(matricula);
+    return cands
+      .filter((c) => chapa(c.condutorMatricula ?? '') === m)
+      .map((c) => ({ id: c.id, numero: c.numero, mesReferencia: c.mesReferencia, supervisorNome: c.supervisorRegistro?.nome ?? c.condutorMatricula }));
+  }
+
   /** Registrar SAÍDA do veículo (condutor autentica). Veículo → EM_USO. */
   async registrarSaida(dto: SaidaFrotaDto, user: JwtPayload) {
     // PADRAO: identifica o condutor por matrícula+senha do portal RH.
