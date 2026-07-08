@@ -241,7 +241,10 @@ export class FrotaService {
   async registrarRetorno(id: string, dto: RetornoFrotaDto, user: JwtPayload, condutorToken?: string) {
     const v = await this.prisma.viagem.findUnique({ where: { id } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
-    if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
+    // Gestor de frota/ADMIN fecham viagem de qualquer filial (frota da empresa
+    // toda). Demais: só a própria filial. A identidade do condutor ("só quem
+    // iniciou") segue valendo abaixo — é regra separada da filial.
+    if (!this.ehGestorFrota(user) && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A viagem não está em curso.');
 
     // PADRÃO (login compartilhado): o token de condutor (do gate ao abrir a viagem)
