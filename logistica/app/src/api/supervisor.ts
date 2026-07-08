@@ -90,6 +90,12 @@ export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUri?: 
 export async function apontarVisitaApp(id: string, paradaId: string, status: 'REALIZADA' | 'PULADA', coords?: { latitude?: number; longitude?: number }): Promise<void> {
   await api.patch(`${B}/viagens/${id}/visitas/${paradaId}/apontar`, { status, ...(coords ?? {}) });
 }
+/** Cria o planejamento (RDV) do supervisor LOGADO — sem matrícula/senha: o backend
+ *  identifica pelo JWT (role SUPERVISOR) e liga ao cadastro pela matrícula do login. */
+export async function criarPlanejamentoApp(mesReferencia: number, veiculoId?: string): Promise<{ id: string; numero: number }> {
+  const { data } = await api.post<{ id: string; numero: number }>(`${B}/viagens`, { mesReferencia, veiculoId });
+  return data;
+}
 /** Workflow do supervisor: enviar ao coordenador · iniciar execução · concluir. */
 export async function enviarPlanejamentoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/enviar`); }
 export async function iniciarExecucaoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/iniciar`); }

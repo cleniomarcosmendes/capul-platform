@@ -1,9 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
-import { listarViagensSupervisor, type ViagemSup } from '../api/supervisor';
+import { listarViagensSupervisor, criarPlanejamentoApp, type ViagemSup } from '../api/supervisor';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'SupervisorHome'>;
@@ -35,6 +35,22 @@ export function SupervisorHomeScreen({ navigation }: Props) {
     return () => { ativo = false; };
   }, [carregar]));
 
+  // Cria o planejamento do MÊS atual no nome do supervisor logado (sem senha).
+  const criarPlanejamento = () => {
+    const now = new Date();
+    const mes = now.getFullYear() * 100 + (now.getMonth() + 1);
+    Alert.alert('Novo planejamento', `Criar o planejamento de ${fmtMes(mes)} no seu nome?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Criar', onPress: async () => {
+        try {
+          const v = await criarPlanejamentoApp(mes);
+          await carregar();
+          navigation.navigate('SupervisorViagem', { viagemId: v.id, numero: v.numero });
+        } catch { Alert.alert('Erro', 'Não foi possível criar o planejamento (já existe um do mês?).'); }
+      } },
+    ]);
+  };
+
   if (carregando) return <View style={styles.center}><ActivityIndicator size="large" color={CAPUL} /></View>;
 
   return (
@@ -43,6 +59,11 @@ export function SupervisorHomeScreen({ navigation }: Props) {
       keyExtractor={(v) => v.id}
       contentContainerStyle={styles.list}
       refreshControl={<RefreshControl refreshing={atualizando} onRefresh={async () => { setAtualizando(true); await carregar(); setAtualizando(false); }} />}
+      ListHeaderComponent={
+        <TouchableOpacity style={styles.novoBtn} onPress={criarPlanejamento}>
+          <Text style={styles.novoBtnTxt}>＋ Novo planejamento (mês atual)</Text>
+        </TouchableOpacity>
+      }
       ListEmptyComponent={<Text style={styles.vazio}>{erro || 'Nenhuma viagem em curso.'}</Text>}
       renderItem={({ item }) => (
         <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('SupervisorViagem', { viagemId: item.id, numero: item.numero })}>
@@ -59,6 +80,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   list: { padding: 16, gap: 12 },
   vazio: { textAlign: 'center', color: '#64748b', marginTop: 40 },
+  novoBtn: { backgroundColor: CAPUL, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 4 },
+  novoBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#e2e8f0' },
   cardTitle: { fontSize: 16, fontWeight: '700', color: CAPUL },
   cardSub: { fontSize: 13, color: '#64748b', marginTop: 2 },
