@@ -67,6 +67,12 @@ export class RotaService {
     // Geocodifica (cache faz repetidas serem instantâneas).
     const pontos: Ponto[] = [];
     const semCoordenada: string[] = [];
+    // Unifica o "Recalcular" com o "Sugerir": ao sugerir a ordem também gravamos
+    // geoLat/geoLng das entregas DA ROTA (escopado — não a filial toda) quando
+    // mudou. Assim o pin fica correto nas telas com mapa (Painel/Monitor) sem
+    // exigir o botão de manutenção do gestor. Derivado do endereço, determinístico.
+    const r7 = (n: number) => Math.round(n * 1e7) / 1e7; // geo_lat/lng = Decimal(10,7)
+    const pinsParaSalvar: { id: string; lat: number; lng: number }[] = [];
     for (const id of idsValidos) {
       const e = porId.get(id)!;
       const c = await this.geocode.geocodificar({
@@ -77,8 +83,21 @@ export class RotaService {
         uf: e.endUf,
         cep: e.endCep,
       });
-      if (c) pontos.push({ id, lat: c.lat, lng: c.lng });
-      else semCoordenada.push(id);
+      if (c) {
+        pontos.push({ id, lat: c.lat, lng: c.lng });
+        const lat = r7(c.lat);
+        const lng = r7(c.lng);
+        if (e.geoLat == null || e.geoLng == null || Number(e.geoLat) !== lat || Number(e.geoLng) !== lng) {
+          pinsParaSalvar.push({ id, lat, lng });
+        }
+      } else {
+        semCoordenada.push(id);
+      }
+    }
+    if (pinsParaSalvar.length) {
+      await Promise.all(
+        pinsParaSalvar.map((p) => this.prisma.entrega.update({ where: { id: p.id }, data: { geoLat: p.lat, geoLng: p.lng } })),
+      );
     }
 
     if (pontos.length < 2) {
