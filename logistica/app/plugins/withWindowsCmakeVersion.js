@@ -34,6 +34,15 @@ const { withSettingsGradle } = require('expo/config-plugins');
  *
  * Requer o CMake 4.1.2 instalado (Android Studio → SDK Manager → SDK Tools →
  * CMake). Se ausente, a AGP o instala via sdkmanager no primeiro build.
+ *
+ * EFEITO COLATERAL do 4.1.2 — `CMAKE_POLICY_VERSION_MINIMUM=3.5`:
+ * o CMake 4.x removeu a compatibilidade com `cmake_minimum_required(VERSION < 3.5)`.
+ * O `expo-updates` (módulo de OTA) ainda declara `VERSION 3.4.1` no seu
+ * CMakeLists.txt, então o configure falha com "Compatibility with CMake < 3.5 has
+ * been removed". Como fixamos o 4.1.2 só por causa do MAX_PATH, injetamos aqui
+ * também o `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` (a saída sugerida pelo próprio
+ * CMake) para que ele trate mínimos antigos como 3.5 e conclua a configuração —
+ * sem precisar patchar o node_modules. Escopado ao Windows junto com o pin.
  */
 const CMAKE_VERSION = '4.1.2';
 const MARKER = '// withWindowsCmakeVersion: CMake pinning (Windows MAX_PATH)';
@@ -66,6 +75,9 @@ function withWindowsCmakeVersion(config) {
       'gradle.beforeProject { project ->',
       '  def pinCmake = {',
       '    project.android.externalNativeBuild.cmake.version = "' + CMAKE_VERSION + '"',
+      '    // CMake 4.x removeu compat com cmake_minimum_required(VERSION < 3.5).',
+      '    // expo-updates declara 3.4.1 — trata mínimos antigos como 3.5 p/ não falhar.',
+      '    project.android.defaultConfig.externalNativeBuild.cmake.arguments("-DCMAKE_POLICY_VERSION_MINIMUM=3.5")',
       '  }',
       '  project.plugins.withId("com.android.application", pinCmake)',
       '  project.plugins.withId("com.android.library", pinCmake)',
