@@ -25,8 +25,6 @@
       ]
     },
     "extra": {
-      "//": "API_URL — apontar pro nginx alcançável pelo celular. Em DEV use o IP da LAN da máquina (ex.: https://192.168.x.x). Sobrescreve via env EXPO_PUBLIC_API_URL.",
-      "apiUrl": "https://platformhlg.capul.com.br",
       "eas": {
         "projectId": "0d458eb9-9907-43b7-92ca-ab1d431482b0"
       }

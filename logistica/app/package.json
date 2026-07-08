@@ -34,6 +34,7 @@
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.2.14",
     "babel-jest": "^30.4.1",
     "babel-preset-expo": "^56.0.16",
