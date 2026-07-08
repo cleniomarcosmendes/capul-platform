@@ -3,7 +3,7 @@ import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -48,16 +48,25 @@ export class FrotaController {
 
   /** EXCEÇÃO da portaria: busca condutor por nome (Protheus infoPortal). Gestores. */
   @Get('condutores/busca')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('PORTARIA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   buscarPorNome(@Query('nome') nome: string) {
     return this.frota.buscarCondutoresPorNome(nome ?? '');
   }
 
-  /** EXCEÇÃO da portaria: aponta a saída ao condutor SEM senha. Gestores (auditável). */
+  /** Saída pela portaria: aponta ao condutor por NOME (sem senha do motorista); o
+   *  porteiro identifica-se por matrícula+senha. Portaria + gestores (auditável). */
   @Post('viagens/portaria')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('PORTARIA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   saidaPortaria(@Body() dto: SaidaPortariaDto, @CurrentUser() user: JwtPayload) {
     return this.frota.registrarSaidaPortaria(dto, user);
+  }
+
+  /** Retorno pela portaria: encerra a rota (KM final) SEM a senha do motorista; o
+   *  porteiro identifica-se por matrícula+senha. Portaria + gestores. */
+  @Post('viagens/:id/retorno-portaria')
+  @Roles('PORTARIA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  retornoPortaria(@Param('id') id: string, @Body() dto: RetornoPortariaDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.registrarRetornoPortaria(id, dto, user);
   }
 
   /** Lista viagens de frota da filial (filtro de situação opcional). */

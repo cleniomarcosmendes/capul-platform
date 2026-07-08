@@ -8,7 +8,7 @@ import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.j
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CondutorTokenService } from '../common/condutor-token.service.js';
-import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
+import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -206,6 +206,10 @@ export class FrotaService {
       throw new BadRequestException(`KM inicial (${dto.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
     }
 
+    // Porteiro identifica-se por matrícula+senha (Protheus) — accountability e
+    // autorização. NÃO é a senha do motorista (que sai apontado por nome).
+    const porteiro = await this.validarOuErro(dto.porteiroMatricula, dto.porteiroSenha);
+
     const novaViagem = await this.prisma.$transaction(async (tx) => {
       const contador = await tx.contadorSequencial.upsert({
         where: { filialId_escopo: { filialId, escopo: 'VIAGEM' } },
@@ -222,6 +226,8 @@ export class FrotaService {
           condutorMatricula: dto.condutorMatricula.trim(),
           condutorNome: dto.condutorNome.trim(),
           registradaPortaria: true,
+          porteiroSaidaMatricula: porteiro.matricula,
+          porteiroSaidaNome: porteiro.nome,
           departamentoSolicitanteId: dto.departamentoSolicitanteId ?? null,
           kmInicial: dto.kmInicial,
           localSaida: dto.localSaida ?? null,
@@ -264,6 +270,28 @@ export class FrotaService {
       throw new BadRequestException(`KM final (${dto.kmFinal}) menor que o KM de saída (${v.kmInicial}).`);
     }
     return this.fechar(id, v.veiculoId, dto.kmFinal, dto.observacoes ?? null);
+  }
+
+  /**
+   * RETORNO pela PORTARIA: encerra a rota SEM a senha do motorista. O porteiro
+   * identifica-se por matrícula+senha (accountability e autorização). Gestor de
+   * frota/ADMIN fecham em qualquer filial; PORTARIA/demais só na própria. Não exige
+   * que a saída tenha sido pela portaria — a portaria encerra qualquer rota em curso.
+   */
+  async registrarRetornoPortaria(id: string, dto: RetornoPortariaDto, user: JwtPayload) {
+    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
+    if (!this.ehGestorFrota(user) && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A viagem não está em curso.');
+    if (dto.kmFinal < (v.kmInicial ?? 0)) {
+      throw new BadRequestException(`KM final (${dto.kmFinal}) menor que o KM de saída (${v.kmInicial}).`);
+    }
+    // Porteiro autentica-se (matrícula+senha) — NÃO a senha do motorista.
+    const porteiro = await this.validarOuErro(dto.porteiroMatricula, dto.porteiroSenha);
+    return this.fechar(id, v.veiculoId, dto.kmFinal, dto.observacoes?.trim() ?? null, {
+      porteiroRetornoMatricula: porteiro.matricula,
+      porteiroRetornoNome: porteiro.nome,
+    });
   }
 
   /** Ajuste/fechamento por GESTOR_FROTA ou supervisor do veículo. */
@@ -367,7 +395,7 @@ export class FrotaService {
     return this.prisma.manutencaoVeiculo.findMany({ where: { veiculoId }, orderBy: { dataManutencao: 'desc' } });
   }
 
-  private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string; adiantamento?: number }) {
+  private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string; adiantamento?: number; porteiroRetornoMatricula?: string; porteiroRetornoNome?: string }) {
     return this.prisma.$transaction(async (tx) => {
       const viagem = await tx.viagem.update({
         where: { id },
@@ -379,6 +407,7 @@ export class FrotaService {
           ...(extra?.kmInicial != null ? { kmInicial: extra.kmInicial } : {}),
           ...(extra?.observacoesSaida != null ? { observacoesSaida: extra.observacoesSaida } : {}),
           ...(extra?.adiantamento != null ? { adiantamento: new Prisma.Decimal(extra.adiantamento) } : {}),
+          ...(extra?.porteiroRetornoMatricula != null ? { porteiroRetornoMatricula: extra.porteiroRetornoMatricula, porteiroRetornoNome: extra.porteiroRetornoNome ?? null } : {}),
         },
       });
       if (veiculoId) {

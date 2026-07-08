@@ -515,6 +515,12 @@ model Viagem {
   // viagem ao condutor por NOME, SEM a senha dele — accountability é do
   // criadoPorId. false = condutor se auto-autenticou (matrícula+senha).
   registradaPortaria        Boolean      @default(false) @map("registrada_portaria")
+  // Fluxo PORTARIA: qual PORTEIRO (funcionário, matrícula+senha do Protheus) operou
+  // a saída e o retorno — accountability distinta do motorista (condutorMatricula).
+  porteiroSaidaMatricula    String?      @map("porteiro_saida_matricula")
+  porteiroSaidaNome         String?      @map("porteiro_saida_nome")
+  porteiroRetornoMatricula  String?      @map("porteiro_retorno_matricula")
+  porteiroRetornoNome       String?      @map("porteiro_retorno_nome")
   situacao                  StatusViagem @default(RASCUNHO)
   // Viagem do SUPERVISOR (Fase 3b): container MENSAL da prestação de contas (RDV).
   // mesReferencia = AAAAMM (ex.: 202605); adiantamento = valor liberado; região do

@@ -81,6 +81,13 @@ export class SaidaPortariaDto {
   @IsString() @IsNotEmpty() @MaxLength(120)
   condutorNome!: string;
 
+  // Porteiro que registra (identifica-se por matrícula+senha — Protheus loginPortal).
+  @IsString() @IsNotEmpty() @MaxLength(20)
+  porteiroMatricula!: string;
+
+  @IsString() @IsNotEmpty()
+  porteiroSenha!: string;
+
   @IsString() @IsNotEmpty()
   veiculoId!: string;
 
@@ -98,6 +105,22 @@ export class SaidaPortariaDto {
 
   @IsOptional() @IsArray() @IsString({ each: true })
   paradasPlanejadas?: string[];
+}
+
+/** Retorno pela PORTARIA: encerra a rota com KM final SEM a senha do motorista; o
+ *  porteiro identifica-se por matrícula+senha (accountability). */
+export class RetornoPortariaDto {
+  @IsInt() @Min(0)
+  kmFinal!: number;
+
+  @IsString() @IsNotEmpty() @MaxLength(20)
+  porteiroMatricula!: string;
+
+  @IsString() @IsNotEmpty()
+  porteiroSenha!: string;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  observacoes?: string;
 }
 
 export class RetornoFrotaDto {
