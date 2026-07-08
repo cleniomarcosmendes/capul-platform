@@ -116,6 +116,20 @@ export class SupervisorController {
     return this.svc.rdvMensal(supervisorId, Number(mes), user);
   }
 
+  /** Encerra o RDV do mês (trava despesas/adiantamentos/visitas). Coordenador/gestor. */
+  @Post('rdv-mensal/fechar')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR')
+  fecharRdv(@CurrentUser() user: JwtPayload, @Body() dto: { supervisorId: string; mesReferencia: number }) {
+    return this.svc.fecharRdv(dto.supervisorId, Number(dto.mesReferencia), user);
+  }
+
+  /** Reabre o RDV do mês (libera lançamentos). Coordenador/gestor. */
+  @Post('rdv-mensal/reabrir')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR')
+  reabrirRdv(@CurrentUser() user: JwtPayload, @Body() dto: { supervisorId: string; mesReferencia: number }) {
+    return this.svc.reabrirRdv(dto.supervisorId, Number(dto.mesReferencia), user);
+  }
+
   // ---- Administração (Fase 5): correções do gestor ----
   @Patch('viagens/:id')
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')

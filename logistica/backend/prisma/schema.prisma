@@ -672,10 +672,26 @@ model Supervisor {
   criadoEm      DateTime @default(now()) @map("criado_em")
   planejamentos Viagem[]
   adiantamentos Adiantamento[]
+  fechamentos   FechamentoRdv[]
 
   @@unique([filialId, matricula])
   @@index([coordenadorId])
   @@map("supervisor")
+  @@schema("logistica")
+}
+
+/// Encerramento mensal do RDV (TEMA 2): presença = mês ENCERRADO (trava despesas e
+/// adiantamentos do supervisor no mês); reabrir remove a linha.
+model FechamentoRdv {
+  id            String     @id @default(uuid())
+  supervisorId  String     @map("supervisor_id")
+  supervisor    Supervisor @relation(fields: [supervisorId], references: [id])
+  mesReferencia Int        @map("mes_referencia")
+  fechadoEm     DateTime   @default(now()) @map("fechado_em")
+  fechadoPorId  String     @map("fechado_por_id")
+
+  @@unique([supervisorId, mesReferencia])
+  @@map("fechamento_rdv")
   @@schema("logistica")
 }
 

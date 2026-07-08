@@ -181,6 +181,13 @@ export class SupervisorService {
   private roleLog(user: JwtPayload): string | undefined {
     return user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
   }
+  /** RDV do mês encerrado? (TEMA 2) — bloqueia despesa/adiantamento/visita. Sem
+   *  supervisor cadastrado ou mês → não trava (nada a fechar). */
+  private async assertRdvAberto(supervisorId: string | null | undefined, mes: number | null | undefined) {
+    if (!supervisorId || mes == null) return;
+    const f = await this.prisma.fechamentoRdv.findUnique({ where: { supervisorId_mesReferencia: { supervisorId, mesReferencia: mes } } });
+    if (f) throw new BadRequestException('RDV do mês encerrado — reabra o mês (coordenador/gestor) para alterar despesas, adiantamentos ou visitas.');
+  }
   /** Matrícula+nome do usuário logado (core, read-only) — usado no auto-serviço do
    *  supervisor (identifica o supervisor pelo próprio login, sem matrícula+senha). */
   private async matriculaDoUsuario(userId: string): Promise<{ matricula: string | null; nome: string } | null> {
@@ -314,6 +321,7 @@ export class SupervisorService {
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para adicionar visitas.');
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     if (dto.atividadeId) {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
@@ -359,6 +367,7 @@ export class SupervisorService {
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Planejamento não encontrado.');
     if (v.filialId !== filialId) throw new ForbiddenException('Planejamento de outra filial.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Planejamento concluído — reabra para apontar.');
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
     if (dto.atividadeId) {
@@ -411,6 +420,7 @@ export class SupervisorService {
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para lançar despesas.');
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     // Fila offline (app): reenvio com a mesma chave não duplica a despesa.
     if (dto.idempotencyKey) {
       const ja = await this.prisma.despesaVeiculo.findUnique({ where: { idempotencyKey: dto.idempotencyKey }, include: { tipoDespesa: { select: { nome: true, categoria: true } } } });
@@ -688,6 +698,7 @@ export class SupervisorService {
     if (!sup || sup.filialId !== filialId) throw new BadRequestException('Supervisor inválido para esta filial.');
     this.assertEscopoSupervisor(sup, user);
     if (dto.mesReferencia % 100 < 1 || dto.mesReferencia % 100 > 12) throw new BadRequestException('Mês de referência inválido (AAAAMM).');
+    await this.assertRdvAberto(dto.supervisorId, dto.mesReferencia);
     return this.prisma.adiantamento.create({
       data: {
         supervisorId: dto.supervisorId, mesReferencia: dto.mesReferencia,
@@ -710,6 +721,28 @@ export class SupervisorService {
     this.assertEscopoSupervisor(a.supervisor, user);
     await this.prisma.adiantamento.delete({ where: { id } });
     return { ok: true };
+  }
+
+  // ---- Encerramento mensal do RDV (TEMA 2) ----
+  async fecharRdv(supervisorId: string, mes: number, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
+    if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
+    this.assertEscopoSupervisor(sup, user); // coordenador do supervisor ou gestor
+    await this.prisma.fechamentoRdv.upsert({
+      where: { supervisorId_mesReferencia: { supervisorId, mesReferencia: mes } },
+      create: { supervisorId, mesReferencia: mes, fechadoPorId: user.sub },
+      update: {},
+    });
+    return { fechado: true as const };
+  }
+  async reabrirRdv(supervisorId: string, mes: number, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
+    if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
+    this.assertEscopoSupervisor(sup, user);
+    await this.prisma.fechamentoRdv.deleteMany({ where: { supervisorId, mesReferencia: mes } });
+    return { fechado: false as const };
   }
 
   /** RDV MENSAL: agrega TODOS os planejamentos do supervisor no mês (despesas
@@ -755,12 +788,15 @@ export class SupervisorService {
     const adiantamentos = await this.prisma.adiantamento.findMany({ where: { supervisorId, mesReferencia: mes }, orderBy: { dataAdiantamento: 'asc' } });
     const totalAdiantamento = adiantamentos.reduce((s, a) => s + Number(a.valor), 0);
     const saldo = totalAdiantamento - total; // >0 devolver à CAPUL; <0 reembolsar
+    // TEMA 2: mês encerrado? (trava novos lançamentos até reabrir)
+    const fech = await this.prisma.fechamentoRdv.findUnique({ where: { supervisorId_mesReferencia: { supervisorId, mesReferencia: mes } } });
 
     return {
       supervisor: { id: sup.id, matricula: sup.matricula, nome: sup.nome },
       mesReferencia: mes, planejamentos: planejamentos.length,
       tipos, dias, totaisPorTipo, totaisPorCategoria, total,
       adiantamentos, totalAdiantamento, saldo,
+      fechado: !!fech, fechadoEm: fech?.fechadoEm ?? null,
     };
   }
 
