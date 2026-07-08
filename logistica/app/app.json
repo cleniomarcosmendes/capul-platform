@@ -43,7 +43,8 @@
       ],
       "expo-secure-store",
       "expo-status-bar",
-      "./plugins/withWindowsCmakeVersion.js"
+      "./plugins/withWindowsCmakeVersion.js",
+      "./plugins/withEntregasFlavors.js"
     ],
     "runtimeVersion": {
       "policy": "fingerprint"
