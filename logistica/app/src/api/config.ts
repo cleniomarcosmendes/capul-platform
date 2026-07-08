@@ -1,20 +1,14 @@
+import * as Updates from 'expo-updates';
 import Constants from 'expo-constants';
+import { urlPorCanal } from './urlPorCanal';
 
 /**
  * URL base da API (nginx da plataforma). Ordem de resolução:
  *  1. EXPO_PUBLIC_API_URL (env do build) — override explícito.
  *  2. DEV: mesmo host do Metro, via HTTP (auto-sincronia com o backend local).
- *  3. app.json → expo.extra.apiUrl (fallback).
- */
-const extraUrl = (Constants.expoConfig?.extra as { apiUrl?: string } | undefined)?.apiUrl;
-
-/**
- * Em DEV o celular já conversa com o Metro no IP da máquina de desenvolvimento.
- * Reaproveitamos esse MESMO host para a API, na porta 8085 (HTTP) — assim o
- * aparelho fica sempre em sincronia com o backend local, sem IP chumbado e sem
- * cair no fallback. HTTP (não HTTPS) porque o Expo Go recusa o certificado
- * self-signed do nginx; a 8085 é um listener HTTP exclusivo de DEV (auth +
- * logistica), montado só na máquina de dev via docker-compose.override.yml.
+ *  3. RUNTIME por canal: Updates.channel → production/homolog (o binário nativo
+ *     grava o canal por flavor; é isso que torna a promoção do bundle exato segura).
+ *  4. Fallback: homologação (mais seguro que produção p/ um build não-identificado).
  */
 const DEV_API_PORT = 8085;
 function devApiUrl(): string | undefined {
@@ -26,8 +20,8 @@ function devApiUrl(): string | undefined {
 export const API_URL = (
   process.env.EXPO_PUBLIC_API_URL ??
   (__DEV__ ? devApiUrl() : undefined) ??
-  extraUrl ??
-  'https://platform.capul.com.br'
+  urlPorCanal(Updates.channel) ??
+  'https://platformhlg.capul.com.br'
 ).replace(/\/$/, '');
 
 export const AUTH_BASE = `${API_URL}/api/v1/auth`;

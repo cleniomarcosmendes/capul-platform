@@ -2,6 +2,7 @@
   "expo": {
     "name": "CAPUL Entregas",
     "slug": "capul-entregas",
+    "owner": "capul",
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "capulentregas",
@@ -19,12 +20,14 @@
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
-        "CAMERA"
+        "CAMERA",
+        "RECEIVE_BOOT_COMPLETED"
       ]
     },
     "extra": {
-      "//": "API_URL — apontar pro nginx alcançável pelo celular. Em DEV use o IP da LAN da máquina (ex.: https://192.168.x.x). Sobrescreve via env EXPO_PUBLIC_API_URL.",
-      "apiUrl": "https://platform.capul.com.br"
+      "eas": {
+        "projectId": "0d458eb9-9907-43b7-92ca-ab1d431482b0"
+      }
     },
     "plugins": [
       "expo-asset",
@@ -35,7 +38,18 @@
           "isAndroidForegroundServiceEnabled": true,
           "locationAlwaysAndWhenInUsePermission": "O CAPUL Entregas usa sua localização durante a viagem (inclusive em segundo plano) para o monitoramento da rota pela gestão."
         }
-      ]
-    ]
+      ],
+      "expo-secure-store",
+      "expo-status-bar",
+      "./plugins/withWindowsCmakeVersion.js",
+      "./plugins/withEntregasFlavors.js"
+    ],
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0d458eb9-9907-43b7-92ca-ab1d431482b0"
+    },
+    "ios": {}
   }
 }
