@@ -374,6 +374,14 @@ export function UsuarioFormPage() {
       };
       const permsHabilitadas = permissoes.map(resolverDepto).filter((p) => p.moduloId && p.departamentoId && p.roleModuloId);
 
+      // Garante que a filial PRINCIPAL esteja sempre na lista de filiais vinculadas
+      // (é o vínculo N-N que os seletores por filial usam — ex.: supervisor no
+      // cadastro de veículo). Sem ele, o usuário some das listas mesmo tendo filial
+      // principal. Espelha o auto-select do onChange da Filial Principal.
+      const filialIdsFinais = filialPrincipalId && !filialIds.includes(filialPrincipalId)
+        ? [...filialIds, filialPrincipalId]
+        : filialIds;
+
       if (isEdicao) {
         await usuarioService.atualizar(id!, {
           username: username || undefined,
@@ -386,7 +394,7 @@ export function UsuarioFormPage() {
           autenticaPortal,
           filialPrincipalId: filialPrincipalId || undefined,
           departamentoId: departamentoId || undefined,
-          filialIds,
+          filialIds: filialIdsFinais,
         });
 
         // Onda 2 C2.2 — diff por (moduloId, departamentoId)
@@ -435,7 +443,7 @@ export function UsuarioFormPage() {
           tipo,
           filialPrincipalId: filialPrincipalId || undefined,
           departamentoId,
-          filialIds: filialIds.length > 0 ? filialIds : undefined,
+          filialIds: filialIdsFinais.length > 0 ? filialIdsFinais : undefined,
           // C2.2 — permissões já vão com departamentoId no usuário novo
           permissoes: permsHabilitadas.map((p) => ({ moduloId: p.moduloId, roleModuloId: p.roleModuloId, departamentoId: p.departamentoId })),
         });
@@ -653,7 +661,13 @@ export function UsuarioFormPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Filial Principal</label>
-                  <select value={filialPrincipalId} onChange={(e) => setFilialPrincipalId(e.target.value)} className={inputClass}>
+                  <select value={filialPrincipalId} onChange={(e) => {
+                    const v = e.target.value;
+                    setFilialPrincipalId(v);
+                    // Ao escolher a filial principal, já marca ela na lista de filiais
+                    // vinculadas (vínculo que os seletores por filial usam). Só adiciona.
+                    if (v) setFilialIds((prev) => prev.includes(v) ? prev : [...prev, v]);
+                  }} className={inputClass}>
                     <option value="">Selecione...</option>
                     {filiais.map((f) => (
                       <option key={f.id} value={f.id}>{f.codigo} - {f.nomeFantasia}</option>
