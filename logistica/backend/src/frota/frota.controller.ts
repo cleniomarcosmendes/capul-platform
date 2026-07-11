@@ -30,8 +30,10 @@ export class FrotaController {
     return this.frota.rdvCandidatosDoCondutor(user, matricula ?? '');
   }
 
-  /** Valida matrícula+senha — SEMPRE 200 com {valida, motivo} (nunca 401). */
+  /** Valida matrícula+senha — SEMPRE 200 com {valida, motivo} (nunca 401). PORTARIA
+   *  usa p/ validar o porteiro inline (mesma checagem do condutor). */
   @Post('condutor/validar')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA')
   validarCondutor(@Body() dto: ValidarCondutorDto) {
     return this.frota.validarCondutor(dto.matricula, dto.senha);
   }

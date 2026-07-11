@@ -276,6 +276,21 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   // Porteiro (quem está no portão) — identifica-se por matrícula+senha (Protheus).
   const [porteiroMatricula, setPorteiroMatricula] = useState('');
   const [porteiroSenha, setPorteiroSenha] = useState('');
+  // Validação inline do porteiro (espelha o fluxo do condutor: valida antes de registrar).
+  const [porteiroOk, setPorteiroOk] = useState(false);
+  const [validandoPorteiro, setValidandoPorteiro] = useState(false);
+  const [erroPorteiro, setErroPorteiro] = useState<string | null>(null);
+  const validarPorteiro = async () => {
+    if (!porteiroMatricula.trim() || !porteiroSenha.trim() || porteiroOk || validandoPorteiro) return;
+    setValidandoPorteiro(true); setErroPorteiro(null);
+    try {
+      const { data } = await logisticaApi.post<{ valida: boolean; motivo?: string }>(
+        '/frota/condutor/validar', { matricula: porteiroMatricula.trim(), senha: porteiroSenha });
+      if (data.valida) setPorteiroOk(true);
+      else setErroPorteiro(data.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível. Tente novamente.' : 'Matrícula ou senha do porteiro inválidas.');
+    } catch (e) { setErroPorteiro(errMsg(e, 'Falha ao validar o porteiro.')); }
+    finally { setValidandoPorteiro(false); }
+  };
   // Vínculo com o RDV (planejamento do supervisor): candidatos do mês p/ o condutor.
   const [rdvCandidatos, setRdvCandidatos] = useState<{ id: string; numero: number; supervisorNome: string | null }[]>([]);
   const [rdvSel, setRdvSel] = useState('');
@@ -285,7 +300,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   // Avança o passo 2: no modo condutor exige senha validada; na portaria, exige o
   // condutor escolhido (por nome) + a matrícula/senha do PORTEIRO preenchidas.
   const podeAvancar = modo === 'PORTARIA'
-    ? (!!condutorSel && porteiroMatricula.trim() !== '' && porteiroSenha.trim() !== '')
+    ? (!!condutorSel && porteiroOk) // porteiro validado inline (matrícula+senha conferem)
     : ehIndividual ? true : credOk; // INDIVIDUAL: já identificado; PADRÃO: exige senha validada
 
   // Ao resolver o nome, posiciona o cursor na senha.
@@ -316,7 +331,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
     setDepartamentoSolicitanteId(''); setPlanejadas([]);
     setNomeBusca(''); setResultados([]); setBuscou(false); setCondutorSel(null);
-    setPorteiroMatricula(''); setPorteiroSenha('');
+    setPorteiroMatricula(''); setPorteiroSenha(''); setPorteiroOk(false); setErroPorteiro(null);
   };
 
   // Busca condutor por NOME no Protheus (modo portaria — sem senha).
@@ -571,15 +586,23 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
             <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
               <div className="sm:col-span-6">
                 <label className="mb-1 block text-sm font-medium text-slate-600">Matrícula do porteiro</label>
-                <input value={porteiroMatricula} onChange={(e) => setPorteiroMatricula(e.target.value)}
+                <input value={porteiroMatricula} onChange={(e) => { setPorteiroMatricula(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }}
                   placeholder="ex.: E00123" autoComplete="off"
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base" />
               </div>
               <div className="sm:col-span-6">
                 <label className="mb-1 block text-sm font-medium text-slate-600">Senha do porteiro</label>
-                <PasswordInput value={porteiroSenha} onChange={(e) => setPorteiroSenha(e.target.value)}
-                  autoComplete="new-password" name="frota-porteiro-senha" placeholder="Senha do portal RH"
-                  className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base" />
+                <div className="flex items-center gap-1">
+                  <PasswordInput wrapperClassName="flex-1" value={porteiroSenha}
+                    onChange={(e) => { setPorteiroSenha(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarPorteiro(); } }}
+                    onBlur={() => void validarPorteiro()}
+                    disabled={porteiroOk} autoComplete="new-password" name="frota-porteiro-senha" placeholder="Senha e Enter"
+                    className={`w-full rounded-lg border px-3.5 py-2.5 text-base disabled:bg-slate-100 ${erroPorteiro ? 'border-rose-400' : (porteiroOk ? 'border-emerald-400' : 'border-slate-300')}`} />
+                  {validandoPorteiro && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />}
+                </div>
+                {erroPorteiro && <p className="mt-1 text-xs font-medium text-rose-600">{erroPorteiro}</p>}
+                {porteiroOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Porteiro confere</p>}
               </div>
             </div>
           </div>
@@ -1232,10 +1255,25 @@ export function RetornoPortariaForm({ v, onClose, onDone }: { v: ViagemFrota; on
   const [porteiroSenha, setPorteiroSenha] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Validação inline do porteiro (espelha o condutor: "✓ confere" antes de encerrar).
+  const [porteiroOk, setPorteiroOk] = useState(false);
+  const [validandoPorteiro, setValidandoPorteiro] = useState(false);
+  const [erroPorteiro, setErroPorteiro] = useState<string | null>(null);
+  const validarPorteiro = async () => {
+    if (!porteiroMatricula.trim() || !porteiroSenha.trim() || porteiroOk || validandoPorteiro) return;
+    setValidandoPorteiro(true); setErroPorteiro(null);
+    try {
+      const { data } = await logisticaApi.post<{ valida: boolean; motivo?: string }>(
+        '/frota/condutor/validar', { matricula: porteiroMatricula.trim(), senha: porteiroSenha });
+      if (data.valida) setPorteiroOk(true);
+      else setErroPorteiro(data.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível. Tente novamente.' : 'Matrícula ou senha do porteiro inválidas.');
+    } catch (e) { setErroPorteiro(errMsg(e, 'Falha ao validar o porteiro.')); }
+    finally { setValidandoPorteiro(false); }
+  };
 
   const encerrar = async () => {
     if (kmFinal === '') { toast('warning', 'Informe o KM de retorno.'); return; }
-    if (!porteiroMatricula.trim() || !porteiroSenha.trim()) { toast('warning', 'Informe a matrícula e a senha do porteiro.'); return; }
+    if (!porteiroOk) { toast('warning', 'Valide a matrícula e a senha do porteiro.'); return; }
     setSalvando(true);
     try {
       await logisticaApi.post(`/frota/viagens/${v.id}/retorno-portaria`, {
@@ -1263,15 +1301,25 @@ export function RetornoPortariaForm({ v, onClose, onDone }: { v: ViagemFrota; on
           <input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={255} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="text-xs text-slate-600">Matrícula do porteiro
-          <input value={porteiroMatricula} onChange={(e) => setPorteiroMatricula(e.target.value)} autoComplete="off" placeholder="ex.: E00123" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input value={porteiroMatricula} onChange={(e) => { setPorteiroMatricula(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }} autoComplete="off" placeholder="ex.: E00123" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="text-xs text-slate-600">Senha do porteiro
-          <PasswordInput value={porteiroSenha} onChange={(e) => setPorteiroSenha(e.target.value)} autoComplete="new-password" name="frota-porteiro-retorno" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <div className="mt-1 flex items-center gap-1">
+            <PasswordInput wrapperClassName="flex-1" value={porteiroSenha}
+              onChange={(e) => { setPorteiroSenha(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarPorteiro(); } }}
+              onBlur={() => void validarPorteiro()}
+              disabled={porteiroOk} autoComplete="new-password" name="frota-porteiro-retorno"
+              className={`w-full rounded-lg border px-3 py-2 text-sm disabled:bg-slate-100 ${erroPorteiro ? 'border-rose-400' : (porteiroOk ? 'border-emerald-400' : 'border-slate-300')}`} />
+            {validandoPorteiro && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-slate-400" />}
+          </div>
+          {erroPorteiro && <span className="mt-1 block font-medium text-rose-600">{erroPorteiro}</span>}
+          {porteiroOk && <span className="mt-1 block font-medium text-emerald-700">✓ Porteiro confere</span>}
         </label>
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Cancelar</button>
-        <button onClick={() => void encerrar()} disabled={salvando} className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+        <button onClick={() => void encerrar()} disabled={salvando || !porteiroOk} title={!porteiroOk ? 'Valide a senha do porteiro primeiro' : undefined} className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
           {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Encerrar pela portaria
         </button>
       </div>
