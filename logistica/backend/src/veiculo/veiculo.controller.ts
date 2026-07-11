@@ -55,8 +55,9 @@ export class VeiculoController {
     return this.veiculos.update(id, dto, user.sub, podeVerOutrasFiliais(user) ? undefined : user.filialId);
   }
 
+  /** Inativar veículo (soft-delete). Gestor de frota/entrega/admin. */
   @Delete(':id')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'ADMIN')
   remover(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.veiculos.remove(id, podeVerOutrasFiliais(user) ? undefined : user.filialId);
   }

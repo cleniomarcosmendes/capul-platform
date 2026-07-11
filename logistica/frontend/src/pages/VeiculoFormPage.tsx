@@ -64,6 +64,8 @@ export function VeiculoFormPage() {
   const [supervisorAreaNome, setSupAreaNome] = useState('');
   const [buscandoArea, setBuscandoArea] = useState(false);
   const [situacao, setSituacao] = useState('DISPONIVEL');
+  const [ativo, setAtivo] = useState(true);
+  const [inativando, setInativando] = useState(false);
   const [carregando, setCarregando] = useState(modoEdicao);
   const [salvando, setSalvando] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -109,7 +111,7 @@ export function VeiculoFormPage() {
         const { data: v } = await logisticaApi.get<{
           placa: string; modelo?: string | null; marca?: string | null; ano?: number | null;
           tipo: string; propriedade?: string; porte?: string | null; finalidade?: string | null; kmAtual: number; filialId: string; departamentoLotacaoId: string;
-          supervisorId: string; situacao: string;
+          supervisorId: string; situacao: string; ativo: boolean;
           supervisorAreaMatricula?: string | null; supervisorAreaNome?: string | null;
           intervaloManutencaoKm?: number | null; kmUltimaManutencao?: number | null; kmProximaManutencao?: number | null;
         }>(`/veiculos/${id}`);
@@ -119,7 +121,7 @@ export function VeiculoFormPage() {
         setIntervalo(v.intervaloManutencaoKm != null ? String(v.intervaloManutencaoKm) : '');
         setKmUltima(v.kmUltimaManutencao ?? null); setKmProxima(v.kmProximaManutencao ?? null);
         setFilialId(v.filialId); setFilialOriginal(v.filialId); setDepartamentoId(v.departamentoLotacaoId);
-        setSupervisorId(v.supervisorId); setSituacao(v.situacao);
+        setSupervisorId(v.supervisorId); setSituacao(v.situacao); setAtivo(v.ativo);
         setSupAreaMat(v.supervisorAreaMatricula ?? ''); setSupAreaNome(v.supervisorAreaNome ?? '');
       } catch {
         toast('error', 'Veículo não encontrado.');
@@ -227,6 +229,30 @@ export function VeiculoFormPage() {
       setSalvando(false);
     }
   }
+
+  const errText = (err: unknown, fallback: string) => {
+    const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+    return Array.isArray(m) ? m.join(', ') : m || fallback;
+  };
+  // Inativar (soft-delete) / reativar — gestor de frota/entrega/admin. Backend bloqueia
+  // inativar com viagem em curso. Reativar = update { ativo: true }.
+  const inativar = async () => {
+    if (!id || !window.confirm('Inativar este veículo? Ele sai do cadastro (o histórico é preservado). Você pode reativar depois.')) return;
+    setInativando(true);
+    try {
+      await logisticaApi.delete(`/veiculos/${id}`);
+      toast('success', 'Veículo inativado.');
+      navigate('/veiculos');
+    } catch (err) { toast('error', errText(err, 'Falha ao inativar o veículo.')); setInativando(false); }
+  };
+  const reativar = async () => {
+    if (!id) return;
+    setInativando(true);
+    try {
+      await logisticaApi.patch(`/veiculos/${id}`, { ativo: true });
+      setAtivo(true); toast('success', 'Veículo reativado.');
+    } catch (err) { toast('error', errText(err, 'Falha ao reativar o veículo.')); } finally { setInativando(false); }
+  };
 
   const inp = 'mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none';
   const lbl = 'block text-xs font-medium text-slate-500';
@@ -387,13 +413,28 @@ export function VeiculoFormPage() {
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2">
-          <Link to="/veiculos" className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancelar</Link>
-          <button type="submit" disabled={salvando}
-            className="flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
-            {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-            {modoEdicao ? 'Salvar alterações' : 'Cadastrar veículo'}
-          </button>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            {modoEdicao && podeEscolherFilial && (ativo ? (
+              <button type="button" onClick={() => void inativar()} disabled={inativando}
+                className="rounded-lg border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                {inativando ? 'Inativando…' : 'Inativar veículo'}
+              </button>
+            ) : (
+              <button type="button" onClick={() => void reativar()} disabled={inativando}
+                className="rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                {inativando ? 'Reativando…' : '↻ Reativar veículo (inativo)'}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Link to="/veiculos" className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancelar</Link>
+            <button type="submit" disabled={salvando}
+              className="flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
+              {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+              {modoEdicao ? 'Salvar alterações' : 'Cadastrar veículo'}
+            </button>
+          </div>
         </div>
       </form>
     </div>

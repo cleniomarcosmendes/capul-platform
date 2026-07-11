@@ -10,7 +10,7 @@ interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: 
 interface Veiculo {
   id: string; placa: string; modelo?: string | null; marca?: string | null;
   ano?: number | null; tipo: string; propriedade?: string; situacao: string; kmAtual: number;
-  filialId: string; supervisorId: string;
+  filialId: string; supervisorId: string; ativo?: boolean;
 }
 
 const labelCore = (i?: CoreItem) => (i ? i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8) : '—');
@@ -31,6 +31,7 @@ export function VeiculosPage() {
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [situacaoSel, setSituacaoSel] = useState('');
+  const [verInativos, setVerInativos] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('placa');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -39,13 +40,13 @@ export function VeiculosPage() {
       setLoading(true);
       try {
         const [v, u] = await Promise.all([
-          logisticaApi.get<Veiculo[]>('/veiculos', { params: situacaoSel ? { situacao: situacaoSel } : undefined }),
+          logisticaApi.get<Veiculo[]>('/veiculos', { params: { ...(situacaoSel ? { situacao: situacaoSel } : {}), ...(verInativos ? { incluirInativos: 'true' } : {}) } }),
           coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
         ]);
         setVeiculos(v.data); setUsuarios(u.data);
       } finally { setLoading(false); }
     })();
-  }, [situacaoSel]);
+  }, [situacaoSel, verInativos]);
 
   const nomeSupervisor = (id: string) => labelCore(usuarios.find((x) => x.id === id));
 
@@ -104,6 +105,10 @@ export function VeiculosPage() {
             {m.label}
           </button>
         ))}
+        <label className="ml-auto flex items-center gap-1.5 text-xs font-medium text-slate-600" title="Mostra também os veículos inativados (soft-delete)">
+          <input type="checkbox" checked={verInativos} onChange={(e) => setVerInativos(e.target.checked)} className="rounded border-slate-300" />
+          Incluir inativos
+        </label>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -127,8 +132,8 @@ export function VeiculosPage() {
               {ordenados.map((v) => {
                 const sit = SIT_META[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
                 return (
-                  <tr key={v.id} onClick={() => navigate(`/veiculos/${v.id}/editar`)} className="cursor-pointer hover:bg-slate-50">
-                    <td className="px-3 py-2 font-mono font-medium text-slate-700">{v.placa}</td>
+                  <tr key={v.id} onClick={() => navigate(`/veiculos/${v.id}/editar`)} className={`cursor-pointer hover:bg-slate-50 ${v.ativo === false ? 'opacity-60' : ''}`}>
+                    <td className="px-3 py-2 font-mono font-medium text-slate-700">{v.placa}{v.ativo === false && <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 font-sans text-[10px] font-medium text-slate-600">Inativo</span>}</td>
                     <td className="px-3 py-2 text-slate-600">{[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}{v.ano ? ` · ${v.ano}` : ''}</td>
                     <td className="px-3 py-2 text-slate-500">{v.tipo}{v.propriedade === 'ALUGADO' ? ' · Alugado' : ''}</td>
                     <td className="px-3 py-2"><span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sit.cls}`}>{sit.label}</span></td>

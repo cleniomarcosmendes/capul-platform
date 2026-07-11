@@ -249,11 +249,15 @@ export class VeiculoService {
     });
   }
 
-  /** Soft-delete (ativo=false) — preserva histórico/viagens. */
+  /** Inativa (soft-delete, ativo=false) — preserva histórico/viagens. Bloqueado se
+   *  houver viagem em curso (registrar retorno/cancelar antes). Reativar = update
+   *  com { ativo: true }. */
   async remove(id: string, userFilialId?: string) {
     const v = await this.prisma.veiculo.findUnique({ where: { id }, select: { id: true, filialId: true } });
     if (!v) throw new NotFoundException('Veículo não encontrado.');
     if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Veículo de outra filial.');
+    const emCurso = await this.prisma.viagem.count({ where: { veiculoId: id, situacao: StatusViagem.EM_CURSO } });
+    if (emCurso > 0) throw new BadRequestException('Não é possível inativar: o veículo tem viagem em curso.');
     return this.prisma.veiculo.update({ where: { id }, data: { ativo: false } });
   }
 }
