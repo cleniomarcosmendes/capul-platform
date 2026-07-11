@@ -9,8 +9,10 @@ import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 @Controller('veiculos')
 // Leitura (listar/obter) liberada também ao REGISTRADOR_FROTA — precisa enxergar
 // veículos disponíveis pra registrar a saída. ESCRITA (criar/editar/excluir) tem
-// @Roles próprio SEM ele (gestão de cadastro é de gestor/admin).
-@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA')
+// @Roles próprio SEM ele (gestão de cadastro é de gestor/admin). PORTARIA também
+// lê (listar/obter) p/ escolher o veículo na "Saída pela portaria"; as escritas
+// (POST/PATCH/DELETE) têm @Roles próprio SEM PORTARIA.
+@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA')
 export class VeiculoController {
   constructor(private readonly veiculos: VeiculoService) {}
 

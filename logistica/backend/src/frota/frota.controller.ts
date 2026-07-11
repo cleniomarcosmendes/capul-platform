@@ -79,19 +79,25 @@ export class FrotaController {
   }
 
   /** Lista viagens de frota da filial (filtro de situação opcional). */
+  // PORTARIA precisa ler a lista/detalhe p/ o "Retorno pela portaria" (método
+  // @Roles substitui o da classe — daí repetir os operacionais + PORTARIA).
   @Get('viagens')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA')
   listar(@CurrentUser() user: JwtPayload, @Query('situacao') situacao?: StatusViagem) {
     return this.frota.listar(user, situacao);
   }
 
   /** Detalhe de uma viagem de frota (página de operações). */
   @Get('viagens/:id')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA')
   obterViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.obterViagem(id, user);
   }
 
-  /** Despesas lançadas na viagem (lista da tela de detalhe). */
+  /** Despesas lançadas na viagem (lista da tela de detalhe). PORTARIA lê p/ abrir
+   *  o detalhe no "Retorno pela portaria". */
   @Get('viagens/:id/despesas')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA')
   despesasDaViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.despesasDaViagem(id, user);
   }
@@ -184,8 +190,9 @@ export class FrotaController {
     return this.frota.atualizarLocal(id, dto);
   }
 
-  /** Paradas (pontos de rota / "caderno" da viagem). */
+  /** Paradas (pontos de rota / "caderno" da viagem). PORTARIA lê p/ abrir o detalhe. */
   @Get('viagens/:id/paradas')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA')
   listarParadas(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.listarParadas(id, user);
   }

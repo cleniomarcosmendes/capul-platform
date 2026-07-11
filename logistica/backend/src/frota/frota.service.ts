@@ -912,7 +912,11 @@ export class FrotaService {
    *  só as SUAS — quem registrou a saída (criadoPorId) ou é supervisor de área do veículo.
    *  404 (não "403") para não vazar a existência de viagem de outro. */
   private assertViagemVisivel(v: { criadoPorId: string; veiculo: { supervisorId: string | null } | null }, user: JwtPayload) {
-    if (this.ehGestorFrota(user)) return;
+    // Gestor de frota vê tudo; PORTARIA vê qualquer viagem da sua filial (é o portão
+    // — precisa abrir/encerrar a rota de qualquer veículo). O escopo de filial já é
+    // aplicado antes (viagemDaFilial/obterViagem). Demais perfis: só as próprias.
+    const role = user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
+    if (this.ehGestorFrota(user) || role === 'PORTARIA') return;
     const ehMinha = v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub;
     if (!ehMinha) throw new NotFoundException('Viagem de frota não encontrada.');
   }
