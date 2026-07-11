@@ -3,7 +3,7 @@ import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, CancelarSaidaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -106,6 +106,13 @@ export class FrotaController {
   @Post('viagens/:id/retorno')
   retorno(@Param('id') id: string, @Body() dto: RetornoFrotaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.registrarRetorno(id, dto, user, condutorToken);
+  }
+
+  /** Cancelar saída registrada errada (EM_CURSO → CANCELADA, libera o veículo). Gestor. */
+  @Patch('viagens/:id/cancelar')
+  @Roles('GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN')
+  cancelarSaida(@Param('id') id: string, @Body() dto: CancelarSaidaDto, @CurrentUser() user: JwtPayload) {
+    return this.frota.cancelarSaida(id, dto, user);
   }
 
   /** Ajuste/fechamento por gestor de frota ou supervisor do veículo. */

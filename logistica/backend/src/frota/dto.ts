@@ -154,6 +154,12 @@ export class RetornoFrotaDto {
   observacoes?: string;
 }
 
+/** Cancelamento de uma saída registrada errada (EM_CURSO → CANCELADA). */
+export class CancelarSaidaDto {
+  @IsString() @IsNotEmpty() @MaxLength(255)
+  motivo!: string;
+}
+
 /** Registro de uma parada (ponto de rota) da viagem de frota — log do "caderno". */
 export class AddParadaDto {
   @IsString() @IsNotEmpty() @MaxLength(120)

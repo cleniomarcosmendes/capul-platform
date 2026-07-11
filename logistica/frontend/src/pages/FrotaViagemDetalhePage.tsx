@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Printer, Settings, Wallet } from 'lucide-react';
+import { ArrowLeft, Loader2, Printer, Settings, Wallet, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/toast-context';
@@ -27,6 +27,8 @@ export function FrotaViagemDetalhePage() {
   const { logisticaRole } = useAuth();
   const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
   const ehPortaria = logisticaRole === 'PORTARIA';
+  // Cancelar saída (registrada errada) — gestor de frota (cross-filial) ou de entrega (própria filial).
+  const podeCancelar = ehGestor || logisticaRole === 'GESTOR_ENTREGA';
 
   const [viagem, setViagem] = useState<ViagemFrota | null>(null);
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
@@ -41,6 +43,9 @@ export function FrotaViagemDetalhePage() {
   // pra não competir com o "Registrar retorno" (caminho normal de fecho).
   const [mostrarAjuste, setMostrarAjuste] = useState(false);
   const [mostrarRetornoPortaria, setMostrarRetornoPortaria] = useState(false);
+  const [mostrarCancelar, setMostrarCancelar] = useState(false);
+  const [motivoCancel, setMotivoCancel] = useState('');
+  const [cancelando, setCancelando] = useState(false);
 
   const carregar = useCallback(async () => {
     if (!id) return;
@@ -70,6 +75,15 @@ export function FrotaViagemDetalhePage() {
       setEditAdiant(false); await carregar();
       toast('success', 'Adiantamento salvo.');
     } catch (e) { toast('error', errMsg(e, 'Falha ao salvar o adiantamento.')); } finally { setSalvandoAdiant(false); }
+  };
+  const cancelarSaida = async () => {
+    if (!motivoCancel.trim()) { toast('warning', 'Informe o motivo do cancelamento.'); return; }
+    setCancelando(true);
+    try {
+      await logisticaApi.patch(`/frota/viagens/${id}/cancelar`, { motivo: motivoCancel.trim() });
+      toast('success', 'Saída cancelada. Veículo liberado.');
+      navigate('/frota');
+    } catch (e) { toast('error', errMsg(e, 'Falha ao cancelar a saída.')); } finally { setCancelando(false); }
   };
 
   if (loading) {
@@ -104,6 +118,9 @@ export function FrotaViagemDetalhePage() {
           <div className="flex items-center gap-2">
             <span className={`rounded-full px-3 py-1 text-sm font-medium ${sit.cls}`}>{sit.label}</span>
             <button onClick={() => navigate(`/frota/viagens/${id}/acerto`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50" title="Relatório de acerto (despesas × adiantamento)"><Printer className="h-4 w-4" /> Acerto</button>
+            {emCurso && podeCancelar && !mostrarCancelar && (
+              <button onClick={() => setMostrarCancelar(true)} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-50" title="Cancelar saída registrada errada — libera o veículo"><X className="h-4 w-4" /> Cancelar saída</button>
+            )}
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
@@ -131,6 +148,17 @@ export function FrotaViagemDetalhePage() {
         </div>
         {v.localSaida && <p className="mt-3 text-sm text-slate-500">Local de saída: {v.localSaida}</p>}
       </div>
+
+      {emCurso && podeCancelar && mostrarCancelar && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3">
+          <p className="mb-2 text-sm font-medium text-rose-700">Cancelar esta saída? O veículo volta a ficar <b>disponível</b>. <span className="font-normal">(Bloqueado se houver despesas lançadas — remova-as antes.)</span></p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input value={motivoCancel} onChange={(e) => setMotivoCancel(e.target.value)} placeholder="Motivo do cancelamento (ex.: veículo/condutor trocado)" maxLength={255} className="min-w-[260px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <button onClick={() => void cancelarSaida()} disabled={cancelando} className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-50">{cancelando ? 'Cancelando…' : 'Confirmar cancelamento'}</button>
+            <button onClick={() => { setMostrarCancelar(false); setMotivoCancel(''); }} className="rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-white">Voltar</button>
+          </div>
+        </div>
+      )}
 
       {!podeOperar && !ehPortaria && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">

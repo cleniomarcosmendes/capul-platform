@@ -461,6 +461,37 @@ export class FrotaService {
     });
   }
 
+  /** Cancela uma saída registrada errada (EM_CURSO → CANCELADA) e libera o veículo.
+   *  Gestor de frota cancela em qualquer filial; gestor de entrega só na própria.
+   *  Bloqueia se houver despesas lançadas (remover antes). Motivo/quem em obs. */
+  async cancelarSaida(id: string, dto: { motivo: string }, user: JwtPayload) {
+    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Saída de frota não encontrada.');
+    if (!this.ehGestorFrota(user) && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('Só é possível cancelar uma saída em curso.');
+    const motivo = (dto.motivo ?? '').trim();
+    if (!motivo) throw new BadRequestException('Informe o motivo do cancelamento.');
+    const nDespesas = await this.prisma.despesaVeiculo.count({ where: { viagemId: id } });
+    if (nDespesas > 0) throw new BadRequestException(`Há ${nDespesas} despesa(s) nesta saída — remova-as antes de cancelar.`);
+    // Nome de quem cancela (o JWT não traz nome) — p/ a trilha na observação.
+    const uRows = await this.prisma.$queryRaw<{ nome: string }[]>(Prisma.sql`SELECT TRIM(nome) AS nome FROM "core"."usuarios" WHERE id = ${user.sub} LIMIT 1`);
+    const quem = uRows[0]?.nome ?? user.sub;
+    return this.prisma.$transaction(async (tx) => {
+      const viagem = await tx.viagem.update({
+        where: { id },
+        data: {
+          situacao: StatusViagem.CANCELADA,
+          dataHoraChegada: new Date(),
+          observacoesChegada: `❌ CANCELADA por ${quem}: ${motivo}`,
+        },
+      });
+      if (v.veiculoId) {
+        await tx.veiculo.update({ where: { id: v.veiculoId }, data: { situacao: SituacaoVeiculo.DISPONIVEL } });
+      }
+      return viagem;
+    });
+  }
+
   // ---- Linha do KM (hodômetro) — segmentos por viagem + lacunas "não apontadas" ----
   /**
    * Monta a "linha do KM" de UM veículo a partir das suas viagens (já filtradas
