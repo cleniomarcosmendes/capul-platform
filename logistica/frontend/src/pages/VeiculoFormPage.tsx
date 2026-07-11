@@ -70,7 +70,7 @@ export function VeiculoFormPage() {
   const [salvando, setSalvando] = useState(false);
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog: DirtyDialog } = useUnsavedChanges(dirty);
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const { usuario, logisticaRole } = useAuth();
   // Gestor de frota/entrega e admin gerem a frota da empresa toda → escolhem a
   // filial (inclusive TROCAR na edição; o backend bloqueia se houver viagem em
@@ -237,7 +237,9 @@ export function VeiculoFormPage() {
   // Inativar (soft-delete) / reativar — gestor de frota/entrega/admin. Backend bloqueia
   // inativar com viagem em curso. Reativar = update { ativo: true }.
   const inativar = async () => {
-    if (!id || !window.confirm('Inativar este veículo? Ele sai do cadastro (o histórico é preservado). Você pode reativar depois.')) return;
+    if (!id) return;
+    const ok = await confirm('Inativar veículo', 'Inativar este veículo? Ele sai do cadastro (o histórico é preservado). Você pode reativar depois.', { confirmLabel: 'Inativar', variant: 'danger' });
+    if (!ok) return;
     setInativando(true);
     try {
       await logisticaApi.delete(`/veiculos/${id}`);
