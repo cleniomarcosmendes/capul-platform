@@ -246,6 +246,10 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   // Fluxo da PORTARIA (apontar por nome; o porteiro se identifica por matrícula+senha).
   // Role PORTARIA (pessoal do portão) + gestores autorizados.
   const ehGestorPortaria = ['PORTARIA', 'GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN'].includes(logisticaRole ?? '');
+  // Login INDIVIDUAL = pessoal → o próprio usuário é o condutor (dispensa matrícula+
+  // senha). PADRÃO = login COLETIVO (vários colaboradores) → precisa identificar o
+  // condutor por matrícula+senha. (tipo vem do JWT via AuthContext.)
+  const ehIndividual = usuario?.tipo === 'INDIVIDUAL';
   const [aberto, setAberto] = useState(false);
   const [modo, setModo] = useState<'CONDUTOR' | 'PORTARIA'>('CONDUTOR');
   const [matricula, setMatricula] = useState('');
@@ -282,7 +286,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   // condutor escolhido (por nome) + a matrícula/senha do PORTEIRO preenchidas.
   const podeAvancar = modo === 'PORTARIA'
     ? (!!condutorSel && porteiroMatricula.trim() !== '' && porteiroSenha.trim() !== '')
-    : credOk;
+    : ehIndividual ? true : credOk; // INDIVIDUAL: já identificado; PADRÃO: exige senha validada
 
   // Ao resolver o nome, posiciona o cursor na senha.
   useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
@@ -380,7 +384,21 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           paradasPlanejadas: paradasPlanejadas.length ? paradasPlanejadas : undefined,
         });
         toast('success', 'Saída registrada pela portaria (sob sua responsabilidade).');
+      } else if (ehIndividual) {
+        // Login pessoal — o condutor é o próprio usuário (backend resolve matrícula
+        // pelo cadastro; sem senha).
+        await logisticaApi.post('/frota/viagens/individual', {
+          veiculoId,
+          kmInicial: Number(kmInicial),
+          finalidade: finalidade.trim() || undefined,
+          localSaida: localSaida.trim() || undefined,
+          departamentoSolicitanteId: departamentoSolicitanteId || undefined,
+          rdvViagemId: rdvSel || undefined,
+          paradasPlanejadas: paradasPlanejadas.length ? paradasPlanejadas : undefined,
+        });
+        toast('success', 'Saída registrada.');
       } else {
+        // Login COLETIVO (PADRÃO) — identifica o condutor por matrícula+senha.
         await logisticaApi.post('/frota/viagens', {
           matricula: matricula.trim(), senha, veiculoId,
           kmInicial: Number(kmInicial),
@@ -423,7 +441,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-xs font-medium">
             <button onClick={() => { setModo('CONDUTOR'); reset(); }}
               className={`rounded-md px-3 py-1.5 ${modo === 'CONDUTOR' ? 'bg-capul-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-              Condutor (matrícula + senha)
+              {ehIndividual ? 'Eu (condutor)' : 'Condutor (matrícula + senha)'}
             </button>
             <button onClick={() => { setModo('PORTARIA'); reset(); }}
               className={`rounded-md px-3 py-1.5 ${modo === 'PORTARIA' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
@@ -435,7 +453,12 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         {/* Passo 1 — Condutor (matrícula + senha) */}
         {modo === 'CONDUTOR' && (
         <div>
-          <PassoHeader n={1} titulo="Condutor" hint="Matrícula e senha do portal RH" />
+          <PassoHeader n={1} titulo="Condutor" hint={ehIndividual ? 'Login pessoal — você é o condutor' : 'Matrícula e senha do portal RH'} />
+          {ehIndividual ? (
+            <p className="rounded-lg bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700">
+              👤 {usuario?.nome ?? 'Você'} — a saída será registrada no seu nome (login pessoal, sem senha).
+            </p>
+          ) : (
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
             <div className="sm:col-span-6">
               <label className="mb-1 block text-sm font-medium text-slate-600">Matrícula</label>
@@ -481,6 +504,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
             </div>
           </div>
+          )}
         </div>
         )}
 
