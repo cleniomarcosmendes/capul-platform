@@ -100,7 +100,8 @@ Plataforma corporativa modular com microservicos independentes:
 - **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota
 - Backend NestJS 11 + Prisma 6 (schema `logistica` + `core` read-only via `$queryRaw`), porta 3003, prefixo `/api/v1/logistica`
 - Frontend React 19 + Vite 7, base `/entregas/`, porta 5177; app entregador/supervisor em Expo (`logistica/app`)
-- Escopo por **filial** (entregas/veiculos/viagens/cadastros — filiais sao cidades diferentes); **Gestor de Entregas é papel de FILIAL** (só ADMIN é global; GESTOR_FROTA cross-filial só p/ veículos). RBAC: `OPERADOR_ENTREGA`/`GESTOR_ENTREGA`/`GESTOR_FROTA`/`REGISTRADOR_FROTA`/`COORDENADOR`/`SUPERVISOR` (ADMIN sempre)
+- Escopo por **filial** (entregas/veiculos/viagens/cadastros — filiais sao cidades diferentes); **Gestor de Entregas é papel de FILIAL** (só ADMIN é global; GESTOR_FROTA cross-filial só p/ veículos). RBAC: `OPERADOR_ENTREGA`/`GESTOR_ENTREGA`/`GESTOR_FROTA`/`REGISTRADOR_FROTA`/`COORDENADOR`/`SUPERVISOR`/`SUPERVISOR_FROTA` (ADMIN sempre)
+- **Supervisor de Departamento** (`SUPERVISOR_FROTA`, Jul/2026): responde só pelos veículos do(s) seu(s) departamento(s) — viagens/acerto/despesas/custo escopados por departamento (derivado de `veiculo.supervisorId`); distinto do `GESTOR_FROTA` (frota inteira, decisões estratégicas). Ver `memory/project_supervisor_departamento_frota.md`
 - Cliente Protheus (SA1) por matricula/telefone/nome via `core.integracoes_api_endpoints` (interino reusa `getLimite`; ver `docs/SOLICITACAO_PROTHEUS_enderecos_SA1.md`)
 - Suite Jest + logging pino + auditoria de migrations (hardening da Fase 1a)
 - **Fase 1b** (app entregador + prova de entrega/cofre + device-sessions): plano em `C:\Arquivos-de-projeto\clenio\Sistema de Rota\007_Fase1b_Plano_PRs.md`. PR 1b.1 (device-sessions no auth-gateway) feito em branch `feat/device-sessions`
