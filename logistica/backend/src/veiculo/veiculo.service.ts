@@ -156,7 +156,17 @@ export class VeiculoService {
       include: { historicoSupervisor: { orderBy: { alteradoEm: 'desc' } } },
     });
     if (!v) throw new NotFoundException('Veículo não encontrado.');
-    if (user) assertPodeVerRegistro(user, v.filialId);
+    if (user) {
+      assertPodeVerRegistro(user, v.filialId);
+      // Supervisor de Departamento: o detalhe respeita o MESMO escopo da lista (só
+      // veículos do[s] seu[s] departamento[s]) — senão vazaria o cadastro por URL,
+      // já que a filial é a mesma dos veículos de outros departamentos.
+      const role = user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
+      if (role === 'SUPERVISOR_FROTA') {
+        const deps = await this.deptosSupervisionados(user);
+        if (!deps.includes(v.departamentoLotacaoId)) throw new NotFoundException('Veículo não encontrado.');
+      }
+    }
     // Nomes do veículo + nomes dos usuários citados no histórico de supervisor.
     const [enriquecido] = await this.enriquecer([v]);
     const usuariosHist = await this.core.nomesUsuarios(
