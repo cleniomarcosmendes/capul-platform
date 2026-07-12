@@ -242,7 +242,7 @@ export function FrotaViagemDetalhePage() {
             className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-amber-700"
             title="Corrigir KM ou forçar o fecho quando o condutor não fechou a rota"
           >
-            <Settings className="h-4 w-4" /> Ajuste de gestor — corrigir KM / forçar fecho (exceção)
+            <Settings className="h-4 w-4" /> Ajuste da rota — corrigir KM / forçar fecho (exceção)
           </button>
         )
       )}

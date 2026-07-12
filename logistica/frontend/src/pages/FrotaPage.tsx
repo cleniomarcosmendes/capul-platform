@@ -1224,7 +1224,7 @@ export function AjusteForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: ()
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-amber-700">Ajuste de gestor — use quando o condutor não fechou a rota corretamente.</p>
+      <p className="text-xs text-amber-700">Ajuste da rota — use quando o condutor não fechou a rota corretamente.</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="text-xs text-slate-600">KM saída
           <input type="number" value={kmInicial} onChange={(e) => setKmInicial(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />

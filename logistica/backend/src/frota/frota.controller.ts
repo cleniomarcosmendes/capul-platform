@@ -182,6 +182,13 @@ export class FrotaController {
     );
   }
 
+  /** Departamentos p/ o filtro da Análise/Custos — escopado ao Supervisor de Departamento. */
+  @Get('departamentos-filtro')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  departamentosFiltro(@CurrentUser() user: JwtPayload) {
+    return this.frota.departamentosDoFiltro(user);
+  }
+
   /** Cadastro de locais/pontos de parada. Sem `scope` → todos (cadastro);
    *  com `scope=true` → só os relevantes p/ a saída (filial + veículo/depto/global). */
   @Get('locais')

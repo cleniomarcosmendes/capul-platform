@@ -53,6 +53,12 @@ export class CoreLookupService {
     return new Map(rows.map((r) => [r.id, r.label]));
   }
 
+  /** Todos os departamentos (id + nome) — para filtros/dropdowns. */
+  async listarDepartamentos(): Promise<{ id: string; nome: string }[]> {
+    return this.prisma.$queryRaw<{ id: string; nome: string }[]>(Prisma.sql`
+      SELECT id, TRIM(nome) AS nome FROM "core"."departamentos" ORDER BY TRIM(nome)`);
+  }
+
   /** id → nome de usuário (colaborador). */
   async nomesUsuarios(ids: string[]): Promise<Map<string, string>> {
     const u = [...new Set(ids.filter(Boolean))];

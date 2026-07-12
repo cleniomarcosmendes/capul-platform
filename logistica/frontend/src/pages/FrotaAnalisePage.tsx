@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, Banknote, Building2, Car, ChevronLeft, ChevronRight, Filter, Gauge, KeyRound, Layers, Loader2, RefreshCw, Tag, Target, X } from 'lucide-react';
-import { coreApi, logisticaApi } from '../services/api';
+import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 
 // Análise das despesas da frota (apresentação à gestão): custo do mês AGRUPADO
@@ -60,7 +60,8 @@ export function FrotaAnalisePage() {
   useEffect(() => {
     logisticaApi.get<VeiculoOpt[]>('/veiculos').then((r) => setVeiculos(r.data)).catch(() => { /* opções são conveniência */ });
     logisticaApi.get<CoreItem[]>('/despesas/tipos').then((r) => setTipos(r.data)).catch(() => { /* idem */ });
-    coreApi.get<CoreItem[]>('/departamentos').then((r) => setDepartamentos(r.data)).catch(() => { /* idem */ });
+    // Escopado no backend: Supervisor de Departamento recebe só os seus departamentos.
+    logisticaApi.get<CoreItem[]>('/frota/departamentos-filtro').then((r) => setDepartamentos(r.data)).catch(() => { /* idem */ });
   }, []);
 
   const filtros = useMemo(() => ({

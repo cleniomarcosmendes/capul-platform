@@ -993,6 +993,17 @@ export class FrotaService {
     }
     return v.veiculo?.supervisorId === user.sub;
   }
+
+  /** Departamentos para o filtro da Análise/Custos: o Supervisor de Departamento
+   *  vê só os seus (escopo); gestor de frota/ADMIN veem todos. */
+  async departamentosDoFiltro(user: JwtPayload) {
+    if (this.ehSupervisorFrota(user)) {
+      const deps = await this.deptosSupervisionados(user);
+      const nomes = await this.core.nomesDepartamentos(deps);
+      return deps.map((id) => ({ id, nome: nomes.get(id) ?? id.slice(0, 8) }));
+    }
+    return this.core.listarDepartamentos();
+  }
   /** Visibilidade de UMA viagem (leitura): gestor de frota/ADMIN veem todas; os demais
    *  só as SUAS — quem registrou a saída (criadoPorId) ou é supervisor do veículo; o
    *  Supervisor de Departamento vê as dos veículos do(s) seu(s) departamento(s).
