@@ -276,7 +276,10 @@ export class DespesaService {
     // PADRÃO usa o token de condutor (do gate ao abrir a viagem); INDIVIDUAL mantém
     // registrante/supervisor/gestão. Regra única em CondutorTokenService.assertOpera.
     this.condutorToken.assertOpera(user, v, condutorToken);
-    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('Só dá pra lançar despesa em viagem em curso.');
+    // Despesa é lançada durante a viagem OU no acerto (depois de entregar o veículo).
+    // Trava só quando o ACERTO é encerrado — não na conclusão da viagem.
+    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada — não aceita despesas.');
+    if (v.acertoEncerradoEm) throw new BadRequestException('Acerto encerrado — reabra o acerto para lançar despesa.');
 
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');

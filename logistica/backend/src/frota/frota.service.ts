@@ -349,6 +349,10 @@ export class FrotaService {
     if (!ehGestor && !ehDono) {
       throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem ajustar.');
     }
+    // Acerto encerrado trava o adiantamento (financeiro); KM/obs (correção) seguem.
+    if (dto.adiantamento !== undefined && v.acertoEncerradoEm) {
+      throw new BadRequestException('Acerto encerrado — reabra o acerto para alterar o adiantamento.');
+    }
 
     const kmFinal = dto.kmFinal ?? v.kmFinal ?? undefined;
     if (dto.concluir) {
@@ -369,6 +373,28 @@ export class FrotaService {
         adiantamento: dto.adiantamento !== undefined ? new Prisma.Decimal(dto.adiantamento) : undefined,
       },
     });
+  }
+
+  /** Encerra o ACERTO da viagem (independente da conclusão): trava despesa e
+   *  adiantamento até reabrir. O veículo já foi liberado ao entregar. Gestor de
+   *  frota, supervisor do veículo ou quem registrou a saída. */
+  async encerrarAcerto(id: string, user: JwtPayload, role?: string) {
+    const v = await this.acertoScope(id, user, role);
+    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada — não há acerto a encerrar.');
+    return this.prisma.viagem.update({ where: { id }, data: { acertoEncerradoEm: new Date(), acertoEncerradoPorId: user.sub } });
+  }
+  async reabrirAcerto(id: string, user: JwtPayload, role?: string) {
+    await this.acertoScope(id, user, role);
+    return this.prisma.viagem.update({ where: { id }, data: { acertoEncerradoEm: null, acertoEncerradoPorId: null } });
+  }
+  private async acertoScope(id: string, user: JwtPayload, role?: string) {
+    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { veiculo: { select: { supervisorId: true } } } });
+    if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
+    const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    if (!ehGestor && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
+    const ehDono = v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub;
+    if (!ehGestor && !ehDono) throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem alterar o acerto.');
+    return v;
   }
 
   /**

@@ -132,6 +132,19 @@ export class FrotaController {
     return this.frota.ajustarPorGestor(id, dto, user, roleLogistica(user));
   }
 
+  /** Encerrar / reabrir o ACERTO da viagem — trava despesa+adiantamento, INDEPENDENTE
+   *  da conclusão (o veículo já foi liberado ao entregar). Gestor/dono (serviço). */
+  @Post('viagens/:id/encerrar-acerto')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR')
+  encerrarAcerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.frota.encerrarAcerto(id, user, roleLogistica(user));
+  }
+  @Post('viagens/:id/reabrir-acerto')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR')
+  reabrirAcerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.frota.reabrirAcerto(id, user, roleLogistica(user));
+  }
+
   /** Registrar manutenção (preventiva do ciclo ou corretiva/excepcional). */
   @Post('veiculos/:id/manutencao')
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
