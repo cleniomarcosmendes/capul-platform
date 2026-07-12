@@ -51,7 +51,9 @@ export function PainelFrotaPage() {
   const { logisticaRole } = useAuth();
   // Custo de frota é do Gestor de Frota/ADMIN (mesma decisão de Custos/Análise da
   // Frota). Demais perfis veem só o operacional (KM, rankings), não o custo.
-  const ehGestorFrota = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+  // Custo da frota: Gestor de Frota/ADMIN (frota toda) + Supervisor de Departamento
+  // (custo escopado ao seu departamento pelo backend).
+  const ehGestorFrota = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN' || logisticaRole === 'SUPERVISOR_FROTA';
   const navigate = useNavigate();
   const [data, setData] = useState<PainelFrota | null>(null);
   const [loading, setLoading] = useState(true);

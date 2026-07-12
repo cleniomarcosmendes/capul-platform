@@ -1015,6 +1015,9 @@ export class FrotaService {
     // a saída (criadoPorId) ou é supervisor de área do veículo (mesmo dono do ajuste).
     const ehGestor = this.ehGestorFrota(user);
     const escopo = ehGestor ? {} : await this.escopoViagemNaoGestor(user);
+    // Supervisor de Departamento: "minha operação" abrange os veículos do(s) seu(s)
+    // departamento(s) — deps computados uma vez p/ o flag ehMinha da lista.
+    const depsSup = this.ehSupervisorFrota(user) ? await this.deptosSupervisionados(user) : [];
     const viagens = await this.prisma.viagem.findMany({
       where: {
         tipo: TipoViagem.FROTA, filialId: ehGestor ? undefined : user.filialId!, ...(situacao ? { situacao } : {}),
@@ -1033,8 +1036,10 @@ export class FrotaService {
       finalidade: v.observacoesSaida, localSaida: v.localSaida,
       dataHoraSaida: v.dataHoraSaida, dataHoraChegada: v.dataHoraChegada,
       paradas: v._count.paradas,
-      // "Minha operação": quem registrou a saída OU o supervisor do veículo.
-      ehMinha: v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub,
+      // "Minha operação": quem registrou a saída, o supervisor do veículo, ou o
+      // Supervisor de Departamento (veículo de um depto seu).
+      ehMinha: v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub
+        || (v.veiculo?.departamentoLotacaoId != null && depsSup.includes(v.veiculo.departamentoLotacaoId)),
     }));
   }
 
@@ -1123,8 +1128,9 @@ export class FrotaService {
       paradas: v._count.paradas,
       adiantamento: v.adiantamento != null ? Number(v.adiantamento) : null,
       acertoEncerradoEm: v.acertoEncerradoEm,
-      // "Minha operação": quem registrou a saída OU o supervisor do veículo.
-      ehMinha: v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub,
+      // "Minha operação": quem registrou a saída, o supervisor do veículo, ou o
+      // Supervisor de Departamento (viagem de um veículo do seu departamento).
+      ehMinha: await this.donoOuEscopo(v, user),
     };
   }
 }

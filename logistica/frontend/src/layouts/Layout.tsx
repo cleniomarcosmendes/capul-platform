@@ -7,14 +7,17 @@ import { useAuth } from '../contexts/AuthContext';
 // aqui é só visual). ADMIN vê tudo (tratado no filtro). Espelha a matriz de
 // acessos da Fase 2: condutor opera por matrícula+senha no terminal de frota.
 const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
-const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA'];
+const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
 const GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA'];
+// Gestão da FROTA que o Supervisor de Departamento também acessa (escopado ao seu
+// departamento no backend): Monitor, Linha do KM e Veículos.
+const FROTA_GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
 // Custo/análise de FROTA (Custos da Frota + Análise da Frota): domínio do Gestor de
 // Frota (+ ADMIN via bypass) e do supervisor do veículo (via escopo de dados). Nem
 // Gestor de Entregas nem Operador entram — senão veem a tela vazia (a consulta é
 // escopada a gestor de frota/supervisor do veículo). O supervisor do veículo ainda
 // lança/vê despesas pelo detalhe da rota de frota.
-const FROTA_GESTAO = ['GESTOR_FROTA'];
+const FROTA_GESTAO = ['GESTOR_FROTA', 'SUPERVISOR_FROTA'];
 // Prestação de Contas (RDV): gestores + coordenador (aprova) + supervisor (planeja).
 // As ABAS internas são gateadas por perfil dentro da SupervisoresPage.
 const SUPERVISORES_MENU = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR', 'SUPERVISOR'];
@@ -41,10 +44,10 @@ const navItems: NavEntry[] = [
 
   { section: 'FROTA', roles: FROTA_OP },
   { to: '/frota', label: 'Saída de Veículos', icon: Fuel, end: true, roles: FROTA_OP },
-  { to: '/frota/painel', label: 'Monitor da Frota', icon: CircleDot, roles: GESTORES },
+  { to: '/frota/painel', label: 'Monitor da Frota', icon: CircleDot, roles: FROTA_GESTORES },
   { to: '/despesas', label: 'Custos da Frota', icon: Banknote, roles: FROTA_GESTAO },
-  { to: '/frota/linha-km', label: 'Linha do KM', icon: Gauge, roles: GESTORES },
-  { to: '/veiculos', label: 'Veículos', icon: Car, roles: GESTORES },
+  { to: '/frota/linha-km', label: 'Linha do KM', icon: Gauge, roles: FROTA_GESTORES },
+  { to: '/veiculos', label: 'Veículos', icon: Car, roles: FROTA_GESTORES },
 
   { section: 'SUPERVISORES', roles: SUPERVISORES_MENU },
   { to: '/supervisores', label: 'Prestação de Contas (RDV)', icon: Users, roles: SUPERVISORES_MENU },
