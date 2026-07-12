@@ -345,7 +345,7 @@ export class FrotaService {
     // (registrante/supervisor) só a sua — que está na própria filial de qualquer forma.
     if (!ehGestor && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
     // Dono da operação (registrante OU supervisor do veículo) também ajusta a SUA.
-    const ehDono = v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub;
+    const ehDono = await this.donoOuEscopo(v, user);
     if (!ehGestor && !ehDono) {
       throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem ajustar.');
     }
@@ -392,7 +392,7 @@ export class FrotaService {
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
     const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
     if (!ehGestor && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
-    const ehDono = v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub;
+    const ehDono = await this.donoOuEscopo(v, user);
     if (!ehGestor && !ehDono) throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem alterar o acerto.');
     return v;
   }
@@ -977,6 +977,16 @@ export class FrotaService {
     }
     const vs = await this.prisma.veiculo.findMany({ where: { filialId: user.filialId ?? undefined, supervisorId: user.sub }, select: { id: true } });
     return vs.map((v) => v.id);
+  }
+  /** Pode AGIR (ajuste/acerto) na viagem: quem registrou a saída; o supervisor do
+   *  veículo; ou o Supervisor de Departamento, se o veículo é de um depto seu. */
+  private async donoOuEscopo(v: { criadoPorId: string; veiculo: { supervisorId: string | null; departamentoLotacaoId?: string | null } | null }, user: JwtPayload): Promise<boolean> {
+    if (v.criadoPorId === user.sub) return true;
+    if (this.ehSupervisorFrota(user)) {
+      const dep = v.veiculo?.departamentoLotacaoId;
+      return dep != null && (await this.deptosSupervisionados(user)).includes(dep);
+    }
+    return v.veiculo?.supervisorId === user.sub;
   }
   /** Visibilidade de UMA viagem (leitura): gestor de frota/ADMIN veem todas; os demais
    *  só as SUAS — quem registrou a saída (criadoPorId) ou é supervisor do veículo; o

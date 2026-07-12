@@ -140,6 +140,29 @@ export class DespesaService {
     return vs.map((v) => v.id);
   }
 
+  /** Departamentos que o usuário supervisiona (encarregado de ≥1 veículo na filial). */
+  private async deptosDoSupervisor(user: JwtPayload): Promise<string[]> {
+    const rows = await this.prisma.veiculo.findMany({
+      where: { filialId: user.filialId ?? undefined, supervisorId: user.sub },
+      select: { departamentoLotacaoId: true }, distinct: ['departamentoLotacaoId'],
+    });
+    return rows.map((r) => r.departamentoLotacaoId);
+  }
+
+  /** IDs dos veículos no ESCOPO do usuário para custo/despesa. Supervisor de
+   *  Departamento (SUPERVISOR_FROTA): todos os veículos do(s) seu(s) departamento(s).
+   *  Demais não-gestores: só os que ele supervisiona diretamente. */
+  private async veiculosNoEscopo(user: JwtPayload, role?: string): Promise<string[]> {
+    if (role === 'SUPERVISOR_FROTA') {
+      const deps = await this.deptosDoSupervisor(user);
+      const vs = await this.prisma.veiculo.findMany({
+        where: { filialId: user.filialId ?? undefined, departamentoLotacaoId: { in: deps } }, select: { id: true },
+      });
+      return vs.map((v) => v.id);
+    }
+    return this.veiculosDoSupervisor(user.filialId!, user.sub);
+  }
+
   /** Pode gerir (lançar direto/aprovar/contestar) a despesa? Despesa de INDIVÍDUO
    *  (sem veículo) só o gestor/admin gere; despesa de veículo, gestor OU supervisor. */
   private async assertPodeGerirVeiculo(veiculoId: string | null, user: JwtPayload, role?: string) {
@@ -156,8 +179,10 @@ export class DespesaService {
       ? await this.prisma.veiculo.findFirst({ where: { id: veiculoId } })
       : await this.prisma.veiculo.findFirst({ where: { id: veiculoId, filialId: user.filialId } });
     if (!veiculo) throw new NotFoundException(ehGestor(role) ? 'Veículo não encontrado.' : 'Veículo não encontrado nesta filial.');
-    if (!ehGestor(role) && veiculo.supervisorId !== user.sub) {
-      throw new ForbiddenException('Apenas o gestor de frota ou o supervisor do veículo pode gerir esta despesa.');
+    // Supervisor de Departamento gere as despesas dos veículos do(s) seu(s) departamento(s).
+    const podeDepto = role === 'SUPERVISOR_FROTA' && (await this.deptosDoSupervisor(user)).includes(veiculo.departamentoLotacaoId);
+    if (!ehGestor(role) && veiculo.supervisorId !== user.sub && !podeDepto) {
+      throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou o supervisor do departamento pode gerir esta despesa.');
     }
     return veiculo;
   }
@@ -170,7 +195,7 @@ export class DespesaService {
 
     if (!ehGestor(role)) {
       // Supervisor: só os veículos dele. Quem não é gestor nem supervisor não vê nada.
-      const ids = await this.veiculosDoSupervisor(user.filialId!, user.sub);
+      const ids = await this.veiculosNoEscopo(user, role);
       if (ids.length === 0) return [];
       where.veiculoId = { in: ids };
     }
@@ -548,7 +573,7 @@ export class DespesaService {
       dataDespesa: { gte: new Date(Date.UTC(ano, mes - 1, 1)), lt: new Date(Date.UTC(ano, mes, 1)) },
     };
     if (!ehGestor(role)) {
-      const ids = await this.veiculosDoSupervisor(user.filialId!, user.sub);
+      const ids = await this.veiculosNoEscopo(user, role);
       if (ids.length === 0) return { total: 0, porVeiculo: [], porTipo: [] };
       where.veiculoId = { in: ids };
     }
@@ -594,7 +619,7 @@ export class DespesaService {
     // Escopo de veículo: supervisor (RBAC) ∩ filtro de veículo específico.
     let allowed: string[] | null = null;
     if (!ehGestor(role)) {
-      allowed = await this.veiculosDoSupervisor(user.filialId!, user.sub);
+      allowed = await this.veiculosNoEscopo(user, role);
       if (allowed.length === 0) return [];
     }
     if (filtro?.veiculoId) {

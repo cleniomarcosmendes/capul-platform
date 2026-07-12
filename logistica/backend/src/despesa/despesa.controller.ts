@@ -35,7 +35,7 @@ function filtroDe(q: Record<string, string>): FiltroAnalise {
 // Controle de acesso real (gestor x supervisor) é enforced no service; o @Roles
 // aqui só barra quem não opera frota. ADMIN sempre passa (RolesGuard).
 @Controller('despesas')
-@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
 export class DespesaController {
   constructor(private readonly despesas: DespesaService) {}
 
@@ -137,7 +137,7 @@ export class DespesaController {
   /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). Recibo opcional. */
   @Post('viagem')
   // Operacional: o REGISTRADOR_FROTA pode lançar na viagem (vira PENDENTE → supervisor aprova).
-  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
   @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
   lancarNaViagem(
     @Body() dto: LancarDespesaViagemDto,

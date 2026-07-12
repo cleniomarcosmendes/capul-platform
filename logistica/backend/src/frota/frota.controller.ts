@@ -47,6 +47,7 @@ export class FrotaController {
 
   /** Registrar saída de veículo (PADRAO: condutor valida matrícula+senha). */
   @Post('viagens')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR_FROTA')
   saida(@Body() dto: SaidaFrotaDto, @CurrentUser() user: JwtPayload) {
     return this.frota.registrarSaida(dto, user);
   }
@@ -54,7 +55,7 @@ export class FrotaController {
   /** Saída por usuário INDIVIDUAL (já autenticado): condutor = próprio usuário, sem
    *  senha. SUPERVISOR liberado p/ registrar a PRÓPRIA saída e vinculá-la ao RDV. */
   @Post('viagens/individual')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   saidaIndividual(@Body() dto: SaidaIndividualDto, @CurrentUser() user: JwtPayload) {
     return this.frota.registrarSaidaIndividual(dto, user);
   }
@@ -115,7 +116,7 @@ export class FrotaController {
 
   /** Registrar retorno (só o próprio condutor). SUPERVISOR fecha a sua saída. */
   @Post('viagens/:id/retorno')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   retorno(@Param('id') id: string, @Body() dto: RetornoFrotaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.registrarRetorno(id, dto, user, condutorToken);
   }
@@ -127,8 +128,9 @@ export class FrotaController {
     return this.frota.cancelarSaida(id, dto, user);
   }
 
-  /** Ajuste/fechamento por gestor de frota ou supervisor do veículo. */
+  /** Ajuste/fechamento por gestor de frota, supervisor do veículo ou Supervisor de Departamento. */
   @Patch('viagens/:id')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR_FROTA')
   ajustar(@Param('id') id: string, @Body() dto: AjusteGestorDto, @CurrentUser() user: JwtPayload) {
     return this.frota.ajustarPorGestor(id, dto, user, roleLogistica(user));
   }
@@ -136,12 +138,12 @@ export class FrotaController {
   /** Encerrar / reabrir o ACERTO da viagem — trava despesa+adiantamento, INDEPENDENTE
    *  da conclusão (o veículo já foi liberado ao entregar). Gestor/dono (serviço). */
   @Post('viagens/:id/encerrar-acerto')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   encerrarAcerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.encerrarAcerto(id, user, roleLogistica(user));
   }
   @Post('viagens/:id/reabrir-acerto')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   reabrirAcerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.reabrirAcerto(id, user, roleLogistica(user));
   }
