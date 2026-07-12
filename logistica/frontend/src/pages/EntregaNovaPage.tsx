@@ -59,6 +59,7 @@ function GateOperador({ onOk }: { onOk: (nome: string) => void }) {
   const [senha, setSenha] = useState('');
   const [validando, setValidando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const senhaRef = useRef<HTMLInputElement>(null);
 
   async function validar() {
     if (!matricula.trim() || !senha) { setErro('Informe matrícula e senha.'); return; }
@@ -94,7 +95,7 @@ function GateOperador({ onOk }: { onOk: (nome: string) => void }) {
           <input
             value={matricula}
             onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setErro(null); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') void validar(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); senhaRef.current?.focus(); } }}
             placeholder="ex.: E01047 ou 001047"
             autoComplete="off"
             autoFocus
@@ -104,6 +105,7 @@ function GateOperador({ onOk }: { onOk: (nome: string) => void }) {
         <div>
           <label className="block text-xs font-medium text-slate-500">Senha do portal RH</label>
           <PasswordInput
+            ref={senhaRef}
             value={senha}
             onChange={(e) => { setSenha(e.target.value); setErro(null); }}
             onKeyDown={(e) => { if (e.key === 'Enter') void validar(); }}

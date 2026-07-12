@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Loader2, Plus, Printer, Route, Tag, Users, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
@@ -87,6 +87,7 @@ function ViagensTab() {
   const [nome, setNome] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const senhaRef = useRef<HTMLInputElement>(null);
 
   const carregar = async () => {
     setLoading(true);
@@ -99,6 +100,19 @@ function ViagensTab() {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Enter/blur na matrícula: busca só o NOME (sem senha) e pula o foco pra senha.
+  // Espelha a Saída de Veículo (condutor) — confirma quem é antes de pedir a senha.
+  const buscarNomeSup = async () => {
+    const m = matricula.trim();
+    if (!m || nome || buscando) return;
+    setBuscando(true);
+    try {
+      const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: m });
+      setNome(data.nome);
+      setTimeout(() => senhaRef.current?.focus(), 0);
+    } catch { toast('warning', 'Matrícula não encontrada no Protheus.'); } finally { setBuscando(false); }
+  };
 
   // Valida o supervisor por matrícula+SENHA (loginPortal do Protheus). Responde
   // 200 {valida,nome,motivo} — nunca 401 (não desloga). Mostra o nome se válido.
@@ -156,15 +170,15 @@ function ViagensTab() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor (matrícula + senha)</label>
               <div className="flex items-start gap-2">
-                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarSupervisor(); } }} placeholder="Matrícula" maxLength={20} className={`${inp} font-mono uppercase`} />
-                <input type="password" value={senha} onChange={(e) => { setSenha(e.target.value); setNome(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarSupervisor(); } }} placeholder="Senha do portal" autoComplete="off" className={inp} />
+                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarNomeSup(); } }} onBlur={() => void buscarNomeSup()} placeholder="Matrícula" maxLength={20} className={`${inp} font-mono uppercase`} />
+                <input ref={senhaRef} type="password" value={senha} onChange={(e) => { setSenha(e.target.value); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarSupervisor(); } }} placeholder="Senha do portal" autoComplete="off" className={inp} />
                 <button type="button" onClick={() => void validarSupervisor()} disabled={buscando || !matricula.trim() || !senha} className="mt-0.5 inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                   {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Validar'}
                 </button>
               </div>
               {nome
-                ? <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome} — validado</p>
-                : <p className="mt-1 text-xs text-slate-400">O supervisor confirma com a senha do portal (matrícula Protheus).</p>}
+                ? <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome} — confirme com a senha do portal</p>
+                : <p className="mt-1 text-xs text-slate-400">Digite a matrícula e tecle Enter — buscamos o nome e o cursor vai pra senha.</p>}
             </div>
             )}
           </div>

@@ -297,6 +297,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [rdvCandidatos, setRdvCandidatos] = useState<{ id: string; numero: number; supervisorNome: string | null }[]>([]);
   const [rdvSel, setRdvSel] = useState('');
   const senhaRef = useRef<HTMLInputElement>(null);
+  const porteiroSenhaRef = useRef<HTMLInputElement>(null);
   const veiculoRef = useRef<HTMLSelectElement>(null);
 
   // Avança o passo 2: no modo condutor exige senha validada; na portaria, exige o
@@ -589,13 +590,14 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
               <div className="sm:col-span-6">
                 <label className="mb-1 block text-sm font-medium text-slate-600">Matrícula do porteiro</label>
                 <input value={porteiroMatricula} onChange={(e) => { setPorteiroMatricula(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); porteiroSenhaRef.current?.focus(); } }}
                   placeholder="ex.: E00123" autoComplete="off"
                   className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base" />
               </div>
               <div className="sm:col-span-6">
                 <label className="mb-1 block text-sm font-medium text-slate-600">Senha do porteiro</label>
                 <div className="flex items-center gap-1">
-                  <PasswordInput wrapperClassName="flex-1" value={porteiroSenha}
+                  <PasswordInput ref={porteiroSenhaRef} wrapperClassName="flex-1" value={porteiroSenha}
                     onChange={(e) => { setPorteiroSenha(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarPorteiro(); } }}
                     onBlur={() => void validarPorteiro()}
@@ -1255,6 +1257,7 @@ export function RetornoPortariaForm({ v, onClose, onDone }: { v: ViagemFrota; on
   const [kmFinal, setKmFinal] = useState('');
   const [porteiroMatricula, setPorteiroMatricula] = useState('');
   const [porteiroSenha, setPorteiroSenha] = useState('');
+  const porteiroSenhaRef = useRef<HTMLInputElement>(null);
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
   // Validação inline do porteiro (espelha o condutor: "✓ confere" antes de encerrar).
@@ -1303,11 +1306,11 @@ export function RetornoPortariaForm({ v, onClose, onDone }: { v: ViagemFrota; on
           <input value={obs} onChange={(e) => setObs(e.target.value)} maxLength={255} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="text-xs text-slate-600">Matrícula do porteiro
-          <input value={porteiroMatricula} onChange={(e) => { setPorteiroMatricula(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }} autoComplete="off" placeholder="ex.: E00123" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+          <input value={porteiroMatricula} onChange={(e) => { setPorteiroMatricula(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); porteiroSenhaRef.current?.focus(); } }} autoComplete="off" placeholder="ex.: E00123" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
         </label>
         <label className="text-xs text-slate-600">Senha do porteiro
           <div className="mt-1 flex items-center gap-1">
-            <PasswordInput wrapperClassName="flex-1" value={porteiroSenha}
+            <PasswordInput ref={porteiroSenhaRef} wrapperClassName="flex-1" value={porteiroSenha}
               onChange={(e) => { setPorteiroSenha(e.target.value); setPorteiroOk(false); setErroPorteiro(null); }}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarPorteiro(); } }}
               onBlur={() => void validarPorteiro()}
