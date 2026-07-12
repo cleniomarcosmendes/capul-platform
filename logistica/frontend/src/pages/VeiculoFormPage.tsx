@@ -76,6 +76,10 @@ export function VeiculoFormPage() {
   // filial (inclusive TROCAR na edição; o backend bloqueia se houver viagem em
   // curso). Operador fica travado na própria (o backend recusa escrita fora dela).
   const podeEscolherFilial = ['ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA'].includes(logisticaRole ?? '');
+  // Quem edita/gerencia o veículo (situação, manutenção, salvar, inativar). O
+  // Supervisor de Departamento abre o cadastro dos veículos do seu depto em MODO
+  // LEITURA — o backend bloqueia as mutações (403); aqui escondemos os controles.
+  const podeGerir = podeEscolherFilial;
 
   // Filial é SEMPRE a do usuário: a escrita é escopada à filial do token para
   // TODOS os perfis (assertMesmaFilial no backend). No cadastro ela nasce travada
@@ -131,7 +135,9 @@ export function VeiculoFormPage() {
 
   // Histórico de manutenções (só em edição).
   const carregarManutencoes = async () => {
-    if (!id) return;
+    // Histórico de manutenção é do gestor (endpoint 403 p/ o Supervisor de
+    // Departamento, que é read-only aqui) — nem busca, evita 403 no network.
+    if (!id || !podeGerir) return;
     try { const { data } = await logisticaApi.get<Manutencao[]>(`/frota/veiculos/${id}/manutencoes`); setManutencoes(data); }
     catch { /* silencioso — histórico é complementar */ }
   };
@@ -290,7 +296,7 @@ export function VeiculoFormPage() {
           <div><label className={lbl}>KM atual</label><input type="number" value={kmAtual} onChange={(e) => setKmAtual(e.target.value)} className={inp} /></div>
           {modoEdicao && (
             <div className="col-span-2"><label className={lbl}>Situação</label>
-              <select value={situacao} onChange={(e) => setSituacao(e.target.value)} className={inp}>{SITUACOES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+              <select value={situacao} onChange={(e) => setSituacao(e.target.value)} disabled={!podeGerir} className={`${inp}${!podeGerir ? ' bg-slate-100 text-slate-500' : ''}`}>{SITUACOES.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
           )}
         </div>
 
@@ -352,7 +358,7 @@ export function VeiculoFormPage() {
           </div>
           <p className="mt-2 text-xs text-slate-400">A próxima revisão nasce do intervalo (km atual + intervalo) e é recalculada a cada manutenção que reinicia o ciclo.</p>
 
-          {modoEdicao ? (
+          {podeGerir && (modoEdicao ? (
             <div className="mt-3 border-t border-slate-200 pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Manutenções ({manutencoes.length})</span>
@@ -412,7 +418,7 @@ export function VeiculoFormPage() {
             </div>
           ) : (
             <p className="mt-1 text-xs text-slate-400">Salve o veículo para registrar manutenções.</p>
-          )}
+          ))}
         </div>
 
         <div className="flex items-center justify-between gap-2">
@@ -430,12 +436,16 @@ export function VeiculoFormPage() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/veiculos" className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancelar</Link>
-            <button type="submit" disabled={salvando}
-              className="flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
-              {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-              {modoEdicao ? 'Salvar alterações' : 'Cadastrar veículo'}
-            </button>
+            <Link to="/veiculos" className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">{podeGerir ? 'Cancelar' : 'Voltar'}</Link>
+            {podeGerir ? (
+              <button type="submit" disabled={salvando}
+                className="flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
+                {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                {modoEdicao ? 'Salvar alterações' : 'Cadastrar veículo'}
+              </button>
+            ) : (
+              <span className="text-xs text-slate-400">Acesso de leitura — alterações são feitas pelo Gestor de Frota.</span>
+            )}
           </div>
         </div>
       </form>
