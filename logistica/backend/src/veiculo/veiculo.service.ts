@@ -100,17 +100,37 @@ export class VeiculoService {
     }
   }
 
+  /** Departamentos que o usuário supervisiona (encarregado de ≥1 veículo na filial). */
+  async deptosSupervisionados(user: JwtPayload): Promise<string[]> {
+    const rows = await this.prisma.veiculo.findMany({
+      where: { filialId: user.filialId ?? undefined, supervisorId: user.sub },
+      select: { departamentoLotacaoId: true },
+      distinct: ['departamentoLotacaoId'],
+    });
+    return rows.map((r) => r.departamentoLotacaoId);
+  }
+
   async list(params: {
     filialId?: string;
     situacao?: SituacaoVeiculo;
     incluirInativos?: boolean;
     departamentoLotacaoId?: string;
     busca?: string;
+    // Supervisor de Departamento: recorta aos veículos do(s) seu(s) departamento(s)
+    // (na sua filial) — ignora todasFiliais (não é cross-filial como o Gestor).
+    supervisorFrotaUser?: JwtPayload;
   }) {
     const termo = params.busca?.trim();
+    let deptoScope: Record<string, unknown> = {};
+    let filialId = params.filialId;
+    if (params.supervisorFrotaUser) {
+      filialId = params.supervisorFrotaUser.filialId ?? undefined;
+      deptoScope = { departamentoLotacaoId: { in: await this.deptosSupervisionados(params.supervisorFrotaUser) } };
+    }
     const veiculos = await this.prisma.veiculo.findMany({
       where: {
-        ...(params.filialId ? { filialId: params.filialId } : {}),
+        ...(filialId ? { filialId } : {}),
+        ...deptoScope,
         ...(params.situacao ? { situacao: params.situacao } : {}),
         ...(params.incluirInativos ? {} : { ativo: true }),
         ...(params.departamentoLotacaoId ? { departamentoLotacaoId: params.departamentoLotacaoId } : {}),

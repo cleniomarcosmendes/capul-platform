@@ -12,7 +12,7 @@ import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 // @Roles próprio SEM ele (gestão de cadastro é de gestor/admin). PORTARIA também
 // lê (listar/obter) p/ escolher o veículo na "Saída pela portaria"; as escritas
 // (POST/PATCH/DELETE) têm @Roles próprio SEM PORTARIA.
-@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR')
+@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
 export class VeiculoController {
   constructor(private readonly veiculos: VeiculoService) {}
 
@@ -34,6 +34,7 @@ export class VeiculoController {
     @Query('busca') busca?: string,
     @Query('todasFiliais') todasFiliais?: string,
   ) {
+    const ehSupFrota = user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role === 'SUPERVISOR_FROTA';
     return this.veiculos.list({
       // Frota é recurso COMPARTILHADO: a saída precisa enxergar veículos livres de
       // qualquer filial/departamento → `todasFiliais=true` ignora o escopo de filial.
@@ -42,6 +43,8 @@ export class VeiculoController {
       incluirInativos: incluirInativos === 'true',
       departamentoLotacaoId,
       busca,
+      // Supervisor de Departamento é escopado ao(s) seu(s) departamento(s).
+      supervisorFrotaUser: ehSupFrota ? user : undefined,
     });
   }
 

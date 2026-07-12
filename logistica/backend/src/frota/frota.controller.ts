@@ -25,7 +25,7 @@ export class FrotaController {
    *  matrícula, no mês, não concluídos. Alimenta o seletor do form de Saída (o 1º
    *  é o auto-match). */
   @Get('rdv-candidatos')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   rdvCandidatos(@CurrentUser() user: JwtPayload, @Query('matricula') matricula?: string) {
     return this.frota.rdvCandidatosDoCondutor(user, matricula ?? '');
   }
@@ -33,7 +33,7 @@ export class FrotaController {
   /** Valida matrícula+senha — SEMPRE 200 com {valida, motivo} (nunca 401). PORTARIA
    *  usa p/ validar o porteiro inline (mesma checagem do condutor). */
   @Post('condutor/validar')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   validarCondutor(@Body() dto: ValidarCondutorDto) {
     return this.frota.validarCondutor(dto.matricula, dto.senha);
   }
@@ -86,14 +86,14 @@ export class FrotaController {
   // PORTARIA precisa ler a lista/detalhe p/ o "Retorno pela portaria" (método
   // @Roles substitui o da classe — daí repetir os operacionais + PORTARIA).
   @Get('viagens')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   listar(@CurrentUser() user: JwtPayload, @Query('situacao') situacao?: StatusViagem) {
     return this.frota.listar(user, situacao);
   }
 
   /** Detalhe de uma viagem de frota (página de operações). */
   @Get('viagens/:id')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   obterViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.obterViagem(id, user);
   }
@@ -101,13 +101,14 @@ export class FrotaController {
   /** Despesas lançadas na viagem (lista da tela de detalhe). PORTARIA lê p/ abrir
    *  o detalhe no "Retorno pela portaria". */
   @Get('viagens/:id/despesas')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   despesasDaViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.despesasDaViagem(id, user);
   }
 
   /** Acerto da viagem (despesas × adiantamento → saldo) — folha imprimível. */
   @Get('viagens/:id/acerto')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   acerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.acertoViagem(id, user);
   }
@@ -162,14 +163,14 @@ export class FrotaController {
   /** Linha do KM (hodômetro) da frota no mês: uma linha por veículo (ou de um só). Página /frota/linha-km. */
   @Get('hodometro')
   // Relatório de gestão — fora do REGISTRADOR_FROTA (mantém os papéis originais da classe).
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
   hodometro(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('ano') ano?: string, @Query('veiculoId') veiculoId?: string, @Query('departamentoId') departamentoId?: string) {
     return this.frota.hodometroFrota(user, mes ? parseInt(mes, 10) : undefined, ano ? parseInt(ano, 10) : undefined, veiculoId || undefined, departamentoId || undefined);
   }
 
-  /** Painel tempo real da frota (monitoramento) — gestores. */
+  /** Painel tempo real da frota (monitoramento) — gestores + Supervisor de Departamento (escopado). */
   @Get('painel')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
   painel(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('ano') ano?: string) {
     const agora = new Date();
     return this.frota.painelFrota(
@@ -210,7 +211,7 @@ export class FrotaController {
 
   /** Paradas (pontos de rota / "caderno" da viagem). PORTARIA lê p/ abrir o detalhe. */
   @Get('viagens/:id/paradas')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   listarParadas(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.listarParadas(id, user);
   }
