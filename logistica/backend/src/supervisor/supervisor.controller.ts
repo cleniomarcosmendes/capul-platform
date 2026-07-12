@@ -71,8 +71,11 @@ export class SupervisorController {
   criarViagem(@Body() dto: CriarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.criarViagemSupervisor(dto, user);
   }
+  // Concluir o RDV: o próprio SUPERVISOR (fecha o seu), o COORDENADOR (oversight) e
+  // gestores — mesmos atores do workflow (enviar/decidir/iniciar). Escopo de filial
+  // é aplicado no serviço. Antes só gestor → 403 p/ supervisor/coordenador (bug).
   @Patch('viagens/:id/concluir')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR', 'COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   concluirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.concluirViagemSupervisor(id, user);
   }
