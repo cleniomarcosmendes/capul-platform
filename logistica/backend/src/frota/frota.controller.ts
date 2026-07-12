@@ -185,6 +185,7 @@ export class FrotaController {
   /** Cadastro de locais/pontos de parada. Sem `scope` → todos (cadastro);
    *  com `scope=true` → só os relevantes p/ a saída (filial + veículo/depto/global). */
   @Get('locais')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   listarLocais(
     @Query('ativos') ativos?: string,
     @Query('scope') scope?: string,
