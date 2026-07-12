@@ -23,6 +23,8 @@ export interface ViagemFrota {
   dataHoraSaida?: string | null; dataHoraChegada?: string | null;
   paradas?: number;
   adiantamento?: number | null;
+  // Acerto encerrado (independente da conclusão) — trava despesa/adiantamento.
+  acertoEncerradoEm?: string | null;
   // "Minha operação" (do backend): registrante da saída OU supervisor do veículo.
   ehMinha?: boolean;
 }

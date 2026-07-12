@@ -1059,6 +1059,7 @@ export class FrotaService {
       dataHoraSaida: v.dataHoraSaida, dataHoraChegada: v.dataHoraChegada,
       paradas: v._count.paradas,
       adiantamento: v.adiantamento != null ? Number(v.adiantamento) : null,
+      acertoEncerradoEm: v.acertoEncerradoEm,
       // "Minha operação": quem registrou a saída OU o supervisor do veículo.
       ehMinha: v.criadoPorId === user.sub || v.veiculo?.supervisorId === user.sub,
     };

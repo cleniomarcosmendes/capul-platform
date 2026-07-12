@@ -103,6 +103,15 @@ export function FrotaViagemDetalhePage() {
   const emCurso = v.situacao === 'EM_CURSO';
   // Gestor opera qualquer viagem; demais só a própria (registrante/supervisor). Senão, só leitura.
   const podeOperar = ehGestor || !!v.ehMinha;
+  // Acerto encerrado (independente da conclusão) trava despesa/adiantamento. Enquanto
+  // aberto, dá pra lançar durante a viagem E no acerto (após a entrega do veículo).
+  const acertoEncerrado = !!v.acertoEncerradoEm;
+  const podeLancar = podeOperar && !acertoEncerrado && v.situacao !== 'CANCELADA';
+  const podeEncerrarAcerto = podeOperar && !acertoEncerrado && v.situacao === 'CONCLUIDA';
+  const acaoAcerto = async (path: string, msg: string) => {
+    try { await logisticaApi.post(`/frota/viagens/${id}/${path}`, {}); toast('success', msg); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao alterar o acerto.')); }
+  };
 
   return (
     <div className="space-y-5">
@@ -118,6 +127,12 @@ export function FrotaViagemDetalhePage() {
           <div className="flex items-center gap-2">
             <span className={`rounded-full px-3 py-1 text-sm font-medium ${sit.cls}`}>{sit.label}</span>
             <button onClick={() => navigate(`/frota/viagens/${id}/acerto`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50" title="Relatório de acerto (despesas × adiantamento)"><Printer className="h-4 w-4" /> Acerto</button>
+            {podeEncerrarAcerto && (
+              <button onClick={() => void acaoAcerto('encerrar-acerto', 'Acerto encerrado.')} className="inline-flex items-center gap-1 rounded-lg border border-amber-300 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50" title="Trava despesas e adiantamento deste acerto">🔒 Encerrar acerto</button>
+            )}
+            {acertoEncerrado && podeOperar && (
+              <button onClick={() => void acaoAcerto('reabrir-acerto', 'Acerto reaberto.')} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50" title="Reabre para lançar despesas/adiantamento">🔓 Reabrir acerto</button>
+            )}
             {emCurso && podeCancelar && !mostrarCancelar && (
               <button onClick={() => setMostrarCancelar(true)} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-50" title="Cancelar saída registrada errada — libera o veículo"><X className="h-4 w-4" /> Cancelar saída</button>
             )}
@@ -142,7 +157,8 @@ export function FrotaViagemDetalhePage() {
           ) : (
             <>
               <b className="text-slate-700">{v.adiantamento != null ? `R$ ${v.adiantamento.toFixed(2)}` : '—'}</b>
-              {podeOperar && <button onClick={() => { setAdiantVal(v.adiantamento != null ? String(v.adiantamento) : ''); setEditAdiant(true); }} className="text-xs text-capul-600 hover:underline">editar</button>}
+              {podeLancar && <button onClick={() => { setAdiantVal(v.adiantamento != null ? String(v.adiantamento) : ''); setEditAdiant(true); }} className="text-xs text-capul-600 hover:underline">editar</button>}
+              {acertoEncerrado && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">🔒 Acerto encerrado — reabra para alterar</span>}
             </>
           )}
         </div>
@@ -185,7 +201,7 @@ export function FrotaViagemDetalhePage() {
           </button>
         )
       )}
-      {(emCurso || despesas.length > 0) && (
+      {(emCurso || despesas.length > 0 || podeLancar) && (
         <Secao cor="border-l-capul-400">
           {despesas.length > 0 && (
             <div className="mb-4">
@@ -209,7 +225,7 @@ export function FrotaViagemDetalhePage() {
               </div>
             </div>
           )}
-          {emCurso && podeOperar && <DespesaCondutorForm v={v} tipos={tipos} onClose={voltar} onDone={() => void carregar()} />}
+          {podeLancar && <DespesaCondutorForm v={v} tipos={tipos} onClose={voltar} onDone={() => void carregar()} />}
         </Secao>
       )}
       <Secao cor="border-l-slate-300">
