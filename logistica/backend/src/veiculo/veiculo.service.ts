@@ -121,19 +121,26 @@ export class VeiculoService {
     supervisorFrotaUser?: JwtPayload;
   }) {
     const termo = params.busca?.trim();
-    let deptoScope: Record<string, unknown> = {};
+    let deptoWhere: Record<string, unknown> = {};
     let filialId = params.filialId;
     if (params.supervisorFrotaUser) {
       filialId = params.supervisorFrotaUser.filialId ?? undefined;
-      deptoScope = { departamentoLotacaoId: { in: await this.deptosSupervisionados(params.supervisorFrotaUser) } };
+      const deps = await this.deptosSupervisionados(params.supervisorFrotaUser);
+      // O filtro ?departamentoLotacaoId RESPEITA o escopo (interseção) — não pode
+      // sobrepor a chave e vazar veículos de outro departamento na mesma filial.
+      const escopo = params.departamentoLotacaoId
+        ? (deps.includes(params.departamentoLotacaoId) ? [params.departamentoLotacaoId] : [])
+        : deps;
+      deptoWhere = { departamentoLotacaoId: { in: escopo } };
+    } else if (params.departamentoLotacaoId) {
+      deptoWhere = { departamentoLotacaoId: params.departamentoLotacaoId };
     }
     const veiculos = await this.prisma.veiculo.findMany({
       where: {
         ...(filialId ? { filialId } : {}),
-        ...deptoScope,
+        ...deptoWhere,
         ...(params.situacao ? { situacao: params.situacao } : {}),
         ...(params.incluirInativos ? {} : { ativo: true }),
-        ...(params.departamentoLotacaoId ? { departamentoLotacaoId: params.departamentoLotacaoId } : {}),
         ...(termo
           ? {
               OR: [

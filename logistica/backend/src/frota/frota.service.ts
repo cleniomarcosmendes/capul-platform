@@ -577,17 +577,22 @@ export class FrotaService {
     if (!ehGestor && !user.filialId) throw new BadRequestException('Usuário sem filial definida.');
     const filialId = ehGestor ? undefined : user.filialId;
     // Supervisor de Departamento: recorta a Linha do KM aos veículos do(s) seu(s)
-    // departamento(s). Gestor/ADMIN veem a frota toda.
-    const deptoScope = this.ehSupervisorFrota(user)
-      ? { departamentoLotacaoId: { in: await this.deptosSupervisionados(user) } }
-      : {};
+    // departamento(s). O filtro ?departamentoId RESPEITA o escopo (interseção) — não
+    // pode sobrepor a chave e vazar outro departamento. Gestor/ADMIN veem a frota toda.
+    const deps = this.ehSupervisorFrota(user) ? await this.deptosSupervisionados(user) : null;
+    let deptoWhere: Prisma.VeiculoWhereInput = {};
+    if (deps) {
+      const escopo = departamentoId ? (deps.includes(departamentoId) ? [departamentoId] : []) : deps;
+      deptoWhere = { departamentoLotacaoId: { in: escopo } };
+    } else if (departamentoId) {
+      deptoWhere = { departamentoLotacaoId: departamentoId };
+    }
 
     const veiculos = await this.prisma.veiculo.findMany({
       where: {
         filialId,
-        ...deptoScope,
+        ...deptoWhere,
         ...(veiculoId ? { id: veiculoId } : {}),
-        ...(departamentoId ? { departamentoLotacaoId: departamentoId } : {}),
       },
       select: { id: true, placa: true, modelo: true, kmAtual: true, departamentoLotacaoId: true },
       orderBy: { placa: 'asc' },
