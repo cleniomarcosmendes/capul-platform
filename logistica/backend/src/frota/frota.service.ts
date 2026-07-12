@@ -630,21 +630,26 @@ export class FrotaService {
     // departamento) só os veículos do seu escopo.
     const veicSupervisor = ehGestor ? null : await this.veiculoIdsNoEscopo(user);
     const despesaScope = veicSupervisor ? { veiculoId: { in: veicSupervisor } } : {};
+    // Supervisor de Departamento: contadores, "na rua agora" e rankings do Monitor
+    // também são recortados ao escopo (senão vazavam a filial inteira — placas, KM e
+    // condutor de outros departamentos). Gestor de Frota/ADMIN veem a filial toda.
+    const veicIdScope = veicSupervisor ? { id: { in: veicSupervisor } } : {};
+    const viagemVeicScope = veicSupervisor ? { veiculoId: { in: veicSupervisor } } : {};
 
     const [
       veicDisponiveis, veicEmUso, veicManutencao, veicBaixados,
       emCurso, manutencaoLista, preventivaLista, despesasPendentes,
       concluidasMes, despesasMes, viagensMes,
     ] = await Promise.all([
-      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.DISPONIVEL } }),
-      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_USO } }),
-      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_MANUTENCAO } }),
-      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.BAIXADO } }),
+      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.DISPONIVEL, ...veicIdScope } }),
+      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_USO, ...veicIdScope } }),
+      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_MANUTENCAO, ...veicIdScope } }),
+      this.prisma.veiculo.count({ where: { filialId, ativo: true, situacao: SituacaoVeiculo.BAIXADO, ...veicIdScope } }),
       // "Na rua agora": TODAS as viagens em curso (ENTREGA + FROTA) — alinha com o
       // mapa ao vivo (que mostra os dois tipos). O nome do condutor de ENTREGA
       // vem do motoristaId (core), resolvido logo abaixo.
       this.prisma.viagem.findMany({
-        where: { filialId, situacao: StatusViagem.EM_CURSO },
+        where: { filialId, situacao: StatusViagem.EM_CURSO, ...viagemVeicScope },
         select: {
           id: true, numero: true, tipo: true, condutorNome: true, motoristaId: true,
           dataHoraSaida: true, observacoesSaida: true, kmInicial: true,
@@ -654,19 +659,19 @@ export class FrotaService {
         orderBy: { dataHoraSaida: 'asc' },
       }),
       this.prisma.veiculo.findMany({
-        where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_MANUTENCAO },
+        where: { filialId, ativo: true, situacao: SituacaoVeiculo.EM_MANUTENCAO, ...veicIdScope },
         select: { placa: true, modelo: true },
       }),
       // Manutenção preventiva: veículos com próxima revisão definida cujo odômetro
       // já chegou perto (LIMIAR) ou passou do alvo.
       this.prisma.veiculo.findMany({
-        where: { filialId, ativo: true, kmProximaManutencao: { not: null } },
+        where: { filialId, ativo: true, kmProximaManutencao: { not: null }, ...veicIdScope },
         select: { id: true, placa: true, modelo: true, kmAtual: true, kmProximaManutencao: true },
       }),
       this.prisma.despesaVeiculo.count({ where: { filialId, situacao: StatusDespesa.PENDENTE, ...despesaScope } }),
       // Concluídas no mês (km rodado) — janela pela chegada.
       this.prisma.viagem.findMany({
-        where: { filialId, tipo: TipoViagem.FROTA, situacao: StatusViagem.CONCLUIDA, dataHoraChegada: { gte: ini, lt: fimExcl } },
+        where: { filialId, tipo: TipoViagem.FROTA, situacao: StatusViagem.CONCLUIDA, dataHoraChegada: { gte: ini, lt: fimExcl }, ...viagemVeicScope },
         select: { kmInicial: true, kmFinal: true, veiculoId: true, veiculo: { select: { placa: true } } },
       }),
       this.prisma.despesaVeiculo.findMany({
@@ -678,7 +683,7 @@ export class FrotaService {
       }),
       // Viagens de frota do mês p/ ranking por departamento solicitante (pela saída).
       this.prisma.viagem.findMany({
-        where: { filialId, tipo: TipoViagem.FROTA, dataHoraSaida: { gte: ini, lt: fimExcl } },
+        where: { filialId, tipo: TipoViagem.FROTA, dataHoraSaida: { gte: ini, lt: fimExcl }, ...viagemVeicScope },
         select: { departamentoSolicitanteId: true },
       }),
     ]);
