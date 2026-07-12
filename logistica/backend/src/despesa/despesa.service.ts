@@ -194,12 +194,19 @@ export class DespesaService {
     const where: Prisma.DespesaVeiculoWhereInput = ehGestor(role) ? {} : { filialId: user.filialId };
 
     if (!ehGestor(role)) {
-      // Supervisor: só os veículos dele. Quem não é gestor nem supervisor não vê nada.
+      // Supervisor: só os veículos do seu escopo. Quem não é gestor nem supervisor não vê nada.
       const ids = await this.veiculosNoEscopo(user, role);
       if (ids.length === 0) return [];
-      where.veiculoId = { in: ids };
+      // O filtro ?veiculoId RESPEITA o escopo: pedir um veículo de fora não vaza.
+      if (q.veiculoId) {
+        if (!ids.includes(q.veiculoId)) return [];
+        where.veiculoId = q.veiculoId;
+      } else {
+        where.veiculoId = { in: ids };
+      }
+    } else if (q.veiculoId) {
+      where.veiculoId = q.veiculoId;
     }
-    if (q.veiculoId) where.veiculoId = q.veiculoId;
     if (q.situacao && ['PENDENTE', 'APROVADA', 'CONTESTADA'].includes(q.situacao)) {
       where.situacao = q.situacao as StatusDespesa;
     }
