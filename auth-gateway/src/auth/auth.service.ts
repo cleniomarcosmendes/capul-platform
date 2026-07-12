@@ -196,6 +196,7 @@ export class AuthService {
             filiais: {
               include: { filial: true },
             },
+            filialPrincipal: true,
             departamento: true,
           },
         },
@@ -225,13 +226,22 @@ export class AuthService {
     const filialAtiva =
       usuario.filiais.find((f) => f.isDefault) || usuario.filiais[0];
 
+    // Fallback para filialPrincipal se nao tem filiais vinculadas (mesma regra do
+    // login — sem isto, o refresh zerava o filialId de quem depende da filial
+    // principal, quebrando o escopo por filial após a renovação do token).
+    const filialFallback = filialAtiva
+      ? { id: filialAtiva.filialId, codigo: filialAtiva.filial.codigo, nome: filialAtiva.filial.nomeFantasia }
+      : usuario.filialPrincipal
+        ? { id: usuario.filialPrincipal.id, codigo: usuario.filialPrincipal.codigo, nome: usuario.filialPrincipal.nomeFantasia }
+        : null;
+
     const payload: JwtPayload = {
       sub: usuario.id,
       username: usuario.username,
       email: usuario.email,
       tipo: usuario.tipo || 'INDIVIDUAL',
-      filialId: filialAtiva?.filialId || null,
-      filialCodigo: filialAtiva?.filial?.codigo || null,
+      filialId: filialFallback?.id || null,
+      filialCodigo: filialFallback?.codigo || null,
       departamentoId: usuario.departamentoId,
       departamentoNome: usuario.departamento.nome,
       // Onda 1 Sub-fase 1.4 — payload agora inclui departamentos[] + funcionalidades[].
