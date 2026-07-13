@@ -12,7 +12,7 @@
     ],
     "android": {
       "package": "br.com.capul.entregas",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "INTERNET",
         "ACCESS_FINE_LOCATION",
@@ -44,9 +44,7 @@
       "./plugins/withWindowsCmakeVersion.js",
       "./plugins/withEntregasFlavors.js"
     ],
-    "runtimeVersion": {
-      "policy": "fingerprint"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/0d458eb9-9907-43b7-92ca-ab1d431482b0"
     },

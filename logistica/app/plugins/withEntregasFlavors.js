@@ -6,8 +6,10 @@ const path = require('path');
  * Dois ambientes side-by-side (produção/homologação) para o app entregador.
  *
  * `android/` é gitignored (workflow managed): tudo é injetado no prebuild, nunca
- * editado à mão. Fonte única → prebuild determinístico → MESMO fingerprint p/ os
- * dois flavors → a promoção do bundle (HLG → produção) é byte-idêntica e válida.
+ * editado à mão. O runtimeVersion é FIXO ("1.0.0" no app.json, não mais policy
+ * "fingerprint"): os dois flavors/canais compartilham o mesmo runtime, então a
+ * promoção do bundle (HLG → produção) é válida e o OTA independe de qual máquina
+ * publica. Ver memory/project_ota_fingerprint_desync.md p/ o histórico.
  *
  * O que este plugin faz:
  *  1. build.gradle: 2 product flavors (`producao` / `homologacao`) na dimensão "env".
