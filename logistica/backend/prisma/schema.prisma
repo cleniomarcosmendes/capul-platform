@@ -354,8 +354,11 @@ model DespesaVeiculo {
   filialId      String        @map("filial_id")
   // OPCIONAL a partir da Fase 2: despesa de INDIVÍDUO (alimentação/hospedagem do
   // supervisor) não tem veículo. Despesa de VEÍCULO continua exigindo (no service).
+  // onDelete EXPLÍCITO (Restrict, igual ao banco): SetNull — o default do Prisma p/
+  // relação opcional — deixaria a despesa órfã e o custo sumiria da análise por
+  // veículo sem erro nenhum. Melhor barrar o delete (que ninguém faz: veículo é baixado).
   veiculoId     String?       @map("veiculo_id")
-  veiculo       Veiculo?      @relation(fields: [veiculoId], references: [id])
+  veiculo       Veiculo?      @relation(fields: [veiculoId], references: [id], onDelete: Restrict)
   viagemId      String?       @map("viagem_id")
   viagem        Viagem?       @relation(fields: [viagemId], references: [id])
   tipoDespesaId String        @map("tipo_despesa_id")
@@ -405,6 +408,9 @@ model DespesaVeiculo {
   @@index([veiculoId])
   @@index([viagemId])
   @@index([tipoDespesaId])
+  // Criado pela migration 20260616140000_fornecedor_despesa (escrita à mão) e nunca
+  // declarado aqui — o schema ficou devendo o índice que o banco já tem.
+  @@index([fornecedorId])
   @@map("despesa_veiculo")
   @@schema("logistica")
 }
@@ -505,8 +511,12 @@ model Viagem {
   tipo                      TipoViagem   @default(ENTREGA)
   // Nullable (12/06): o RASCUNHO pode nascer só com a carga — veículo e
   // motorista são definidos depois; o DESPACHO é que exige os dois.
+  // onDelete EXPLÍCITO: quando o campo virou opcional, o default do Prisma passou
+  // de Restrict p/ SetNull, mas a FK no banco continuou Restrict — e Restrict é o
+  // certo: apagar um veículo não pode esvaziar silenciosamente a viagem que ele
+  // rodou. Veículo sai de operação por BAIXA (status), nunca por DELETE.
   veiculoId                 String?      @map("veiculo_id")
-  veiculo                   Veiculo?     @relation(fields: [veiculoId], references: [id])
+  veiculo                   Veiculo?     @relation(fields: [veiculoId], references: [id], onDelete: Restrict)
   motoristaId               String?      @map("motorista_id")
   departamentoSolicitanteId String?      @map("departamento_solicitante_id")
   kmInicial                 Int?         @map("km_inicial")
@@ -566,6 +576,9 @@ model Viagem {
   @@index([motoristaId])
   @@index([tipo])
   @@index([supervisorRegistroId])
+  // Criado pela migration 20260708140000_viagem_rdv_link (escrita à mão) e nunca
+  // declarado aqui — o schema ficou devendo o índice que o banco já tem.
+  @@index([rdvViagemId])
   @@map("viagem")
   @@schema("logistica")
 }
