@@ -22,6 +22,9 @@ const path = require('path');
  *     {"expo-channel-name":"${updatesChannel}"} — o Gradle substitui o token por flavor.
  *  3. Label por flavor via source set (res/values/strings.xml de cada flavor sobrepõe
  *     o app_name do main, sem conflito de recurso duplicado).
+ *  4. Ícone de homologação (âmbar + selo "HLG") pelo mesmo mecanismo: assets/android-res-homolog
+ *     é copiado para src/homologacao/res e sobrepõe os mipmaps/iconBackground que o Expo
+ *     gerou no main a partir do app.json. Regerar com scripts/gerar-icones.mjs.
  */
 const MARKER = '// withEntregasFlavors: product flavors produção/homologação';
 
@@ -109,9 +112,36 @@ function withFlavorLabels(config) {
   ]);
 }
 
+// ---- 4. ícone próprio do flavor de homologação ----------------------------
+/**
+ * Copia assets/android-res-homolog/** para src/homologacao/res/**.
+ *
+ * O merger de recursos do Gradle faz o source set do flavor vencer o main quando
+ * o nome do recurso é o mesmo — então basta reusar os nomes que o Expo gera
+ * (ic_launcher / ic_launcher_round / ic_launcher_foreground / ic_launcher_monochrome
+ * e a cor iconBackground). Produção continua saindo do app.json, sem override.
+ */
+function withHomologIcon(config) {
+  return withDangerousMod(config, [
+    'android',
+    (config) => {
+      const origem = path.join(config.modRequest.projectRoot, 'assets', 'android-res-homolog');
+      if (!fs.existsSync(origem)) {
+        throw new Error(
+          'withEntregasFlavors: assets/android-res-homolog não existe — o APK de homologação sairia com o ícone de produção e ninguém saberia qual app é qual. Rode scripts/gerar-icones.mjs.'
+        );
+      }
+      const destino = path.join(config.modRequest.platformProjectRoot, 'app', 'src', 'homologacao', 'res');
+      fs.cpSync(origem, destino, { recursive: true });
+      return config;
+    },
+  ]);
+}
+
 module.exports = function withEntregasFlavors(config) {
   config = withFlavors(config);
   config = withChannelMeta(config);
   config = withFlavorLabels(config);
+  config = withHomologIcon(config);
   return config;
 };

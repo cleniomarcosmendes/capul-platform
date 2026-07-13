@@ -44,7 +44,25 @@
 | `scheme` (deep link) | `capulentregas` | `capulentregas-hlg` |
 | Canal (embutido no build) | `production` | `homolog` |
 | API (runtime, por canal) | `https://platform.capul.com.br` | `https://platformhlg.capul.com.br` |
-| Ícone | atual | *(follow-up)* |
+| Ícone | marca CAPUL, fundo **verde** `#047942` | mesma marca, fundo **âmbar** `#b45309` + selo **HLG** |
+
+### Ícone do app
+
+A marca sai do arquivo oficial (`Logos Capul/CAPUL - LOGO VERTICAL - SemFundoBranco.png`):
+só o símbolo (folhas + chama), no estilo do avatar da empresa — traço branco, folhas
+vazadas, chama amarela. Regerar tudo com `scripts/gerar-icones.mjs` (lê o PSD/PNG oficial,
+escreve `assets/`).
+
+- **Produção**: `app.json` → `icon` + `android.adaptiveIcon` (foreground, monochrome,
+  `backgroundColor`). O prebuild do Expo gera os mipmaps.
+- **Homologação**: `assets/android-res-homolog/` é copiado pelo `withEntregasFlavors`
+  para `src/homologacao/res/`, sobrepondo os mesmos nomes de recurso (`ic_launcher*`,
+  `iconBackground`) — o merger do Gradle faz o flavor vencer o main.
+
+> **O ícone é recurso NATIVO: OTA não troca ícone.** Mexeu em `assets/` → só entra no
+> aparelho com **APK novo** (não precisa bumpar `runtimeVersion`, porque não muda a
+> compatibilidade JS↔nativo — mas precisa de um `versionCode` novo se o APK anterior
+> já foi distribuído).
 
 ## Resolução da API por canal (runtime)
 
