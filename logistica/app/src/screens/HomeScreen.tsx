@@ -9,9 +9,11 @@ const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 // Entitlement por role (espelha a RBAC do backend — roles.guard.ts: ADMIN sempre).
-const ROLES_FROTA = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'ADMIN'];
+// Espelha os @Roles de frota.controller.ts e supervisor.controller.ts: se um papel
+// entrar lá, tem que entrar aqui, senão o app barra na porta quem a API autoriza.
+const ROLES_FROTA = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA', 'ADMIN'];
 const ROLES_ENTREGA = ['ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'ADMIN'];
-const ROLES_SUPERVISOR = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'ADMIN'];
+const ROLES_SUPERVISOR = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR', 'COORDENADOR', 'ADMIN'];
 
 /**
  * Tela-lançador: o usuário escolhe entre Entregas e Frota. Cada card só fica
