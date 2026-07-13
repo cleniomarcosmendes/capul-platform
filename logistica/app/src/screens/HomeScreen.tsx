@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-nativ
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../auth/AuthContext';
+import { VERSAO_LABEL } from '../lib/versao';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
@@ -56,6 +57,8 @@ export function HomeScreen({ navigation }: Props) {
       <TouchableOpacity style={styles.sairBtn} onPress={() => void logout()}>
         <Text style={styles.sairBtnTxt}>Sair</Text>
       </TouchableOpacity>
+
+      <Text style={styles.versao} selectable>{VERSAO_LABEL}</Text>
     </View>
   );
 }
@@ -98,4 +101,5 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 22, paddingVertical: 12, backgroundColor: '#fff',
   },
   sairBtnTxt: { color: '#b91c1c', fontSize: 16, fontWeight: '700' },
+  versao: { fontSize: 12, color: '#94a3b8', textAlign: 'center', marginTop: 2 },
 });
