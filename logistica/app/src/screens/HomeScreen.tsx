@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../auth/AuthContext';
@@ -22,12 +23,15 @@ const ROLES_SUPERVISOR = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTRE
  */
 export function HomeScreen({ navigation }: Props) {
   const { logout, role } = useAuth();
+  const insets = useSafeAreaInsets();
   const podeEntrega = !!role && ROLES_ENTREGA.includes(role);
   const podeFrota = !!role && ROLES_FROTA.includes(role);
   const podeSupervisor = !!role && ROLES_SUPERVISOR.includes(role);
 
   return (
-    <View style={styles.container}>
+    // O bloco de baixo (Sair + versão) é empurrado pro fim da tela; sem o inset
+    // a versão cai atrás da barra de navegação do Android e some.
+    <View style={[styles.container, { paddingBottom: 16 + insets.bottom }]}>
       <Text style={styles.titulo}>O que você vai operar?</Text>
 
       <Card
@@ -103,5 +107,5 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 22, paddingVertical: 12, backgroundColor: '#fff',
   },
   sairBtnTxt: { color: '#b91c1c', fontSize: 16, fontWeight: '700' },
-  versao: { fontSize: 12, color: '#94a3b8', textAlign: 'center', marginTop: 2 },
+  versao: { fontSize: 12, color: '#94a3b8', textAlign: 'center', marginTop: 10 },
 });
