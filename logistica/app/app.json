@@ -3,7 +3,7 @@
     "name": "CAPUL Entregas",
     "slug": "capul-entregas",
     "owner": "capul",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "capulentregas",
     "userInterfaceStyle": "light",
