@@ -9,7 +9,9 @@ const path = require('path');
  * editado à mão. O runtimeVersion é FIXO ("1.0.0" no app.json, não mais policy
  * "fingerprint"): os dois flavors/canais compartilham o mesmo runtime, então a
  * promoção do bundle (HLG → produção) é válida e o OTA independe de qual máquina
- * publica. Ver memory/project_ota_fingerprint_desync.md p/ o histórico.
+ * publica. Ver docs/OTA_DOIS_AMBIENTES.md p/ o histórico e a REGRA DO BUMP: mexeu em
+ * nativo (lib/permissão/plugin/SDK) → bumpar runtimeVersion + versionCode e rebuildar
+ * o APK, senão um OTA que exige o nativo novo crasha num APK que não o tem.
  *
  * O que este plugin faz:
  *  1. build.gradle: 2 product flavors (`producao` / `homologacao`) na dimensão "env".

@@ -27,14 +27,15 @@
 | 8 | APK novo (mudança nativa) | **TI instala manualmente**; aviso in-app de versão mínima = follow-up |
 | 9 | Ícone distinto p/ HLG | **Follow-up** (ainda não há arte) |
 | 10 | Build do APK | **Local (gradle)**; OTA via nuvem (`eas update`, plano free cobre) |
-| 11 | Como materializar as variantes | **Product flavors do Android + `runtimeVersion: fingerprint`** |
+| 11 | Como materializar as variantes | **Product flavors do Android + `runtimeVersion` FIXO (`"1.0.0"`)** |
 
 ## Modelo de identidade
 
 - **1 projeto EAS** (`projectId 0d458eb9-9907-43b7-92ca-ab1d431482b0`), `updates.url` atual.
 - **2 canais / branches de update**: `production` e `homolog` *(a criar)*.
 - **2 variantes side-by-side** via **product flavors** do Android — uma única pasta
-  `android/` (fonte idêntica → **mesmo fingerprint** → promoção byte-idêntica funciona):
+  `android/` (fonte idêntica; os dois flavors compartilham o **mesmo `runtimeVersion`**
+  → promoção byte-idêntica funciona):
 
 | | Produção | Homologação |
 |---|---|---|
@@ -106,43 +107,50 @@ API_URL =
   usado (cota apertada no free e desnecessário, já que o APK é local).
 - **TI instala/atualiza o APK manualmente** por ambiente.
 
-## ⚠️ Pegadinha do fingerprint — APK e OTA têm que casar
+## ⚠️ runtimeVersion FIXO — e quando bumpar (regra manual)
 
-Com `policy = "fingerprint"`, o EAS **só entrega um OTA cujo `runtimeVersion`
-(o hash do fingerprint) seja idêntico ao embutido no APK instalado**. Se não casar,
-o app recebe "nenhum update disponível" **em silêncio** e o banner nunca aparece.
+O EAS **só entrega um OTA cujo `runtimeVersion` seja idêntico ao embutido no APK
+instalado**. Se não casar, o app recebe "nenhum update disponível" **em silêncio** e o
+banner nunca aparece.
 
-O fingerprint inclui **mais coisa do que os arquivos nativos** — entre as fontes está
-o bloco **`scripts` do `package.json`** (fonte `packageJson:scripts`). Ou seja: mexer
-num script npm (ex.: adicionar `--environment` a um `ota:*`) **muda o runtimeVersion**
-e dessincroniza um APK que já estava buildado.
+Hoje o `runtimeVersion` é **fixo** (`"1.0.0"` no `app.json`). Antes usávamos
+`policy: "fingerprint"` e **isso deu errado**: `android/` é gitignored e regenerado pelo
+prebuild em cada máquina, então o fingerprint virava assinatura da **máquina**, não do
+código — o **mesmo commit** saía com runtime diferente conforme quem publicava
+(`cff4a22` numa máquina, `e44b0e97` na outra) e um dev **quebrava o canal OTA do outro**.
+Com runtime fixo, qualquer dev publica de qualquer máquina e todos os aparelhos recebem.
 
-**Regra de ouro:** o APK e os OTAs daquele ambiente têm que sair do **mesmo estado do
-tree**. Alterações **puras de JS/TSX** (telas, lógica) **não** mudam o fingerprint —
-essas são as que o OTA entrega. Mudança em `scripts`/deps/config/plugins/nativo **muda**
-o fingerprint → exige **APK novo**.
+**O trade-off:** perdemos a proteção automática. Agora é **manual**:
 
-**Conferir/depurar quando o banner não aparece:**
+> **Mexeu em NATIVO — nova lib nativa, permissão no `app.json`, config plugin, upgrade de
+> SDK/deps? → bumpe o `runtimeVersion` (`"1.0.1"`, …), bumpe o `versionCode` e
+> REBUILDE + redistribua o APK.**
+> **Enquanto for só JS/TSX (telas, lógica), NÃO toque no `runtimeVersion`** — os OTAs
+> fluem sozinhos pros aparelhos que já estão em campo.
+
+Se esquecer de bumpar ao mexer no nativo, um OTA que depende do nativo novo cai num APK
+que **não o tem** → **crash** no aparelho do usuário. É esse o risco que o fingerprint
+cobria de graça e que agora depende de disciplina.
+
+**Depurar quando o banner não aparece:**
 
 ```bash
-# runtimeVersion embutido no APK instalado (após um build local):
-cat android/app/build/generated/assets/createHomologacaoReleaseUpdatesResources/fingerprint
+# runtimeVersion que o app.json declara (é o que vai no APK e no OTA):
+node -e "console.log(require('./app.json').expo.runtimeVersion)"
 # runtimeVersion dos OTAs publicados no branch:
 eas update:list --branch homolog
-# fingerprint do tree atual (o que um "eas update" agora publicaria):
-npx @expo/fingerprint . | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).hash))"
 ```
-Os três têm que bater. Se o do APK ≠ o do OTA → rebuildar o APK do estado atual e
-reinstalar (ou publicar o OTA a partir do mesmo estado em que o APK foi buildado).
+Os dois têm que bater com o do APK instalado. Se o APK for anterior ao último bump →
+rebuildar (`npm run build:homolog`) e reinstalar.
 
 ## Segurança de runtime
 
-- `runtimeVersion.policy = fingerprint` mantido. Como os dois flavors saem da
-  **mesma fonte `android/`**, o fingerprint é **idêntico** → runtimes iguais →
-  promoção funciona.
-- Mudança **nativa** (dep nativa, permissão, SDK) muda o fingerprint → bumpa o
-  runtime automaticamente e o OTA incompatível **não** é entregue por engano;
-  o entregador precisa de **APK novo** (instalação manual pelo TI).
+- `runtimeVersion` **fixo** (`"1.0.0"`). Os dois flavors compartilham o mesmo runtime →
+  promoção HLG → produção funciona, e o OTA independe de qual máquina publica.
+- Mudança **nativa** (dep nativa, permissão, config plugin, SDK) **não** bumpa nada
+  sozinha: é o dev que tem que **bumpar o `runtimeVersion` + o `versionCode`** e
+  redistribuir o **APK novo** (instalação manual pelo TI). Sem esse bump, o OTA cai num
+  APK sem o nativo novo → **crash**. Ver a seção "runtimeVersion FIXO" acima.
 
 ## Limpezas de passagem (na implementação)
 
