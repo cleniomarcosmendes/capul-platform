@@ -18,6 +18,7 @@
 - Master `PlatformCapul_Roteiro_Completo.md` continua separado (DR/zero, atualizado eventualmente)
 - Histórico de deploys preservado em `C:\Arquivos-de-projeto\` por data
 - Destinatário fixo: Douglas — Infra (172.16.0.203, Ubuntu 24.04)
+- **Exceção — app entregador (`logistica/app`)**: não sobe em container e **não é do Douglas**. Vive nas Seções **2.10** (escopo), **7.5** (release: OTA/APK, feito pelo Clenio DEPOIS das validações) e **8.4** (rollback). Se o delta não tocou o app, escrever "app não afetado" — não deletar as seções.
 - **Todo bloco de validação SQL deve ser precedido do comando de conexão** (feedback Douglas 21/05/2026) — `docker compose exec postgres psql -U capul_user -d capul_platform` logo antes do bloco ```` ```sql ````, pra quem executa não precisar rolar o documento. Vale por subseção (um comando cobre blocos SQL consecutivos da mesma subseção). SQL one-liner com `-c "..."` já é autocontido.
 
 ---
@@ -46,6 +47,7 @@
 **Migrations novas:** {{quantidade}} ({{lista resumida}}).
 **Endpoints novos/alterados:** {{quantidade ou "nenhum"}}.
 **Telas frontend novas:** {{lista ou "nenhuma"}}.
+**App entregador:** {{não afetado | OTA | APK novo}} — {{quem executa e quando; ver Seção 2.10 e 7.5}}.
 
 ---
 
@@ -95,6 +97,28 @@
 ### 2.9 Mudanças em roles/permissões
 
 (Se algum endpoint subiu/desceu de role, listar. Se não, escrever "nenhuma mudança de role".)
+
+### 2.10 App entregador (`logistica/app` — Expo)
+
+O app **não é entregue por este roteiro**: o `docker compose` do servidor não coloca nada
+no aparelho do entregador. Se o delta tocou `logistica/app/`, preencher; senão escrever
+"app não afetado".
+
+| Item | Valor |
+|---|---|
+| Tipo de entrega | {{OTA (só JS) \| APK novo (mexeu em nativo: `app.json`, `plugins/`, `assets/`, dep nativa)}} |
+| `runtimeVersion` | {{inalterado (`1.0.0`) \| bumpado para `X.Y.Z` → **exige reinstalar o APK**}} |
+| `versionCode` | {{inalterado \| bumpado para `N`}} |
+| Executa | **Clenio** (OTA) / **TI** (instala o APK) — **não é do Douglas** |
+| Quando | {{Depois das validações da Seção 7 — ver Seção 7.5}} |
+
+**Compatibilidade com o campo (verificar SEMPRE, mesmo com "app não afetado"):**
+o entregador que está offline, ou que adiou o update, continua rodando o **bundle antigo**
+por dias. Se este deploy muda contrato de API que o app consome (payload, status, role),
+o backend novo **precisa continuar respondendo à versão instalada** — senão o app quebra
+em campo sem ninguém ter mexido nele.
+
+- [ ] Endpoints consumidos pelo app permanecem retrocompatíveis: {{SIM \| NÃO — mitigação:}}
 
 ---
 
@@ -386,6 +410,36 @@ curl -sk https://localhost/api/v1/fiscal/health | jq .
 
 ---
 
+## 7.5 Release do app entregador — **Clenio, não o Douglas**
+
+> Preencher só se a Seção 2.10 disse que o app foi afetado. **A ordem importa:**
+> o app novo costuma depender de endpoint novo, então ele só sai **DEPOIS** de o
+> backend estar em PROD e validado (Seção 7). Publicar o OTA antes = app quebrado
+> em campo apontando pra uma API que ainda não existe.
+
+**Se é OTA (só JS):**
+```bash
+cd logistica/app
+npm run ota:homolog -- -m "{{descrição}}"   # publica no canal homolog
+# validar no app HLG (aparelho real, persona real do papel)
+npm run ota:promote -- -m "{{descrição}}"   # promove o MESMO bundle para production
+```
+Regra do módulo: **nada chega em produção sem passar por HLG e ser promovido.**
+O aparelho pega no cold start / foreground (banner "Nova versão disponível"); quem
+escolhe a hora de aplicar é o entregador — não force no meio de uma entrega.
+
+**Se é APK novo (mexeu em nativo — inclusive ícone/splash):**
+```bash
+cd logistica/app
+npm run build:homolog      # ou build:production (gradle local, Windows)
+```
+- [ ] APK de **homologação** instalado e validado
+- [ ] APK de **produção** distribuído pela TI aos aparelhos
+- [ ] ⚠️ Se o `runtimeVersion` foi bumpado: **enquanto o APK novo não for instalado,
+      o aparelho para de receber OTA — em silêncio.** Confirmar aparelho a aparelho.
+
+---
+
 ## 8. Rollback
 
 (Documentar passo-a-passo do rollback. Toda migration deve ter rollback definido — se for additive simples, basta voltar imagem; se for destrutiva, comando SQL pra reverter.)
@@ -409,6 +463,18 @@ docker compose up -d --build {{containers_afetados}}
 ```bash
 sudo ./scripts/backup.sh restore /opt/capul-platform/backups/backup_full_<data>.tar.gz
 ```
+
+### 8.4 Rollback do app entregador (se a Seção 7.5 foi executada)
+
+O rollback do servidor **não desfaz** o que já está no aparelho — OTA e APK têm ciclo próprio.
+
+| Entregue como | Como voltar |
+|---|---|
+| OTA | Republicar o update **anterior** no canal `production` (`eas update:republish` apontando pro grupo bom, ou *promote* do dashboard). O aparelho volta no próximo cold start. |
+| APK | Não há downgrade automático: a TI reinstala o APK anterior aparelho a aparelho. **Por isso APK só sai depois do OTA validado em HLG.** |
+
+> Se o rollback do backend reverte um endpoint que o app novo já usa, o app em campo
+> quebra até o OTA anterior ser republicado — **reverta os dois juntos**.
 
 ---
 
@@ -437,6 +503,9 @@ Marcar **todos** antes de enviar:
 - [ ] Saídas anômalas comuns documentadas em cada passo (não só caso feliz)
 - [ ] Containers afetados estão na sequência de rebuild (Seção 6 PASSO 3)
 - [ ] **Todo bloco de validação SQL é precedido do comando de conexão** `docker compose exec postgres psql -U capul_user -d capul_platform` (feedback Douglas 21/05/2026)
+- [ ] **App entregador:** Seção 2.10 preenchida (mesmo que seja só "app não afetado")
+- [ ] **App entregador:** os endpoints que o app consome continuam retrocompatíveis com o bundle **já instalado** nos aparelhos (entregador offline roda o antigo por dias)
+- [ ] **App entregador:** se há OTA/APK, a Seção 7.5 deixa explícito que é **do Clenio, depois** das validações — e não do Douglas
 
 ---
 
@@ -448,3 +517,4 @@ Marcar **todos** antes de enviar:
 | Revisão pelo Clenio | Clenio | {{DATA_REVISAO}} |
 | Aplicado em produção | Douglas | (preencher após aplicação) |
 | Validação pós-deploy | Douglas + Clenio | (preencher após aplicação) |
+| Release do app (OTA/APK) | Clenio (OTA) / TI (instala APK) | (preencher — só após a validação acima) |

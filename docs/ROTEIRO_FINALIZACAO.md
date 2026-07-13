@@ -135,6 +135,9 @@ cd logistica/backend && npx tsc --noEmit
 
 # Frontend logistica (React + Vite)
 cd logistica/frontend && npx tsc --noEmit
+
+# App entregador/supervisor (Expo — NAO sobe em container, ver 2.7.1)
+cd logistica/app && npm run typecheck
 ```
 
 ### 2.1.1 Testes Automatizados (OBRIGATORIO se mexeu em logica)
@@ -150,6 +153,9 @@ cd logistica/backend && npm test
 
 # Inventario (FastAPI/pytest)
 cd inventario/backend && python -m pytest -q
+
+# App entregador (Jest)
+cd logistica/app && npm test
 ```
 
 > Se criou regra nova sem teste, **adicione o teste** (padrao: `createPrismaMock`
@@ -340,6 +346,38 @@ Cenarios que exigem atualizacao:
 - Nova migration SQL no inventario
 - Mudanca na estrategia de deploy
 
+### 2.7.1 Verificacao de Impacto no App Entregador (`logistica/app`)
+
+O app **nao sobe em container**: ele chega no aparelho por OTA (bundle JS) ou por APK
+novo (nativo). O `docker compose` do deploy **nao entrega nada disso** — se esta etapa
+for pulada, o codigo fica no `main` e nunca chega no entregador.
+
+```bash
+# A sessao tocou o app?
+git diff --name-only HEAD~5 | grep "^logistica/app/"
+```
+
+**Classificar a mudanca** (define o que vai no roteiro de deploy):
+
+| Mudou | Chega por | Bumpar? |
+|---|---|---|
+| So `src/`, `App.tsx` (JS/TS puro) | **OTA** (`npm run ota:homolog` → validar → `npm run ota:promote`) | nada |
+| `assets/` (icone/splash) | **APK novo** — recurso nativo, OTA nao troca icone | so `versionCode`, **se o APK anterior ja foi distribuido** |
+| `app.json` (permissao, plugin, SDK), `plugins/`, dep nativa nova | **APK novo** | **`runtimeVersion` + `versionCode`** (REGRA DO BUMP) |
+
+> ⚠️ **REGRA DO BUMP** (`memory/feedback_app_ota_runtime_fixo_bump.md`): o EAS so entrega
+> OTA cujo `runtimeVersion` bate com o do APK instalado. Mexeu em nativo e **nao** bumpou →
+> o OTA novo (que exige o nativo novo) **crasha** o APK antigo. Bumpou o `runtimeVersion` →
+> os aparelhos so voltam a receber OTA **depois** de reinstalar o APK.
+> Icone/splash sao excecao: sao nativos, mas **nao** mudam a compatibilidade JS↔nativo,
+> entao **nao** bumpam `runtimeVersion`.
+
+**RBAC — espelho obrigatorio** (`memory/feedback_app_rbac_espelha_backend.md`): se a sessao
+adicionou/alterou papel nos `@Roles` de `logistica/backend` (frota, supervisor, entregas),
+espelhar em `logistica/app/src/screens/HomeScreen.tsx` (`ROLES_ENTREGA` / `ROLES_FROTA` /
+`ROLES_SUPERVISOR`). Sem isso o app **barra na porta quem a API autoriza**.
+Testar com a **persona real** do papel, nunca com ADMIN (ADMIN passa em tudo e esconde o bug).
+
 ### 2.8 Revisao de Codigo (gate antes do push)
 
 Para features grandes ou que tocam **seguranca/RBAC/dados**, passar uma revisao
@@ -386,6 +424,13 @@ ALERTA MIGRACAO:
   [ ] Arquivos de infra alterados: SIM/NAO
       Se SIM → Atualizar docs/ROTEIRO_MIGRACAO_PRODUCAO.md
 
+ALERTA APP ENTREGADOR:
+  [ ] logistica/app alterado: SIM/NAO
+      Se SIM → Entrega por: OTA / APK novo (nativo)
+                Bump: runtimeVersion SIM/NAO | versionCode SIM/NAO
+                RBAC do backend espelhada no HomeScreen: SIM/NAO/NA
+                → Registrar no roteiro de deploy (secao 2.10)
+
 ================================
 ```
 
@@ -415,6 +460,7 @@ ALERTA MIGRACAO:
 - [ ] Arquivos orfaos analisados
 - [ ] Limpeza Docker (se necessario)
 - [ ] Impacto em migracao verificado (schema, docker-compose, Dockerfile)
+- [ ] **Impacto no app entregador verificado** (OTA x APK novo, REGRA DO BUMP, RBAC espelhada) — se mexeu em `logistica/app`
 - [ ] **Revisao de codigo** (feature grande / toca seguranca) — gate antes do push
 - [ ] Relatorio apresentado
 
@@ -484,11 +530,44 @@ Aplicar este checklist **sempre que houver alteracoes em `fiscal/`**:
 
 ---
 
-**Ultima Atualizacao**: 06/06/2026
-**Versao**: 1.5
+## Checklist especifico do App Entregador (`logistica/app`)
+
+Aplicar **sempre que houver alteracoes em `logistica/app/`**. O app e o unico artefato
+da plataforma que **nao e entregue pelo deploy do servidor** — quem entrega e o Clenio
+(OTA) ou a TI (APK). Ver `logistica/app/docs/OTA_DOIS_AMBIENTES.md`.
+
+### Codigo
+- [ ] `npm run typecheck` sem erros
+- [ ] `npm test` passando
+- [ ] Papel novo/alterado no backend da logistica espelhado no `HomeScreen.tsx` (`ROLES_*`)
+- [ ] Testado com a **persona real** do papel (nao com ADMIN)
+
+### Entrega — decidir e registrar (secao 2.7.1)
+- [ ] Classificado: **OTA** (so JS) x **APK novo** (nativo: `app.json`, `plugins/`, `assets/`, dep nativa)
+- [ ] Se nativo que o JS novo exige: `runtimeVersion` **e** `versionCode` bumpados
+- [ ] Se so icone/splash: `versionCode` bumpado **apenas se o APK anterior ja foi distribuido**
+      (`runtimeVersion` **nao** muda — nao afeta compatibilidade JS↔nativo)
+- [ ] Publicacao segue o fluxo: `npm run ota:homolog` → validar em campo → `npm run ota:promote`
+      (**nada chega em producao sem passar por HLG**)
+- [ ] Se a mudanca depende de endpoint novo: OTA/APK **so depois** do deploy do backend em PROD
+- [ ] Registrado na secao 2.10 do roteiro de deploy (`docs/_TEMPLATE_Roteiro_Deploy.md`)
+
+### Compatibilidade com quem esta em campo
+- [ ] O backend novo continua respondendo a versao do app **ja instalada** nos aparelhos
+      (entregador offline / que adiou o update roda o bundle antigo por dias)
+
+---
+
+**Ultima Atualizacao**: 13/07/2026
+**Versao**: 1.6
 
 ## Changelog
 
+- **1.6 (13/07/2026)**: **App entregador (`logistica/app`) incluido** — antes o roteiro
+  ignorava o app inteiro, que nao sobe em container e nao e entregue pelo deploy do
+  servidor. Novo passo **2.7.1** (classificar OTA x APK novo, REGRA DO BUMP, espelho da
+  RBAC no `HomeScreen.tsx`), `typecheck`/`test` do app nas secoes 2.1/2.1.1, alerta no
+  relatorio final e **checklist especifico do App Entregador**.
 - **1.5 (06/06/2026)**: Modulo **logistica** incluido (builds, logs, migrations,
   commits). Nova secao **2.1.1 Testes Automatizados** (`npm test`/pytest — antes
   o roteiro so checava `tsc`, nao rodava as suites). Secao 2.3 passa a usar
