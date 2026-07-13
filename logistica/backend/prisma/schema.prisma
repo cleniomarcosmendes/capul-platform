@@ -264,6 +264,13 @@ model ManutencaoVeiculo {
   kmProximaGerada Int?           @map("km_proxima_gerada")
   registradoPorId String         @map("registrado_por_id")
   criadoEm        DateTime       @default(now()) @map("criado_em")
+  // Despesa gerada pelo `custo` desta manutenção. O custo NAO e somado a partir
+  // daqui: quem responde por dinheiro na Analise/indicadores e a despesa_veiculo,
+  // e so ela. Este vinculo existe pra (a) rastrear a origem e (b) garantir 1 custo
+  // = 1 despesa (nao ha contagem dupla nem custo invisivel). SetNull: apagar a
+  // despesa nao apaga a manutencao — o historico de KM/ciclo sobrevive.
+  despesaId       String?         @unique @map("despesa_id")
+  despesa         DespesaVeiculo? @relation(fields: [despesaId], references: [id], onDelete: SetNull)
 
   @@index([veiculoId, dataManutencao])
   @@map("manutencao_veiculo")
@@ -391,6 +398,8 @@ model DespesaVeiculo {
   motivoContestacao  String?   @map("motivo_contestacao")
   // Chave de idempotência (Fase 2d offline): reenvio da fila não duplica a despesa.
   idempotencyKey String? @unique @map("idempotency_key")
+  // Volta do vínculo com a manutenção que gerou esta despesa (quando veio de lá).
+  manutencao     ManutencaoVeiculo?
 
   @@index([filialId, situacao])
   @@index([veiculoId])

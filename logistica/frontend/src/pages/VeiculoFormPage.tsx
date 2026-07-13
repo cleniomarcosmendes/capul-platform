@@ -380,7 +380,13 @@ export function VeiculoFormPage() {
                     </div>
                     <div><label className={lbl}>KM na manutenção</label><input type="number" min={0} value={mKm} onChange={(e) => setMKm(e.target.value)} placeholder={kmAtual || '0'} className={inp} /></div>
                     <div><label className={lbl}>Data</label><input type="date" value={mData} onChange={(e) => setMData(e.target.value)} className={inp} /></div>
-                    <div><label className={lbl}>Custo (R$)</label><input type="number" step="0.01" min={0} value={mCusto} onChange={(e) => setMCusto(e.target.value)} placeholder="opcional" className={inp} /></div>
+                    <div>
+                      <label className={lbl}>Custo (R$)</label>
+                      <input type="number" step="0.01" min={0} value={mCusto} onChange={(e) => setMCusto(e.target.value)} placeholder="opcional" className={inp} />
+                      {/* O gestor precisa saber que o custo já entra na Análise — senão
+                          ele lança a mesma nota de novo em /despesas/nova e duplica. */}
+                      <p className="mt-1 text-xs text-slate-500">Vira uma despesa aprovada do veículo (tipo Manutenção). Não lance de novo em Despesas.</p>
+                    </div>
                     <div className="sm:col-span-2"><label className={lbl}>Motivo / observação</label><input value={mMotivo} onChange={(e) => setMMotivo(e.target.value)} maxLength={255} className={inp} placeholder="ex.: revisão dos 10 mil / troca de correia" /></div>
                   </div>
                   <label className="mt-3 flex items-center gap-2 text-sm text-slate-600">

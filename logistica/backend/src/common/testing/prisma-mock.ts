@@ -31,6 +31,7 @@ export function createPrismaMock(): Record<string, any> {
     contadorSequencial: modelMock(),
     despesaVeiculo: modelMock(),
     tipoDespesa: modelMock(),
+    manutencaoVeiculo: modelMock(),
     supervisor: modelMock(),
     adiantamento: modelMock(),
     fechamentoRdv: modelMock(),

@@ -16,6 +16,9 @@ const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padSta
 // Quantos km antes da próxima revisão o Monitor começa a avisar.
 const LIMIAR_AVISO_MANUTENCAO_KM = 500;
 
+// Tipo de despesa em que o custo da manutenção é lançado (nome é @unique no seed).
+const NOME_TIPO_MANUTENCAO = 'Manutenção';
+
 /**
  * Controle de FROTA (Fase 2) — viagens internas (saída/retorno), o "caderno
  * digital" da portaria. O CONDUTOR se identifica por matrícula+senha (Protheus,
@@ -398,9 +401,26 @@ export class FrotaService {
   }
 
   /**
+   * Tipo de despesa em que a manutenção é classificada. Vem do seed; se alguém
+   * tiver desativado/renomeado, recriamos — a alternativa seria estourar no meio
+   * do registro da manutenção por causa de um cadastro auxiliar, o que puniria o
+   * gestor por um problema que não é dele.
+   */
+  private async tipoDespesaManutencao(tx: Prisma.TransactionClient) {
+    const existente = await tx.tipoDespesa.findFirst({ where: { nome: NOME_TIPO_MANUTENCAO } });
+    if (existente?.ativo) return existente;
+    if (existente) return tx.tipoDespesa.update({ where: { id: existente.id }, data: { ativo: true } });
+    return tx.tipoDespesa.create({
+      data: { nome: NOME_TIPO_MANUTENCAO, categoria: 'VEICULO', ativo: true, requerAprovacao: true },
+    });
+  }
+
+  /**
    * Registra manutenção feita: marca o odômetro da revisão (kmUltimaManutencao)
    * e agenda a próxima (km + intervalo). Reseta o alerta preventivo do veículo.
    * Gestor de frota ou supervisor do veículo (mesma governança do ajuste).
+   *
+   * Com `custo`, emite também a DESPESA correspondente (ver dentro da transação).
    */
   async registrarManutencao(veiculoId: string, dto: RegistrarManutencaoDto, user: JwtPayload, role?: string) {
     const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
@@ -424,6 +444,33 @@ export class FrotaService {
     const dataManutencao = dto.data ? new Date(dto.data) : new Date();
 
     return this.prisma.$transaction(async (tx) => {
+      // O custo da manutenção vira DESPESA. `despesa_veiculo` é a única fonte de
+      // dinheiro do módulo (Análise e indicadores só leem de lá) — se o custo
+      // ficasse guardado apenas aqui, ele sumiria do fechamento sem dar erro.
+      // Nasce APROVADA: quem registra manutenção já é gestor/supervisor do veículo.
+      const despesaId = dto.custo != null && dto.custo > 0
+        ? (await tx.despesaVeiculo.create({
+            data: {
+              filialId: veiculo.filialId,
+              veiculoId,
+              tipoDespesaId: (await this.tipoDespesaManutencao(tx)).id,
+              valor: new Prisma.Decimal(dto.custo),
+              dataDespesa: dataManutencao,
+              observacao: [
+                tipo === TipoManutencao.CORRETIVA ? 'Manutenção corretiva' : 'Manutenção preventiva',
+                `(KM ${km})`,
+                dto.observacao?.trim() ? `— ${dto.observacao.trim()}` : '',
+              ].filter(Boolean).join(' '),
+              semNota: true, // a manutenção não captura número de documento
+              situacao: StatusDespesa.APROVADA,
+              criadoPorId: user.sub,
+              aprovadoPorId: user.sub,
+              aprovadoEm: new Date(),
+            },
+            select: { id: true },
+          })).id
+        : null;
+
       await tx.manutencaoVeiculo.create({
         data: {
           veiculoId,
@@ -435,6 +482,7 @@ export class FrotaService {
           reiniciouCiclo: reiniciar,
           kmProximaGerada: reiniciar ? proxima : null,
           registradoPorId: user.sub,
+          despesaId,
         },
       });
       // Só mexe no ciclo preventivo do veículo quando reinicia.

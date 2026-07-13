@@ -71,3 +71,60 @@ describe('FrotaService — escopo de visibilidade das viagens de frota', () => {
     await expect(svc.obterViagem('v1', comRole('SUPERVISOR_FROTA'))).rejects.toThrow(NotFoundException);
   });
 });
+
+// O custo da manutenção era gravado em manutencao_veiculo.custo e NUNCA somado —
+// Análise e indicadores leem só despesa_veiculo. Estes testes travam a correção:
+// custo → despesa (uma, aprovada, vinculada); sem custo → nenhuma despesa.
+describe('FrotaService — manutenção com custo gera despesa', () => {
+  let prisma: any;
+  let svc: FrotaService;
+  const gestor = comRole('GESTOR_FROTA');
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new FrotaService(prisma, dep(), dep(), dep());
+    prisma.veiculo.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', kmAtual: 1000, intervaloManutencaoKm: 10000, supervisorId: 'u1' });
+    prisma.veiculo.update.mockResolvedValue({ id: 'v1' });
+    prisma.tipoDespesa.findFirst.mockResolvedValue({ id: 'tp-manut', nome: 'Manutenção', ativo: true });
+    prisma.despesaVeiculo.create.mockResolvedValue({ id: 'desp-1' });
+    prisma.manutencaoVeiculo.create.mockResolvedValue({ id: 'm1' });
+  });
+
+  it('com custo → cria 1 despesa APROVADA no veículo e vincula à manutenção', async () => {
+    await svc.registrarManutencao('v1', { custo: 450.5, km: 1200, observacao: 'Troca de óleo' } as any, gestor, 'GESTOR_FROTA');
+
+    expect(prisma.despesaVeiculo.create).toHaveBeenCalledTimes(1);
+    const despesa = prisma.despesaVeiculo.create.mock.calls[0][0].data;
+    expect(despesa).toMatchObject({
+      filialId: 'f1',
+      veiculoId: 'v1',
+      tipoDespesaId: 'tp-manut',
+      situacao: 'APROVADA',
+      semNota: true,
+    });
+    expect(Number(despesa.valor)).toBe(450.5);
+    expect(despesa.observacao).toContain('KM 1200');
+
+    // O vínculo é o que impede custo órfão e contagem dupla.
+    expect(prisma.manutencaoVeiculo.create.mock.calls[0][0].data.despesaId).toBe('desp-1');
+  });
+
+  it('sem custo → NÃO cria despesa (manutenção segue sendo só histórico de KM)', async () => {
+    await svc.registrarManutencao('v1', { km: 1200 } as any, gestor, 'GESTOR_FROTA');
+    expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
+    expect(prisma.manutencaoVeiculo.create.mock.calls[0][0].data.despesaId).toBeNull();
+  });
+
+  it('custo zero → NÃO cria despesa (lançamento de R$ 0 só polui a Análise)', async () => {
+    await svc.registrarManutencao('v1', { custo: 0, km: 1200 } as any, gestor, 'GESTOR_FROTA');
+    expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
+  });
+
+  it('tipo "Manutenção" desativado → reativa em vez de estourar no meio do registro', async () => {
+    prisma.tipoDespesa.findFirst.mockResolvedValue({ id: 'tp-manut', nome: 'Manutenção', ativo: false });
+    prisma.tipoDespesa.update.mockResolvedValue({ id: 'tp-manut', ativo: true });
+    await svc.registrarManutencao('v1', { custo: 100 } as any, gestor, 'GESTOR_FROTA');
+    expect(prisma.tipoDespesa.update).toHaveBeenCalledWith({ where: { id: 'tp-manut' }, data: { ativo: true } });
+    expect(prisma.despesaVeiculo.create).toHaveBeenCalledTimes(1);
+  });
+});
