@@ -84,6 +84,20 @@ api.interceptors.response.use(
   },
 );
 
+/**
+ * Conta com MFA (verificação em duas etapas). O app não tem a segunda etapa: o
+ * auth-gateway responde 200 com `{ mfaRequired, mfaToken }` e SEM tokens, então
+ * sem este erro o login seguia adiante e morria gravando `undefined` no
+ * SecureStore — a tela mostrava "verifique a conexão", que manda o usuário caçar
+ * problema de rede que não existe.
+ */
+export class MfaNaoSuportadoError extends Error {
+  constructor() {
+    super('Conta com MFA — o app não faz a segunda etapa.');
+    this.name = 'MfaNaoSuportadoError';
+  }
+}
+
 /** Login mobile (device-session). Devolve os tokens; NÃO grava (quem grava é o AuthContext). */
 export async function loginRequest(
   login: string,
@@ -97,5 +111,8 @@ export async function loginRequest(
     deviceInfo: 'CAPUL Entregas (app)',
     plataforma: 'ANDROID',
   });
+  if (data.mfaRequired || !data.accessToken || !data.refreshToken) {
+    throw new MfaNaoSuportadoError();
+  }
   return data;
 }

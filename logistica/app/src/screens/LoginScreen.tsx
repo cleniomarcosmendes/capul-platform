@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
+import { MfaNaoSuportadoError } from '../api/client';
 
 const CAPUL = '#1e7d3a';
 
@@ -30,7 +31,9 @@ export function LoginScreen() {
     } catch (e: unknown) {
       const status = (e as { response?: { status?: number } })?.response?.status;
       setErro(
-        status === 401 ? 'Matrícula ou senha inválidas.'
+        e instanceof MfaNaoSuportadoError
+          ? 'Esta conta usa verificação em duas etapas (MFA), que o app ainda não faz. Peça à TI para desativar o MFA desta conta ou use o sistema no computador.'
+        : status === 401 ? 'Matrícula ou senha inválidas.'
         : status === 503 ? 'Portal do RH indisponível. Tente novamente em instantes.'
         : 'Não foi possível entrar. Verifique a conexão.',
       );
