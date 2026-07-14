@@ -60,6 +60,7 @@ export class UsuarioService {
         username: true,
         email: true,
         nome: true,
+        matricula: true,
         telefone: true,
         cargo: true,
         status: true,

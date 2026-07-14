@@ -295,8 +295,10 @@ function AtividadesTab() {
 
 // ---------------- Equipe (supervisores + vínculo com coordenador) ----------------
 interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; ativo: boolean }
-interface CoreUser { id: string; nome?: string; nomeFantasia?: string; departamento?: { id: string; nome: string } | null }
+interface CoreUser { id: string; nome?: string; nomeFantasia?: string; matricula?: string | null; departamento?: { id: string; nome: string } | null; permissoes?: { modulo: { codigo: string }; roleModulo: { codigo: string } }[] }
 interface DeptItem { id: string; nome: string }
+// Supervisor de área = usuário do sistema com o papel SUPERVISOR no módulo LOGISTICA.
+const ehSupervisorArea = (u: CoreUser) => (u.permissoes ?? []).some((p) => p.modulo.codigo === 'LOGISTICA' && p.roleModulo.codigo === 'SUPERVISOR');
 
 function EquipeTab() {
   const { toast } = useToast();
@@ -307,11 +309,9 @@ function EquipeTab() {
   const [departamentos, setDepartamentos] = useState<DeptItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [matricula, setMatricula] = useState('');
-  const [nome, setNome] = useState('');
+  const [usuarioId, setUsuarioId] = useState('');
   const [deptId, setDeptId] = useState('');
   const [coordenadorId, setCoordenadorId] = useState('');
-  const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editCoord, setEditCoord] = useState('');
@@ -344,22 +344,28 @@ function EquipeTab() {
   }, [filialId]);
 
   const nomeUser = (u: CoreUser) => u.nome ?? u.nomeFantasia ?? u.id;
-  const buscarNome = async () => {
-    const m = matricula.trim();
-    if (!m) { setNome(''); return; }
-    setBuscando(true);
-    try { const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: m }); setNome(data.nome); }
-    catch { setNome(''); toast('warning', 'Matrícula não encontrada no Protheus.'); } finally { setBuscando(false); }
+  // Supervisores de área DA FILIAL (usuários com o papel), ordenados por nome, para
+  // escolher pelo NOME — quem monta o time (Supervisor de Departamento) sabe o nome,
+  // não a matrícula. Matrícula e departamento vêm do cadastro do usuário.
+  const supervisoresArea = usuarios.filter(ehSupervisorArea);
+  const supSel = usuarios.find((u) => u.id === usuarioId);
+  const escolherSupervisor = (uid: string) => {
+    setUsuarioId(uid);
+    const u = usuarios.find((x) => x.id === uid);
+    const dep = u?.departamento?.id; // default: o departamento do próprio supervisor
+    if (dep && departamentos.some((d) => d.id === dep)) setDeptId(dep);
   };
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!matricula.trim() || !nome.trim()) { toast('warning', 'Informe a matrícula e busque o nome.'); return; }
-    if (!deptId) { toast('warning', 'Selecione o departamento do supervisor de área.'); return; }
+    const u = usuarios.find((x) => x.id === usuarioId);
+    if (!u) { toast('warning', 'Escolha o supervisor de área pelo nome.'); return; }
+    if (!u.matricula?.trim()) { toast('warning', 'Este usuário não tem matrícula (chapa) no cadastro — necessária para o RDV. Ajuste no Configurador.'); return; }
+    if (!deptId) { toast('warning', 'Selecione o departamento.'); return; }
     setSalvando(true);
     try {
-      await logisticaApi.post('/supervisor/supervisores', { matricula: matricula.trim(), nome: nome.trim(), departamentoId: deptId, coordenadorId: coordenadorId || undefined });
-      toast('success', 'Supervisor cadastrado.');
-      setShowForm(false); setMatricula(''); setNome(''); setDeptId(''); setCoordenadorId('');
+      await logisticaApi.post('/supervisor/supervisores', { matricula: u.matricula.trim(), nome: nomeUser(u), departamentoId: deptId, coordenadorId: coordenadorId || undefined });
+      toast('success', 'Supervisor de área cadastrado.');
+      setShowForm(false); setUsuarioId(''); setDeptId(''); setCoordenadorId('');
       await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao cadastrar.')); } finally { setSalvando(false); }
   };
@@ -383,15 +389,17 @@ function EquipeTab() {
         <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Matrícula (Protheus) *</label>
-              <div className="flex gap-2">
-                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} onBlur={() => void buscarNome()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarNome(); } }} placeholder="ex.: E05222" maxLength={20} className={`${inp} font-mono uppercase`} />
-                <button type="button" onClick={() => void buscarNome()} disabled={buscando || !matricula.trim()} className="mt-1 shrink-0 rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">{buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}</button>
-              </div>
-              {nome ? (
-                <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome} — nome confirmado no Protheus</p>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor de área *</label>
+              <select value={usuarioId} onChange={(e) => escolherSupervisor(e.target.value)} className={inp}>
+                <option value="">— selecione pelo nome</option>
+                {supervisoresArea.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}{u.matricula ? ` · ${u.matricula}` : ''}</option>)}
+              </select>
+              {supervisoresArea.length === 0 ? (
+                <p className="mt-1 text-xs text-amber-700">Nenhum usuário com o papel <b>Supervisor de Área</b> nesta filial. Atribua o papel no Configurador primeiro.</p>
+              ) : supSel && !supSel.matricula ? (
+                <p className="mt-1 text-xs text-rose-600">Sem matrícula (chapa) no cadastro — ajuste no Configurador para usar no RDV.</p>
               ) : (
-                <p className="mt-1 text-xs text-slate-500">Digite a matrícula do supervisor de área e clique em <b>Buscar</b> (ou Enter) — o nome é confirmado no Protheus. Só cadastra depois de confirmar.</p>
+                <p className="mt-1 text-xs text-slate-500">Escolha pelo <b>nome</b>. A matrícula e o departamento vêm do cadastro dele — ajuste o departamento se precisar.</p>
               )}
             </div>
             <div>
@@ -403,11 +411,10 @@ function EquipeTab() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Coordenador</label>
-              <select value={coordenadorId} onChange={(e) => { const cid = e.target.value; setCoordenadorId(cid); const dep = deptDoCoord(cid); if (dep) setDeptId(dep); }} className={inp}>
+              <select value={coordenadorId} onChange={(e) => { const cid = e.target.value; setCoordenadorId(cid); if (!deptId) { const dep = deptDoCoord(cid); if (dep) setDeptId(dep); } }} className={inp}>
                 <option value="">— (sem coordenador)</option>
                 {usuarios.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
               </select>
-              <p className="mt-1 text-xs text-slate-500">Ao escolher o coordenador, o <b>departamento</b> é preenchido pelo dele — ajuste se precisar.</p>
             </div>
           </div>
           <div className="mt-4 flex gap-3">
