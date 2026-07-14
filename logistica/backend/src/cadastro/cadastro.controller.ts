@@ -38,10 +38,12 @@ export class CadastroController {
   ) {}
 
   // ---------- Busca unificada ----------
-  // Também usada no planejamento de visitas da Saída de Veículos (frota) → libera
-  // os papéis de frota para a LEITURA (cadastro/escrita de cliente segue entrega).
+  // LEITURA usada em vários fluxos que precisam achar cliente/endereço: planejamento de
+  // visitas da Saída de Veículos (frota) E do RDV/Supervisores (o supervisor de área
+  // monta suas visitas). Por isso libera, além de entrega, os papéis de frota e os do
+  // RDV (SUPERVISOR/SUPERVISOR_FROTA/COORDENADOR). A escrita de cliente segue em entrega.
   @Get('busca')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA', 'COORDENADOR')
   buscaUnificada(@Query('termo') termo: string, @CurrentUser() user: JwtPayload) {
     return this.busca.buscaUnificada(termo ?? '', filialDoUsuario(user));
   }
