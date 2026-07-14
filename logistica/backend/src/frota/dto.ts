@@ -18,6 +18,11 @@ export class ValidarCondutorDto {
 }
 
 export class SaidaFrotaDto {
+  // Adiantamento (opcional) já na SAÍDA — "para viajar, a 1ª coisa é o adiantamento".
+  // Editável depois no detalhe da viagem (até o acerto encerrar).
+  @IsOptional() @IsNumber() @Min(0)
+  adiantamento?: number;
+
   @IsString() @IsNotEmpty() @MaxLength(20)
   matricula!: string;
 
@@ -55,6 +60,10 @@ export class SaidaFrotaDto {
  * nem senha: o condutor é o próprio usuário logado (matrícula resolvida do core).
  */
 export class SaidaIndividualDto {
+  // Adiantamento (opcional) já na saída — editável depois no detalhe da viagem.
+  @IsOptional() @IsNumber() @Min(0)
+  adiantamento?: number;
+
   @IsString() @IsNotEmpty()
   veiculoId!: string;
 
@@ -85,6 +94,10 @@ export class SaidaIndividualDto {
  * do resultado do infoPortal (não digitados livremente).
  */
 export class SaidaPortariaDto {
+  // Adiantamento (opcional) já na saída — editável depois no detalhe da viagem.
+  @IsOptional() @IsNumber() @Min(0)
+  adiantamento?: number;
+
   @IsString() @IsNotEmpty() @MaxLength(20)
   condutorMatricula!: string;
 

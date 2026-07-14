@@ -260,6 +260,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [senha, setSenha] = useState('');
   const [veiculoId, setVeiculoId] = useState('');
   const [kmInicial, setKmInicial] = useState('');
+  const [adiantamento, setAdiantamento] = useState('');
   const [finalidade, setFinalidade] = useState('');
   const [localSaida, setLocalSaida] = useState('');
   const [departamentoSolicitanteId, setDepartamentoSolicitanteId] = useState('');
@@ -331,7 +332,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
     setRdvCandidatos([]); setRdvSel('');
-    setKmInicial(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
+    setKmInicial(''); setAdiantamento(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
     setDepartamentoSolicitanteId(''); setPlanejadas([]);
     setNomeBusca(''); setResultados([]); setBuscou(false); setCondutorSel(null);
     setPorteiroMatricula(''); setPorteiroSenha(''); setPorteiroOk(false); setErroPorteiro(null);
@@ -395,6 +396,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           condutorMatricula: condutorSel!.matricula, condutorNome: condutorSel!.nome, veiculoId,
           porteiroMatricula: porteiroMatricula.trim(), porteiroSenha,
           kmInicial: Number(kmInicial),
+          adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
           departamentoSolicitanteId: departamentoSolicitanteId || undefined,
@@ -408,6 +410,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         await logisticaApi.post('/frota/viagens/individual', {
           veiculoId,
           kmInicial: Number(kmInicial),
+          adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
           departamentoSolicitanteId: departamentoSolicitanteId || undefined,
@@ -420,6 +423,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         await logisticaApi.post('/frota/viagens', {
           matricula: matricula.trim(), senha, veiculoId,
           kmInicial: Number(kmInicial),
+          adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
           departamentoSolicitanteId: departamentoSolicitanteId || undefined,
@@ -648,6 +652,16 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                 disabled={!podeAvancar}
                 className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
+            </div>
+
+            <div className="sm:col-span-3">
+              <label className="mb-1 block text-sm font-medium text-slate-600">Adiantamento (R$)</label>
+              <input
+                type="number" min="0" step="0.01" value={adiantamento} onChange={(e) => setAdiantamento(e.target.value)}
+                disabled={!podeAvancar} placeholder="opcional"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
+              />
+              <p className="mt-1 text-xs text-slate-400">Pode informar já na saída — editável depois no acerto.</p>
             </div>
 
             <div className="sm:col-span-5">

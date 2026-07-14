@@ -150,7 +150,7 @@ export class FrotaService {
     user: JwtPayload,
     condutorMatricula: string,
     condutorNome: string,
-    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: string[]; rdvViagemId?: string },
+    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: string[]; rdvViagemId?: string; adiantamento?: number },
   ) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
@@ -190,6 +190,7 @@ export class FrotaService {
           kmInicial: dados.kmInicial,
           localSaida: dados.localSaida ?? null,
           observacoesSaida: dados.finalidade ?? null,
+          ...(dados.adiantamento != null ? { adiantamento: new Prisma.Decimal(dados.adiantamento) } : {}),
           dataHoraSaida: new Date(),
           criadoPorId: user.sub,
         },
@@ -276,6 +277,7 @@ export class FrotaService {
           kmInicial: dto.kmInicial,
           localSaida: dto.localSaida ?? null,
           observacoesSaida: dto.finalidade ?? null,
+          ...(dto.adiantamento != null ? { adiantamento: new Prisma.Decimal(dto.adiantamento) } : {}),
           dataHoraSaida: new Date(),
           criadoPorId: user.sub,
         },
