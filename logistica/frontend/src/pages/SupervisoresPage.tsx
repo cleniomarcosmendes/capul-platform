@@ -294,8 +294,9 @@ function AtividadesTab() {
 }
 
 // ---------------- Equipe (supervisores + vínculo com coordenador) ----------------
-interface Supervisor { id: string; matricula: string; nome: string; coordenadorId?: string | null; coordenadorNome?: string | null; ativo: boolean }
+interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; ativo: boolean }
 interface CoreUser { id: string; nome?: string; nomeFantasia?: string }
+interface DeptItem { id: string; nome: string }
 
 function EquipeTab() {
   const { toast } = useToast();
@@ -303,26 +304,33 @@ function EquipeTab() {
   const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
   const [itens, setItens] = useState<Supervisor[]>([]);
   const [usuarios, setUsuarios] = useState<CoreUser[]>([]);
+  const [departamentos, setDepartamentos] = useState<DeptItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [matricula, setMatricula] = useState('');
   const [nome, setNome] = useState('');
+  const [deptId, setDeptId] = useState('');
   const [coordenadorId, setCoordenadorId] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editCoord, setEditCoord] = useState('');
+  const [editDepto, setEditDepto] = useState('');
 
   const carregar = async () => {
     setLoading(true);
     try {
-      const [s, u] = await Promise.all([
+      const [s, u, d] = await Promise.all([
         logisticaApi.get<Supervisor[]>('/supervisor/supervisores'),
         filialId ? coreApi.get<CoreUser[]>('/usuarios', { params: { filialId } }) : Promise.resolve({ data: [] as CoreUser[] }),
+        // Departamentos que ESTE usuário pode escolher: o Supervisor de Departamento vê
+        // só os seus; ADMIN vê todos. Mesmo endpoint escopado da Análise de Custos.
+        logisticaApi.get<DeptItem[]>('/frota/departamentos-filtro').catch(() => ({ data: [] as DeptItem[] })),
       ]);
-      setItens(s.data); setUsuarios(u.data);
+      setItens(s.data); setUsuarios(u.data); setDepartamentos(d.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a equipe.')); } finally { setLoading(false); }
   };
+  const deptNome = (id?: string | null) => (id ? (departamentos.find((d) => d.id === id)?.nome ?? id.slice(0, 8)) : null);
   useEffect(() => {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -339,16 +347,17 @@ function EquipeTab() {
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!matricula.trim() || !nome.trim()) { toast('warning', 'Informe a matrícula e busque o nome.'); return; }
+    if (!deptId) { toast('warning', 'Selecione o departamento do representante.'); return; }
     setSalvando(true);
     try {
-      await logisticaApi.post('/supervisor/supervisores', { matricula: matricula.trim(), nome: nome.trim(), coordenadorId: coordenadorId || undefined });
+      await logisticaApi.post('/supervisor/supervisores', { matricula: matricula.trim(), nome: nome.trim(), departamentoId: deptId, coordenadorId: coordenadorId || undefined });
       toast('success', 'Supervisor cadastrado.');
-      setShowForm(false); setMatricula(''); setNome(''); setCoordenadorId('');
+      setShowForm(false); setMatricula(''); setNome(''); setDeptId(''); setCoordenadorId('');
       await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao cadastrar.')); } finally { setSalvando(false); }
   };
   const salvarEdicao = async (id: string) => {
-    try { await logisticaApi.patch(`/supervisor/supervisores/${id}`, { coordenadorId: editCoord }); toast('success', 'Vínculo atualizado.'); setEditId(null); await carregar(); }
+    try { await logisticaApi.patch(`/supervisor/supervisores/${id}`, { departamentoId: editDepto, coordenadorId: editCoord }); toast('success', 'Cadastro atualizado.'); setEditId(null); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
   const toggle = async (s: Supervisor) => {
@@ -359,7 +368,7 @@ function EquipeTab() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <p className="text-sm text-slate-500">Cadastre os supervisores de área e vincule cada um ao seu <b>coordenador</b> (quem aprova planejamentos e despesas).</p>
+        <p className="text-sm text-slate-500">Monte o time: cadastre os representantes, informe o <b>departamento</b> de cada um e vincule ao seu <b>coordenador</b> (quem aprova planejamentos e despesas).</p>
         <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700"><Plus className="h-4 w-4" /> Novo supervisor</button>
       </div>
 
@@ -373,6 +382,13 @@ function EquipeTab() {
                 <button type="button" onClick={() => void buscarNome()} disabled={buscando || !matricula.trim()} className="mt-1 shrink-0 rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">{buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}</button>
               </div>
               {nome && <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome}</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Departamento *</label>
+              <select value={deptId} onChange={(e) => setDeptId(e.target.value)} className={inp}>
+                <option value="">— selecione</option>
+                {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Coordenador</label>
@@ -394,12 +410,20 @@ function EquipeTab() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full">
-            <thead><tr className="bg-slate-50"><th className={th}>Matrícula</th><th className={th}>Nome</th><th className={th}>Coordenador</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
+            <thead><tr className="bg-slate-50"><th className={th}>Matrícula</th><th className={th}>Nome</th><th className={th}>Departamento</th><th className={th}>Coordenador</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {itens.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-mono text-slate-700">{s.matricula}</td>
                   <td className="px-4 py-3 font-medium text-slate-700">{s.nome}</td>
+                  <td className="px-4 py-3">
+                    {editId === s.id ? (
+                      <select value={editDepto} onChange={(e) => setEditDepto(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
+                        <option value="">— (sem)</option>
+                        {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+                      </select>
+                    ) : (deptNome(s.departamentoId) ?? <span className="text-slate-400">— sem departamento</span>)}
+                  </td>
                   <td className="px-4 py-3">
                     {editId === s.id ? (
                       <select value={editCoord} onChange={(e) => setEditCoord(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
@@ -417,7 +441,7 @@ function EquipeTab() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-3">
-                        <button onClick={() => { setEditId(s.id); setEditCoord(s.coordenadorId ?? ''); }} className="text-xs text-capul-600 hover:underline">Vincular/editar</button>
+                        <button onClick={() => { setEditId(s.id); setEditCoord(s.coordenadorId ?? ''); setEditDepto(s.departamentoId ?? ''); }} className="text-xs text-capul-600 hover:underline">Editar</button>
                         <button onClick={() => void toggle(s)} className="text-xs text-capul-600 hover:underline">{s.ativo ? 'Inativar' : 'Ativar'}</button>
                       </div>
                     )}
