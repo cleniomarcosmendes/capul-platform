@@ -23,13 +23,18 @@ export class SupervisorController {
   supervisores(@CurrentUser() user: JwtPayload, @Query('ativos') ativos?: string) {
     return this.svc.listarSupervisores(user, ativos === 'true');
   }
+  // Escrita do cadastro (inclui gravar `coordenadorId`, que define quem aprova a
+  // prestação de contas): SÓ gestor. O papel SUPERVISOR é o SUPERVISIONADO — se
+  // pudesse escrever aqui, apontaria a si mesmo como coordenador e passaria a
+  // aprovar as próprias despesas/planejamentos (quebra de segregação de função).
+  // O fluxo self-service do RDV (criarViagemSupervisor) só LÊ este cadastro.
   @Post('supervisores')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   criarSupervisor(@Body() dto: CriarSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.criarSupervisor(dto, user);
   }
   @Patch('supervisores/:id')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   atualizarSupervisor(@Param('id') id: string, @Body() dto: AtualizarSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.atualizarSupervisor(id, dto, user);
   }
@@ -81,15 +86,21 @@ export class SupervisorController {
   }
 
   // ---- Workflow do planejamento (6b) ----
+  // Atores do workflow: o SUPERVISOR dono envia/inicia o seu; o COORDENADOR decide;
+  // gestor faz oversight. Operador/registrador NÃO participam da aprovação — fora do
+  // @Roles. Decidir é só do coordenador/gestor (o supervisionado nunca decide o seu).
   @Patch('viagens/:id/enviar')
+  @Roles('SUPERVISOR', 'COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   enviarPlanejamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.enviarPlanejamento(id, user);
   }
   @Patch('viagens/:id/decidir')
+  @Roles('COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   decidirPlanejamento(@Param('id') id: string, @Body() dto: DecidirPlanejamentoDto, @CurrentUser() user: JwtPayload) {
     return this.svc.decidirPlanejamento(id, dto.decisao, dto.comentario, user);
   }
   @Patch('viagens/:id/iniciar')
+  @Roles('SUPERVISOR', 'COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   iniciarExecucao(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.iniciarExecucao(id, user);
   }
@@ -187,8 +198,10 @@ export class SupervisorController {
     const { buffer, mimeType } = await this.svc.obterReciboDespesa(id, despesaId, user);
     return new StreamableFile(buffer, { type: mimeType, disposition: `inline; filename="comprovante-${despesaId}"` });
   }
-  // Decisão do coordenador sobre a despesa (6d): aprovar / rejeitar (contestar)
+  // Decisão do coordenador sobre a despesa (6d): aprovar / rejeitar (contestar).
+  // Só coordenador/gestor — o supervisionado nunca aprova a própria despesa.
   @Patch('viagens/:id/despesas/:despesaId/decidir')
+  @Roles('COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   decidirDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Body() dto: DecidirDespesaDto, @CurrentUser() user: JwtPayload) {
     return this.svc.decidirDespesa(id, despesaId, dto.decisao, dto.motivo, user);
   }
