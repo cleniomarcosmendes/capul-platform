@@ -295,7 +295,7 @@ function AtividadesTab() {
 
 // ---------------- Equipe (supervisores + vínculo com coordenador) ----------------
 interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; ativo: boolean }
-interface CoreUser { id: string; nome?: string; nomeFantasia?: string }
+interface CoreUser { id: string; nome?: string; nomeFantasia?: string; departamento?: { id: string; nome: string } | null }
 interface DeptItem { id: string; nome: string }
 
 function EquipeTab() {
@@ -331,6 +331,13 @@ function EquipeTab() {
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a equipe.')); } finally { setLoading(false); }
   };
   const deptNome = (id?: string | null) => (id ? (departamentos.find((d) => d.id === id)?.nome ?? id.slice(0, 8)) : null);
+  // Departamento sugerido pelo coordenador escolhido (cadastro dele no core) — só vale
+  // se estiver na lista que ESTE usuário pode escolher; senão devolve '' (não sugere
+  // um departamento fora do escopo do Supervisor de Departamento).
+  const deptDoCoord = (cid: string) => {
+    const dep = usuarios.find((u) => u.id === cid)?.departamento?.id;
+    return dep && departamentos.some((d) => d.id === dep) ? dep : '';
+  };
   useEffect(() => {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -381,7 +388,11 @@ function EquipeTab() {
                 <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} onBlur={() => void buscarNome()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarNome(); } }} placeholder="ex.: E05222" maxLength={20} className={`${inp} font-mono uppercase`} />
                 <button type="button" onClick={() => void buscarNome()} disabled={buscando || !matricula.trim()} className="mt-1 shrink-0 rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">{buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}</button>
               </div>
-              {nome && <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome}</p>}
+              {nome ? (
+                <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome} — nome confirmado no Protheus</p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">Digite a matrícula do representante e clique em <b>Buscar</b> (ou Enter) — o nome é confirmado no Protheus. Só cadastra depois de confirmar.</p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Departamento *</label>
@@ -392,10 +403,11 @@ function EquipeTab() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Coordenador</label>
-              <select value={coordenadorId} onChange={(e) => setCoordenadorId(e.target.value)} className={inp}>
+              <select value={coordenadorId} onChange={(e) => { const cid = e.target.value; setCoordenadorId(cid); const dep = deptDoCoord(cid); if (dep) setDeptId(dep); }} className={inp}>
                 <option value="">— (sem coordenador)</option>
                 {usuarios.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
               </select>
+              <p className="mt-1 text-xs text-slate-500">Ao escolher o coordenador, o <b>departamento</b> é preenchido pelo dele — ajuste se precisar.</p>
             </div>
           </div>
           <div className="mt-4 flex gap-3">
@@ -426,7 +438,7 @@ function EquipeTab() {
                   </td>
                   <td className="px-4 py-3">
                     {editId === s.id ? (
-                      <select value={editCoord} onChange={(e) => setEditCoord(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
+                      <select value={editCoord} onChange={(e) => { const cid = e.target.value; setEditCoord(cid); const dep = deptDoCoord(cid); if (dep) setEditDepto(dep); }} className="rounded border border-slate-300 px-2 py-1 text-sm">
                         <option value="">— (sem)</option>
                         {usuarios.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
                       </select>
