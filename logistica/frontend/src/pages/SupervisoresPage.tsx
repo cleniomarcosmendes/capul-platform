@@ -35,7 +35,7 @@ const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
 };
 const statusPlan = (s?: string | null) => STATUS_PLAN[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 
-const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', coordenacao: 'Coordenação (aprovar)', fechamento: 'Fechamento (RDV)', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
+const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', coordenacao: 'Coordenação (aprovar)', fechamento: 'Adiantamentos / RDV', atividades: 'Atividades', equipe: 'Equipe (supervisores)' };
 type TabKey = 'viagens' | 'coordenacao' | 'fechamento' | 'atividades' | 'equipe';
 
 // Abas visíveis por perfil (defesa em profundidade — o backend barra as escritas):
@@ -588,7 +588,7 @@ function FechamentoTab() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-slate-500">Fechamento mensal por supervisor: lance os adiantamentos (pode haver vários) e veja a RDV agregada do mês (todos os planejamentos). Saldo = adiantamentos − despesas aprovadas.</p>
+      <p className="mb-4 text-sm text-slate-500">Adiantamentos e RDV do mês, por supervisor. <b>Lance o adiantamento a qualquer momento</b> — antes, durante ou depois da viagem (pode haver vários no mês). Ao lado, a RDV agregada do mês (saldo = adiantamentos − despesas aprovadas) e o <b>encerramento</b> do mês (ao final, trava lançamentos).</p>
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor</label>
