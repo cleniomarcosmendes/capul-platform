@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { UsuarioService } from './usuario.service';
 import { CapabilityService } from './capability.service';
+import { ProtheusFuncionarioService } from './protheus-funcionario.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ConfiguradorAdminGuard } from '../presenca/configurador-admin.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -29,11 +30,21 @@ export class UsuarioController {
   constructor(
     private readonly usuarioService: UsuarioService,
     private readonly capabilityService: CapabilityService,
+    private readonly funcionarioLookup: ProtheusFuncionarioService,
   ) {}
 
   @Get()
   findAll(@Query('filialId') filialId?: string) {
     return this.usuarioService.findAll(filialId);
+  }
+
+  // Busca funcionário por NOME no Protheus (SA1 filtrado a chapas E…) para preencher a
+  // matrícula no cadastro de usuário — quem cadastra sabe o nome, não a chapa. Declarado
+  // ANTES de `@Get(':id')` (senão "funcionarios" cairia como id).
+  @Get('funcionarios')
+  @UseGuards(ConfiguradorAdminGuard)
+  buscarFuncionarios(@Query('nome') nome?: string) {
+    return this.funcionarioLookup.buscarPorNome(nome ?? '');
   }
 
   @Get('me/preferencias')

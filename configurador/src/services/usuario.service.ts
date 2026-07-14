@@ -13,6 +13,13 @@ export const usuarioService = {
     return data;
   },
 
+  /** Busca funcionário por NOME no Protheus (SA1 filtrado a chapas E…) para preencher a
+   *  matrícula — quem cadastra sabe o nome, não a chapa. */
+  async buscarFuncionarios(nome: string): Promise<{ matricula: string; nome: string }[]> {
+    const { data } = await coreApi.get('/usuarios/funcionarios', { params: { nome } });
+    return data;
+  },
+
   async criar(dto: {
     username: string;
     nome: string;

@@ -65,6 +65,26 @@ export function UsuarioFormPage() {
   // Login pelo portal RH (app do entregador): matrícula + senha do portal.
   const [matricula, setMatricula] = useState('');
   const [autenticaPortal, setAutenticaPortal] = useState(false);
+  // Busca de funcionário por nome (Protheus SA1, só chapas E…) → preenche a matrícula.
+  const [funcNome, setFuncNome] = useState('');
+  const [funcResultados, setFuncResultados] = useState<{ matricula: string; nome: string }[]>([]);
+  const [funcBuscando, setFuncBuscando] = useState(false);
+  const [funcMsg, setFuncMsg] = useState('');
+  const buscarFuncionario = async () => {
+    const termo = funcNome.trim();
+    if (termo.length < 3) { setFuncMsg('Digite ao menos 3 letras do nome.'); return; }
+    setFuncBuscando(true); setFuncMsg(''); setFuncResultados([]);
+    try {
+      const r = await usuarioService.buscarFuncionarios(termo);
+      setFuncResultados(r);
+      if (r.length === 0) setFuncMsg('Nenhum funcionário encontrado no Protheus com esse nome.');
+    } catch { setFuncMsg('Falha ao buscar no Protheus.'); } finally { setFuncBuscando(false); }
+  };
+  const escolherFuncionario = (f: { matricula: string; nome: string }) => {
+    setMatricula(f.matricula);
+    if (!nome.trim()) setNome(f.nome); // preenche o Nome Completo se ainda vazio
+    setFuncResultados([]); setFuncNome(''); setFuncMsg('');
+  };
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [cargo, setCargo] = useState('');
@@ -543,6 +563,31 @@ export function UsuarioFormPage() {
                   Matrícula {autenticaPortal && '*'}
                 </label>
                 <input type="text" value={matricula} onChange={(e) => setMatricula(e.target.value)} className={inputClass} placeholder="Ex.: 001047" />
+                {/* Buscar a chapa pelo nome no Protheus (quem cadastra sabe o nome, não a matrícula). */}
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text" value={funcNome}
+                    onChange={(e) => setFuncNome(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarFuncionario(); } }}
+                    className={inputClass} placeholder="ou busque o funcionário pelo nome (Protheus)"
+                  />
+                  <button type="button" onClick={() => void buscarFuncionario()} disabled={funcBuscando || funcNome.trim().length < 3}
+                    className="shrink-0 rounded-md border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                    {funcBuscando ? 'Buscando…' : 'Buscar'}
+                  </button>
+                </div>
+                {funcResultados.length > 0 && (
+                  <ul className="mt-1 max-h-44 overflow-auto rounded-md border border-slate-200 bg-white text-sm shadow-sm">
+                    {funcResultados.map((f) => (
+                      <li key={f.matricula}>
+                        <button type="button" onClick={() => escolherFuncionario(f)} className="block w-full px-3 py-1.5 text-left hover:bg-slate-50">
+                          <span className="font-medium text-slate-700">{f.nome}</span> <span className="font-mono text-slate-400">· {f.matricula}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {funcMsg && <p className="mt-1 text-xs text-slate-500">{funcMsg}</p>}
               </div>
               <div className="sm:col-span-2">
                 <label className="flex items-center gap-2 text-sm text-slate-700">
