@@ -10,31 +10,32 @@ import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarS
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
   f ? { buffer: f.buffer, mimetype: f.mimetype, size: f.size } : undefined;
 
-// Leitura liberada aos operadores (escolhem atividade/região ao lançar a visita);
-// escrita (cadastro dos catálogos) é do gestor. @Roles do método sobrepõe o da classe.
+// RDV/Supervisores é processo INTERNO do setor: quem administra é o SUPERVISOR_FROTA
+// ("Supervisor de Departamento", escopado aos SEUS departamentos no serviço) e o
+// COORDENADOR (só o seu time). Os GESTORES (entrega/frota) NÃO participam — frota é
+// veículo, não processo interno. ADMIN passa sempre (guard). @Roles do método sobrepõe
+// o da classe.
 @Controller('supervisor')
-@Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'OPERADOR_ENTREGA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR')
+@Roles('OPERADOR_ENTREGA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
 export class SupervisorController {
   constructor(private readonly svc: SupervisorService) {}
 
   // ---- Cadastro de Supervisor de Área + vínculo (Fase 6a) ----
-  // Escrita: gestor / "supervisor de departamento" monta o time. Leitura liberada.
   @Get('supervisores')
   supervisores(@CurrentUser() user: JwtPayload, @Query('ativos') ativos?: string) {
     return this.svc.listarSupervisores(user, ativos === 'true');
   }
-  // Escrita do cadastro (inclui gravar `coordenadorId`, que define quem aprova a
-  // prestação de contas): SÓ gestor. O papel SUPERVISOR é o SUPERVISIONADO — se
-  // pudesse escrever aqui, apontaria a si mesmo como coordenador e passaria a
-  // aprovar as próprias despesas/planejamentos (quebra de segregação de função).
-  // O fluxo self-service do RDV (criarViagemSupervisor) só LÊ este cadastro.
+  // Escrita do cadastro ("montar o time" — inclui gravar `coordenadorId`, que define quem
+  // aprova a prestação de contas): SÓ o Supervisor de Departamento (nos SEUS departamentos)
+  // e ADMIN. O papel SUPERVISOR é o SUPERVISIONADO — não escreve aqui (senão se apontaria
+  // como coordenador e aprovaria as próprias despesas). O self-service do RDV só LÊ isto.
   @Post('supervisores')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR_FROTA')
   criarSupervisor(@Body() dto: CriarSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.criarSupervisor(dto, user);
   }
   @Patch('supervisores/:id')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR_FROTA')
   atualizarSupervisor(@Param('id') id: string, @Body() dto: AtualizarSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.atualizarSupervisor(id, dto, user);
   }
@@ -51,12 +52,12 @@ export class SupervisorController {
     return this.svc.listarTiposDespesa(ativos !== 'false');
   }
   @Post('atividades')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR_FROTA')
   criarAtividade(@Body() dto: CriarAtividadeDto, @CurrentUser() user: JwtPayload) {
     return this.svc.criarAtividade(dto, user);
   }
   @Patch('atividades/:id')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR_FROTA')
   atualizarAtividade(@Param('id') id: string, @Body() dto: AtualizarAtividadeDto, @CurrentUser() user: JwtPayload) {
     return this.svc.atualizarAtividade(id, dto, user);
   }
@@ -72,35 +73,35 @@ export class SupervisorController {
     return this.svc.obterViagemSupervisor(id, user);
   }
   @Post('viagens')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR')
+  @Roles('SUPERVISOR', 'SUPERVISOR_FROTA')
   criarViagem(@Body() dto: CriarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.criarViagemSupervisor(dto, user);
   }
-  // Concluir o RDV: o próprio SUPERVISOR (fecha o seu), o COORDENADOR (oversight) e
-  // gestores — mesmos atores do workflow (enviar/decidir/iniciar). Escopo de filial
-  // é aplicado no serviço. Antes só gestor → 403 p/ supervisor/coordenador (bug).
+  // Concluir o RDV: o próprio SUPERVISOR (fecha o seu), o COORDENADOR e o Supervisor de
+  // Departamento — mesmos atores do workflow (enviar/decidir/iniciar). O escopo (filial +
+  // departamento/coordenação) é aplicado no serviço.
   @Patch('viagens/:id/concluir')
-  @Roles('SUPERVISOR', 'COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
   concluirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.concluirViagemSupervisor(id, user);
   }
 
   // ---- Workflow do planejamento (6b) ----
-  // Atores do workflow: o SUPERVISOR dono envia/inicia o seu; o COORDENADOR decide;
-  // gestor faz oversight. Operador/registrador NÃO participam da aprovação — fora do
-  // @Roles. Decidir é só do coordenador/gestor (o supervisionado nunca decide o seu).
+  // Atores: o SUPERVISOR dono envia/inicia o seu; o COORDENADOR e o Supervisor de
+  // Departamento decidem (cada um no seu escopo). Operador/registrador NÃO participam da
+  // aprovação. Decidir nunca é do supervisionado (ele não decide o próprio).
   @Patch('viagens/:id/enviar')
-  @Roles('SUPERVISOR', 'COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
   enviarPlanejamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.enviarPlanejamento(id, user);
   }
   @Patch('viagens/:id/decidir')
-  @Roles('COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   decidirPlanejamento(@Param('id') id: string, @Body() dto: DecidirPlanejamentoDto, @CurrentUser() user: JwtPayload) {
     return this.svc.decidirPlanejamento(id, dto.decisao, dto.comentario, user);
   }
   @Patch('viagens/:id/iniciar')
-  @Roles('SUPERVISOR', 'COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
   iniciarExecucao(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.iniciarExecucao(id, user);
   }
@@ -116,12 +117,12 @@ export class SupervisorController {
     return this.svc.listarAdiantamentos(user, supervisorId, Number(mes));
   }
   @Post('adiantamentos')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   lancarAdiantamento(@Body() dto: LancarAdiantamentoDto, @CurrentUser() user: JwtPayload) {
     return this.svc.lancarAdiantamento(dto, user);
   }
   @Delete('adiantamentos/:id')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   removerAdiantamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.removerAdiantamento(id, user);
   }
@@ -130,28 +131,28 @@ export class SupervisorController {
     return this.svc.rdvMensal(supervisorId, Number(mes), user);
   }
 
-  /** Encerra o RDV do mês (trava despesas/adiantamentos/visitas). Coordenador/gestor. */
+  /** Encerra o RDV do mês (trava despesas/adiantamentos/visitas). Coordenador/Supervisor de Departamento. */
   @Post('rdv-mensal/fechar')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   fecharRdv(@CurrentUser() user: JwtPayload, @Body() dto: { supervisorId: string; mesReferencia: number }) {
     return this.svc.fecharRdv(dto.supervisorId, Number(dto.mesReferencia), user);
   }
 
-  /** Reabre o RDV do mês (libera lançamentos). Coordenador/gestor. */
+  /** Reabre o RDV do mês (libera lançamentos). Coordenador/Supervisor de Departamento. */
   @Post('rdv-mensal/reabrir')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   reabrirRdv(@CurrentUser() user: JwtPayload, @Body() dto: { supervisorId: string; mesReferencia: number }) {
     return this.svc.reabrirRdv(dto.supervisorId, Number(dto.mesReferencia), user);
   }
 
-  // ---- Administração (Fase 5): correções do gestor ----
+  // ---- Administração (Fase 5): correções do Supervisor de Departamento / ADMIN ----
   @Patch('viagens/:id')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR_FROTA')
   editarViagem(@Param('id') id: string, @Body() dto: EditarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.editarViagem(id, dto, user);
   }
   @Patch('viagens/:id/reabrir')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('SUPERVISOR_FROTA')
   reabrirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.reabrirViagem(id, user);
   }
@@ -201,7 +202,7 @@ export class SupervisorController {
   // Decisão do coordenador sobre a despesa (6d): aprovar / rejeitar (contestar).
   // Só coordenador/gestor — o supervisionado nunca aprova a própria despesa.
   @Patch('viagens/:id/despesas/:despesaId/decidir')
-  @Roles('COORDENADOR', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   decidirDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Body() dto: DecidirDespesaDto, @CurrentUser() user: JwtPayload) {
     return this.svc.decidirDespesa(id, despesaId, dto.decisao, dto.motivo, user);
   }

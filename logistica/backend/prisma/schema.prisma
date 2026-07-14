@@ -693,6 +693,11 @@ model Supervisor {
   matricula     String
   nome          String
   filialId      String   @map("filial_id")
+  // Departamento (core.departamento.id, gravado como String sem FK — convenção do
+  // schema). Escopo do Supervisor de Departamento (SUPERVISOR_FROTA) no RDV: ele
+  // gere só os representantes dos seus departamentos. Nullable: "montar o time"
+  // define; registros antigos ficam sem depto até serem editados.
+  departamentoId String? @map("departamento_id")
   coordenadorId String?  @map("coordenador_id")
   ativo         Boolean  @default(true)
   criadoEm      DateTime @default(now()) @map("criado_em")
@@ -702,6 +707,7 @@ model Supervisor {
 
   @@unique([filialId, matricula])
   @@index([coordenadorId])
+  @@index([departamentoId])
   @@map("supervisor")
   @@schema("logistica")
 }

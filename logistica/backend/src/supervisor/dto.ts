@@ -21,11 +21,17 @@ export class LancarAdiantamentoDto {
 export class CriarSupervisorDto {
   @IsString() @IsNotEmpty() @MaxLength(20) matricula!: string;
   @IsString() @IsNotEmpty() @MaxLength(120) nome!: string;
+  // Departamento (core.departamento.id) a que este representante pertence — define o
+  // escopo do Supervisor de Departamento. Opcional no contrato (ADMIN pode omitir);
+  // o Supervisor de Departamento só grava um dos SEUS departamentos.
+  @IsOptional() @IsString() @MaxLength(40) departamentoId?: string;
   // Usuário do sistema (core.usuarios) que coordena este supervisor. Opcional.
   @IsOptional() @IsString() @MaxLength(40) coordenadorId?: string;
 }
 export class AtualizarSupervisorDto {
   @IsOptional() @IsString() @MaxLength(120) nome?: string;
+  // '' = tirar do departamento; senão troca (para um depto do próprio escopo).
+  @IsOptional() @IsString() @MaxLength(40) departamentoId?: string;
   // '' = desvincular o coordenador; senão troca.
   @IsOptional() @IsString() @MaxLength(40) coordenadorId?: string;
   @IsOptional() @IsBoolean() ativo?: boolean;

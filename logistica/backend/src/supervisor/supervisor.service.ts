@@ -41,9 +41,9 @@ export class SupervisorService {
   // ---- Cadastro de Supervisor de Área + vínculo com o coordenador (Fase 6a) ----
   async listarSupervisores(user: JwtPayload, somenteAtivos?: boolean) {
     const filialId = filialDoUsuario(user);
+    const escopo = await this.escopoSupervisorWhere(user);
     const lista = await this.prisma.supervisor.findMany({
-      // Gestor vê os da filial; coordenador só os SEUS (Fechamento/RDV escopado).
-      where: { filialId, ...(this.ehGestor(user) ? {} : { coordenadorId: user.sub }), ...(somenteAtivos ? { ativo: true } : {}) },
+      where: { filialId, ...escopo, ...(somenteAtivos ? { ativo: true } : {}) },
       orderBy: { nome: 'asc' },
     });
     const coordIds = [...new Set(lista.map((s) => s.coordenadorId).filter((x): x is string => !!x))];
@@ -53,12 +53,14 @@ export class SupervisorService {
 
   async criarSupervisor(dto: CriarSupervisorDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
+    const departamentoId = dto.departamentoId?.trim() || null;
+    await this.assertPodeGerirDepartamento(departamentoId, user);
     const matricula = dto.matricula.trim().toUpperCase();
     const ja = await this.prisma.supervisor.findFirst({ where: { filialId, matricula } });
     if (ja) throw new BadRequestException('Já existe um supervisor com essa matrícula nesta filial.');
     if (dto.coordenadorId) await this.core.validarUsuario(dto.coordenadorId, 'Coordenador');
     return this.prisma.supervisor.create({
-      data: { matricula, nome: dto.nome.trim(), filialId, coordenadorId: dto.coordenadorId || null },
+      data: { matricula, nome: dto.nome.trim(), filialId, departamentoId, coordenadorId: dto.coordenadorId || null },
     });
   }
 
@@ -67,11 +69,16 @@ export class SupervisorService {
     const s = await this.prisma.supervisor.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('Supervisor não encontrado.');
     if (s.filialId !== filialId) throw new ForbiddenException('Supervisor de outra filial.');
+    // Pode mexer NESTE registro (departamento atual dele é do seu escopo)…
+    await this.assertPodeGerirDepartamento(s.departamentoId, user);
+    // …e, se está movendo de departamento, o destino também precisa ser do seu escopo.
+    if (dto.departamentoId !== undefined) await this.assertPodeGerirDepartamento(dto.departamentoId?.trim() || null, user);
     if (dto.coordenadorId) await this.core.validarUsuario(dto.coordenadorId, 'Coordenador');
     return this.prisma.supervisor.update({
       where: { id },
       data: {
         nome: dto.nome?.trim() ?? undefined,
+        departamentoId: dto.departamentoId !== undefined ? (dto.departamentoId?.trim() || null) : undefined,
         coordenadorId: dto.coordenadorId !== undefined ? (dto.coordenadorId || null) : undefined,
         ativo: dto.ativo ?? undefined,
       },
@@ -138,7 +145,8 @@ export class SupervisorService {
     } else if (this.roleLog(user) === 'SUPERVISOR') {
       // Auto-serviço (híbrido): o próprio usuário logado É o supervisor — o JWT já
       // autenticou, então dispensa matrícula+senha. Identifica pela matrícula do
-      // login (liga ao cadastro adiante). O gestor segue pelo ramo acima.
+      // login (liga ao cadastro adiante). O Supervisor de Departamento cria por representante
+      // pelo ramo acima (matrícula+senha do representante).
       const u = await this.matriculaDoUsuario(user.sub);
       if (!u?.matricula?.trim()) {
         throw new BadRequestException('Seu usuário não tem matrícula cadastrada. Peça ao administrador ou informe a matrícula e a senha do supervisor.');
@@ -200,45 +208,105 @@ export class SupervisorService {
       Prisma.sql`SELECT matricula, TRIM(nome) AS nome FROM "core"."usuarios" WHERE id = ${userId} LIMIT 1`);
     return rows[0] ?? null;
   }
-  private ehGestor(user: JwtPayload): boolean {
-    const r = this.roleLog(user);
-    return r === 'GESTOR_FROTA' || r === 'GESTOR_ENTREGA' || r === 'ADMIN';
+  private ehAdmin(user: JwtPayload): boolean { return this.roleLog(user) === 'ADMIN'; }
+  private ehSupervisorDepto(user: JwtPayload): boolean { return this.roleLog(user) === 'SUPERVISOR_FROTA'; }
+
+  /** Departamentos que o Supervisor de Departamento (SUPERVISOR_FROTA) cobre — MESMA
+   *  fonte da frota: os departamentos dos veículos que ele supervisiona. Uma só
+   *  definição de "os departamentos dele" no módulo. Vazio → não cobre nenhum. */
+  private async deptosDoSupervisorDepto(user: JwtPayload): Promise<string[]> {
+    const rows = await this.prisma.veiculo.findMany({
+      where: { filialId: user.filialId ?? undefined, supervisorId: user.sub },
+      select: { departamentoLotacaoId: true },
+      distinct: ['departamentoLotacaoId'],
+    });
+    return rows.map((r) => r.departamentoLotacaoId).filter((x): x is string => !!x);
   }
-  /** Escopo do coordenador: gestor alcança qualquer supervisor da filial; o
-   *  coordenador só os SEUS (vínculo). Usado no Fechamento/RDV/adiantamentos. */
-  private assertEscopoSupervisor(sup: { coordenadorId: string | null } | null, user: JwtPayload) {
-    if (!sup || this.ehGestor(user)) return;
-    if (sup.coordenadorId !== user.sub) throw new ForbiddenException('Supervisor fora da sua coordenação.');
+
+  /** Filtro Prisma de quais representantes o usuário alcança no RDV: ADMIN todos da
+   *  filial; Supervisor de Departamento os dos SEUS departamentos; demais (coordenador)
+   *  só os SEUS (vínculo). Gestores de entrega/frota NÃO participam do RDV. */
+  private async escopoSupervisorWhere(user: JwtPayload): Promise<Prisma.SupervisorWhereInput> {
+    if (this.ehAdmin(user)) return {};
+    if (this.ehSupervisorDepto(user)) return { departamentoId: { in: await this.deptosDoSupervisorDepto(user) } };
+    return { coordenadorId: user.sub };
+  }
+
+  /** Alcança um representante específico? ADMIN sim; Supervisor de Departamento se o
+   *  depto do representante é um dos seus; coordenador se é supervisor dele. Usado no
+   *  Fechamento/RDV/adiantamentos. */
+  private async assertEscopoSupervisor(sup: { coordenadorId: string | null; departamentoId: string | null } | null, user: JwtPayload) {
+    if (!sup || this.ehAdmin(user)) return;
+    if (this.ehSupervisorDepto(user)) {
+      const deps = await this.deptosDoSupervisorDepto(user);
+      if (sup.departamentoId && deps.includes(sup.departamentoId)) return;
+      throw new ForbiddenException('Representante fora do seu departamento.');
+    }
+    if (sup.coordenadorId === user.sub) return;
+    throw new ForbiddenException('Representante fora da sua coordenação.');
+  }
+
+  /** "Montar o time" (escrever o cadastro) e escolher o departamento: ADMIN em qualquer
+   *  depto; Supervisor de Departamento só nos SEUS; ninguém mais. deptId null → só ADMIN
+   *  (representante sem depto fica fora do escopo de qualquer Supervisor de Departamento). */
+  private async assertPodeGerirDepartamento(deptId: string | null, user: JwtPayload) {
+    if (this.ehAdmin(user)) return;
+    if (this.ehSupervisorDepto(user)) {
+      const deps = await this.deptosDoSupervisorDepto(user);
+      if (deptId && deps.includes(deptId)) return;
+      throw new ForbiddenException('Departamento fora do seu escopo.');
+    }
+    throw new ForbiddenException('Sem permissão para gerir o cadastro de representantes.');
+  }
+
+  /** Decide (aprova/ajusta/rejeita) planejamento/despesa: ADMIN; o Supervisor de
+   *  Departamento (se o representante é de um depto seu); o COORDENADOR do representante.
+   *  O supervisionado nunca decide o seu. */
+  private async assertPodeDecidir(reg: { coordenadorId: string | null; departamentoId: string | null } | null | undefined, user: JwtPayload) {
+    if (this.ehAdmin(user)) return;
+    if (this.ehSupervisorDepto(user)) {
+      const deps = await this.deptosDoSupervisorDepto(user);
+      if (reg?.departamentoId && deps.includes(reg.departamentoId)) return;
+      throw new ForbiddenException('Representante fora do seu departamento.');
+    }
+    if (reg?.coordenadorId && reg.coordenadorId === user.sub) return;
+    throw new ForbiddenException('Apenas o coordenador do representante (ou o Supervisor de Departamento) pode decidir.');
   }
 
   // ---- Workflow do planejamento (supervisor envia · coordenador decide) ----
   private async planejamentoOuErro(id: string, filialId: string) {
-    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, matricula: true } } } });
+    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, matricula: true, departamentoId: true } } } });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Planejamento não encontrado.');
     if (v.filialId !== filialId) throw new ForbiddenException('Planejamento de outra filial.');
     return v;
   }
 
   /** Transições que o PRÓPRIO supervisor dispara (enviar/iniciar): quem pode é o
-   *  supervisor DONO do RDV (por matrícula), o coordenador dele, ou gestor/admin.
-   *  Sem isso, qualquer supervisor da mesma filial avançaria o planejamento alheio
-   *  (a filial já foi checada em planejamentoOuErro; aqui é o dono). Planejamento
-   *  sem cadastro de supervisor vinculado (não roteia): o criador é o dono. */
+   *  representante DONO do RDV (por matrícula), o coordenador dele, o Supervisor de
+   *  Departamento (se é de um depto seu), ou ADMIN. Sem isso, qualquer supervisor da
+   *  mesma filial avançaria o planejamento alheio (a filial já foi checada em
+   *  planejamentoOuErro). Planejamento sem cadastro vinculado (não roteia): o criador. */
   private async assertDonoOuGestorPlanejamento(
-    v: { criadoPorId: string | null; supervisorRegistro: { coordenadorId: string | null; matricula: string } | null },
+    v: { criadoPorId: string | null; supervisorRegistro: { coordenadorId: string | null; matricula: string; departamentoId: string | null } | null },
     user: JwtPayload,
   ) {
-    if (this.ehGestor(user)) return;
+    if (this.ehAdmin(user)) return;
+    if (this.ehSupervisorDepto(user)) {
+      const dep = v.supervisorRegistro?.departamentoId;
+      const deps = await this.deptosDoSupervisorDepto(user);
+      if (dep && deps.includes(dep)) return;
+      throw new ForbiddenException('Planejamento fora do seu departamento.');
+    }
     const coord = v.supervisorRegistro?.coordenadorId;
     if (coord && coord === user.sub) return; // coordenador do supervisor
     const supMat = v.supervisorRegistro?.matricula;
     if (supMat) {
       const u = await this.matriculaDoUsuario(user.sub);
-      if (u?.matricula && chapa(u.matricula) === chapa(supMat)) return; // é o próprio supervisor
+      if (u?.matricula && chapa(u.matricula) === chapa(supMat)) return; // é o próprio representante
     } else if (v.criadoPorId && v.criadoPorId === user.sub) {
       return; // planejamento sem cadastro vinculado: o criador é o dono
     }
-    throw new ForbiddenException('Apenas o supervisor dono do planejamento, o coordenador dele ou o gestor pode fazer isso.');
+    throw new ForbiddenException('Apenas o representante dono do planejamento, o coordenador dele ou o Supervisor de Departamento pode fazer isso.');
   }
 
   async enviarPlanejamento(id: string, user: JwtPayload) {
@@ -255,11 +323,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
     if (v.statusPlanejamento !== 'ENVIADO') throw new BadRequestException('Só decide planejamento que foi ENVIADO para aprovação.');
-    // Só o coordenador do supervisor (ou gestor/admin) decide.
-    const ehCoordenador = v.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === user.sub;
-    if (!this.ehGestor(user) && !ehCoordenador) {
-      throw new ForbiddenException('Apenas o coordenador do supervisor (ou o gestor) pode aprovar/ajustar/rejeitar.');
-    }
+    await this.assertPodeDecidir(v.supervisorRegistro, user);
     if (decisao !== 'APROVADO' && !comentario?.trim()) throw new BadRequestException('Informe o comentário do ajuste/rejeição.');
     return this.prisma.viagem.update({
       where: { id },
@@ -277,16 +341,20 @@ export class SupervisorService {
     return this.prisma.viagem.update({ where: { id }, data: { statusPlanejamento: 'EM_EXECUCAO' } });
   }
 
-  /** Fila de aprovação: o COORDENADOR vê os planejamentos dos SEUS supervisores
-   *  (via vínculo); o GESTOR/ADMIN vê TODOS os da filial (oversight — espelha o
-   *  `decidir`, que já deixa o gestor aprovar/rejeitar qualquer um). */
-  listarPlanejamentosCoordenador(user: JwtPayload, status?: string) {
+  /** Fila de aprovação: o COORDENADOR vê os planejamentos dos SEUS supervisores (via
+   *  vínculo); o Supervisor de Departamento vê os dos SEUS departamentos; ADMIN vê
+   *  TODOS da filial. Espelha o `decidir`. */
+  async listarPlanejamentosCoordenador(user: JwtPayload, status?: string) {
     const filialId = filialDoUsuario(user);
+    let regFiltro: Prisma.ViagemWhereInput = {};
+    if (this.ehAdmin(user)) regFiltro = {};
+    else if (this.ehSupervisorDepto(user)) regFiltro = { supervisorRegistro: { departamentoId: { in: await this.deptosDoSupervisorDepto(user) } } };
+    else regFiltro = { supervisorRegistro: { coordenadorId: user.sub } };
     return this.prisma.viagem.findMany({
       where: {
         filialId,
         tipo: TipoViagem.SUPERVISOR,
-        ...(this.ehGestor(user) ? {} : { supervisorRegistro: { coordenadorId: user.sub } }),
+        ...regFiltro,
         ...(status ? { statusPlanejamento: status as StatusPlanejamento } : {}),
       },
       orderBy: [{ mesReferencia: 'desc' }, { numero: 'desc' }],
@@ -488,12 +556,11 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id: despesaId },
-      include: { viagem: { select: { tipo: true, filialId: true, supervisorRegistro: { select: { coordenadorId: true } } } } },
+      include: { viagem: { select: { tipo: true, filialId: true, supervisorRegistro: { select: { coordenadorId: true, departamentoId: true } } } } },
     });
     if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
     if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
-    const ehCoordenador = d.viagem.supervisorRegistro?.coordenadorId && d.viagem.supervisorRegistro.coordenadorId === user.sub;
-    if (!this.ehGestor(user) && !ehCoordenador) throw new ForbiddenException('Apenas o coordenador do supervisor (ou o gestor) pode aprovar/rejeitar despesas.');
+    await this.assertPodeDecidir(d.viagem.supervisorRegistro, user);
     if (decisao === 'CONTESTADA' && !motivo?.trim()) throw new BadRequestException('Informe o motivo da rejeição da despesa.');
     return this.prisma.despesaVeiculo.update({
       where: { id: despesaId },
@@ -541,9 +608,10 @@ export class SupervisorService {
   // ---- Administração (Fase 5): correções do gestor ----
   async editarViagem(id: string, dto: EditarViagemSupervisorDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, departamentoId: true } } } });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    await this.assertEscopoSupervisor(v.supervisorRegistro, user);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
     return this.prisma.viagem.update({
       where: { id },
@@ -555,9 +623,10 @@ export class SupervisorService {
 
   async reabrirViagem(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const v = await this.prisma.viagem.findUnique({ where: { id } });
+    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, departamentoId: true } } } });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    await this.assertEscopoSupervisor(v.supervisorRegistro, user);
     if (v.situacao !== StatusViagem.CONCLUIDA) return v;
     return this.prisma.viagem.update({
       where: { id },
@@ -725,7 +794,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: dto.supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new BadRequestException('Supervisor inválido para esta filial.');
-    this.assertEscopoSupervisor(sup, user);
+    await this.assertEscopoSupervisor(sup, user);
     if (dto.mesReferencia % 100 < 1 || dto.mesReferencia % 100 > 12) throw new BadRequestException('Mês de referência inválido (AAAAMM).');
     await this.assertRdvAberto(dto.supervisorId, dto.mesReferencia);
     return this.prisma.adiantamento.create({
@@ -740,14 +809,14 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
-    this.assertEscopoSupervisor(sup, user);
+    await this.assertEscopoSupervisor(sup, user);
     return this.prisma.adiantamento.findMany({ where: { supervisorId, mesReferencia: mes }, orderBy: { dataAdiantamento: 'asc' } });
   }
   async removerAdiantamento(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true } } } });
+    const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true, departamentoId: true } } } });
     if (!a || a.supervisor.filialId !== filialId) throw new NotFoundException('Adiantamento não encontrado.');
-    this.assertEscopoSupervisor(a.supervisor, user);
+    await this.assertEscopoSupervisor(a.supervisor, user);
     await this.prisma.adiantamento.delete({ where: { id } });
     return { ok: true };
   }
@@ -757,7 +826,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
-    this.assertEscopoSupervisor(sup, user); // coordenador do supervisor ou gestor
+    await this.assertEscopoSupervisor(sup, user); // coordenador do supervisor ou gestor
     await this.prisma.fechamentoRdv.upsert({
       where: { supervisorId_mesReferencia: { supervisorId, mesReferencia: mes } },
       create: { supervisorId, mesReferencia: mes, fechadoPorId: user.sub },
@@ -769,7 +838,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
-    this.assertEscopoSupervisor(sup, user);
+    await this.assertEscopoSupervisor(sup, user);
     await this.prisma.fechamentoRdv.deleteMany({ where: { supervisorId, mesReferencia: mes } });
     return { fechado: false as const };
   }
@@ -780,7 +849,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
-    this.assertEscopoSupervisor(sup, user);
+    await this.assertEscopoSupervisor(sup, user);
 
     const planejamentos = await this.prisma.viagem.findMany({
       where: { filialId, tipo: TipoViagem.SUPERVISOR, supervisorRegistroId: supervisorId, mesReferencia: mes },

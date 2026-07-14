@@ -101,11 +101,18 @@ describe('SupervisorService.listarPlanejamentosCoordenador', () => {
     expect(arg.where.supervisorRegistro).toEqual({ coordenadorId: 'u1' });
   });
 
-  it('gestor: SEM filtro de coordenador — vê todos os planejamentos da filial', () => {
-    void svc.listarPlanejamentosCoordenador(comRole('GESTOR_ENTREGA'));
+  it('ADMIN: SEM filtro de coordenador — vê todos os planejamentos da filial', async () => {
+    await svc.listarPlanejamentosCoordenador(comRole('ADMIN'));
     const arg = prisma.viagem.findMany.mock.calls[0][0];
     expect(arg.where.supervisorRegistro).toBeUndefined();
     expect(arg.where.filialId).toBe('f1');
+  });
+
+  it('Supervisor de Departamento: filtra por departamentoId ∈ seus departamentos', async () => {
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }, { departamentoLotacaoId: 'd2' }]);
+    await svc.listarPlanejamentosCoordenador(comRole('SUPERVISOR_FROTA'));
+    const arg = prisma.viagem.findMany.mock.calls[0][0];
+    expect(arg.where.supervisorRegistro).toEqual({ departamentoId: { in: ['d1', 'd2'] } });
   });
 });
 
@@ -124,10 +131,31 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
     await svc.listarSupervisores(comRole('COORDENADOR'));
     expect(prisma.supervisor.findMany.mock.calls[0][0].where.coordenadorId).toBe('u1');
   });
-  it('listarSupervisores gestor: SEM filtro de coordenador', async () => {
+  it('listarSupervisores ADMIN: SEM filtro (vê todos da filial)', async () => {
     prisma.supervisor.findMany.mockResolvedValue([]);
-    await svc.listarSupervisores(comRole('GESTOR_ENTREGA'));
-    expect(prisma.supervisor.findMany.mock.calls[0][0].where.coordenadorId).toBeUndefined();
+    await svc.listarSupervisores(comRole('ADMIN'));
+    const where = prisma.supervisor.findMany.mock.calls[0][0].where;
+    expect(where.coordenadorId).toBeUndefined();
+    expect(where.departamentoId).toBeUndefined();
+  });
+  it('listarSupervisores Supervisor de Departamento: filtra por departamentoId ∈ seus deptos', async () => {
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]);
+    prisma.supervisor.findMany.mockResolvedValue([]);
+    await svc.listarSupervisores(comRole('SUPERVISOR_FROTA'));
+    expect(prisma.supervisor.findMany.mock.calls[0][0].where.departamentoId).toEqual({ in: ['d1'] });
+  });
+  it('criarSupervisor Supervisor de Departamento: depto FORA do seu escopo → 403', async () => {
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]);
+    await expect(svc.criarSupervisor({ matricula: 'E1', nome: 'X', departamentoId: 'd9' } as any, comRole('SUPERVISOR_FROTA')))
+      .rejects.toThrow(ForbiddenException);
+    expect(prisma.supervisor.create).not.toHaveBeenCalled();
+  });
+  it('criarSupervisor Supervisor de Departamento: depto DELE → cria', async () => {
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]);
+    prisma.supervisor.findFirst.mockResolvedValue(null);
+    prisma.supervisor.create.mockResolvedValue({ id: 's1' });
+    await svc.criarSupervisor({ matricula: 'E1', nome: 'X', departamentoId: 'd1' } as any, comRole('SUPERVISOR_FROTA'));
+    expect(prisma.supervisor.create.mock.calls[0][0].data.departamentoId).toBe('d1');
   });
   it('rdvMensal coordenador com supervisor de OUTRO coordenador → 403', async () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'outro-coord' });
@@ -145,9 +173,10 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
   });
 });
 
-// ⭐ Owner-check do workflow (enviar/iniciar): só o supervisor DONO do planejamento
-// (por matrícula), o coordenador dele ou o gestor avançam o estado. Fecha o buraco de
-// um SUPERVISOR da mesma filial mexer no planejamento alheio (gate de segurança 14/07).
+// ⭐ Owner-check do workflow (enviar/iniciar): só o representante DONO (por matrícula), o
+// coordenador dele, o Supervisor de Departamento (se é de um depto seu) ou ADMIN avançam o
+// estado. Fecha o buraco de um SUPERVISOR da mesma filial mexer no planejamento alheio
+// (gate de segurança 14/07) + escopo por departamento do Supervisor de Departamento.
 describe('SupervisorService workflow enviar/iniciar — owner-check', () => {
   let prisma: any;
   let svc: SupervisorService;
@@ -157,10 +186,10 @@ describe('SupervisorService workflow enviar/iniciar — owner-check', () => {
     prisma.viagem.update.mockResolvedValue({ id: 'v1' });
   });
   const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
-  // planejamento de OUTRO supervisor: matrícula do dono E09999, coordenador é 'outro'.
+  // planejamento de OUTRO representante: matrícula do dono E09999, coordenador 'outro', depto 'd-outro'.
   const planAlheio = (statusPlanejamento: string) => ({
     id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', statusPlanejamento, criadoPorId: 'outro',
-    supervisorRegistro: { coordenadorId: 'outro-coord', matricula: 'E09999' },
+    supervisorRegistro: { coordenadorId: 'outro-coord', matricula: 'E09999', departamentoId: 'd-outro' },
   });
 
   it('enviar: SUPERVISOR que NÃO é o dono (matrícula diferente) → 403', async () => {
@@ -183,18 +212,36 @@ describe('SupervisorService workflow enviar/iniciar — owner-check', () => {
   it('enviar: COORDENADOR do supervisor (sem depender de matrícula) → envia', async () => {
     prisma.viagem.findUnique.mockResolvedValue({
       id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', statusPlanejamento: 'RASCUNHO', criadoPorId: 'outro',
-      supervisorRegistro: { coordenadorId: 'u1', matricula: 'E09999' },
+      supervisorRegistro: { coordenadorId: 'u1', matricula: 'E09999', departamentoId: 'd-outro' },
     });
     await svc.enviarPlanejamento('v1', comRole('COORDENADOR'));
     expect(prisma.viagem.update).toHaveBeenCalled();
     expect(prisma.$queryRaw).not.toHaveBeenCalled(); // atalho pelo coordenador
   });
 
-  it('enviar: GESTOR passa direto (oversight), sem lookup de matrícula', async () => {
+  it('enviar: ADMIN passa direto (oversight), sem lookup de matrícula', async () => {
     prisma.viagem.findUnique.mockResolvedValue(planAlheio('RASCUNHO'));
-    await svc.enviarPlanejamento('v1', comRole('GESTOR_ENTREGA'));
+    await svc.enviarPlanejamento('v1', comRole('ADMIN'));
     expect(prisma.viagem.update).toHaveBeenCalled();
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('enviar: Supervisor de Departamento no SEU depto → envia (via veículos que supervisiona)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue({
+      id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', statusPlanejamento: 'RASCUNHO', criadoPorId: 'outro',
+      supervisorRegistro: { coordenadorId: 'outro-coord', matricula: 'E09999', departamentoId: 'd1' },
+    });
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]); // depto do rep ∈ seus deptos
+    await svc.enviarPlanejamento('v1', comRole('SUPERVISOR_FROTA'));
+    expect(prisma.viagem.update.mock.calls[0][0].data.statusPlanejamento).toBe('ENVIADO');
+    expect(prisma.$queryRaw).not.toHaveBeenCalled(); // não precisa de matrícula: decide por departamento
+  });
+
+  it('enviar: Supervisor de Departamento em depto que NÃO é seu → 403', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planAlheio('RASCUNHO')); // depto 'd-outro'
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]); // só cobre 'd1'
+    await expect(svc.enviarPlanejamento('v1', comRole('SUPERVISOR_FROTA'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
   });
 
   it('iniciar: SUPERVISOR que NÃO é o dono → 403 (não muda estado)', async () => {
