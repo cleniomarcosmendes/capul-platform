@@ -18,9 +18,11 @@ const FROTA_GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
 // escopada a gestor de frota/supervisor do veículo). O supervisor do veículo ainda
 // lança/vê despesas pelo detalhe da rota de frota.
 const FROTA_GESTAO = ['GESTOR_FROTA', 'SUPERVISOR_FROTA'];
-// Prestação de Contas (RDV): gestores + coordenador (aprova) + supervisor (planeja).
-// As ABAS internas são gateadas por perfil dentro da SupervisoresPage.
-const SUPERVISORES_MENU = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR', 'SUPERVISOR'];
+// Prestação de Contas (RDV) — processo INTERNO do setor: Supervisor de Departamento
+// (admin), Coordenador (aprova o seu time) e Supervisor de Área (planeja). Gestores de
+// entrega/frota NÃO entram (o backend os barra). ADMIN vê via bypass. As ABAS internas
+// são gateadas por perfil dentro da SupervisoresPage.
+const SUPERVISORES_MENU = ['SUPERVISOR_FROTA', 'COORDENADOR', 'SUPERVISOR'];
 
 type NavEntry =
   | { section: string; roles?: string[] }

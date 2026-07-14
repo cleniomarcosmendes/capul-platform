@@ -39,10 +39,11 @@ const TAB_LABEL: Record<string, string> = { viagens: 'Planejamentos', coordenaca
 type TabKey = 'viagens' | 'coordenacao' | 'fechamento' | 'atividades' | 'equipe';
 
 // Abas visíveis por perfil (defesa em profundidade — o backend barra as escritas):
-// Gestor/Admin = tudo · Coordenador = Planejamentos + Coordenação + Fechamento ·
-// Supervisor (e demais) = só Planejamentos.
+// ADMIN + Supervisor de Departamento (admin do RDV) = tudo · Coordenador = Planejamentos
+// + Coordenação + Fechamento · Supervisor de Área (e demais) = só Planejamentos.
+// Gestores de entrega/frota saíram do RDV (backend os barra) — não recebem abas de admin.
 function abasDoPerfil(role: string | null): TabKey[] {
-  if (role === 'ADMIN' || role === 'GESTOR_ENTREGA' || role === 'GESTOR_FROTA') return ['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'];
+  if (role === 'ADMIN' || role === 'SUPERVISOR_FROTA') return ['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'];
   if (role === 'COORDENADOR') return ['viagens', 'coordenacao', 'fechamento'];
   return ['viagens'];
 }
