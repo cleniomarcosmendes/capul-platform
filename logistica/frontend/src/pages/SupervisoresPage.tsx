@@ -354,7 +354,7 @@ function EquipeTab() {
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!matricula.trim() || !nome.trim()) { toast('warning', 'Informe a matrícula e busque o nome.'); return; }
-    if (!deptId) { toast('warning', 'Selecione o departamento do representante.'); return; }
+    if (!deptId) { toast('warning', 'Selecione o departamento do supervisor de área.'); return; }
     setSalvando(true);
     try {
       await logisticaApi.post('/supervisor/supervisores', { matricula: matricula.trim(), nome: nome.trim(), departamentoId: deptId, coordenadorId: coordenadorId || undefined });
@@ -375,7 +375,7 @@ function EquipeTab() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <p className="text-sm text-slate-500">Monte o time: cadastre os representantes, informe o <b>departamento</b> de cada um e vincule ao seu <b>coordenador</b> (quem aprova planejamentos e despesas).</p>
+        <p className="text-sm text-slate-500">Monte o time: cadastre os <b>supervisores de área</b>, informe o <b>departamento</b> de cada um e vincule ao seu <b>coordenador</b> (quem aprova planejamentos e despesas).</p>
         <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700"><Plus className="h-4 w-4" /> Novo supervisor</button>
       </div>
 
@@ -391,7 +391,7 @@ function EquipeTab() {
               {nome ? (
                 <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome} — nome confirmado no Protheus</p>
               ) : (
-                <p className="mt-1 text-xs text-slate-500">Digite a matrícula do representante e clique em <b>Buscar</b> (ou Enter) — o nome é confirmado no Protheus. Só cadastra depois de confirmar.</p>
+                <p className="mt-1 text-xs text-slate-500">Digite a matrícula do supervisor de área e clique em <b>Buscar</b> (ou Enter) — o nome é confirmado no Protheus. Só cadastra depois de confirmar.</p>
               )}
             </div>
             <div>
