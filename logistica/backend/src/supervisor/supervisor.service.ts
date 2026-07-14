@@ -155,13 +155,23 @@ export class SupervisorService {
       supNome = u.nome;
     }
 
-    // Vincula ao Supervisor cadastrado (leva ao coordenador que aprova). Se não
-    // estiver cadastrado, o planejamento nasce sem coordenador (não roteia).
-    let supervisorRegistroId: string | null = null;
-    if (supMatricula) {
-      const reg = await this.prisma.supervisor.findFirst({ where: { filialId, matricula: supMatricula, ativo: true } });
-      supervisorRegistroId = reg?.id ?? null;
+    // O planejamento PRECISA estar vinculado a um supervisor de área cadastrado E com
+    // COORDENADOR — senão nasceria órfão e não roteia para aprovação (ninguém o veria).
+    // Bloqueia a criação sem isso (o "montar o time" tem que vir antes).
+    if (!supMatricula) {
+      throw new BadRequestException('Informe a matrícula do supervisor de área (ou entre como o próprio supervisor) — o planejamento precisa estar vinculado a um cadastro.');
     }
+    const reg = await this.prisma.supervisor.findFirst({
+      where: { filialId, matricula: supMatricula, ativo: true },
+      select: { id: true, coordenadorId: true },
+    });
+    if (!reg) {
+      throw new BadRequestException('Supervisor de área não cadastrado na equipe desta filial. Peça ao Supervisor de Departamento para te cadastrar (montar o time) com um coordenador antes de criar o planejamento.');
+    }
+    if (!reg.coordenadorId) {
+      throw new BadRequestException('Seu cadastro de supervisor de área não tem coordenador vinculado (quem aprova). Peça ao Supervisor de Departamento para vincular um coordenador antes de criar o planejamento.');
+    }
+    const supervisorRegistroId = reg.id;
 
     return this.prisma.$transaction(async (tx) => {
       const contador = await tx.contadorSequencial.upsert({
@@ -313,6 +323,10 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
     await this.assertDonoOuGestorPlanejamento(v, user);
+    // Sem coordenador não há para quem enviar (planejamento órfão legado). Barra o envio.
+    if (!v.supervisorRegistro?.coordenadorId) {
+      throw new BadRequestException('Este planejamento não tem coordenador vinculado — não há para quem enviar. Peça ao Supervisor de Departamento para vincular um coordenador ao seu cadastro.');
+    }
     if (!['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '')) {
       throw new BadRequestException('Só envia planejamento em rascunho, ajustado ou rejeitado.');
     }

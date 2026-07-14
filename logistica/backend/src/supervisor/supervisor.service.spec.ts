@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SupervisorService } from './supervisor.service';
 import { createPrismaMock } from '../common/testing/prisma-mock';
 
@@ -249,5 +249,45 @@ describe('SupervisorService workflow enviar/iniciar — owner-check', () => {
     prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Outro Sup' }]);
     await expect(svc.iniciarExecucao('v1', comRole('SUPERVISOR'))).rejects.toThrow(ForbiddenException);
     expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+});
+
+// ⭐ Bloqueio: não criar planejamento sem cadastro/coordenador (senão nasce órfão e não
+// roteia p/ aprovação — buraco pego no teste E2E de 14/07). Também barra o ENVIAR órfão.
+describe('SupervisorService.criarViagemSupervisor — exige cadastro + coordenador', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+    // self-service: matriculaDoUsuario($queryRaw) → matrícula do supervisor logado.
+    prisma.$queryRaw.mockResolvedValue([{ matricula: '005274', nome: 'Kelver' }]);
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  it('SUPERVISOR sem cadastro na equipe → 400 (não cria)', async () => {
+    prisma.supervisor.findFirst.mockResolvedValue(null);
+    await expect(svc.criarViagemSupervisor({ mesReferencia: 202607 } as any, comRole('SUPERVISOR'))).rejects.toThrow(BadRequestException);
+    expect(prisma.viagem.create).not.toHaveBeenCalled();
+  });
+
+  it('SUPERVISOR cadastrado mas SEM coordenador → 400 (não cria)', async () => {
+    prisma.supervisor.findFirst.mockResolvedValue({ id: 's1', coordenadorId: null });
+    await expect(svc.criarViagemSupervisor({ mesReferencia: 202607 } as any, comRole('SUPERVISOR'))).rejects.toThrow(BadRequestException);
+    expect(prisma.viagem.create).not.toHaveBeenCalled();
+  });
+
+  it('SUPERVISOR cadastrado COM coordenador → cria, vinculado ao cadastro', async () => {
+    prisma.supervisor.findFirst.mockResolvedValue({ id: 's1', coordenadorId: 'coord1' });
+    prisma.contadorSequencial.upsert.mockResolvedValue({ ultimoNumero: 1 });
+    prisma.viagem.create.mockResolvedValue({ id: 'v1' });
+    await svc.criarViagemSupervisor({ mesReferencia: 202607 } as any, comRole('SUPERVISOR'));
+    expect(prisma.viagem.create.mock.calls[0][0].data.supervisorRegistroId).toBe('s1');
+  });
+
+  it('Supervisor de Departamento sem informar a matrícula do representante → 400', async () => {
+    // não é self-service (role ≠ SUPERVISOR) e não veio matrícula → não há a quem vincular.
+    await expect(svc.criarViagemSupervisor({ mesReferencia: 202607 } as any, comRole('SUPERVISOR_FROTA'))).rejects.toThrow(BadRequestException);
+    expect(prisma.viagem.create).not.toHaveBeenCalled();
   });
 });
