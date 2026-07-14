@@ -9,6 +9,11 @@ import { CofreStorageService } from '../cofre/cofre-storage.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
 import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
+/** Normaliza matrícula → chapa E-prefixada (E+5díg), colapsando `E01047`/`01047`/
+ *  `1047` no mesmo valor. Mesma regra do `frota.service` (match de condutor) — usar
+ *  para comparar matrículas sem depender do formato digitado. */
+const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
+
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
  * (N:N com município). Escopo por filial: cada filial vê os SEUS + os globais
@@ -208,15 +213,38 @@ export class SupervisorService {
 
   // ---- Workflow do planejamento (supervisor envia · coordenador decide) ----
   private async planejamentoOuErro(id: string, filialId: string) {
-    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true } } } });
+    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, matricula: true } } } });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Planejamento não encontrado.');
     if (v.filialId !== filialId) throw new ForbiddenException('Planejamento de outra filial.');
     return v;
   }
 
+  /** Transições que o PRÓPRIO supervisor dispara (enviar/iniciar): quem pode é o
+   *  supervisor DONO do RDV (por matrícula), o coordenador dele, ou gestor/admin.
+   *  Sem isso, qualquer supervisor da mesma filial avançaria o planejamento alheio
+   *  (a filial já foi checada em planejamentoOuErro; aqui é o dono). Planejamento
+   *  sem cadastro de supervisor vinculado (não roteia): o criador é o dono. */
+  private async assertDonoOuGestorPlanejamento(
+    v: { criadoPorId: string | null; supervisorRegistro: { coordenadorId: string | null; matricula: string } | null },
+    user: JwtPayload,
+  ) {
+    if (this.ehGestor(user)) return;
+    const coord = v.supervisorRegistro?.coordenadorId;
+    if (coord && coord === user.sub) return; // coordenador do supervisor
+    const supMat = v.supervisorRegistro?.matricula;
+    if (supMat) {
+      const u = await this.matriculaDoUsuario(user.sub);
+      if (u?.matricula && chapa(u.matricula) === chapa(supMat)) return; // é o próprio supervisor
+    } else if (v.criadoPorId && v.criadoPorId === user.sub) {
+      return; // planejamento sem cadastro vinculado: o criador é o dono
+    }
+    throw new ForbiddenException('Apenas o supervisor dono do planejamento, o coordenador dele ou o gestor pode fazer isso.');
+  }
+
   async enviarPlanejamento(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
+    await this.assertDonoOuGestorPlanejamento(v, user);
     if (!['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '')) {
       throw new BadRequestException('Só envia planejamento em rascunho, ajustado ou rejeitado.');
     }
@@ -242,6 +270,7 @@ export class SupervisorService {
   async iniciarExecucao(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
+    await this.assertDonoOuGestorPlanejamento(v, user);
     if (!['APROVADO', 'AJUSTADO'].includes(v.statusPlanejamento ?? '')) {
       throw new BadRequestException('Só inicia execução de planejamento aprovado/ajustado.');
     }
