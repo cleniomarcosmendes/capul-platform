@@ -12,7 +12,15 @@ interface Visita {
   municipio?: string | null; propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
   atividadeId?: string | null;
   atividade?: { nome: string } | null;
+  latitude?: number | null; longitude?: number | null; // GPS capturado ao apontar "Realizar"
 }
+interface AdiantV { id: string; valor: number | string; dataAdiantamento: string; observacao?: string | null; situacao?: string | null; motivoRejeicao?: string | null }
+const STATUS_ADIANT: Record<string, { label: string; cls: string }> = {
+  PENDENTE: { label: 'Aguardando aprovação', cls: 'bg-amber-100 text-amber-700' },
+  APROVADO: { label: 'Aprovado', cls: 'bg-emerald-100 text-emerald-700' },
+  REJEITADO: { label: 'Rejeitado', cls: 'bg-rose-100 text-rose-700' },
+};
+const statusAdiant = (s?: string | null) => STATUS_ADIANT[s ?? 'APROVADO'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 const STATUS_VISITA: Record<string, { label: string; cls: string }> = {
   PLANEJADA: { label: 'Planejada', cls: 'bg-amber-100 text-amber-700' },
   REALIZADA: { label: 'Realizada', cls: 'bg-emerald-100 text-emerald-700' },
@@ -157,6 +165,10 @@ export function SupervisorViagemPage() {
   // administração (Fase 5)
   const [editVisitaId, setEditVisitaId] = useState<string | null>(null);
   const [editDespId, setEditDespId] = useState<string | null>(null);
+  // adiantamentos do mês (aprovação pelo coordenador)
+  const [adiants, setAdiants] = useState<AdiantV[]>([]);
+  const [rejAdiantId, setRejAdiantId] = useState<string | null>(null);
+  const [motivoAdiant, setMotivoAdiant] = useState('');
 
   const carregar = async () => {
     if (!id) return;
@@ -173,6 +185,12 @@ export function SupervisorViagemPage() {
       ]);
       setAtividades(a.status === 'fulfilled' ? a.value.data : []);
       setTipos(t.status === 'fulfilled' ? t.value.data.filter((x) => x.ativo !== false) : []);
+      // Adiantamentos do mês (para a aprovação do coordenador) — best-effort: se o
+      // usuário não alcança o supervisor (fora da coordenação), o backend barra e some.
+      if (d.data.supervisorRegistro?.id && d.data.mesReferencia) {
+        try { const ad = await logisticaApi.get<AdiantV[]>('/supervisor/adiantamentos', { params: { supervisorId: d.data.supervisorRegistro.id, mes: d.data.mesReferencia } }); setAdiants(ad.data); }
+        catch { setAdiants([]); }
+      } else setAdiants([]);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a viagem.')); } finally { setLoading(false); }
   };
   useEffect(() => {
@@ -181,9 +199,16 @@ export function SupervisorViagemPage() {
   }, [id]);
 
   const concluida = v?.situacao === 'CONCLUIDA';
+  // Fase de planejamento (espelha o backend): a visita adicionada aqui nasce PLANEJADA
+  // (monta o roteiro). Fora disso ela nasce REALIZADA (visita de fato, em campo).
+  const emPlanejamento = v?.statusPlanejamento === 'RASCUNHO' || v?.statusPlanejamento === 'AJUSTADO' || v?.statusPlanejamento === 'REJEITADO' || v?.statusPlanejamento == null;
   // Quem aprova/rejeita despesa: gestor/admin OU o coordenador deste supervisor.
   const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'ADMIN';
   const podeAprovarDespesa = ehGestor || (!!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id);
+  // Quem decide ADIANTAMENTO: só ADMIN, Supervisor de Departamento ou o COORDENADOR deste
+  // supervisor (gestores de entrega/frota NÃO — espelha o @Roles do backend).
+  const ehCoordDesteSup = !!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id;
+  const podeDecidirAdiantamento = logisticaRole === 'ADMIN' || logisticaRole === 'SUPERVISOR_FROTA' || (logisticaRole === 'COORDENADOR' && ehCoordDesteSup);
 
   const limparForm = () => { setCliMat(''); setCliNome(''); setMunicipio(''); setAtividadeId(''); setPropriedade(''); setObs(''); setDataVisita(''); setEditVisitaId(null); };
   const abrirEdicaoVisita = (p: Visita) => {
@@ -289,6 +314,14 @@ export function SupervisorViagemPage() {
       setRejDesp(null); setMotivoRej(''); await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao decidir a despesa.')); }
   };
+  // Decisão do coordenador sobre um ADIANTAMENTO pendente (auto-serviço do supervisor).
+  const decidirAdiantamento = async (aid: string, decisao: 'APROVAR' | 'REJEITAR', motivo?: string) => {
+    try {
+      await logisticaApi.patch(`/supervisor/adiantamentos/${aid}/decidir`, { decisao, motivo });
+      toast('success', decisao === 'APROVAR' ? 'Adiantamento aprovado.' : 'Adiantamento rejeitado.');
+      setRejAdiantId(null); setMotivoAdiant(''); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao decidir o adiantamento.')); }
+  };
   // Decisão do coordenador sobre o PLANEJAMENTO (aqui no detalhe, com visitas +
   // despesas + comprovantes à vista — não mais "às cegas" na fila da Coordenação).
   const decidirPlanejamento = async (decisao: 'APROVADO' | 'AJUSTADO' | 'REJEITADO', comentario?: string) => {
@@ -358,9 +391,45 @@ export function SupervisorViagemPage() {
         </div>
       )}
 
+      {/* Adiantamentos do mês — trazidos para a tela do coordenador (aprovar/rejeitar os
+          lançados em auto-serviço pelo supervisor). Só aparece se houver algum. */}
+      {adiants.length > 0 && (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold text-slate-700">Adiantamentos do mês ({fmtMes(v.mesReferencia)})</h2>
+          <div className="divide-y divide-slate-100">
+            {adiants.map((a) => (
+              <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
+                <span className="font-medium text-slate-700">{brl(a.valor)}</span>
+                <span className="text-slate-400">{fmtData(a.dataAdiantamento)}</span>
+                {a.observacao && <span className="text-slate-500">· {a.observacao}</span>}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusAdiant(a.situacao).cls}`}>{statusAdiant(a.situacao).label}</span>
+                {a.situacao === 'REJEITADO' && a.motivoRejeicao && <span className="text-xs text-rose-600" title={a.motivoRejeicao}>ⓘ {a.motivoRejeicao}</span>}
+                {podeDecidirAdiantamento && a.situacao === 'PENDENTE' && (
+                  rejAdiantId === a.id ? (
+                    <span className="flex flex-wrap items-center gap-1">
+                      <input value={motivoAdiant} onChange={(e) => setMotivoAdiant(e.target.value)} maxLength={500} placeholder="Motivo da rejeição *" className="w-56 rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+                      <button onClick={() => { if (!motivoAdiant.trim()) { toast('warning', 'Informe o motivo.'); return; } void decidirAdiantamento(a.id, 'REJEITAR', motivoAdiant.trim()); }} className="rounded bg-rose-600 px-2 py-1 text-xs font-medium text-white hover:bg-rose-700">Confirmar</button>
+                      <button onClick={() => { setRejAdiantId(null); setMotivoAdiant(''); }} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+                    </span>
+                  ) : (
+                    <span className="ml-auto flex items-center gap-2">
+                      <button onClick={() => void decidirAdiantamento(a.id, 'APROVAR')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Aprovar</button>
+                      <button onClick={() => { setRejAdiantId(a.id); setMotivoAdiant(''); }} className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 hover:bg-rose-100">Rejeitar</button>
+                    </span>
+                  )
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-400">Só adiantamentos <b>aprovados</b> entram no saldo da RDV. Pendentes aguardam decisão do coordenador.</p>
+        </div>
+      )}
+
       {!concluida && (
         <form onSubmit={adicionar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : 'Nova visita'}</h2>
+          <h2 className="mb-1 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : emPlanejamento ? 'Incluir cliente no planejamento' : 'Nova visita'}</h2>
+          {!editVisitaId && emPlanejamento && <p className="mb-4 text-xs text-sky-800">📋 Monte o roteiro: adicione os clientes que pretende visitar. Você aponta como realizada/pulada durante a execução.</p>}
+          {(editVisitaId || !emPlanejamento) && <div className="mb-4" />}
           <div className="mb-3">
             <label className="mb-1 block text-xs font-medium text-slate-500">Cliente</label>
             <BuscaCliente onPick={(c) => { setCliMat(c.matricula ?? ''); setCliNome(c.nome); if (c.municipio) setMunicipio(c.municipio); if (c.propriedade) setPropriedade(c.propriedade); }} />
@@ -374,7 +443,7 @@ export function SupervisorViagemPage() {
           </div>
           <div className="mt-3"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={observacao} onChange={(e) => setObs(e.target.value)} maxLength={500} className={inp} /></div>
           <div className="mt-4 flex gap-3">
-            <button type="submit" disabled={salvando} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50"><Plus className="h-4 w-4" /> {salvando ? 'Salvando…' : editVisitaId ? 'Salvar visita' : 'Registrar visita'}</button>
+            <button type="submit" disabled={salvando} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50"><Plus className="h-4 w-4" /> {salvando ? 'Salvando…' : editVisitaId ? 'Salvar visita' : emPlanejamento ? 'Incluir no planejamento' : 'Registrar visita'}</button>
             {editVisitaId && <button type="button" onClick={limparForm} className="self-center text-sm text-slate-500 hover:text-slate-700">Cancelar edição</button>}
             {clienteMatricula && <span className="self-center text-xs text-slate-400">Matrícula: <b className="font-mono">{clienteMatricula}</b></span>}
           </div>
@@ -419,7 +488,12 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3 text-slate-500">{p.sequencia}</td>
                 <td className="px-4 py-3">{fmtData(p.dataHora)}</td>
                 <td className="px-4 py-3"><span className="font-medium text-slate-700">{p.clienteNome ?? '—'}</span>{p.clienteMatricula && <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{p.clienteMatricula}</span>}</td>
-                <td className="px-4 py-3 text-slate-500">{p.municipio ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-500">
+                  {p.municipio ?? '—'}
+                  {p.latitude != null && p.longitude != null && (
+                    <a href={`https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-0.5 text-xs text-capul-600 hover:underline" title="Ver no mapa a localização capturada (GPS)"><MapPin className="h-3 w-3" /> Ver no mapa</a>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-slate-500">{p.propriedade ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">{p.atividade?.nome ?? '—'}</td>
                 <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${statusVisita(p.status).cls}`}>{statusVisita(p.status).label}</span></td>
