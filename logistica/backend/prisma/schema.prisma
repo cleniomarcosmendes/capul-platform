@@ -141,6 +141,17 @@ enum StatusParada {
   @@schema("logistica")
 }
 
+// Situação do adiantamento do RDV (aprovação pelo coordenador). O adiantamento
+// lançado pelo PRÓPRIO supervisor de área (auto-serviço) nasce PENDENTE e o
+// coordenador APROVA/REJEITA; o lançado pelo coordenador/departamento já nasce
+// APROVADO. Só APROVADO entra no saldo da RDV.
+enum SituacaoAdiantamento {
+  PENDENTE
+  APROVADO
+  REJEITADO
+  @@schema("logistica")
+}
+
 // ---------- Cliente / Endereço (GLOBAIS, cross-filial) ----------
 model ClienteLocal {
   id         String            @id @default(uuid())
@@ -739,6 +750,12 @@ model Adiantamento {
   observacao      String?
   lancadoPorId    String     @map("lancado_por_id")
   criadoEm        DateTime   @default(now()) @map("criado_em")
+  // Aprovação (coordenador). Default APROVADO cobre linhas legadas e o lançamento
+  // do coordenador/departamento; o auto-serviço do supervisor grava PENDENTE.
+  situacao        SituacaoAdiantamento @default(APROVADO)
+  decididoPorId   String?    @map("decidido_por_id")
+  decididoEm      DateTime?  @map("decidido_em")
+  motivoRejeicao  String?    @map("motivo_rejeicao")
 
   @@index([supervisorId, mesReferencia])
   @@map("adiantamento")

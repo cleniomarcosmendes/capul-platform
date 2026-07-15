@@ -17,6 +17,13 @@ export class LancarAdiantamentoDto {
   @IsOptional() @IsString() @MaxLength(255) observacao?: string;
 }
 
+// Decisão do coordenador sobre um adiantamento PENDENTE (auto-serviço do supervisor).
+export class DecidirAdiantamentoDto {
+  @IsIn(['APROVAR', 'REJEITAR'])
+  decisao!: 'APROVAR' | 'REJEITAR';
+  @IsOptional() @IsString() @MaxLength(500) motivo?: string;
+}
+
 // ---- Cadastro de Supervisor de Área + vínculo com o coordenador (Fase 6a) ----
 export class CriarSupervisorDto {
   @IsString() @IsNotEmpty() @MaxLength(20) matricula!: string;

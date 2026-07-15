@@ -171,6 +171,71 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'outro-coord' });
     await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
   });
+
+  // ⭐ Auto-serviço (mudança 15/07): o próprio SUPERVISOR de área lança/vê o adiantamento
+  // do SEU cadastro (casado pela matrícula do login) — mas nunca o de outro representante.
+  it('lancarAdiantamento SUPERVISOR no SEU cadastro (matrícula bate, tolera prefixo/zeros) → lança', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'algum-coord', matricula: 'E01047' });
+    prisma.$queryRaw.mockResolvedValue([{ matricula: '1047', nome: 'Dono' }]); // chapa('1047') === chapa('E01047')
+    prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });
+    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('SUPERVISOR'))).resolves.toBeDefined();
+    expect(prisma.adiantamento.create).toHaveBeenCalled();
+  });
+  it('lancarAdiantamento SUPERVISOR em cadastro de OUTRO (matrícula difere) → 403', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'outro-coord', matricula: 'E09999' });
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Outro' }]); // chapa ≠ E09999
+    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('SUPERVISOR'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.adiantamento.create).not.toHaveBeenCalled();
+  });
+  it('meuCadastroSupervisor resolve o cadastro do supervisor logado pela matrícula do login', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Dono' }]);
+    prisma.supervisor.findFirst.mockResolvedValue({ id: 's1', nome: 'Dono', matricula: 'E01047', coordenadorId: 'c1' });
+    const reg = await svc.meuCadastroSupervisor(comRole('SUPERVISOR'));
+    expect(reg).toEqual({ id: 's1', nome: 'Dono', matricula: 'E01047', coordenadorId: 'c1' });
+    expect(prisma.supervisor.findFirst.mock.calls[0][0].where).toMatchObject({ filialId: 'f1', matricula: 'E01047', ativo: true });
+  });
+  it('meuCadastroSupervisor sem cadastro montado → null', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Dono' }]);
+    prisma.supervisor.findFirst.mockResolvedValue(null);
+    await expect(svc.meuCadastroSupervisor(comRole('SUPERVISOR'))).resolves.toBeNull();
+  });
+
+  // ⭐ Aprovação do adiantamento (15/07): auto-serviço do supervisor nasce PENDENTE; o
+  // lançamento do coordenador/departamento já nasce APROVADO. Só o coordenador (ou depto)
+  // decide — nunca o supervisionado.
+  it('lancarAdiantamento SUPERVISOR (auto-serviço) → nasce PENDENTE', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'algum-coord', matricula: 'E01047' });
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Dono' }]);
+    prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });
+    await svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('SUPERVISOR'));
+    expect(prisma.adiantamento.create.mock.calls[0][0].data.situacao).toBe('PENDENTE');
+    expect(prisma.adiantamento.create.mock.calls[0][0].data.decididoPorId).toBeNull();
+  });
+  it('lancarAdiantamento COORDENADOR → já nasce APROVADO (com decididoPor)', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'u1' });
+    prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });
+    await svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('COORDENADOR'));
+    expect(prisma.adiantamento.create.mock.calls[0][0].data.situacao).toBe('APROVADO');
+    expect(prisma.adiantamento.create.mock.calls[0][0].data.decididoPorId).toBe('u1');
+  });
+  it('decidirAdiantamento coordenador do rep APROVAR → APROVADO', async () => {
+    prisma.adiantamento.findUnique.mockResolvedValue({ id: 'a1', supervisorId: 's1', mesReferencia: 202607, situacao: 'PENDENTE', supervisor: { filialId: 'f1', coordenadorId: 'u1', departamentoId: null } });
+    prisma.adiantamento.update.mockResolvedValue({ id: 'a1' });
+    await svc.decidirAdiantamento('a1', 'APROVAR', undefined, comRole('COORDENADOR'));
+    expect(prisma.adiantamento.update.mock.calls[0][0].data.situacao).toBe('APROVADO');
+  });
+  it('decidirAdiantamento REJEITAR sem motivo → 400', async () => {
+    prisma.adiantamento.findUnique.mockResolvedValue({ id: 'a1', supervisorId: 's1', mesReferencia: 202607, situacao: 'PENDENTE', supervisor: { filialId: 'f1', coordenadorId: 'u1', departamentoId: null } });
+    await expect(svc.decidirAdiantamento('a1', 'REJEITAR', '', comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+  });
+  it('decidirAdiantamento de coordenador ALHEIO → 403 (não decide)', async () => {
+    prisma.adiantamento.findUnique.mockResolvedValue({ id: 'a1', supervisorId: 's1', mesReferencia: 202607, situacao: 'PENDENTE', supervisor: { filialId: 'f1', coordenadorId: 'outro', departamentoId: null } });
+    await expect(svc.decidirAdiantamento('a1', 'APROVAR', undefined, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+  });
+  it('decidirAdiantamento já decidido → 400', async () => {
+    prisma.adiantamento.findUnique.mockResolvedValue({ id: 'a1', supervisorId: 's1', mesReferencia: 202607, situacao: 'APROVADO', supervisor: { filialId: 'f1', coordenadorId: 'u1', departamentoId: null } });
+    await expect(svc.decidirAdiantamento('a1', 'APROVAR', undefined, comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+  });
 });
 
 // ⭐ Owner-check do workflow (enviar/iniciar): só o representante DONO (por matrícula), o

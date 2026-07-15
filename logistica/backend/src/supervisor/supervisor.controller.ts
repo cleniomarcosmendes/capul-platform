@@ -4,7 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
-import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirDespesaDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /** Converte o arquivo do multer no binário do comprovante (ou undefined). */
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
@@ -112,19 +112,35 @@ export class SupervisorController {
   }
 
   // ---- Adiantamentos (mensais, vários) + RDV mensal ----
+  // Lançar/remover: o COORDENADOR, o Supervisor de Departamento e o próprio SUPERVISOR de
+  // área (auto-serviço, só no SEU cadastro — escopo aplicado no serviço). Encerrar o mês
+  // (fechar/reabrir) NÃO é do supervisionado — segue coordenador/departamento.
   @Get('adiantamentos')
   adiantamentos(@CurrentUser() user: JwtPayload, @Query('supervisorId') supervisorId: string, @Query('mes') mes: string) {
     return this.svc.listarAdiantamentos(user, supervisorId, Number(mes));
   }
   @Post('adiantamentos')
-  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   lancarAdiantamento(@Body() dto: LancarAdiantamentoDto, @CurrentUser() user: JwtPayload) {
     return this.svc.lancarAdiantamento(dto, user);
   }
   @Delete('adiantamentos/:id')
-  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   removerAdiantamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.removerAdiantamento(id, user);
+  }
+  /** Coordenador / Supervisor de Departamento aprova/rejeita o adiantamento PENDENTE
+   *  (auto-serviço do supervisor de área). O supervisionado não decide o próprio. */
+  @Patch('adiantamentos/:id/decidir')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
+  decidirAdiantamento(@Param('id') id: string, @Body() dto: DecidirAdiantamentoDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.decidirAdiantamento(id, dto.decisao, dto.motivo, user);
+  }
+  /** Cadastro do supervisor de área LOGADO (auto-serviço) — o front fixa o "meu"
+   *  supervisorId no Fechamento sem seletor. null se ainda não montado no time. */
+  @Get('meu-cadastro')
+  meuCadastro(@CurrentUser() user: JwtPayload) {
+    return this.svc.meuCadastroSupervisor(user);
   }
   @Get('rdv-mensal')
   rdvMensal(@CurrentUser() user: JwtPayload, @Query('supervisorId') supervisorId: string, @Query('mes') mes: string) {
