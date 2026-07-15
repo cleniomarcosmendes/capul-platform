@@ -242,10 +242,20 @@ export class SupervisorService {
     return { coordenadorId: user.sub };
   }
 
+  /** O usuário logado É o próprio representante? (auto-serviço) — casa a matrícula do
+   *  login (core, read-only) com a do cadastro, tolerando prefixo/zeros como o
+   *  owner-check do workflow. Só consulta se o cadastro tiver matrícula. */
+  private async ehProprioSupervisor(matriculaSup: string | null | undefined, user: JwtPayload): Promise<boolean> {
+    if (!matriculaSup) return false;
+    const u = await this.matriculaDoUsuario(user.sub);
+    return !!u?.matricula && chapa(u.matricula) === chapa(matriculaSup);
+  }
+
   /** Alcança um representante específico? ADMIN sim; Supervisor de Departamento se o
-   *  depto do representante é um dos seus; coordenador se é supervisor dele. Usado no
+   *  depto do representante é um dos seus; coordenador se é supervisor dele; e o PRÓPRIO
+   *  representante (auto-serviço, por matrícula) alcança o SEU. Usado no
    *  Fechamento/RDV/adiantamentos. */
-  private async assertEscopoSupervisor(sup: { coordenadorId: string | null; departamentoId: string | null } | null, user: JwtPayload) {
+  private async assertEscopoSupervisor(sup: { coordenadorId: string | null; departamentoId: string | null; matricula?: string | null } | null, user: JwtPayload) {
     if (!sup || this.ehAdmin(user)) return;
     if (this.ehSupervisorDepto(user)) {
       const deps = await this.deptosDoSupervisorDepto(user);
@@ -253,6 +263,8 @@ export class SupervisorService {
       throw new ForbiddenException('Representante fora do seu departamento.');
     }
     if (sup.coordenadorId === user.sub) return;
+    // Auto-serviço: o próprio supervisor de área alcança o SEU RDV/adiantamentos.
+    if (await this.ehProprioSupervisor(sup.matricula, user)) return;
     throw new ForbiddenException('Representante fora da sua coordenação.');
   }
 
@@ -781,7 +793,7 @@ export class SupervisorService {
     let adiantamento = v.adiantamento != null ? Number(v.adiantamento) : 0;
     if (v.supervisorRegistroId && v.mesReferencia != null) {
       const advs = await this.prisma.adiantamento.findMany({
-        where: { supervisorId: v.supervisorRegistroId, mesReferencia: v.mesReferencia },
+        where: { supervisorId: v.supervisorRegistroId, mesReferencia: v.mesReferencia, situacao: 'APROVADO' },
         select: { valor: true },
       });
       if (advs.length) adiantamento = advs.reduce((s, a) => s + Number(a.valor), 0);
@@ -803,6 +815,20 @@ export class SupervisorService {
     };
   }
 
+  /** Cadastro do supervisor de área LOGADO (auto-serviço) — resolve pela matrícula do
+   *  login, na filial dele (mesmo lookup do criarViagemSupervisor). null se ainda não
+   *  foi montado no time. Serve p/ o front fixar o "meu" supervisorId no Fechamento. */
+  async meuCadastroSupervisor(user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const u = await this.matriculaDoUsuario(user.sub);
+    if (!u?.matricula?.trim()) return null;
+    const reg = await this.prisma.supervisor.findFirst({
+      where: { filialId, matricula: u.matricula.trim().toUpperCase(), ativo: true },
+      select: { id: true, nome: true, matricula: true, coordenadorId: true },
+    });
+    return reg ?? null;
+  }
+
   // ---- Adiantamentos (mensais, vários por supervisor/mês) ----
   async lancarAdiantamento(dto: LancarAdiantamentoDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
@@ -811,11 +837,39 @@ export class SupervisorService {
     await this.assertEscopoSupervisor(sup, user);
     if (dto.mesReferencia % 100 < 1 || dto.mesReferencia % 100 > 12) throw new BadRequestException('Mês de referência inválido (AAAAMM).');
     await this.assertRdvAberto(dto.supervisorId, dto.mesReferencia);
+    // Auto-serviço do supervisor de área nasce PENDENTE (o coordenador aprova). O
+    // lançamento do coordenador/departamento/admin já nasce APROVADO (são a autoridade).
+    const ehAutoServico = this.roleLog(user) === 'SUPERVISOR';
     return this.prisma.adiantamento.create({
       data: {
         supervisorId: dto.supervisorId, mesReferencia: dto.mesReferencia,
         valor: new Prisma.Decimal(dto.valor), dataAdiantamento: this.parseData(dto.data),
         observacao: dto.observacao?.trim() || null, lancadoPorId: user.sub,
+        situacao: ehAutoServico ? 'PENDENTE' : 'APROVADO',
+        decididoPorId: ehAutoServico ? null : user.sub,
+        decididoEm: ehAutoServico ? null : new Date(),
+      },
+    });
+  }
+
+  /** Coordenador / Supervisor de Departamento decide um adiantamento PENDENTE (lançado
+   *  em auto-serviço pelo supervisor de área). O supervisionado NUNCA decide o próprio
+   *  (assertPodeDecidir barra). Rejeitar exige motivo. Só mexe em mês aberto. */
+  async decidirAdiantamento(id: string, decisao: 'APROVAR' | 'REJEITAR', motivo: string | undefined, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true, departamentoId: true } } } });
+    if (!a || a.supervisor.filialId !== filialId) throw new NotFoundException('Adiantamento não encontrado.');
+    await this.assertPodeDecidir(a.supervisor, user);
+    await this.assertRdvAberto(a.supervisorId, a.mesReferencia);
+    if (a.situacao !== 'PENDENTE') throw new BadRequestException('Este adiantamento já foi decidido.');
+    const aprovar = decisao === 'APROVAR';
+    if (!aprovar && !motivo?.trim()) throw new BadRequestException('Informe o motivo da rejeição.');
+    return this.prisma.adiantamento.update({
+      where: { id },
+      data: {
+        situacao: aprovar ? 'APROVADO' : 'REJEITADO',
+        decididoPorId: user.sub, decididoEm: new Date(),
+        motivoRejeicao: aprovar ? null : motivo!.trim(),
       },
     });
   }
@@ -828,7 +882,7 @@ export class SupervisorService {
   }
   async removerAdiantamento(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true, departamentoId: true } } } });
+    const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true, departamentoId: true, matricula: true } } } });
     if (!a || a.supervisor.filialId !== filialId) throw new NotFoundException('Adiantamento não encontrado.');
     await this.assertEscopoSupervisor(a.supervisor, user);
     await this.prisma.adiantamento.delete({ where: { id } });
@@ -898,7 +952,9 @@ export class SupervisorService {
     const dias = [...diasMap.entries()].map(([data, o]) => ({ data, municipios: [...(munsPorDia.get(data) ?? [])], valores: o.valores, total: o.total })).sort((a, b) => a.data.localeCompare(b.data));
 
     const adiantamentos = await this.prisma.adiantamento.findMany({ where: { supervisorId, mesReferencia: mes }, orderBy: { dataAdiantamento: 'asc' } });
-    const totalAdiantamento = adiantamentos.reduce((s, a) => s + Number(a.valor), 0);
+    // Só APROVADO entra no saldo; PENDENTE fica à parte (aguardando o coordenador).
+    const totalAdiantamento = adiantamentos.filter((a) => a.situacao === 'APROVADO').reduce((s, a) => s + Number(a.valor), 0);
+    const totalAdiantamentoPendente = adiantamentos.filter((a) => a.situacao === 'PENDENTE').reduce((s, a) => s + Number(a.valor), 0);
     const saldo = totalAdiantamento - total; // >0 devolver à CAPUL; <0 reembolsar
     // TEMA 2: mês encerrado? (trava novos lançamentos até reabrir)
     const fech = await this.prisma.fechamentoRdv.findUnique({ where: { supervisorId_mesReferencia: { supervisorId, mesReferencia: mes } } });
@@ -907,7 +963,7 @@ export class SupervisorService {
       supervisor: { id: sup.id, matricula: sup.matricula, nome: sup.nome },
       mesReferencia: mes, planejamentos: planejamentos.length,
       tipos, dias, totaisPorTipo, totaisPorCategoria, total,
-      adiantamentos, totalAdiantamento, saldo,
+      adiantamentos, totalAdiantamento, totalAdiantamentoPendente, saldo,
       fechado: !!fech, fechadoEm: fech?.fechadoEm ?? null,
     };
   }

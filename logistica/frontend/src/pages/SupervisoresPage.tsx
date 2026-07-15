@@ -40,11 +40,13 @@ type TabKey = 'viagens' | 'coordenacao' | 'fechamento' | 'atividades' | 'equipe'
 
 // Abas visíveis por perfil (defesa em profundidade — o backend barra as escritas):
 // ADMIN + Supervisor de Departamento (admin do RDV) = tudo · Coordenador = Planejamentos
-// + Coordenação + Fechamento · Supervisor de Área (e demais) = só Planejamentos.
+// + Coordenação + Fechamento · Supervisor de Área = Planejamentos + Fechamento (só o SEU,
+// auto-serviço: lança adiantamento e vê a própria RDV — sem seletor, sem encerrar mês).
 // Gestores de entrega/frota saíram do RDV (backend os barra) — não recebem abas de admin.
 function abasDoPerfil(role: string | null): TabKey[] {
   if (role === 'ADMIN' || role === 'SUPERVISOR_FROTA') return ['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'];
   if (role === 'COORDENADOR') return ['viagens', 'coordenacao', 'fechamento'];
+  if (role === 'SUPERVISOR') return ['viagens', 'fechamento'];
   return ['viagens'];
 }
 
@@ -135,13 +137,15 @@ function ViagensTab() {
     const mesRef = Number(mes.replace('-', '')); // "2026-05" → 202605
     setSalvando(true);
     try {
-      await logisticaApi.post('/supervisor/viagens', {
+      const { data } = await logisticaApi.post<{ id: string }>('/supervisor/viagens', {
         mesReferencia: mesRef,
         // Supervisor logado: backend identifica pelo JWT (sem matrícula+senha).
         ...(ehSupervisorLogado ? {} : { supervisorMatricula: matricula.trim() || undefined, supervisorSenha: senha || undefined }),
       });
-      toast('success', 'Planejamento criado.');
+      toast('success', 'Planejamento criado — agora inclua os clientes do roteiro.');
       setShowForm(false); setMes(''); setMatricula(''); setSenha(''); setNome('');
+      // Abre direto o planejamento (form "Incluir cliente no planejamento" já à mão).
+      if (data?.id) { navigate(`/supervisores/viagens/${data.id}`); return; }
       await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao criar planejamento.')); } finally { setSalvando(false); }
   };
@@ -526,13 +530,24 @@ function CoordenacaoTab() {
 
 // ---------------- Fechamento mensal (adiantamentos + RDV agregada) ----------------
 interface SupItem { id: string; nome: string; matricula: string }
-interface Adiant { id: string; valor: number | string; dataAdiantamento: string; observacao?: string | null }
-interface RdvMensal { total: number; totalAdiantamento: number; saldo: number; planejamentos: number; totaisPorCategoria: { VEICULO: number; INDIVIDUO: number }; fechado?: boolean; fechadoEm?: string | null }
+interface Adiant { id: string; valor: number | string; dataAdiantamento: string; observacao?: string | null; situacao?: string | null; motivoRejeicao?: string | null }
+interface RdvMensal { total: number; totalAdiantamento: number; totalAdiantamentoPendente?: number; saldo: number; planejamentos: number; totaisPorCategoria: { VEICULO: number; INDIVIDUO: number }; fechado?: boolean; fechadoEm?: string | null }
+const ADIANT_BADGE: Record<string, { label: string; cls: string }> = {
+  PENDENTE: { label: 'Aguardando aprovação', cls: 'bg-amber-100 text-amber-700' },
+  APROVADO: { label: 'Aprovado', cls: 'bg-emerald-100 text-emerald-700' },
+  REJEITADO: { label: 'Rejeitado', cls: 'bg-rose-100 text-rose-700' },
+};
+const adiantBadge = (s?: string | null) => ADIANT_BADGE[s ?? 'APROVADO'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 
 function FechamentoTab() {
   const { toast } = useToast();
+  const { logisticaRole } = useAuth();
   const navigate = useNavigate();
+  // Supervisor de área: auto-serviço — fixa o SEU cadastro (sem seletor, sem encerrar mês).
+  const ehSupervisorArea = logisticaRole === 'SUPERVISOR';
   const [sups, setSups] = useState<SupItem[]>([]);
+  // undefined = carregando o próprio cadastro · null = ainda não montado no time.
+  const [meuCadastro, setMeuCadastro] = useState<SupItem | null | undefined>(ehSupervisorArea ? undefined : null);
   const [supId, setSupId] = useState('');
   const [mesInput, setMesInput] = useState('');
   const mes = mesInput ? Number(mesInput.replace('-', '')) : 0;
@@ -544,8 +559,15 @@ function FechamentoTab() {
   const [obs, setObs] = useState('');
 
   useEffect(() => {
+    if (ehSupervisorArea) {
+      // Auto-serviço: resolve o próprio cadastro e fixa o supId (sem seletor).
+      logisticaApi.get<SupItem | null>('/supervisor/meu-cadastro')
+        .then((r) => { setMeuCadastro(r.data ?? null); if (r.data) setSupId(r.data.id); })
+        .catch(() => setMeuCadastro(null));
+      return;
+    }
     logisticaApi.get<SupItem[]>('/supervisor/supervisores', { params: { ativos: true } }).then((r) => setSups(r.data)).catch(() => { /* silencioso */ });
-  }, []);
+  }, [ehSupervisorArea]);
 
   const carregar = async () => {
     if (!supId || !mes) { setAdiantamentos([]); setRdv(null); return; }
@@ -588,14 +610,26 @@ function FechamentoTab() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-slate-500">Adiantamentos e RDV do mês, por supervisor. <b>Lance o adiantamento a qualquer momento</b> — antes, durante ou depois da viagem (pode haver vários no mês). Ao lado, a RDV agregada do mês (saldo = adiantamentos − despesas aprovadas) e o <b>encerramento</b> do mês (ao final, trava lançamentos).</p>
+      <p className="mb-4 text-sm text-slate-500">
+        {ehSupervisorArea
+          ? <><b>Seus adiantamentos e a sua RDV do mês.</b> Lance o adiantamento a qualquer momento — antes, durante ou depois da viagem (pode haver vários no mês). Ao lado, a sua RDV agregada (saldo = adiantamentos − despesas aprovadas). O encerramento do mês é feito pelo coordenador.</>
+          : <>Adiantamentos e RDV do mês, por supervisor. <b>Lance o adiantamento a qualquer momento</b> — antes, durante ou depois da viagem (pode haver vários no mês). Ao lado, a RDV agregada do mês (saldo = adiantamentos − despesas aprovadas) e o <b>encerramento</b> do mês (ao final, trava lançamentos).</>}
+      </p>
+      {ehSupervisorArea && meuCadastro === null ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-700">Seu cadastro de supervisor de área ainda não foi montado no time desta filial (ou seu login não tem matrícula). Peça ao Supervisor de Departamento para te cadastrar com um coordenador — depois você poderá lançar seus adiantamentos aqui.</p>
+      ) : (
+      <>
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor</label>
-          <select value={supId} onChange={(e) => setSupId(e.target.value)} className={inp}>
-            <option value="">Selecione…</option>
-            {sups.map((s) => <option key={s.id} value={s.id}>{s.nome} ({s.matricula})</option>)}
-          </select>
+          {ehSupervisorArea ? (
+            <div className={`${inp} bg-slate-50 text-slate-600`}>{meuCadastro ? `Você — ${meuCadastro.nome} (${meuCadastro.matricula})` : 'Carregando…'}</div>
+          ) : (
+            <select value={supId} onChange={(e) => setSupId(e.target.value)} className={inp}>
+              <option value="">Selecione…</option>
+              {sups.map((s) => <option key={s.id} value={s.id}>{s.nome} ({s.matricula})</option>)}
+            </select>
+          )}
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Mês</label>
@@ -615,6 +649,7 @@ function FechamentoTab() {
                       <tr key={a.id}>
                         <td className="py-2">{fmtData(a.dataAdiantamento)}</td>
                         <td className="py-2 font-medium">{brl(a.valor)}</td>
+                        <td className="py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${adiantBadge(a.situacao).cls}`} title={a.situacao === 'REJEITADO' ? (a.motivoRejeicao ?? '') : ''}>{adiantBadge(a.situacao).label}</span></td>
                         <td className="py-2 text-slate-500">{a.observacao ?? ''}</td>
                         <td className="py-2 text-right"><button onClick={() => void remover(a.id)} className="text-xs text-rose-600 hover:underline">Remover</button></td>
                       </tr>
@@ -642,22 +677,30 @@ function FechamentoTab() {
                 <div className="flex justify-between"><dt className="text-slate-500">Despesas de veículo</dt><dd>{brl(rdv?.totaisPorCategoria.VEICULO ?? 0)}</dd></div>
                 <div className="flex justify-between"><dt className="text-slate-500">Despesas de indivíduo</dt><dd>{brl(rdv?.totaisPorCategoria.INDIVIDUO ?? 0)}</dd></div>
                 <div className="flex justify-between border-t border-slate-100 pt-2 font-medium"><dt>Total de despesas</dt><dd>{brl(rdv?.total ?? 0)}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-500">Adiantamentos</dt><dd>{brl(rdv?.totalAdiantamento ?? 0)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Adiantamentos aprovados</dt><dd>{brl(rdv?.totalAdiantamento ?? 0)}</dd></div>
+                {(rdv?.totalAdiantamentoPendente ?? 0) > 0 && (
+                  <div className="flex justify-between text-amber-700"><dt>Aguardando aprovação</dt><dd>{brl(rdv?.totalAdiantamentoPendente ?? 0)}</dd></div>
+                )}
                 <div className="flex justify-between rounded-lg bg-slate-50 px-2 py-2 font-semibold"><dt>{(rdv?.saldo ?? 0) >= 0 ? 'A devolver à CAPUL' : 'A reembolsar'}</dt><dd>{brl(Math.abs(rdv?.saldo ?? 0))}</dd></div>
               </dl>
               {rdv?.fechado && (
-                <p className="mt-3 rounded-lg bg-amber-50 px-2 py-2 text-xs font-medium text-amber-700">🔒 Mês encerrado — despesas, adiantamentos e visitas travados. Reabra para alterar.</p>
+                <p className="mt-3 rounded-lg bg-amber-50 px-2 py-2 text-xs font-medium text-amber-700">🔒 Mês encerrado — despesas, adiantamentos e visitas travados{ehSupervisorArea ? ' (fale com o coordenador para reabrir)' : ''}.</p>
               )}
-              <button
-                onClick={() => void encerrarMes()}
-                className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-medium ${rdv?.fechado ? 'border border-slate-300 text-slate-700 hover:bg-slate-50' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
-              >
-                {rdv?.fechado ? '🔓 Reabrir mês' : '🔒 Encerrar mês'}
-              </button>
+              {/* Encerrar/reabrir o mês é do coordenador/Supervisor de Departamento — não do supervisionado. */}
+              {!ehSupervisorArea && (
+                <button
+                  onClick={() => void encerrarMes()}
+                  className={`mt-3 w-full rounded-lg px-3 py-2 text-sm font-medium ${rdv?.fechado ? 'border border-slate-300 text-slate-700 hover:bg-slate-50' : 'bg-amber-600 text-white hover:bg-amber-700'}`}
+                >
+                  {rdv?.fechado ? '🔓 Reabrir mês' : '🔒 Encerrar mês'}
+                </button>
+              )}
             </div>
           </div>
         )
-      ) : <p className="py-8 text-center text-sm text-slate-400">Selecione o supervisor e o mês.</p>}
+      ) : <p className="py-8 text-center text-sm text-slate-400">{ehSupervisorArea ? 'Escolha o mês.' : 'Selecione o supervisor e o mês.'}</p>}
+      </>
+      )}
     </div>
   );
 }

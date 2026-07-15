@@ -24,6 +24,7 @@ export interface VisitaSup {
   clienteNome?: string | null; municipio?: string | null;
   propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
   atividadeId?: string | null; atividade?: { nome: string } | null;
+  latitude?: number | null; longitude?: number | null; // GPS capturado ao apontar "Realizar"
 }
 export interface DespesaSup {
   id: string; valor: number | string; dataDespesa?: string | null; situacao?: SituacaoDespesa | null;
@@ -33,6 +34,10 @@ export interface DespesaSup {
 export interface ViagemSupDetalhe extends ViagemSup { paradas: VisitaSup[]; despesas: DespesaSup[] }
 export interface AtividadeSup { id: string; nome: string; ativo?: boolean }
 export interface TipoDespesaSup { id: string; nome: string; categoria: string; ativo?: boolean }
+export type SituacaoAdiantamento = 'PENDENTE' | 'APROVADO' | 'REJEITADO';
+export interface AdiantamentoSup { id: string; valor: number | string; dataAdiantamento: string; observacao?: string | null; situacao?: SituacaoAdiantamento | null; motivoRejeicao?: string | null }
+/** Cadastro do supervisor de área LOGADO (auto-serviço) — id p/ lançar o adiantamento. */
+export interface MeuCadastroSup { id: string; nome: string; matricula: string; coordenadorId: string | null }
 
 export interface NovaVisita {
   atividadeId?: string; clienteNome: string;
@@ -100,6 +105,25 @@ export async function criarPlanejamentoApp(mesReferencia: number, veiculoId?: st
 export async function enviarPlanejamentoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/enviar`); }
 export async function iniciarExecucaoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/iniciar`); }
 export async function concluirPlanejamentoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/concluir`); }
+
+/** Cadastro do supervisor logado (auto-serviço) — null se ainda não montado no time. */
+export async function meuCadastroSup(): Promise<MeuCadastroSup | null> {
+  const { data } = await api.get<MeuCadastroSup | null>(`${B}/meu-cadastro`);
+  return data ?? null;
+}
+/** Adiantamentos do mês do supervisor (mensal, vários por supervisor/mês). */
+export async function listarAdiantamentosSup(supervisorId: string, mes: number): Promise<AdiantamentoSup[]> {
+  const { data } = await api.get<AdiantamentoSup[]>(`${B}/adiantamentos`, { params: { supervisorId, mes } });
+  return data;
+}
+/** Lança o adiantamento (auto-serviço do supervisor de área — só o SEU cadastro). O
+ *  backend barra se o mês (RDV) estiver encerrado ou se o cadastro não for o do logado. */
+export async function lancarAdiantamentoSup(body: { supervisorId: string; mesReferencia: number; valor: number; data?: string; observacao?: string }): Promise<void> {
+  await api.post(`${B}/adiantamentos`, body);
+}
+export async function removerAdiantamentoSup(id: string): Promise<void> {
+  await api.delete(`${B}/adiantamentos/${id}`);
+}
 
 export async function listarAtividadesSup(): Promise<AtividadeSup[]> {
   const { data } = await api.get<AtividadeSup[]>(`${B}/atividades`, { params: { ativos: true } });
