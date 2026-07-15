@@ -95,7 +95,7 @@ Plataforma corporativa modular com microservicos independentes:
 
 ### 7. Logistica / Entregas (`/entregas`) *(em desenvolvimento — Fase 1a/1b + Supervisores/RDV e gestão de Frota; Jul/2026)*
 - Entregas domiciliares do supermercado (Unaí/MG): cadastro de entrega (balcao), montagem de viagem, frota, romaneio/etiquetas, painel
-- **Supervisores/RDV**: planejamentos + workflow de aprovação do coordenador + fechamento mensal (prestação de contas de representantes)
+- **Supervisores/RDV**: planejamentos + workflow de aprovação do coordenador + fechamento mensal (prestação de contas de representantes). **Adiantamento** lançado pelos 3 perfis (coordenador, supervisor de departamento e o próprio **supervisor de área em auto-serviço** — nasce PENDENTE e o coordenador aprova/rejeita; só APROVADO entra no saldo da RDV). Visita: rótulo contextual (planejar × registrar) + link "Ver no mapa" (GPS capturado). Ver `memory/project_rdv_adiantamento_tres_perfis.md`
 - **Gestão de Frota**: saída de veículos, adiantamento/acerto de viagem, manutenção, linha do KM, custos/análise (custo de frota restrito a GESTOR_FROTA/ADMIN)
 - **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota
 - Backend NestJS 11 + Prisma 6 (schema `logistica` + `core` read-only via `$queryRaw`), porta 3003, prefixo `/api/v1/logistica`
@@ -272,4 +272,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 14/07/2026*
+*Ultima atualizacao: 15/07/2026*
