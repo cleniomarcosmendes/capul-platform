@@ -14,6 +14,8 @@ import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarS
  *  `1047` no mesmo valor. Mesma regra do `frota.service` (match de condutor) — usar
  *  para comparar matrículas sem depender do formato digitado. */
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
+/** Máximo de comprovantes (foto/PDF) por despesa. */
+const MAX_ANEXOS_DESPESA = 5;
 
 /**
  * Catálogos do módulo Supervisores/RDV (Fase 3a): Atividade de visita e Região
@@ -38,6 +40,47 @@ export class SupervisorService {
       where: { id: despesaId },
       data: { comprovanteObjectKey: objectKey, comprovanteHash: hash, comprovanteMime: recibo.mimetype ?? null },
     });
+  }
+
+  /** Anexa N comprovantes (foto/PDF) à despesa — até MAX_ANEXOS_DESPESA no total. Cada
+   *  binário vai pro cofre (MinIO); grava chave/hash/mime/ordem. Excedente é ignorado. */
+  private async anexarComprovantes(despesaId: string, filialId: string, recibos: ReciboBinario[]) {
+    if (!recibos.length) return;
+    const jaTem = await this.prisma.anexoDespesa.count({ where: { despesaId } });
+    const espaco = MAX_ANEXOS_DESPESA - jaTem;
+    if (espaco <= 0) throw new BadRequestException(`Máximo de ${MAX_ANEXOS_DESPESA} comprovantes por despesa.`);
+    let ordem = jaTem;
+    for (const r of recibos.slice(0, espaco)) {
+      const { objectKey, hash } = await this.storage.put(r.buffer, { filialId, refId: despesaId, mimeType: r.mimetype });
+      await this.prisma.anexoDespesa.create({ data: { despesaId, objectKey, hash, mime: r.mimetype ?? null, tamanho: r.size, ordem: ordem++ } });
+    }
+  }
+
+  /** Baixa um anexo específico da despesa (stream). Escopo por filial/viagem-supervisor. */
+  async obterAnexoDespesa(viagemId: string, despesaId: string, anexoId: string, user: JwtPayload): Promise<{ buffer: Buffer; mimeType: string }> {
+    const filialId = filialDoUsuario(user);
+    const a = await this.prisma.anexoDespesa.findUnique({
+      where: { id: anexoId },
+      include: { despesa: { select: { viagemId: true, filialId: true, viagem: { select: { tipo: true } } } } },
+    });
+    if (!a || a.despesaId !== despesaId || a.despesa.viagemId !== viagemId || a.despesa.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Anexo não encontrado.');
+    if (a.despesa.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    const buffer = await this.storage.get(a.objectKey);
+    return { buffer, mimeType: a.mime ?? 'application/octet-stream' };
+  }
+
+  /** Remove um anexo da despesa (some do cofre + do banco). */
+  async removerAnexoDespesa(viagemId: string, despesaId: string, anexoId: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const a = await this.prisma.anexoDespesa.findUnique({
+      where: { id: anexoId },
+      include: { despesa: { select: { viagemId: true, filialId: true, viagem: { select: { tipo: true } } } } },
+    });
+    if (!a || a.despesaId !== despesaId || a.despesa.viagemId !== viagemId || a.despesa.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Anexo não encontrado.');
+    if (a.despesa.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    await this.storage.remove(a.objectKey).catch(() => undefined);
+    await this.prisma.anexoDespesa.delete({ where: { id: anexoId } });
+    return { ok: true };
   }
 
   // ---- Cadastro de Supervisor de Área + vínculo com o coordenador (Fase 6a) ----
@@ -423,7 +466,7 @@ export class SupervisorService {
             localCliente: { select: { id: true, nome: true, tipo: true, latConsolidada: true, longConsolidada: true, confianca: true, nMarcacoes: true } },
           },
         },
-        despesas: { include: { tipoDespesa: { select: { nome: true, categoria: true } } } },
+        despesas: { include: { tipoDespesa: { select: { nome: true, categoria: true } }, anexos: { select: { id: true, mime: true, ordem: true }, orderBy: { ordem: 'asc' } } } },
         // Saídas de veículo (frota) vinculadas a este RDV → o KM vem daqui.
         saidasVinculadas: {
           orderBy: { dataHoraSaida: 'asc' },
@@ -587,7 +630,7 @@ export class SupervisorService {
   }
 
   // ---- Despesas da viagem do supervisor (compõem a RDV) ----
-  async lancarDespesa(viagemId: string, dto: LancarDespesaSupervisorDto, user: JwtPayload, recibo?: ReciboBinario) {
+  async lancarDespesa(viagemId: string, dto: LancarDespesaSupervisorDto, user: JwtPayload, recibos?: ReciboBinario[]) {
     const filialId = filialDoUsuario(user);
     const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
@@ -622,7 +665,7 @@ export class SupervisorService {
       },
       include: { tipoDespesa: { select: { nome: true, categoria: true } } },
     });
-    if (recibo) return this.anexarReciboDespesa(d.id, filialId, recibo);
+    if (recibos?.length) await this.anexarComprovantes(d.id, filialId, recibos);
     return d;
   }
 

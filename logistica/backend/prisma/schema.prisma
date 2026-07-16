@@ -466,6 +466,9 @@ model DespesaVeiculo {
   idempotencyKey String? @unique @map("idempotency_key")
   // Volta do vínculo com a manutenção que gerou esta despesa (quando veio de lá).
   manutencao     ManutencaoVeiculo?
+  // Vários comprovantes (Jul/2026): a despesa pode ter até N anexos (fotos/PDF). Os
+  // campos comprovante* acima são o LEGADO (1 anexo) — convivem; leitura junta os dois.
+  anexos         AnexoDespesa[]
 
   @@index([filialId, situacao])
   @@index([veiculoId])
@@ -475,6 +478,24 @@ model DespesaVeiculo {
   // declarado aqui — o schema ficou devendo o índice que o banco já tem.
   @@index([fornecedorId])
   @@map("despesa_veiculo")
+  @@schema("logistica")
+}
+
+// Anexo (comprovante) da despesa — vários por despesa (foto/PDF). O binário vive no
+// object store (MinIO, CofreStorageService); aqui ficam a chave + hash + mime + ordem.
+model AnexoDespesa {
+  id        String         @id @default(uuid())
+  despesaId String         @map("despesa_id")
+  despesa   DespesaVeiculo @relation(fields: [despesaId], references: [id], onDelete: Cascade)
+  objectKey String         @map("object_key")
+  hash      String?
+  mime      String?
+  tamanho   Int?
+  ordem     Int            @default(0)
+  criadoEm  DateTime       @default(now()) @map("criado_em")
+
+  @@index([despesaId])
+  @@map("anexo_despesa")
   @@schema("logistica")
 }
 
