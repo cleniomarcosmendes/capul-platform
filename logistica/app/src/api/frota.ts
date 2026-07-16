@@ -56,13 +56,17 @@ export async function listarViagensFrota(situacao: 'EM_CURSO' | 'CONCLUIDA' = 'E
   return data;
 }
 
+/** Parada planejada da rota: local + cliente (SA1) opcional. O cliente faz a entrega
+ *  alimentar a consolidação da localização do local (geo). */
+export interface ParadaPlanejadaApp { local: string; clienteMatricula?: string; clienteNome?: string }
+
 export interface SaidaPayload {
   matricula: string;
   senha: string;
   veiculoId: string;
   kmInicial: number;
   finalidade?: string;
-  paradasPlanejadas?: string[];
+  paradasPlanejadas?: ParadaPlanejadaApp[];
 }
 
 /** Registrar saída PADRAO (revalida matrícula+senha no backend). */
@@ -75,7 +79,7 @@ export interface SaidaIndividualPayload {
   veiculoId: string;
   kmInicial: number;
   finalidade?: string;
-  paradasPlanejadas?: string[];
+  paradasPlanejadas?: ParadaPlanejadaApp[];
 }
 
 /** Registrar saída INDIVIDUAL — o próprio usuário logado é o condutor (sem senha). */
@@ -99,7 +103,7 @@ export async function registrarRetorno(viagemId: string, p: RetornoPayload): Pro
 }
 
 /** Tipos de despesa ativos (pra o select do lançamento). */
-export interface ParadaPayload { local: string; km?: number; observacao?: string; latitude?: number; longitude?: number; idempotencyKey?: string }
+export interface ParadaPayload { local: string; km?: number; observacao?: string; latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean; clienteMatricula?: string; clienteNome?: string; idempotencyKey?: string }
 
 /** Registra uma parada (ad-hoc) na viagem em curso — o "caderno" da frota. */
 export async function adicionarParadaFrota(viagemId: string, p: ParadaPayload): Promise<void> {
@@ -118,7 +122,7 @@ export async function listarParadasFrota(viagemId: string): Promise<ParadaFrotaI
   return data;
 }
 
-export interface CheckinPayload { km?: number; latitude?: number; longitude?: number; observacao?: string }
+export interface CheckinPayload { km?: number; latitude?: number; longitude?: number; observacao?: string; precisaoM?: number; noLocal?: boolean; clienteMatricula?: string; clienteNome?: string }
 
 /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */
 export async function checkinParadaFrota(viagemId: string, paradaId: string, p: CheckinPayload): Promise<void> {

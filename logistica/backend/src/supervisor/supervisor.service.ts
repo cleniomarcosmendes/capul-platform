@@ -6,6 +6,7 @@ import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
 import { CofreStorageService } from '../cofre/cofre-storage.service.js';
+import { LocalClienteService } from '../local/local-cliente.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
 import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
@@ -26,6 +27,7 @@ export class SupervisorService {
     private readonly condutor: ProtheusCondutorService,
     private readonly core: CoreLookupService,
     private readonly storage: CofreStorageService,
+    private readonly locais: LocalClienteService,
   ) {}
 
   /** Anexa o recibo (foto/PDF) à despesa: sobe no cofre (MinIO) e grava
@@ -415,7 +417,11 @@ export class SupervisorService {
         supervisorRegistro: { select: { id: true, nome: true, coordenadorId: true } },
         paradas: {
           orderBy: { sequencia: 'asc' },
-          include: { atividade: { select: { nome: true } } },
+          include: {
+            atividade: { select: { nome: true } },
+            // Local consolidado → o "Ver no mapa" usa a coordenada APRENDIDA (não o ponto bruto).
+            localCliente: { select: { id: true, nome: true, tipo: true, latConsolidada: true, longConsolidada: true, confianca: true, nMarcacoes: true } },
+          },
         },
         despesas: { include: { tipoDespesa: { select: { nome: true, categoria: true } } } },
         // Saídas de veículo (frota) vinculadas a este RDV → o KM vem daqui.
@@ -458,21 +464,29 @@ export class SupervisorService {
       if (ja) return ja;
     }
     const emPlanejamento = ['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '');
-    return this.prisma.$transaction(async (tx) => {
+    const clienteMatricula = dto.clienteMatricula?.trim().toUpperCase() || null;
+    const propriedade = dto.propriedade?.trim() || null;
+    const localId = await this.resolverLocalDaMarcacao(dto.localClienteId, dto.noLocal, {
+      clienteMatricula, clienteNome: dto.clienteNome?.trim() || null, propriedade, municipio: dto.municipio?.trim() || null,
+    }, user);
+    const criada = await this.prisma.$transaction(async (tx) => {
       const seq = (await tx.parada.count({ where: { viagemId } })) + 1;
       return tx.parada.create({
         data: {
           viagemId,
           sequencia: seq,
           atividadeId: dto.atividadeId ?? null,
-          clienteMatricula: dto.clienteMatricula?.trim().toUpperCase() || null,
+          clienteMatricula,
           clienteNome: dto.clienteNome?.trim() || null,
           municipio: dto.municipio?.trim() || null,
-          propriedade: dto.propriedade?.trim() || null,
+          propriedade,
           local: dto.local?.trim() || null,
           observacao: dto.observacao?.trim() || null,
           latitude: dto.latitude ?? null,
           longitude: dto.longitude ?? null,
+          precisaoM: dto.precisaoM ?? null,
+          noLocal: dto.noLocal ?? null,
+          localClienteId: localId,
           dataHora: this.parseData(dto.dataVisita),
           status: emPlanejamento ? 'PLANEJADA' : 'REALIZADA',
           idempotencyKey: dto.idempotencyKey ?? null,
@@ -480,6 +494,29 @@ export class SupervisorService {
         include: { atividade: { select: { nome: true } } },
       });
     });
+    // Visita já REALIZADA em campo (execução) com marcação confiável → consolida o local.
+    if (criada.localClienteId && criada.status === 'REALIZADA' && criada.noLocal && criada.latitude != null) {
+      await this.locais.consolidar(criada.localClienteId).catch(() => undefined);
+    }
+    return criada;
+  }
+
+  /** Resolve o local do cliente que esta marcação alimenta: o já escolhido; ou, se o
+   *  usuário confirmou "no local" e há cliente+propriedade, cria/reaproveita o local
+   *  (PROPRIEDADE) por essa chave (bootstrap do cadastro). Senão, null. */
+  private async resolverLocalDaMarcacao(
+    localIdAtual: string | null | undefined,
+    noLocal: boolean | undefined,
+    m: { clienteMatricula: string | null; clienteNome: string | null; propriedade: string | null; municipio: string | null },
+    user: JwtPayload,
+  ): Promise<string | null> {
+    if (localIdAtual) return localIdAtual;
+    if (!noLocal || !m.clienteMatricula?.trim() || !m.propriedade?.trim()) return null;
+    const local = await this.locais.criar(
+      { clienteMatricula: m.clienteMatricula, clienteNome: m.clienteNome ?? undefined, tipo: 'PROPRIEDADE', nome: m.propriedade, municipio: m.municipio ?? undefined },
+      user,
+    );
+    return local.id;
   }
 
   /** Apontamento (6c): marca a visita PLANEJADA como REALIZADA (com a atividade
@@ -497,7 +534,11 @@ export class SupervisorService {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
     }
-    return this.prisma.parada.update({
+    // Local do cliente: usa o escolhido (dto/parada) ou, se confirmou "no local" e não há
+    // um, AUTO-RESOLVE por cliente+propriedade (bootstrap do cadastro de locais a partir
+    // do dado que já existe — o app não precisa de seletor).
+    const localId = await this.resolverLocalDaMarcacao(dto.localClienteId ?? p.localClienteId, dto.noLocal, p, user);
+    const atualizada = await this.prisma.parada.update({
       where: { id: paradaId },
       data: {
         status: dto.status,
@@ -505,10 +546,19 @@ export class SupervisorService {
         observacao: dto.observacao !== undefined ? (dto.observacao?.trim() || null) : undefined,
         latitude: dto.latitude ?? undefined,
         longitude: dto.longitude ?? undefined,
+        precisaoM: dto.precisaoM ?? undefined,
+        noLocal: dto.noLocal ?? undefined,
+        localClienteId: localId ?? undefined,
         dataHora: dto.dataVisita ? this.parseData(dto.dataVisita) : undefined,
       },
       include: { atividade: { select: { nome: true } } },
     });
+    // Marcação confiável (no local, com GPS) → reconsolida a localização do local.
+    // Best-effort: uma falha aqui não derruba o apontamento.
+    if (atualizada.localClienteId && atualizada.status === 'REALIZADA' && atualizada.noLocal && atualizada.latitude != null) {
+      await this.locais.consolidar(atualizada.localClienteId).catch(() => undefined);
+    }
+    return atualizada;
   }
 
   async removerVisita(viagemId: string, paradaId: string, user: JwtPayload) {

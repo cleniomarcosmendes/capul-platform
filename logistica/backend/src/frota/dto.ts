@@ -1,5 +1,17 @@
-import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { TipoManutencao } from '@prisma/client';
+
+// Parada PLANEJADA da rota (na saída e no planejar): local + cliente opcional. O cliente
+// (SA1) faz a parada de ENTREGA alimentar a consolidação da localização do local (geo).
+export class ParadaPlanejadaDto {
+  @IsString() @IsNotEmpty() @MaxLength(120) local!: string;
+  @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
+  @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+  // Fazenda (zona rural): se preenchida, a entrega alimenta a geo da propriedade (mesmo
+  // local do supervisor). Vazia = entrega urbana (endereço preciso, sem aprender).
+  @IsOptional() @IsString() @MaxLength(120) propriedade?: string;
+}
 
 export class BuscarCondutorDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
@@ -51,8 +63,8 @@ export class SaidaFrotaDto {
   rdvViagemId?: string;
 
   // Rota planejada (opcional): locais das visitas — nascem como PLANEJADA.
-  @IsOptional() @IsArray() @IsString({ each: true })
-  paradasPlanejadas?: string[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParadaPlanejadaDto)
+  paradasPlanejadas?: ParadaPlanejadaDto[];
 }
 
 /**
@@ -84,8 +96,8 @@ export class SaidaIndividualDto {
   @IsOptional() @IsString() @MaxLength(40)
   rdvViagemId?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
-  paradasPlanejadas?: string[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParadaPlanejadaDto)
+  paradasPlanejadas?: ParadaPlanejadaDto[];
 }
 
 /**
@@ -131,8 +143,8 @@ export class SaidaPortariaDto {
   @IsOptional() @IsString() @MaxLength(40)
   rdvViagemId?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
-  paradasPlanejadas?: string[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParadaPlanejadaDto)
+  paradasPlanejadas?: ParadaPlanejadaDto[];
 }
 
 /** Retorno pela PORTARIA: encerra a rota com KM final SEM a senha do motorista; o
@@ -190,6 +202,16 @@ export class AddParadaDto {
   @IsOptional() @IsNumber()
   longitude?: number;
 
+  // Geo Fase A: cliente (SA1) + FAZENDA (propriedade) + qualidade da marcação. SÓ entrega
+  // na fazenda (zona rural) alimenta a geo — cidade tem endereço preciso (Google/Waze).
+  // A fazenda é o MESMO local aprendido nas visitas do supervisor.
+  @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
+  @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+  @IsOptional() @IsString() @MaxLength(120) propriedade?: string;
+  @IsOptional() @IsInt() @Min(0) precisaoM?: number;
+  @IsOptional() @IsBoolean() noLocal?: boolean;
+  @IsOptional() @IsString() @MaxLength(40) localClienteId?: string;
+
   // Idempotência (fila offline): reenvio com a mesma chave não duplica.
   @IsOptional() @IsString() @MaxLength(60)
   idempotencyKey?: string;
@@ -231,8 +253,8 @@ export class AtualizarLocalParadaDto {
 
 /** Planejamento de paradas (visitas) — lista de locais (texto livre). */
 export class PlanejarParadasDto {
-  @IsArray() @ArrayNotEmpty() @IsString({ each: true })
-  locais!: string[];
+  @IsArray() @ArrayNotEmpty() @ValidateNested({ each: true }) @Type(() => ParadaPlanejadaDto)
+  paradas!: ParadaPlanejadaDto[];
 }
 
 /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */
@@ -251,6 +273,15 @@ export class CheckinParadaDto {
 
   @IsOptional() @IsNumber()
   longitude?: number;
+
+  // Geo Fase A: cliente (SA1) + FAZENDA (propriedade) + qualidade da marcação. SÓ entrega
+  // na fazenda alimenta a geo (cidade tem endereço preciso). Fazenda = mesmo local do supervisor.
+  @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
+  @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+  @IsOptional() @IsString() @MaxLength(120) propriedade?: string;
+  @IsOptional() @IsInt() @Min(0) precisaoM?: number;
+  @IsOptional() @IsBoolean() noLocal?: boolean;
+  @IsOptional() @IsString() @MaxLength(40) localClienteId?: string;
 }
 
 /** Registrar manutenção feita — reseta o contador preventivo do veículo. */

@@ -12,7 +12,23 @@ interface Visita {
   municipio?: string | null; propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
   atividadeId?: string | null;
   atividade?: { nome: string } | null;
-  latitude?: number | null; longitude?: number | null; // GPS capturado ao apontar "Realizar"
+  latitude?: number | null; longitude?: number | null; // GPS bruto desta marcação
+  localCliente?: LocalConsolidado | null; // local + coordenada consolidada (aprendida)
+}
+interface LocalConsolidado {
+  id: string; nome: string; tipo?: string | null;
+  latConsolidada?: number | string | null; longConsolidada?: number | string | null;
+  confianca?: string | null; nMarcacoes?: number | null;
+}
+// Ponto para o "Ver no mapa": prefere a coordenada CONSOLIDADA do local; cai para o ponto
+// bruto da marcação; null se não há nada.
+function pontoMapa(p: Visita): { lat: number; lng: number; consolidado: boolean; confianca?: string | null } | null {
+  const lc = p.localCliente;
+  if (lc?.latConsolidada != null && lc?.longConsolidada != null) {
+    return { lat: Number(lc.latConsolidada), lng: Number(lc.longConsolidada), consolidado: true, confianca: lc.confianca };
+  }
+  if (p.latitude != null && p.longitude != null) return { lat: Number(p.latitude), lng: Number(p.longitude), consolidado: false };
+  return null;
 }
 interface AdiantV { id: string; valor: number | string; dataAdiantamento: string; observacao?: string | null; situacao?: string | null; motivoRejeicao?: string | null }
 const STATUS_ADIANT: Record<string, { label: string; cls: string }> = {
@@ -152,6 +168,10 @@ export function SupervisorViagemPage() {
   const [observacao, setObs] = useState('');
   const [dataVisita, setDataVisita] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Local geolocalizado do cliente (Fase A geo): escolher um local já aprendido liga a
+  // visita à sua consolidação; senão o backend cria pelo nome da propriedade.
+  const [localClienteId, setLocalClienteId] = useState('');
+  const [locais, setLocais] = useState<LocalConsolidado[]>([]);
   // form da despesa
   const [tipos, setTipos] = useState<{ id: string; nome: string; categoria: string; ativo?: boolean }[]>([]);
   const [showDesp, setShowDesp] = useState(false);
@@ -197,6 +217,12 @@ export function SupervisorViagemPage() {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  // Locais já aprendidos do cliente selecionado (para o seletor no form da visita).
+  useEffect(() => {
+    const m = clienteMatricula.trim();
+    if (!m) { setLocais([]); return; }
+    logisticaApi.get<LocalConsolidado[]>(`/local/cliente/${encodeURIComponent(m)}`).then((r) => setLocais(r.data)).catch(() => setLocais([]));
+  }, [clienteMatricula]);
 
   const concluida = v?.situacao === 'CONCLUIDA';
   // Fase de planejamento (espelha o backend): a visita adicionada aqui nasce PLANEJADA
@@ -210,13 +236,20 @@ export function SupervisorViagemPage() {
   const ehCoordDesteSup = !!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id;
   const podeDecidirAdiantamento = logisticaRole === 'ADMIN' || logisticaRole === 'SUPERVISOR_FROTA' || (logisticaRole === 'COORDENADOR' && ehCoordDesteSup);
 
-  const limparForm = () => { setCliMat(''); setCliNome(''); setMunicipio(''); setAtividadeId(''); setPropriedade(''); setObs(''); setDataVisita(''); setEditVisitaId(null); };
+  const limparForm = () => { setCliMat(''); setCliNome(''); setMunicipio(''); setAtividadeId(''); setPropriedade(''); setObs(''); setDataVisita(''); setLocalClienteId(''); setEditVisitaId(null); };
   const abrirEdicaoVisita = (p: Visita) => {
     setEditVisitaId(p.id);
     setCliMat(p.clienteMatricula ?? ''); setCliNome(p.clienteNome ?? ''); setMunicipio(p.municipio ?? '');
     setAtividadeId(p.atividadeId ?? ''); setPropriedade(p.propriedade ?? ''); setObs(p.observacao ?? '');
+    setLocalClienteId(p.localCliente?.id ?? '');
     setDataVisita(p.dataHora ? new Date(p.dataHora).toISOString().slice(0, 10) : '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  // Escolhe um local já aprendido → liga a visita a ele e preenche a propriedade com o nome.
+  const escolherLocal = (lid: string) => {
+    setLocalClienteId(lid);
+    const l = locais.find((x) => x.id === lid);
+    if (l) setPropriedade(l.nome);
   };
 
   const adicionar = async (e: React.FormEvent) => {
@@ -229,6 +262,7 @@ export function SupervisorViagemPage() {
       clienteNome: clienteNome.trim(),
       municipio: municipio.trim() || undefined,
       propriedade: propriedade.trim() || undefined,
+      localClienteId: localClienteId || undefined,
       observacao: observacao.trim() || undefined,
       dataVisita: dataVisita || undefined,
     };
@@ -434,6 +468,20 @@ export function SupervisorViagemPage() {
             <label className="mb-1 block text-xs font-medium text-slate-500">Cliente</label>
             <BuscaCliente onPick={(c) => { setCliMat(c.matricula ?? ''); setCliNome(c.nome); if (c.municipio) setMunicipio(c.municipio); if (c.propriedade) setPropriedade(c.propriedade); }} />
           </div>
+          {clienteMatricula && locais.length > 0 && (
+            <div className="mb-3">
+              <label className="mb-1 block text-xs font-medium text-slate-500">Local já conhecido do cliente</label>
+              <select value={localClienteId} onChange={(e) => escolherLocal(e.target.value)} className={inp}>
+                <option value="">— novo local (usar o nome em Propriedade) —</option>
+                {locais.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nome}{l.confianca === 'CONFIRMADA' ? ` — confirmado (${l.nMarcacoes ?? 0} marcações)` : l.confianca === 'PROVISORIA' ? ` — provisório (${l.nMarcacoes ?? 0})` : ' — sem localização ainda'}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-400">Escolha um local existente para acumular as marcações no mesmo ponto, ou deixe "novo" e informe a propriedade.</p>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Nome do cliente / prospect *</label><input value={clienteNome} onChange={(e) => setCliNome(e.target.value)} maxLength={120} className={inp} placeholder="Selecionado acima ou digite (prospect)" /></div>
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Município</label><input value={municipio} onChange={(e) => setMunicipio(e.target.value)} maxLength={120} className={inp} /></div>
@@ -490,9 +538,16 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3"><span className="font-medium text-slate-700">{p.clienteNome ?? '—'}</span>{p.clienteMatricula && <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{p.clienteMatricula}</span>}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {p.municipio ?? '—'}
-                  {p.latitude != null && p.longitude != null && (
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${p.latitude},${p.longitude}`} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-0.5 text-xs text-capul-600 hover:underline" title="Ver no mapa a localização capturada (GPS)"><MapPin className="h-3 w-3" /> Ver no mapa</a>
-                  )}
+                  {(() => {
+                    const m = pontoMapa(p);
+                    if (!m) return null;
+                    const titulo = m.consolidado ? `Localização aprendida do local${m.confianca === 'PROVISORIA' ? ' (provisória)' : ''}` : 'Marcação bruta desta visita (GPS)';
+                    return (
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${m.lat},${m.lng}`} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-0.5 text-xs text-capul-600 hover:underline" title={titulo}>
+                        <MapPin className="h-3 w-3" /> {m.consolidado ? 'Ver local' : 'Ver marcação'}
+                      </a>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3 text-slate-500">{p.propriedade ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">{p.atividade?.nome ?? '—'}</td>

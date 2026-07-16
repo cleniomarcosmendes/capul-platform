@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CofreModule } from '../cofre/cofre.module.js';
+import { LocalClienteModule } from '../local/local-cliente.module.js';
 import { SupervisorController } from './supervisor.controller.js';
 import { SupervisorService } from './supervisor.service.js';
 
@@ -7,7 +8,7 @@ import { SupervisorService } from './supervisor.service.js';
 // da despesa do supervisor — só o binário; metadado (objectKey/hash/mime) fica no
 // próprio registro (mesmo padrão da frota).
 @Module({
-  imports: [CofreModule],
+  imports: [CofreModule, LocalClienteModule],
   controllers: [SupervisorController],
   providers: [SupervisorService],
 })

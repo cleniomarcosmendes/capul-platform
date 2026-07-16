@@ -4,6 +4,7 @@ import { createPrismaMock } from '../common/testing/prisma-mock';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const dep = () => ({}) as any;
+const locaisMock = () => ({ consolidar: jest.fn().mockResolvedValue({}), criar: jest.fn().mockResolvedValue({ id: 'lc1' }), listarPorCliente: jest.fn() }) as any;
 const comRole = (role: string, sub = 'u1') => ({ sub, filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
 
 describe('FrotaService — escopo de visibilidade das viagens de frota', () => {
@@ -11,7 +12,7 @@ describe('FrotaService — escopo de visibilidade das viagens de frota', () => {
   let svc: FrotaService;
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new FrotaService(prisma, dep(), dep(), dep());
+    svc = new FrotaService(prisma, dep(), dep(), dep(), locaisMock());
   });
 
   // ⭐ Vazamento pego 05/07: a lista mostrava TODAS as viagens da filial p/ qualquer papel.
@@ -82,7 +83,7 @@ describe('FrotaService — manutenção com custo gera despesa', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new FrotaService(prisma, dep(), dep(), dep());
+    svc = new FrotaService(prisma, dep(), dep(), dep(), locaisMock());
     prisma.veiculo.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', kmAtual: 1000, intervaloManutencaoKm: 10000, supervisorId: 'u1' });
     prisma.veiculo.update.mockResolvedValue({ id: 'v1' });
     prisma.tipoDespesa.findFirst.mockResolvedValue({ id: 'tp-manut', nome: 'Manutenção', ativo: true });

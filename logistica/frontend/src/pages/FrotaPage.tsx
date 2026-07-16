@@ -75,19 +75,29 @@ function SeletorLocais({ onPick, disabled, filialId, veiculoId, departamentoId }
   );
 }
 
+// Parada planejada: local + cliente (SA1) opcional. O cliente faz a parada de entrega
+// alimentar a consolidação da localização do local (geo Fase A).
+export interface ParadaPlan { local: string; clienteMatricula?: string; clienteNome?: string }
+
 /**
  * Editor da ROTA PLANEJADA (pontos de parada) — lista estruturada em vez do antigo
  * textarea de linhas (redesenho pós-avaliação de UX 03/07). Barra de adicionar
  * (buscar cliente + cadastro + digitar) separada da LISTA; cada parada tem nº de
- * ordem, subir/descer e remover; contador no topo. `value`/`onChange` = string[].
+ * ordem, subir/descer e remover; contador no topo. `value`/`onChange` = ParadaPlan[].
  */
 function RotaPlanejadaEditor({ value, onChange, disabled, filialId, veiculoId, departamentoId, ajuda }: {
-  value: string[]; onChange: (v: string[]) => void; disabled?: boolean;
+  value: ParadaPlan[]; onChange: (v: ParadaPlan[]) => void; disabled?: boolean;
   filialId?: string; veiculoId?: string; departamentoId?: string; ajuda?: React.ReactNode;
 }) {
   const [novo, setNovo] = useState('');
-  const add = (s: string) => { const t = s.trim(); if (t) onChange([...value, t]); };
-  const addDigitado = () => { const t = novo.trim(); if (!t) return; onChange([...value, t]); setNovo(''); };
+  // Buscar cliente traz {rotulo, matricula, nome}; cadastro/digitação trazem só a string.
+  const add = (sel: string | { rotulo: string; matricula?: string; nome?: string }) => {
+    const item: ParadaPlan = typeof sel === 'string'
+      ? { local: sel.trim() }
+      : { local: sel.rotulo.trim(), clienteMatricula: sel.matricula, clienteNome: sel.nome };
+    if (item.local) onChange([...value, item]);
+  };
+  const addDigitado = () => { const t = novo.trim(); if (!t) return; onChange([...value, { local: t }]); setNovo(''); };
   const remover = (i: number) => onChange(value.filter((_, idx) => idx !== i));
   const mover = (i: number, dir: -1 | 1) => {
     const j = i + dir; if (j < 0 || j >= value.length) return;
@@ -120,9 +130,9 @@ function RotaPlanejadaEditor({ value, onChange, disabled, filialId, veiculoId, d
       ) : (
         <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
           {value.map((p, i) => (
-            <li key={`${i}-${p}`} className="flex items-center gap-2 bg-white px-3 py-2">
+            <li key={`${i}-${p.local}`} className="flex items-center gap-2 bg-white px-3 py-2">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-capul-100 text-xs font-semibold text-capul-700">{i + 1}</span>
-              <span className="min-w-0 flex-1 truncate text-sm text-slate-700" title={p}>{p}</span>
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-700" title={p.local}>{p.local}{p.clienteMatricula ? <span className="ml-1 rounded bg-emerald-50 px-1 text-[10px] text-emerald-600" title="Cliente vinculado — a entrega vai aprender a localização">📍</span> : null}</span>
               <button type="button" onClick={() => mover(i, -1)} disabled={disabled || i === 0} title="Subir" className="rounded p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
               <button type="button" onClick={() => mover(i, 1)} disabled={disabled || i === value.length - 1} title="Descer" className="rounded p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
               <button type="button" onClick={() => remover(i)} disabled={disabled} title="Remover" className="rounded p-1 text-slate-400 hover:text-red-600 disabled:opacity-30"><Trash2 className="h-4 w-4" /></button>
@@ -265,7 +275,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [localSaida, setLocalSaida] = useState('');
   const [departamentoSolicitanteId, setDepartamentoSolicitanteId] = useState('');
   const [deptos, setDeptos] = useState<DeptoItem[]>([]);
-  const [planejadas, setPlanejadas] = useState<string[]>([]); // rota planejada (pontos de parada)
+  const [planejadas, setPlanejadas] = useState<ParadaPlan[]>([]); // rota planejada (pontos de parada)
   const [salvando, setSalvando] = useState(false);
   const [credOk, setCredOk] = useState(false);
   const [validandoSenha, setValidandoSenha] = useState(false);
@@ -388,7 +398,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     }
     if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
     if (kmInicial === '') { toast('warning', 'Informe o KM de saída.'); return; }
-    const paradasPlanejadas = planejadas.map((l) => l.trim()).filter(Boolean);
+    const paradasPlanejadas = planejadas.filter((p) => p.local.trim());
     setSalvando(true);
     try {
       if (modo === 'PORTARIA') {
@@ -764,7 +774,7 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
   const [km, setKm] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const [planejados, setPlanejados] = useState<string[]>([]);
+  const [planejados, setPlanejados] = useState<ParadaPlan[]>([]);
   const [planejando, setPlanejando] = useState(false);
   const [checkinId, setCheckinId] = useState<string | null>(null);
   const [checkinKm, setCheckinKm] = useState('');
@@ -807,11 +817,11 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
 
   // Planejar várias visitas (uma por linha) → status PLANEJADA.
   const planejar = async () => {
-    const locais = planejados.map((l) => l.trim()).filter(Boolean);
-    if (locais.length === 0) { toast('warning', 'Informe ao menos um local (um por linha).'); return; }
+    const paradas = planejados.filter((p) => p.local.trim());
+    if (paradas.length === 0) { toast('warning', 'Informe ao menos um local.'); return; }
     setPlanejando(true);
     try {
-      await logisticaApi.post(`/frota/viagens/${v.id}/paradas/planejar`, { locais });
+      await logisticaApi.post(`/frota/viagens/${v.id}/paradas/planejar`, { paradas });
       setPlanejados([]);
       await carregar(); onChanged();
     } catch (e) {

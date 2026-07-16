@@ -19,12 +19,20 @@ export interface ViagemSup {
   comentarioCoordenador?: string | null;
   _count?: { paradas: number; despesas: number };
 }
+export type ConfiancaLocal = 'SEM_DADO' | 'PROVISORIA' | 'CONFIRMADA';
+/** Local geolocalizado do cliente, com a coordenada CONSOLIDADA (aprendida das marcações). */
+export interface LocalConsolidado {
+  id: string; nome: string; tipo?: string | null;
+  latConsolidada?: number | string | null; longConsolidada?: number | string | null;
+  confianca?: ConfiancaLocal | null; nMarcacoes?: number | null;
+}
 export interface VisitaSup {
   id: string; sequencia: number; status?: StatusVisita | null;
   clienteNome?: string | null; municipio?: string | null;
   propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
   atividadeId?: string | null; atividade?: { nome: string } | null;
-  latitude?: number | null; longitude?: number | null; // GPS capturado ao apontar "Realizar"
+  latitude?: number | null; longitude?: number | null; // GPS bruto desta marcação
+  localCliente?: LocalConsolidado | null; // local + coordenada consolidada
 }
 export interface DespesaSup {
   id: string; valor: number | string; dataDespesa?: string | null; situacao?: SituacaoDespesa | null;
@@ -43,6 +51,7 @@ export interface NovaVisita {
   atividadeId?: string; clienteNome: string;
   municipio?: string; propriedade?: string; observacao?: string; dataVisita?: string;
   latitude?: number; longitude?: number; // GPS da visita (igual às paradas da frota)
+  precisaoM?: number; noLocal?: boolean; localClienteId?: string; // Fase A geo
   idempotencyKey?: string; // fila offline: dedup no reenvio
 }
 export interface NovaDespesa {
@@ -91,9 +100,15 @@ export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUri?: 
     timeout: 60_000,
   });
 }
-/** Apontamento da visita (6c): PLANEJADA → REALIZADA ou PULADA (na execução). */
-export async function apontarVisitaApp(id: string, paradaId: string, status: 'REALIZADA' | 'PULADA', coords?: { latitude?: number; longitude?: number }): Promise<void> {
-  await api.patch(`${B}/viagens/${id}/visitas/${paradaId}/apontar`, { status, ...(coords ?? {}) });
+/** Apontamento da visita (6c): PLANEJADA → REALIZADA ou PULADA (na execução).
+ *  `extra` leva GPS + precisão + confirmação "no local" (alimenta a consolidação). */
+export async function apontarVisitaApp(
+  id: string,
+  paradaId: string,
+  status: 'REALIZADA' | 'PULADA',
+  extra?: { latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean },
+): Promise<void> {
+  await api.patch(`${B}/viagens/${id}/visitas/${paradaId}/apontar`, { status, ...(extra ?? {}) });
 }
 /** Cria o planejamento (RDV) do supervisor LOGADO — sem matrícula/senha: o backend
  *  identifica pelo JWT (role SUPERVISOR) e liga ao cadastro pela matrícula do login. */

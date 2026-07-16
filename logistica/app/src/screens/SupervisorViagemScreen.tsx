@@ -13,7 +13,7 @@ import {
   listarAtividadesSup, listarTiposDespesaSup,
   meuCadastroSup, listarAdiantamentosSup, lancarAdiantamentoSup, removerAdiantamentoSup,
   type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup, type NovaVisita, type NovaDespesa,
-  type MeuCadastroSup, type AdiantamentoSup,
+  type MeuCadastroSup, type AdiantamentoSup, type VisitaSup,
 } from '../api/supervisor';
 import { uuid } from '../lib/uuid';
 import {
@@ -23,15 +23,49 @@ import {
 const CAPUL = '#1e7d3a';
 
 /** GPS opcional (igual às paradas da frota): se negar permissão/falhar, segue sem
- *  coordenada — não trava a visita/apontamento. */
-async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: number }> {
+ *  coordenada — não trava a visita/apontamento. Retorna também a PRECISÃO (m), que
+ *  alimenta a consolidação da localização do local (marcação imprecisa é descartada). */
+async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: number; precisaoM?: number }> {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return {};
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    return {
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      precisaoM: pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : undefined,
+    };
   } catch { return {}; }
 }
+/** Pergunta se o usuário está NO local do cliente — só "sim" alimenta a consolidação
+ *  (evita gravar marcação da estrada/cidade como se fosse a propriedade). */
+function confirmarNoLocal(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Você está no local do cliente?',
+      'Confirme só se estiver na propriedade — isso ensina o mapa a localizar o cliente. Se marcou da estrada ou da cidade, escolha "Não estou".',
+      [
+        { text: 'Não estou', onPress: () => resolve(false) },
+        { text: 'Sim, estou aqui', onPress: () => resolve(true) },
+      ],
+      { cancelable: false },
+    );
+  });
+}
+
+/** Ponto para o "Ver no mapa": prefere a coordenada CONSOLIDADA do local (aprendida);
+ *  cai para o ponto bruto desta marcação; null se não há nada. */
+function pontoDoMapa(p: VisitaSup): { lat: number; lng: number; consolidado: boolean; confianca?: string | null } | null {
+  const lc = p.localCliente;
+  if (lc?.latConsolidada != null && lc?.longConsolidada != null) {
+    return { lat: Number(lc.latConsolidada), lng: Number(lc.longConsolidada), consolidado: true, confianca: lc.confianca };
+  }
+  if (p.latitude != null && p.longitude != null) {
+    return { lat: Number(p.latitude), lng: Number(p.longitude), consolidado: false };
+  }
+  return null;
+}
+
 type Props = NativeStackScreenProps<RootStackParamList, 'SupervisorViagem'>;
 
 const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -146,10 +180,14 @@ export function SupervisorViagemScreen({ route }: Props) {
     if (!cliNome.trim()) { Alert.alert('Visita', 'Informe o cliente (ou prospect).'); return; }
     setSalvV(true);
     const coords = await capturarCoordenadas();
+    // Visita registrada em execução (não planejamento) nasce REALIZADA — confirma se está
+    // no local para alimentar a consolidação.
+    const noLocal = !emPlanejamento && coords.latitude != null ? await confirmarNoLocal() : undefined;
     const payload: NovaVisita = {
       clienteNome: cliNome.trim(), municipio: muni.trim() || undefined,
       atividadeId: ativId || undefined, propriedade: prop.trim() || undefined,
-      observacao: vObs.trim() || undefined, ...coords, idempotencyKey: uuid(),
+      observacao: vObs.trim() || undefined, ...coords,
+      ...(noLocal !== undefined ? { noLocal } : {}), idempotencyKey: uuid(),
     };
     try {
       await adicionarVisitaApp(viagemId, payload);
@@ -167,10 +205,14 @@ export function SupervisorViagemScreen({ route }: Props) {
   const apontar = async (paradaId: string, status: 'REALIZADA' | 'PULADA') => {
     // GPS só faz sentido na visita REALIZADA (onde ele esteve); PULADA não captura.
     const coords = status === 'REALIZADA' ? await capturarCoordenadas() : {};
-    try { await apontarVisitaApp(viagemId, paradaId, status, coords); await carregar(); }
+    // Confirmação: só marcações "no local" ensinam a localização do cliente (evita marcar
+    // da estrada/cidade). Pergunta só na REALIZADA e só se houver GPS.
+    const noLocal = status === 'REALIZADA' && coords.latitude != null ? await confirmarNoLocal() : undefined;
+    const extra = { ...coords, ...(noLocal !== undefined ? { noLocal } : {}) };
+    try { await apontarVisitaApp(viagemId, paradaId, status, extra); await carregar(); }
     catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarSupervisor({ id: uuid(), rotulo: `Apontar ${status === 'REALIZADA' ? 'realizada' : 'pulada'}`, acao: { tipo: 'apontar', viagemId, paradaId, status, ...coords } });
+        await enfileirarSupervisor({ id: uuid(), rotulo: `Apontar ${status === 'REALIZADA' ? 'realizada' : 'pulada'}`, acao: { tipo: 'apontar', viagemId, paradaId, status, ...extra } });
         Alert.alert('Salvo offline', 'Sem sinal — o apontamento vai sincronizar quando a conexão voltar.');
       } else { Alert.alert('Erro', msg(e, 'Falha ao apontar a visita.')); }
     }
@@ -327,11 +369,18 @@ export function SupervisorViagemScreen({ route }: Props) {
               <Badge bg={st.bg} fg={st.fg} label={st.l} />
             </View>
             <Text style={styles.itemSub}>{p.atividade?.nome ?? '—'}{p.propriedade ? ` · ${p.propriedade}` : ''}</Text>
-            {p.latitude != null && p.longitude != null && (
-              <TouchableOpacity onPress={() => abrirNoMapa(p.latitude!, p.longitude!)}>
-                <Text style={styles.mapLink}>📍 Ver no mapa</Text>
-              </TouchableOpacity>
-            )}
+            {(() => {
+              const m = pontoDoMapa(p);
+              if (!m) return null;
+              const rotulo = m.consolidado
+                ? `📍 Ver local no mapa${m.confianca === 'PROVISORIA' ? ' (provisório)' : ''}`
+                : '📍 Ver marcação desta visita';
+              return (
+                <TouchableOpacity onPress={() => abrirNoMapa(m.lat, m.lng)}>
+                  <Text style={styles.mapLink}>{rotulo}</Text>
+                </TouchableOpacity>
+              );
+            })()}
             {emExecucao && p.status === 'PLANEJADA' && (
               <View style={styles.apRow}>
                 <TouchableOpacity style={[styles.apBtn, styles.apOk]} onPress={() => void apontar(p.id, 'REALIZADA')}><Text style={styles.apOkTxt}>Realizar</Text></TouchableOpacity>

@@ -157,7 +157,8 @@ export function SaidaFrotaScreen({ navigation }: Props) {
       Alert.alert('KM inicial', `O KM informado (${km}) é menor que o KM atual do veículo (${veiculo.kmAtual}).`);
       return;
     }
-    const paradasPlanejadas = planejadasTxt.split('\n').map((l) => l.trim()).filter(Boolean);
+    // App planeja por texto (uma parada por linha), sem cliente estruturado → itens {local}.
+    const paradasPlanejadas = planejadasTxt.split('\n').map((l) => l.trim()).filter(Boolean).map((local) => ({ local }));
     const rota = paradasPlanejadas.length ? paradasPlanejadas : undefined;
     setSalvando(true);
     try {
