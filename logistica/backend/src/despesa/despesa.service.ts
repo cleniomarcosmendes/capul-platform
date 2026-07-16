@@ -32,6 +32,8 @@ export interface FiltroAnalise {
 
 /** Recibo (foto/PDF do cupom) anexado no lançamento — binário p/ o object store. */
 export type ReciboBinario = { buffer: Buffer; mimetype?: string; size: number };
+/** Máximo de comprovantes (foto/PDF) por despesa — padrão da plataforma. */
+const MAX_ANEXOS_DESPESA = 5;
 
 /**
  * Despesas da frota (Fase 2) com governança em 3 níveis:
@@ -69,6 +71,44 @@ export class DespesaService {
         comprovanteMime: recibo.mimetype ?? null,
       },
     });
+  }
+
+  /** Anexa N comprovantes (foto/PDF) à despesa — até MAX_ANEXOS_DESPESA no total. Cada
+   *  binário vai pro cofre; grava chave/hash/mime/ordem. Excedente é ignorado. */
+  private async anexarComprovantes(despesaId: string, filialId: string, recibos: ReciboBinario[]) {
+    if (!recibos.length) return;
+    const jaTem = await this.prisma.anexoDespesa.count({ where: { despesaId } });
+    const espaco = MAX_ANEXOS_DESPESA - jaTem;
+    if (espaco <= 0) throw new BadRequestException(`Máximo de ${MAX_ANEXOS_DESPESA} comprovantes por despesa.`);
+    let ordem = jaTem;
+    for (const r of recibos.slice(0, espaco)) {
+      const { objectKey, hash } = await this.storage.put(r.buffer, { filialId, refId: despesaId, mimeType: r.mimetype });
+      await this.prisma.anexoDespesa.create({ data: { despesaId, objectKey, hash, mime: r.mimetype ?? null, tamanho: r.size, ordem: ordem++ } });
+    }
+  }
+
+  /** Baixa um anexo específico da despesa (frota). Escopo: gestor (filial) ou supervisor
+   *  do veículo — igual ao download do recibo legado. */
+  async obterAnexo(despesaId: string, anexoId: string, user: JwtPayload, role?: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    const a = await this.prisma.anexoDespesa.findUnique({ where: { id: anexoId } });
+    if (!a || a.despesaId !== despesaId) throw new NotFoundException('Anexo não encontrado.');
+    const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId } });
+    if (!d || (!ehGestor(role) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
+    const buffer = await this.storage.get(a.objectKey);
+    return { buffer, mimeType: a.mime ?? 'application/octet-stream' };
+  }
+
+  /** Remove um anexo da despesa (frota) — some do cofre + do banco. */
+  async removerAnexo(despesaId: string, anexoId: string, user: JwtPayload, role?: string) {
+    const a = await this.prisma.anexoDespesa.findUnique({ where: { id: anexoId } });
+    if (!a || a.despesaId !== despesaId) throw new NotFoundException('Anexo não encontrado.');
+    const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId } });
+    if (!d || (!ehGestor(role) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
+    await this.storage.remove(a.objectKey).catch(() => undefined);
+    await this.prisma.anexoDespesa.delete({ where: { id: anexoId } });
+    return { ok: true };
   }
 
   // ---------- Tipos de despesa ----------
@@ -218,7 +258,7 @@ export class DespesaService {
 
     const despesas = await this.prisma.despesaVeiculo.findMany({
       where,
-      include: { veiculo: { select: { placa: true, modelo: true } }, tipoDespesa: { select: { nome: true } } },
+      include: { veiculo: { select: { placa: true, modelo: true } }, tipoDespesa: { select: { nome: true } }, anexos: { select: { id: true, mime: true }, orderBy: { ordem: 'asc' } } },
       orderBy: { dataDespesa: 'desc' },
       take: 300,
     });
@@ -232,7 +272,7 @@ export class DespesaService {
       aprovadoEm: d.aprovadoEm, motivoContestacao: d.motivoContestacao,
       anormalidade: d.anormalidade, motivoAnormalidade: d.motivoAnormalidade,
       numeroDocumento: d.numeroDocumento, semNota: d.semNota,
-      temComprovante: !!d.comprovanteObjectKey,
+      temComprovante: !!d.comprovanteObjectKey, anexos: d.anexos,
     }));
   }
 
@@ -260,7 +300,7 @@ export class DespesaService {
 
   // ---------- Lançamento ----------
   /** Lançamento direto por supervisor/gestor → já APROVADA. */
-  async lancarDireto(dto: LancarDespesaDto, user: JwtPayload, role?: string, recibo?: ReciboBinario) {
+  async lancarDireto(dto: LancarDespesaDto, user: JwtPayload, role?: string, recibos?: ReciboBinario[]) {
     const veiculo = await this.assertPodeGerirVeiculo(dto.veiculoId, user, role);
     // Lançamento direto é sempre por veículo (INDIVÍDUO entra pela viagem).
     if (!veiculo) throw new BadRequestException('Informe o veículo da despesa.');
@@ -290,7 +330,8 @@ export class DespesaService {
         aprovadoEm: new Date(),
       },
     });
-    return recibo ? this.anexarRecibo(despesa.id, despesa.filialId, recibo) : despesa;
+    if (recibos?.length) await this.anexarComprovantes(despesa.id, despesa.filialId, recibos);
+    return despesa;
   }
 
   /**
@@ -298,7 +339,7 @@ export class DespesaService {
    * token de condutor (gate ao abrir a viagem); INDIVIDUAL herda o próprio login.
    * Continua exigindo validação do supervisor.
    */
-  async lancarNaViagem(dto: LancarDespesaViagemDto, user: JwtPayload, recibo?: ReciboBinario, condutorToken?: string) {
+  async lancarNaViagem(dto: LancarDespesaViagemDto, user: JwtPayload, recibos?: ReciboBinario[], condutorToken?: string) {
     const v = await this.prisma.viagem.findUnique({
       where: { id: dto.viagemId },
       include: { veiculo: { select: { supervisorId: true } } },
@@ -356,7 +397,8 @@ export class DespesaService {
         idempotencyKey: dto.idempotencyKey ?? null,
       },
     });
-    return recibo ? this.anexarRecibo(despesa.id, despesa.filialId, recibo) : despesa;
+    if (recibos?.length) await this.anexarComprovantes(despesa.id, despesa.filialId, recibos);
+    return despesa;
   }
 
   /**
@@ -364,7 +406,7 @@ export class DespesaService {
    * vira uma despesa (mesmo veículo/nota, tipo distinto), já APROVADA (lançamento
    * direto do supervisor/gestor). Tudo em transação — ou grava tudo, ou nada.
    */
-  async ratear(dto: RatearDespesaDto, user: JwtPayload, role?: string, recibo?: ReciboBinario) {
+  async ratear(dto: RatearDespesaDto, user: JwtPayload, role?: string, recibos?: ReciboBinario[]) {
     const veiculo = await this.assertPodeGerirVeiculo(dto.veiculoId, user, role);
     // Rateio de nota é sempre por veículo (INDIVÍDUO entra pela viagem).
     if (!veiculo) throw new BadRequestException('Informe o veículo da despesa.');
@@ -410,10 +452,10 @@ export class DespesaService {
         },
       })),
     );
-    // Recibo (a foto da nota) — anexa em cada linha do rateio para abrir de qualquer uma.
-    if (recibo) {
+    // Recibo(s) (a foto da nota) — anexa em cada linha do rateio para abrir de qualquer uma.
+    if (recibos?.length) {
       for (const d of criadas) {
-        try { await this.anexarRecibo(d.id, d.filialId, recibo); } catch { /* recibo é best-effort */ }
+        try { await this.anexarComprovantes(d.id, d.filialId, recibos); } catch { /* recibo é best-effort */ }
       }
     }
     return { ok: true, criadas: criadas.length };
@@ -476,6 +518,7 @@ export class DespesaService {
         veiculo: { select: { placa: true, modelo: true } },
         tipoDespesa: { select: { nome: true } },
         viagem: { select: { numero: true, observacoesSaida: true, condutorNome: true } },
+        anexos: { select: { id: true, mime: true }, orderBy: { ordem: 'asc' } },
       },
     });
     if (!d || (!ehGestor(role) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
@@ -488,7 +531,7 @@ export class DespesaService {
       fornecedorId: d.fornecedorId, fornecedor: d.fornecedor, observacao: d.observacao,
       anormalidade: d.anormalidade, motivoAnormalidade: d.motivoAnormalidade,
       numeroDocumento: d.numeroDocumento, semNota: d.semNota,
-      temComprovante: !!d.comprovanteObjectKey,
+      temComprovante: !!d.comprovanteObjectKey, anexos: d.anexos,
       // Contexto (read-only) p/ a tela mostrar "todas as informações".
       autorNome: d.autorNome, autorMatricula: d.autorMatricula,
       criadoEm: d.criadoEm, aprovadoEm: d.aprovadoEm, motivoContestacao: d.motivoContestacao,
@@ -548,9 +591,11 @@ export class DespesaService {
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
     if (!d || (!ehGestor(role) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
     await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
+    // Anexos: o cascade apaga as LINHAS; os binários no cofre saem aqui (antes do delete).
+    const anexos = await this.prisma.anexoDespesa.findMany({ where: { despesaId: id }, select: { objectKey: true } });
     await this.prisma.despesaVeiculo.delete({ where: { id } });
-    if (d.comprovanteObjectKey) {
-      try { await this.storage.remove(d.comprovanteObjectKey); } catch { /* objeto órfão é tolerável */ }
+    for (const key of [d.comprovanteObjectKey, ...anexos.map((a) => a.objectKey)]) {
+      if (key) { try { await this.storage.remove(key); } catch { /* objeto órfão é tolerável */ } }
     }
     return { ok: true };
   }
