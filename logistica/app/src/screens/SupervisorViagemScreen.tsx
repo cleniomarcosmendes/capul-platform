@@ -16,6 +16,7 @@ import {
   type MeuCadastroSup, type AdiantamentoSup, type VisitaSup, type ViagemSup,
 } from '../api/supervisor';
 import { uuid } from '../lib/uuid';
+import { maskMoeda, parseMoeda } from '../lib/moeda';
 import {
   enfileirarSupervisor, processarFilaSupervisor, contarPendentesSupervisor, onFilaSupervisorChange, ehErroDeRede,
 } from '../offline/filaSupervisor';
@@ -237,11 +238,11 @@ export function SupervisorViagemScreen({ route }: Props) {
   const limparDespesa = () => { setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUri(null); };
 
   const salvarDespesa = async () => {
-    if (!tipoId || !valor) { Alert.alert('Despesa', 'Escolha o tipo e informe o valor.'); return; }
+    if (!tipoId || parseMoeda(valor) <= 0) { Alert.alert('Despesa', 'Escolha o tipo e informe o valor.'); return; }
     setSalvD(true);
     const foto = fotoUri;
     const payload: NovaDespesa = {
-      tipoDespesaId: tipoId, valor: Number(valor),
+      tipoDespesaId: tipoId, valor: parseMoeda(valor),
       fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined, idempotencyKey: uuid(),
     };
     try {
@@ -261,11 +262,11 @@ export function SupervisorViagemScreen({ route }: Props) {
   const salvarAdiantamento = async () => {
     if (!meuSup) { Alert.alert('Adiantamento', 'Seu cadastro de supervisor ainda não foi montado no time. Peça ao coordenador para te cadastrar.'); return; }
     if (!v?.mesReferencia) { Alert.alert('Adiantamento', 'Mês da viagem indefinido.'); return; }
-    if (!advValor || Number(advValor) <= 0) { Alert.alert('Adiantamento', 'Informe o valor do adiantamento.'); return; }
+    if (parseMoeda(advValor) <= 0) { Alert.alert('Adiantamento', 'Informe o valor do adiantamento.'); return; }
     if (advData.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(advData.trim())) { Alert.alert('Adiantamento', 'Data inválida — use o formato AAAA-MM-DD (ou deixe vazio para hoje).'); return; }
     setSalvA(true);
     try {
-      await lancarAdiantamentoSup({ supervisorId: meuSup.id, mesReferencia: v.mesReferencia, valor: Number(advValor), data: advData.trim() || undefined, observacao: advObs.trim() || undefined });
+      await lancarAdiantamentoSup({ supervisorId: meuSup.id, mesReferencia: v.mesReferencia, valor: parseMoeda(advValor), data: advData.trim() || undefined, observacao: advObs.trim() || undefined });
       limparAdiant(); await carregar();
       Alert.alert('Pronto', 'Adiantamento lançado — aguardando aprovação do coordenador.');
     } catch (e) { Alert.alert('Erro', msg(e, 'Falha ao lançar o adiantamento.')); } finally { setSalvA(false); }
@@ -331,7 +332,7 @@ export function SupervisorViagemScreen({ route }: Props) {
               </View>
             );
           })}
-          <TextInput style={styles.input} placeholder="Valor (R$)" keyboardType="decimal-pad" value={advValor} onChangeText={setAdvValor} />
+          <TextInput style={styles.input} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={advValor} onChangeText={(t) => setAdvValor(maskMoeda(t))} />
           <TextInput style={styles.input} placeholder="Data AAAA-MM-DD (opcional — hoje)" value={advData} onChangeText={setAdvData} autoCapitalize="none" />
           <TextInput style={styles.input} placeholder="Observação (opcional)" value={advObs} onChangeText={setAdvObs} />
           <TouchableOpacity style={[styles.btn, salvA && styles.btnOff]} onPress={() => void salvarAdiantamento()} disabled={salvA}>
@@ -406,7 +407,7 @@ export function SupervisorViagemScreen({ route }: Props) {
             <SelectBusca valor={despViagemId} opcoes={planejamentos.map((p) => ({ id: p.id, nome: `Planejamento #${p.numero}${p.id === viagemId ? ' (este)' : ''}`, subtitulo: fmtMes(p.mesReferencia) }))} onChange={setDespViagemId} placeholder="A qual planejamento pertence" />
           )}
           <SelectBusca valor={tipoId} opcoes={tipos.map((t) => ({ id: t.id, nome: t.nome, subtitulo: t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo' }))} onChange={setTipoId} placeholder="Tipo de despesa" />
-          <TextInput style={styles.input} placeholder="Valor (R$)" keyboardType="decimal-pad" value={valor} onChangeText={setValor} />
+          <TextInput style={styles.input} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={valor} onChangeText={(t) => setValor(maskMoeda(t))} />
           <TextInput style={styles.input} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
           <TextInput style={styles.input} placeholder="Observação" value={dObs} onChangeText={setDObs} />
           <Text style={styles.fLabel}>Comprovante (opcional)</Text>
