@@ -81,9 +81,20 @@ export class DespesaService {
     const espaco = MAX_ANEXOS_DESPESA - jaTem;
     if (espaco <= 0) throw new BadRequestException(`Máximo de ${MAX_ANEXOS_DESPESA} comprovantes por despesa.`);
     let ordem = jaTem;
+    let primeiro: { objectKey: string; hash: string; mime?: string } | null = null;
     for (const r of recibos.slice(0, espaco)) {
       const { objectKey, hash } = await this.storage.put(r.buffer, { filialId, refId: despesaId, mimeType: r.mimetype });
       await this.prisma.anexoDespesa.create({ data: { despesaId, objectKey, hash, mime: r.mimetype ?? null, tamanho: r.size, ordem: ordem++ } });
+      if (!primeiro) primeiro = { objectKey, hash, mime: r.mimetype };
+    }
+    // Compat: espelha o 1º anexo no campo legado se ainda não houver — assim as telas da
+    // frota (que leem `comprovanteObjectKey`) seguem mostrando 1 comprovante sem mudança de
+    // UI. Mesmo objeto (sem duplicar binário). Só quando o legado está vazio (não sobrescreve).
+    if (primeiro) {
+      const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId }, select: { comprovanteObjectKey: true } });
+      if (d && !d.comprovanteObjectKey) {
+        await this.prisma.despesaVeiculo.update({ where: { id: despesaId }, data: { comprovanteObjectKey: primeiro.objectKey, comprovanteHash: primeiro.hash, comprovanteMime: primeiro.mime ?? null } });
+      }
     }
   }
 
