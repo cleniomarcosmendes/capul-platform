@@ -35,19 +35,21 @@ export class FrotaService {
     private readonly locais: LocalClienteService,
   ) {}
 
-  /** Marcação de ENTREGA (parada de frota) que alimenta a consolidação do local do
-   *  cliente. Usa o local escolhido; ou, se confirmou "no local" (ou veio GPS) e há
-   *  cliente + endereço, cria/reaproveita o local (tipo ENTREGA) por essa chave. */
-  private async resolverLocalEntrega(
+  /** Marcação de entrega que alimenta a geo: SÓ entrega na FAZENDA (zona rural) — a entrega
+   *  na CIDADE tem endereço preciso (Google/Waze), não precisa aprender e não deve poluir o
+   *  cadastro. "Fazenda" = há `propriedade` indicada; reusa o MESMO local PROPRIEDADE das
+   *  visitas do supervisor (não confunde entrega-cidade com entrega-fazenda). Sem propriedade
+   *  (entrega urbana) → null (nenhum local geo). */
+  private async resolverLocalFazenda(
     localIdAtual: string | null | undefined,
     noLocal: boolean | undefined,
-    m: { clienteMatricula?: string | null; clienteNome?: string | null; nome?: string | null; municipio?: string | null },
+    m: { clienteMatricula?: string | null; clienteNome?: string | null; propriedade?: string | null; municipio?: string | null },
     user: JwtPayload,
   ): Promise<string | null> {
     if (localIdAtual) return localIdAtual;
-    if (!noLocal || !m.clienteMatricula?.trim() || !m.nome?.trim()) return null;
+    if (!noLocal || !m.clienteMatricula?.trim() || !m.propriedade?.trim()) return null;
     const local = await this.locais.criar(
-      { clienteMatricula: m.clienteMatricula, clienteNome: m.clienteNome ?? undefined, tipo: 'ENTREGA', nome: m.nome, municipio: m.municipio ?? undefined },
+      { clienteMatricula: m.clienteMatricula, clienteNome: m.clienteNome ?? undefined, tipo: 'PROPRIEDADE', nome: m.propriedade, municipio: m.municipio ?? undefined },
       user,
     );
     return local.id;
@@ -236,6 +238,7 @@ export class FrotaService {
         planejadoLocal: p.local.trim(), local: p.local.trim(),
         clienteMatricula: p.clienteMatricula?.trim().toUpperCase() || null,
         clienteNome: p.clienteNome?.trim() || null,
+        propriedade: p.propriedade?.trim() || null,
       })),
     });
   }
@@ -878,11 +881,11 @@ export class FrotaService {
       const ja = await this.prisma.parada.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
       if (ja) return ja;
     }
-    // Entrega feita = está no local (check-in com GPS). Resolve/liga o local ENTREGA do
-    // cliente (um por cliente) para acumular a consolidação da localização de entrega.
+    // Entrega feita = está no local (check-in com GPS). Só entrega na FAZENDA (há
+    // `propriedade`) alimenta a geo — reusa o mesmo local PROPRIEDADE do supervisor.
     const noLocalEff = dto.noLocal ?? (dto.latitude != null);
-    const localId = await this.resolverLocalEntrega(dto.localClienteId, noLocalEff,
-      { clienteMatricula: dto.clienteMatricula, clienteNome: dto.clienteNome, nome: 'Entrega', municipio: null }, user);
+    const localId = await this.resolverLocalFazenda(dto.localClienteId, noLocalEff,
+      { clienteMatricula: dto.clienteMatricula, clienteNome: dto.clienteNome, propriedade: dto.propriedade, municipio: null }, user);
     const criada = await this.prisma.parada.create({
       data: {
         viagemId: id,
@@ -893,6 +896,7 @@ export class FrotaService {
         observacao: dto.observacao ?? null,
         clienteMatricula: dto.clienteMatricula?.trim().toUpperCase() || null,
         clienteNome: dto.clienteNome?.trim() || null,
+        propriedade: dto.propriedade?.trim() || null,
         latitude: dto.latitude ?? null,
         longitude: dto.longitude ?? null,
         precisaoM: dto.precisaoM ?? null,
@@ -922,6 +926,7 @@ export class FrotaService {
         planejadoLocal: p.local.trim(), local: p.local.trim(),
         clienteMatricula: p.clienteMatricula?.trim().toUpperCase() || null,
         clienteNome: p.clienteNome?.trim() || null,
+        propriedade: p.propriedade?.trim() || null,
       })),
     });
     return this.listarParadas(id, user);
@@ -936,8 +941,9 @@ export class FrotaService {
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
     const noLocalEff = dto.noLocal ?? (dto.latitude != null);
     const clienteMatricula = dto.clienteMatricula?.trim().toUpperCase() || p.clienteMatricula;
-    const localId = await this.resolverLocalEntrega(dto.localClienteId ?? p.localClienteId, noLocalEff,
-      { clienteMatricula, clienteNome: dto.clienteNome ?? p.clienteNome, nome: 'Entrega', municipio: p.municipio }, user);
+    const propriedade = dto.propriedade?.trim() || p.propriedade;
+    const localId = await this.resolverLocalFazenda(dto.localClienteId ?? p.localClienteId, noLocalEff,
+      { clienteMatricula, clienteNome: dto.clienteNome ?? p.clienteNome, propriedade, municipio: p.municipio }, user);
     const atualizada = await this.prisma.parada.update({
       where: { id: paradaId },
       data: {
@@ -947,6 +953,7 @@ export class FrotaService {
         observacao: dto.observacao?.trim() || p.observacao,
         clienteMatricula: clienteMatricula ?? undefined,
         clienteNome: dto.clienteNome?.trim() || undefined,
+        propriedade: propriedade ?? undefined,
         latitude: dto.latitude ?? p.latitude,
         longitude: dto.longitude ?? p.longitude,
         precisaoM: dto.precisaoM ?? undefined,

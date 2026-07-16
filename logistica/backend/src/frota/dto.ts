@@ -8,6 +8,9 @@ export class ParadaPlanejadaDto {
   @IsString() @IsNotEmpty() @MaxLength(120) local!: string;
   @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
   @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+  // Fazenda (zona rural): se preenchida, a entrega alimenta a geo da propriedade (mesmo
+  // local do supervisor). Vazia = entrega urbana (endereço preciso, sem aprender).
+  @IsOptional() @IsString() @MaxLength(120) propriedade?: string;
 }
 
 export class BuscarCondutorDto {
@@ -199,10 +202,12 @@ export class AddParadaDto {
   @IsOptional() @IsNumber()
   longitude?: number;
 
-  // Geo Fase A: cliente (SA1) + qualidade da marcação → consolida a localização do
-  // local de ENTREGA do cliente (mesmo motor da visita do supervisor).
+  // Geo Fase A: cliente (SA1) + FAZENDA (propriedade) + qualidade da marcação. SÓ entrega
+  // na fazenda (zona rural) alimenta a geo — cidade tem endereço preciso (Google/Waze).
+  // A fazenda é o MESMO local aprendido nas visitas do supervisor.
   @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
   @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+  @IsOptional() @IsString() @MaxLength(120) propriedade?: string;
   @IsOptional() @IsInt() @Min(0) precisaoM?: number;
   @IsOptional() @IsBoolean() noLocal?: boolean;
   @IsOptional() @IsString() @MaxLength(40) localClienteId?: string;
@@ -269,9 +274,11 @@ export class CheckinParadaDto {
   @IsOptional() @IsNumber()
   longitude?: number;
 
-  // Geo Fase A: cliente (SA1) + qualidade da marcação (consolida o local de ENTREGA).
+  // Geo Fase A: cliente (SA1) + FAZENDA (propriedade) + qualidade da marcação. SÓ entrega
+  // na fazenda alimenta a geo (cidade tem endereço preciso). Fazenda = mesmo local do supervisor.
   @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
   @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+  @IsOptional() @IsString() @MaxLength(120) propriedade?: string;
   @IsOptional() @IsInt() @Min(0) precisaoM?: number;
   @IsOptional() @IsBoolean() noLocal?: boolean;
   @IsOptional() @IsString() @MaxLength(40) localClienteId?: string;
