@@ -17,7 +17,7 @@ import { adicionarVisitaApp, apontarVisitaApp, lancarDespesaApp, type NovaVisita
 export type AcaoSupervisor =
   | { tipo: 'visita'; viagemId: string; payload: NovaVisita }
   | { tipo: 'apontar'; viagemId: string; paradaId: string; status: 'REALIZADA' | 'PULADA'; latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean }
-  | { tipo: 'despesa'; viagemId: string; payload: NovaDespesa; fotoUri: string | null };
+  | { tipo: 'despesa'; viagemId: string; payload: NovaDespesa; fotoUris: string[] };
 
 export interface ItemSupervisor {
   id: string;          // idempotencyKey (visita/despesa) ou uuid local (apontar)
@@ -43,19 +43,22 @@ async function ler(): Promise<ItemSupervisor[]> {
 async function gravar(itens: ItemSupervisor[]) { await AsyncStorage.setItem(KEY, JSON.stringify(itens)); notificar(itens.length); }
 export async function contarPendentesSupervisor(): Promise<number> { return (await ler()).length; }
 
-async function apagarFoto(uri: string | null) {
-  if (!uri) return;
-  await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+async function apagarFotos(uris: string[]) {
+  for (const uri of uris) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
 }
 
 /** Enfileira uma ação que falhou por rede (foto da despesa copiada p/ pasta do app). */
 export async function enfileirarSupervisor(item: { id: string; rotulo: string; acao: AcaoSupervisor }): Promise<void> {
   let acao = item.acao;
-  if (acao.tipo === 'despesa' && acao.fotoUri) {
+  if (acao.tipo === 'despesa' && acao.fotoUris.length) {
     await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => undefined);
-    const dest = `${DIR}${item.id}.jpg`;
-    await FileSystem.copyAsync({ from: acao.fotoUri, to: dest });
-    acao = { ...acao, fotoUri: dest };
+    const destinos: string[] = [];
+    for (let i = 0; i < acao.fotoUris.length; i++) {
+      const dest = `${DIR}${item.id}-${i}.jpg`;
+      await FileSystem.copyAsync({ from: acao.fotoUris[i], to: dest });
+      destinos.push(dest);
+    }
+    acao = { ...acao, fotoUris: destinos };
   }
   const itens = await ler();
   if (itens.some((i) => i.id === item.id)) return; // já enfileirado
@@ -67,7 +70,7 @@ async function enviar(acao: AcaoSupervisor): Promise<void> {
   switch (acao.tipo) {
     case 'visita': return await adicionarVisitaApp(acao.viagemId, acao.payload);
     case 'apontar': return await apontarVisitaApp(acao.viagemId, acao.paradaId, acao.status, { latitude: acao.latitude, longitude: acao.longitude, precisaoM: acao.precisaoM, noLocal: acao.noLocal });
-    case 'despesa': return await lancarDespesaApp(acao.viagemId, acao.payload, acao.fotoUri ?? undefined);
+    case 'despesa': return await lancarDespesaApp(acao.viagemId, acao.payload, acao.fotoUris);
   }
 }
 
@@ -86,14 +89,14 @@ export async function processarFilaSupervisor(): Promise<ResultadoFilaSupervisor
     for (const item of itens) {
       try {
         await enviar(item.acao);
-        if (item.acao.tipo === 'despesa') await apagarFoto(item.acao.fotoUri);
+        if (item.acao.tipo === 'despesa') await apagarFotos(item.acao.fotoUris);
         enviadas++;
       } catch (err) {
         const status = isAxiosError(err) ? err.response?.status : undefined;
         const negocio = status !== undefined && status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
         if (negocio) {
           const msg = (isAxiosError(err) && (err.response?.data as { message?: string } | undefined)?.message) || `Rejeitada (HTTP ${status}).`;
-          if (item.acao.tipo === 'despesa') await apagarFoto(item.acao.fotoUri);
+          if (item.acao.tipo === 'despesa') await apagarFotos(item.acao.fotoUris);
           descartadas.push({ rotulo: item.rotulo, motivo: String(msg) });
         } else {
           manter.push({ ...item, tentativas: item.tentativas + 1, ultimoErro: status ? `HTTP ${status}` : 'sem conexão' });

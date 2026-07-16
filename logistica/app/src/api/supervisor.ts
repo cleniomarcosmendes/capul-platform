@@ -37,6 +37,7 @@ export interface VisitaSup {
 export interface DespesaSup {
   id: string; valor: number | string; dataDespesa?: string | null; situacao?: SituacaoDespesa | null;
   comprovanteObjectKey?: string | null;
+  anexos?: { id: string; mime?: string | null }[];
   tipoDespesa?: { nome: string; categoria: string } | null;
 }
 export interface ViagemSupDetalhe extends ViagemSup { paradas: VisitaSup[]; despesas: DespesaSup[] }
@@ -74,11 +75,12 @@ export async function adicionarVisitaApp(id: string, body: NovaVisita): Promise<
 }
 /**
  * Lança a despesa do supervisor → PENDENTE (coordenador aprova/rejeita depois).
- * Comprovante (foto do recibo) OPCIONAL — caso de uso forte no campo: fotografar
- * na hora. Com foto → multipart; sem foto → JSON. Backend aceita os dois.
+ * Comprovantes (fotos do recibo) OPCIONAIS — caso de uso forte no campo: fotografar
+ * na hora (várias). Com foto(s) → multipart; sem → JSON. Backend aceita os dois.
  */
-export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUri?: string): Promise<void> {
-  if (!fotoUri) {
+export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUris?: string[]): Promise<void> {
+  const fotos = (fotoUris ?? []).filter(Boolean);
+  if (!fotos.length) {
     await api.post(`${B}/viagens/${id}/despesas`, body);
     return;
   }
@@ -89,15 +91,17 @@ export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUri?: 
   if (body.fornecedor) form.append('fornecedor', body.fornecedor);
   if (body.observacao) form.append('observacao', body.observacao);
   if (body.idempotencyKey) form.append('idempotencyKey', body.idempotencyKey);
-  const isPng = fotoUri.toLowerCase().endsWith('.png');
-  form.append('comprovante', {
-    uri: fotoUri,
-    name: isPng ? 'comprovante.png' : 'comprovante.jpg',
-    type: isPng ? 'image/png' : 'image/jpeg',
-  } as unknown as Blob);
+  fotos.forEach((uri, i) => {
+    const isPng = uri.toLowerCase().endsWith('.png');
+    form.append('comprovantes', {
+      uri,
+      name: isPng ? `comprovante-${i + 1}.png` : `comprovante-${i + 1}.jpg`,
+      type: isPng ? 'image/png' : 'image/jpeg',
+    } as unknown as Blob);
+  });
   await api.post(`${B}/viagens/${id}/despesas`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 60_000,
+    timeout: 90_000,
   });
 }
 /** Apontamento da visita (6c): PLANEJADA → REALIZADA ou PULADA (na execução).
