@@ -95,7 +95,9 @@ Plataforma corporativa modular com microservicos independentes:
 
 ### 7. Logistica / Entregas (`/entregas`) *(em desenvolvimento — Fase 1a/1b + Supervisores/RDV e gestão de Frota; Jul/2026)*
 - Entregas domiciliares do supermercado (Unaí/MG): cadastro de entrega (balcao), montagem de viagem, frota, romaneio/etiquetas, painel
-- **Supervisores/RDV**: planejamentos + workflow de aprovação do coordenador + fechamento mensal (prestação de contas de representantes). **Adiantamento** lançado pelos 3 perfis (coordenador, supervisor de departamento e o próprio **supervisor de área em auto-serviço** — nasce PENDENTE e o coordenador aprova/rejeita; só APROVADO entra no saldo da RDV). Visita: rótulo contextual (planejar × registrar) + link "Ver no mapa" (GPS capturado). Ver `memory/project_rdv_adiantamento_tres_perfis.md`
+- **Supervisores/RDV**: planejamentos + workflow de aprovação do coordenador + fechamento mensal (prestação de contas de representantes). **Adiantamento** lançado pelos 3 perfis (coordenador, supervisor de departamento e o próprio **supervisor de área em auto-serviço** — nasce PENDENTE e o coordenador aprova/rejeita; só APROVADO entra no saldo da RDV). Visita: rótulo contextual (planejar × registrar). **App = execução** (o planejamento é feito no desktop). Ver `memory/project_rdv_adiantamento_tres_perfis.md`
+- **Geolocalização de campo (Fase A)**: locais do cliente (`LocalCliente`) aprendidos das marcações de campo (consolidação por medóide, robusta a outlier) — o Protheus não tem esse dado. **SEDE** (visita técnica → tipo PROPRIEDADE) × **SILO/ponto de entrega** (entrega de ração rural → tipo ENTREGA) são locais distintos; entrega urbana não gera geo. "Ver no mapa" usa a coordenada consolidada. Gravar no Protheus = Fase C (futura). Ver `memory/project_geo_local_cliente.md`
+- **Despesa com vários comprovantes** (foto/PDF, até 5): tabela `anexo_despesa` (cofre/MinIO), padrão em supervisor + frota, web + app, convivendo com o comprovante único legado. Ver `memory/project_despesa_multi_anexo.md`
 - **Gestão de Frota**: saída de veículos, adiantamento/acerto de viagem, manutenção, linha do KM, custos/análise (custo de frota restrito a GESTOR_FROTA/ADMIN)
 - **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota
 - Backend NestJS 11 + Prisma 6 (schema `logistica` + `core` read-only via `$queryRaw`), porta 3003, prefixo `/api/v1/logistica`
@@ -272,4 +274,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 15/07/2026*
+*Ultima atualizacao: 16/07/2026*
