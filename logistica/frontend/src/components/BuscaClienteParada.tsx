@@ -26,7 +26,7 @@ function fmtEnd(e?: { logradouro?: string; complemento?: string | null; bairro?:
   return [e.logradouro, e.complemento, e.bairro, cidade].filter(Boolean).join(', ');
 }
 
-export function BuscaClienteParada({ onAdd, disabled }: { onAdd: (rotulo: string) => void; disabled?: boolean }) {
+export function BuscaClienteParada({ onAdd, disabled }: { onAdd: (sel: { rotulo: string; matricula?: string; nome: string }) => void; disabled?: boolean }) {
   const [termo, setTermo] = useState('');
   const [resp, setResp] = useState<BuscaResp | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,8 +46,8 @@ export function BuscaClienteParada({ onAdd, disabled }: { onAdd: (rotulo: string
     return () => clearTimeout(h);
   }, [termo]);
 
-  function escolher(rotulo: string) {
-    onAdd(rotulo);
+  function escolher(sel: { rotulo: string; matricula?: string; nome: string }) {
+    onAdd(sel);
     setTermo(''); setResp(null); setAberto(false);
   }
 
@@ -92,7 +92,7 @@ export function BuscaClienteParada({ onAdd, disabled }: { onAdd: (rotulo: string
                 const rotulo = `${r.nome} (${r.matricula})${fmtEnd(r.end) ? ` — ${fmtEnd(r.end)}` : ''}`;
                 return (
                   <li key={`p${i}`}>
-                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher(rotulo)}
+                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher({ rotulo, matricula: r.matricula, nome: r.nome })}
                       className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-capul-50">
                       <User className="mt-0.5 h-4 w-4 shrink-0 text-capul-600" />
                       <span className="min-w-0">
@@ -109,7 +109,7 @@ export function BuscaClienteParada({ onAdd, disabled }: { onAdd: (rotulo: string
                 const rotulo = `${r.nome}${fmtEnd(r.end) ? ` — ${fmtEnd(r.end)}` : ''}`;
                 return (
                   <li key={`l${r.key}`}>
-                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher(rotulo)}
+                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher({ rotulo, nome: r.nome })}
                       className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-capul-50">
                       <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                       <span className="min-w-0">

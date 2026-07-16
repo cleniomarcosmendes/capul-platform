@@ -8,6 +8,7 @@ import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.j
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CondutorTokenService } from '../common/condutor-token.service.js';
+import { LocalClienteService } from '../local/local-cliente.service.js';
 import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
@@ -31,7 +32,26 @@ export class FrotaService {
     private readonly condutor: ProtheusCondutorService,
     private readonly core: CoreLookupService,
     private readonly condutorToken: CondutorTokenService,
+    private readonly locais: LocalClienteService,
   ) {}
+
+  /** Marcação de ENTREGA (parada de frota) que alimenta a consolidação do local do
+   *  cliente. Usa o local escolhido; ou, se confirmou "no local" (ou veio GPS) e há
+   *  cliente + endereço, cria/reaproveita o local (tipo ENTREGA) por essa chave. */
+  private async resolverLocalEntrega(
+    localIdAtual: string | null | undefined,
+    noLocal: boolean | undefined,
+    m: { clienteMatricula?: string | null; clienteNome?: string | null; nome?: string | null; municipio?: string | null },
+    user: JwtPayload,
+  ): Promise<string | null> {
+    if (localIdAtual) return localIdAtual;
+    if (!noLocal || !m.clienteMatricula?.trim() || !m.nome?.trim()) return null;
+    const local = await this.locais.criar(
+      { clienteMatricula: m.clienteMatricula, clienteNome: m.clienteNome ?? undefined, tipo: 'ENTREGA', nome: m.nome, municipio: m.municipio ?? undefined },
+      user,
+    );
+    return local.id;
+  }
 
   /**
    * Gate do login PADRÃO: ao abrir uma viagem em curso, o condutor se identifica
@@ -853,7 +873,12 @@ export class FrotaService {
       const ja = await this.prisma.parada.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
       if (ja) return ja;
     }
-    return this.prisma.parada.create({
+    // Entrega feita = está no local (check-in com GPS). Resolve/liga o local ENTREGA do
+    // cliente (um por cliente) para acumular a consolidação da localização de entrega.
+    const noLocalEff = dto.noLocal ?? (dto.latitude != null);
+    const localId = await this.resolverLocalEntrega(dto.localClienteId, noLocalEff,
+      { clienteMatricula: dto.clienteMatricula, clienteNome: dto.clienteNome, nome: 'Entrega', municipio: null }, user);
+    const criada = await this.prisma.parada.create({
       data: {
         viagemId: id,
         sequencia: await this.proximaSequencia(id),
@@ -861,14 +886,21 @@ export class FrotaService {
         local: dto.local,
         km: dto.km ?? null,
         observacao: dto.observacao ?? null,
+        clienteMatricula: dto.clienteMatricula?.trim().toUpperCase() || null,
+        clienteNome: dto.clienteNome?.trim() || null,
         latitude: dto.latitude ?? null,
         longitude: dto.longitude ?? null,
+        precisaoM: dto.precisaoM ?? null,
+        noLocal: noLocalEff,
+        localClienteId: localId,
         dataHora: new Date(),
         realizadaEm: new Date(),
         idempotencyKey: dto.idempotencyKey ?? null,
       },
       select: { id: true, sequencia: true, status: true, local: true, km: true, dataHora: true, observacao: true },
     });
+    if (localId && noLocalEff && dto.latitude != null) await this.locais.consolidar(localId).catch(() => undefined);
+    return criada;
   }
 
   /** Planeja N paradas (status PLANEJADA) — visitas que o condutor pretende fazer. */
@@ -894,20 +926,32 @@ export class FrotaService {
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A rota não está em curso — não é possível alterar paradas.');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
-    return this.prisma.parada.update({
+    const noLocalEff = dto.noLocal ?? (dto.latitude != null);
+    const clienteMatricula = dto.clienteMatricula?.trim().toUpperCase() || p.clienteMatricula;
+    const localId = await this.resolverLocalEntrega(dto.localClienteId ?? p.localClienteId, noLocalEff,
+      { clienteMatricula, clienteNome: dto.clienteNome ?? p.clienteNome, nome: 'Entrega', municipio: p.municipio }, user);
+    const atualizada = await this.prisma.parada.update({
       where: { id: paradaId },
       data: {
         status: StatusParada.REALIZADA,
         local: dto.local?.trim() || p.local || p.planejadoLocal,
         km: dto.km ?? p.km,
         observacao: dto.observacao?.trim() || p.observacao,
+        clienteMatricula: clienteMatricula ?? undefined,
+        clienteNome: dto.clienteNome?.trim() || undefined,
         latitude: dto.latitude ?? p.latitude,
         longitude: dto.longitude ?? p.longitude,
+        precisaoM: dto.precisaoM ?? undefined,
+        noLocal: noLocalEff,
+        localClienteId: localId ?? undefined,
         dataHora: new Date(),
         realizadaEm: new Date(),
       },
       select: { id: true, sequencia: true, status: true, local: true, km: true, realizadaEm: true },
     });
+    const lat = dto.latitude ?? (p.latitude != null ? Number(p.latitude) : null);
+    if (localId && noLocalEff && lat != null) await this.locais.consolidar(localId).catch(() => undefined);
+    return atualizada;
   }
 
   /** Marca uma parada planejada como PULADA (visita não realizada). */

@@ -190,6 +190,14 @@ export class AddParadaDto {
   @IsOptional() @IsNumber()
   longitude?: number;
 
+  // Geo Fase A: cliente (SA1) + qualidade da marcação → consolida a localização do
+  // local de ENTREGA do cliente (mesmo motor da visita do supervisor).
+  @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
+  @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+  @IsOptional() @IsInt() @Min(0) precisaoM?: number;
+  @IsOptional() @IsBoolean() noLocal?: boolean;
+  @IsOptional() @IsString() @MaxLength(40) localClienteId?: string;
+
   // Idempotência (fila offline): reenvio com a mesma chave não duplica.
   @IsOptional() @IsString() @MaxLength(60)
   idempotencyKey?: string;
@@ -251,6 +259,13 @@ export class CheckinParadaDto {
 
   @IsOptional() @IsNumber()
   longitude?: number;
+
+  // Geo Fase A: cliente (SA1) + qualidade da marcação (consolida o local de ENTREGA).
+  @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
+  @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+  @IsOptional() @IsInt() @Min(0) precisaoM?: number;
+  @IsOptional() @IsBoolean() noLocal?: boolean;
+  @IsOptional() @IsString() @MaxLength(40) localClienteId?: string;
 }
 
 /** Registrar manutenção feita — reseta o contador preventivo do veículo. */

@@ -86,7 +86,7 @@ function RotaPlanejadaEditor({ value, onChange, disabled, filialId, veiculoId, d
   filialId?: string; veiculoId?: string; departamentoId?: string; ajuda?: React.ReactNode;
 }) {
   const [novo, setNovo] = useState('');
-  const add = (s: string) => { const t = s.trim(); if (t) onChange([...value, t]); };
+  const add = (sel: string | { rotulo: string }) => { const t = (typeof sel === 'string' ? sel : sel.rotulo).trim(); if (t) onChange([...value, t]); };
   const addDigitado = () => { const t = novo.trim(); if (!t) return; onChange([...value, t]); setNovo(''); };
   const remover = (i: number) => onChange(value.filter((_, idx) => idx !== i));
   const mover = (i: number, dir: -1 | 1) => {
