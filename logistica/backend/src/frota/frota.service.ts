@@ -35,12 +35,13 @@ export class FrotaService {
     private readonly locais: LocalClienteService,
   ) {}
 
-  /** Marcação de entrega que alimenta a geo: SÓ entrega na FAZENDA (zona rural) — a entrega
-   *  na CIDADE tem endereço preciso (Google/Waze), não precisa aprender e não deve poluir o
-   *  cadastro. "Fazenda" = há `propriedade` indicada; reusa o MESMO local PROPRIEDADE das
-   *  visitas do supervisor (não confunde entrega-cidade com entrega-fazenda). Sem propriedade
-   *  (entrega urbana) → null (nenhum local geo). */
-  private async resolverLocalFazenda(
+  /** Marcação de entrega RURAL que alimenta a geo: SÓ entrega na fazenda — a entrega na
+   *  CIDADE tem endereço preciso (Google/Waze), não aprende e não polui o cadastro. O ponto
+   *  de entrega rural (SILO) é DISTINTO da SEDE da propriedade (visita técnica) — pode ficar
+   *  a ~20 km — então nasce como local tipo ENTREGA próprio (não mescla com a PROPRIEDADE/sede
+   *  do supervisor). "Rural" = há `propriedade` indicada (nome do silo/ponto). Sem ela (entrega
+   *  urbana) → null (nenhum local geo). */
+  private async resolverLocalEntregaRural(
     localIdAtual: string | null | undefined,
     noLocal: boolean | undefined,
     m: { clienteMatricula?: string | null; clienteNome?: string | null; propriedade?: string | null; municipio?: string | null },
@@ -49,7 +50,7 @@ export class FrotaService {
     if (localIdAtual) return localIdAtual;
     if (!noLocal || !m.clienteMatricula?.trim() || !m.propriedade?.trim()) return null;
     const local = await this.locais.criar(
-      { clienteMatricula: m.clienteMatricula, clienteNome: m.clienteNome ?? undefined, tipo: 'PROPRIEDADE', nome: m.propriedade, municipio: m.municipio ?? undefined },
+      { clienteMatricula: m.clienteMatricula, clienteNome: m.clienteNome ?? undefined, tipo: 'ENTREGA', nome: m.propriedade, municipio: m.municipio ?? undefined },
       user,
     );
     return local.id;
@@ -881,10 +882,10 @@ export class FrotaService {
       const ja = await this.prisma.parada.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
       if (ja) return ja;
     }
-    // Entrega feita = está no local (check-in com GPS). Só entrega na FAZENDA (há
-    // `propriedade`) alimenta a geo — reusa o mesmo local PROPRIEDADE do supervisor.
+    // Entrega feita = está no local (check-in com GPS). Só entrega RURAL (há `propriedade`
+    // = silo/ponto de entrega) alimenta a geo, num local ENTREGA próprio (≠ sede do supervisor).
     const noLocalEff = dto.noLocal ?? (dto.latitude != null);
-    const localId = await this.resolverLocalFazenda(dto.localClienteId, noLocalEff,
+    const localId = await this.resolverLocalEntregaRural(dto.localClienteId, noLocalEff,
       { clienteMatricula: dto.clienteMatricula, clienteNome: dto.clienteNome, propriedade: dto.propriedade, municipio: null }, user);
     const criada = await this.prisma.parada.create({
       data: {
@@ -942,7 +943,7 @@ export class FrotaService {
     const noLocalEff = dto.noLocal ?? (dto.latitude != null);
     const clienteMatricula = dto.clienteMatricula?.trim().toUpperCase() || p.clienteMatricula;
     const propriedade = dto.propriedade?.trim() || p.propriedade;
-    const localId = await this.resolverLocalFazenda(dto.localClienteId ?? p.localClienteId, noLocalEff,
+    const localId = await this.resolverLocalEntregaRural(dto.localClienteId ?? p.localClienteId, noLocalEff,
       { clienteMatricula, clienteNome: dto.clienteNome ?? p.clienteNome, propriedade, municipio: p.municipio }, user);
     const atualizada = await this.prisma.parada.update({
       where: { id: paradaId },
