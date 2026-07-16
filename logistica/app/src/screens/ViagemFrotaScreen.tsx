@@ -30,12 +30,16 @@ type Aba = null | 'parada' | 'retorno' | 'despesa';
 
 /** GPS opcional com captura automática: se negar permissão/falhar, segue sem
  *  coordenada (não trava a operação). Usado na parada ad-hoc e no check-in. */
-async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: number }> {
+async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: number; precisaoM?: number }> {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return {};
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    return {
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      precisaoM: pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : undefined,
+    };
   } catch { return {}; }
 }
 
@@ -197,8 +201,10 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
 
   async function confirmarChegada(pid: string, rotulo: string) {
     setCkBusy(true);
-    const { latitude, longitude } = await capturarCoordenadas();
-    const payload = { km: ckKm !== '' ? Number(ckKm) : undefined, latitude, longitude, observacao: ckObs.trim() || undefined };
+    const coords = await capturarCoordenadas();
+    // Check-in = o condutor está NO ponto de entrega → marcação "no local" (alimenta a
+    // consolidação quando a parada tiver cliente vinculado).
+    const payload = { km: ckKm !== '' ? Number(ckKm) : undefined, ...coords, ...(coords.latitude != null ? { noLocal: true } : {}), observacao: ckObs.trim() || undefined };
     try {
       await checkinParadaFrota(viagem.id, pid, payload);
       setCheckinId(null); setCkKm(''); setCkObs('');
@@ -231,8 +237,8 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
     if (!podeRegistrar) return;
     setSalvando(true);
     // GPS automático também na parada ad-hoc (mapear cliente/fazenda da visita).
-    const { latitude, longitude } = await capturarCoordenadas();
-    const payload = { local: local.trim(), km: km !== '' ? Number(km) : undefined, observacao: obs.trim() || undefined, latitude, longitude, idempotencyKey: uuid() };
+    const coords = await capturarCoordenadas();
+    const payload = { local: local.trim(), km: km !== '' ? Number(km) : undefined, observacao: obs.trim() || undefined, ...coords, idempotencyKey: uuid() };
     try {
       await adicionarParadaFrota(viagem.id, payload);
       setLocal(''); setKm(''); setObs('');
