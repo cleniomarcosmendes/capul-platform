@@ -230,7 +230,10 @@ export function SupervisorViagemPage() {
   const emPlanejamento = v?.statusPlanejamento === 'RASCUNHO' || v?.statusPlanejamento === 'AJUSTADO' || v?.statusPlanejamento === 'REJEITADO' || v?.statusPlanejamento == null;
   // Quem aprova/rejeita despesa: gestor/admin OU o coordenador deste supervisor.
   const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'ADMIN';
-  const podeAprovarDespesa = ehGestor || (!!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id);
+  // Aprova planejamento/despesa: coordenador deste supervisor, ADMIN/gestor OU o Supervisor
+  // de Departamento (SUPERVISOR_FROTA) — o backend valida o escopo por departamento. Sem o
+  // SUPERVISOR_FROTA aqui, o supervisor de departamento não via o painel de aprovação.
+  const podeAprovarDespesa = ehGestor || logisticaRole === 'SUPERVISOR_FROTA' || (!!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id);
   // Quem decide ADIANTAMENTO: só ADMIN, Supervisor de Departamento ou o COORDENADOR deste
   // supervisor (gestores de entrega/frota NÃO — espelha o @Roles do backend).
   const ehCoordDesteSup = !!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id;
