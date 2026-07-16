@@ -1,5 +1,14 @@
-import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { TipoManutencao } from '@prisma/client';
+
+// Parada PLANEJADA da rota (na saída e no planejar): local + cliente opcional. O cliente
+// (SA1) faz a parada de ENTREGA alimentar a consolidação da localização do local (geo).
+export class ParadaPlanejadaDto {
+  @IsString() @IsNotEmpty() @MaxLength(120) local!: string;
+  @IsOptional() @IsString() @MaxLength(20) clienteMatricula?: string;
+  @IsOptional() @IsString() @MaxLength(120) clienteNome?: string;
+}
 
 export class BuscarCondutorDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
@@ -51,8 +60,8 @@ export class SaidaFrotaDto {
   rdvViagemId?: string;
 
   // Rota planejada (opcional): locais das visitas — nascem como PLANEJADA.
-  @IsOptional() @IsArray() @IsString({ each: true })
-  paradasPlanejadas?: string[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParadaPlanejadaDto)
+  paradasPlanejadas?: ParadaPlanejadaDto[];
 }
 
 /**
@@ -84,8 +93,8 @@ export class SaidaIndividualDto {
   @IsOptional() @IsString() @MaxLength(40)
   rdvViagemId?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
-  paradasPlanejadas?: string[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParadaPlanejadaDto)
+  paradasPlanejadas?: ParadaPlanejadaDto[];
 }
 
 /**
@@ -131,8 +140,8 @@ export class SaidaPortariaDto {
   @IsOptional() @IsString() @MaxLength(40)
   rdvViagemId?: string;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
-  paradasPlanejadas?: string[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ParadaPlanejadaDto)
+  paradasPlanejadas?: ParadaPlanejadaDto[];
 }
 
 /** Retorno pela PORTARIA: encerra a rota com KM final SEM a senha do motorista; o
@@ -239,8 +248,8 @@ export class AtualizarLocalParadaDto {
 
 /** Planejamento de paradas (visitas) — lista de locais (texto livre). */
 export class PlanejarParadasDto {
-  @IsArray() @ArrayNotEmpty() @IsString({ each: true })
-  locais!: string[];
+  @IsArray() @ArrayNotEmpty() @ValidateNested({ each: true }) @Type(() => ParadaPlanejadaDto)
+  paradas!: ParadaPlanejadaDto[];
 }
 
 /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */

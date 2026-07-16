@@ -56,13 +56,17 @@ export async function listarViagensFrota(situacao: 'EM_CURSO' | 'CONCLUIDA' = 'E
   return data;
 }
 
+/** Parada planejada da rota: local + cliente (SA1) opcional. O cliente faz a entrega
+ *  alimentar a consolidação da localização do local (geo). */
+export interface ParadaPlanejadaApp { local: string; clienteMatricula?: string; clienteNome?: string }
+
 export interface SaidaPayload {
   matricula: string;
   senha: string;
   veiculoId: string;
   kmInicial: number;
   finalidade?: string;
-  paradasPlanejadas?: string[];
+  paradasPlanejadas?: ParadaPlanejadaApp[];
 }
 
 /** Registrar saída PADRAO (revalida matrícula+senha no backend). */
@@ -75,7 +79,7 @@ export interface SaidaIndividualPayload {
   veiculoId: string;
   kmInicial: number;
   finalidade?: string;
-  paradasPlanejadas?: string[];
+  paradasPlanejadas?: ParadaPlanejadaApp[];
 }
 
 /** Registrar saída INDIVIDUAL — o próprio usuário logado é o condutor (sem senha). */

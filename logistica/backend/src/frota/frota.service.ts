@@ -9,7 +9,7 @@ import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CondutorTokenService } from '../common/condutor-token.service.js';
 import { LocalClienteService } from '../local/local-cliente.service.js';
-import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
+import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, type ParadaPlanejadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -170,7 +170,7 @@ export class FrotaService {
     user: JwtPayload,
     condutorMatricula: string,
     condutorNome: string,
-    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: string[]; rdvViagemId?: string; adiantamento?: number },
+    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: ParadaPlanejadaDto[]; rdvViagemId?: string; adiantamento?: number },
   ) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
@@ -224,13 +224,18 @@ export class FrotaService {
   }
 
   /** Cria as paradas PLANEJADAS da rota informada na saída (opcional). */
-  private async seedParadasPlanejadas(viagemId: string, locais?: string[]) {
-    const limpos = (locais ?? []).map((l) => l.trim()).filter(Boolean);
+  private async seedParadasPlanejadas(viagemId: string, paradas?: ParadaPlanejadaDto[]) {
+    const limpos = (paradas ?? []).filter((p) => p?.local?.trim());
     if (limpos.length === 0) return;
     let seq = 1;
+    // Guarda o cliente (SA1) na parada planejada — quando o condutor der o check-in com
+    // GPS, a marcação já sabe de quem é e alimenta a consolidação do local de entrega.
     await this.prisma.parada.createMany({
-      data: limpos.map((local) => ({
-        viagemId, sequencia: seq++, status: StatusParada.PLANEJADA, planejadoLocal: local, local,
+      data: limpos.map((p) => ({
+        viagemId, sequencia: seq++, status: StatusParada.PLANEJADA,
+        planejadoLocal: p.local.trim(), local: p.local.trim(),
+        clienteMatricula: p.clienteMatricula?.trim().toUpperCase() || null,
+        clienteNome: p.clienteNome?.trim() || null,
       })),
     });
   }
@@ -908,12 +913,15 @@ export class FrotaService {
     const v = await this.viagemDaFilial(id, user);
     this.condutorToken.assertOpera(user, v, condutorToken);
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A rota não está em curso — não é possível alterar paradas.');
-    const locais = dto.locais.map((l) => l.trim()).filter(Boolean);
-    if (locais.length === 0) throw new BadRequestException('Informe ao menos um local.');
+    const limpos = (dto.paradas ?? []).filter((p) => p?.local?.trim());
+    if (limpos.length === 0) throw new BadRequestException('Informe ao menos um local.');
     let seq = await this.proximaSequencia(id);
     await this.prisma.parada.createMany({
-      data: locais.map((local) => ({
-        viagemId: id, sequencia: seq++, status: StatusParada.PLANEJADA, planejadoLocal: local, local,
+      data: limpos.map((p) => ({
+        viagemId: id, sequencia: seq++, status: StatusParada.PLANEJADA,
+        planejadoLocal: p.local.trim(), local: p.local.trim(),
+        clienteMatricula: p.clienteMatricula?.trim().toUpperCase() || null,
+        clienteNome: p.clienteNome?.trim() || null,
       })),
     });
     return this.listarParadas(id, user);
