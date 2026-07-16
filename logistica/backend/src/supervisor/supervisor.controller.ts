@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, StreamableFile, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
@@ -9,6 +9,10 @@ import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarS
 /** Converte o arquivo do multer no binário do comprovante (ou undefined). */
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
   f ? { buffer: f.buffer, mimetype: f.mimetype, size: f.size } : undefined;
+/** Vários arquivos (multer) → binários. AnyFiles pega qualquer nome de campo
+ *  ('comprovante' legado OU 'comprovantes[]' novo) — retrocompatível. */
+const recibosDe = (fs?: Express.Multer.File[]): ReciboBinario[] =>
+  (fs ?? []).map((f) => ({ buffer: f.buffer, mimetype: f.mimetype, size: f.size }));
 
 // RDV/Supervisores é processo INTERNO do setor: quem administra é o SUPERVISOR_FROTA
 // ("Supervisor de Departamento", escopado aos SEUS departamentos no serviço) e o
@@ -200,20 +204,31 @@ export class SupervisorController {
   // ---- Despesas da viagem (compõem a RDV) ----
   // Comprovante (foto/PDF) opcional: multipart quando houver arquivo, JSON quando não.
   @Post('viagens/:id/despesas')
-  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
-  lancarDespesa(@Param('id') id: string, @Body() dto: LancarDespesaSupervisorDto, @CurrentUser() user: JwtPayload, @UploadedFile() comprovante?: Express.Multer.File) {
-    return this.svc.lancarDespesa(id, dto, user, reciboDe(comprovante));
+  @UseInterceptors(AnyFilesInterceptor({ limits: { fileSize: 15 * 1024 * 1024, files: 5 } }))
+  lancarDespesa(@Param('id') id: string, @Body() dto: LancarDespesaSupervisorDto, @CurrentUser() user: JwtPayload, @UploadedFiles() comprovantes?: Express.Multer.File[]) {
+    return this.svc.lancarDespesa(id, dto, user, recibosDe(comprovantes));
   }
   @Delete('viagens/:id/despesas/:despesaId')
   removerDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @CurrentUser() user: JwtPayload) {
     return this.svc.removerDespesa(id, despesaId, user);
   }
-  // Download do comprovante (o coordenador vê antes de decidir).
+  // Download do comprovante LEGADO (1 anexo, campo antigo) — o coordenador vê antes de decidir.
   @Get('viagens/:id/despesas/:despesaId/comprovante')
   @Header('Cache-Control', 'private, no-store')
   async comprovanteDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @CurrentUser() user: JwtPayload): Promise<StreamableFile> {
     const { buffer, mimeType } = await this.svc.obterReciboDespesa(id, despesaId, user);
     return new StreamableFile(buffer, { type: mimeType, disposition: `inline; filename="comprovante-${despesaId}"` });
+  }
+  // Download de um anexo (novo — vários por despesa).
+  @Get('viagens/:id/despesas/:despesaId/anexos/:anexoId')
+  @Header('Cache-Control', 'private, no-store')
+  async anexoDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload): Promise<StreamableFile> {
+    const { buffer, mimeType } = await this.svc.obterAnexoDespesa(id, despesaId, anexoId, user);
+    return new StreamableFile(buffer, { type: mimeType, disposition: `inline; filename="anexo-${anexoId}"` });
+  }
+  @Delete('viagens/:id/despesas/:despesaId/anexos/:anexoId')
+  removerAnexoDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.removerAnexoDespesa(id, despesaId, anexoId, user);
   }
   // Decisão do coordenador sobre a despesa (6d): aprovar / rejeitar (contestar).
   // Só coordenador/gestor — o supervisionado nunca aprova a própria despesa.

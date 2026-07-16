@@ -1,8 +1,8 @@
 import {
   Body, Controller, Delete, Get, Header, Headers, Param, Patch, Post, Query,
-  StreamableFile, UploadedFile, UseInterceptors,
+  StreamableFile, UploadedFile, UploadedFiles, UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { DespesaService, type FiltroAnalise, type ReciboBinario } from './despesa.service.js';
@@ -16,6 +16,9 @@ import {
 /** Converte o arquivo do multer no binário do recibo (ou undefined). */
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
   f ? { buffer: f.buffer, mimetype: f.mimetype, size: f.size } : undefined;
+/** Vários arquivos → binários (AnyFiles pega 'comprovante' legado OU 'comprovantes[]'). */
+const recibosDe = (fs?: Express.Multer.File[]): ReciboBinario[] =>
+  (fs ?? []).map((f) => ({ buffer: f.buffer, mimetype: f.mimetype, size: f.size }));
 
 const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
@@ -114,46 +117,57 @@ export class DespesaController {
 
   /** Lançamento direto (supervisor/gestor) → APROVADA. Recibo (foto/PDF) opcional. */
   @Post()
-  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  @UseInterceptors(AnyFilesInterceptor({ limits: { fileSize: 15 * 1024 * 1024, files: 5 } }))
   lancarDireto(
     @Body() dto: LancarDespesaDto,
     @CurrentUser() user: JwtPayload,
-    @UploadedFile() comprovante?: Express.Multer.File,
+    @UploadedFiles() comprovantes?: Express.Multer.File[],
   ) {
-    return this.despesas.lancarDireto(dto, user, roleLogistica(user), reciboDe(comprovante));
+    return this.despesas.lancarDireto(dto, user, roleLogistica(user), recibosDe(comprovantes));
   }
 
-  /** Rateio de uma nota: 1 documento → vários tipos no mesmo veículo (cada um vira despesa APROVADA). Recibo opcional. */
+  /** Rateio de uma nota: 1 documento → vários tipos no mesmo veículo (cada um vira despesa APROVADA). Recibos opcionais. */
   @Post('ratear')
-  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  @UseInterceptors(AnyFilesInterceptor({ limits: { fileSize: 15 * 1024 * 1024, files: 5 } }))
   ratear(
     @Body() dto: RatearDespesaDto,
     @CurrentUser() user: JwtPayload,
-    @UploadedFile() comprovante?: Express.Multer.File,
+    @UploadedFiles() comprovantes?: Express.Multer.File[],
   ) {
-    return this.despesas.ratear(dto, user, roleLogistica(user), reciboDe(comprovante));
+    return this.despesas.ratear(dto, user, roleLogistica(user), recibosDe(comprovantes));
   }
 
-  /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). Recibo opcional. */
+  /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). Recibos opcionais. */
   @Post('viagem')
   // Operacional: o REGISTRADOR_FROTA pode lançar na viagem (vira PENDENTE → supervisor aprova).
   @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
-  @UseInterceptors(FileInterceptor('comprovante', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  @UseInterceptors(AnyFilesInterceptor({ limits: { fileSize: 15 * 1024 * 1024, files: 5 } }))
   lancarNaViagem(
     @Body() dto: LancarDespesaViagemDto,
     @CurrentUser() user: JwtPayload,
-    @UploadedFile() comprovante?: Express.Multer.File,
+    @UploadedFiles() comprovantes?: Express.Multer.File[],
     @Headers('x-condutor-token') condutorToken?: string,
   ) {
-    return this.despesas.lancarNaViagem(dto, user, reciboDe(comprovante), condutorToken);
+    return this.despesas.lancarNaViagem(dto, user, recibosDe(comprovantes), condutorToken);
   }
 
-  /** Download do recibo (foto/PDF do cupom) — escopo gestor/supervisor do veículo. */
+  /** Download do recibo LEGADO (1 anexo, campo antigo) — escopo gestor/supervisor do veículo. */
   @Get(':id/comprovante')
   @Header('Cache-Control', 'private, no-store')
   async comprovante(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<StreamableFile> {
     const { buffer, mimeType } = await this.despesas.obterRecibo(id, user, roleLogistica(user));
     return new StreamableFile(buffer, { type: mimeType, disposition: `inline; filename="recibo-${id}"` });
+  }
+  /** Download de um anexo (novo — vários por despesa). */
+  @Get(':id/anexos/:anexoId')
+  @Header('Cache-Control', 'private, no-store')
+  async anexo(@Param('id') id: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload): Promise<StreamableFile> {
+    const { buffer, mimeType } = await this.despesas.obterAnexo(id, anexoId, user, roleLogistica(user));
+    return new StreamableFile(buffer, { type: mimeType, disposition: `inline; filename="anexo-${anexoId}"` });
+  }
+  @Delete(':id/anexos/:anexoId')
+  removerAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload) {
+    return this.despesas.removerAnexo(id, anexoId, user, roleLogistica(user));
   }
 
   /** Editar despesa (gestor de frota / supervisor do veículo). */

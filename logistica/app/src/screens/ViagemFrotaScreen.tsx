@@ -25,6 +25,7 @@ import { useAuth } from '../auth/AuthContext';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
 
 const CAPUL = '#1e7d3a';
+const MAX_FOTOS_DESPESA = 5;
 type Props = NativeStackScreenProps<RootStackParamList, 'ViagemFrota'>;
 type Aba = null | 'parada' | 'retorno' | 'despesa';
 
@@ -394,7 +395,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   const [fornecedor, setFornecedor] = useState('');
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [semNota, setSemNota] = useState(false);
-  const [fotoUri, setFotoUri] = useState<string | null>(null);
+  const [fotoUris, setFotoUris] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -405,11 +406,19 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   const podeLancar = !!tipoId && valor !== '' && parseMoeda(valor) > 0 && !salvando;
 
   async function tirarFoto() {
+    if (fotoUris.length >= MAX_FOTOS_DESPESA) { Alert.alert('Cupons', `Máximo de ${MAX_FOTOS_DESPESA} fotos.`); return; }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Câmera', 'Permita a câmera para fotografar o cupom.'); return; }
     const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
-    if (!r.canceled && r.assets[0]?.uri) setFotoUri(r.assets[0].uri);
+    if (!r.canceled && r.assets[0]?.uri) setFotoUris((prev) => [...prev, r.assets[0].uri].slice(0, MAX_FOTOS_DESPESA));
   }
+  async function escolherFotos() {
+    const restante = MAX_FOTOS_DESPESA - fotoUris.length;
+    if (restante <= 0) { Alert.alert('Cupons', `Máximo de ${MAX_FOTOS_DESPESA} fotos.`); return; }
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, selectionLimit: restante, quality: 0.6 });
+    if (!r.canceled) setFotoUris((prev) => [...prev, ...r.assets.map((a) => a.uri)].slice(0, MAX_FOTOS_DESPESA));
+  }
+  const removerFoto = (i: number) => setFotoUris((prev) => prev.filter((_, idx) => idx !== i));
 
   async function lancar() {
     if (!podeLancar) return;
@@ -422,12 +431,12 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
       semNota: semNota || undefined, idempotencyKey: uuid(),
     };
     try {
-      await lancarDespesaViagem(payload, fotoUri ?? undefined);
+      await lancarDespesaViagem(payload, fotoUris);
       Alert.alert('Despesa lançada', 'Entrou como pendente de validação do supervisor.', [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Despesa R$ ${valor}`, acao: { tipo: 'despesa', viagemId: viagem.id, payload, fotoUri: fotoUri ?? null, condutorToken: getCondutorToken() ?? undefined } });
-        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: onPronto }]);
+        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Despesa R$ ${valor}`, acao: { tipo: 'despesa', viagemId: viagem.id, payload, fotoUris, condutorToken: getCondutorToken() ?? undefined } });
+        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e as fotos) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: onPronto }]);
       } else {
         const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
         Alert.alert('Não foi possível lançar', String(msg || 'Tente novamente.'));
@@ -472,14 +481,22 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
         <Text style={[styles.chipTxt, semNota && styles.chipTxtOn]}>Sem nota fiscal (S/N)</Text>
       </TouchableOpacity>
 
-      <Text style={styles.label}>Foto do cupom (opcional)</Text>
-      {fotoUri ? (
-        <View>
-          <Image source={{ uri: fotoUri }} style={styles.foto} resizeMode="cover" />
-          <TouchableOpacity style={styles.refazer} onPress={() => setFotoUri(null)} disabled={salvando}><Text style={styles.refazerTxt}>Remover foto</Text></TouchableOpacity>
+      <Text style={styles.label}>Fotos do cupom (opcional, até {MAX_FOTOS_DESPESA})</Text>
+      {fotoUris.length > 0 && (
+        <View style={styles.thumbs}>
+          {fotoUris.map((uri, i) => (
+            <View key={i} style={styles.thumbBox}>
+              <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
+              <TouchableOpacity style={styles.thumbX} onPress={() => removerFoto(i)} disabled={salvando}><Text style={styles.thumbXTxt}>✕</Text></TouchableOpacity>
+            </View>
+          ))}
         </View>
-      ) : (
-        <TouchableOpacity style={styles.btnFoto} onPress={tirarFoto} disabled={salvando}><Text style={styles.btnFotoTxt}>📷 Fotografar cupom</Text></TouchableOpacity>
+      )}
+      {fotoUris.length < MAX_FOTOS_DESPESA && (
+        <View style={styles.fotoBtns}>
+          <TouchableOpacity style={[styles.btnFoto, styles.btnFotoFlex]} onPress={tirarFoto} disabled={salvando}><Text style={styles.btnFotoTxt}>📷 Fotografar</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.btnFoto, styles.btnFotoFlex]} onPress={escolherFotos} disabled={salvando}><Text style={styles.btnFotoTxt}>🖼️ Galeria</Text></TouchableOpacity>
+        </View>
       )}
 
       <TouchableOpacity style={[styles.registrar, !podeLancar && styles.registrarOff]} onPress={lancar} disabled={!podeLancar}>
@@ -518,6 +535,13 @@ const styles = StyleSheet.create({
   chipTxt: { color: '#334155', fontWeight: '600' },
   chipTxtOn: { color: '#fff' },
   foto: { width: '100%', height: 240, borderRadius: 12, backgroundColor: '#e2e8f0', marginTop: 4 },
+  thumbs: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 },
+  thumbBox: { position: 'relative' },
+  thumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  thumbX: { position: 'absolute', top: -6, right: -6, backgroundColor: '#e11d48', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  thumbXTxt: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  fotoBtns: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  btnFotoFlex: { flex: 1, paddingVertical: 18 },
   btnFoto: { borderWidth: 2, borderColor: CAPUL, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 28, alignItems: 'center', backgroundColor: '#fff', marginTop: 4 },
   btnFotoTxt: { color: CAPUL, fontSize: 16, fontWeight: '700' },
   refazer: { alignSelf: 'center', marginTop: 8 },

@@ -22,6 +22,7 @@ import {
 } from '../offline/filaSupervisor';
 
 const CAPUL = '#1e7d3a';
+const MAX_FOTOS_DESPESA = 5;
 
 /** GPS opcional (igual às paradas da frota): se negar permissão/falhar, segue sem
  *  coordenada — não trava a visita/apontamento. Retorna também a PRECISÃO (m), que
@@ -125,7 +126,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [showVisita, setShowVisita] = useState(false); // form de visita/oportunidade recolhido
   // form despesa
   const [tipoId, setTipoId] = useState(''); const [valor, setValor] = useState(''); const [dForn, setDForn] = useState(''); const [dObs, setDObs] = useState('');
-  const [fotoUri, setFotoUri] = useState<string | null>(null); // comprovante (opcional)
+  const [fotoUris, setFotoUris] = useState<string[]>([]); // comprovantes (fotos) — vários
   const [salvD, setSalvD] = useState(false);
   const [showDespesa, setShowDespesa] = useState(false); // form de despesa recolhido (botão)
   const [despViagemId, setDespViagemId] = useState(viagemId); // planejamento-alvo da despesa
@@ -229,31 +230,39 @@ export function SupervisorViagemScreen({ route }: Props) {
   };
 
   const tirarFoto = async () => {
+    if (fotoUris.length >= MAX_FOTOS_DESPESA) { Alert.alert('Comprovantes', `Máximo de ${MAX_FOTOS_DESPESA} fotos.`); return; }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Comprovante', 'Permita o acesso à câmera para fotografar o recibo.'); return; }
     const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
-    if (!r.canceled && r.assets[0]?.uri) setFotoUri(r.assets[0].uri);
+    if (!r.canceled && r.assets[0]?.uri) setFotoUris((prev) => [...prev, r.assets[0].uri].slice(0, MAX_FOTOS_DESPESA));
   };
+  const escolherFotos = async () => {
+    const restante = MAX_FOTOS_DESPESA - fotoUris.length;
+    if (restante <= 0) { Alert.alert('Comprovantes', `Máximo de ${MAX_FOTOS_DESPESA} fotos.`); return; }
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, selectionLimit: restante, quality: 0.6 });
+    if (!r.canceled) setFotoUris((prev) => [...prev, ...r.assets.map((a) => a.uri)].slice(0, MAX_FOTOS_DESPESA));
+  };
+  const removerFoto = (i: number) => setFotoUris((prev) => prev.filter((_, idx) => idx !== i));
 
-  const limparDespesa = () => { setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUri(null); };
+  const limparDespesa = () => { setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUris([]); };
 
   const salvarDespesa = async () => {
     if (!tipoId || parseMoeda(valor) <= 0) { Alert.alert('Despesa', 'Escolha o tipo e informe o valor.'); return; }
     setSalvD(true);
-    const foto = fotoUri;
+    const fotos = fotoUris;
     const payload: NovaDespesa = {
       tipoDespesaId: tipoId, valor: parseMoeda(valor),
       fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined, idempotencyKey: uuid(),
     };
     try {
-      await lancarDespesaApp(despViagemId, payload, foto ?? undefined);
+      await lancarDespesaApp(despViagemId, payload, fotos);
       limparDespesa(); setShowDespesa(false); await carregar();
       Alert.alert('Pronto', 'Despesa lançada (aguarda aprovação do coordenador).');
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarSupervisor({ id: payload.idempotencyKey!, rotulo: `Despesa: ${brl(payload.valor)}`, acao: { tipo: 'despesa', viagemId: despViagemId, payload, fotoUri: foto ?? null } });
+        await enfileirarSupervisor({ id: payload.idempotencyKey!, rotulo: `Despesa: ${brl(payload.valor)}`, acao: { tipo: 'despesa', viagemId: despViagemId, payload, fotoUris: fotos } });
         limparDespesa(); setShowDespesa(false);
-        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.');
+        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e as fotos) vão sincronizar quando a conexão voltar.');
       } else { Alert.alert('Erro', msg(e, 'Falha ao lançar despesa.')); }
     } finally { setSalvD(false); }
   };
@@ -410,14 +419,22 @@ export function SupervisorViagemScreen({ route }: Props) {
           <TextInput style={styles.input} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={valor} onChangeText={(t) => setValor(maskMoeda(t))} />
           <TextInput style={styles.input} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
           <TextInput style={styles.input} placeholder="Observação" value={dObs} onChangeText={setDObs} />
-          <Text style={styles.fLabel}>Comprovante (opcional)</Text>
-          {fotoUri ? (
-            <View>
-              <Image source={{ uri: fotoUri }} style={styles.foto} resizeMode="cover" />
-              <TouchableOpacity style={styles.refazer} onPress={() => setFotoUri(null)} disabled={salvD}><Text style={styles.refazerTxt}>Remover foto</Text></TouchableOpacity>
+          <Text style={styles.fLabel}>Comprovantes (opcional, até {MAX_FOTOS_DESPESA})</Text>
+          {fotoUris.length > 0 && (
+            <View style={styles.thumbs}>
+              {fotoUris.map((uri, i) => (
+                <View key={i} style={styles.thumbBox}>
+                  <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
+                  <TouchableOpacity style={styles.thumbX} onPress={() => removerFoto(i)} disabled={salvD}><Text style={styles.thumbXTxt}>✕</Text></TouchableOpacity>
+                </View>
+              ))}
             </View>
-          ) : (
-            <TouchableOpacity style={styles.btnFoto} onPress={() => void tirarFoto()} disabled={salvD}><Text style={styles.btnFotoTxt}>📷 Fotografar recibo</Text></TouchableOpacity>
+          )}
+          {fotoUris.length < MAX_FOTOS_DESPESA && (
+            <View style={styles.fotoBtns}>
+              <TouchableOpacity style={[styles.btnFoto, styles.btnFotoFlex]} onPress={() => void tirarFoto()} disabled={salvD}><Text style={styles.btnFotoTxt}>📷 Fotografar</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.btnFoto, styles.btnFotoFlex]} onPress={() => void escolherFotos()} disabled={salvD}><Text style={styles.btnFotoTxt}>🖼️ Galeria</Text></TouchableOpacity>
+            </View>
           )}
           <View style={styles.formBtns}>
             <TouchableOpacity style={[styles.btn, styles.btnFlex, salvD && styles.btnOff]} onPress={() => void salvarDespesa()} disabled={salvD}>
@@ -440,7 +457,7 @@ export function SupervisorViagemScreen({ route }: Props) {
               <Text style={styles.itemTitle}>{d.tipoDespesa?.nome ?? '—'} · {brl(d.valor)}</Text>
               <Badge bg={st.bg} fg={st.fg} label={st.l} />
             </View>
-            <Text style={styles.itemSub}>{d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'}{d.comprovanteObjectKey ? ' · 📎 comprovante' : ''}</Text>
+            <Text style={styles.itemSub}>{d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'}{(() => { const n = (d.anexos?.length ?? 0) + (d.comprovanteObjectKey ? 1 : 0); return n ? ` · 📎 ${n} comprovante${n > 1 ? 's' : ''}` : ''; })()}</Text>
           </View>
         );
       })}
@@ -469,6 +486,13 @@ const styles = StyleSheet.create({
   fLabel: { fontSize: 13, color: '#334155', fontWeight: '600', marginTop: 12 },
   btnFoto: { borderWidth: 2, borderColor: CAPUL, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 24, alignItems: 'center', backgroundColor: '#fff', marginTop: 4 },
   btnFotoTxt: { color: CAPUL, fontSize: 15, fontWeight: '700' },
+  fotoBtns: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  btnFotoFlex: { flex: 1, paddingVertical: 16 },
+  thumbs: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 },
+  thumbBox: { position: 'relative' },
+  thumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  thumbX: { position: 'absolute', top: -6, right: -6, backgroundColor: '#e11d48', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  thumbXTxt: { color: '#fff', fontWeight: '700', fontSize: 12 },
   foto: { width: '100%', height: 220, borderRadius: 12, backgroundColor: '#e2e8f0', marginTop: 4 },
   refazer: { alignSelf: 'center', marginTop: 8 },
   refazerTxt: { color: CAPUL, fontWeight: '600' },

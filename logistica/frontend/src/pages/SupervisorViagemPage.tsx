@@ -43,7 +43,9 @@ const STATUS_VISITA: Record<string, { label: string; cls: string }> = {
   PULADA: { label: 'Pulada', cls: 'bg-slate-100 text-slate-500' },
 };
 const statusVisita = (s?: string | null) => STATUS_VISITA[s ?? 'REALIZADA'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
-interface DespesaV { id: string; valor: number | string; situacao: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null }
+interface AnexoV { id: string; mime?: string | null; ordem?: number }
+interface DespesaV { id: string; valor: number | string; situacao: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null; anexos?: AnexoV[] }
+const MAX_ANEXOS = 5;
 interface ViagemDetalhe {
   id: string; numero: number; situacao: string; statusPlanejamento?: string | null; comentarioCoordenador?: string | null;
   mesReferencia?: number | null;
@@ -180,7 +182,7 @@ export function SupervisorViagemPage() {
   const [dData, setDData] = useState('');
   const [dFornecedor, setDForn] = useState('');
   const [dObs, setDObs] = useState('');
-  const [dRecibo, setDRecibo] = useState<File | null>(null); // comprovante (foto/PDF) opcional
+  const [dRecibos, setDRecibos] = useState<File[]>([]); // comprovantes (foto/PDF) — vários
   const [salvandoDesp, setSalvandoDesp] = useState(false);
   // administração (Fase 5)
   const [editVisitaId, setEditVisitaId] = useState<string | null>(null);
@@ -302,19 +304,31 @@ export function SupervisorViagemPage() {
     catch (e) { toast('error', errMsg(e, 'Falha ao iniciar.')); }
   };
 
-  const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); setDRecibo(null); };
+  const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); setDRecibos([]); };
   const abrirEdicaoDesp = (d: DespesaV) => {
     setEditDespId(d.id); setShowDesp(true);
     setDTipo(d.tipoDespesaId ?? ''); setDValor(String(d.valor)); setDForn(d.fornecedor ?? ''); setDObs(d.observacao ?? '');
-    setDData(d.dataDespesa ? new Date(d.dataDespesa).toISOString().slice(0, 10) : ''); setDRecibo(null);
+    setDData(d.dataDespesa ? new Date(d.dataDespesa).toISOString().slice(0, 10) : ''); setDRecibos([]);
   };
-  const verComprovante = async (dId: string) => {
+  // Abre um blob (comprovante legado ou anexo) numa aba nova.
+  const abrirBlob = async (rota: string) => {
     try {
-      const { data } = await logisticaApi.get(`/supervisor/viagens/${id}/despesas/${dId}/comprovante`, { responseType: 'blob' });
+      const { data } = await logisticaApi.get(rota, { responseType: 'blob' });
       const url = URL.createObjectURL(data as Blob);
       window.open(url, '_blank', 'noopener');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) { toast('error', errMsg(e, 'Falha ao abrir o comprovante.')); }
+  };
+  const verComprovante = (dId: string) => abrirBlob(`/supervisor/viagens/${id}/despesas/${dId}/comprovante`);
+  const verAnexo = (dId: string, anexoId: string) => abrirBlob(`/supervisor/viagens/${id}/despesas/${dId}/anexos/${anexoId}`);
+  const removerAnexo = async (dId: string, anexoId: string) => {
+    try { await logisticaApi.delete(`/supervisor/viagens/${id}/despesas/${dId}/anexos/${anexoId}`); toast('success', 'Anexo removido.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao remover o anexo.')); }
+  };
+  // Acrescenta arquivos escolhidos ao lote (cap MAX_ANEXOS).
+  const addRecibos = (files: FileList | null) => {
+    if (!files?.length) return;
+    setDRecibos((prev) => [...prev, ...Array.from(files)].slice(0, MAX_ANEXOS));
   };
   const lancarDespesa = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,15 +336,15 @@ export function SupervisorViagemPage() {
     setSalvandoDesp(true);
     const url = editDespId ? `/supervisor/viagens/${id}/despesas/${editDespId}` : `/supervisor/viagens/${id}/despesas`;
     try {
-      // Com comprovante → multipart (FormData); sem → JSON. O backend aceita os dois.
-      if (dRecibo) {
+      // Com comprovante(s) → multipart (FormData); sem → JSON. O backend aceita os dois.
+      if (dRecibos.length) {
         const fd = new FormData();
         fd.append('tipoDespesaId', dTipo);
         fd.append('valor', String(Number(dValor)));
         if (dData) fd.append('data', dData);
         if (dFornecedor.trim()) fd.append('fornecedor', dFornecedor.trim());
         if (dObs.trim()) fd.append('observacao', dObs.trim());
-        fd.append('comprovante', dRecibo);
+        dRecibos.forEach((f) => fd.append('comprovantes', f));
         if (editDespId) await logisticaApi.patch(url, fd); else await logisticaApi.post(url, fd);
       } else {
         const body = { tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined, fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined };
@@ -595,17 +609,26 @@ export function SupervisorViagemPage() {
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Fornecedor</label><input value={dFornecedor} onChange={(e) => setDForn(e.target.value)} maxLength={120} className={inp} /></div>
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={dObs} onChange={(e) => setDObs(e.target.value)} maxLength={500} className={inp} /></div>
             <div className="sm:col-span-4">
-              <label className="mb-1 block text-xs font-medium text-slate-500">Comprovante (foto/PDF) — opcional</label>
+              <label className="mb-1 block text-xs font-medium text-slate-500">Comprovantes (foto/PDF) — opcional, até {MAX_ANEXOS}</label>
               <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
-                  <Paperclip className="h-4 w-4" /> {dRecibo ? 'Trocar arquivo' : 'Anexar comprovante'}
-                  <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => setDRecibo(e.target.files?.[0] ?? null)} />
-                </label>
-                {dRecibo && <span className="text-xs text-slate-500">{dRecibo.name} <button type="button" onClick={() => setDRecibo(null)} className="ml-1 text-rose-500 hover:text-rose-700">remover</button></span>}
-                {!dRecibo && editDespId && v.despesas.find((x) => x.id === editDespId)?.comprovanteObjectKey && (
-                  <button type="button" onClick={() => void verComprovante(editDespId)} className="text-xs text-capul-600 hover:underline">Ver comprovante atual</button>
+                {dRecibos.length < MAX_ANEXOS && (
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+                    <Paperclip className="h-4 w-4" /> Anexar comprovante(s)
+                    <input type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={(e) => { addRecibos(e.target.files); e.target.value = ''; }} />
+                  </label>
                 )}
+                {editDespId && (() => { const dd = v.despesas.find((x) => x.id === editDespId); const n = (dd?.anexos?.length ?? 0) + (dd?.comprovanteObjectKey ? 1 : 0); return n > 0 ? <span className="text-xs text-slate-400">{n} comprovante(s) já anexado(s) — veja na lista abaixo</span> : null; })()}
               </div>
+              {dRecibos.length > 0 && (
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {dRecibos.map((f, i) => (
+                    <li key={i} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                      {f.name}
+                      <button type="button" onClick={() => setDRecibos((prev) => prev.filter((_, idx) => idx !== i))} className="text-rose-500 hover:text-rose-700"><Trash2 className="h-3 w-3" /></button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
           <div className="mt-3 flex gap-2">
@@ -632,10 +655,16 @@ export function SupervisorViagemPage() {
                   {d.situacao === 'CONTESTADA' && d.motivoContestacao && <span className="ml-1 text-xs text-rose-600" title={d.motivoContestacao}>ⓘ</span>}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {d.comprovanteObjectKey && (
-                      <button onClick={() => void verComprovante(d.id)} className="inline-flex items-center gap-1 text-slate-400 hover:text-capul-600" title="Ver comprovante"><Paperclip className="h-4 w-4" /></button>
+                      <button onClick={() => void verComprovante(d.id)} className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500 hover:text-capul-600" title="Comprovante"><Paperclip className="h-3 w-3" /></button>
                     )}
+                    {(d.anexos ?? []).map((a, i) => (
+                      <span key={a.id} className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+                        <button onClick={() => void verAnexo(d.id, a.id)} className="inline-flex items-center gap-0.5 hover:text-capul-600" title="Ver comprovante"><Paperclip className="h-3 w-3" />{(d.comprovanteObjectKey ? i + 2 : i + 1)}</button>
+                        {!concluida && <button onClick={() => void removerAnexo(d.id, a.id)} className="text-rose-400 hover:text-rose-600" title="Remover anexo"><Trash2 className="h-3 w-3" /></button>}
+                      </span>
+                    ))}
                     {podeAprovarDespesa && d.situacao === 'PENDENTE' && (
                       <>
                         <button onClick={() => void decidirDespesa(d.id, 'APROVADA')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Aprovar</button>
