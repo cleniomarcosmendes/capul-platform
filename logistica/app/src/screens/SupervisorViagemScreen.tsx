@@ -9,11 +9,11 @@ import type { RootStackParamList } from '../navigation';
 import { SelectBusca } from '../components/SelectBusca';
 import {
   obterViagemSupervisor, adicionarVisitaApp, lancarDespesaApp, apontarVisitaApp,
-  enviarPlanejamentoApp, iniciarExecucaoApp, concluirPlanejamentoApp,
+  iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor,
   listarAtividadesSup, listarTiposDespesaSup,
   meuCadastroSup, listarAdiantamentosSup, lancarAdiantamentoSup, removerAdiantamentoSup,
   type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup, type NovaVisita, type NovaDespesa,
-  type MeuCadastroSup, type AdiantamentoSup, type VisitaSup,
+  type MeuCadastroSup, type AdiantamentoSup, type VisitaSup, type ViagemSup,
 } from '../api/supervisor';
 import { uuid } from '../lib/uuid';
 import {
@@ -121,10 +121,14 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [cliNome, setCliNome] = useState(''); const [muni, setMuni] = useState(''); const [ativId, setAtivId] = useState('');
   const [prop, setProp] = useState(''); const [vObs, setVObs] = useState('');
   const [salvV, setSalvV] = useState(false);
+  const [showVisita, setShowVisita] = useState(false); // form de visita/oportunidade recolhido
   // form despesa
   const [tipoId, setTipoId] = useState(''); const [valor, setValor] = useState(''); const [dForn, setDForn] = useState(''); const [dObs, setDObs] = useState('');
   const [fotoUri, setFotoUri] = useState<string | null>(null); // comprovante (opcional)
   const [salvD, setSalvD] = useState(false);
+  const [showDespesa, setShowDespesa] = useState(false); // form de despesa recolhido (botão)
+  const [despViagemId, setDespViagemId] = useState(viagemId); // planejamento-alvo da despesa
+  const [planejamentos, setPlanejamentos] = useState<ViagemSup[]>([]); // do mês, p/ o seletor
   // adiantamentos do mês (auto-serviço do supervisor de área — só o SEU cadastro)
   const [meuSup, setMeuSup] = useState<MeuCadastroSup | null>(null);
   const [adiants, setAdiants] = useState<AdiantamentoSup[]>([]);
@@ -143,6 +147,9 @@ export function SupervisorViagemScreen({ route }: Props) {
       setMeuSup(meu);
       setAdiants(meu && d.mesReferencia ? await listarAdiantamentosSup(meu.id, d.mesReferencia) : []);
     } catch { /* silencioso — não derruba o resto da tela */ }
+    // Planejamentos em curso do supervisor → seletor opcional de "a qual planejamento
+    // pertence" a despesa (default = este). Best-effort.
+    try { setPlanejamentos(await listarViagensSupervisor('EM_CURSO')); } catch { /* silencioso */ }
   }, [viagemId]);
 
   useFocusEffect(useCallback(() => {
@@ -168,9 +175,6 @@ export function SupervisorViagemScreen({ route }: Props) {
   const concluida = v?.situacao === 'CONCLUIDA';
   const sp = v?.statusPlanejamento ?? null;
   const emExecucao = sp === 'EM_EXECUCAO';
-  // Fase de planejamento (espelha o backend): a visita adicionada aqui nasce PLANEJADA
-  // (monta o roteiro). Fora disso ela nasce REALIZADA (visita de fato, em campo).
-  const emPlanejamento = sp === 'RASCUNHO' || sp === 'AJUSTADO' || sp === 'REJEITADO' || sp === null;
   // Aprovado mas ainda não iniciado: há visitas planejadas esperando o "Iniciar execução".
   const temPlanejadaPendente = (v?.paradas ?? []).some((p) => (p.status ?? 'PLANEJADA') === 'PLANEJADA');
 
@@ -180,9 +184,8 @@ export function SupervisorViagemScreen({ route }: Props) {
     if (!cliNome.trim()) { Alert.alert('Visita', 'Informe o cliente (ou prospect).'); return; }
     setSalvV(true);
     const coords = await capturarCoordenadas();
-    // Visita registrada em execução (não planejamento) nasce REALIZADA — confirma se está
-    // no local para alimentar a consolidação.
-    const noLocal = !emPlanejamento && coords.latitude != null ? await confirmarNoLocal() : undefined;
+    // Em campo a visita nasce REALIZADA — confirma se está no local (alimenta a consolidação).
+    const noLocal = coords.latitude != null ? await confirmarNoLocal() : undefined;
     const payload: NovaVisita = {
       clienteNome: cliNome.trim(), municipio: muni.trim() || undefined,
       atividadeId: ativId || undefined, propriedade: prop.trim() || undefined,
@@ -191,7 +194,7 @@ export function SupervisorViagemScreen({ route }: Props) {
     };
     try {
       await adicionarVisitaApp(viagemId, payload);
-      limparVisita(); await carregar();
+      limparVisita(); setShowVisita(false); await carregar();
       Alert.alert('Pronto', 'Visita registrada.');
     } catch (e) {
       if (ehErroDeRede(e)) {
@@ -242,13 +245,13 @@ export function SupervisorViagemScreen({ route }: Props) {
       fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined, idempotencyKey: uuid(),
     };
     try {
-      await lancarDespesaApp(viagemId, payload, foto ?? undefined);
-      limparDespesa(); await carregar();
+      await lancarDespesaApp(despViagemId, payload, foto ?? undefined);
+      limparDespesa(); setShowDespesa(false); await carregar();
       Alert.alert('Pronto', 'Despesa lançada (aguarda aprovação do coordenador).');
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarSupervisor({ id: payload.idempotencyKey!, rotulo: `Despesa: ${brl(payload.valor)}`, acao: { tipo: 'despesa', viagemId, payload, fotoUri: foto ?? null } });
-        limparDespesa();
+        await enfileirarSupervisor({ id: payload.idempotencyKey!, rotulo: `Despesa: ${brl(payload.valor)}`, acao: { tipo: 'despesa', viagemId: despViagemId, payload, fotoUri: foto ?? null } });
+        limparDespesa(); setShowDespesa(false);
         Alert.alert('Salvo offline', 'Sem sinal — a despesa (e a foto) vão sincronizar quando a conexão voltar.');
       } else { Alert.alert('Erro', msg(e, 'Falha ao lançar despesa.')); }
     } finally { setSalvD(false); }
@@ -295,9 +298,6 @@ export function SupervisorViagemScreen({ route }: Props) {
           <Text style={styles.coment}>Coordenador: {v.comentarioCoordenador}</Text>
         )}
         <View style={styles.wfRow}>
-          {(sp === 'RASCUNHO' || sp === 'AJUSTADO' || sp === 'REJEITADO') && (
-            <TouchableOpacity style={[styles.wfBtn, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(enviarPlanejamentoApp, 'Enviado ao coordenador.')}><Text style={styles.wfBtnTxt}>Enviar ao coordenador</Text></TouchableOpacity>
-          )}
           {sp === 'APROVADO' && (
             <TouchableOpacity style={[styles.wfBtn, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(iniciarExecucaoApp, 'Execução iniciada.')}><Text style={styles.wfBtnTxt}>Iniciar execução</Text></TouchableOpacity>
           )}
@@ -305,6 +305,9 @@ export function SupervisorViagemScreen({ route }: Props) {
             <TouchableOpacity style={[styles.wfBtn, styles.wfBtnAlt, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(concluirPlanejamentoApp, 'Planejamento concluído.')}><Text style={[styles.wfBtnTxt, styles.wfBtnTxtAlt]}>Concluir</Text></TouchableOpacity>
           )}
         </View>
+        {(sp === 'RASCUNHO' || sp === 'AJUSTADO' || sp === 'REJEITADO' || sp === 'ENVIADO') && (
+          <Text style={styles.coment}>✎ O planejamento é montado e enviado ao coordenador no computador. Aqui você executa quando aprovado.</Text>
+        )}
       </View>
 
       {meuSup && (
@@ -337,20 +340,25 @@ export function SupervisorViagemScreen({ route }: Props) {
         </View>
       )}
 
-      {!concluida && (
+      {emExecucao && (showVisita ? (
         <View style={styles.card}>
-          <Text style={styles.sTitle}>{emPlanejamento ? 'Incluir cliente no planejamento' : 'Registrar visita'}</Text>
-          {emPlanejamento && <Text style={styles.hint}>Monte o roteiro: adicione os clientes que pretende visitar. Você aponta como realizada/pulada durante a execução.</Text>}
+          <Text style={styles.sTitle}>Registrar visita / oportunidade</Text>
+          <Text style={styles.hint}>Cliente atendido ou um prospect (oportunidade) que surgiu na viagem.</Text>
           <TextInput style={styles.input} placeholder="Cliente / prospect" value={cliNome} onChangeText={setCliNome} />
           <TextInput style={styles.input} placeholder="Município" value={muni} onChangeText={setMuni} />
           <SelectBusca valor={ativId} opcoes={ativs.map((a) => ({ id: a.id, nome: a.nome }))} onChange={setAtivId} placeholder="Atividade" permiteLimpar />
-          <TextInput style={styles.input} placeholder="Propriedade / fazenda" value={prop} onChangeText={setProp} />
+          <TextInput style={styles.input} placeholder="Propriedade / fazenda (se rural)" value={prop} onChangeText={setProp} />
           <TextInput style={styles.input} placeholder="Observação" value={vObs} onChangeText={setVObs} />
-          <TouchableOpacity style={[styles.btn, salvV && styles.btnOff]} onPress={() => void salvarVisita()} disabled={salvV}>
-            <Text style={styles.btnTxt}>{salvV ? 'Salvando…' : (emPlanejamento ? '＋ Incluir no planejamento' : 'Registrar visita')}</Text>
-          </TouchableOpacity>
+          <View style={styles.formBtns}>
+            <TouchableOpacity style={[styles.btn, styles.btnFlex, salvV && styles.btnOff]} onPress={() => void salvarVisita()} disabled={salvV}>
+              <Text style={styles.btnTxt}>{salvV ? 'Salvando…' : 'Registrar visita'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { limparVisita(); setShowVisita(false); }} disabled={salvV}><Text style={styles.cancelTxt}>Cancelar</Text></TouchableOpacity>
+          </View>
         </View>
-      )}
+      ) : (
+        <TouchableOpacity style={styles.addBtn} onPress={() => setShowVisita(true)}><Text style={styles.addBtnTxt}>＋ Registrar visita / oportunidade</Text></TouchableOpacity>
+      ))}
 
       <Text style={styles.listTitle}>Visitas ({v.paradas.length})</Text>
       {sp === 'APROVADO' && temPlanejadaPendente && (
@@ -391,9 +399,12 @@ export function SupervisorViagemScreen({ route }: Props) {
         );
       })}
 
-      {!concluida && (
+      {!concluida && (showDespesa ? (
         <View style={styles.card}>
-          <Text style={styles.sTitle}>Nova despesa</Text>
+          <Text style={styles.sTitle}>Lançar despesa</Text>
+          {planejamentos.length > 1 && (
+            <SelectBusca valor={despViagemId} opcoes={planejamentos.map((p) => ({ id: p.id, nome: `Planejamento #${p.numero}${p.id === viagemId ? ' (este)' : ''}`, subtitulo: fmtMes(p.mesReferencia) }))} onChange={setDespViagemId} placeholder="A qual planejamento pertence" />
+          )}
           <SelectBusca valor={tipoId} opcoes={tipos.map((t) => ({ id: t.id, nome: t.nome, subtitulo: t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo' }))} onChange={setTipoId} placeholder="Tipo de despesa" />
           <TextInput style={styles.input} placeholder="Valor (R$)" keyboardType="decimal-pad" value={valor} onChangeText={setValor} />
           <TextInput style={styles.input} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
@@ -407,11 +418,16 @@ export function SupervisorViagemScreen({ route }: Props) {
           ) : (
             <TouchableOpacity style={styles.btnFoto} onPress={() => void tirarFoto()} disabled={salvD}><Text style={styles.btnFotoTxt}>📷 Fotografar recibo</Text></TouchableOpacity>
           )}
-          <TouchableOpacity style={[styles.btn, salvD && styles.btnOff]} onPress={() => void salvarDespesa()} disabled={salvD}>
-            <Text style={styles.btnTxt}>{salvD ? 'Salvando…' : 'Lançar despesa'}</Text>
-          </TouchableOpacity>
+          <View style={styles.formBtns}>
+            <TouchableOpacity style={[styles.btn, styles.btnFlex, salvD && styles.btnOff]} onPress={() => void salvarDespesa()} disabled={salvD}>
+              <Text style={styles.btnTxt}>{salvD ? 'Salvando…' : 'Lançar despesa'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => { limparDespesa(); setShowDespesa(false); }} disabled={salvD}><Text style={styles.cancelTxt}>Cancelar</Text></TouchableOpacity>
+          </View>
         </View>
-      )}
+      ) : (
+        <TouchableOpacity style={styles.addBtn} onPress={() => { setDespViagemId(viagemId); setShowDespesa(true); }}><Text style={styles.addBtnTxt}>＋ Lançar despesa</Text></TouchableOpacity>
+      ))}
 
       <Text style={styles.listTitle}>Despesas ({v.despesas.length})</Text>
       {v.despesas.length === 0 && <Text style={styles.vazio}>Nenhuma despesa ainda.</Text>}
@@ -478,5 +494,11 @@ const styles = StyleSheet.create({
   advRej: { fontSize: 12, color: '#be123c', marginTop: 2 },
   advDel: { color: '#e11d48', fontWeight: '600', fontSize: 13 },
   mapLink: { color: CAPUL, fontWeight: '600', fontSize: 13, marginTop: 6 },
+  addBtn: { borderWidth: 1.5, borderColor: CAPUL, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: '#fff' },
+  addBtnTxt: { color: CAPUL, fontWeight: '700', fontSize: 15 },
+  formBtns: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
+  btnFlex: { flex: 1, marginTop: 0 },
+  cancelBtn: { paddingVertical: 12, paddingHorizontal: 4 },
+  cancelTxt: { color: '#64748b', fontWeight: '600', fontSize: 14 },
   hint: { fontSize: 12, color: '#075985', backgroundColor: '#e0f2fe', borderRadius: 8, padding: 8, marginTop: 4, marginBottom: 4 },
 });
