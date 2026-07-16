@@ -34,6 +34,7 @@ export function createPrismaMock(): Record<string, any> {
     manutencaoVeiculo: modelMock(),
     supervisor: modelMock(),
     adiantamento: modelMock(),
+    localCliente: modelMock(),
     fechamentoRdv: modelMock(),
     atividadeVisita: modelMock(),
     $queryRaw: jest.fn().mockResolvedValue([]),

@@ -6,6 +6,7 @@ import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
 import { CofreStorageService } from '../cofre/cofre-storage.service.js';
+import { LocalClienteService } from '../local/local-cliente.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
 import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
@@ -26,6 +27,7 @@ export class SupervisorService {
     private readonly condutor: ProtheusCondutorService,
     private readonly core: CoreLookupService,
     private readonly storage: CofreStorageService,
+    private readonly locais: LocalClienteService,
   ) {}
 
   /** Anexa o recibo (foto/PDF) à despesa: sobe no cofre (MinIO) e grava
@@ -458,7 +460,7 @@ export class SupervisorService {
       if (ja) return ja;
     }
     const emPlanejamento = ['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '');
-    return this.prisma.$transaction(async (tx) => {
+    const criada = await this.prisma.$transaction(async (tx) => {
       const seq = (await tx.parada.count({ where: { viagemId } })) + 1;
       return tx.parada.create({
         data: {
@@ -473,6 +475,9 @@ export class SupervisorService {
           observacao: dto.observacao?.trim() || null,
           latitude: dto.latitude ?? null,
           longitude: dto.longitude ?? null,
+          precisaoM: dto.precisaoM ?? null,
+          noLocal: dto.noLocal ?? null,
+          localClienteId: dto.localClienteId ?? null,
           dataHora: this.parseData(dto.dataVisita),
           status: emPlanejamento ? 'PLANEJADA' : 'REALIZADA',
           idempotencyKey: dto.idempotencyKey ?? null,
@@ -480,6 +485,11 @@ export class SupervisorService {
         include: { atividade: { select: { nome: true } } },
       });
     });
+    // Visita já REALIZADA em campo (execução) com marcação confiável → consolida o local.
+    if (criada.localClienteId && criada.status === 'REALIZADA' && criada.noLocal && criada.latitude != null) {
+      await this.locais.consolidar(criada.localClienteId).catch(() => undefined);
+    }
+    return criada;
   }
 
   /** Apontamento (6c): marca a visita PLANEJADA como REALIZADA (com a atividade
@@ -497,7 +507,7 @@ export class SupervisorService {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
     }
-    return this.prisma.parada.update({
+    const atualizada = await this.prisma.parada.update({
       where: { id: paradaId },
       data: {
         status: dto.status,
@@ -505,10 +515,19 @@ export class SupervisorService {
         observacao: dto.observacao !== undefined ? (dto.observacao?.trim() || null) : undefined,
         latitude: dto.latitude ?? undefined,
         longitude: dto.longitude ?? undefined,
+        precisaoM: dto.precisaoM ?? undefined,
+        noLocal: dto.noLocal ?? undefined,
+        localClienteId: dto.localClienteId ?? undefined,
         dataHora: dto.dataVisita ? this.parseData(dto.dataVisita) : undefined,
       },
       include: { atividade: { select: { nome: true } } },
     });
+    // Marcação confiável (no local, com GPS) → reconsolida a localização do local.
+    // Best-effort: uma falha aqui não derruba o apontamento.
+    if (atualizada.localClienteId && atualizada.status === 'REALIZADA' && atualizada.noLocal && atualizada.latitude != null) {
+      await this.locais.consolidar(atualizada.localClienteId).catch(() => undefined);
+    }
+    return atualizada;
   }
 
   async removerVisita(viagemId: string, paradaId: string, user: JwtPayload) {

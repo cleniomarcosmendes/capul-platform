@@ -152,6 +152,58 @@ enum SituacaoAdiantamento {
   @@schema("logistica")
 }
 
+// Tipo do local geolocalizado de um cliente (SA1). Um cliente pode ter VÁRIOS locais
+// (a fazenda ≠ o endereço de entrega urbano) — por isso a chave é cliente+tipo+nome.
+enum TipoLocalCliente {
+  PROPRIEDADE
+  ENTREGA
+  OUTRO
+  @@schema("logistica")
+}
+
+// Confiança da localização CONSOLIDADA do local (aprendida das marcações de campo).
+// SEM_DADO = ainda sem marcação boa; PROVISORIA = 1-2 marcações / disperso; CONFIRMADA
+// = várias marcações concordando dentro do raio.
+enum ConfiancaLocal {
+  SEM_DADO
+  PROVISORIA
+  CONFIRMADA
+  @@schema("logistica")
+}
+
+// Local geolocalizado de um cliente (SA1) — a "verdade de campo" que o Protheus NÃO
+// tem. Um cliente tem N locais (fazendas, endereço de entrega…). A coordenada é
+// CONSOLIDADA a partir das marcações (paradas) de qualquer origem: visita de supervisor
+// OU parada de saída de veículo. `nome` estrutura o que antes era texto livre
+// (`parada.propriedade`), dando chave estável ao agrupamento.
+model LocalCliente {
+  id               String           @id @default(uuid())
+  filialId         String?          @map("filial_id")
+  clienteMatricula String           @map("cliente_matricula")
+  clienteNome      String?          @map("cliente_nome")
+  tipo             TipoLocalCliente @default(PROPRIEDADE)
+  nome             String
+  municipio        String?
+  // Geolocalização CONSOLIDADA (medóide do cluster mais denso das marcações).
+  latConsolidada   Decimal?         @map("lat_consolidada") @db.Decimal(10, 7)
+  longConsolidada  Decimal?         @map("long_consolidada") @db.Decimal(10, 7)
+  confianca        ConfiancaLocal   @default(SEM_DADO)
+  nMarcacoes       Int              @default(0) @map("n_marcacoes")
+  raioDispersaoM   Int?             @map("raio_dispersao_m")
+  consolidadoEm    DateTime?        @map("consolidado_em")
+  // Export ao Protheus (Fase C, quando houver endpoint de escrita) — auditoria.
+  enviadoProtheusEm DateTime?       @map("enviado_protheus_em")
+  ativo            Boolean          @default(true)
+  criadoEm         DateTime         @default(now()) @map("criado_em")
+  paradas          Parada[]
+
+  @@unique([clienteMatricula, tipo, nome])
+  @@index([clienteMatricula])
+  @@index([filialId])
+  @@map("local_cliente")
+  @@schema("logistica")
+}
+
 // ---------- Cliente / Endereço (GLOBAIS, cross-filial) ----------
 model ClienteLocal {
   id         String            @id @default(uuid())
@@ -622,12 +674,22 @@ model Parada {
   clienteNome      String?          @map("cliente_nome")
   municipio        String?
   propriedade      String?
+  // Local geolocalizado (Fase A geo): liga a marcação (esta parada) ao local do cliente
+  // que ela ajuda a consolidar. Nullable: parada avulsa/prospect sem local escolhido.
+  localClienteId   String?          @map("local_cliente_id")
+  localCliente     LocalCliente?    @relation(fields: [localClienteId], references: [id])
+  // Qualidade da marcação: precisão do GPS (m) e confirmação do usuário de que está NO
+  // local (≠ marcou da estrada/cidade). Só marcações `noLocal=true` e precisas
+  // alimentam a consolidação. Nullable = legado/desconhecido.
+  precisaoM        Int?             @map("precisao_m")
+  noLocal          Boolean?         @map("no_local")
   // Chave de idempotência (Fase 2d offline): reenvio da fila não duplica a parada.
   idempotencyKey String?   @unique @map("idempotency_key")
   registradoEm DateTime  @default(now()) @map("registrado_em")
 
   @@index([viagemId, sequencia])
   @@index([atividadeId])
+  @@index([localClienteId])
   @@map("parada")
   @@schema("logistica")
 }

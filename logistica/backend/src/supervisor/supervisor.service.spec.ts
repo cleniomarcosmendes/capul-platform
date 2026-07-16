@@ -7,6 +7,7 @@ const user = (filialId: string | null = 'f1') => ({ sub: 'u1', filialId, modulos
 const condutorMock = () => ({ validar: jest.fn() }) as any;
 const coreMock = () => ({}) as any;
 const storageMock = () => ({ put: jest.fn(), get: jest.fn(), remove: jest.fn() }) as any;
+const locaisMock = () => ({ consolidar: jest.fn().mockResolvedValue({}), listarPorCliente: jest.fn(), criar: jest.fn() }) as any;
 
 describe('SupervisorService.rdv (RDV por planejamento)', () => {
   let prisma: any;
@@ -14,7 +15,7 @@ describe('SupervisorService.rdv (RDV por planejamento)', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
   });
 
   const viagemBase = {
@@ -65,7 +66,7 @@ describe('SupervisorService idempotência (fila offline)', () => {
   let svc: SupervisorService;
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
   });
 
   it('lancarDespesa: idempotencyKey já existente → devolve a despesa e NÃO cria outra', async () => {
@@ -91,7 +92,7 @@ describe('SupervisorService.listarPlanejamentosCoordenador', () => {
   let svc: SupervisorService;
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
   });
   const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
 
@@ -122,7 +123,7 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
   let svc: SupervisorService;
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
   });
   const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
 
@@ -247,7 +248,7 @@ describe('SupervisorService workflow enviar/iniciar — owner-check', () => {
   let svc: SupervisorService;
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
     prisma.viagem.update.mockResolvedValue({ id: 'v1' });
   });
   const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
@@ -324,7 +325,7 @@ describe('SupervisorService.criarViagemSupervisor — exige cadastro + coordenad
   let svc: SupervisorService;
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock());
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
     // self-service: matriculaDoUsuario($queryRaw) → matrícula do supervisor logado.
     prisma.$queryRaw.mockResolvedValue([{ matricula: '005274', nome: 'Kelver' }]);
   });
