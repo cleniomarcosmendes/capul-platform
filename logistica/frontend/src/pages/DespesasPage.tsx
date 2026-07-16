@@ -19,7 +19,7 @@ interface Despesa {
   id: string; situacao: string; placa: string; modelo?: string | null; veiculoId: string;
   tipo: string; valor: number; dataDespesa: string; fornecedor?: string | null;
   observacao?: string | null; autorNome?: string | null; aprovadoEm?: string | null;
-  motivoContestacao?: string | null; temComprovante?: boolean;
+  motivoContestacao?: string | null; temComprovante?: boolean; anexos?: { id: string; mime?: string | null }[];
   anormalidade?: boolean; motivoAnormalidade?: string | null;
   numeroDocumento?: string | null; semNota?: boolean;
 }
@@ -318,13 +318,15 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
     try { await logisticaApi.patch(`/despesas/${d.id}/contestar`, { motivo: motivo.trim() }); toast('success', 'Despesa contestada.'); onChanged(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao contestar.')); } finally { setBusy(false); }
   };
-  const verRecibo = async () => {
+  const abrirBlob = async (rota: string) => {
     setBusy(true);
     try {
-      const { data } = await logisticaApi.get(`/despesas/${d.id}/comprovante`, { responseType: 'blob' });
+      const { data } = await logisticaApi.get(rota, { responseType: 'blob' });
       window.open(URL.createObjectURL(data as Blob), '_blank', 'noopener');
     } catch (e) { toast('error', errMsg(e, 'Falha ao abrir o recibo.')); } finally { setBusy(false); }
   };
+  const verRecibo = () => abrirBlob(`/despesas/${d.id}/comprovante`);
+  const verAnexo = (anexoId: string) => abrirBlob(`/despesas/${d.id}/anexos/${anexoId}`);
 
   return (
     <>
@@ -337,11 +339,17 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
         <td className="px-4 py-2 text-slate-600">
           <div className="flex items-center gap-2">
             <span className="block max-w-[12rem] truncate" title={d.fornecedor ?? ''}>{d.fornecedor ?? '—'}</span>
-            {d.temComprovante && (
+            {(d.anexos?.length ?? 0) > 0 ? (
+              d.anexos!.map((a, i) => (
+                <button key={a.id} onClick={(e) => { e.stopPropagation(); void verAnexo(a.id); }} disabled={busy} title="Ver comprovante" className="inline-flex shrink-0 items-center gap-0.5 rounded border border-capul-200 bg-capul-50 px-1.5 py-0.5 text-xs text-capul-700 hover:bg-capul-100 disabled:opacity-50">
+                  <Paperclip className="h-3 w-3" />{d.anexos!.length > 1 ? i + 1 : ''}
+                </button>
+              ))
+            ) : d.temComprovante ? (
               <button onClick={(e) => { e.stopPropagation(); void verRecibo(); }} disabled={busy} title="Ver recibo" className="inline-flex shrink-0 items-center gap-1 rounded border border-capul-200 bg-capul-50 px-1.5 py-0.5 text-xs text-capul-700 hover:bg-capul-100 disabled:opacity-50">
                 <Paperclip className="h-3 w-3" /> Recibo
               </button>
-            )}
+            ) : null}
           </div>
         </td>
         <td className="px-4 py-2 text-slate-600"><span className="block max-w-[12rem] truncate" title={d.autorNome ?? ''}>{d.autorNome ?? '—'}</span></td>

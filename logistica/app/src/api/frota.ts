@@ -177,7 +177,7 @@ export interface DespesaViagemPayload {
  * condutor (matrícula+senha); INDIVIDUAL herda o próprio login. Foto do cupom
  * OPCIONAL (multipart). Caso de uso mais forte do mobile: fotografar o recibo na rua.
  */
-export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUri?: string): Promise<void> {
+export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUris?: string[]): Promise<void> {
   const form = new FormData();
   form.append('viagemId', p.viagemId);
   form.append('tipoDespesaId', p.tipoDespesaId);
@@ -188,16 +188,16 @@ export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUri?: str
   if (p.semNota) form.append('semNota', 'true');
   else if (p.numeroDocumento) form.append('numeroDocumento', p.numeroDocumento);
   if (p.idempotencyKey) form.append('idempotencyKey', p.idempotencyKey);
-  if (fotoUri) {
-    const isPng = fotoUri.toLowerCase().endsWith('.png');
-    form.append('comprovante', {
-      uri: fotoUri,
-      name: isPng ? 'recibo.png' : 'recibo.jpg',
+  (fotoUris ?? []).filter(Boolean).forEach((uri, i) => {
+    const isPng = uri.toLowerCase().endsWith('.png');
+    form.append('comprovantes', {
+      uri,
+      name: isPng ? `recibo-${i + 1}.png` : `recibo-${i + 1}.jpg`,
       type: isPng ? 'image/png' : 'image/jpeg',
     } as unknown as Blob);
-  }
+  });
   await api.post(`${LOGISTICA_BASE}/despesas/viagem`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 60_000,
+    timeout: 90_000,
   });
 }

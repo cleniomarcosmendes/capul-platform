@@ -60,8 +60,7 @@ export function DespesaNovaPage() {
   // Rateio (só na criação): 1 nota → várias linhas (tipo + valor).
   const [rateio, setRateio] = useState(false);
   const [linhas, setLinhas] = useState<{ tipoDespesaId: string; valor: string }[]>([{ tipoDespesaId: '', valor: '' }]);
-  const [recibo, setRecibo] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [recibos, setRecibos] = useState<File[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [info, setInfo] = useState<DespesaInfo | null>(null); // contexto read-only (edição)
   // Anormalidade (mau uso) — só gestor; salva à parte (endpoint próprio).
@@ -140,11 +139,13 @@ export function DespesaNovaPage() {
     finally { setSalvandoAnormal(false); }
   };
 
-  const escolherRecibo = (f: File | null) => {
-    setRecibo(f);
-    setPreview(f && f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+  const MAX_ANEXOS = 5;
+  const addRecibos = (files: FileList | null) => {
+    if (!files?.length) return;
+    setRecibos((prev) => [...prev, ...Array.from(files)].slice(0, MAX_ANEXOS));
     setDirty(true);
   };
+  const removerRecibo = (i: number) => { setRecibos((prev) => prev.filter((_, idx) => idx !== i)); setDirty(true); };
 
   // Enter não submete (só o botão grava) — exceto em textarea.
   function bloquearEnterSubmit(e: KeyboardEvent<HTMLFormElement>) {
@@ -219,7 +220,7 @@ export function DespesaNovaPage() {
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
         if (observacao.trim()) fd.append('observacao', observacao.trim());
         fd.append('itens', JSON.stringify(itens));
-        if (recibo) fd.append('comprovante', recibo);
+        recibos.forEach((f) => fd.append('comprovantes', f));
         await logisticaApi.post('/despesas/ratear', fd);
         toast('success', `Rateio lançado: ${itens.length} despesa(s) aprovada(s).`);
         setDirty(false);
@@ -238,8 +239,8 @@ export function DespesaNovaPage() {
     setSalvando(true);
     const docFields = { numeroDocumento: semNota ? undefined : (numeroDocumento.trim() || undefined), semNota: semNota || undefined };
     try {
-      // Com recibo → multipart (FormData); sem recibo → JSON. O backend aceita os dois.
-      if (recibo) {
+      // Com recibo(s) → multipart (FormData); sem → JSON. O backend aceita os dois.
+      if (recibos.length) {
         const fd = new FormData();
         fd.append('veiculoId', veiculoId);
         fd.append('tipoDespesaId', tipoDespesaId);
@@ -250,7 +251,7 @@ export function DespesaNovaPage() {
         if (observacao.trim()) fd.append('observacao', observacao.trim());
         if (docFields.numeroDocumento) fd.append('numeroDocumento', docFields.numeroDocumento);
         if (semNota) fd.append('semNota', 'true');
-        fd.append('comprovante', recibo);
+        recibos.forEach((f) => fd.append('comprovantes', f));
         await logisticaApi.post('/despesas', fd);
       } else {
         await logisticaApi.post('/despesas', {
@@ -444,20 +445,21 @@ export function DespesaNovaPage() {
 
         {!modoEdicao && (
         <div>
-          <label className={lbl}>Recibo / cupom (opcional)</label>
+          <label className={lbl}>Recibos / cupons (opcional, até {MAX_ANEXOS})</label>
           <div className="mt-1 flex flex-wrap items-center gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-              <Paperclip className="h-4 w-4 text-slate-400" />
-              {recibo ? 'Trocar arquivo' : 'Anexar foto/PDF'}
-              <input type="file" accept="image/*,application/pdf" capture="environment" className="hidden" onChange={(e) => escolherRecibo(e.target.files?.[0] ?? null)} />
-            </label>
-            {recibo && (
-              <span className="inline-flex items-center gap-2 text-slate-500">
-                {preview ? <img src={preview} alt="prévia" className="h-10 w-10 rounded border border-slate-200 object-cover" /> : <ImageIcon className="h-5 w-5 text-slate-400" />}
-                <span className="max-w-[14rem] truncate">{recibo.name}</span>
-                <button type="button" onClick={() => escolherRecibo(null)} className="text-slate-400 hover:text-rose-500"><X className="h-4 w-4" /></button>
-              </span>
+            {recibos.length < MAX_ANEXOS && (
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                <Paperclip className="h-4 w-4 text-slate-400" /> Anexar foto(s)/PDF
+                <input type="file" multiple accept="image/*,application/pdf" className="hidden" onChange={(e) => { addRecibos(e.target.files); e.target.value = ''; }} />
+              </label>
             )}
+            {recibos.map((f, i) => (
+              <span key={i} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-2 py-1 text-slate-500">
+                {f.type.startsWith('image/') ? <img src={URL.createObjectURL(f)} alt="" className="h-10 w-10 rounded border border-slate-200 object-cover" /> : <ImageIcon className="h-5 w-5 text-slate-400" />}
+                <span className="max-w-[10rem] truncate text-xs">{f.name}</span>
+                <button type="button" onClick={() => removerRecibo(i)} className="text-slate-400 hover:text-rose-500"><X className="h-4 w-4" /></button>
+              </span>
+            ))}
           </div>
         </div>
         )}

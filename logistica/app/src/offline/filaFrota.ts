@@ -24,7 +24,7 @@ export type AcaoFrota =
   | { tipo: 'parada'; viagemId: string; payload: ParadaPayload; condutorToken?: string }
   | { tipo: 'checkin'; viagemId: string; paradaId: string; payload: CheckinPayload; condutorToken?: string }
   | { tipo: 'pular'; viagemId: string; paradaId: string; condutorToken?: string }
-  | { tipo: 'despesa'; viagemId: string; payload: DespesaViagemPayload; fotoUri: string | null; condutorToken?: string };
+  | { tipo: 'despesa'; viagemId: string; payload: DespesaViagemPayload; fotoUris: string[]; condutorToken?: string };
 
 export interface ItemFrota {
   id: string;          // idempotencyKey (parada/despesa) ou uuid local (checkin/pular)
@@ -50,19 +50,22 @@ async function ler(): Promise<ItemFrota[]> {
 async function gravar(itens: ItemFrota[]) { await AsyncStorage.setItem(KEY, JSON.stringify(itens)); notificar(itens.length); }
 export async function contarPendentesFrota(): Promise<number> { return (await ler()).length; }
 
-async function apagarFoto(uri: string | null) {
-  if (!uri) return;
-  await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+async function apagarFotos(uris: string[]) {
+  for (const uri of uris) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
 }
 
-/** Enfileira uma ação que falhou por rede (foto da despesa copiada p/ pasta do app). */
+/** Enfileira uma ação que falhou por rede (fotos da despesa copiadas p/ pasta do app). */
 export async function enfileirarFrota(item: { id: string; rotulo: string; acao: AcaoFrota }): Promise<void> {
   let acao = item.acao;
-  if (acao.tipo === 'despesa' && acao.fotoUri) {
+  if (acao.tipo === 'despesa' && acao.fotoUris.length) {
     await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => undefined);
-    const dest = `${DIR}${item.id}.jpg`;
-    await FileSystem.copyAsync({ from: acao.fotoUri, to: dest });
-    acao = { ...acao, fotoUri: dest };
+    const destinos: string[] = [];
+    for (let i = 0; i < acao.fotoUris.length; i++) {
+      const dest = `${DIR}${item.id}-${i}.jpg`;
+      await FileSystem.copyAsync({ from: acao.fotoUris[i], to: dest });
+      destinos.push(dest);
+    }
+    acao = { ...acao, fotoUris: destinos };
   }
   const itens = await ler();
   if (itens.some((i) => i.id === item.id)) return; // já enfileirado
@@ -80,7 +83,7 @@ async function enviar(acao: AcaoFrota): Promise<void> {
       case 'parada': return await adicionarParadaFrota(acao.viagemId, acao.payload);
       case 'checkin': return await checkinParadaFrota(acao.viagemId, acao.paradaId, acao.payload);
       case 'pular': return await pularParadaFrota(acao.viagemId, acao.paradaId);
-      case 'despesa': return await lancarDespesaViagem(acao.payload, acao.fotoUri ?? undefined);
+      case 'despesa': return await lancarDespesaViagem(acao.payload, acao.fotoUris);
     }
   } finally {
     setCondutorToken(anterior);
@@ -102,14 +105,14 @@ export async function processarFilaFrota(): Promise<ResultadoFilaFrota> {
     for (const item of itens) {
       try {
         await enviar(item.acao);
-        if (item.acao.tipo === 'despesa') await apagarFoto(item.acao.fotoUri);
+        if (item.acao.tipo === 'despesa') await apagarFotos(item.acao.fotoUris);
         enviadas++;
       } catch (err) {
         const status = isAxiosError(err) ? err.response?.status : undefined;
         const negocio = status !== undefined && status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
         if (negocio) {
           const msg = (isAxiosError(err) && (err.response?.data as { message?: string } | undefined)?.message) || `Rejeitada (HTTP ${status}).`;
-          if (item.acao.tipo === 'despesa') await apagarFoto(item.acao.fotoUri);
+          if (item.acao.tipo === 'despesa') await apagarFotos(item.acao.fotoUris);
           descartadas.push({ rotulo: item.rotulo, motivo: String(msg) });
         } else {
           manter.push({ ...item, tentativas: item.tentativas + 1, ultimoErro: status ? `HTTP ${status}` : 'sem conexão' });
