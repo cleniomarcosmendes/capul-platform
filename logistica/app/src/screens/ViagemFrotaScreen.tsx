@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -45,9 +45,22 @@ async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: n
 }
 
 /** Detalhe de uma viagem de frota EM CURSO: registrar retorno OU lançar despesa. */
+// Teclado: rola o campo focado pra cima do teclado (recurso nativo do ScrollView).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AoFocar = (e: any) => void;
+function fazerAoFocar(scrollRef: React.RefObject<ScrollView | null>): AoFocar {
+  return (e) => {
+    const resp = scrollRef.current?.getScrollResponder?.() as { scrollResponderScrollNativeHandleToKeyboard?: (n: number, off: number, prevent: boolean) => void } | undefined;
+    const node: number | undefined = e?.target;
+    if (resp?.scrollResponderScrollNativeHandleToKeyboard && node != null) resp.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
+  };
+}
+
 export function ViagemFrotaScreen({ route, navigation }: Props) {
   const { viagemId } = route.params;
   const { tipo } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
+  const aoFocar = fazerAoFocar(scrollRef);
   // PADRÃO (login compartilhado): exige identificar o condutor UMA vez ao abrir a
   // viagem (gate) → token cobre parada/despesa/retorno. INDIVIDUAL já é a pessoa.
   const ehIndividual = tipo === 'INDIVIDUAL';
@@ -90,7 +103,7 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
   if (!viagem) return <View style={styles.centro}><Text style={styles.vazio}>Viagem não está mais em curso.</Text></View>;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
+    <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" style={styles.container} contentContainerStyle={styles.conteudo}>
       {rastreando && (
         <View style={styles.rastreioBanner}>
           <Text style={styles.rastreioTxt}>📍 Localização ativa durante a viagem</Text>
@@ -110,7 +123,7 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
       </View>
 
       {!condutorOk ? (
-        <GateCondutor viagem={viagem} onOk={() => setCondutorOk(true)} />
+        <GateCondutor viagem={viagem} onOk={() => setCondutorOk(true)} aoFocar={aoFocar} />
       ) : (
         <>
           <View style={styles.acoes}>
@@ -125,9 +138,9 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           </View>
 
-          {aba === 'parada' && <ParadaForm viagem={viagem} onRegistrada={() => void carregar()} />}
-          {aba === 'retorno' && <RetornoForm viagem={viagem} ehIndividual={ehIndividual} onPronto={() => navigation.goBack()} />}
-          {aba === 'despesa' && <DespesaForm viagem={viagem} onPronto={() => { setAba(null); void carregar(); }} />}
+          {aba === 'parada' && <ParadaForm viagem={viagem} onRegistrada={() => void carregar()} aoFocar={aoFocar} />}
+          {aba === 'retorno' && <RetornoForm viagem={viagem} ehIndividual={ehIndividual} onPronto={() => navigation.goBack()} aoFocar={aoFocar} />}
+          {aba === 'despesa' && <DespesaForm viagem={viagem} onPronto={() => { setAba(null); void carregar(); }} aoFocar={aoFocar} />}
         </>
       )}
     </ScrollView>
@@ -136,7 +149,7 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
 
 /** Gate do login PADRÃO: identifica o condutor da viagem (matrícula+senha) UMA
  *  vez. Com sucesso, seta o token de condutor e libera as ações da viagem. */
-function GateCondutor({ viagem, onOk }: { viagem: ViagemFrota; onOk: () => void }) {
+function GateCondutor({ viagem, onOk, aoFocar }: { viagem: ViagemFrota; onOk: () => void; aoFocar: AoFocar }) {
   const [matricula, setMatricula] = useState(viagem.condutorMatricula ?? '');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -165,7 +178,7 @@ function GateCondutor({ viagem, onOk }: { viagem: ViagemFrota; onOk: () => void 
       <Text style={styles.passo}>Identifique o condutor</Text>
       <Text style={styles.dica}>Login compartilhado: confirme a matrícula + senha do condutor desta viagem ({viagem.condutorNome ?? '—'}) para registrar parada, despesa ou retorno.</Text>
       <Text style={styles.label}>Matrícula</Text>
-      <TextInput style={styles.input} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!validando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!validando} />
       <Text style={styles.label}>Senha do portal RH</Text>
       <View style={styles.senhaWrap}>
         <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!validando} />
@@ -181,7 +194,7 @@ function GateCondutor({ viagem, onOk }: { viagem: ViagemFrota; onOk: () => void 
   );
 }
 
-function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrada: () => void }) {
+function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; onRegistrada: () => void; aoFocar: AoFocar }) {
   const [paradas, setParadas] = useState<ParadaFrotaItem[]>([]);
   const [local, setLocal] = useState('');
   const [km, setKm] = useState('');
@@ -271,8 +284,8 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
               <Text style={styles.paradaLocal}>📍 {p.planejadoLocal ?? p.local}</Text>
               {checkinId === p.id ? (
                 <View style={{ gap: 6, marginTop: 6 }}>
-                  <TextInput style={styles.input} value={ckKm} onChangeText={setCkKm} keyboardType="numeric" placeholder="KM no local (opcional)" editable={!ckBusy} />
-                  <TextInput style={styles.input} value={ckObs} onChangeText={setCkObs} maxLength={255} placeholder="Observação (opcional)" editable={!ckBusy} />
+                  <TextInput style={styles.input} onFocus={aoFocar} value={ckKm} onChangeText={setCkKm} keyboardType="numeric" placeholder="KM no local (opcional)" editable={!ckBusy} />
+                  <TextInput style={styles.input} onFocus={aoFocar} value={ckObs} onChangeText={setCkObs} maxLength={255} placeholder="Observação (opcional)" editable={!ckBusy} />
                   <Text style={styles.dicaMini}>📡 A localização (GPS) é capturada automaticamente ao confirmar.</Text>
                   <View style={styles.paradaBtns}>
                     <TouchableOpacity style={[styles.btnCheck, ckBusy && styles.registrarOff]} onPress={() => confirmarChegada(p.id, p.planejadoLocal ?? p.local ?? 'parada')} disabled={ckBusy}>
@@ -295,11 +308,11 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
       <Text style={[styles.passo, { marginTop: 16 }]}>➕ Registrar parada agora</Text>
       <Text style={styles.dicaMini}>Parada no improviso — entra como realizada na hora (com GPS).</Text>
       <Text style={styles.label}>Local</Text>
-      <TextInput style={styles.input} value={local} onChangeText={setLocal} maxLength={120} placeholder="Ex.: Posto BR, Cliente X, Oficina…" editable={!salvando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={local} onChangeText={setLocal} maxLength={120} placeholder="Ex.: Posto BR, Cliente X, Oficina…" editable={!salvando} />
       <Text style={styles.label}>KM atual (opcional)</Text>
-      <TextInput style={styles.input} value={km} onChangeText={setKm} keyboardType="numeric" editable={!salvando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={km} onChangeText={setKm} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Observação (opcional)</Text>
-      <TextInput style={styles.input} value={obs} onChangeText={setObs} maxLength={255} editable={!salvando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={obs} onChangeText={setObs} maxLength={255} editable={!salvando} />
       <Text style={styles.dicaMini}>📡 A localização (GPS) é capturada automaticamente ao registrar — útil pra mapear a fazenda/cliente.</Text>
       <TouchableOpacity style={[styles.registrar, !podeRegistrar && styles.registrarOff]} onPress={registrar} disabled={!podeRegistrar}>
         {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Registrar parada</Text>}
@@ -308,7 +321,7 @@ function ParadaForm({ viagem, onRegistrada }: { viagem: ViagemFrota; onRegistrad
   );
 }
 
-function RetornoForm({ viagem, ehIndividual, onPronto }: { viagem: ViagemFrota; ehIndividual: boolean; onPronto: () => void }) {
+function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: ViagemFrota; ehIndividual: boolean; onPronto: () => void; aoFocar: AoFocar }) {
   const [matricula, setMatricula] = useState(viagem.condutorMatricula ?? '');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -361,7 +374,7 @@ function RetornoForm({ viagem, ehIndividual, onPronto }: { viagem: ViagemFrota; 
         <>
           <Text style={styles.dica}>Só o condutor que iniciou fecha a viagem — confirme matrícula + senha.</Text>
           <Text style={styles.label}>Matrícula</Text>
-          <TextInput style={styles.input} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!salvando} />
+          <TextInput style={styles.input} onFocus={aoFocar} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!salvando} />
           <Text style={styles.label}>Senha do portal RH</Text>
           <View style={styles.senhaWrap}>
             <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!salvando} />
@@ -374,9 +387,9 @@ function RetornoForm({ viagem, ehIndividual, onPronto }: { viagem: ViagemFrota; 
         <Text style={styles.dica}>Condutor {viagem.condutorNome ?? ''} identificado — informe o KM final para fechar a viagem.</Text>
       )}
       <Text style={styles.label}>KM final (odômetro)</Text>
-      <TextInput style={styles.input} value={kmFinal} onChangeText={setKmFinal} keyboardType="numeric" editable={!salvando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={kmFinal} onChangeText={setKmFinal} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Observações (opcional)</Text>
-      <TextInput style={styles.input} value={obs} onChangeText={setObs} maxLength={255} editable={!salvando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={obs} onChangeText={setObs} maxLength={255} editable={!salvando} />
       <TouchableOpacity style={[styles.registrar, !podeRegistrar && styles.registrarOff]} onPress={registrar} disabled={!podeRegistrar}>
         {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Registrar retorno</Text>}
       </TouchableOpacity>
@@ -384,7 +397,7 @@ function RetornoForm({ viagem, ehIndividual, onPronto }: { viagem: ViagemFrota; 
   );
 }
 
-function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () => void }) {
+function DespesaForm({ viagem, onPronto, aoFocar }: { viagem: ViagemFrota; onPronto: () => void; aoFocar: AoFocar }) {
   // A identidade do condutor já foi resolvida ao abrir a viagem (gate PADRÃO →
   // token no header; INDIVIDUAL = próprio login). Aqui não se pede senha de novo.
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
@@ -458,9 +471,9 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
         editable={!salvando}
       />
       <Text style={styles.label}>Valor (R$)</Text>
-      <TextInput style={styles.input} value={valor} onChangeText={(t) => setValor(maskMoeda(t))} keyboardType="decimal-pad" placeholder="0,00" editable={!salvando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={valor} onChangeText={(t) => setValor(maskMoeda(t))} keyboardType="decimal-pad" placeholder="0,00" editable={!salvando} />
       <Text style={styles.label}>Data da despesa</Text>
-      <TextInput style={styles.input} value={dData} onChangeText={setDData} placeholder="AAAA-MM-DD (opcional — hoje)" autoCapitalize="none" keyboardType="numbers-and-punctuation" editable={!salvando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={dData} onChangeText={setDData} placeholder="AAAA-MM-DD (opcional — hoje)" autoCapitalize="none" keyboardType="numbers-and-punctuation" editable={!salvando} />
       {fornecedores.length > 0 && (
         <>
           <Text style={styles.label}>Fornecedor (cadastrado)</Text>
@@ -475,10 +488,10 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
         </>
       )}
       <Text style={styles.label}>Fornecedor (livre, se não cadastrado)</Text>
-      <TextInput style={styles.input} value={fornecedor} onChangeText={setFornecedor} maxLength={120} editable={!salvando} />
+      <TextInput style={styles.input} onFocus={aoFocar} value={fornecedor} onChangeText={setFornecedor} maxLength={120} editable={!salvando} />
 
       <Text style={styles.label}>Nº nota / documento</Text>
-      <TextInput style={styles.input} value={semNota ? 'S/N' : numeroDocumento} onChangeText={setNumeroDocumento}
+      <TextInput style={styles.input} onFocus={aoFocar} value={semNota ? 'S/N' : numeroDocumento} onChangeText={setNumeroDocumento}
         editable={!salvando && !semNota} maxLength={60} placeholder="ex.: 12345 ou nota de débito" />
       <TouchableOpacity style={[styles.chip, semNota && styles.chipOn, { alignSelf: 'flex-start', marginTop: 6 }]}
         onPress={() => { setSemNota((v) => !v); setNumeroDocumento(''); }} disabled={salvando}>
