@@ -392,6 +392,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
   const [fornecedorId, setFornecedorId] = useState('');
   const [valor, setValor] = useState('');
+  const [dData, setDData] = useState(''); // data da despesa (opcional, AAAA-MM-DD → hoje)
   const [fornecedor, setFornecedor] = useState('');
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [semNota, setSemNota] = useState(false);
@@ -422,10 +423,11 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
 
   async function lancar() {
     if (!podeLancar) return;
+    if (dData.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(dData.trim())) { Alert.alert('Despesa', 'Data inválida — use o formato AAAA-MM-DD (ou deixe vazio para hoje).'); return; }
     setSalvando(true);
     const payload = {
       viagemId: viagem.id,
-      tipoDespesaId: tipoId, valor: parseMoeda(valor),
+      tipoDespesaId: tipoId, valor: parseMoeda(valor), dataDespesa: dData.trim() || undefined,
       fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined,
       numeroDocumento: semNota ? undefined : (numeroDocumento.trim() || undefined),
       semNota: semNota || undefined, idempotencyKey: uuid(),
@@ -457,6 +459,8 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
       />
       <Text style={styles.label}>Valor (R$)</Text>
       <TextInput style={styles.input} value={valor} onChangeText={(t) => setValor(maskMoeda(t))} keyboardType="decimal-pad" placeholder="0,00" editable={!salvando} />
+      <Text style={styles.label}>Data da despesa</Text>
+      <TextInput style={styles.input} value={dData} onChangeText={setDData} placeholder="AAAA-MM-DD (opcional — hoje)" autoCapitalize="none" keyboardType="numbers-and-punctuation" editable={!salvando} />
       {fornecedores.length > 0 && (
         <>
           <Text style={styles.label}>Fornecedor (cadastrado)</Text>

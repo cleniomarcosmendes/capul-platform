@@ -162,6 +162,7 @@ export interface DespesaViagemPayload {
   viagemId: string;
   tipoDespesaId: string;
   valor: number;
+  dataDespesa?: string; // AAAA-MM-DD (opcional → hoje); backend ancora meio-dia
   fornecedorId?: string;
   fornecedor?: string;
   observacao?: string;
@@ -182,6 +183,7 @@ export async function lancarDespesaViagem(p: DespesaViagemPayload, fotoUris?: st
   form.append('viagemId', p.viagemId);
   form.append('tipoDespesaId', p.tipoDespesaId);
   form.append('valor', String(p.valor));
+  if (p.dataDespesa) form.append('dataDespesa', p.dataDespesa);
   if (p.fornecedorId) form.append('fornecedorId', p.fornecedorId);
   if (p.fornecedor) form.append('fornecedor', p.fornecedor);
   if (p.observacao) form.append('observacao', p.observacao);

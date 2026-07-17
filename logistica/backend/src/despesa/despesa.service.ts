@@ -16,6 +16,11 @@ import {
 
 const ehGestor = (role?: string) => role === 'GESTOR_FROTA' || role === 'ADMIN';
 
+/** Data da despesa: aceita ISO completo ('…T…') ou data-só 'AAAA-MM-DD'. Para
+ *  data-só, ancora ao MEIO-DIA -03:00 — evita o "dia anterior" por fuso (mesma
+ *  regra do supervisor). Só chamar com string presente. */
+const dataDeDespesa = (s: string): Date => (s.includes('T') ? new Date(s) : new Date(`${s}T12:00:00-03:00`));
+
 /** Rótulos de finalidade do veículo (Análise da Frota). */
 const FINALIDADE_LABEL: Record<string, string> = { ENTREGA: 'Entrega', PASSEIO: 'Passeio', SERVICO: 'Serviço' };
 
@@ -329,7 +334,7 @@ export class DespesaService {
         viagemId: dto.viagemId ?? null,
         tipoDespesaId: tipo.id,
         valor: new Prisma.Decimal(dto.valor),
-        dataDespesa: dto.dataDespesa ? new Date(dto.dataDespesa) : new Date(),
+        dataDespesa: dto.dataDespesa ? dataDeDespesa(dto.dataDespesa) : new Date(),
         fornecedorId: dto.fornecedorId || null,
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
@@ -440,7 +445,7 @@ export class DespesaService {
       await this.assertDocumentoUnico(veiculo.filialId, veiculo.id, numeroDocumento, it.tipoDespesaId);
     }
 
-    const dataDespesa = dto.dataDespesa ? new Date(dto.dataDespesa) : new Date();
+    const dataDespesa = dto.dataDespesa ? dataDeDespesa(dto.dataDespesa) : new Date();
     const agora = new Date();
     const criadas = await this.prisma.$transaction(
       dto.itens.map((it) => this.prisma.despesaVeiculo.create({
@@ -586,7 +591,7 @@ export class DespesaService {
       data: {
         tipoDespesaId: dto.tipoDespesaId ?? undefined,
         valor: dto.valor !== undefined ? new Prisma.Decimal(dto.valor) : undefined,
-        dataDespesa: dto.dataDespesa ? new Date(dto.dataDespesa) : undefined,
+        dataDespesa: dto.dataDespesa ? dataDeDespesa(dto.dataDespesa) : undefined,
         // fornecedorId: string vazia limpa o vínculo; undefined não toca.
         fornecedorId: dto.fornecedorId !== undefined ? (dto.fornecedorId || null) : undefined,
         fornecedor: dto.fornecedor !== undefined ? (dto.fornecedor.trim() || null) : undefined,

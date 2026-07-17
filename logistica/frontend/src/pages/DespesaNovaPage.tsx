@@ -184,7 +184,7 @@ export function DespesaNovaPage() {
       try {
         await logisticaApi.patch(`/despesas/${edicaoId}`, {
           tipoDespesaId, valor: parseMoeda(valor),
-          dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
+          dataDespesa: dataDespesa || undefined,
           fornecedorId: fornecedorId || '',
           fornecedor: fornecedor.trim(),
           observacao: observacao.trim(),
@@ -215,7 +215,7 @@ export function DespesaNovaPage() {
         const fd = new FormData();
         fd.append('veiculoId', veiculoId);
         fd.append('numeroDocumento', numeroDocumento.trim());
-        if (dataDespesa) fd.append('dataDespesa', new Date(dataDespesa).toISOString());
+        if (dataDespesa) fd.append('dataDespesa', dataDespesa);
         if (fornecedorId) fd.append('fornecedorId', fornecedorId);
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
         if (observacao.trim()) fd.append('observacao', observacao.trim());
@@ -245,7 +245,7 @@ export function DespesaNovaPage() {
         fd.append('veiculoId', veiculoId);
         fd.append('tipoDespesaId', tipoDespesaId);
         fd.append('valor', String(parseMoeda(valor)));
-        if (dataDespesa) fd.append('dataDespesa', new Date(dataDespesa).toISOString());
+        if (dataDespesa) fd.append('dataDespesa', dataDespesa);
         if (fornecedorId) fd.append('fornecedorId', fornecedorId);
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
         if (observacao.trim()) fd.append('observacao', observacao.trim());
@@ -256,7 +256,7 @@ export function DespesaNovaPage() {
       } else {
         await logisticaApi.post('/despesas', {
           veiculoId, tipoDespesaId, valor: parseMoeda(valor),
-          dataDespesa: dataDespesa ? new Date(dataDespesa).toISOString() : undefined,
+          dataDespesa: dataDespesa || undefined,
           fornecedorId: fornecedorId || undefined,
           fornecedor: fornecedor.trim() || undefined, observacao: observacao.trim() || undefined,
           ...docFields,
