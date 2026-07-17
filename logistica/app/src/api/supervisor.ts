@@ -36,6 +36,7 @@ export interface VisitaSup {
 }
 export interface DespesaSup {
   id: string; valor: number | string; dataDespesa?: string | null; situacao?: SituacaoDespesa | null;
+  fornecedor?: string | null; observacao?: string | null; tipoDespesaId?: string | null;
   comprovanteObjectKey?: string | null;
   anexos?: { id: string; mime?: string | null }[];
   tipoDespesa?: { nome: string; categoria: string } | null;
@@ -69,6 +70,15 @@ export async function listarViagensSupervisor(situacao?: string): Promise<Viagem
 export async function obterViagemSupervisor(id: string): Promise<ViagemSupDetalhe> {
   const { data } = await api.get<ViagemSupDetalhe>(`${B}/viagens/${id}`);
   return data;
+}
+/** Remove uma despesa (enquanto a viagem não está concluída). */
+export async function removerDespesaApp(viagemId: string, despesaId: string): Promise<void> {
+  await api.delete(`${B}/viagens/${viagemId}/despesas/${despesaId}`);
+}
+export interface EditarDespesa { tipoDespesaId?: string; valor?: number; fornecedor?: string; observacao?: string }
+/** Edita os dados de uma despesa (tipo/valor/fornecedor/obs). Não troca os comprovantes. */
+export async function editarDespesaApp(viagemId: string, despesaId: string, body: EditarDespesa): Promise<void> {
+  await api.patch(`${B}/viagens/${viagemId}/despesas/${despesaId}`, body);
 }
 export async function adicionarVisitaApp(id: string, body: NovaVisita): Promise<void> {
   await api.post(`${B}/viagens/${id}/visitas`, body);

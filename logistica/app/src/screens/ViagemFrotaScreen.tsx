@@ -415,7 +415,7 @@ function DespesaForm({ viagem, onPronto }: { viagem: ViagemFrota; onPronto: () =
   async function escolherFotos() {
     const restante = MAX_FOTOS_DESPESA - fotoUris.length;
     if (restante <= 0) { Alert.alert('Cupons', `Máximo de ${MAX_FOTOS_DESPESA} fotos.`); return; }
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, selectionLimit: restante, quality: 0.6 });
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: restante, quality: 0.6 });
     if (!r.canceled) setFotoUris((prev) => [...prev, ...r.assets.map((a) => a.uri)].slice(0, MAX_FOTOS_DESPESA));
   }
   const removerFoto = (i: number) => setFotoUris((prev) => prev.filter((_, idx) => idx !== i));

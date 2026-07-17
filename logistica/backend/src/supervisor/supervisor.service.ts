@@ -697,13 +697,15 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id: despesaId },
-      include: { viagem: { select: { tipo: true, filialId: true, situacao: true } } },
+      include: { viagem: { select: { tipo: true, filialId: true, situacao: true } }, anexos: { select: { objectKey: true } } },
     });
     if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
     if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
     if (d.viagem?.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover despesas.');
-    if (d.comprovanteObjectKey) {
-      try { await this.storage.remove(d.comprovanteObjectKey); } catch { /* objeto órfão é tolerável */ }
+    // Limpa os binários (comprovante legado + anexos) — as linhas AnexoDespesa somem por cascade.
+    const chaves = [d.comprovanteObjectKey, ...d.anexos.map((a) => a.objectKey)].filter((k): k is string => !!k);
+    for (const k of chaves) {
+      try { await this.storage.remove(k); } catch { /* objeto órfão é tolerável */ }
     }
     await this.prisma.despesaVeiculo.delete({ where: { id: despesaId } });
     return { ok: true };

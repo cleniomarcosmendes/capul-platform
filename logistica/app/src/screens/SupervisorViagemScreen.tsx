@@ -9,6 +9,7 @@ import type { RootStackParamList } from '../navigation';
 import { SelectBusca } from '../components/SelectBusca';
 import {
   obterViagemSupervisor, adicionarVisitaApp, lancarDespesaApp, apontarVisitaApp,
+  removerDespesaApp, editarDespesaApp,
   iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor,
   listarAtividadesSup, listarTiposDespesaSup,
   meuCadastroSup, listarAdiantamentosSup, lancarAdiantamentoSup, removerAdiantamentoSup,
@@ -130,6 +131,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [salvD, setSalvD] = useState(false);
   const [showDespesa, setShowDespesa] = useState(false); // form de despesa recolhido (botão)
   const [despViagemId, setDespViagemId] = useState(viagemId); // planejamento-alvo da despesa
+  const [editDespId, setEditDespId] = useState<string | null>(null); // despesa em edição (senão: novo lançamento)
   const [planejamentos, setPlanejamentos] = useState<ViagemSup[]>([]); // do mês, p/ o seletor
   // adiantamentos do mês (auto-serviço do supervisor de área — só o SEU cadastro)
   const [meuSup, setMeuSup] = useState<MeuCadastroSup | null>(null);
@@ -239,16 +241,37 @@ export function SupervisorViagemScreen({ route }: Props) {
   const escolherFotos = async () => {
     const restante = MAX_FOTOS_DESPESA - fotoUris.length;
     if (restante <= 0) { Alert.alert('Comprovantes', `Máximo de ${MAX_FOTOS_DESPESA} fotos.`); return; }
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, selectionLimit: restante, quality: 0.6 });
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: restante, quality: 0.6 });
     if (!r.canceled) setFotoUris((prev) => [...prev, ...r.assets.map((a) => a.uri)].slice(0, MAX_FOTOS_DESPESA));
   };
   const removerFoto = (i: number) => setFotoUris((prev) => prev.filter((_, idx) => idx !== i));
 
-  const limparDespesa = () => { setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUris([]); };
+  const limparDespesa = () => { setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUris([]); setEditDespId(null); setDespViagemId(viagemId); };
+  // Abre o form já preenchido com a despesa (edição de tipo/valor/fornecedor/obs — os
+  // comprovantes ficam como estão). Só metadados: por isso escondemos foto/planejamento.
+  const abrirEdicaoDesp = (d: ViagemSupDetalhe['despesas'][number]) => {
+    setEditDespId(d.id);
+    setTipoId(d.tipoDespesaId ?? (d.tipoDespesa ? (tipos.find((t) => t.nome === d.tipoDespesa?.nome)?.id ?? '') : ''));
+    setValor(maskMoeda(String(Math.round(Number(d.valor) * 100))));
+    setDForn(d.fornecedor ?? ''); setDObs(d.observacao ?? ''); setFotoUris([]);
+    setShowDespesa(true);
+  };
 
   const salvarDespesa = async () => {
     if (!tipoId || parseMoeda(valor) <= 0) { Alert.alert('Despesa', 'Escolha o tipo e informe o valor.'); return; }
     setSalvD(true);
+    // Edição: só atualiza os dados da despesa (online — não vai pra fila offline).
+    if (editDespId) {
+      try {
+        await editarDespesaApp(viagemId, editDespId, {
+          tipoDespesaId: tipoId, valor: parseMoeda(valor),
+          fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined,
+        });
+        limparDespesa(); setShowDespesa(false); await carregar();
+        Alert.alert('Pronto', 'Despesa atualizada.');
+      } catch (e) { Alert.alert('Erro', msg(e, 'Falha ao editar a despesa.')); } finally { setSalvD(false); }
+      return;
+    }
     const fotos = fotoUris;
     const payload: NovaDespesa = {
       tipoDespesaId: tipoId, valor: parseMoeda(valor),
@@ -265,6 +288,15 @@ export function SupervisorViagemScreen({ route }: Props) {
         Alert.alert('Salvo offline', 'Sem sinal — a despesa (e as fotos) vão sincronizar quando a conexão voltar.');
       } else { Alert.alert('Erro', msg(e, 'Falha ao lançar despesa.')); }
     } finally { setSalvD(false); }
+  };
+  const removerDespesa = (id: string) => {
+    Alert.alert('Remover despesa', 'Confirma remover esta despesa? Os comprovantes anexados também serão apagados.', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Remover', style: 'destructive', onPress: async () => {
+        try { await removerDespesaApp(viagemId, id); await carregar(); }
+        catch (e) { Alert.alert('Erro', msg(e, 'Falha ao remover a despesa.')); }
+      } },
+    ]);
   };
 
   const limparAdiant = () => { setAdvValor(''); setAdvData(''); setAdvObs(''); };
@@ -411,40 +443,44 @@ export function SupervisorViagemScreen({ route }: Props) {
 
       {!concluida && (showDespesa ? (
         <View style={styles.card}>
-          <Text style={styles.sTitle}>Lançar despesa</Text>
-          {planejamentos.length > 1 && (
+          <Text style={styles.sTitle}>{editDespId ? 'Editar despesa' : 'Lançar despesa'}</Text>
+          {!editDespId && planejamentos.length > 1 && (
             <SelectBusca valor={despViagemId} opcoes={planejamentos.map((p) => ({ id: p.id, nome: `Planejamento #${p.numero}${p.id === viagemId ? ' (este)' : ''}`, subtitulo: fmtMes(p.mesReferencia) }))} onChange={setDespViagemId} placeholder="A qual planejamento pertence" />
           )}
           <SelectBusca valor={tipoId} opcoes={tipos.map((t) => ({ id: t.id, nome: t.nome, subtitulo: t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo' }))} onChange={setTipoId} placeholder="Tipo de despesa" />
           <TextInput style={styles.input} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={valor} onChangeText={(t) => setValor(maskMoeda(t))} />
           <TextInput style={styles.input} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
           <TextInput style={styles.input} placeholder="Observação" value={dObs} onChangeText={setDObs} />
-          <Text style={styles.fLabel}>Comprovantes (opcional, até {MAX_FOTOS_DESPESA})</Text>
-          {fotoUris.length > 0 && (
-            <View style={styles.thumbs}>
-              {fotoUris.map((uri, i) => (
-                <View key={i} style={styles.thumbBox}>
-                  <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
-                  <TouchableOpacity style={styles.thumbX} onPress={() => removerFoto(i)} disabled={salvD}><Text style={styles.thumbXTxt}>✕</Text></TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-          {fotoUris.length < MAX_FOTOS_DESPESA && (
-            <View style={styles.fotoBtns}>
-              <TouchableOpacity style={[styles.btnFoto, styles.btnFotoFlex]} onPress={() => void tirarFoto()} disabled={salvD}><Text style={styles.btnFotoTxt}>📷 Fotografar</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.btnFoto, styles.btnFotoFlex]} onPress={() => void escolherFotos()} disabled={salvD}><Text style={styles.btnFotoTxt}>🖼️ Galeria</Text></TouchableOpacity>
-            </View>
-          )}
+          {editDespId ? (
+            <Text style={styles.dica}>Os comprovantes anexados não mudam na edição.</Text>
+          ) : (<>
+            <Text style={styles.fLabel}>Comprovantes (opcional, até {MAX_FOTOS_DESPESA})</Text>
+            {fotoUris.length > 0 && (
+              <View style={styles.thumbs}>
+                {fotoUris.map((uri, i) => (
+                  <View key={i} style={styles.thumbBox}>
+                    <Image source={{ uri }} style={styles.thumb} resizeMode="cover" />
+                    <TouchableOpacity style={styles.thumbX} onPress={() => removerFoto(i)} disabled={salvD}><Text style={styles.thumbXTxt}>✕</Text></TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+            {fotoUris.length < MAX_FOTOS_DESPESA && (
+              <View style={styles.fotoBtns}>
+                <TouchableOpacity style={[styles.btnFoto, styles.btnFotoFlex]} onPress={() => void tirarFoto()} disabled={salvD}><Text style={styles.btnFotoTxt}>📷 Fotografar</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.btnFoto, styles.btnFotoFlex]} onPress={() => void escolherFotos()} disabled={salvD}><Text style={styles.btnFotoTxt}>🖼️ Galeria</Text></TouchableOpacity>
+              </View>
+            )}
+          </>)}
           <View style={styles.formBtns}>
             <TouchableOpacity style={[styles.btn, styles.btnFlex, salvD && styles.btnOff]} onPress={() => void salvarDespesa()} disabled={salvD}>
-              <Text style={styles.btnTxt}>{salvD ? 'Salvando…' : 'Lançar despesa'}</Text>
+              <Text style={styles.btnTxt}>{salvD ? 'Salvando…' : editDespId ? 'Salvar alterações' : 'Lançar despesa'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelBtn} onPress={() => { limparDespesa(); setShowDespesa(false); }} disabled={salvD}><Text style={styles.cancelTxt}>Cancelar</Text></TouchableOpacity>
           </View>
         </View>
       ) : (
-        <TouchableOpacity style={styles.addBtn} onPress={() => { setDespViagemId(viagemId); setShowDespesa(true); }}><Text style={styles.addBtnTxt}>＋ Lançar despesa</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.addBtn} onPress={() => { limparDespesa(); setShowDespesa(true); }}><Text style={styles.addBtnTxt}>＋ Lançar despesa</Text></TouchableOpacity>
       ))}
 
       <Text style={styles.listTitle}>Despesas ({v.despesas.length})</Text>
@@ -458,6 +494,12 @@ export function SupervisorViagemScreen({ route }: Props) {
               <Badge bg={st.bg} fg={st.fg} label={st.l} />
             </View>
             <Text style={styles.itemSub}>{d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'}{(() => { const n = (d.anexos?.length ?? 0) + (d.comprovanteObjectKey ? 1 : 0); return n ? ` · 📎 ${n} comprovante${n > 1 ? 's' : ''}` : ''; })()}</Text>
+            {!concluida && d.situacao !== 'APROVADA' && (
+              <View style={styles.itemAcoes}>
+                <TouchableOpacity onPress={() => abrirEdicaoDesp(d)}><Text style={styles.itemEdit}>Editar</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => removerDespesa(d.id)}><Text style={styles.advDel}>Remover</Text></TouchableOpacity>
+              </View>
+            )}
           </View>
         );
       })}
@@ -518,6 +560,9 @@ const styles = StyleSheet.create({
   advVal: { fontSize: 14, fontWeight: '700', color: '#1e293b' },
   advRej: { fontSize: 12, color: '#be123c', marginTop: 2 },
   advDel: { color: '#e11d48', fontWeight: '600', fontSize: 13 },
+  itemAcoes: { flexDirection: 'row', gap: 18, marginTop: 8 },
+  itemEdit: { color: CAPUL, fontWeight: '600', fontSize: 13 },
+  dica: { fontSize: 12, color: '#64748b', marginTop: 10, fontStyle: 'italic' },
   mapLink: { color: CAPUL, fontWeight: '600', fontSize: 13, marginTop: 6 },
   addBtn: { borderWidth: 1.5, borderColor: CAPUL, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: '#fff' },
   addBtnTxt: { color: CAPUL, fontWeight: '700', fontSize: 15 },
