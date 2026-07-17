@@ -145,10 +145,14 @@ export function BaixaScreen({ route, navigation }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.tela}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      // Android já redimensiona a janela sozinho (softwareKeyboardLayoutMode "resize"):
+      // usar behavior="height" aqui faz ajuste EM CIMA do ajuste do SO e empurra o campo
+      // pra trás do teclado. Deixamos undefined no Android (o scrollToEnd no foco põe o
+      // campo à vista) e só no iOS usamos "padding".
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
     >
-    <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
       <Text style={styles.titulo}>
         #{entregaNumero} · {destinatario}
       </Text>
@@ -263,7 +267,7 @@ export function BaixaScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#f8fafc' },
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  conteudo: { padding: 16, gap: 12 },
+  conteudo: { padding: 16, gap: 12, paddingBottom: 40 },
   rodape: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingHorizontal: 16, paddingTop: 12 },
   titulo: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   toggleWrap: { flexDirection: 'row', gap: 8 },
