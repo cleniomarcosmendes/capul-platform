@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,10 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
 import { isAxiosError } from 'axios';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { baixarEntrega, type BaixaPayload } from '../api/baixa';
@@ -41,6 +45,9 @@ async function capturarGeo(): Promise<{ geoLat?: number; geoLng?: number }> {
 }
 
 export function BaixaScreen({ route, navigation }: Props) {
+  const insets = useSafeAreaInsets(); // espaço da barra de navegação (Android) p/ o botão não sumir
+  const headerHeight = useHeaderHeight(); // p/ o KeyboardAvoidingView não descontar errado no iOS
+  const scrollRef = useRef<ScrollView>(null); // rolar o campo à vista quando o teclado abrir
   const { entregaId, entregaNumero, destinatario } = route.params;
   const [resultado, setResultado] = useState<'ENTREGUE' | 'NAO_ENTREGUE'>('ENTREGUE');
   const [motivo, setMotivo] = useState('');
@@ -136,7 +143,12 @@ export function BaixaScreen({ route, navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
+    <KeyboardAvoidingView
+      style={styles.tela}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
+    >
+    <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Text style={styles.titulo}>
         #{entregaNumero} · {destinatario}
       </Text>
@@ -199,6 +211,8 @@ export function BaixaScreen({ route, navigation }: Props) {
             onChangeText={setRecebedor}
             maxLength={120}
             editable={!enviando}
+            returnKeyType="done"
+            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200)}
           />
         </>
       ) : (
@@ -217,7 +231,11 @@ export function BaixaScreen({ route, navigation }: Props) {
       )}
 
       <Text style={styles.gpsAviso}>A localização do aparelho é registrada na baixa.</Text>
+    </ScrollView>
 
+    {/* Botão FIXO no rodapé (sempre visível, acima da barra do Android) — o usuário não
+        precisa rolar para confirmar. */}
+    <View style={[styles.rodape, { paddingBottom: insets.bottom + 10 }]}>
       <TouchableOpacity
         style={[styles.confirmar, !podeConfirmar && styles.confirmarOff, !entregue && styles.confirmarErr]}
         onPress={confirmar}
@@ -231,19 +249,22 @@ export function BaixaScreen({ route, navigation }: Props) {
           </Text>
         )}
       </TouchableOpacity>
+    </View>
 
-      <SignaturePad
-        visible={mostrarAssinatura}
-        onOK={salvarAssinatura}
-        onCancel={() => setMostrarAssinatura(false)}
-      />
-    </ScrollView>
+    <SignaturePad
+      visible={mostrarAssinatura}
+      onOK={salvarAssinatura}
+      onCancel={() => setMostrarAssinatura(false)}
+    />
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  tela: { flex: 1, backgroundColor: '#f8fafc' },
   container: { flex: 1, backgroundColor: '#f8fafc' },
   conteudo: { padding: 16, gap: 12 },
+  rodape: { backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingHorizontal: 16, paddingTop: 12 },
   titulo: { fontSize: 17, fontWeight: '700', color: '#0f172a' },
   toggleWrap: { flexDirection: 'row', gap: 8 },
   toggle: {
