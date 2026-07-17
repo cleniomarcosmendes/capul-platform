@@ -187,11 +187,12 @@ export class SupervisorService {
       if (r.status !== 'VALIDO') throw new BadRequestException('Matrícula ou senha do supervisor inválidas.');
       supMatricula = r.matricula ?? dto.supervisorMatricula.trim().toUpperCase();
       supNome = r.nome ?? null;
-    } else if (this.roleLog(user) === 'SUPERVISOR') {
-      // Auto-serviço (híbrido): o próprio usuário logado É o supervisor — o JWT já
-      // autenticou, então dispensa matrícula+senha. Identifica pela matrícula do
-      // login (liga ao cadastro adiante). O Supervisor de Departamento cria por representante
-      // pelo ramo acima (matrícula+senha do representante).
+    } else if (['SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA'].includes(this.roleLog(user) ?? '')) {
+      // Auto-serviço (híbrido): o próprio usuário logado É o dono do RDV — o JWT já
+      // autenticou, então dispensa matrícula+senha. Identifica pela matrícula do login
+      // (liga ao cadastro adiante). Vale para supervisor de área, COORDENADOR (RDV próprio,
+      // aprovado pelo supervisor de departamento) e supervisor de departamento (RDV próprio,
+      // aprova a si mesmo). Para criar POR um representante, usa-se o ramo acima (matrícula+senha).
       const u = await this.matriculaDoUsuario(user.sub);
       if (!u?.matricula?.trim()) {
         throw new BadRequestException('Seu usuário não tem matrícula cadastrada. Peça ao administrador ou informe a matrícula e a senha do supervisor.');
@@ -200,21 +201,22 @@ export class SupervisorService {
       supNome = u.nome;
     }
 
-    // O planejamento PRECISA estar vinculado a um supervisor de área cadastrado E com
-    // COORDENADOR — senão nasceria órfão e não roteia para aprovação (ninguém o veria).
-    // Bloqueia a criação sem isso (o "montar o time" tem que vir antes).
+    // O planejamento PRECISA estar vinculado a um cadastro que ROTEIE para aprovação:
+    // um COORDENADOR (supervisor de área → coordenador) OU um DEPARTAMENTO (coordenador
+    // e supervisor de departamento → supervisor de departamento). Sem um dos dois nasceria
+    // órfão (ninguém o veria). O "montar o time" tem que vir antes.
     if (!supMatricula) {
       throw new BadRequestException('Informe a matrícula do supervisor de área (ou entre como o próprio supervisor) — o planejamento precisa estar vinculado a um cadastro.');
     }
     const reg = await this.prisma.supervisor.findFirst({
       where: { filialId, matricula: supMatricula, ativo: true },
-      select: { id: true, coordenadorId: true },
+      select: { id: true, coordenadorId: true, departamentoId: true },
     });
     if (!reg) {
-      throw new BadRequestException('Supervisor de área não cadastrado na equipe desta filial. Peça ao Supervisor de Departamento para te cadastrar (montar o time) com um coordenador antes de criar o planejamento.');
+      throw new BadRequestException('Cadastro não encontrado na equipe desta filial. Peça ao Supervisor de Departamento para te cadastrar (montar o time) com um coordenador ou departamento antes de criar o planejamento.');
     }
-    if (!reg.coordenadorId) {
-      throw new BadRequestException('Seu cadastro de supervisor de área não tem coordenador vinculado (quem aprova). Peça ao Supervisor de Departamento para vincular um coordenador antes de criar o planejamento.');
+    if (!reg.coordenadorId && !reg.departamentoId) {
+      throw new BadRequestException('Seu cadastro não tem coordenador nem departamento vinculado (quem aprova). Peça ao Supervisor de Departamento para vincular antes de criar o planejamento.');
     }
     const supervisorRegistroId = reg.id;
 
@@ -380,9 +382,11 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
     await this.assertDonoOuGestorPlanejamento(v, user);
-    // Sem coordenador não há para quem enviar (planejamento órfão legado). Barra o envio.
-    if (!v.supervisorRegistro?.coordenadorId) {
-      throw new BadRequestException('Este planejamento não tem coordenador vinculado — não há para quem enviar. Peça ao Supervisor de Departamento para vincular um coordenador ao seu cadastro.');
+    // Sem coordenador NEM departamento não há para quem enviar (órfão). Coordenador roteia
+    // p/ o coordenador; departamento roteia p/ o supervisor de departamento (caso do RDV
+    // do próprio coordenador). Barra o envio se não houver nenhum dos dois.
+    if (!v.supervisorRegistro?.coordenadorId && !v.supervisorRegistro?.departamentoId) {
+      throw new BadRequestException('Este planejamento não tem coordenador nem departamento vinculado — não há para quem enviar. Peça ao Supervisor de Departamento para vincular ao seu cadastro.');
     }
     if (!['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '')) {
       throw new BadRequestException('Só envia planejamento em rascunho, ajustado ou rejeitado.');

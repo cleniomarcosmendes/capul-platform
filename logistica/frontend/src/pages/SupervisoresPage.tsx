@@ -79,7 +79,10 @@ function ViagensTab() {
   const { logisticaRole } = useAuth();
   // Auto-serviço: o próprio supervisor logado cria seu planejamento (identificado
   // pelo login), sem matrícula+senha. Gestor segue informando matrícula+senha.
-  const ehSupervisorLogado = logisticaRole === 'SUPERVISOR';
+  // Cria o PRÓPRIO RDV em auto-serviço (login): supervisor de área e coordenador (o RDV
+  // do coordenador é aprovado pelo supervisor de departamento). O supervisor de departamento
+  // usa a via "por representante" (matrícula+senha) — cria para o time.
+  const ehSupervisorLogado = logisticaRole === 'SUPERVISOR' || logisticaRole === 'COORDENADOR';
   const navigate = useNavigate();
   const [viagens, setViagens] = useState<ViagemSup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,7 +172,7 @@ function ViagensTab() {
             </div>
             {ehSupervisorLogado ? (
             <div className="flex items-end">
-              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">👤 Você é o supervisor — o planejamento será criado no seu nome (login). Não precisa de matrícula/senha.</p>
+              <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">👤 O planejamento (RDV) será criado no seu nome (login). Não precisa de matrícula/senha.</p>
             </div>
             ) : (
             <div>
