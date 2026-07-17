@@ -127,6 +127,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [showVisita, setShowVisita] = useState(false); // form de visita/oportunidade recolhido
   // form despesa
   const [tipoId, setTipoId] = useState(''); const [valor, setValor] = useState(''); const [dForn, setDForn] = useState(''); const [dObs, setDObs] = useState('');
+  const [dData, setDData] = useState(''); // data da despesa (opcional, AAAA-MM-DD → hoje se vazio)
   const [fotoUris, setFotoUris] = useState<string[]>([]); // comprovantes (fotos) — vários
   const [salvD, setSalvD] = useState(false);
   const [showDespesa, setShowDespesa] = useState(false); // form de despesa recolhido (botão)
@@ -256,25 +257,28 @@ export function SupervisorViagemScreen({ route }: Props) {
   };
   const removerFoto = (i: number) => setFotoUris((prev) => prev.filter((_, idx) => idx !== i));
 
-  const limparDespesa = () => { setTipoId(''); setValor(''); setDForn(''); setDObs(''); setFotoUris([]); setEditDespId(null); setDespViagemId(viagemId); };
+  const limparDespesa = () => { setTipoId(''); setValor(''); setDData(''); setDForn(''); setDObs(''); setFotoUris([]); setEditDespId(null); setDespViagemId(viagemId); };
   // Abre o form já preenchido com a despesa (edição de tipo/valor/fornecedor/obs — os
   // comprovantes ficam como estão). Só metadados: por isso escondemos foto/planejamento.
   const abrirEdicaoDesp = (d: ViagemSupDetalhe['despesas'][number]) => {
     setEditDespId(d.id);
     setTipoId(d.tipoDespesaId ?? (d.tipoDespesa ? (tipos.find((t) => t.nome === d.tipoDespesa?.nome)?.id ?? '') : ''));
     setValor(maskMoeda(String(Math.round(Number(d.valor) * 100))));
+    setDData(d.dataDespesa ? String(d.dataDespesa).slice(0, 10) : '');
     setDForn(d.fornecedor ?? ''); setDObs(d.observacao ?? ''); setFotoUris([]);
     setShowDespesa(true);
   };
 
   const salvarDespesa = async () => {
     if (!tipoId || parseMoeda(valor) <= 0) { Alert.alert('Despesa', 'Escolha o tipo e informe o valor.'); return; }
+    if (dData.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(dData.trim())) { Alert.alert('Despesa', 'Data inválida — use o formato AAAA-MM-DD (ou deixe vazio para hoje).'); return; }
+    const data = dData.trim() || undefined; // vazio → backend usa hoje
     setSalvD(true);
     // Edição: só atualiza os dados da despesa (online — não vai pra fila offline).
     if (editDespId) {
       try {
         await editarDespesaApp(viagemId, editDespId, {
-          tipoDespesaId: tipoId, valor: parseMoeda(valor),
+          tipoDespesaId: tipoId, valor: parseMoeda(valor), data,
           fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined,
         });
         limparDespesa(); setShowDespesa(false); await carregar();
@@ -284,7 +288,7 @@ export function SupervisorViagemScreen({ route }: Props) {
     }
     const fotos = fotoUris;
     const payload: NovaDespesa = {
-      tipoDespesaId: tipoId, valor: parseMoeda(valor),
+      tipoDespesaId: tipoId, valor: parseMoeda(valor), data,
       fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined, idempotencyKey: uuid(),
     };
     try {
@@ -462,6 +466,7 @@ export function SupervisorViagemScreen({ route }: Props) {
           )}
           <SelectBusca valor={tipoId} opcoes={tipos.map((t) => ({ id: t.id, nome: t.nome, subtitulo: t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo' }))} onChange={setTipoId} placeholder="Tipo de despesa" />
           <TextInput style={styles.input} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={valor} onChangeText={(t) => setValor(maskMoeda(t))} />
+          <TextInput style={styles.input} placeholder="Data AAAA-MM-DD (opcional — hoje)" value={dData} onChangeText={setDData} autoCapitalize="none" keyboardType="numbers-and-punctuation" />
           <TextInput style={styles.input} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
           <TextInput style={styles.input} placeholder="Observação" value={dObs} onChangeText={setDObs} />
           {editDespId ? (

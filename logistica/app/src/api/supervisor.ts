@@ -75,7 +75,7 @@ export async function obterViagemSupervisor(id: string): Promise<ViagemSupDetalh
 export async function removerDespesaApp(viagemId: string, despesaId: string): Promise<void> {
   await api.delete(`${B}/viagens/${viagemId}/despesas/${despesaId}`);
 }
-export interface EditarDespesa { tipoDespesaId?: string; valor?: number; fornecedor?: string; observacao?: string }
+export interface EditarDespesa { tipoDespesaId?: string; valor?: number; data?: string; fornecedor?: string; observacao?: string }
 /** Edita os dados de uma despesa (tipo/valor/fornecedor/obs). Não troca os comprovantes. */
 export async function editarDespesaApp(viagemId: string, despesaId: string, body: EditarDespesa): Promise<void> {
   await api.patch(`${B}/viagens/${viagemId}/despesas/${despesaId}`, body);
