@@ -14,7 +14,8 @@ import { CoreLookupService } from './core-lookup.service.js';
 export class CoreController {
   constructor(private readonly core: CoreLookupService) {}
 
-  /** Motoristas (usuários LOGISTICA ativos) da filial — escopado por perfil. */
+  /** Motoristas da filial: usuários ATIVOS com papel ENTREGADOR no módulo
+   *  Logística (não lista gestores/coordenadores/supervisores). */
   @Get()
   listar(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
     const fil = resolverFilialLeitura(user, filialId) ?? user.filialId;

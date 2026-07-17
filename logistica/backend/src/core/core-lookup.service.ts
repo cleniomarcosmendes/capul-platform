@@ -83,9 +83,12 @@ export class CoreLookupService {
   }
 
   /**
-   * Usuários elegíveis a MOTORISTA: ATIVOS, com permissão ATIVA no módulo
-   * LOGISTICA (Configurador) e da FILIAL informada (filial principal). Evita
-   * listar a base inteira de colaboradores no seletor de motorista.
+   * MOTORISTAS elegíveis à rota de entrega: usuários ATIVOS, da FILIAL informada
+   * (filial principal), com permissão ATIVA no módulo LOGISTICA **e papel
+   * ENTREGADOR** (o papel do motorista). Antes listava qualquer papel de
+   * Logística (gestor/coordenador/supervisor apareciam como "motorista"); agora
+   * é só quem dirige. Requisito: os motoristas precisam estar cadastrados com o
+   * papel ENTREGADOR no Configurador — senão não aparecem aqui.
    */
   async motoristasLogistica(filialId: string): Promise<{ id: string; nome: string }[]> {
     if (!filialId) return [];
@@ -94,6 +97,7 @@ export class CoreLookupService {
       FROM "core"."usuarios" u
       JOIN "core"."permissoes_modulo" pm ON pm.usuario_id = u.id AND pm.status = 'ATIVO'
       JOIN "core"."modulos_sistema" m ON m.id = pm.modulo_id AND m.codigo = 'LOGISTICA'
+      JOIN "core"."roles_modulo" rm ON rm.id = pm.role_modulo_id AND rm.codigo = 'ENTREGADOR'
       WHERE u.status = 'ATIVO' AND u.filial_principal_id = ${filialId}
       ORDER BY nome`);
   }
