@@ -226,30 +226,39 @@ export class FrotaController {
     return this.frota.listarParadas(id, user);
   }
 
+  // Operações de parada em campo: o condutor pode ser de vários perfis (inclusive
+  // SUPERVISOR/SUPERVISOR_FROTA quando ele mesmo registra a saída). O @Roles só
+  // libera o módulo; QUEM opera a viagem é barrado por identidade em assertOpera
+  // (quem registrou a saída / supervisor do veículo / gestão da frota / condutor token).
   @Post('viagens/:id/paradas')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   adicionarParada(@Param('id') id: string, @Body() dto: AddParadaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.adicionarParada(id, dto, user, condutorToken);
   }
 
   /** Planeja N paradas (visitas) — status PLANEJADA. */
   @Post('viagens/:id/paradas/planejar')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   planejarParadas(@Param('id') id: string, @Body() dto: PlanejarParadasDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.planejarParadas(id, dto, user, condutorToken);
   }
 
   /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional). */
   @Patch('viagens/:id/paradas/:paradaId/checkin')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   checkinParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @Body() dto: CheckinParadaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.checkinParada(id, paradaId, dto, user, condutorToken);
   }
 
   /** Marca uma parada planejada como PULADA. */
   @Patch('viagens/:id/paradas/:paradaId/pular')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   pularParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.pularParada(id, paradaId, user, condutorToken);
   }
 
   @Delete('viagens/:id/paradas/:paradaId')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   removerParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.removerParada(id, paradaId, user, condutorToken);
   }
