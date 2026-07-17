@@ -4,7 +4,7 @@ import { Header } from '../../layouts/Header';
 import { usuarioService } from '../../services/usuario.service';
 import { departamentoService } from '../../services/departamento.service';
 import { departamentoFuncionalidadeService } from '../../services/departamento-funcionalidade.service';
-import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock, Plus, Trash2, Eye, Check, X } from 'lucide-react';
+import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock, Plus, Trash2, Eye, Check, X, HelpCircle } from 'lucide-react';
 import type { UsuarioDetalhe, ModuloSistema, FilialOption, Departamento, UsuarioCapability } from '../../types';
 import { useConfirm } from '../../components/ConfirmDialog';
 import PasswordInput from '../../components/PasswordInput';
@@ -111,6 +111,9 @@ export function UsuarioFormPage() {
   const [showResetSenha, setShowResetSenha] = useState(false);
   const [novaSenha, setNovaSenha] = useState('');
   const [resetMsg, setResetMsg] = useState('');
+  // Guia de papéis (help): módulo cujo guia de roles está aberto no modal. As
+  // descrições vêm do próprio backend (role.descricao) — sempre em sincronia.
+  const [guiaModulo, setGuiaModulo] = useState<ModuloSistema | null>(null);
 
   // Timeout de inatividade — preferência por usuário (default 60min se não configurado)
   type TimeoutPref = 30 | 60 | 120 | 240 | 'never';
@@ -844,18 +847,38 @@ export function UsuarioFormPage() {
                             ))}
                           </select>
                         </td>
-                        <td className="px-3 py-2">
-                          <select
-                            value={perm.roleModuloId}
-                            onChange={(e) => atualizarPerfil(idx, 'roleModuloId', e.target.value)}
-                            disabled={!perm.moduloId}
-                            className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:bg-slate-50 disabled:text-slate-400"
-                          >
-                            <option value="">— escolher —</option>
-                            {rolesDisp.map((r) => (
-                              <option key={r.id} value={r.id}>{r.nome}</option>
-                            ))}
-                          </select>
+                        <td className="px-3 py-2 align-top">
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={perm.roleModuloId}
+                              onChange={(e) => atualizarPerfil(idx, 'roleModuloId', e.target.value)}
+                              disabled={!perm.moduloId}
+                              className="w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:bg-slate-50 disabled:text-slate-400"
+                            >
+                              <option value="">— escolher —</option>
+                              {rolesDisp.map((r) => (
+                                <option key={r.id} value={r.id}>{r.nome}</option>
+                              ))}
+                            </select>
+                            {/* "?" abre o guia com TODOS os papéis do módulo (o que faz cada um) */}
+                            {moduloAtual && rolesDisp.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setGuiaModulo(moduloAtual)}
+                                title={`Ver o que cada papel de ${moduloAtual.nome} faz`}
+                                className="shrink-0 text-slate-400 hover:text-emerald-600"
+                              >
+                                <HelpCircle className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          {/* Dica inline: resumo do papel escolhido (descricao do backend) */}
+                          {(() => {
+                            const r = rolesDisp.find((x) => x.id === perm.roleModuloId);
+                            return r?.descricao ? (
+                              <p className="mt-1 text-[11px] leading-tight text-slate-500">{r.descricao}</p>
+                            ) : null;
+                          })()}
                         </td>
                         <td className="px-3 py-2">
                           {usaDepartamento ? (
@@ -1115,6 +1138,45 @@ export function UsuarioFormPage() {
           {msg && <div className="bg-green-50 text-green-700 text-sm px-4 py-3 rounded-lg border border-green-200">{msg}</div>}
         </form>
       </div>
+
+      {/* Guia de papéis do módulo — conteúdo 100% do backend (role.descricao), sem
+          dicionário paralelo: novo papel/edição de descrição aparece aqui automaticamente. */}
+      {guiaModulo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          onClick={() => setGuiaModulo(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white">
+              <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-emerald-600" />
+                Papéis — {guiaModulo.nome}
+              </h3>
+              <button type="button" onClick={() => setGuiaModulo(null)} className="text-slate-400 hover:text-slate-700 rounded p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-500">Cada usuário tem <b>um</b> papel por módulo. Escolha pelo que a pessoa precisa fazer:</p>
+              {guiaModulo.rolesDisponiveis.length === 0 ? (
+                <p className="text-sm text-slate-400">Nenhum papel cadastrado para este módulo.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {guiaModulo.rolesDisponiveis.map((r) => (
+                    <li key={r.id} className="rounded-lg border border-slate-200 px-3 py-2">
+                      <div className="text-sm font-medium text-slate-800">{r.nome}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{r.descricao || 'Sem descrição cadastrada.'}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
