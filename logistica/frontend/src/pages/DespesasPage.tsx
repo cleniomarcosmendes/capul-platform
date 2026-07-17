@@ -296,8 +296,12 @@ function abrirRelatorioDespesas(despesas: Despesa[], filtros: string[], total: n
 
 function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
   const { toast, confirm } = useToast();
+  const { logisticaRole } = useAuth();
   const navigate = useNavigate();
   const sit = SIT_META[d.situacao] ?? { label: d.situacao, cls: 'bg-slate-100 text-slate-600' };
+  // Gestor de frota controla a frota (contesta despesa de veículo), mas NÃO aprova o
+  // acerto do departamento — a aprovação é do supervisor de departamento.
+  const soContesta = logisticaRole === 'GESTOR_FROTA';
   const [contestando, setContestando] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [busy, setBusy] = useState(false);
@@ -370,9 +374,11 @@ function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
           <div className="flex justify-end gap-2">
             {d.situacao === 'PENDENTE' && (
               <>
-                <button onClick={(e) => { e.stopPropagation(); void aprovar(); }} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
-                  <Check className="h-3.5 w-3.5" /> Aprovar
-                </button>
+                {!soContesta && (
+                  <button onClick={(e) => { e.stopPropagation(); void aprovar(); }} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                    <Check className="h-3.5 w-3.5" /> Aprovar
+                  </button>
+                )}
                 <button onClick={(e) => { e.stopPropagation(); setContestando((s) => !s); }} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50">
                   <X className="h-3.5 w-3.5" /> Contestar
                 </button>
