@@ -1020,11 +1020,22 @@ export class SupervisorService {
       where: { filialId, tipo: TipoViagem.SUPERVISOR, supervisorRegistroId: supervisorId, mesReferencia: mes },
       include: {
         despesas: { where: { situacao: 'APROVADA' }, include: { tipoDespesa: { select: { id: true, nome: true, categoria: true } } } },
-        paradas: { select: { dataHora: true, municipio: true } },
+        paradas: { orderBy: { sequencia: 'asc' }, include: { atividade: { select: { nome: true } } } },
       },
+      orderBy: { numero: 'asc' },
     });
     const despesas = planejamentos.flatMap((p) => p.despesas);
     const paradas = planejamentos.flatMap((p) => p.paradas);
+    // Relatórios MENSAIS (fechamento é mensal): a lista de planejamentos do mês e
+    // TODAS as visitas do mês (de todos os planejamentos), com o nº do planejamento.
+    const planejamentosLista = planejamentos.map((p) => ({ id: p.id, numero: p.numero, statusPlanejamento: p.statusPlanejamento }));
+    const visitas = planejamentos.flatMap((p) => p.paradas.map((v) => ({
+      id: v.id, planejamentoNumero: p.numero, sequencia: v.sequencia,
+      clienteNome: v.clienteNome, clienteMatricula: v.clienteMatricula,
+      municipio: v.municipio, propriedade: v.propriedade, observacao: v.observacao,
+      dataHora: v.dataHora, status: v.status, motivoPulada: v.motivoPulada,
+      atividade: v.atividade ? { nome: v.atividade.nome } : null,
+    })));
     const diaDe = (d: Date | null) => (d ? new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) : '—');
 
     const tiposMap = new Map<string, { id: string; nome: string; categoria: string }>();
@@ -1059,6 +1070,7 @@ export class SupervisorService {
     return {
       supervisor: { id: sup.id, matricula: sup.matricula, nome: sup.nome },
       mesReferencia: mes, planejamentos: planejamentos.length,
+      planejamentosLista, visitas,
       tipos, dias, totaisPorTipo, totaisPorCategoria, total,
       adiantamentos, totalAdiantamento, totalAdiantamentoPendente, saldo,
       fechado: !!fech, fechadoEm: fech?.fechadoEm ?? null,

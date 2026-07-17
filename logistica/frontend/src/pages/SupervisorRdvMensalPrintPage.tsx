@@ -8,6 +8,7 @@ interface Adiant { id: string; valor: number | string; dataAdiantamento: string;
 interface RdvMensal {
   supervisor: { matricula?: string | null; nome?: string | null };
   mesReferencia: number; planejamentos: number;
+  planejamentosLista?: { id: string; numero: number; statusPlanejamento?: string | null }[];
   tipos: { id: string; nome: string; categoria: string }[];
   dias: { data: string; municipios: string[]; valores: Record<string, number>; total: number }[];
   totaisPorTipo: Record<string, number>;
@@ -44,7 +45,9 @@ export function SupervisorRdvMensalPrintPage() {
       </div>
 
       <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>RELATÓRIO DE DESPESAS DE VIAGEM (RDV) — MENSAL</h2>
-      <p style={{ textAlign: 'center', margin: '0 0 12px', fontSize: 12 }}>Mês {fmtMes(r.mesReferencia)} · {r.planejamentos} planejamento(s)</p>
+      <p style={{ textAlign: 'center', margin: '0 0 12px', fontSize: 12 }}>
+        Mês {fmtMes(r.mesReferencia)} · {r.planejamentos} planejamento(s){r.planejamentosLista?.length ? `: ${r.planejamentosLista.map((p) => `#${p.numero}`).join(', ')}` : ''}
+      </p>
 
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
         <tbody>

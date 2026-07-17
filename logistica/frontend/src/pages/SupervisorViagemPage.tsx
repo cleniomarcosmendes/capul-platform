@@ -406,8 +406,14 @@ export function SupervisorViagemPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => navigate(`/supervisores/viagens/${id}/rdv`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> RDV</button>
-          <button onClick={() => navigate(`/supervisores/viagens/${id}/visitas`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> Visitas</button>
+          {/* Relatórios MENSAIS (fechamento é mensal): agregam TODOS os planejamentos do
+              supervisor no mês, não só este. Precisam do supervisor + mês da viagem. */}
+          {v.supervisorRegistro?.id && v.mesReferencia ? (
+            <>
+              <button onClick={() => navigate(`/supervisores/rdv-mensal/${v.supervisorRegistro!.id}/${v.mesReferencia}`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> RDV do mês</button>
+              <button onClick={() => navigate(`/supervisores/rdv-mensal/${v.supervisorRegistro!.id}/${v.mesReferencia}/visitas`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> Visitas do mês</button>
+            </>
+          ) : null}
           {/* Decisão do coordenador/gestor sobre o planejamento ENVIADO — aqui, com tudo à vista. */}
           {v.statusPlanejamento === 'ENVIADO' && podeAprovarDespesa && (
             <>

@@ -670,7 +670,10 @@ function FechamentoTab() {
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-slate-700">RDV do mês (agregada)</h3>
-                <button onClick={() => navigate(`/supervisores/rdv-mensal/${supId}/${mes}`)} className="inline-flex items-center gap-1 text-xs text-capul-600 hover:underline"><Printer className="h-3.5 w-3.5" /> Imprimir RDV</button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => navigate(`/supervisores/rdv-mensal/${supId}/${mes}`)} className="inline-flex items-center gap-1 text-xs text-capul-600 hover:underline"><Printer className="h-3.5 w-3.5" /> Imprimir RDV</button>
+                  <button onClick={() => navigate(`/supervisores/rdv-mensal/${supId}/${mes}/visitas`)} className="inline-flex items-center gap-1 text-xs text-capul-600 hover:underline"><Printer className="h-3.5 w-3.5" /> Imprimir Visitas</button>
+                </div>
               </div>
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between"><dt className="text-slate-500">Planejamentos no mês</dt><dd>{rdv?.planejamentos ?? 0}</dd></div>

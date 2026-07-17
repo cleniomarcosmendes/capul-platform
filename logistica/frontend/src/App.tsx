@@ -76,8 +76,8 @@ function Protected() {
               <Route path="/supervisores" element={<SupervisoresPage />} />
               <Route path="/supervisores/viagens/:id" element={<SupervisorViagemPage />} />
               <Route path="/supervisores/viagens/:id/rdv" element={<SupervisorRdvPrintPage />} />
-              <Route path="/supervisores/viagens/:id/visitas" element={<SupervisorVisitasPrintPage />} />
               <Route path="/supervisores/rdv-mensal/:supervisorId/:mes" element={<SupervisorRdvMensalPrintPage />} />
+              <Route path="/supervisores/rdv-mensal/:supervisorId/:mes/visitas" element={<SupervisorVisitasPrintPage />} />
               <Route path="/veiculos" element={<VeiculosPage />} />
               <Route path="/veiculos/novo" element={<VeiculoFormPage />} />
               <Route path="/veiculos/:id/editar" element={<VeiculoFormPage />} />
