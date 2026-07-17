@@ -165,7 +165,7 @@ export function EntregasPage() {
 
       {/* Grid */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        {loading ? (
+        {loading && ordenadas.length === 0 ? (
           <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>
         ) : ordenadas.length === 0 ? (
           <div className="p-6 text-sm text-slate-500">Nenhuma entrega com esses filtros.</div>

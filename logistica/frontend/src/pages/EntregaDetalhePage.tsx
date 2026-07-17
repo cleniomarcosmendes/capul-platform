@@ -96,7 +96,9 @@ export function EntregaDetalhePage() {
   const lbl = 'block text-xs font-medium text-slate-500';
   const card = 'rounded-xl border border-slate-200 bg-white shadow-sm p-5';
 
-  if (loading) return <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>;
+  // Só a carga inicial (sem dados) mostra a tela cheia de "Carregando…"; recarregar após
+  // uma ação mantém o conteúdo montado (não perde a posição de rolagem).
+  if (loading && !e) return <div className="p-6 text-sm text-slate-500"><Loader2 className="inline h-4 w-4 animate-spin" /> Carregando…</div>;
   if (!e) return (
     <div className="space-y-4">
       {naoEncontrado && <div className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">Entrega não encontrada.</div>}

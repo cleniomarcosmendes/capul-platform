@@ -194,7 +194,7 @@ function ViagensTab() {
         </form>
       )}
 
-      {loading ? (
+      {loading && viagens.length === 0 ? (
         <div className="py-12 text-center text-slate-500">Carregando…</div>
       ) : viagens.length === 0 ? (
         <div className="py-12 text-center"><Route className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhum planejamento</p></div>
@@ -264,7 +264,7 @@ function AtividadesTab() {
         <input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={80} placeholder="Nova atividade (ex.: VISITA TÉCNICA)" className={`${inp} max-w-md`} />
         <button type="submit" disabled={salvando} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50"><Plus className="h-4 w-4" /> Adicionar</button>
       </form>
-      {loading ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
+      {loading && itens.length === 0 ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
         <div className="py-12 text-center"><Tag className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhuma atividade</p></div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -429,7 +429,7 @@ function EquipeTab() {
         </form>
       )}
 
-      {loading ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
+      {loading && itens.length === 0 ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
         <div className="py-12 text-center"><Users className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhum supervisor cadastrado</p></div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -507,7 +507,7 @@ function CoordenacaoTab() {
   return (
     <div>
       <p className="mb-6 text-sm text-slate-500">Fila de aprovação. Clique em <b>Revisar e decidir</b> para abrir o planejamento com as visitas e as despesas (valores + comprovantes) e então <b>Aprovar</b>, <b>Ajustar</b> ou <b>Rejeitar</b> — o coordenador vê os seus supervisores; o gestor, os da filial.</p>
-      {loading ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
+      {loading && itens.length === 0 ? <div className="py-12 text-center text-slate-500">Carregando…</div> : itens.length === 0 ? (
         <div className="py-12 text-center"><Users className="mx-auto mb-3 h-12 w-12 text-slate-300" /><p className="text-slate-500">Nenhum planejamento sob sua coordenação</p></div>
       ) : (
         <div className="space-y-3">
@@ -638,7 +638,7 @@ function FechamentoTab() {
       </div>
 
       {supId && mes ? (
-        loading ? <div className="py-8 text-center text-slate-500">Carregando…</div> : (
+        loading && adiantamentos.length === 0 ? <div className="py-8 text-center text-slate-500">Carregando…</div> : (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <h3 className="mb-3 text-sm font-semibold text-slate-700">Adiantamentos do mês</h3>

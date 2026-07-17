@@ -383,7 +383,10 @@ export function SupervisorViagemPage() {
     } catch (e) { toast('error', errMsg(e, 'Falha ao decidir o planejamento.')); }
   };
 
-  if (loading) return <div className="p-6 text-slate-500">Carregando…</div>;
+  // Só a carga INICIAL (sem dados ainda) mostra a tela cheia de "Carregando…". Recarregar
+  // após uma ação (aprovar despesa/adiantamento, apontar visita…) mantém o conteúdo montado
+  // — assim o scroll fica onde estava e o aprovador continua de onde parou.
+  if (loading && !v) return <div className="p-6 text-slate-500">Carregando…</div>;
   if (!v) return <div className="p-6 text-slate-500">Viagem não encontrada.</div>;
 
   const totalDespesas = v.despesas.reduce((s, d) => s + Number(d.valor), 0);

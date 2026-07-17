@@ -187,7 +187,9 @@ function DespesasTab() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        {loading ? (
+        {/* Só mostra o spinner na carga inicial (lista ainda vazia). Ao aprovar/contestar uma
+            despesa a lista recarrega, mas permanece montada — o aprovador não perde a rolagem. */}
+        {loading && despesas.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-12 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
         ) : despesas.length === 0 ? (
           <div className="py-12 text-center text-sm text-slate-400">Nenhuma despesa no período.</div>
@@ -476,7 +478,7 @@ function FornecedoresTab() {
         </form>
       )}
 
-      {loading ? (
+      {loading && fornecedores.length === 0 ? (
         <div className="py-12 text-center text-slate-500">Carregando…</div>
       ) : fornecedores.length === 0 ? (
         <div className="py-12 text-center">
@@ -665,7 +667,7 @@ function LocaisTab() {
         </form>
       )}
 
-      {loading ? (
+      {loading && locais.length === 0 ? (
         <div className="py-12 text-center text-slate-500">Carregando…</div>
       ) : locais.length === 0 ? (
         <div className="py-12 text-center">
@@ -819,7 +821,7 @@ function TiposTab() {
         </form>
       )}
 
-      {loading ? (
+      {loading && tipos.length === 0 ? (
         <div className="py-12 text-center text-slate-500">Carregando…</div>
       ) : tipos.length === 0 ? (
         <div className="py-12 text-center">

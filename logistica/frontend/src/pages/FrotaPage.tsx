@@ -202,7 +202,7 @@ export function FrotaPage() {
           </select>
         </div>
 
-        {loading ? (
+        {loading && viagens.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-12 text-slate-400">
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
@@ -868,7 +868,7 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
         <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">🔒 Rota {SIT_META[v.situacao]?.label?.toLowerCase() ?? 'encerrada'} — paradas em modo leitura (sem alterações).</p>
       )}
 
-      {loading ? (
+      {loading && paradas.length === 0 ? (
         <div className="flex items-center gap-2 py-3 text-sm text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
       ) : paradas.length === 0 ? (
         <p className="py-2 text-sm text-slate-400">Nenhuma parada registrada.</p>
