@@ -1,6 +1,6 @@
 # Roteiro de Testes — Logística (skill do Chrome)
 
-**Gerado em:** 17/07/2026 · **Escopo:** validar as features entregues na jornada de 15–17/07/2026 (já na `main`/`origin`).
+**Gerado em:** 17/07/2026 · **Escopo:** validar as features entregues na jornada de 15–17/07/2026 (já na `main`/`origin`) **+ o ajuste de 17/07 do retorno de frota** (INDIVIDUAL fecha sem matrícula/senha — cenários **A10** e **B8**, ainda pendentes de commit/deploy; já no DEV).
 **Ambiente:** `https://localhost/entregas/` (Logística) e `https://localhost/configurador/` (Configurador).
 **Como rodar:** abrir no Chrome (skill), logar com o usuário indicado em cada cenário, seguir os passos e conferir o "Esperado".
 
@@ -72,6 +72,15 @@
 - **Usuários:** kelvereduardo (cria/envia) + fabricioneiva (aprova).
 - **Esperado:** kelver cria/envia planejamento; **fabricio** vê na Coordenação e aprova (fluxo que já existia — regressão).
 
+### A10. Retorno de frota INDIVIDUAL — fecha só com o KM (sem matrícula/senha) *(ajuste 17/07)*
+- **Usuário:** kelvereduardo (ou lidyaneaparecida) · **Tela:** Frota (saída + retorno de veículo).
+- **Pré-condição:** o usuário precisa estar com **Tipo = Individual** em Configurador → Usuários → editar → campo **Tipo** (× "Padrao (Compartilhado)") **e** ter **matrícula cadastrada** (o backend resolve o condutor pelo cadastro). É o padrão dos usuários de teste; só confirmar.
+- **Passos:**
+  1. **Saída (individual):** Frota → registrar **saída** de um veículo DISPONÍVEL → deve indicar "condutor = você (login), sem senha" → informar **KM inicial** → sair. (Cria a viagem EM_CURSO com o próprio usuário como condutor.)
+  2. **Retorno:** abrir essa viagem EM_CURSO → **Registrar retorno**.
+- **Esperado:** o formulário de retorno **não** mostra os campos **Matrícula** nem **Senha do portal RH** — apenas **KM de retorno** (+ observações). A dica diz "Você (nome) fecha a própria rota — informe apenas o KM de retorno". Ao informar o KM (≥ KM de saída) → **conclui sem senha**. KM menor que o de saída → bloqueia.
+- **Regressão (fallback/PADRÃO):** para um usuário com **Tipo = Padrao (Compartilhado)**, o retorno **continua** exigindo matrícula + senha (login coletivo). *(Não há usuário PADRAO na lista de teste — validar só se houver credencial; senão, marcar N/A.)*
+
 ---
 
 ## PARTE B — Testes MOBILE (app Expo — manual, NÃO via Chrome)
@@ -85,6 +94,7 @@ O app roda no celular (Metro), fora do alcance da skill do Chrome. Validar no ap
 - **B5. Baixa de entrega:** botão "Confirmar" fixo + "Quem recebeu" não fica atrás do teclado.
 - **B6. SUPERVISOR_FROTA marca paradas** (lidyane, como condutora): dar baixa/check-in em parada — sem erro 403.
 - **B7. Nome do app:** após **novo build do APK**, o app aparece como **"CAPUL Logística"** (config nativa — não muda no reload do Metro).
+- **B8. Retorno de frota INDIVIDUAL sem senha** *(ajuste 17/07)*: logado no app com usuário **Tipo = Individual** (ex.: kelver/lidyane) que tenha uma viagem de frota **EM_CURSO** como condutor → abrir a viagem → aba **🏁 Retorno** → deve mostrar **só o KM final** (sem os campos matrícula/senha) → informar KM → **Registrar retorno** fecha sem senha. Confirme também que o **teclado não sobrepõe** o campo KM (B1). *Requer o app com o JS atualizado (Metro/OTA) — o backend do DEV já aceita o fluxo.*
 
 ---
 
@@ -101,3 +111,5 @@ O app roda no celular (Metro), fora do alcance da skill do Chrome. Validar no ap
 | A7 | Acerto por departamento | ⬜ | |
 | A8 | Editar/remover + data | ⬜ | |
 | A9 | Área → Coordenador | ⬜ | |
+| A10 | Retorno frota INDIVIDUAL s/ senha (web) | ⬜ | |
+| B8 | Retorno frota INDIVIDUAL s/ senha (app) | ⬜ | |
