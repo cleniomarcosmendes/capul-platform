@@ -205,6 +205,40 @@ export class DespesaService {
     return rows.map((r) => r.departamentoLotacaoId);
   }
 
+  /** Departamento (lotação) de um usuário do core (schema read-only via raw). */
+  private async deptoDoUsuario(userId: string | null): Promise<string | null> {
+    if (!userId) return null;
+    const rows = await this.prisma.$queryRaw<{ departamento_id: string | null }[]>(
+      Prisma.sql`SELECT departamento_id FROM "core"."usuarios" WHERE id = ${userId} LIMIT 1`);
+    return rows[0]?.departamento_id ?? null;
+  }
+
+  /** Departamentos que o supervisor de departamento GERE: o próprio departamento dele
+   *  (lotação) + os departamentos dos veículos que ele supervisiona. */
+  private async deptosGeridos(user: JwtPayload): Promise<string[]> {
+    const [viaVeiculos, proprio] = await Promise.all([this.deptosDoSupervisor(user), this.deptoDoUsuario(user.sub)]);
+    return [...new Set([...viaVeiculos, ...(proprio ? [proprio] : [])])].filter(Boolean) as string[];
+  }
+
+  /** Departamento do ACERTO da despesa = o do CONDUTOR (quem lançou); se não tiver,
+   *  cai para o departamento do VEÍCULO. É por aqui que a aprovação segue a pessoa. */
+  private async deptoDaDespesa(d: { criadoPorId: string | null; veiculoId: string | null }): Promise<string | null> {
+    const doCondutor = await this.deptoDoUsuario(d.criadoPorId);
+    if (doCondutor) return doCondutor;
+    if (d.veiculoId) {
+      const v = await this.prisma.veiculo.findUnique({ where: { id: d.veiculoId }, select: { departamentoLotacaoId: true } });
+      return v?.departamentoLotacaoId ?? null;
+    }
+    return null;
+  }
+
+  /** É o supervisor de departamento cujo escopo cobre o departamento do condutor da despesa? */
+  private async ehSupervisorDoDepto(d: { criadoPorId: string | null; veiculoId: string | null }, user: JwtPayload, role?: string): Promise<boolean> {
+    if (role !== 'SUPERVISOR_FROTA') return false;
+    const dep = await this.deptoDaDespesa(d);
+    return !!dep && (await this.deptosGeridos(user)).includes(dep);
+  }
+
   /** IDs dos veículos no ESCOPO do usuário para custo/despesa. Supervisor de
    *  Departamento (SUPERVISOR_FROTA): todos os veículos do(s) seu(s) departamento(s).
    *  Demais não-gestores: só os que ele supervisiona diretamente. */
@@ -487,21 +521,33 @@ export class DespesaService {
   private async despesaGerivel(id: string, user: JwtPayload, role?: string) {
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
     if (!d || (!ehGestor(role) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeGerirVeiculo(d.veiculoId, user, role);
     if (d.situacao !== StatusDespesa.PENDENTE) throw new BadRequestException('A despesa não está pendente de validação.');
     return d;
   }
 
+  /** APROVAR o acerto é operação de DEPARTAMENTO: só o supervisor de departamento do
+   *  departamento do CONDUTOR (ou ADMIN). O GESTOR_FROTA cuida da frota (veículos), não
+   *  aprova acerto de departamento — ele pode CONTESTAR (ver abaixo). */
   async aprovar(id: string, user: JwtPayload, role?: string) {
-    await this.despesaGerivel(id, user, role);
+    const d = await this.despesaGerivel(id, user, role);
+    const pode = role === 'ADMIN' || await this.ehSupervisorDoDepto(d, user, role);
+    if (!pode) {
+      throw new ForbiddenException('Apenas o supervisor de departamento do condutor aprova o acerto. O gestor de frota controla os veículos (pode contestar), mas não aprova o acerto do departamento.');
+    }
     return this.prisma.despesaVeiculo.update({
       where: { id },
       data: { situacao: StatusDespesa.APROVADA, aprovadoPorId: user.sub, aprovadoEm: new Date(), motivoContestacao: null },
     });
   }
 
+  /** CONTESTAR/reprovar: o supervisor de departamento (do condutor) OU o GESTOR_FROTA
+   *  (controle de frota: mau uso/consumo do veículo) OU ADMIN. */
   async contestar(id: string, dto: ContestarDespesaDto, user: JwtPayload, role?: string) {
-    await this.despesaGerivel(id, user, role);
+    const d = await this.despesaGerivel(id, user, role);
+    const pode = ehGestor(role) || await this.ehSupervisorDoDepto(d, user, role);
+    if (!pode) {
+      throw new ForbiddenException('Sem permissão para contestar esta despesa (supervisor do departamento do condutor ou gestor de frota).');
+    }
     return this.prisma.despesaVeiculo.update({
       where: { id },
       data: { situacao: StatusDespesa.CONTESTADA, aprovadoPorId: user.sub, aprovadoEm: new Date(), motivoContestacao: dto.motivo.trim() },
