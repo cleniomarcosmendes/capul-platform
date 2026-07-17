@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -114,6 +114,17 @@ function Badge({ bg, fg, label }: { bg: string; fg: string; label: string }) {
  *  visitas (apontar realizada/pulada na execução) e despesas (com comprovante). */
 export function SupervisorViagemScreen({ route }: Props) {
   const { viagemId } = route.params;
+  // Teclado: ao focar um campo, rola ele pra cima do teclado (recurso nativo do
+  // ScrollView) — resolve o teclado sobrepondo os campos das visitas/despesas.
+  const scrollRef = useRef<ScrollView>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const aoFocar = (e: any) => {
+    const resp = scrollRef.current?.getScrollResponder?.() as { scrollResponderScrollNativeHandleToKeyboard?: (n: number, off: number, prevent: boolean) => void } | undefined;
+    const node: number | undefined = e?.target;
+    if (resp?.scrollResponderScrollNativeHandleToKeyboard && node != null) {
+      resp.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
+    }
+  };
   const [v, setV] = useState<ViagemSupDetalhe | null>(null);
   const [ativs, setAtivs] = useState<AtividadeSup[]>([]);
   const [tipos, setTipos] = useState<TipoDespesaSup[]>([]);
@@ -340,7 +351,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   if (!v) return <View style={styles.center}><Text>Planejamento não encontrado.</Text></View>;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.container}>
       {pendentes > 0 && (
         <TouchableOpacity style={styles.banner} onPress={() => void sincronizar()}>
           <Text style={styles.bannerTxt}>📴 {pendentes} registro(s) aguardando sinal — toque para reenviar</Text>
@@ -387,9 +398,9 @@ export function SupervisorViagemScreen({ route }: Props) {
               </View>
             );
           })}
-          <TextInput style={styles.input} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={advValor} onChangeText={(t) => setAdvValor(maskMoeda(t))} />
-          <TextInput style={styles.input} placeholder="Data AAAA-MM-DD (opcional — hoje)" value={advData} onChangeText={setAdvData} autoCapitalize="none" />
-          <TextInput style={styles.input} placeholder="Observação (opcional)" value={advObs} onChangeText={setAdvObs} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={advValor} onChangeText={(t) => setAdvValor(maskMoeda(t))} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Data AAAA-MM-DD (opcional — hoje)" value={advData} onChangeText={setAdvData} autoCapitalize="none" />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Observação (opcional)" value={advObs} onChangeText={setAdvObs} />
           <TouchableOpacity style={[styles.btn, salvA && styles.btnOff]} onPress={() => void salvarAdiantamento()} disabled={salvA}>
             <Text style={styles.btnTxt}>{salvA ? 'Salvando…' : 'Lançar adiantamento'}</Text>
           </TouchableOpacity>
@@ -400,11 +411,11 @@ export function SupervisorViagemScreen({ route }: Props) {
         <View style={styles.card}>
           <Text style={styles.sTitle}>Registrar visita / oportunidade</Text>
           <Text style={styles.hint}>Cliente atendido ou um prospect (oportunidade) que surgiu na viagem.</Text>
-          <TextInput style={styles.input} placeholder="Cliente / prospect" value={cliNome} onChangeText={setCliNome} />
-          <TextInput style={styles.input} placeholder="Município" value={muni} onChangeText={setMuni} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Cliente / prospect" value={cliNome} onChangeText={setCliNome} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Município" value={muni} onChangeText={setMuni} />
           <SelectBusca valor={ativId} opcoes={ativs.map((a) => ({ id: a.id, nome: a.nome }))} onChange={setAtivId} placeholder="Atividade" permiteLimpar />
-          <TextInput style={styles.input} placeholder="Propriedade / fazenda (se rural)" value={prop} onChangeText={setProp} />
-          <TextInput style={styles.input} placeholder="Observação" value={vObs} onChangeText={setVObs} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Propriedade / fazenda (se rural)" value={prop} onChangeText={setProp} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Observação" value={vObs} onChangeText={setVObs} />
           <View style={styles.formBtns}>
             <TouchableOpacity style={[styles.btn, styles.btnFlex, salvV && styles.btnOff]} onPress={() => void salvarVisita()} disabled={salvV}>
               <Text style={styles.btnTxt}>{salvV ? 'Salvando…' : 'Registrar visita'}</Text>
@@ -465,10 +476,10 @@ export function SupervisorViagemScreen({ route }: Props) {
             <SelectBusca valor={despViagemId} opcoes={planejamentos.map((p) => ({ id: p.id, nome: `Planejamento #${p.numero}${p.id === viagemId ? ' (este)' : ''}`, subtitulo: fmtMes(p.mesReferencia) }))} onChange={setDespViagemId} placeholder="A qual planejamento pertence" />
           )}
           <SelectBusca valor={tipoId} opcoes={tipos.map((t) => ({ id: t.id, nome: t.nome, subtitulo: t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo' }))} onChange={setTipoId} placeholder="Tipo de despesa" />
-          <TextInput style={styles.input} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={valor} onChangeText={(t) => setValor(maskMoeda(t))} />
-          <TextInput style={styles.input} placeholder="Data AAAA-MM-DD (opcional — hoje)" value={dData} onChangeText={setDData} autoCapitalize="none" keyboardType="numbers-and-punctuation" />
-          <TextInput style={styles.input} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
-          <TextInput style={styles.input} placeholder="Observação" value={dObs} onChangeText={setDObs} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={valor} onChangeText={(t) => setValor(maskMoeda(t))} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Data AAAA-MM-DD (opcional — hoje)" value={dData} onChangeText={setDData} autoCapitalize="none" keyboardType="numbers-and-punctuation" />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
+          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Observação" value={dObs} onChangeText={setDObs} />
           {editDespId ? (
             <Text style={styles.dica}>Os comprovantes anexados não mudam na edição.</Text>
           ) : (<>
