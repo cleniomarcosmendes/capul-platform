@@ -9,6 +9,7 @@ interface RdvMensal {
   supervisor: { matricula?: string | null; nome?: string | null };
   mesReferencia: number; planejamentos: number;
   planejamentosLista?: { id: string; numero: number; statusPlanejamento?: string | null }[];
+  municipios?: string[];
   tipos: { id: string; nome: string; categoria: string }[];
   dias: { data: string; municipios: string[]; valores: Record<string, number>; total: number }[];
   totaisPorTipo: Record<string, number>;
@@ -54,6 +55,13 @@ export function SupervisorRdvMensalPrintPage() {
           <tr><td style={cell}><b>Funcionário:</b> {r.supervisor.nome ?? '—'}</td><td style={cell}><b>Matrícula:</b> {r.supervisor.matricula ?? '—'}</td></tr>
         </tbody>
       </table>
+
+      {/* Lista COMPLETA de municípios visitados no mês (de todas as visitas). A grade
+          por dia abaixo mostra só os municípios dos dias COM despesa, então esta linha
+          garante o total do mês. */}
+      <p style={{ margin: '0 0 12px', fontSize: 11 }}>
+        <b>Municípios visitados no mês ({r.municipios?.length ?? 0}):</b> {r.municipios?.length ? r.municipios.join(', ') : '—'}
+      </p>
 
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>

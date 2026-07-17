@@ -1036,6 +1036,11 @@ export class SupervisorService {
       dataHora: v.dataHora, status: v.status, motivoPulada: v.motivoPulada,
       atividade: v.atividade ? { nome: v.atividade.nome } : null,
     })));
+    // Lista COMPLETA de municípios visitados no mês (de TODAS as visitas, não só dos
+    // dias com despesa — a grade por dia é orientada por despesa e omitia cidades).
+    const municipios = [...new Set(
+      visitas.map((v) => v.municipio?.trim()).filter((m): m is string => !!m).map((m) => m.toLocaleUpperCase('pt-BR')),
+    )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     const diaDe = (d: Date | null) => (d ? new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) : '—');
 
     const tiposMap = new Map<string, { id: string; nome: string; categoria: string }>();
@@ -1070,7 +1075,7 @@ export class SupervisorService {
     return {
       supervisor: { id: sup.id, matricula: sup.matricula, nome: sup.nome },
       mesReferencia: mes, planejamentos: planejamentos.length,
-      planejamentosLista, visitas,
+      planejamentosLista, visitas, municipios,
       tipos, dias, totaisPorTipo, totaisPorCategoria, total,
       adiantamentos, totalAdiantamento, totalAdiantamentoPendente, saldo,
       fechado: !!fech, fechadoEm: fech?.fechadoEm ?? null,
