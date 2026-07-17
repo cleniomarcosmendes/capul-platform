@@ -322,22 +322,19 @@ function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; on
 }
 
 function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: ViagemFrota; ehIndividual: boolean; onPronto: () => void; aoFocar: AoFocar }) {
-  const [matricula, setMatricula] = useState(viagem.condutorMatricula ?? '');
-  const [senha, setSenha] = useState('');
-  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [kmFinal, setKmFinal] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
 
-  // PADRÃO já se identificou no gate (token via header) → só pede KM. INDIVIDUAL confirma matrícula+senha.
-  const credOk = ehIndividual ? (!!matricula.trim() && !!senha) : true;
-  const podeRegistrar = credOk && kmFinal !== '' && Number(kmFinal) >= 0 && !salvando;
+  // Identidade "só o condutor que iniciou fecha": PADRÃO via token do gate (header);
+  // INDIVIDUAL é o próprio usuário logado (backend resolve a matrícula pelo cadastro).
+  // Nenhum dos dois pede senha aqui → só o KM final fecha a viagem.
+  const podeRegistrar = kmFinal !== '' && Number(kmFinal) >= 0 && !salvando;
 
   async function executar() {
     setSalvando(true);
     try {
       await registrarRetorno(viagem.id, {
-        ...(ehIndividual ? { matricula: matricula.trim(), senha } : {}),
         kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined,
       });
       Alert.alert('Retorno registrado', `${viagem.placa} de volta.`, [{ text: 'OK', onPress: onPronto }]);
@@ -370,22 +367,11 @@ function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: Viag
 
   return (
     <View style={styles.painel}>
-      {ehIndividual ? (
-        <>
-          <Text style={styles.dica}>Só o condutor que iniciou fecha a viagem — confirme matrícula + senha.</Text>
-          <Text style={styles.label}>Matrícula</Text>
-          <TextInput style={styles.input} onFocus={aoFocar} value={matricula} onChangeText={(t) => setMatricula(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} editable={!salvando} />
-          <Text style={styles.label}>Senha do portal RH</Text>
-          <View style={styles.senhaWrap}>
-            <TextInput style={[styles.input, styles.senhaInput]} value={senha} onChangeText={setSenha} secureTextEntry={!mostrarSenha} editable={!salvando} />
-            <TouchableOpacity style={styles.olho} onPress={() => setMostrarSenha((v) => !v)} hitSlop={10}>
-              <Text style={styles.olhoTxt}>{mostrarSenha ? '🙈' : '👁️'}</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : (
-        <Text style={styles.dica}>Condutor {viagem.condutorNome ?? ''} identificado — informe o KM final para fechar a viagem.</Text>
-      )}
+      <Text style={styles.dica}>
+        {ehIndividual
+          ? `Você (${viagem.condutorNome ?? 'condutor'}) fecha a própria viagem — informe o KM final.`
+          : `Condutor ${viagem.condutorNome ?? ''} identificado — informe o KM final para fechar a viagem.`}
+      </Text>
       <Text style={styles.label}>KM final (odômetro)</Text>
       <TextInput style={styles.input} onFocus={aoFocar} value={kmFinal} onChangeText={setKmFinal} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Observações (opcional)</Text>

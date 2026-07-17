@@ -328,10 +328,24 @@ export class FrotaService {
     if (!this.ehGestorFrota(user) && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A viagem não está em curso.');
 
-    // PADRÃO (login compartilhado): o token de condutor (do gate ao abrir a viagem)
-    // já provou que é o condutor que iniciou. INDIVIDUAL/fallback: matrícula+senha.
+    // Identidade "só o condutor que iniciou fecha a viagem", por tipo de login:
+    // - PADRÃO (login compartilhado): o token de condutor (do gate ao abrir a
+    //   viagem) já provou quem é o condutor. Sem senha por ação.
+    // - INDIVIDUAL: o próprio usuário logado é o condutor — a matrícula sai do
+    //   cadastro (colaboradorDoUsuario), simétrico à saída individual. Sem senha.
+    // - Fallback (sem token / login legado): matrícula+senha via portal RH.
     if (user.tipo === 'PADRAO' && condutorToken) {
       this.condutorToken.verificar(condutorToken, v.id);
+    } else if (user.tipo === 'INDIVIDUAL') {
+      const col = await this.core.colaboradorDoUsuario(user.sub);
+      if (!col) {
+        throw new BadRequestException(
+          'Seu usuário não tem matrícula cadastrada. Peça ao administrador para cadastrá-la ou feche a viagem informando matrícula e senha.',
+        );
+      }
+      if (chapa(col.matricula) !== chapa(v.condutorMatricula ?? '')) {
+        throw new ForbiddenException('Só o condutor que iniciou pode fechar a viagem. Para corrigir, peça ao gestor de frota.');
+      }
     } else {
       if (!dto.matricula || !dto.senha) {
         throw new BadRequestException('Informe matrícula e senha do condutor para fechar a viagem.');

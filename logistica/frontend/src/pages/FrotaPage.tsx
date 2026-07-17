@@ -965,6 +965,12 @@ export function ParadasPanel({ v, podeEditar = true, onChanged }: { v: ViagemFro
 
 export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: () => void; onDone: () => void }) {
   const { toast, confirm } = useToast();
+  // Login INDIVIDUAL = pessoal → o próprio usuário é o condutor (dispensa matrícula+
+  // senha; o backend resolve a matrícula pelo cadastro e valida "só quem iniciou").
+  // PADRÃO = login COLETIVO → identifica o condutor por matrícula+senha. Simétrico à
+  // SAÍDA. (tipo vem do JWT via AuthContext.)
+  const { usuario } = useAuth();
+  const ehIndividual = usuario?.tipo === 'INDIVIDUAL';
   const [matricula, setMatricula] = useState(v.condutorMatricula ?? '');
   // O condutor já é conhecido pela viagem (da saída) — começa identificado.
   const [nome, setNome] = useState<string | null>(v.condutorNome ?? null);
@@ -979,8 +985,8 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
   const senhaRef = useRef<HTMLInputElement>(null);
   const kmRef = useRef<HTMLInputElement>(null);
 
-  // Só avança depois que matrícula+senha forem VALIDADAS.
-  const podeAvancar = credOk;
+  // INDIVIDUAL já está identificado pelo login; PADRÃO só avança após validar senha.
+  const podeAvancar = ehIndividual ? true : credOk;
 
   // Foca a senha assim que o condutor estiver identificado.
   useEffect(() => { if (nome) senhaRef.current?.focus(); }, [nome]);
@@ -1014,7 +1020,7 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
   };
 
   const registrar = async () => {
-    if (!credOk) { toast('warning', 'Valide a matrícula e a senha do condutor.'); return; }
+    if (!ehIndividual && !credOk) { toast('warning', 'Valide a matrícula e a senha do condutor.'); return; }
     if (kmFinal === '') { toast('warning', 'Informe o KM de retorno.'); return; }
     // Aviso NÃO-bloqueante: paradas planejadas sem baixa (decisão: retorno é o obrigatório).
     try {
@@ -1030,7 +1036,9 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
     setSalvando(true);
     try {
       await logisticaApi.post(`/frota/viagens/${v.id}/retorno`, {
-        matricula: matricula.trim(), senha, kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined,
+        // INDIVIDUAL: sem matrícula/senha — o backend usa o usuário logado (JWT).
+        ...(ehIndividual ? {} : { matricula: matricula.trim(), senha }),
+        kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined,
       });
       toast('success', 'Retorno registrado.');
       onDone();
@@ -1044,8 +1052,13 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
   return (
     <div className="space-y-3">
       <p className="flex items-center gap-2 text-sm font-semibold text-slate-700"><LogIn className="h-4 w-4 text-emerald-600" /> Registrar retorno — rota #{v.numero}</p>
-      <p className="text-xs text-slate-500">Só o condutor que iniciou pode fechar (matrícula + senha).</p>
+      <p className="text-xs text-slate-500">
+        {ehIndividual
+          ? `Você (${v.condutorNome ?? 'condutor'}) fecha a própria rota — informe apenas o KM de retorno.`
+          : 'Só o condutor que iniciou pode fechar (matrícula + senha).'}
+      </p>
       <div className="flex flex-wrap items-start gap-4">
+        {!ehIndividual && (<>
         <div className="w-56">
           <label className="mb-1 block text-sm font-medium text-slate-600">Matrícula</label>
           <div className="flex gap-1">
@@ -1087,6 +1100,7 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
           {erroSenha && <p className="mt-1 text-xs font-medium text-rose-600">{erroSenha}</p>}
           {credOk && <p className="mt-1 text-xs font-medium text-emerald-700">✓ Senha confere</p>}
         </div>
+        </>)}
         <div className={`w-40 ${podeAvancar ? '' : 'opacity-60'}`}>
           <label className="mb-1 block text-sm font-medium text-slate-600">KM de retorno <span className="text-rose-500">*</span></label>
           <input
