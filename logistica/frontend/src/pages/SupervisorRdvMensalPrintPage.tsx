@@ -56,9 +56,9 @@ export function SupervisorRdvMensalPrintPage() {
         </tbody>
       </table>
 
-      {/* Lista COMPLETA de municípios visitados no mês (de todas as visitas). A grade
-          por dia abaixo mostra só os municípios dos dias COM despesa, então esta linha
-          garante o total do mês. */}
+      {/* Municípios do mês: lista COMPLETA (de todas as visitas). A grade abaixo é só
+          de DESPESAS por dia (dinheiro) — o itinerário dia-a-dia completo fica no
+          relatório de Visitas, evitando a confusão de duas listas de cidades. */}
       <p style={{ margin: '0 0 12px', fontSize: 11 }}>
         <b>Municípios visitados no mês ({r.municipios?.length ?? 0}):</b> {r.municipios?.length ? r.municipios.join(', ') : '—'}
       </p>
@@ -67,18 +67,16 @@ export function SupervisorRdvMensalPrintPage() {
         <thead>
           <tr>
             <th style={th}>Dia</th>
-            <th style={th}>Município(s)</th>
             {r.tipos.map((t) => <th key={t.id} style={th}>{t.nome}</th>)}
             <th style={th}>Total</th>
           </tr>
         </thead>
         <tbody>
           {r.dias.length === 0 ? (
-            <tr><td style={cell} colSpan={r.tipos.length + 3}>Sem despesas aprovadas no mês.</td></tr>
+            <tr><td style={cell} colSpan={r.tipos.length + 2}>Sem despesas aprovadas no mês.</td></tr>
           ) : r.dias.map((d) => (
             <tr key={d.data}>
               <td style={cell}>{fmtDia(d.data)}</td>
-              <td style={cell}>{d.municipios.join(', ') || '—'}</td>
               {r.tipos.map((t) => <td key={t.id} style={cellR}>{d.valores[t.id] ? brl(d.valores[t.id]) : ''}</td>)}
               <td style={{ ...cellR, fontWeight: 700 }}>{brl(d.total)}</td>
             </tr>
@@ -86,7 +84,7 @@ export function SupervisorRdvMensalPrintPage() {
         </tbody>
         <tfoot>
           <tr>
-            <td style={{ ...th, textAlign: 'right' }} colSpan={2}>TOTAIS</td>
+            <td style={{ ...th, textAlign: 'right' }}>TOTAIS</td>
             {r.tipos.map((t) => <td key={t.id} style={{ ...cellR, fontWeight: 700 }}>{brl(r.totaisPorTipo[t.id] || 0)}</td>)}
             <td style={{ ...cellR, fontWeight: 700 }}>{brl(r.total)}</td>
           </tr>

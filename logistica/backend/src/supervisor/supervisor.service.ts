@@ -648,6 +648,8 @@ export class SupervisorService {
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     // INDIVÍDUO não tem veículo; VEÍCULO usa o veículo da viagem (se houver).
     const veiculoId = tipo.categoria === 'INDIVIDUO' ? null : v.veiculoId;
+    const dataDespesa = this.parseData(dto.data);
+    this.assertDataNoMes(dataDespesa, v.mesReferencia, 'despesa');
     const d = await this.prisma.despesaVeiculo.create({
       data: {
         filialId,
@@ -655,7 +657,7 @@ export class SupervisorService {
         viagemId,
         tipoDespesaId: tipo.id,
         valor: new Prisma.Decimal(dto.valor),
-        dataDespesa: this.parseData(dto.data),
+        dataDespesa,
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
         // Redesenho 6d: despesa do supervisor nasce PENDENTE — o coordenador
@@ -789,7 +791,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id: despesaId },
-      include: { viagem: { select: { tipo: true, filialId: true, situacao: true, veiculoId: true } } },
+      include: { viagem: { select: { tipo: true, filialId: true, situacao: true, veiculoId: true, mesReferencia: true } } },
     });
     if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
     if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
@@ -803,6 +805,8 @@ export class SupervisorService {
       tipoId = tipo.id;
       veiculoId = tipo.categoria === 'INDIVIDUO' ? null : d.viagem.veiculoId;
     }
+    // Editar a data também respeita o mês do planejamento (RDV é mensal).
+    if (dto.data !== undefined) this.assertDataNoMes(this.parseData(dto.data), d.viagem.mesReferencia, 'despesa');
     // Troca do comprovante: sobe o novo e remove o antigo (best-effort).
     if (recibo) {
       if (d.comprovanteObjectKey) {
@@ -937,10 +941,12 @@ export class SupervisorService {
     // Auto-serviço do supervisor de área nasce PENDENTE (o coordenador aprova). O
     // lançamento do coordenador/departamento/admin já nasce APROVADO (são a autoridade).
     const ehAutoServico = this.roleLog(user) === 'SUPERVISOR';
+    const dataAdiantamento = this.parseData(dto.data);
+    this.assertDataNoMes(dataAdiantamento, dto.mesReferencia, 'adiantamento');
     return this.prisma.adiantamento.create({
       data: {
         supervisorId: dto.supervisorId, mesReferencia: dto.mesReferencia,
-        valor: new Prisma.Decimal(dto.valor), dataAdiantamento: this.parseData(dto.data),
+        valor: new Prisma.Decimal(dto.valor), dataAdiantamento,
         observacao: dto.observacao?.trim() || null, lancadoPorId: user.sub,
         situacao: ehAutoServico ? 'PENDENTE' : 'APROVADO',
         decididoPorId: ehAutoServico ? null : user.sub,
@@ -1087,6 +1093,21 @@ export class SupervisorService {
   private parseData(s?: string): Date {
     if (!s) return new Date();
     return s.includes('T') ? new Date(s) : new Date(`${s}T12:00:00-03:00`);
+  }
+
+  /** AAAA-MM da data (em -03:00) como inteiro AAAAMM — para comparar com mesReferencia. */
+  private mesDaData(d: Date): number {
+    const s = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // AAAA-MM-DD
+    return Number(s.slice(0, 4)) * 100 + Number(s.slice(5, 7));
+  }
+  /** Barra lançamento com data fora do mês do planejamento (RDV é mensal). */
+  private assertDataNoMes(d: Date, mesReferencia: number | null | undefined, rotulo: 'despesa' | 'adiantamento') {
+    if (!mesReferencia) return;
+    const m = this.mesDaData(d);
+    if (m !== mesReferencia) {
+      const fmt = (mm: number) => `${String(mm % 100).padStart(2, '0')}/${Math.floor(mm / 100)}`;
+      throw new BadRequestException(`Data da ${rotulo} (${fmt(m)}) fora do mês do planejamento (${fmt(mesReferencia)}). Informe uma data dentro de ${fmt(mesReferencia)}.`);
+    }
   }
 
 }
