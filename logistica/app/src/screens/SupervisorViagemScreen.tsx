@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
@@ -209,13 +209,13 @@ export function SupervisorViagemScreen({ route }: Props) {
     } finally { setSalvV(false); }
   };
 
-  const apontar = async (paradaId: string, status: 'REALIZADA' | 'PULADA') => {
+  const apontar = async (paradaId: string, status: 'REALIZADA' | 'PULADA', motivoPulada?: string) => {
     // GPS só faz sentido na visita REALIZADA (onde ele esteve); PULADA não captura.
     const coords = status === 'REALIZADA' ? await capturarCoordenadas() : {};
     // Confirmação: só marcações "no local" ensinam a localização do cliente (evita marcar
     // da estrada/cidade). Pergunta só na REALIZADA e só se houver GPS.
     const noLocal = status === 'REALIZADA' && coords.latitude != null ? await confirmarNoLocal() : undefined;
-    const extra = { ...coords, ...(noLocal !== undefined ? { noLocal } : {}) };
+    const extra = { ...coords, ...(noLocal !== undefined ? { noLocal } : {}), ...(motivoPulada ? { motivoPulada } : {}) };
     try { await apontarVisitaApp(viagemId, paradaId, status, extra); await carregar(); }
     catch (e) {
       if (ehErroDeRede(e)) {
@@ -223,6 +223,16 @@ export function SupervisorViagemScreen({ route }: Props) {
         Alert.alert('Salvo offline', 'Sem sinal — o apontamento vai sincronizar quando a conexão voltar.');
       } else { Alert.alert('Erro', msg(e, 'Falha ao apontar a visita.')); }
     }
+  };
+  // Pular exige justificativa → abre o modal; confirmar chama apontar(..., 'PULADA', motivo).
+  const [pularId, setPularId] = useState<string | null>(null);
+  const [motivoPular, setMotivoPular] = useState('');
+  const [pulando, setPulando] = useState(false);
+  const confirmarPular = async () => {
+    if (!pularId || !motivoPular.trim()) return;
+    setPulando(true);
+    try { await apontar(pularId, 'PULADA', motivoPular.trim()); setPularId(null); setMotivoPular(''); }
+    finally { setPulando(false); }
   };
 
   const acao = async (fn: (id: string) => Promise<void>, ok: string) => {
@@ -419,6 +429,9 @@ export function SupervisorViagemScreen({ route }: Props) {
               <Badge bg={st.bg} fg={st.fg} label={st.l} />
             </View>
             <Text style={styles.itemSub}>{p.atividade?.nome ?? '—'}{p.propriedade ? ` · ${p.propriedade}` : ''}</Text>
+            {p.status === 'PULADA' && p.motivoPulada ? (
+              <Text style={styles.motivoPulada}>Motivo: {p.motivoPulada}</Text>
+            ) : null}
             {(() => {
               const m = pontoDoMapa(p);
               if (!m) return null;
@@ -434,7 +447,7 @@ export function SupervisorViagemScreen({ route }: Props) {
             {emExecucao && p.status === 'PLANEJADA' && (
               <View style={styles.apRow}>
                 <TouchableOpacity style={[styles.apBtn, styles.apOk]} onPress={() => void apontar(p.id, 'REALIZADA')}><Text style={styles.apOkTxt}>Realizar</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.apBtn} onPress={() => void apontar(p.id, 'PULADA')}><Text style={styles.apTxt}>Pular</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.apBtn} onPress={() => { setPularId(p.id); setMotivoPular(''); }}><Text style={styles.apTxt}>Pular</Text></TouchableOpacity>
               </View>
             )}
           </View>
@@ -503,6 +516,36 @@ export function SupervisorViagemScreen({ route }: Props) {
           </View>
         );
       })}
+
+      {/* Pular visita: exige justificativa (vai pro relatório de visitas). */}
+      <Modal visible={pularId !== null} transparent animationType="fade" onRequestClose={() => setPularId(null)}>
+        <View style={styles.modalFundo}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitulo}>Pular visita</Text>
+            <Text style={styles.modalSub}>Informe o motivo pelo qual esta visita não foi realizada.</Text>
+            <TextInput
+              style={[styles.input, styles.modalInput]}
+              placeholder="Ex.: cliente ausente, propriedade fechada, tempo…"
+              value={motivoPular}
+              onChangeText={setMotivoPular}
+              maxLength={500}
+              multiline
+              autoFocus
+              editable={!pulando}
+            />
+            <View style={styles.formBtns}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnFlex, (!motivoPular.trim() || pulando) && styles.btnOff]}
+                onPress={() => void confirmarPular()}
+                disabled={!motivoPular.trim() || pulando}
+              >
+                <Text style={styles.btnTxt}>{pulando ? 'Salvando…' : 'Confirmar'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setPularId(null)} disabled={pulando}><Text style={styles.cancelTxt}>Cancelar</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -545,6 +588,12 @@ const styles = StyleSheet.create({
   itemHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   itemTitle: { fontSize: 14, fontWeight: '600', color: '#1e293b', flexShrink: 1 },
   itemSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  motivoPulada: { fontSize: 12, color: '#b45309', marginTop: 4, fontStyle: 'italic' },
+  modalFundo: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 24 },
+  modalCard: { backgroundColor: '#fff', borderRadius: 14, padding: 18 },
+  modalTitulo: { fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  modalSub: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  modalInput: { minHeight: 80, textAlignVertical: 'top' },
   badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   badgeTxt: { fontSize: 11, fontWeight: '700' },
   apRow: { flexDirection: 'row', gap: 8, marginTop: 8 },

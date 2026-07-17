@@ -585,6 +585,8 @@ export class SupervisorService {
       where: { id: paradaId },
       data: {
         status: dto.status,
+        // Motivo só na PULADA; ao (re)marcar REALIZADA limpamos qualquer justificativa antiga.
+        motivoPulada: dto.status === 'PULADA' ? (dto.motivoPulada?.trim() || null) : null,
         atividadeId: dto.atividadeId !== undefined ? (dto.atividadeId || null) : undefined,
         observacao: dto.observacao !== undefined ? (dto.observacao?.trim() || null) : undefined,
         latitude: dto.latitude ?? undefined,

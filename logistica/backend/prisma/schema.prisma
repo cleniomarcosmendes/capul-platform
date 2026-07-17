@@ -687,6 +687,9 @@ model Parada {
   status         StatusParada @default(REALIZADA)
   planejadoLocal String?      @map("planejado_local")
   realizadaEm    DateTime?    @map("realizada_em")
+  // Justificativa quando a visita é PULADA (obrigatória no app ao pular) — aparece no
+  // relatório de visitas. Só faz sentido com status PULADA; zerada ao virar REALIZADA.
+  motivoPulada   String?      @map("motivo_pulada")
   // Visita do supervisor (Fase 3c): atividade + região + propriedade/fazenda +
   // cliente (matrícula/sócio Protheus estruturado) + município. `observacao` = obs.
   atividadeId      String?          @map("atividade_id")

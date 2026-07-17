@@ -5,8 +5,10 @@ import { logisticaApi } from '../services/api';
 interface Visita {
   id: string; sequencia: number; clienteMatricula?: string | null; clienteNome?: string | null;
   municipio?: string | null; propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
+  status?: 'PLANEJADA' | 'REALIZADA' | 'PULADA' | null; motivoPulada?: string | null;
   atividade?: { nome: string } | null;
 }
+const SITUACAO: Record<string, string> = { REALIZADA: 'Realizada', PULADA: 'Pulada', PLANEJADA: 'Planejada' };
 interface Detalhe {
   numero: number; mesReferencia?: number | null; condutorNome?: string | null; condutorMatricula?: string | null;
   paradas: Visita[];
@@ -46,30 +48,37 @@ export function SupervisorVisitasPrintPage() {
         <thead>
           <tr>
             <th style={th}>Data</th>
+            <th style={th}>Situação</th>
             <th style={th}>Cliente (matrícula)</th>
             <th style={th}>Propriedade</th>
             <th style={th}>Município</th>
             <th style={th}>Atividade</th>
-            <th style={th}>Obs</th>
+            <th style={th}>Obs / Motivo</th>
           </tr>
         </thead>
         <tbody>
           {v.paradas.length === 0 ? (
-            <tr><td style={cell} colSpan={6}>Nenhuma visita registrada.</td></tr>
-          ) : v.paradas.map((p) => (
-            <tr key={p.id}>
-              <td style={cell}>{fmtData(p.dataHora)}</td>
-              <td style={cell}>{p.clienteNome ?? '—'}{p.clienteMatricula ? ` (${p.clienteMatricula})` : ''}</td>
-              <td style={cell}>{p.propriedade ?? '—'}</td>
-              <td style={cell}>{p.municipio ?? '—'}</td>
-              <td style={cell}>{p.atividade?.nome ?? '—'}</td>
-              <td style={cell}>{p.observacao ?? '—'}</td>
-            </tr>
-          ))}
+            <tr><td style={cell} colSpan={7}>Nenhuma visita registrada.</td></tr>
+          ) : v.paradas.map((p) => {
+            const pulada = p.status === 'PULADA';
+            return (
+              <tr key={p.id} style={pulada ? { background: '#fafafa', color: '#666' } : undefined}>
+                <td style={cell}>{fmtData(p.dataHora)}</td>
+                <td style={{ ...cell, textAlign: 'center', fontWeight: pulada ? 700 : 400 }}>{SITUACAO[p.status ?? 'REALIZADA'] ?? p.status ?? '—'}</td>
+                <td style={cell}>{p.clienteNome ?? '—'}{p.clienteMatricula ? ` (${p.clienteMatricula})` : ''}</td>
+                <td style={cell}>{p.propriedade ?? '—'}</td>
+                <td style={cell}>{p.municipio ?? '—'}</td>
+                <td style={cell}>{p.atividade?.nome ?? '—'}</td>
+                <td style={cell}>{pulada ? (p.motivoPulada ? `Pulada — ${p.motivoPulada}` : 'Pulada (sem motivo)') : (p.observacao ?? '—')}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
-      <p style={{ marginTop: 12, fontSize: 12 }}>Total de visitas: <b>{v.paradas.length}</b></p>
+      <p style={{ marginTop: 12, fontSize: 12 }}>
+        Total: <b>{v.paradas.length}</b> · Realizadas: <b>{v.paradas.filter((p) => (p.status ?? 'REALIZADA') === 'REALIZADA').length}</b> · Puladas: <b>{v.paradas.filter((p) => p.status === 'PULADA').length}</b>
+      </p>
 
       <div style={{ marginTop: 56, display: 'flex', justifyContent: 'space-around', fontSize: 12 }}>
         <div style={{ textAlign: 'center' }}>____________________________<br />Supervisor</div>

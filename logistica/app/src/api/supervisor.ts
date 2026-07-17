@@ -27,7 +27,7 @@ export interface LocalConsolidado {
   confianca?: ConfiancaLocal | null; nMarcacoes?: number | null;
 }
 export interface VisitaSup {
-  id: string; sequencia: number; status?: StatusVisita | null;
+  id: string; sequencia: number; status?: StatusVisita | null; motivoPulada?: string | null;
   clienteNome?: string | null; municipio?: string | null;
   propriedade?: string | null; observacao?: string | null; dataHora?: string | null;
   atividadeId?: string | null; atividade?: { nome: string } | null;
@@ -120,7 +120,7 @@ export async function apontarVisitaApp(
   id: string,
   paradaId: string,
   status: 'REALIZADA' | 'PULADA',
-  extra?: { latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean },
+  extra?: { latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean; motivoPulada?: string },
 ): Promise<void> {
   await api.patch(`${B}/viagens/${id}/visitas/${paradaId}/apontar`, { status, ...(extra ?? {}) });
 }

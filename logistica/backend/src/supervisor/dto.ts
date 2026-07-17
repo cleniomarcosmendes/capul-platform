@@ -102,6 +102,8 @@ export class ApontarVisitaDto {
   status!: 'REALIZADA' | 'PULADA';
   @IsOptional() @IsString() @MaxLength(40) atividadeId?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
+  // Justificativa da visita PULADA (o app exige ao pular). Ignorada se REALIZADA.
+  @IsOptional() @IsString() @MaxLength(500) motivoPulada?: string;
   @IsOptional() @IsDateString() dataVisita?: string;
   // GPS capturado no momento do apontamento em campo (REALIZADA).
   @IsOptional() @IsNumber() latitude?: number;
