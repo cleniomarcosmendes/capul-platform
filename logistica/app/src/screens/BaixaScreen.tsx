@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -43,6 +46,8 @@ async function capturarGeo(): Promise<{ geoLat?: number; geoLng?: number }> {
 
 export function BaixaScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets(); // espaço da barra de navegação (Android) p/ o botão não sumir
+  const headerHeight = useHeaderHeight(); // p/ o KeyboardAvoidingView não descontar errado no iOS
+  const scrollRef = useRef<ScrollView>(null); // rolar o campo à vista quando o teclado abrir
   const { entregaId, entregaNumero, destinatario } = route.params;
   const [resultado, setResultado] = useState<'ENTREGUE' | 'NAO_ENTREGUE'>('ENTREGUE');
   const [motivo, setMotivo] = useState('');
@@ -138,8 +143,12 @@ export function BaixaScreen({ route, navigation }: Props) {
   }
 
   return (
-    <View style={styles.tela}>
-    <ScrollView style={styles.container} contentContainerStyle={styles.conteudo} showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView
+      style={styles.tela}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
+    >
+    <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Text style={styles.titulo}>
         #{entregaNumero} · {destinatario}
       </Text>
@@ -202,6 +211,8 @@ export function BaixaScreen({ route, navigation }: Props) {
             onChangeText={setRecebedor}
             maxLength={120}
             editable={!enviando}
+            returnKeyType="done"
+            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200)}
           />
         </>
       ) : (
@@ -245,7 +256,7 @@ export function BaixaScreen({ route, navigation }: Props) {
       onOK={salvarAssinatura}
       onCancel={() => setMostrarAssinatura(false)}
     />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
