@@ -1,9 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useHeaderHeight } from '@react-navigation/elements';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -46,8 +45,8 @@ async function capturarGeo(): Promise<{ geoLat?: number; geoLng?: number }> {
 
 export function BaixaScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets(); // espaço da barra de navegação (Android) p/ o botão não sumir
-  const headerHeight = useHeaderHeight(); // p/ o KeyboardAvoidingView não descontar errado no iOS
   const scrollRef = useRef<ScrollView>(null); // rolar o campo à vista quando o teclado abrir
+  const [kbHeight, setKbHeight] = useState(0); // altura do teclado → vira padding do rodapé do scroll
   const { entregaId, entregaNumero, destinatario } = route.params;
   const [resultado, setResultado] = useState<'ENTREGUE' | 'NAO_ENTREGUE'>('ENTREGUE');
   const [motivo, setMotivo] = useState('');
@@ -58,6 +57,20 @@ export function BaixaScreen({ route, navigation }: Props) {
   const [enviando, setEnviando] = useState(false);
   // Chave fixa da PRIMEIRA tentativa — reenvio (online ou da fila) não duplica.
   const idempotencyKey = useRef(uuid()).current;
+
+  // Teclado: quando ABRE, guardamos a altura (vira padding do fim do scroll, garantindo
+  // espaço para rolar) e, JÁ com o teclado aberto (evento, não timeout adivinhado), levamos
+  // o campo em foco à vista. Funciona com ou sem o resize nativo da janela.
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const sub1 = Keyboard.addListener(showEvt, (e) => {
+      setKbHeight(e.endCoordinates?.height ?? 0);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    });
+    const sub2 = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    return () => { sub1.remove(); sub2.remove(); };
+  }, []);
 
   const entregue = resultado === 'ENTREGUE';
   // Foto E assinatura são PERMITIDAS juntas (não são mais exclusivas). A entrega
@@ -143,16 +156,8 @@ export function BaixaScreen({ route, navigation }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.tela}
-      // Android já redimensiona a janela sozinho (softwareKeyboardLayoutMode "resize"):
-      // usar behavior="height" aqui faz ajuste EM CIMA do ajuste do SO e empurra o campo
-      // pra trás do teclado. Deixamos undefined no Android (o scrollToEnd no foco põe o
-      // campo à vista) e só no iOS usamos "padding".
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
-    >
-    <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
+    <View style={styles.tela}>
+    <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={[styles.conteudo, { paddingBottom: 40 + kbHeight }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
       <Text style={styles.titulo}>
         #{entregaNumero} · {destinatario}
       </Text>
@@ -260,7 +265,7 @@ export function BaixaScreen({ route, navigation }: Props) {
       onOK={salvarAssinatura}
       onCancel={() => setMostrarAssinatura(false)}
     />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
