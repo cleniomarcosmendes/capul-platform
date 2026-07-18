@@ -59,9 +59,11 @@
 - **Esperado:** o RDV do coordenador roteia para a **Lidyane** (por departamento) e ela aprova planejamento **e** despesas.
 
 ### A7. Acerto de frota por DEPARTAMENTO do condutor + gestor de frota só contesta
-- **Usuário:** lidyaneaparecida · **Tela:** **Custos da Frota** → despesas PENDENTES.
-- **Passos:** ver as despesas de saídas cujos **condutores** são do departamento dela (inclui as **de indivíduo**, sem veículo) → **Aprovar**.
-- **Esperado:** ela aprova as do departamento dela (inclusive indivíduo). Se logar como **GESTOR_FROTA**: só aparece **Contestar** (sem "Aprovar"); ao tentar aprovar via API → bloqueio.
+- **Usuário:** lidyanerocha (SUPERVISOR_FROTA) · **Tela:** **Custos da Frota** → despesas PENDENTES.
+- **Pré-condição (importante):** o teste precisa de uma despesa de **FROTA lançada numa saída de VEÍCULO** cujo veículo esteja **lotado no departamento dela**. ⚠️ Despesa de **RDV** (lançada num planejamento de supervisor) **NÃO** aparece aqui — é outro livro (ver nota abaixo). E despesa de categoria **INDIVÍDUO (sem veículo)** também **não** aparece para o Sup. de Departamento (é gestor-only — ver Esperado).
+- **Passos:** ver as despesas de saídas cujos **veículos** são do departamento dela → **Aprovar** uma.
+- **Esperado:** ela aprova as **despesas de veículo** do departamento dela. **Despesa de INDIVÍDUO (sem veículo) é gestor-only** — não aparece nem é aprovável pelo Sup. de Departamento (`despesa.service.ts`: filtro por `veiculoId ∈ deptos` + "só o gestor/admin gere"). Se logar como **GESTOR_FROTA**: só aparece **Contestar** (sem "Aprovar"); ao tentar aprovar via API → bloqueio.
+- **Nota (dois livros distintos):** "Custos da Frota" (`/despesas`) é o livro de despesas de **VEÍCULO**. Despesa de **RDV** (viagem `tipo=SUPERVISOR`) vive no fluxo do RDV: detalhe do planejamento → **"Despesas do mês"**, aprovada em **"Coordenação (aprovar)"**, e entra no **"Adiantamentos / RDV"** quando APROVADA. Não confundir os dois ao testar. *(Confirmado no código 17/07 — a despesa de RDV do teste anterior não aparecer em Custos da Frota é o comportamento correto.)*
 
 ### A8. Editar/remover + Data na despesa (desktop)
 - **Usuário:** kelvereduardo (ou lidyane) · **Tela:** um planejamento com despesa.
