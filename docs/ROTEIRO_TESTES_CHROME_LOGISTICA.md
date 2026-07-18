@@ -98,6 +98,12 @@
   3. Agora, em **Em execução**, o form "Nova visita" passa a mostrar o botão **"Registrar visita"** e as visitas planejadas ganham a ação de **apontar (realizada/pulada) na linha**.
 - **Regressão:** o **status** continua "Em execução" (não mudou); só o verbo do botão mudou. No **app** (parte B), o mesmo botão/dica devem dizer "Liberar para execução".
 
+### A13. Sup. de Departamento: aprovar despesa de INDIVÍDUO do depto + encerrar retorno alheio *(ajuste 17/07)*
+- **Usuário:** lidyanerocha (SUPERVISOR_FROTA).
+- **Parte 1 — aprovar despesa de INDIVÍDUO (sem veículo):** gerar uma despesa PENDENTE de categoria **INDIVÍDUO** (ex.: **Alimentação**) numa saída de veículo do depto dela (rota #10, KELVER=FBR) → em **Custos da Frota** (Pendentes) a despesa **agora aparece** (antes era gestor-only/invisível ao Sup. Depto) → **Aprovar**. *(Complementa o A7: A7 = despesa de VEÍCULO; A13 = despesa de INDIVÍDUO, que passou a ser visível/aprovável pelo Sup. de Departamento. Verificado por API em 17/07: lista as 3 Alimentação de FBR + aprova → APROVADA.)*
+- **Parte 2 — encerrar retorno de veículo que outro não fechou** *(já existia; confirmar)*: com uma viagem de **frota EM_CURSO** de um veículo do **depto dela** iniciada por **outro** usuário (o condutor não fez o retorno) → abrir o detalhe da viagem → clicar em **"Ajuste da rota — corrigir KM / forçar fecho (exceção)"** → marcar **"Fechar a rota (concluir)"** + informar o **KM de retorno** → **Salvar**.
+- **Esperado:** Parte 1 → a despesa de indivíduo do depto dela fica **Aprovada**. Parte 2 → a rota é **fechada** (toast "Rota ajustada e fechada.") mesmo sem o condutor ter registrado o retorno — o Sup. de Departamento corrige a situação no seu depto. ⚠️ Isso é **distinto** do "Registrar retorno" normal (esse continua exigindo o condutor).
+
 ---
 
 ## PARTE B — Testes MOBILE (app Expo — manual, NÃO via Chrome)
@@ -132,4 +138,5 @@ O app roda no celular (Metro), fora do alcance da skill do Chrome. Validar no ap
 | A10 | Retorno frota INDIVIDUAL s/ senha (web) | ⬜ | |
 | A11 | Novo planejamento (Sup. Depto) — seleção do time, s/ senha | ⬜ | |
 | A12 | Rótulos: "Incluir no planejamento" + "Liberar para execução" | ⬜ | |
+| A13 | Sup. Depto aprova despesa INDIVÍDUO + encerra retorno alheio | ⬜ | |
 | B8 | Retorno frota INDIVIDUAL s/ senha (app) | ⬜ | |
