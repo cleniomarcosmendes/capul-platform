@@ -305,8 +305,14 @@ function AtividadesTab() {
 interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; ativo: boolean }
 interface CoreUser { id: string; nome?: string; nomeFantasia?: string; matricula?: string | null; departamento?: { id: string; nome: string } | null; permissoes?: { modulo: { codigo: string }; roleModulo: { codigo: string } }[] }
 interface DeptItem { id: string; nome: string }
-// Supervisor de área = usuário do sistema com o papel SUPERVISOR no módulo LOGISTICA.
-const ehSupervisorArea = (u: CoreUser) => (u.permissoes ?? []).some((p) => p.modulo.codigo === 'LOGISTICA' && p.roleModulo.codigo === 'SUPERVISOR');
+// Representantes do RDV cadastráveis na equipe:
+// - SUPERVISOR de área  → roteia ao COORDENADOR (campo "Coordenador").
+// - COORDENADOR         → roteia ao Supervisor de Departamento POR DEPARTAMENTO
+//   (sem coordenador acima); precisa do registro p/ criar o próprio RDV.
+const temRoleLogistica = (u: CoreUser, role: string) => (u.permissoes ?? []).some((p) => p.modulo.codigo === 'LOGISTICA' && p.roleModulo.codigo === role);
+const ehSupervisorArea = (u: CoreUser) => temRoleLogistica(u, 'SUPERVISOR');
+const ehCoordenador = (u: CoreUser) => temRoleLogistica(u, 'COORDENADOR');
+const ehRepresentante = (u: CoreUser) => ehSupervisorArea(u) || ehCoordenador(u);
 
 function EquipeTab() {
   const { toast } = useToast();
@@ -352,15 +358,19 @@ function EquipeTab() {
   }, [filialId]);
 
   const nomeUser = (u: CoreUser) => u.nome ?? u.nomeFantasia ?? u.id;
-  // Supervisores de área DA FILIAL (usuários com o papel), ordenados por nome, para
-  // escolher pelo NOME — quem monta o time (Supervisor de Departamento) sabe o nome,
-  // não a matrícula. Matrícula e departamento vêm do cadastro do usuário.
-  const supervisoresArea = usuarios.filter(ehSupervisorArea);
+  // Representantes DA FILIAL (SUPERVISOR de área OU COORDENADOR), ordenados por nome,
+  // para escolher pelo NOME — quem monta o time (Supervisor de Departamento) sabe o
+  // nome, não a matrícula. Matrícula e departamento vêm do cadastro do usuário.
+  const representantes = usuarios.filter(ehRepresentante);
   const supSel = usuarios.find((u) => u.id === usuarioId);
+  // Coordenador selecionado → roteia POR DEPARTAMENTO (sem coordenador acima).
+  const selEhCoordenador = !!supSel && ehCoordenador(supSel);
   const escolherSupervisor = (uid: string) => {
     setUsuarioId(uid);
     const u = usuarios.find((x) => x.id === uid);
-    const dep = u?.departamento?.id; // default: o departamento do próprio supervisor
+    // Coordenador não tem coordenador acima — limpa o vínculo ao selecioná-lo.
+    if (u && ehCoordenador(u)) setCoordenadorId('');
+    const dep = u?.departamento?.id; // default: o departamento do próprio representante
     if (dep && departamentos.some((d) => d.id === dep)) setDeptId(dep);
   };
   const criar = async (e: React.FormEvent) => {
@@ -389,23 +399,25 @@ function EquipeTab() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <p className="text-sm text-slate-500">Monte o time: cadastre os <b>supervisores de área</b>, informe o <b>departamento</b> de cada um e vincule ao seu <b>coordenador</b> (quem aprova planejamentos e despesas).</p>
-        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700"><Plus className="h-4 w-4" /> Novo supervisor</button>
+        <p className="text-sm text-slate-500">Monte o time: cadastre os <b>supervisores de área</b> (roteiam ao seu <b>coordenador</b>) e os <b>coordenadores</b> (roteiam ao <b>Supervisor de Departamento</b>, por departamento) — o cadastro é o que permite criar e aprovar planejamentos/despesas.</p>
+        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700"><Plus className="h-4 w-4" /> Novo cadastro</button>
       </div>
 
       {showForm && (
         <form onSubmit={criar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor de área *</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor de área ou Coordenador *</label>
               <select value={usuarioId} onChange={(e) => escolherSupervisor(e.target.value)} className={inp}>
                 <option value="">— selecione pelo nome</option>
-                {supervisoresArea.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}{u.matricula ? ` · ${u.matricula}` : ''}</option>)}
+                {representantes.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}{ehCoordenador(u) ? ' (coordenador)' : ''}{u.matricula ? ` · ${u.matricula}` : ''}</option>)}
               </select>
-              {supervisoresArea.length === 0 ? (
-                <p className="mt-1 text-xs text-amber-700">Nenhum usuário com o papel <b>Supervisor de Área</b> nesta filial. Atribua o papel no Configurador primeiro.</p>
+              {representantes.length === 0 ? (
+                <p className="mt-1 text-xs text-amber-700">Nenhum usuário com o papel <b>Supervisor de Área</b> ou <b>Coordenador</b> nesta filial. Atribua o papel no Configurador primeiro.</p>
               ) : supSel && !supSel.matricula ? (
                 <p className="mt-1 text-xs text-rose-600">Sem matrícula (chapa) no cadastro — ajuste no Configurador para usar no RDV.</p>
+              ) : selEhCoordenador ? (
+                <p className="mt-1 text-xs text-slate-500"><b>Coordenador</b>: roteia ao Supervisor de Departamento pelo <b>departamento</b> (sem coordenador acima).</p>
               ) : (
                 <p className="mt-1 text-xs text-slate-500">Escolha pelo <b>nome</b>. A matrícula e o departamento vêm do cadastro dele — ajuste o departamento se precisar.</p>
               )}
@@ -417,13 +429,15 @@ function EquipeTab() {
                 {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
               </select>
             </div>
+            {!selEhCoordenador && (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Coordenador</label>
               <select value={coordenadorId} onChange={(e) => { const cid = e.target.value; setCoordenadorId(cid); if (!deptId) { const dep = deptDoCoord(cid); if (dep) setDeptId(dep); } }} className={inp}>
                 <option value="">— (sem coordenador)</option>
-                {usuarios.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
+                {usuarios.filter(ehCoordenador).map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
               </select>
             </div>
+            )}
           </div>
           <div className="mt-4 flex gap-3">
             <button type="submit" disabled={salvando} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">{salvando ? 'Salvando…' : 'Cadastrar'}</button>

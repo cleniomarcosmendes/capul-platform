@@ -19,7 +19,7 @@
 
 ## Pré-requisitos de setup (fazer 1x antes)
 
-1. **RDV do coordenador (cenário 6):** logar como **lidyaneaparecida** → aba **Equipe (supervisores)** → "montar o time" → cadastrar **fabricioneiva** como representante **no departamento da Lidyane (Vendas/FBR)**, **sem coordenador acima**. Sem isso o RDV do coordenador não roteia para a Lidyane.
+1. **RDV do coordenador (cenário 6):** logar como **lidyanerocha** → aba **Equipe (supervisores)** → **+ Novo cadastro** → no seletor **"Supervisor de área ou Coordenador"** escolher **fabricioneiva** (aparece com o sufixo *"(coordenador)"*) → **Departamento = Vendas/FBR** → **Cadastrar**. Para coordenador o campo "Coordenador" some (roteia por departamento, **sem coordenador acima**). *(Ajuste 17/07 — antes o seletor só listava papel SUPERVISOR e o coordenador não aparecia.)* **Pré-condição do roteamento:** a Lidyane precisa **supervisionar algum veículo lotado em Vendas/FBR** (o escopo do Supervisor de Departamento deriva de `veiculo.supervisorId` + `departamentoLotacaoId`) — senão o RDV do Fabricio não cai na fila dela.
 2. Confirmar que há planejamentos do mês 08/2026 do **kelvereduardo** (viagens #5 e #8) para os relatórios mensais.
 
 ---
@@ -52,10 +52,10 @@
 - **Esperado:** **bloqueia** com mensagem "Data da despesa (07/2026) fora do mês do planejamento (08/2026)…". Com data dentro de 08/2026 → grava normal.
 
 ### A6. RDV do COORDENADOR aprovado pela Supervisora de Departamento
-- **Usuários:** fabricioneiva (cria) + lidyaneaparecida (aprova). Depende do setup #1.
+- **Usuários:** fabricioneiva (cria) + lidyanerocha (aprova). Depende do setup #1 *(cadastro do Fabricio como coordenador na Equipe — desbloqueado pelo ajuste 17/07)*.
 - **Passos:**
-  1. **fabricioneiva:** Supervisores → aba **Planejamentos** → **Novo planejamento** (deve aparecer "👤 será criado no seu nome (login)", sem matrícula/senha) → escolher mês → criar → incluir 1–2 visitas → **Enviar**.
-  2. **lidyaneaparecida:** aba **Coordenação (aprovar)** → o planejamento do Fabricio deve aparecer → **Aprovar**. Lançar/rever uma despesa do planejamento e **Aprovar** também.
+  1. **fabricioneiva:** Supervisores → aba **Planejamentos** → **Novo planejamento** (deve aparecer "👤 será criado no seu nome (login)", sem matrícula/senha) → escolher mês → criar → incluir 1–2 visitas → **Enviar**. *(Sem o cadastro do setup #1, este passo falha com "Cadastro não encontrado na equipe desta filial".)*
+  2. **lidyanerocha:** aba **Coordenação (aprovar)** → o planejamento do Fabricio deve aparecer → **Aprovar**. Lançar/rever uma despesa do planejamento e **Aprovar** também.
 - **Esperado:** o RDV do coordenador roteia para a **Lidyane** (por departamento) e ela aprova planejamento **e** despesas.
 
 ### A7. Acerto de frota por DEPARTAMENTO do condutor + gestor de frota só contesta
