@@ -33,12 +33,16 @@ describe('DespesaService — escopo da listagem (SUPERVISOR_FROTA)', () => {
     expect(prisma.despesaVeiculo.findMany.mock.calls[0][0].where.veiculoId).toBe('v-in');
   });
 
-  it('sem filtro → restringe ao conjunto do escopo (in: [ids])', async () => {
+  it('sem filtro → veículos do escopo OU despesa de INDIVÍDUO (sem veículo) de viagem de frota do depto', async () => {
     prisma.veiculo.findMany
-      .mockResolvedValueOnce([{ departamentoLotacaoId: 'd1' }])
-      .mockResolvedValueOnce([{ id: 'v-in' }]);
+      .mockResolvedValueOnce([{ departamentoLotacaoId: 'd1' }]) // deptos supervisionados
+      .mockResolvedValueOnce([{ id: 'v-in' }]); // veículos do depto (escopo)
     prisma.despesaVeiculo.findMany.mockResolvedValue([]);
     await svc.listar(sup(), 'SUPERVISOR_FROTA', {} as any);
-    expect(prisma.despesaVeiculo.findMany.mock.calls[0][0].where.veiculoId).toEqual({ in: ['v-in'] });
+    const where = prisma.despesaVeiculo.findMany.mock.calls[0][0].where;
+    expect(where.OR).toEqual([
+      { veiculoId: { in: ['v-in'] } },
+      { veiculoId: null, viagem: { tipo: 'FROTA', veiculo: { departamentoLotacaoId: { in: ['d1'] } } } },
+    ]);
   });
 });

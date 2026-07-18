@@ -290,24 +290,36 @@ export class DespesaService {
     const where: Prisma.DespesaVeiculoWhereInput = ehGestor(role) ? {} : { filialId: user.filialId };
 
     if (!ehGestor(role)) {
-      // Supervisor: só os veículos do seu escopo. Quem não é gestor nem supervisor não vê nada.
-      const ids = await this.veiculosNoEscopo(user, role);
-      if (ids.length === 0) return [];
-      // O filtro ?veiculoId RESPEITA o escopo: pedir um veículo de fora não vaza.
-      if (q.veiculoId) {
-        if (!ids.includes(q.veiculoId)) return [];
-        where.veiculoId = q.veiculoId;
-      } else if (role === 'SUPERVISOR_FROTA') {
-        // Sup. de Departamento vê os veículos do(s) seu(s) depto(s) E as despesas de
-        // INDIVÍDUO (sem veículo) de viagens de FROTA cujo veículo é de um depto dela
-        // — para poder aprovar o acerto de indivíduo do seu departamento.
+      // Supervisor: só o seu escopo. Quem não é gestor nem supervisor não vê nada.
+      if (role === 'SUPERVISOR_FROTA') {
+        // Sup. de Departamento: veículos do(s) seu(s) depto(s). deps computado UMA vez
+        // (reusa no OR de INDIVÍDUO) — evita a dupla chamada de deptosDoSupervisor.
         const deps = await this.deptosDoSupervisor(user);
-        where.OR = [
-          { veiculoId: { in: ids } },
-          { veiculoId: null, viagem: { tipo: TipoViagem.FROTA, veiculo: { departamentoLotacaoId: { in: deps } } } },
-        ];
+        const vs = await this.prisma.veiculo.findMany({
+          where: { filialId: user.filialId ?? undefined, departamentoLotacaoId: { in: deps } }, select: { id: true },
+        });
+        const ids = vs.map((v) => v.id);
+        if (q.veiculoId) {
+          if (!ids.includes(q.veiculoId)) return []; // ?veiculoId de fora não vaza
+          where.veiculoId = q.veiculoId;
+        } else {
+          if (ids.length === 0) return [];
+          // Veículos do escopo OU despesa de INDIVÍDUO (sem veículo) de viagem de FROTA
+          // cujo veículo é de um depto dela — p/ aprovar o acerto de indivíduo do depto.
+          where.OR = [
+            { veiculoId: { in: ids } },
+            { veiculoId: null, viagem: { tipo: TipoViagem.FROTA, veiculo: { departamentoLotacaoId: { in: deps } } } },
+          ];
+        }
       } else {
-        where.veiculoId = { in: ids };
+        const ids = await this.veiculosNoEscopo(user, role);
+        if (ids.length === 0) return [];
+        if (q.veiculoId) {
+          if (!ids.includes(q.veiculoId)) return [];
+          where.veiculoId = q.veiculoId;
+        } else {
+          where.veiculoId = { in: ids };
+        }
       }
     } else if (q.veiculoId) {
       where.veiculoId = q.veiculoId;
