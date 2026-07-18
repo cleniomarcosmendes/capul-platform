@@ -81,6 +81,12 @@
 - **Esperado:** o formulário de retorno **não** mostra os campos **Matrícula** nem **Senha do portal RH** — apenas **KM de retorno** (+ observações). A dica diz "Você (nome) fecha a própria rota — informe apenas o KM de retorno". Ao informar o KM (≥ KM de saída) → **conclui sem senha**. KM menor que o de saída → bloqueia.
 - **Regressão (fallback/PADRÃO):** para um usuário com **Tipo = Padrao (Compartilhado)**, o retorno **continua** exigindo matrícula + senha (login coletivo). *(Não há usuário PADRAO na lista de teste — validar só se houver credencial; senão, marcar N/A.)*
 
+### A11. Novo planejamento pela Supervisora de Departamento — seleção do time, sem senha *(ajuste 17/07)*
+- **Usuário:** lidyanerocha (SUPERVISOR_FROTA) · **Tela:** Supervisores → aba **Planejamentos** → **Novo planejamento**.
+- **Pré-condição:** ter representantes cadastrados no time dela (aba Equipe) — ex.: Kelver (supervisor) e Fabricio (coordenador), do setup #1.
+- **Passos:** abrir o form → o campo **"Supervisor ou Coordenador"** agora é um **seletor por nome** (não mais matrícula+senha) → escolher um representante do time → escolher o mês → **Criar planejamento**.
+- **Esperado:** o planejamento é criado **sem digitar matrícula/senha** (antes exigia a senha do portal do representante). Só aparecem no seletor os representantes **do escopo dela** (departamento). Se o time estiver vazio, mostra o aviso para cadastrar na aba Equipe. *(Auto-serviço do próprio supervisor/coordenador — "criado no seu nome" — segue inalterado.)*
+
 ---
 
 ## PARTE B — Testes MOBILE (app Expo — manual, NÃO via Chrome)
@@ -112,4 +118,5 @@ O app roda no celular (Metro), fora do alcance da skill do Chrome. Validar no ap
 | A8 | Editar/remover + data | ⬜ | |
 | A9 | Área → Coordenador | ⬜ | |
 | A10 | Retorno frota INDIVIDUAL s/ senha (web) | ⬜ | |
+| A11 | Novo planejamento (Sup. Depto) — seleção do time, s/ senha | ⬜ | |
 | B8 | Retorno frota INDIVIDUAL s/ senha (app) | ⬜ | |

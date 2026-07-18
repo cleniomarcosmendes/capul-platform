@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Loader2, Plus, Printer, Route, Tag, Users, X } from 'lucide-react';
+import { Check, Plus, Printer, Route, Tag, Users, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -88,18 +88,21 @@ function ViagensTab() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [mes, setMes] = useState('');
-  const [matricula, setMatricula] = useState('');
-  const [senha, setSenha] = useState('');
-  const [nome, setNome] = useState('');
-  const [buscando, setBuscando] = useState(false);
+  // Gestor/Supervisor de Departamento cria PARA um representante: seleciona pelo nome
+  // do time JÁ CADASTRADO (aba Equipe), sem matrícula/senha. O backend valida o escopo.
+  const [equipe, setEquipe] = useState<Supervisor[]>([]);
+  const [supRegistroId, setSupRegistroId] = useState('');
   const [salvando, setSalvando] = useState(false);
-  const senhaRef = useRef<HTMLInputElement>(null);
 
   const carregar = async () => {
     setLoading(true);
     try {
-      const v = await logisticaApi.get<ViagemSup[]>('/supervisor/viagens');
-      setViagens(v.data);
+      const [v, eq] = await Promise.all([
+        logisticaApi.get<ViagemSup[]>('/supervisor/viagens'),
+        // Só o gestor precisa do time (o supervisor/coordenador cria o próprio, por login).
+        ehSupervisorLogado ? Promise.resolve({ data: [] as Supervisor[] }) : logisticaApi.get<Supervisor[]>('/supervisor/supervisores'),
+      ]);
+      setViagens(v.data); setEquipe(eq.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar planejamentos.')); } finally { setLoading(false); }
   };
   useEffect(() => {
@@ -107,46 +110,23 @@ function ViagensTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Enter/blur na matrícula: busca só o NOME (sem senha) e pula o foco pra senha.
-  // Espelha a Saída de Veículo (condutor) — confirma quem é antes de pedir a senha.
-  const buscarNomeSup = async () => {
-    const m = matricula.trim();
-    if (!m || nome || buscando) return;
-    setBuscando(true);
-    try {
-      const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: m });
-      setNome(data.nome);
-      setTimeout(() => senhaRef.current?.focus(), 0);
-    } catch { toast('warning', 'Matrícula não encontrada no Protheus.'); } finally { setBuscando(false); }
-  };
-
-  // Valida o supervisor por matrícula+SENHA (loginPortal do Protheus). Responde
-  // 200 {valida,nome,motivo} — nunca 401 (não desloga). Mostra o nome se válido.
-  const validarSupervisor = async () => {
-    const m = matricula.trim();
-    if (!m || !senha) { setNome(''); return; }
-    setBuscando(true);
-    try {
-      const { data } = await logisticaApi.post<{ valida: boolean; nome?: string; motivo?: string }>('/frota/condutor/validar', { matricula: m, senha });
-      if (data.valida && data.nome) { setNome(data.nome); toast('success', `Supervisor validado: ${data.nome}`); }
-      else { setNome(''); toast('warning', data.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível.' : 'Matrícula ou senha inválidas.'); }
-    } catch { setNome(''); toast('error', 'Falha ao validar o supervisor.'); } finally { setBuscando(false); }
-  };
+  const timeAtivo = equipe.filter((s) => s.ativo);
 
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mes) { toast('warning', 'Informe o mês de referência.'); return; }
-    if (!ehSupervisorLogado && matricula.trim() && !senha) { toast('warning', 'Informe a senha do supervisor (ou limpe a matrícula).'); return; }
+    if (!ehSupervisorLogado && !supRegistroId) { toast('warning', 'Selecione o supervisor ou coordenador do seu time.'); return; }
     const mesRef = Number(mes.replace('-', '')); // "2026-05" → 202605
     setSalvando(true);
     try {
       const { data } = await logisticaApi.post<{ id: string }>('/supervisor/viagens', {
         mesReferencia: mesRef,
-        // Supervisor logado: backend identifica pelo JWT (sem matrícula+senha).
-        ...(ehSupervisorLogado ? {} : { supervisorMatricula: matricula.trim() || undefined, supervisorSenha: senha || undefined }),
+        // Supervisor/coordenador logado: backend identifica pelo JWT (auto-serviço).
+        // Gestor: envia o representante selecionado (cadastro), sem senha.
+        ...(ehSupervisorLogado ? {} : { supervisorRegistroId: supRegistroId }),
       });
       toast('success', 'Planejamento criado — agora inclua os clientes do roteiro.');
-      setShowForm(false); setMes(''); setMatricula(''); setSenha(''); setNome('');
+      setShowForm(false); setMes(''); setSupRegistroId('');
       // Abre direto o planejamento (form "Incluir cliente no planejamento" já à mão).
       if (data?.id) { navigate(`/supervisores/viagens/${data.id}`); return; }
       await carregar();
@@ -176,17 +156,14 @@ function ViagensTab() {
             </div>
             ) : (
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor (matrícula + senha)</label>
-              <div className="flex items-start gap-2">
-                <input value={matricula} onChange={(e) => { setMatricula(e.target.value.toUpperCase()); setNome(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarNomeSup(); } }} onBlur={() => void buscarNomeSup()} placeholder="Matrícula" maxLength={20} className={`${inp} font-mono uppercase`} />
-                <input ref={senhaRef} type="password" value={senha} onChange={(e) => { setSenha(e.target.value); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void validarSupervisor(); } }} placeholder="Senha do portal" autoComplete="off" className={inp} />
-                <button type="button" onClick={() => void validarSupervisor()} disabled={buscando || !matricula.trim() || !senha} className="mt-0.5 inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                  {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Validar'}
-                </button>
-              </div>
-              {nome
-                ? <p className="mt-1 text-xs font-medium text-emerald-700">👤 {nome} — confirme com a senha do portal</p>
-                : <p className="mt-1 text-xs text-slate-400">Digite a matrícula e tecle Enter — buscamos o nome e o cursor vai pra senha.</p>}
+              <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor ou Coordenador *</label>
+              <select value={supRegistroId} onChange={(e) => setSupRegistroId(e.target.value)} className={inp}>
+                <option value="">— selecione pelo nome</option>
+                {timeAtivo.map((s) => <option key={s.id} value={s.id}>{s.nome}{s.matricula ? ` · ${s.matricula}` : ''}</option>)}
+              </select>
+              {timeAtivo.length === 0
+                ? <p className="mt-1 text-xs text-amber-700">Nenhum representante no seu time. Cadastre na aba <b>Equipe (supervisores)</b> primeiro.</p>
+                : <p className="mt-1 text-xs text-slate-500">Escolha o representante do seu time pelo <b>nome</b> — sem matrícula/senha.</p>}
             </div>
             )}
           </div>

@@ -59,8 +59,12 @@ export class CriarViagemSupervisorDto {
   @IsInt() @Min(200001) @Max(209912) mesReferencia!: number;
   @IsOptional() @IsNumber() @Min(0) adiantamento?: number;
   @IsOptional() @IsString() @MaxLength(40) veiculoId?: string;
-  // Supervisor de área (funcionário Protheus) dono da viagem — identifica-se por
-  // matrícula+senha (loginPortal). O nome é resolvido no Protheus (não confiar no client).
+  // Representante JÁ CADASTRADO no time (aba Equipe) — o gestor/Supervisor de
+  // Departamento seleciona pelo NOME, sem senha (identidade vem do cadastro; a
+  // autorização é o escopo do gestor + auditoria). Caminho preferido no desktop.
+  @IsOptional() @IsString() @MaxLength(40) supervisorRegistroId?: string;
+  // Legado/fallback: supervisor identificado por matrícula+senha (loginPortal). O
+  // nome é resolvido no Protheus (não confiar no client). Mantido p/ retrocompat.
   @IsOptional() @IsString() @MaxLength(20) supervisorMatricula?: string;
   @IsOptional() @IsString() supervisorSenha?: string;
   @IsOptional() @IsString() @MaxLength(120) supervisorNome?: string;

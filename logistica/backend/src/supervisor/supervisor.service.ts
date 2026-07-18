@@ -180,7 +180,22 @@ export class SupervisorService {
     // (400 se inválida — não 401, que deslogaria). O nome vem do Protheus (fonte).
     let supMatricula: string | null = null;
     let supNome: string | null = null;
-    if (dto.supervisorMatricula?.trim()) {
+    // Registro selecionado (quando o gestor escolhe do time) — evita re-consultar abaixo.
+    let regSel: { id: string; matricula: string; nome: string; coordenadorId: string | null; departamentoId: string | null } | null = null;
+    if (dto.supervisorRegistroId?.trim()) {
+      // Gestor/Supervisor de Departamento seleciona um representante JÁ CADASTRADO no time
+      // (aba Equipe) — SEM senha. A identidade vem do cadastro; a autorização é o escopo
+      // do gestor (assertEscopoSupervisor: ADMIN todos, Sup. Depto por departamento,
+      // coordenador por vínculo) + auditoria (criadoPorId).
+      regSel = await this.prisma.supervisor.findFirst({
+        where: { id: dto.supervisorRegistroId.trim(), filialId, ativo: true },
+        select: { id: true, matricula: true, nome: true, coordenadorId: true, departamentoId: true },
+      });
+      if (!regSel) throw new BadRequestException('Representante não encontrado no time desta filial.');
+      await this.assertEscopoSupervisor(regSel, user);
+      supMatricula = regSel.matricula;
+      supNome = regSel.nome;
+    } else if (dto.supervisorMatricula?.trim()) {
       if (!dto.supervisorSenha?.trim()) throw new BadRequestException('Informe a senha do supervisor.');
       const r = await this.condutor.validar(dto.supervisorMatricula.trim(), dto.supervisorSenha);
       if (r.status === 'INDISPONIVEL') throw new ServiceUnavailableException('Portal do RH indisponível. Tente novamente em instantes.');
@@ -208,10 +223,12 @@ export class SupervisorService {
     if (!supMatricula) {
       throw new BadRequestException('Informe a matrícula do supervisor de área (ou entre como o próprio supervisor) — o planejamento precisa estar vinculado a um cadastro.');
     }
-    const reg = await this.prisma.supervisor.findFirst({
-      where: { filialId, matricula: supMatricula, ativo: true },
-      select: { id: true, coordenadorId: true, departamentoId: true },
-    });
+    const reg = regSel
+      ? { id: regSel.id, coordenadorId: regSel.coordenadorId, departamentoId: regSel.departamentoId }
+      : await this.prisma.supervisor.findFirst({
+          where: { filialId, matricula: supMatricula, ativo: true },
+          select: { id: true, coordenadorId: true, departamentoId: true },
+        });
     if (!reg) {
       throw new BadRequestException('Cadastro não encontrado na equipe desta filial. Peça ao Supervisor de Departamento para te cadastrar (montar o time) com um coordenador ou departamento antes de criar o planejamento.');
     }
