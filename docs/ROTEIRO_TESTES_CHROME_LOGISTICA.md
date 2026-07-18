@@ -8,7 +8,7 @@
 
 | Usuário | Perfil (Logística) |
 |---|---|
-| `lidyaneaparecida` | Supervisor de Departamento (SUPERVISOR_FROTA) — depto Vendas (FBR) |
+| `lidyanerocha` | Supervisor de Departamento (SUPERVISOR_FROTA) — depto Vendas (FBR) |
 | `fabricioneiva` | Coordenador (COORDENADOR) |
 | `kelvereduardo` | Supervisor de Área (SUPERVISOR) |
 | `admin` (Gestão TI/Configurador) | ADMIN — usar p/ o Configurador |
@@ -37,12 +37,12 @@
 - **Esperado:** lista **somente** usuários com papel **ENTREGADOR** da filial (hoje só **Wanderson Nascimento Costa**). Não devem aparecer gestores/coordenadores/supervisores.
 
 ### A3. Aprovar despesa não volta ao topo (preserva rolagem)
-- **Usuário:** lidyaneaparecida (ou fabricioneiva) · **Tela:** Supervisores → um planejamento com várias despesas PENDENTES.
+- **Usuário:** lidyanerocha (ou fabricioneiva) · **Tela:** Supervisores → um planejamento com várias despesas PENDENTES.
 - **Passos:** rolar até o fim da lista de despesas → **Aprovar** uma despesa lá embaixo.
 - **Esperado:** a página **permanece na mesma posição** (não sobe pro topo). Repetir em outra lista (Custos da Frota).
 
 ### A4. Relatórios RDV e Visitas — MENSAIS
-- **Usuário:** lidyaneaparecida · **Tela:** Supervisores → **Adiantamentos / RDV** (Fechamento) do **kelvereduardo**, mês **08/2026**.
+- **Usuário:** lidyanerocha · **Tela:** Supervisores → **Adiantamentos / RDV** (Fechamento) do **kelvereduardo**, mês **08/2026**.
 - **Passos:** **Imprimir RDV** e **Imprimir Visitas**.
 - **Esperado:** RDV mostra "2 planejamento(s): #5, #8" + **Municípios visitados no mês** (lista completa, dedupe por caixa). Visitas lista **todas** as visitas do mês (14: 4 do #5 + 10 do #8) com coluna **Planej.** e **Situação** (Realizada/Pulada + motivo). A grade do RDV **não** tem mais coluna de municípios.
 
@@ -75,7 +75,7 @@
 - **Esperado:** kelver cria/envia planejamento; **fabricio** vê na Coordenação e aprova (fluxo que já existia — regressão).
 
 ### A10. Retorno de frota INDIVIDUAL — fecha só com o KM (sem matrícula/senha) *(ajuste 17/07)*
-- **Usuário:** kelvereduardo (ou lidyaneaparecida) · **Tela:** Frota (saída + retorno de veículo).
+- **Usuário:** kelvereduardo (ou lidyanerocha) · **Tela:** Frota (saída + retorno de veículo).
 - **Pré-condição:** o usuário precisa estar com **Tipo = Individual** em Configurador → Usuários → editar → campo **Tipo** (× "Padrao (Compartilhado)") **e** ter **matrícula cadastrada** (o backend resolve o condutor pelo cadastro). É o padrão dos usuários de teste; só confirmar.
 - **Passos:**
   1. **Saída (individual):** Frota → registrar **saída** de um veículo DISPONÍVEL → deve indicar "condutor = você (login), sem senha" → informar **KM inicial** → sair. (Cria a viagem EM_CURSO com o próprio usuário como condutor.)
@@ -101,8 +101,11 @@
 ### A13. Sup. de Departamento: aprovar despesa de INDIVÍDUO do depto + encerrar retorno alheio *(ajuste 17/07)*
 - **Usuário:** lidyanerocha (SUPERVISOR_FROTA).
 - **Parte 1 — aprovar despesa de INDIVÍDUO (sem veículo):** gerar uma despesa PENDENTE de categoria **INDIVÍDUO** (ex.: **Alimentação**) numa saída de veículo do depto dela (rota #10, KELVER=FBR) → em **Custos da Frota** (Pendentes) a despesa **agora aparece** (antes era gestor-only/invisível ao Sup. Depto) → **Aprovar**. *(Complementa o A7: A7 = despesa de VEÍCULO; A13 = despesa de INDIVÍDUO, que passou a ser visível/aprovável pelo Sup. de Departamento. Verificado por API em 17/07: lista as 3 Alimentação de FBR + aprova → APROVADA.)*
-- **Parte 2 — encerrar retorno de veículo que outro não fechou** *(já existia; confirmar)*: com uma viagem de **frota EM_CURSO** de um veículo do **depto dela** iniciada por **outro** usuário (o condutor não fez o retorno) → abrir o detalhe da viagem → clicar em **"Ajuste da rota — corrigir KM / forçar fecho (exceção)"** → marcar **"Fechar a rota (concluir)"** + informar o **KM de retorno** → **Salvar**.
-- **Esperado:** Parte 1 → a despesa de indivíduo do depto dela fica **Aprovada**. Parte 2 → a rota é **fechada** (toast "Rota ajustada e fechada.") mesmo sem o condutor ter registrado o retorno — o Sup. de Departamento corrige a situação no seu depto. ⚠️ Isso é **distinto** do "Registrar retorno" normal (esse continua exigindo o condutor).
+- **Parte 2 — encerrar retorno de veículo que outro não fechou** *(já existia; confirmar)* — **NÃO precisa de credencial de PORTARIA**:
+  - **Setup (obrigatório):** primeiro **registre uma SAÍDA** de um veículo do depto FBR e deixe-a **EM_CURSO** (sem retorno). O jeito mais simples aqui: logada como **lidyanerocha**, Frota → **Registrar saída** → modo **"Eu (condutor)"** → veículo **LIDYANE** (ou KELVER) + KM inicial → sair. *(Sem uma viagem EM_CURSO no depto dela, não há o que fechar — foi por isso que o teste anterior não achou o botão.)*
+  - **Ação:** abrir o **detalhe** dessa viagem EM_CURSO → localizar o link discreto **"Ajuste da rota — corrigir KM / forçar fecho (exceção)"** (fica no rodapé do detalhe, cor âmbar) → marcar **"Fechar a rota (concluir)"** + informar o **KM de retorno** (≥ KM de saída) → **Salvar**.
+  - ⚠️ **NÃO é** o **"Retorno pela portaria (sem senha do motorista)"** (esse exige matrícula+senha de um usuário **PORTARIA**). O caminho do Sup. de Departamento é o **"Ajuste da rota → forçar fecho"**, que a Lidyane usa **direto, sem credencial extra** — é a permissão dela para corrigir situações no seu depto.
+- **Esperado:** Parte 1 → a despesa de indivíduo do depto dela fica **Aprovada**. Parte 2 → a rota é **fechada** (toast "Rota ajustada e fechada.") mesmo sem "Registrar retorno" do condutor — o Sup. de Departamento corrige a situação no seu depto. ⚠️ Distinto do "Registrar retorno" normal (que exige o condutor) **e** do "Retorno pela portaria" (que exige o porteiro).
 
 ---
 
