@@ -229,7 +229,11 @@ export function SupervisorViagemPage() {
   const concluida = v?.situacao === 'CONCLUIDA';
   // Fase de planejamento (espelha o backend): a visita adicionada aqui nasce PLANEJADA
   // (monta o roteiro). Fora disso ela nasce REALIZADA (visita de fato, em campo).
-  const emPlanejamento = v?.statusPlanejamento === 'RASCUNHO' || v?.statusPlanejamento === 'AJUSTADO' || v?.statusPlanejamento === 'REJEITADO' || v?.statusPlanejamento == null;
+  // "Planejamento" (montar o roteiro) = TUDO antes da execução começar. ENVIADO e
+  // APROVADO ainda são planejamento — a visita nasce PLANEJADA e só é apontada
+  // (realizada/pulada) depois do "Liberar para execução" (statusPlanejamento=EM_EXECUCAO).
+  // Antes o rótulo caía em "Registrar visita" já no APROVADO, sem a execução ter começado.
+  const emPlanejamento = v?.statusPlanejamento !== 'EM_EXECUCAO' && v?.statusPlanejamento !== 'CONCLUIDO';
   // Quem aprova/rejeita despesa: gestor/admin OU o coordenador deste supervisor.
   const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'ADMIN';
   // Aprova planejamento/despesa: coordenador deste supervisor, ADMIN/gestor OU o Supervisor
@@ -300,7 +304,7 @@ export function SupervisorViagemPage() {
     catch (e) { toast('error', errMsg(e, 'Falha ao enviar.')); }
   };
   const iniciar = async () => {
-    try { await logisticaApi.patch(`/supervisor/viagens/${id}/iniciar`); toast('success', 'Execução iniciada.'); await carregar(); }
+    try { await logisticaApi.patch(`/supervisor/viagens/${id}/iniciar`); toast('success', 'Viagem liberada para execução.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao iniciar.')); }
   };
 
@@ -425,7 +429,7 @@ export function SupervisorViagemPage() {
           {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') &&
             <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">Enviar ao coordenador</button>}
           {v.statusPlanejamento === 'APROVADO' &&
-            <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Iniciar execução</button>}
+            <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
           {v.statusPlanejamento === 'EM_EXECUCAO' &&
             <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir</button>}
           {v.statusPlanejamento === 'CONCLUIDO' &&

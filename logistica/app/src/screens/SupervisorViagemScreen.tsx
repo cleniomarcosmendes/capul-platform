@@ -191,7 +191,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   const concluida = v?.situacao === 'CONCLUIDA';
   const sp = v?.statusPlanejamento ?? null;
   const emExecucao = sp === 'EM_EXECUCAO';
-  // Aprovado mas ainda não iniciado: há visitas planejadas esperando o "Iniciar execução".
+  // Aprovado mas ainda não iniciado: há visitas planejadas esperando o "Liberar para execução".
   const temPlanejadaPendente = (v?.paradas ?? []).some((p) => (p.status ?? 'PLANEJADA') === 'PLANEJADA');
 
   const limparVisita = () => { setCliNome(''); setMuni(''); setAtivId(''); setProp(''); setVObs(''); };
@@ -366,7 +366,7 @@ export function SupervisorViagemScreen({ route }: Props) {
         )}
         <View style={styles.wfRow}>
           {sp === 'APROVADO' && (
-            <TouchableOpacity style={[styles.wfBtn, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(iniciarExecucaoApp, 'Execução iniciada.')}><Text style={styles.wfBtnTxt}>Iniciar execução</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.wfBtn, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(iniciarExecucaoApp, 'Viagem liberada para execução.')}><Text style={styles.wfBtnTxt}>Liberar para execução</Text></TouchableOpacity>
           )}
           {emExecucao && (
             <TouchableOpacity style={[styles.wfBtn, styles.wfBtnAlt, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(concluirPlanejamentoApp, 'Planejamento concluído.')}><Text style={[styles.wfBtnTxt, styles.wfBtnTxtAlt]}>Concluir</Text></TouchableOpacity>
@@ -429,7 +429,7 @@ export function SupervisorViagemScreen({ route }: Props) {
 
       <Text style={styles.listTitle}>Visitas ({v.paradas.length})</Text>
       {sp === 'APROVADO' && temPlanejadaPendente && (
-        <Text style={styles.hint}>Planejamento aprovado. Toque em “Iniciar execução” (no topo) para apontar as visitas como realizadas ou puladas.</Text>
+        <Text style={styles.hint}>Planejamento aprovado. Toque em “Liberar para execução” (no topo) para apontar as visitas como realizadas ou puladas.</Text>
       )}
       {sp === 'ENVIADO' && temPlanejadaPendente && (
         <Text style={styles.hint}>Enviado — aguardando o coordenador aprovar. Depois você inicia a execução e aponta as visitas.</Text>
