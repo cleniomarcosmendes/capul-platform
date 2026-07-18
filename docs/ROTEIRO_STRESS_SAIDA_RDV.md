@@ -11,7 +11,7 @@
 | Papel | Logins | Tipo login | Senha |
 |---|---|---|---|
 | ADMIN | `admin` | INDIVIDUAL | (padrão) |
-| GESTOR_FROTA | `gfrota01`, `marcelo` | INDIVIDUAL | seed = `123456` (confirmar) |
+| GESTOR_FROTA | `gfrota01`, `marcelo` | INDIVIDUAL | seed = `123456` (CONFIRMADO 18/07) |
 | GESTOR_ENTREGA | `renataborges`, `supdept02` | INDIVIDUAL | `123456` / ref. |
 | OPERADOR_ENTREGA | `condutor_col` (**PADRÃO**), `condutor_ind` | PADRAO / IND | `123456` |
 | PORTARIA | `portaria01` | **PADRÃO** | `123456` |

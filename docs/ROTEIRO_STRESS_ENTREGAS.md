@@ -17,10 +17,12 @@
 | OPERADOR_ENTREGA | `condutor_col` (PADRÃO), `condutor_ind` | confirmar filial | cadastra/monta/baixa; NÃO vê comprovantes |
 | ADMIN | `admin` | global | passa em tudo |
 
-> Senhas: `renataborges`/`wandersonnascimento` → memória `reference_test_users_logistica`; seed (`condutor_col` etc.) → `123456` (validar). **Você digita as senhas.**
+> Senhas: `renataborges`/`wandersonnascimento` → memória `reference_test_users_logistica`; seed (`condutor_col` etc.) → **`123456` (CONFIRMADO** — login testado via API 18/07). **Você digita as senhas.**
+> ⚠️ Os logins PADRÃO/OPERADOR de seed (`condutor_col`, `portaria01`, `condutor_ind`) estão na **filial 01 (AGROVETERINARIA)**, não na 02. Para Entregas na filial 02, use **`renataborges`** (GESTOR_ENTREGA, tem a 02) + **`wandersonnascimento`** (ENTREGADOR da 02).
 
 ## Fixtures (DEV)
 
+- **Veículo DISPONÍVEL na filial 02:** **`SUP01`** (para montar/despachar rota).
 - **Filial 02 (SUPERMERCADO UNAI):** ~41 entregas ENTREGUE + 1 NÃO_ENTREGUE, 8 rotas CONCLUÍDA (histórico p/ Painel/Análise/Comprovantes).
 - **Filial 01 (AGROVETERINARIA UNAI):** **1 rota EM_CURSO + 3 entregas EM_VIAGEM** (dá pra testar baixa ao vivo se o motorista da rota tiver app; senão, criar um ciclo novo na 02).
 - **Clientes reais p/ autofill (Protheus SA1, leitura):** CLENIO MARCOS MENDES `E01047` · RENATA BORGES `E01981` · THIAGO MACEDO `E04060` (matrícula/nome/telefone). Bloqueados (A1_MSBLQL='1') nunca aparecem.
