@@ -220,20 +220,26 @@ export class DespesaService {
     return [...new Set([...viaVeiculos, ...(proprio ? [proprio] : [])])].filter(Boolean) as string[];
   }
 
-  /** Departamento do ACERTO da despesa = o do CONDUTOR (quem lançou); se não tiver,
-   *  cai para o departamento do VEÍCULO. É por aqui que a aprovação segue a pessoa. */
-  private async deptoDaDespesa(d: { criadoPorId: string | null; veiculoId: string | null }): Promise<string | null> {
-    const doCondutor = await this.deptoDoUsuario(d.criadoPorId);
-    if (doCondutor) return doCondutor;
+  /** Departamento do ACERTO da despesa. Despesa de VEÍCULO segue o CONDUTOR (quem
+   *  lançou), com fallback no depto do veículo. Despesa de INDIVÍDUO (sem veículo)
+   *  numa viagem de FROTA segue o depto do VEÍCULO da viagem — MESMA chave usada na
+   *  listagem, para que "listar" e "aprovar" fiquem coerentes p/ o Sup. de Departamento. */
+  private async deptoDaDespesa(d: { criadoPorId: string | null; veiculoId: string | null; viagemId?: string | null }): Promise<string | null> {
     if (d.veiculoId) {
+      const doCondutor = await this.deptoDoUsuario(d.criadoPorId);
+      if (doCondutor) return doCondutor;
       const v = await this.prisma.veiculo.findUnique({ where: { id: d.veiculoId }, select: { departamentoLotacaoId: true } });
       return v?.departamentoLotacaoId ?? null;
     }
-    return null;
+    if (d.viagemId) {
+      const vg = await this.prisma.viagem.findUnique({ where: { id: d.viagemId }, select: { tipo: true, veiculo: { select: { departamentoLotacaoId: true } } } });
+      if (vg?.tipo === TipoViagem.FROTA && vg.veiculo?.departamentoLotacaoId) return vg.veiculo.departamentoLotacaoId;
+    }
+    return await this.deptoDoUsuario(d.criadoPorId);
   }
 
-  /** É o supervisor de departamento cujo escopo cobre o departamento do condutor da despesa? */
-  private async ehSupervisorDoDepto(d: { criadoPorId: string | null; veiculoId: string | null }, user: JwtPayload, role?: string): Promise<boolean> {
+  /** É o supervisor de departamento cujo escopo cobre o departamento da despesa? */
+  private async ehSupervisorDoDepto(d: { criadoPorId: string | null; veiculoId: string | null; viagemId?: string | null }, user: JwtPayload, role?: string): Promise<boolean> {
     if (role !== 'SUPERVISOR_FROTA') return false;
     const dep = await this.deptoDaDespesa(d);
     return !!dep && (await this.deptosGeridos(user)).includes(dep);
@@ -291,6 +297,15 @@ export class DespesaService {
       if (q.veiculoId) {
         if (!ids.includes(q.veiculoId)) return [];
         where.veiculoId = q.veiculoId;
+      } else if (role === 'SUPERVISOR_FROTA') {
+        // Sup. de Departamento vê os veículos do(s) seu(s) depto(s) E as despesas de
+        // INDIVÍDUO (sem veículo) de viagens de FROTA cujo veículo é de um depto dela
+        // — para poder aprovar o acerto de indivíduo do seu departamento.
+        const deps = await this.deptosDoSupervisor(user);
+        where.OR = [
+          { veiculoId: { in: ids } },
+          { veiculoId: null, viagem: { tipo: TipoViagem.FROTA, veiculo: { departamentoLotacaoId: { in: deps } } } },
+        ];
       } else {
         where.veiculoId = { in: ids };
       }
