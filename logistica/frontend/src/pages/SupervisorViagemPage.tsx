@@ -491,9 +491,10 @@ export function SupervisorViagemPage() {
 
       {!concluida && (
         <form onSubmit={adicionar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-1 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : emPlanejamento ? 'Incluir cliente no planejamento' : 'Nova visita'}</h2>
+          <h2 className="mb-1 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : emPlanejamento ? 'Incluir cliente no planejamento' : 'Registrar visita fora do plano'}</h2>
           {!editVisitaId && emPlanejamento && <p className="mb-4 text-xs text-sky-800">📋 Monte o roteiro: adicione os clientes que pretende visitar. Você aponta como realizada/pulada durante a execução.</p>}
-          {(editVisitaId || !emPlanejamento) && <div className="mb-4" />}
+          {!editVisitaId && !emPlanejamento && <p className="mb-4 text-xs text-sky-800">➕ Visita <b>fora do planejamento inicial</b>: cliente atendido ou uma oportunidade (prospect) que surgiu na viagem. Entra como <b>Realizada</b>. As visitas do plano você aponta (realizada/pulada) na lista abaixo.</p>}
+          {editVisitaId && <div className="mb-4" />}
           <div className="mb-3">
             <label className="mb-1 block text-xs font-medium text-slate-500">Cliente</label>
             <BuscaCliente onPick={(c) => { setCliMat(c.matricula ?? ''); setCliNome(c.nome); if (c.municipio) setMunicipio(c.municipio); if (c.propriedade) setPropriedade(c.propriedade); }} />

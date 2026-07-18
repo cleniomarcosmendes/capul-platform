@@ -410,7 +410,7 @@ export function SupervisorViagemScreen({ route }: Props) {
       {emExecucao && (showVisita ? (
         <View style={styles.card}>
           <Text style={styles.sTitle}>Registrar visita / oportunidade</Text>
-          <Text style={styles.hint}>Cliente atendido ou um prospect (oportunidade) que surgiu na viagem.</Text>
+          <Text style={styles.hint}>Visita fora do plano: cliente atendido ou um prospect (oportunidade) que surgiu na viagem. Entra como Realizada.</Text>
           <TextInput style={styles.input} onFocus={aoFocar} placeholder="Cliente / prospect" value={cliNome} onChangeText={setCliNome} />
           <TextInput style={styles.input} onFocus={aoFocar} placeholder="Município" value={muni} onChangeText={setMuni} />
           <SelectBusca valor={ativId} opcoes={ativs.map((a) => ({ id: a.id, nome: a.nome }))} onChange={setAtivId} placeholder="Atividade" permiteLimpar />
