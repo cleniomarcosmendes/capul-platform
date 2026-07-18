@@ -87,6 +87,15 @@
 - **Passos:** abrir o form → o campo **"Supervisor ou Coordenador"** agora é um **seletor por nome** (não mais matrícula+senha) → escolher um representante do time → escolher o mês → **Criar planejamento**.
 - **Esperado:** o planejamento é criado **sem digitar matrícula/senha** (antes exigia a senha do portal do representante). Só aparecem no seletor os representantes **do escopo dela** (departamento). Se o time estiver vazio, mostra o aviso para cadastrar na aba Equipe. *(Auto-serviço do próprio supervisor/coordenador — "criado no seu nome" — segue inalterado.)*
 
+### A12. Rótulos do planejamento — "Incluir no planejamento" (APROVADO) + "Liberar para execução" *(ajuste 17/07)*
+- **Usuário:** kelvereduardo (dono) ou fabricioneiva · **Tela:** Supervisores → abrir um planejamento **APROVADO** (ex.: #13) — detalhe da viagem.
+- **Passos e Esperado (rótulo da visita):**
+  1. Com o planejamento em **Aprovado** (ainda **não** iniciado), olhar o form **"Nova visita"**: o título deve ser **"Incluir cliente no planejamento"**, com a dica "📋 Monte o roteiro…", e o botão deve ser **"Incluir no planejamento"** — **não** "Registrar visita". A visita adicionada entra como **Planejada** (o registro real é a baixa **na linha** da visita, durante a execução).
+- **Passos e Esperado ("Liberar para execução"):**
+  2. No topo, o botão (antes "Iniciar execução") deve se chamar **"Liberar para execução"**; ao clicar, toast **"Viagem liberada para execução."** e o status vai para **Em execução**.
+  3. Agora, em **Em execução**, o form "Nova visita" passa a mostrar o botão **"Registrar visita"** e as visitas planejadas ganham a ação de **apontar (realizada/pulada) na linha**.
+- **Regressão:** o **status** continua "Em execução" (não mudou); só o verbo do botão mudou. No **app** (parte B), o mesmo botão/dica devem dizer "Liberar para execução".
+
 ---
 
 ## PARTE B — Testes MOBILE (app Expo — manual, NÃO via Chrome)
@@ -101,6 +110,7 @@ O app roda no celular (Metro), fora do alcance da skill do Chrome. Validar no ap
 - **B6. SUPERVISOR_FROTA marca paradas** (lidyane, como condutora): dar baixa/check-in em parada — sem erro 403.
 - **B7. Nome do app:** após **novo build do APK**, o app aparece como **"CAPUL Logística"** (config nativa — não muda no reload do Metro).
 - **B8. Retorno de frota INDIVIDUAL sem senha** *(ajuste 17/07)*: logado no app com usuário **Tipo = Individual** (ex.: kelver/lidyane) que tenha uma viagem de frota **EM_CURSO** como condutor → abrir a viagem → aba **🏁 Retorno** → deve mostrar **só o KM final** (sem os campos matrícula/senha) → informar KM → **Registrar retorno** fecha sem senha. Confirme também que o **teclado não sobrepõe** o campo KM (B1). *Requer o app com o JS atualizado (Metro/OTA) — o backend do DEV já aceita o fluxo.*
+- **B9. "Liberar para execução" no app** *(ajuste 17/07)*: no app do supervisor, abrir um planejamento **Aprovado** → o botão do workflow deve se chamar **"Liberar para execução"** (antes "Iniciar execução"), e a dica deve dizer "Toque em 'Liberar para execução'… para apontar as visitas". Ao tocar → toast "Viagem liberada para execução." e o status vira **Em execução** (só então libera apontar realizada/pulada). *Requer app com JS atualizado (Metro/OTA).*
 
 ---
 
@@ -119,4 +129,5 @@ O app roda no celular (Metro), fora do alcance da skill do Chrome. Validar no ap
 | A9 | Área → Coordenador | ⬜ | |
 | A10 | Retorno frota INDIVIDUAL s/ senha (web) | ⬜ | |
 | A11 | Novo planejamento (Sup. Depto) — seleção do time, s/ senha | ⬜ | |
+| A12 | Rótulos: "Incluir no planejamento" + "Liberar para execução" | ⬜ | |
 | B8 | Retorno frota INDIVIDUAL s/ senha (app) | ⬜ | |
