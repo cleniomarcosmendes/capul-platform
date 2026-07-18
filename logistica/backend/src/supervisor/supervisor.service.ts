@@ -519,15 +519,17 @@ export class SupervisorService {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
     }
-    // Na fase de PLANEJAMENTO (rascunho/ajustado/rejeitado) a visita nasce
-    // PLANEJADA; durante a EXECUÇÃO ela é uma exceção (cliente incluído em campo)
-    // e nasce REALIZADA.
+    // ANTES da execução (rascunho/enviado/aprovado/ajustado/rejeitado) a visita
+    // nasce PLANEJADA — inclusive em APROVADO, que ainda é planejamento até o
+    // "Liberar para execução". Só durante a EXECUÇÃO (EM_EXECUCAO) uma visita
+    // incluída em campo é exceção e nasce REALIZADA. Espelha o rótulo do desktop
+    // ("Incluir no planejamento" × "Registrar visita").
     // Fila offline (app): reenvio com a mesma chave não duplica a visita.
     if (dto.idempotencyKey) {
       const ja = await this.prisma.parada.findUnique({ where: { idempotencyKey: dto.idempotencyKey }, include: { atividade: { select: { nome: true } } } });
       if (ja) return ja;
     }
-    const emPlanejamento = ['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '');
+    const emPlanejamento = v.statusPlanejamento !== 'EM_EXECUCAO' && v.statusPlanejamento !== 'CONCLUIDO';
     const clienteMatricula = dto.clienteMatricula?.trim().toUpperCase() || null;
     const propriedade = dto.propriedade?.trim() || null;
     const localId = await this.resolverLocalDaMarcacao(dto.localClienteId, dto.noLocal, {
