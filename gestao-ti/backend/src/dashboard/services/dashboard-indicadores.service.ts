@@ -125,7 +125,13 @@ export class DashboardIndicadoresService {
       this.prisma.parcelaContrato.findMany({
         where: { status: 'PAGA', dataPagamento: { gte: dataInicio, lte: dataFim }, ...parcelaDeptoWhere },
         include: {
-          contrato: { select: { departamentoId: true, departamento: { select: { nome: true } } } },
+          contrato: {
+            select: {
+              departamentoId: true,
+              departamento: { select: { nome: true } },
+              produtoRef: { select: { tipoProduto: { select: { id: true, descricao: true } } } },
+            },
+          },
           rateioItens: { include: { centroCusto: { select: { id: true, codigo: true, nome: true } } } },
         },
       }),
@@ -184,7 +190,11 @@ export class DashboardIndicadoresService {
       const v = Number(p.valor);
       totalParcelas += v;
       add(depto, p.contrato.departamentoId ?? '__sd', p.contrato.departamento?.nome ?? 'Sem departamento', v);
-      add(tipo, '__contrato', 'Contratos/serviços (sem produto)', v);
+      // Tipo de produto do CONTRATO (produtoRef → tipoProduto). Reconcilia com os
+      // mesmos baldes das NFs (mesmo id de TipoProduto → mesma faixa); contrato sem
+      // produto/tipo cai em "Não classificado" (__nc), igual item de NF sem tipo.
+      const ctTipo = p.contrato.produtoRef?.tipoProduto;
+      add(tipo, ctTipo?.id ?? '__nc', ctTipo?.descricao ?? 'Não classificado', v);
       if (p.rateioItens.length) {
         let somaR = 0;
         for (const ri of p.rateioItens) {
@@ -378,7 +388,13 @@ export class DashboardIndicadoresService {
       this.prisma.parcelaContrato.findMany({
         where: { status: 'PAGA', dataPagamento: { gte: windowInicio, lte: windowFim }, ...parcelaDeptoWhere },
         include: {
-          contrato: { select: { departamentoId: true, departamento: { select: { nome: true } } } },
+          contrato: {
+            select: {
+              departamentoId: true,
+              departamento: { select: { nome: true } },
+              produtoRef: { select: { tipoProduto: { select: { id: true, descricao: true } } } },
+            },
+          },
           rateioItens: { include: { centroCusto: { select: { id: true, codigo: true, nome: true } } } },
         },
       }),
@@ -446,7 +462,8 @@ export class DashboardIndicadoresService {
       if (dimensao === 'departamento') {
         addS(p.contrato.departamentoId ?? '__sd', p.contrato.departamento?.nome ?? 'Sem departamento', mi, v);
       } else if (dimensao === 'tipoProduto') {
-        addS('__contrato', 'Contratos/serviços (sem produto)', mi, v);
+        const ctTipo = p.contrato.produtoRef?.tipoProduto;
+        addS(ctTipo?.id ?? '__nc', ctTipo?.descricao ?? 'Não classificado', mi, v);
       } else if (p.rateioItens.length) {
         let somaR = 0;
         for (const ri of p.rateioItens) {
@@ -505,7 +522,7 @@ export class DashboardIndicadoresService {
       this.prisma.parcelaContrato.findMany({
         where: { status: 'PAGA', dataPagamento: { gte: dataInicio, lte: dataFim }, ...parcelaDeptoWhere },
         include: {
-          contrato: { select: { numero: true, titulo: true, departamentoId: true } },
+          contrato: { select: { numero: true, titulo: true, departamentoId: true, produtoRef: { select: { tipoProdutoId: true } } } },
           rateioItens: { select: { centroCustoId: true, valorCalculado: true } },
         },
         orderBy: { dataPagamento: 'asc' },
@@ -566,7 +583,9 @@ export class DashboardIndicadoresService {
           if (v > 0) docs.push(nfDoc(nf, v));
         }
       }
-      if (chave === '__contrato') for (const p of parcelas) docs.push(parcDoc(p, Number(p.valor)));
+      for (const p of parcelas) {
+        if ((p.contrato.produtoRef?.tipoProdutoId ?? '__nc') === chave) docs.push(parcDoc(p, Number(p.valor)));
+      }
     } else {
       for (const nf of nfs) if ((nf.departamento?.id ?? '__sd') === chave) docs.push(nfDoc(nf, Number(nf.valorTotal)));
       for (const p of parcelas) if ((p.contrato.departamentoId ?? '__sd') === chave) docs.push(parcDoc(p, Number(p.valor)));
