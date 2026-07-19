@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { ModalidadeRateio } from '@prisma/client';
+import { ModalidadeRateio, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ContratoCoreService } from './contrato-core.service.js';
 import { ConfigurarRateioTemplateDto, SimularRateioDto, RateioItemDto, GerarRateioParcelaDto, ConfigurarRateioDto } from '../dto/rateio.dto.js';
@@ -91,6 +91,18 @@ export class ContratoRateioService {
       usuarioId,
     );
 
+    // Materializa o template nas parcelas SEM rateio (forcar=false preserva
+    // ajustes manuais). Fecha o buraco em que a parcela nasce sem rateio: a
+    // geracao automatica/manual nao aplica o template e "copiar p/ pendentes"
+    // ignora as PAGAS. Best-effort — o template ja foi salvo; se alguma parcela
+    // falhar (ex.: VALOR_FIXO incompativel com o valor), o usuario aciona a acao
+    // explicita "Reprocessar" e ve o detalhe das falhas.
+    try {
+      await this.reprocessarRateioTemplate(contratoId, usuarioId, role, false);
+    } catch {
+      /* noop — reprocesso e best-effort; nao deve reverter o save do template */
+    }
+
     return this.obterRateioTemplate(contratoId);
   }
 
@@ -137,28 +149,11 @@ export class ContratoRateioService {
       }
 
       const valorParcela = new Decimal(parcela.valor.toString());
-      const itensTemplate = template.itens.map((item) => ({
-        centroCustoId: item.centroCustoId,
-        percentual: item.percentual ? Number(item.percentual) : undefined,
-        valorFixo: item.valorFixo ? Number(item.valorFixo) : undefined,
-        parametro: item.parametro ? Number(item.parametro) : undefined,
-        naturezaId: item.naturezaId || undefined,
-      }));
+      const itensTemplate = this.mapItensTemplate(template.itens);
 
-      const itensCalculados = this.computeRateio(template.modalidade, itensTemplate, valorParcela);
-
-      await this.prisma.$transaction(async (tx) => {
-        await tx.parcelaRateioItem.deleteMany({ where: { parcelaId } });
-        await tx.parcelaRateioItem.createMany({
-          data: itensCalculados.map((item) => ({
-            parcelaId,
-            centroCustoId: item.centroCustoId,
-            percentual: item.percentual,
-            valorCalculado: item.valorCalculado,
-            naturezaId: item.naturezaId,
-          })),
-        });
-      });
+      await this.prisma.$transaction((tx) =>
+        this.aplicarTemplateNaParcela(tx, parcelaId, valorParcela, template.modalidade, itensTemplate),
+      );
 
       await this.core.criarHistorico(contratoId, 'RATEIO_ALTERADO', `Rateio gerado para parcela #${parcela.numero} via template`, usuarioId);
     }
@@ -246,6 +241,123 @@ export class ContratoRateioService {
     await this.core.criarHistorico(contratoId, 'RATEIO_ALTERADO', `Rateio da parcela #${parcelaOrigem.numero} copiado para ${parcelasPendentes.length} parcelas pendentes`, usuarioId);
 
     return { parcelasCopied: parcelasPendentes.length };
+  }
+
+  /**
+   * Mapeia os itens do template (Decimal | null) para o shape que o computeRateio
+   * espera (number | undefined). Reuso entre gerarRateioParcela e reprocessamento.
+   */
+  private mapItensTemplate(
+    itens: { centroCustoId: string; percentual: Decimal | null; valorFixo: Decimal | null; parametro: Decimal | null; naturezaId: string | null }[],
+  ): RateioItemDto[] {
+    return itens.map((item) => ({
+      centroCustoId: item.centroCustoId,
+      percentual: item.percentual ? Number(item.percentual) : undefined,
+      valorFixo: item.valorFixo ? Number(item.valorFixo) : undefined,
+      parametro: item.parametro ? Number(item.parametro) : undefined,
+      naturezaId: item.naturezaId || undefined,
+    }));
+  }
+
+  /**
+   * Materializa (calcula + grava) o rateio de UMA parcela a partir do template,
+   * dentro da transacao recebida — substitui o rateio existente da parcela.
+   * Extraido de gerarRateioParcela para reuso no reprocessamento em lote.
+   */
+  private async aplicarTemplateNaParcela(
+    tx: Prisma.TransactionClient,
+    parcelaId: string,
+    valorParcela: Decimal,
+    modalidade: ModalidadeRateio,
+    itensTemplate: RateioItemDto[],
+  ) {
+    const itensCalculados = this.computeRateio(modalidade, itensTemplate, valorParcela);
+    await tx.parcelaRateioItem.deleteMany({ where: { parcelaId } });
+    await tx.parcelaRateioItem.createMany({
+      data: itensCalculados.map((item) => ({
+        parcelaId,
+        centroCustoId: item.centroCustoId,
+        percentual: item.percentual,
+        valorCalculado: item.valorCalculado,
+        naturezaId: item.naturezaId,
+      })),
+    });
+  }
+
+  /**
+   * Reprocessa o rateio de TODAS as parcelas do contrato a partir do template
+   * configurado — inclusive parcelas ja PAGAS (rateio e atribuicao contabil de
+   * centro de custo, nao altera valor nem status da parcela). Fecha o buraco em
+   * que parcelas nascem sem rateio (geracao automatica/manual nao materializam o
+   * template) e "copiar para pendentes" ignora as PAGAS. Idempotente e robusto:
+   * falha em uma parcela nao aborta as demais.
+   *
+   * @param forcar true  = substitui o rateio de TODAS as parcelas (propaga
+   *                        mudanca do template; sobrescreve ajuste manual). Usado
+   *                        pela acao explicita "Reprocessar".
+   *               false = so preenche parcelas SEM rateio (preserva ajuste
+   *                        manual). Usado pelo gancho automatico ao salvar o
+   *                        template.
+   */
+  async reprocessarRateioTemplate(
+    contratoId: string,
+    usuarioId: string,
+    role: string = 'ADMIN',
+    forcar = true,
+  ) {
+    const contrato = await this.core.findOne(contratoId);
+    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+
+    const template = await this.prisma.rateioTemplate.findUnique({
+      where: { contratoId },
+      include: { itens: true },
+    });
+    if (!template) {
+      throw new BadRequestException('Contrato nao possui rateio template configurado');
+    }
+    const itensTemplate = this.mapItensTemplate(template.itens);
+
+    const parcelas = await this.prisma.parcelaContrato.findMany({
+      where: { contratoId, status: { not: 'CANCELADA' } },
+      select: { id: true, numero: true, valor: true, _count: { select: { rateioItens: true } } },
+      orderBy: { numero: 'asc' },
+    });
+
+    let atualizadas = 0;
+    let preservadas = 0;
+    const falhas: { numero: number; motivo: string }[] = [];
+
+    for (const parcela of parcelas) {
+      if (!forcar && parcela._count.rateioItens > 0) {
+        preservadas++;
+        continue;
+      }
+      try {
+        await this.prisma.$transaction((tx) =>
+          this.aplicarTemplateNaParcela(
+            tx,
+            parcela.id,
+            new Decimal(parcela.valor.toString()),
+            template.modalidade,
+            itensTemplate,
+          ),
+        );
+        atualizadas++;
+      } catch (e) {
+        falhas.push({ numero: parcela.numero, motivo: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
+    await this.core.criarHistorico(
+      contratoId,
+      'RATEIO_ALTERADO',
+      `Rateio reprocessado a partir do template: ${atualizadas} parcela(s) atualizada(s)` +
+        (preservadas ? `, ${preservadas} preservada(s)` : '') +
+        (falhas.length ? `, ${falhas.length} com falha` : ''),
+      usuarioId,
+    );
+
+    return { total: parcelas.length, atualizadas, preservadas, falhas };
   }
 
   // --- Rateio por Projeto ---

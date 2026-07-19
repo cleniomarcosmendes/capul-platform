@@ -1171,6 +1171,8 @@ function TabRateioTemplate({ contrato, canManage, onReload, toast }: TabProps) {
   const [itens, setItens] = useState<{ centroCustoId: string; naturezaId: string; percentual: string; valorFixo: string; parametro: string }[]>([]);
   const [simulacao, setSimulacao] = useState<{ centroCustoId: string; valorCalculado: number }[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
+  const [confirmReproc, setConfirmReproc] = useState(false);
   const { ConfirmDialog: ConfirmDialogRateio } = useUnsavedChanges(showForm);
 
   useEffect(() => {
@@ -1268,19 +1270,56 @@ function TabRateioTemplate({ contrato, canManage, onReload, toast }: TabProps) {
     }
   }
 
+  // Backfill: aplica o template a TODAS as parcelas (inclusive pagas). Corrige
+  // parcelas que ficaram sem rateio e apareciam em "Contratos — sem rateio de
+  // centro de custo" nos Indicadores. Sobrescreve rateio manual por parcela.
+  async function handleReprocessar() {
+    setConfirmReproc(false);
+    setReprocessing(true);
+    try {
+      const r = await contratoService.reprocessarRateioTemplate(contrato.id);
+      const partes = [`${r.atualizadas} parcela(s) atualizada(s)`];
+      if (r.preservadas) partes.push(`${r.preservadas} preservada(s)`);
+      if (r.falhas.length) partes.push(`${r.falhas.length} com falha`);
+      toast.show(r.falhas.length ? 'error' : 'success', `Rateio reprocessado: ${partes.join(', ')}.`);
+      onReload();
+    } catch (err) {
+      toast.show('error', extractErrorMsg(err, 'Erro ao reprocessar rateio'));
+    } finally {
+      setReprocessing(false);
+    }
+  }
+
   const ccMap = Object.fromEntries(centrosCusto.map((c) => [c.id, c]));
 
   return (
     <>
     {ConfirmDialogRateio}
+    <ConfirmModal
+      open={confirmReproc}
+      title="Reprocessar rateio"
+      message="Aplica o template de rateio a TODAS as parcelas do contrato, inclusive as ja pagas, sobrescrevendo eventuais ajustes manuais de rateio por parcela. Use para corrigir parcelas que ficaram sem rateio de centro de custo. Deseja continuar?"
+      onConfirm={handleReprocessar}
+      onCancel={() => setConfirmReproc(false)}
+    />
     <div className="bg-white rounded-xl border border-slate-200">
       <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h4 className="font-semibold text-slate-700">Rateio Template</h4>
         {canManage && !finalizado && (
-          <button onClick={() => showForm ? setShowForm(false) : startEditing()}
-            className="text-xs text-capul-600 hover:underline">
-            {showForm ? 'Cancelar' : (template ? 'Editar Template' : 'Configurar Template')}
-          </button>
+          <div className="flex items-center gap-4">
+            {template && !showForm && (
+              <button onClick={() => setConfirmReproc(true)} disabled={reprocessing}
+                className="text-xs text-capul-600 hover:underline disabled:opacity-50 inline-flex items-center gap-1"
+                title="Aplica o template a todas as parcelas (inclusive pagas) — corrige parcelas sem rateio">
+                <RefreshCw size={13} className={reprocessing ? 'animate-spin' : ''} />
+                {reprocessing ? 'Reprocessando...' : 'Reprocessar rateio'}
+              </button>
+            )}
+            <button onClick={() => showForm ? setShowForm(false) : startEditing()}
+              className="text-xs text-capul-600 hover:underline">
+              {showForm ? 'Cancelar' : (template ? 'Editar Template' : 'Configurar Template')}
+            </button>
+          </div>
         )}
       </div>
 

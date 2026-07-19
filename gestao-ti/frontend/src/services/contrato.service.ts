@@ -180,6 +180,15 @@ export const contratoService = {
     return data;
   },
 
+  // Reprocessa o template em TODAS as parcelas (inclusive PAGAS) — backfill de
+  // parcelas que ficaram sem rateio. Sobrescreve rateio manual das parcelas.
+  async reprocessarRateioTemplate(
+    contratoId: string,
+  ): Promise<{ total: number; atualizadas: number; preservadas: number; falhas: { numero: number; motivo: string }[] }> {
+    const { data } = await gestaoApi.post(`/contratos/${contratoId}/rateio-template/reprocessar`);
+    return data;
+  },
+
   // Rateio por Parcela
   async obterRateioParcela(contratoId: string, parcelaId: string): Promise<ParcelaRateioItem[]> {
     const { data } = await gestaoApi.get(`/contratos/${contratoId}/parcelas/${parcelaId}/rateio`);

@@ -110,6 +110,10 @@ export class ContratoService {
     return this.rateio.configurarRateioTemplate(contratoId, dto, usuarioId, role);
   }
 
+  async reprocessarRateioTemplate(contratoId: string, usuarioId: string, role: string = 'ADMIN', forcar = true) {
+    return this.rateio.reprocessarRateioTemplate(contratoId, usuarioId, role, forcar);
+  }
+
   async obterRateioParcela(contratoId: string, parcelaId: string) {
     return this.rateio.obterRateioParcela(contratoId, parcelaId);
   }

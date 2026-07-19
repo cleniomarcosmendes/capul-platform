@@ -314,6 +314,19 @@ export class ContratoController {
     return this.service.simularRateioTemplate(id, dto);
   }
 
+  // Reprocessa o rateio a partir do template em TODAS as parcelas (inclusive
+  // PAGAS) — backfill de parcelas que nasceram sem rateio. forcar=true sobrescreve
+  // ajuste manual; e a acao explicita disparada pelo botao "Reprocessar rateio".
+  @Post(':id/rateio-template/reprocessar')
+  @Roles('ADMIN', 'GESTOR', 'SUPORTE')
+  reprocessarRateioTemplate(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.reprocessarRateioTemplate(id, user.sub, role, true);
+  }
+
   // --- Rateio por Parcela ---
 
   @Get(':id/parcelas/:pid/rateio')
