@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Package, Truck, CheckCircle2, XCircle, Route, Car, Timer, ChevronLeft, ChevronRight } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
 interface Painel {
@@ -33,6 +34,8 @@ const diaCurto = (iso: string) => {
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function PainelPage() {
+  const { logisticaRole } = useAuth();
+  const podeVerOutrasFiliais = logisticaRole === 'ADMIN' || logisticaRole === 'GESTOR_FROTA';
   const [data, setData] = useState<Painel | null>(null);
   const [filiais, setFiliais] = useState<CoreItem[]>([]);
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);
@@ -84,11 +87,16 @@ export function PainelPage() {
           <p className="text-sm text-slate-500">Indicadores operacionais de entregas e frota.</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Só ADMIN/GESTOR_FROTA veem outras filiais; GESTOR_ENTREGA é papel de
+              filial (o backend escopa à dele) — sem o seletor p/ não oferecer o que
+              não funciona (a seleção revertia sozinha). */}
+          {podeVerOutrasFiliais && (
           <select value={filialId} onChange={(e) => setFilialId(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none">
             <option value="">Todas as filiais</option>
             {filiais.map((f) => <option key={f.id} value={f.id}>{labelCore(f)}</option>)}
           </select>
+          )}
           <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white p-1">
             <button onClick={() => passoMes(-1)} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" title="Mês anterior">
               <ChevronLeft className="h-4 w-4" />
