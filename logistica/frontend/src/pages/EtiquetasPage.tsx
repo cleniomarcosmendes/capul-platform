@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Printer, Loader2, ArrowLeft } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { EtiquetaEntrega, type EntregaEtiqueta } from '../components/EtiquetaEntrega';
@@ -42,6 +42,13 @@ const CSS = `
 
 export function EtiquetasPage({ modo }: { modo: 'viagem' | 'entrega' }) {
   const { id } = useParams();
+  const navigate = useNavigate();
+  // A etiqueta abre em nova aba (target=_blank) → não há histórico p/ voltar.
+  // Se houver histórico (navegou na mesma aba), volta; senão vai para a origem.
+  const voltar = () => {
+    if (window.history.length > 1) window.history.back();
+    else navigate(modo === 'viagem' ? `/viagens/${id}` : `/entregas/${id}`);
+  };
   const [itens, setItens] = useState<Item[]>([]);
   const [cab, setCab] = useState<{ viagemNumero?: number; placa?: string; total?: number }>({});
   const [filiais, setFiliais] = useState<CoreItem[]>([]);
@@ -90,7 +97,7 @@ export function EtiquetasPage({ modo }: { modo: 'viagem' | 'entrega' }) {
   return (
     <div className="etq-root">
       <div className="no-print etq-toolbar">
-        <button onClick={() => history.back()} className={`${btn} text-slate-600 hover:bg-slate-100`}>
+        <button onClick={voltar} className={`${btn} text-slate-600 hover:bg-slate-100`}>
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
         <span className="text-sm text-slate-500">

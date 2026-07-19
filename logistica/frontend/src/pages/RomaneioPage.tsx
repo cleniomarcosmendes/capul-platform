@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Printer, Loader2, ArrowLeft } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { maskTelefone, maskCep } from '../utils/format';
@@ -55,6 +55,9 @@ const PRINT_CSS = `
 
 export function RomaneioPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  // Abre em nova aba (target=_blank) → sem histórico p/ voltar; cai na origem.
+  const voltar = () => { if (window.history.length > 1) window.history.back(); else navigate(`/viagens/${id}`); };
   const [v, setV] = useState<ViagemR | null>(null);
   const [filiais, setFiliais] = useState<CoreItem[]>([]);
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);
@@ -94,7 +97,7 @@ export function RomaneioPage() {
   return (
     <div style={{ background: '#f1f5f9', minHeight: '100vh' }}>
       <div className="rom-noprint" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 20px', background: '#fff', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
-        <button onClick={() => history.back()} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
+        <button onClick={voltar} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </button>
         <span className="text-sm text-slate-500">{v ? `Romaneio da Rota #${v.numero}` : ''}</span>
