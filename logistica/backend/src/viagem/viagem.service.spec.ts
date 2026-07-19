@@ -3,15 +3,17 @@ import { ViagemService } from './viagem.service';
 import { createPrismaMock } from '../common/testing/prisma-mock';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const coreMock = () => ({ validarUsuario: jest.fn().mockResolvedValue(undefined), nomesUsuarios: jest.fn().mockResolvedValue(new Map()) }) as any;
+const coreMock = () => ({ validarUsuario: jest.fn().mockResolvedValue(undefined), assertEntregador: jest.fn().mockResolvedValue(undefined), nomesUsuarios: jest.fn().mockResolvedValue(new Map()) }) as any;
 
 describe('ViagemService', () => {
   let prisma: any;
   let svc: ViagemService;
+  let core: any;
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new ViagemService(prisma, coreMock());
+    core = coreMock();
+    svc = new ViagemService(prisma, core);
   });
 
   describe('despachar', () => {
@@ -34,6 +36,11 @@ describe('ViagemService', () => {
     it('400 se rascunho ainda não tem veículo/motorista (12/06)', async () => {
       prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: null, motoristaId: null, situacao: 'RASCUNHO', paradas: [{ entregaId: 'e1' }] });
       await expect(svc.despachar('v1', {} as any, 'f1')).rejects.toThrow('Defina veículo e motorista');
+    });
+    it('400 se o motorista perdeu o papel ENTREGADOR (brecha E11a)', async () => {
+      prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: 'vc1', motoristaId: 'm1', situacao: 'RASCUNHO', paradas: [{ entregaId: 'e1' }] });
+      core.assertEntregador.mockRejectedValueOnce(new BadRequestException('Motorista inválido: precisa ter o papel Entregador ativo nesta filial.'));
+      await expect(svc.despachar('v1', {} as any, 'f1')).rejects.toThrow('papel Entregador');
     });
     it('400 se o veículo não está DISPONIVEL', async () => {
       prisma.viagem.findUnique.mockResolvedValue({ id: 'v1', filialId: 'f1', veiculoId: 'vc1', motoristaId: 'm1', situacao: 'RASCUNHO', paradas: [{ entregaId: 'e1' }] });

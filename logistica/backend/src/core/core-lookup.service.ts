@@ -101,4 +101,19 @@ export class CoreLookupService {
       WHERE u.status = 'ATIVO' AND u.filial_principal_id = ${filialId}
       ORDER BY nome`);
   }
+
+  /** Garante que o motorista É um ENTREGADOR ATIVO da filial (mesma regra do seletor
+   *  `motoristasLogistica`). Fecha a brecha de um rascunho antigo cujo motorista
+   *  perdeu o papel ENTREGADOR — a validação de existência (`validarUsuario`) não
+   *  pegava isso. Usado ao definir o motorista e no DESPACHO. */
+  async assertEntregador(motoristaId: string, filialId: string): Promise<void> {
+    const r = await this.prisma.$queryRaw<{ n: number }[]>(Prisma.sql`
+      SELECT count(*)::int AS n
+      FROM "core"."usuarios" u
+      JOIN "core"."permissoes_modulo" pm ON pm.usuario_id = u.id AND pm.status = 'ATIVO'
+      JOIN "core"."modulos_sistema" m ON m.id = pm.modulo_id AND m.codigo = 'LOGISTICA'
+      JOIN "core"."roles_modulo" rm ON rm.id = pm.role_modulo_id AND rm.codigo = 'ENTREGADOR'
+      WHERE u.id = ${motoristaId} AND u.status = 'ATIVO' AND u.filial_principal_id = ${filialId}`);
+    if (!r[0]?.n) throw new BadRequestException('Motorista inválido: precisa ter o papel Entregador ativo nesta filial.');
+  }
 }

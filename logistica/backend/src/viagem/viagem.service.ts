@@ -22,7 +22,7 @@ export class ViagemService {
     // 12/06: rascunho pode nascer SÓ com a carga — veículo/motorista são
     // opcionais aqui e obrigatórios no DESPACHO.
     if (dto.veiculoId) await this.validarVeiculoDaFilial(dto.veiculoId, dto.filialId);
-    if (dto.motoristaId) await this.core.validarUsuario(dto.motoristaId, 'Motorista');
+    if (dto.motoristaId) await this.core.assertEntregador(dto.motoristaId, dto.filialId);
 
     const entregaIds = dto.entregaIds ?? [];
     if (entregaIds.length) {
@@ -76,7 +76,7 @@ export class ViagemService {
   async atualizar(id: string, dto: { veiculoId?: string | null; motoristaId?: string | null }, userFilialId?: string) {
     const v = await this.rascunhoOuErro(id, userFilialId);
     if (dto.veiculoId) await this.validarVeiculoDaFilial(dto.veiculoId, v.filialId);
-    if (dto.motoristaId) await this.core.validarUsuario(dto.motoristaId, 'Motorista');
+    if (dto.motoristaId) await this.core.assertEntregador(dto.motoristaId, v.filialId);
     await this.prisma.viagem.update({
       where: { id },
       data: {
@@ -222,6 +222,9 @@ export class ViagemService {
     if (!v.veiculoId || !v.motoristaId) {
       throw new BadRequestException('Defina veículo e motorista antes de despachar.');
     }
+    // Fecha a brecha E11a: o motorista pode ter sido definido num rascunho antigo e
+    // depois perdido o papel ENTREGADOR — revalida no ponto de não-retorno.
+    await this.core.assertEntregador(v.motoristaId, v.filialId);
     const veiculoId = v.veiculoId; // narrow estável p/ dentro da transaction
 
     const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
