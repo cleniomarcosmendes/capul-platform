@@ -36,8 +36,8 @@
 - **Tela:** Entregas → **Nova entrega** (`/entregas/nova`), como `renataborges` (filial 02).
 - **E1a — IDENTIFICADO ("Com matrícula"):** tipo cliente **Com matrícula** → digitar `E01047` (ou nome/telefone) → **autofill** puxa nome/telefone/endereços do Protheus (rótulo "Cadastro") → escolher endereço → volumes + **origem da venda** (obrigatório) → **Salvar entrega**. **Esperado:** entrega **PENDENTE**, nº sequencial.
 - **E1b — RECORRENTE (local):** tipo **Recorrente (local)** → escolher um ClienteLocal da filial → endereço → salvar. **Esperado:** PENDENTE, endereço reutilizável.
-- **E1c — EVENTUAL:** tipo **Eventual** (sem matrícula) → nome + telefone + endereço digitado → salvar. **Esperado:** PENDENTE; ⚠️ o endereço do EVENTUAL **não** é persistido como reutilizável (não volta no próximo autofill).
-- **E1d — Erros** 🔧: sem origem da venda → toast "Informe a origem da venda…"; sem endereço → 400 "Informe enderecoEntregaId ou os campos de endereço (endLogradouro)."; sem filial no perfil → "Sem filial no perfil — selecione uma filial no Hub.".
+- **E1c — EVENTUAL:** tipo **Eventual** (sem matrícula) → nome + telefone + endereço digitado → salvar. **Esperado:** PENDENTE; o endereço do EVENTUAL **não** vira cadastro *reutilizável* (`EnderecoEntrega`). ⚠️ **PORÉM** ele **reaparece no autofill "(do histórico)"** se você buscar pelo mesmo **telefone/nome** depois — isso é **esperado** (o autofill traz o histórico de entregas da filial por telefone/nome; útil p/ eventual que repete). Ou seja: não é cadastro salvo, mas a entrega passada aparece no histórico.
+- **E1d — Erros** 🔧 *(backend-only — a UI previne):* a origem da venda vem **pré-selecionada** ("Presencial") e o endereço é barrado por **validação HTML5** antes de chegar no backend — então as mensagens "Informe a origem…"/"Informe enderecoEntregaId ou os campos de endereço…" só se veem via API direta. "Sem filial no perfil" aparece se o login não tiver filial.
 - **E1e — Operador PADRÃO (caixa compartilhado)** 🔧: logado com login **PADRÃO** (ex.: `condutor_col`), o cadastro exige **matrícula+senha do operador** ("Identifique-se para cadastrar entregas") → sem → "Identifique-se: informe matrícula e senha do operador."; RH fora → 503 "Portal do RH indisponível…"; inválida → "Matrícula ou senha do operador inválidas.".
 - **E1f — Autofill Protheus** 🔧: buscar por matrícula (`/^[ACEF]\d+/`), telefone (≥8 díg) e nome (≥3) → retorna clientes + endereços + histórico; cliente **bloqueado** (A1_MSBLQL) **não** aparece.
 
@@ -73,27 +73,27 @@
 - *(Auto-conclusão foi DESLIGADA em 30/06 — a rota é encerrada explicitamente.)*
 
 ## E8. Endereços / Geocode
-- **E8a — CRUD de endereço** (`/cadastro/enderecos`): criar/editar/remover (soft-delete). 🔧 `clienteLocalId` inválido → "clienteLocalId inválido."; busca sem chave → "Informe matricula ou clienteLocalId."; inexistente → "Endereço não encontrado.".
+- **E8a — Endereços** ⚠️ **NÃO há tela de CRUD dedicada** (a rota `/cadastro/enderecos` redireciona ao Hub). Os endereços são criados/editados **dentro do cadastro de entrega** e há uma **consulta somente-leitura** em `/entregas/clientes`. O CRUD existe só via **API** 🔧 (`POST/PATCH/DELETE /cadastro/enderecos`: `clienteLocalId inválido` / `Informe matricula ou clienteLocalId` / `Endereço não encontrado`).
 - **E8b — Recalcular localizações (gestor):** em Montar rota, botão **"Recalcular localizações"** (só GESTOR) → re-geocodifica as entregas não-canceladas da filial; reporta `semCoordenada`.
 - **E8c — Geocode fallback (cidade pequena)** 🔧: entrega cujo endereço não resolve na rua → fallback **rua→bairro→município** (precisão BAIRRO/CIDADE); sem cidade/UF → sem coordenada, badge ⚠, vai pro **fim** da rota sugerida.
 
 ## E9. Painel / Análise / Comprovantes
 - **E9a — Painel** (`/painel`, GESTOR/OPERADOR): cartões de FILA (pendentes/em viagem "agora") + fluxo do mês (entregues/não-entregues/canceladas) + por filial/veículo/motorista/origem + prazo médio + série por dia. Filtros mês/ano.
 - **E9b — Análise** (`/analise-entregas`): manchete + grupos + drill-down por origem/status/motorista/bairro; documentos por dimensão.
-- **E9c — Comprovantes/cofre** (`/comprovantes`, **só GESTOR_ENTREGA**): buscar baixadas por matrícula/cupom/nº entrega → ver metadados + **baixar arquivo** (foto/assinatura). 🔧 comprovante inexistente → "Comprovante não encontrado".
+- **E9c — Comprovantes/cofre** (`/comprovantes`): a **lista de baixadas** (`GET /entregas/baixadas`) é **OPERADOR_ENTREGA + GESTOR_ENTREGA** (consulta do financeiro) → mostra nome/status/tipo de prova. **O ARQUIVO da prova** (foto/assinatura, `GET /comprovantes/:id/arquivo`) é **GESTOR_ENTREGA-only** → OPERADOR clicando "ver prova" numa entrega COM comprovante recebe **403** ("Não foi possível abrir a prova."). 🔧 "nada baixado" → "Nenhuma entrega baixada encontrada".
 - **E9d — Escopo de leitura** 🔧: GESTOR_ENTREGA vê **só a própria filial**; só ADMIN/GESTOR_FROTA veem outras filiais no painel.
 
 ## E10. RBAC de Entregas (UI × API)
 - **E10a — ENTREGADOR não monta/despacha** 🔧: `wandersonnascimento` só tem app (GET viagem, iniciar, concluir, baixar); montar/despachar via API → 403.
 - **E10b — GESTOR_ENTREGA é papel de FILIAL** 🔧: só a própria filial; `filialId` de outra no body → "Operação fora da sua filial." / leitura de outra filial bloqueada.
-- **E10c — Comprovantes só GESTOR** 🔧: OPERADOR_ENTREGA em `/comprovantes` → 403.
+- **E10c — Prova (arquivo) só GESTOR** 🔧: OPERADOR_ENTREGA **vê a lista** de baixadas (financeiro), mas **abrir/baixar o arquivo** da prova (`/comprovantes/:id/arquivo`) → **403**. *(A doc antiga dizia 'OPERADOR não vê comprovantes' — impreciso: ele vê a lista, não a prova.)*
 - **E10d — Regeocodificar** só GESTOR_ENTREGA/GESTOR_FROTA; consolidar local só GESTOR_FROTA/SUPERVISOR_FROTA.
 
 ## E11. Casos de borda extras
 - **E11a — Motorista perdeu o papel ENTREGADOR** 🔧: some do seletor, mas um rascunho antigo com o ID dele ainda despacha (a validação só checa existência do usuário, não o papel) — **possível brecha**, reportar.
 - **E11b — Prova com cofre/MinIO indisponível** 🔧: baixa ENTREGUE com foto **falha** (prova é gravada antes de fechar a baixa) — verificar se o app enfileira ou alerta; busca de baixadas/comprovantes **degrada** (lista sem tipo de prova, não quebra).
 - **E11c — Mesma matrícula com N endereços** (Protheus SA1): dedupe por logradouro+complemento+cidade+cep no autofill.
-- **E11d — Cliente EVENTUAL repetido:** confirmar que não vira cadastro reutilizável (some do autofill seguinte).
+- **E11d — Cliente EVENTUAL repetido:** não vira cadastro *reutilizável* (`EnderecoEntrega`), MAS a entrega passada **aparece no autofill "(do histórico)"** por telefone/nome (esperado — ver E1c).
 
 ---
 
