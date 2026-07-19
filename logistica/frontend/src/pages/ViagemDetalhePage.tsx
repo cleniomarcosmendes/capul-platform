@@ -286,8 +286,9 @@ export function ViagemDetalhePage() {
           </a>
           {(v.situacao === 'RASCUNHO' || v.situacao === 'EM_CURSO') && (
             <a href={`/entregas/etiquetas/viagem/${v.id}`} target="_blank" rel="noopener"
+              title="Imprime a etiqueta de TODAS as entregas da rota (uma por embalagem). Para uma só, use o 🖨 na linha da entrega."
               className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
-              <Printer className="h-3.5 w-3.5" /> Etiquetas
+              <Printer className="h-3.5 w-3.5" /> Etiquetas (todas)
             </a>
           )}
           {v.situacao === 'RASCUNHO' && (
@@ -496,9 +497,16 @@ export function ViagemDetalhePage() {
                   {p.entrega ? (
                     <>
                       <td className="px-3 py-2 font-medium text-slate-700">
-                        <Link to={`/entregas/${p.entrega.id}`} className="hover:text-capul-700 hover:underline">
-                          #{p.entrega.numero} · {p.entrega.destinatarioNome}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link to={`/entregas/${p.entrega.id}`} className="hover:text-capul-700 hover:underline">
+                            #{p.entrega.numero} · {p.entrega.destinatarioNome}
+                          </Link>
+                          <a href={`/entregas/etiquetas/entrega/${p.entrega.id}`} target="_blank" rel="noopener"
+                            title="Imprimir a etiqueta desta entrega (cola na embalagem)"
+                            className="inline-flex items-center text-slate-400 hover:text-capul-700">
+                            <Printer className="h-3.5 w-3.5" />
+                          </a>
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-slate-500">
                         {p.entrega.endLogradouro}{p.entrega.endNumero ? `, ${p.entrega.endNumero}` : ''}{p.entrega.endBairro ? ` — ${p.entrega.endBairro}` : ''}
