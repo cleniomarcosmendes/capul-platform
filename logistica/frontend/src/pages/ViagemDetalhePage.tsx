@@ -284,13 +284,8 @@ export function ViagemDetalhePage() {
             className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
             <FileText className="h-3.5 w-3.5" /> Romaneio
           </a>
-          {(v.situacao === 'RASCUNHO' || v.situacao === 'EM_CURSO') && (
-            <a href={`/entregas/etiquetas/viagem/${v.id}`} target="_blank" rel="noopener"
-              title="Imprime a etiqueta de TODAS as entregas da rota (uma por embalagem). Para uma só, use o 🖨 na linha da entrega."
-              className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
-              <Printer className="h-3.5 w-3.5" /> Etiquetas (todas)
-            </a>
-          )}
+          {/* Etiqueta é por embalagem → impressa na linha de cada entrega (🖨). O
+              Romaneio lista a rota inteira. (Removido o "Etiquetas (todas)" em lote.) */}
           {v.situacao === 'RASCUNHO' && (
             <>
               <button onClick={() => setConfirmacao({

@@ -46,8 +46,8 @@ function Protected() {
   }
   return (
     <Routes>
-      {/* Impressão de etiquetas: fora do Layout (sem sidebar/header) */}
-      <Route path="/etiquetas/viagem/:id" element={<EtiquetasPage modo="viagem" />} />
+      {/* Impressão de etiqueta: fora do Layout (sem sidebar/header). Etiqueta é POR
+          ENTREGA (uma por embalagem); a listagem da rota é o Romaneio. */}
       <Route path="/etiquetas/entrega/:id" element={<EtiquetasPage modo="entrega" />} />
       <Route path="/romaneio/viagem/:id" element={<RomaneioPage />} />
       <Route
