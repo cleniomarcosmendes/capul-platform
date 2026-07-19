@@ -57,7 +57,7 @@ const statusColors: Record<string, string> = {
 
 const statusLabels: Record<string, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
-  RESOLVIDO: 'Resolvido', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
+  RESOLVIDO: 'Encerrado', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
   EM_ANDAMENTO: 'Em Andamento', CONCLUIDA: 'Concluida', CANCELADA: 'Cancelada',
 };
 

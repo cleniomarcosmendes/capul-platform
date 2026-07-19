@@ -110,7 +110,7 @@ const SYSTEM_LABELS: Record<string, string> = {
   ASSUMIDO: 'Chamado assumido',
   TRANSFERENCIA_EQUIPE: 'Transferência de equipe',
   TRANSFERENCIA_TECNICO: 'Transferência de técnico',
-  RESOLVIDO: 'Chamado resolvido',
+  RESOLVIDO: 'Chamado encerrado',
   FECHADO: 'Chamado fechado',
   REABERTO: 'Chamado reaberto',
   CANCELADO: 'Chamado cancelado',

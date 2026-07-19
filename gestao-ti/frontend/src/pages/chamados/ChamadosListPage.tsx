@@ -47,7 +47,7 @@ const statusLabels: Record<StatusChamado, string> = {
   EM_ATENDIMENTO: 'Em Atendimento',
   PENDENTE: 'Pendente',
   PENDENTE_USUARIO: 'Pendente Usuário',
-  RESOLVIDO: 'Resolvido',
+  RESOLVIDO: 'Encerrado',
   FECHADO: 'Fechado',
   CANCELADO: 'Cancelado',
   REABERTO: 'Reaberto',

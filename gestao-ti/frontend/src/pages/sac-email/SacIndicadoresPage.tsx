@@ -9,7 +9,7 @@ const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'O
 const CANAL_LABEL: Record<string, string> = { BALCAO: 'Balcão', TELEFONE: 'Telefone', EMAIL: 'E-mail', OUTRO: 'Outro', NAO_INFORMADO: 'Não informado' };
 const STATUS_LABEL: Record<string, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em atendimento', PENDENTE: 'Pendente', AGUARDANDO_USUARIO: 'Aguardando usuário',
-  RESOLVIDO: 'Resolvido', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
+  RESOLVIDO: 'Encerrado', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
 };
 
 /** SAC 4c — indicadores do SAC (volume, canal, equipe, status, tempo, e-mail). */

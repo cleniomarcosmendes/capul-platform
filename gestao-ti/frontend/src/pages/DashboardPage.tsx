@@ -30,7 +30,7 @@ const statusLabels: Record<string, string> = {
   ABERTO: 'Aberto',
   EM_ATENDIMENTO: 'Em Atendimento',
   PENDENTE: 'Pendente',
-  RESOLVIDO: 'Resolvido',
+  RESOLVIDO: 'Encerrado',
   FECHADO: 'Fechado',
   CANCELADO: 'Cancelado',
   REABERTO: 'Reaberto',
@@ -216,7 +216,7 @@ function DashboardUsuarioFinal({ usuario, pendentesCount }: { usuario: { nome: s
                 { label: 'Abertos', value: abertos, icon: Ticket, color: 'bg-blue-100 text-blue-600' },
                 { label: 'Em Atendimento', value: emAtendimento, icon: Clock, color: 'bg-yellow-100 text-yellow-600' },
                 { label: 'Pendentes', value: pendentes, icon: AlertTriangle, color: 'bg-orange-100 text-orange-600' },
-                { label: 'Resolvidos', value: resolvidos, icon: CheckCircle, color: 'bg-green-100 text-green-600' },
+                { label: 'Encerrados', value: resolvidos, icon: CheckCircle, color: 'bg-green-100 text-green-600' },
                 { label: 'Fechados', value: fechados, icon: CheckCircle, color: 'bg-slate-100 text-slate-600' },
                 { label: 'Reabertos', value: reabertos, icon: MessageSquare, color: 'bg-purple-100 text-purple-600' },
               ]}
@@ -1413,7 +1413,7 @@ export function DashboardPage() {
                         { label: 'Abertos', value: resumo.chamados.abertos, icon: Ticket, color: 'bg-blue-100 text-blue-600' },
                         { label: 'Em Atendimento', value: resumo.chamados.emAtendimento, icon: Clock, color: 'bg-yellow-100 text-yellow-600' },
                         { label: 'Pendentes', value: resumo.chamados.pendentes, icon: AlertTriangle, color: 'bg-orange-100 text-orange-600' },
-                        { label: 'Resolvidos', value: resumo.chamados.resolvidos, icon: CheckCircle, color: 'bg-green-100 text-green-600' },
+                        { label: 'Encerrados', value: resumo.chamados.resolvidos, icon: CheckCircle, color: 'bg-green-100 text-green-600' },
                         { label: 'Fechados', value: resumo.chamados.fechados, icon: CheckCircle, color: 'bg-slate-100 text-slate-600' },
                         { label: 'OS Abertas', value: resumo.ordensServico.abertas, icon: Wrench, color: 'bg-capul-100 text-capul-600' },
                       ]}

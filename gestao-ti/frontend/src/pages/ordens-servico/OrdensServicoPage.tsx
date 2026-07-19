@@ -26,7 +26,7 @@ const statusColors: Record<StatusOS, string> = {
 };
 const statusChamadoLabel: Record<string, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
-  RESOLVIDO: 'Resolvido', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
+  RESOLVIDO: 'Encerrado', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
 };
 const statusChamadoCores: Record<string, string> = {
   ABERTO: 'bg-blue-100 text-blue-700', EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700',

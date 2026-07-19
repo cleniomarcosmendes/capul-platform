@@ -77,7 +77,7 @@ const prioridadeColors: Record<string, string> = {
 
 const tipoHistoricoLabels: Record<string, string> = {
   ABERTURA: 'Abertura', ASSUMIDO: 'Assumido', TRANSFERENCIA_EQUIPE: 'Transf. Equipe',
-  TRANSFERENCIA_TECNICO: 'Transf. Tecnico', COMENTARIO: 'Comentario', RESOLVIDO: 'Resolvido',
+  TRANSFERENCIA_TECNICO: 'Transf. Tecnico', COMENTARIO: 'Comentario', RESOLVIDO: 'Encerrado',
   FECHADO: 'Fechado', REABERTO: 'Reaberto', CANCELADO: 'Cancelado', AVALIADO: 'Avaliado',
 };
 

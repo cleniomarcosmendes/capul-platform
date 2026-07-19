@@ -164,7 +164,7 @@ const anexoTipoLabel: Record<string, string> = {
 };
 
 const chamadoStatusLabel: Record<string, string> = {
-  ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente', RESOLVIDO: 'Resolvido', FECHADO: 'Fechado', CANCELADO: 'Cancelado',
+  ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente', RESOLVIDO: 'Encerrado', FECHADO: 'Fechado', CANCELADO: 'Cancelado',
 };
 const chamadoStatusCores: Record<string, string> = {
   ABERTO: 'bg-blue-100 text-blue-700', EM_ATENDIMENTO: 'bg-yellow-100 text-yellow-700', PENDENTE: 'bg-orange-100 text-orange-700', RESOLVIDO: 'bg-green-100 text-green-700', FECHADO: 'bg-slate-100 text-slate-600', CANCELADO: 'bg-red-100 text-red-700',

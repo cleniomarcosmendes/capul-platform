@@ -26,7 +26,7 @@ import { maskTelefone } from '../../lib/telefone';
 const statusLabels: Record<StatusChamado, string> = {
   ABERTO: 'Aberto', EM_ATENDIMENTO: 'Em Atendimento', PENDENTE: 'Pendente',
   PENDENTE_USUARIO: 'Pendente Usuário',
-  RESOLVIDO: 'Resolvido', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
+  RESOLVIDO: 'Encerrado', FECHADO: 'Fechado', CANCELADO: 'Cancelado', REABERTO: 'Reaberto',
   AGRUPADO: 'Agrupado',
 };
 
@@ -990,7 +990,7 @@ export function ChamadoDetalhePage() {
                   {canResolver && (
                     <button onClick={() => { closeAllPanels(); setShowResolver(true); }}
                       className="flex items-center gap-1.5 bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700">
-                      <CheckCircle className="w-4 h-4" /> Finalizar Chamado
+                      <CheckCircle className="w-4 h-4" /> Encerrar Chamado
                     </button>
                   )}
                   {canFechar && (
@@ -1963,10 +1963,10 @@ export function ChamadoDetalhePage() {
             {showResolver && (
               <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closeAllPanels}>
                 <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
-                <h4 className="font-medium text-sm text-slate-700">Finalizar Chamado</h4>
+                <h4 className="font-medium text-sm text-slate-700">Encerrar Chamado</h4>
                 <textarea value={resolverDescricao} onChange={(e) => setResolverDescricao(e.target.value)} rows={3}
                   maxLength={5000}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Descreva a resolucao do chamado *" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Descreva a conclusão do chamado *" />
                 <div className="flex justify-end">
                   <span
                     className={`text-xs ${
