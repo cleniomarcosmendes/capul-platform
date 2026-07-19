@@ -427,7 +427,11 @@ export function ChamadoDetalhePage() {
   const temTecnico = !!chamado.tecnicoId;
   const finalizado = ['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status);
   const emAndamento = !finalizado;
-  const canAssumir = isTecnico && ['ABERTO', 'PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'].includes(chamado.status);
+  // "Assumir" = pegar um chamado que NÃO é seu (sem técnico ou de outro). Se você já
+  // é o responsável, não faz sentido "assumir" — a mesma ação (voltar p/ EM_ATENDIMENTO)
+  // aparece como "Retomar atendimento". Ambos chamam o mesmo endpoint `assumir`.
+  const canAssumir = isTecnico && !isTecnicoAtribuido && ['ABERTO', 'PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'].includes(chamado.status);
+  const canRetomar = isTecnico && isTecnicoAtribuido && ['PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'].includes(chamado.status);
   const canTransferirEquipe = podeMovimentar && emAndamento;
   const canTransferirTecnico = podeMovimentar && emAndamento && temTecnico;
   const canResolver = podeMovimentar && emAndamento && temTecnico;
@@ -960,7 +964,7 @@ export function ChamadoDetalhePage() {
             </div>
 
             {/* Ações — barra de ações do chamado (movida para sidebar em 14/05/2026 — pedido suporte) */}
-            {(canAssumir || canTransferirEquipe || canTransferirTecnico || canResolver || canFechar || canReabrir || canCancelar || canExcluir || canDuplicar || canAvaliar) && (
+            {(canAssumir || canRetomar || canTransferirEquipe || canTransferirTecnico || canResolver || canFechar || canReabrir || canCancelar || canExcluir || canDuplicar || canAvaliar) && (
               <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
                 <h4 className="font-semibold text-slate-700 text-sm">Ações</h4>
                 <div className="flex flex-wrap gap-2">
@@ -968,6 +972,13 @@ export function ChamadoDetalhePage() {
                     <button onClick={async () => { if (await confirm('Assumir Chamado', `Voce sera o responsavel pelo atendimento do chamado #${chamado.numero}. Deseja continuar?`, { confirmLabel: 'Sim, assumir' })) runAction(() => chamadoService.assumir(chamado.id)); }} disabled={actionLoading}
                       className="flex items-center gap-1.5 bg-capul-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
                       <UserPlus className="w-4 h-4" /> Assumir
+                    </button>
+                  )}
+                  {canRetomar && (
+                    <button onClick={() => runAction(() => chamadoService.assumir(chamado.id))} disabled={actionLoading}
+                      title="Voltar o chamado para 'Em atendimento' (você já é o responsável)."
+                      className="flex items-center gap-1.5 bg-capul-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-capul-700 disabled:opacity-50">
+                      <UserPlus className="w-4 h-4" /> Retomar atendimento
                     </button>
                   )}
                   {(canTransferirEquipe || canTransferirTecnico) && (
