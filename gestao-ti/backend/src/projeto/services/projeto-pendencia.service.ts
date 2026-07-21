@@ -211,6 +211,17 @@ export class ProjetoPendenciaService {
       }).catch((err) => console.error('Email envolvidos (pendencia criada) error:', (err as Error).message));
     }
 
+    // Responsável do projeto: fica sabendo da nova pendência (exceto se foi ele).
+    // Dedup: se o responsável da pendência já é o do projeto, ele já foi avisado acima.
+    void this.helpers.notificarResponsavelProjeto({
+      projetoId, autorId: criadorId, itemTipo: 'pendência',
+      titulo: `Nova pendência #${pendencia.numero}: ${pendencia.titulo}`,
+      mensagem: `Nova pendência "${pendencia.titulo}" criada no projeto "${projeto.nome}".`,
+      dados: { pendenciaId: pendencia.id },
+      jaNotificados: dto.responsavelId !== criadorId ? [dto.responsavelId] : [],
+      emailJaEnviado: dto.responsavelId !== criadorId,
+    });
+
     return pendencia;
   }
 
@@ -303,6 +314,16 @@ export class ProjetoPendenciaService {
           }),
         }).catch((err) => console.error('Email envolvidos (pendencia transferida) error:', (err as Error).message));
       }
+
+      // Responsável do projeto: fica sabendo da transferência (exceto se foi ele).
+      void this.helpers.notificarResponsavelProjeto({
+        projetoId, autorId: userId, itemTipo: 'pendência',
+        titulo: `Pendência #${pendencia.numero} transferida`,
+        mensagem: `A pendência "${pendencia.titulo}" teve o responsável alterado.`,
+        dados: { pendenciaId },
+        jaNotificados: [dto.responsavelId!],
+        emailJaEnviado: dto.responsavelId !== userId,
+      });
     }
 
     if (dto.status !== undefined && dto.status !== pendencia.status) {
@@ -353,6 +374,17 @@ export class ProjetoPendenciaService {
           }).catch((err) => console.error('Email envolvidos (pendencia status) error:', (err as Error).message));
         }
       }
+
+      // Responsável do projeto: fica sabendo da mudança de status (exceto se foi ele).
+      const statusMov = statusLabels[dto.status] || dto.status;
+      void this.helpers.notificarResponsavelProjeto({
+        projetoId, autorId: userId, itemTipo: 'pendência',
+        titulo: `Pendência #${pendencia.numero} — ${statusMov}`,
+        mensagem: `A pendência "${pendencia.titulo}" teve o status alterado para ${statusMov}.`,
+        dados: { pendenciaId },
+        jaNotificados: Array.from(idsNotificar),
+        emailJaEnviado: dto.emailEnvolvidos === true,
+      });
     }
 
     return this.prisma.pendenciaProjeto.update({
@@ -430,6 +462,16 @@ export class ProjetoPendenciaService {
         { projetoId, atividadeId: atividade.id },
       ).catch((err) => console.error('Notificacao error:', err.message));
     }
+
+    // Responsável do projeto: fica sabendo da atividade gerada (exceto se foi ele).
+    void this.helpers.notificarResponsavelProjeto({
+      projetoId, autorId: userId, itemTipo: 'atividade',
+      titulo: `Nova atividade: ${atividade.titulo}`,
+      mensagem: `Atividade "${atividade.titulo}" gerada da pendência #${pendencia.numero}.`,
+      dados: { atividadeId: atividade.id },
+      jaNotificados: idsNotificar,
+      emailJaEnviado: false,
+    });
 
     return atividade;
   }
@@ -559,6 +601,19 @@ export class ProjetoPendenciaService {
         }).catch((err) => console.error('Email envolvidos (pendencia comentario) error:', (err as Error).message));
       }
     }
+
+    // Responsável do projeto: fica sabendo do novo comentário (exceto se foi ele).
+    // Interna não envia e-mail e pula responsável UC/TERC (não vê o conteúdo).
+    void this.helpers.notificarResponsavelProjeto({
+      projetoId, autorId: userId, itemTipo: 'pendência',
+      titulo: `Novo comentário na pendência #${pendencia.numero}`,
+      mensagem: `Novo comentário na pendência "${pendencia.titulo}".`,
+      dados: { pendenciaId },
+      jaNotificados: [...Array.from(idsNotificar), ...mencionadoIds],
+      emailJaEnviado: dto.emailEnvolvidos === true && publica,
+      emailPermitido: publica,
+      restringirNaoStaff: !publica,
+    });
 
     return interacao;
   }

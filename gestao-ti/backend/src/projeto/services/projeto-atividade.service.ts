@@ -136,6 +136,16 @@ export class ProjetoAtividadeService {
       }
     }
 
+    // Responsável do projeto: fica sabendo da nova atividade (exceto se foi ele).
+    void this.helpers.notificarResponsavelProjeto({
+      projetoId, autorId: userId, itemTipo: 'atividade',
+      titulo: `Nova atividade: ${dto.titulo}`,
+      mensagem: `Nova atividade "${dto.titulo}" criada no projeto "${atividade.projeto.nome}".`,
+      dados: { atividadeId: atividade.id },
+      jaNotificados: notificarIds,
+      emailJaEnviado: dto.emailEnvolvidos === true,
+    });
+
     this.historico.registrar(atividade.id, 'CRIADA', {
       descricao: 'Tarefa criada',
       usuarioId: userId,
@@ -280,6 +290,17 @@ export class ProjetoAtividadeService {
           }).catch((err) => console.error('Email envolvidos (atividade status) error:', (err as Error).message));
         }
       }
+
+      // Responsável do projeto: fica sabendo da mudança de status (exceto se foi ele).
+      const statusMov = statusLabelsNotif[dto.status] || dto.status;
+      void this.helpers.notificarResponsavelProjeto({
+        projetoId, autorId: actorId ?? atividade.usuarioId, itemTipo: 'atividade',
+        titulo: `Atividade "${updated.titulo}" — ${statusMov}`,
+        mensagem: `A atividade "${updated.titulo}" teve o status alterado para ${statusMov}.`,
+        dados: { atividadeId },
+        jaNotificados: (dto.responsavelIds ?? idsAntigos).filter((uid) => uid !== atividade.usuarioId),
+        emailJaEnviado: dto.emailEnvolvidos === true,
+      });
     }
 
     // Registrar movimentacao na timeline da pendencia (se vinculada)
@@ -506,6 +527,19 @@ export class ProjetoAtividadeService {
         }).catch((err) => console.error('Email envolvidos (atividade comentario) error:', (err as Error).message));
       }
     }
+
+    // Responsável do projeto: fica sabendo da nova nota (exceto se foi ele). Nota
+    // interna não envia e-mail e pula responsável UC/TERC (não vê o conteúdo).
+    void this.helpers.notificarResponsavelProjeto({
+      projetoId, autorId: userId, itemTipo: 'atividade',
+      titulo: `Nova nota na atividade "${atividade.titulo}"`,
+      mensagem: `Nova nota na atividade "${atividade.titulo}".`,
+      dados: { atividadeId },
+      jaNotificados: [...idsNotificar, ...mencionadoIds],
+      emailJaEnviado: emailEnvolvidos === true && publicaEfetiva,
+      emailPermitido: publicaEfetiva,
+      restringirNaoStaff: !publicaEfetiva,
+    });
 
     this.historico.registrar(atividadeId, 'COMENTARIO_ADICIONADO', {
       descricao: 'Adicionou uma nota',

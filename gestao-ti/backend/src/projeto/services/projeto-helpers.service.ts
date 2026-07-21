@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
+import { EmailEnvolvidosService } from '../../email/email-envolvidos.service.js';
+import * as emailTpl from '../../email/email-templates.js';
 import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
 import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
@@ -14,7 +16,83 @@ export class ProjetoHelpersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificacaoService: NotificacaoService,
+    private readonly emailEnvolvidos: EmailEnvolvidosService,
   ) {}
+
+  /**
+   * Notifica o RESPONSÁVEL DO PROJETO sobre uma movimentação (atividade/pendência),
+   * EXCETO quando o autor é o próprio responsável. Ponto único da regra pedida:
+   * "toda movimentação notifica o responsável, menos a que ele mesmo fez".
+   *
+   * - Sino (in-app) SEMPRE; e-mail conforme `emailPermitido` (nota interna não
+   *   envia), respeitando opt-out do canal no EmailEnvolvidosService.
+   * - Dedup: `jaNotificados` = quem a ação já avisou no sino (não duplica o sino);
+   *   `emailJaEnviado` = a ação já mandou e-mail a essa lista (não duplica e-mail).
+   * - `restringirNaoStaff` (nota interna): pula o responsável se ele for
+   *   USUARIO_CHAVE/TERCEIRIZADO vinculado (não vê conteúdo interno — Regra 14/05).
+   * Fire-and-forget: nunca lança (erros só logam), não deve travar a request.
+   */
+  async notificarResponsavelProjeto(opts: {
+    projetoId: string;
+    autorId: string;
+    titulo: string;
+    mensagem: string;
+    itemTipo: 'atividade' | 'pendência';
+    dados?: Record<string, unknown>;
+    jaNotificados?: Iterable<string>;
+    emailJaEnviado?: boolean;
+    emailPermitido?: boolean;
+    restringirNaoStaff?: boolean;
+  }): Promise<void> {
+    try {
+      const projeto = await this.prisma.projeto.findUnique({
+        where: { id: opts.projetoId },
+        select: { responsavelId: true, numero: true, nome: true },
+      });
+      const resp = projeto?.responsavelId;
+      if (!resp || resp === opts.autorId) return; // a regra: nada quando o autor é o responsável
+
+      // Nota interna: responsável UC/TERC vinculado não é notificado (não vê o conteúdo).
+      if (opts.restringirNaoStaff) {
+        const chave = await this.prisma.usuarioChaveProjeto.findUnique({
+          where: { projetoId_usuarioId: { projetoId: opts.projetoId, usuarioId: resp } },
+        });
+        if (chave && chave.ativo) return;
+      }
+
+      const ja = new Set(opts.jaNotificados ?? []);
+      if (!ja.has(resp)) {
+        this.notificacaoService.criarParaUsuario(
+          resp, 'PROJETO_ATUALIZADO', opts.titulo, opts.mensagem,
+          { projetoId: opts.projetoId, ...opts.dados },
+        ).catch((err) => console.error('Notificacao error:', err.message));
+      }
+
+      const emailPermitido = opts.emailPermitido ?? true;
+      const emailDedup = opts.emailJaEnviado ? ja : new Set<string>();
+      if (emailPermitido && !emailDedup.has(resp)) {
+        const autor = await this.prisma.usuario.findUnique({ where: { id: opts.autorId }, select: { nome: true } });
+        this.emailEnvolvidos.enviar({
+          canal: opts.itemTipo === 'pendência' ? 'pendencias' : 'atividades',
+          emissorId: opts.autorId,
+          destinatarioIds: [resp],
+          subject: `[Projeto #${projeto!.numero}] ${opts.titulo}`,
+          html: emailTpl.projetoMovimentacaoResponsavel({
+            projetoNumero: projeto!.numero,
+            projetoNome: projeto!.nome,
+            projetoId: opts.projetoId,
+            resumo: opts.mensagem,
+            autor: autor?.nome ?? 'Sistema',
+            itemTipo: opts.itemTipo,
+            atividadeId: opts.dados?.atividadeId as string | undefined,
+            pendenciaId: opts.dados?.pendenciaId as string | undefined,
+          }),
+        }).catch((err) => console.error('Email responsavel projeto error:', (err as Error).message));
+      }
+    } catch (err) {
+      console.error('notificarResponsavelProjeto error:', (err as Error).message);
+    }
+  }
 
   async ensureProjetoExists(id: string) {
     const projeto = await this.prisma.projeto.findUnique({ where: { id } });

@@ -183,6 +183,36 @@ export function atividadeCriada(args: {
   );
 }
 
+/**
+ * E-mail genérico ao RESPONSÁVEL DO PROJETO sobre qualquer movimentação
+ * (atividade/pendência) feita por outra pessoa. Uniforme entre os tipos de
+ * movimento — o `resumo` descreve o que aconteceu; o link abre o item.
+ */
+export function projetoMovimentacaoResponsavel(args: {
+  projetoNumero: number;
+  projetoNome: string;
+  projetoId: string;
+  resumo: string;
+  autor: string;
+  itemTipo: 'atividade' | 'pendência';
+  atividadeId?: string;
+  pendenciaId?: string;
+}): string {
+  const tab = args.pendenciaId ? 'pendencias' : 'atividades';
+  const anchor = args.pendenciaId
+    ? `&pendenciaId=${args.pendenciaId}`
+    : args.atividadeId ? `&atividadeId=${args.atividadeId}` : '';
+  return layout(
+    `Movimentação no projeto #${args.projetoNumero}`,
+    `<p style="margin: 0 0 8px; color: #475569;">Projeto: <strong>${escapeHtml(args.projetoNome)}</strong></p>
+     <p style="margin: 0 0 16px; color: #64748b; font-size: 13px;">por ${escapeHtml(args.autor)} · você é o responsável do projeto</p>
+     <div style="background: #f1f5f9; border-left: 3px solid #0e7490; padding: 12px 16px; border-radius: 4px; color: #1e293b; white-space: pre-wrap;">${escapeHtml(args.resumo)}</div>`,
+    `${BASE_URL}/gestao-ti/projetos/${args.projetoId}?tab=${tab}${anchor}`,
+    'Abrir projeto',
+    args.itemTipo,
+  );
+}
+
 export function usuarioChaveAdicionado(args: {
   projetoNumero: number;
   projetoNome: string;
