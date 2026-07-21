@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -47,6 +48,13 @@ export function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* ScrollView: centraliza quando cabe e ROLA quando o teclado abre — assim
+          o campo de senha nunca fica escondido atrás do teclado (Android). */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.box}>
         <Text style={styles.titulo}>CAPUL Logística</Text>
         <Text style={styles.sub}>Entregas e Frota</Text>
@@ -96,12 +104,14 @@ export function LoginScreen() {
           )}
         </TouchableOpacity>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: CAPUL, justifyContent: 'center', padding: 24 },
+  container: { flex: 1, backgroundColor: CAPUL },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   box: { backgroundColor: '#fff', borderRadius: 16, padding: 24, gap: 12 },
   titulo: { fontSize: 24, fontWeight: '700', color: CAPUL, textAlign: 'center' },
   sub: { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 8 },
