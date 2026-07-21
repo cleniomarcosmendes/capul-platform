@@ -8,6 +8,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { tiposDespesa, fornecedoresDespesa, type FornecedorDespesa } from '../api/frota';
 import { lancarDespesaEntrega } from '../api/viagens';
+import { ehErroDeRede } from '../offline/filaFrota';
+import { enfileirarDespesaEntrega } from '../offline/filaDespesaEntrega';
 import { SelectBusca } from '../components/SelectBusca';
 import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
@@ -62,20 +64,27 @@ export function DespesaEntregaScreen({ route, navigation }: Props) {
   async function lancar() {
     if (!podeLancar) return;
     setSalvando(true);
+    const idem = uuid();
     const payload = {
       viagemId,
       tipoDespesaId: tipoId, valor: parseMoeda(valor),
       fornecedorId: fornecedorId || undefined, fornecedor: fornecedor.trim() || undefined,
       observacao: observacao.trim() || undefined,
       numeroDocumento: semNota ? undefined : (numeroDocumento.trim() || undefined),
-      semNota: semNota || undefined, idempotencyKey: uuid(),
+      semNota: semNota || undefined, idempotencyKey: idem,
     };
     try {
       await lancarDespesaEntrega(payload, fotoUris);
       Alert.alert('Despesa lançada', 'Registrada como custo do veículo.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e) {
-      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
-      Alert.alert('Não foi possível lançar', String(msg || 'Verifique a conexão e tente novamente.'));
+      if (ehErroDeRede(e)) {
+        // Sem sinal (a rua): guarda a despesa + fotos e sincroniza depois.
+        await enfileirarDespesaEntrega({ id: idem, rotulo: `Despesa R$ ${valor}`, viagemId, payload, fotoUris });
+        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e as fotos) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      } else {
+        const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+        Alert.alert('Não foi possível lançar', String(msg || 'Verifique a conexão e tente novamente.'));
+      }
     } finally { setSalvando(false); }
   }
 

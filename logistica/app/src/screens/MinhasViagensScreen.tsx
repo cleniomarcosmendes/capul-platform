@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { minhasViagens } from '../api/viagens';
 import { contarPendentes, onFilaChange, processarFila } from '../offline/filaBaixas';
+import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFilaDespesaEntrega } from '../offline/filaDespesaEntrega';
 import type { Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -25,6 +26,7 @@ export function MinhasViagensScreen({ navigation }: Props) {
   const [atualizando, setAtualizando] = useState(false);
   const [erro, setErro] = useState('');
   const [pendentes, setPendentes] = useState(0);
+  const [pendentesDespesa, setPendentesDespesa] = useState(0);
   const [reenviando, setReenviando] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -36,9 +38,10 @@ export function MinhasViagensScreen({ navigation }: Props) {
     }
   }, []);
 
-  // Tenta esvaziar a fila offline; avisa o que o servidor rejeitou em definitivo.
+  // Tenta esvaziar as filas offline (baixas + despesas da rota); avisa o que o
+  // servidor rejeitou em definitivo.
   const reenviarFila = useCallback(async () => {
-    if ((await contarPendentes()) === 0) return;
+    if ((await contarPendentes()) === 0 && (await contarPendentesDespesaEntrega()) === 0) return;
     setReenviando(true);
     try {
       const r = await processarFila();
@@ -48,16 +51,27 @@ export function MinhasViagensScreen({ navigation }: Props) {
           r.descartadas.map((d) => `#${d.entregaNumero}: ${d.motivo}`).join('\n'),
         );
       }
+      const rd = await processarFilaDespesaEntrega();
+      if (rd.descartadas.length > 0) {
+        Alert.alert(
+          'Despesas rejeitadas pelo servidor',
+          rd.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'),
+        );
+      }
       if (r.enviadas > 0) await carregar();
     } finally {
       setReenviando(false);
     }
   }, [carregar]);
 
-  // Contador da fila ao vivo (banner).
+  // Contadores das filas ao vivo (banner).
   useEffect(() => {
     void contarPendentes().then(setPendentes);
     return onFilaChange(setPendentes);
+  }, []);
+  useEffect(() => {
+    void contarPendentesDespesaEntrega().then(setPendentesDespesa);
+    return onFilaDespesaEntregaChange(setPendentesDespesa);
   }, []);
 
   // Recarrega ao focar a tela (volta do detalhe/baixa) e tenta reenviar a fila.
@@ -92,12 +106,15 @@ export function MinhasViagensScreen({ navigation }: Props) {
 
   return (
     <View style={{ flex: 1 }}>
-      {pendentes > 0 && (
+      {(pendentes > 0 || pendentesDespesa > 0) && (
         <TouchableOpacity style={styles.fila} onPress={() => void reenviarFila()} disabled={reenviando}>
           <Text style={styles.filaTxt}>
             {reenviando
-              ? 'Reenviando baixas pendentes…'
-              : `${pendentes} baixa${pendentes === 1 ? '' : 's'} aguardando sinal — toque para reenviar`}
+              ? 'Reenviando pendências…'
+              : `${[
+                  pendentes > 0 ? `${pendentes} baixa${pendentes === 1 ? '' : 's'}` : null,
+                  pendentesDespesa > 0 ? `${pendentesDespesa} despesa${pendentesDespesa === 1 ? '' : 's'}` : null,
+                ].filter(Boolean).join(' + ')} aguardando sinal — toque para reenviar`}
           </Text>
         </TouchableOpacity>
       )}

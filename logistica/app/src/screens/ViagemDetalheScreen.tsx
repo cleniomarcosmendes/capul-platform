@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { obterViagem, iniciarEntrega, encerrarEntrega } from '../api/viagens';
+import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFilaDespesaEntrega } from '../offline/filaDespesaEntrega';
 import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, MAX_PARADAS_MAPS } from '../lib/navegar';
 import { useRastreamento } from '../lib/useRastreamento';
 import type { Parada, Viagem } from '../types/api';
@@ -33,6 +34,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [acaoKm, setAcaoKm] = useState<null | 'iniciar' | 'encerrar'>(null);
   const [kmInput, setKmInput] = useState('');
   const [salvandoKm, setSalvandoKm] = useState(false);
+  // Fila offline da despesa da rota (banner + reenvio).
+  const [pendDespesa, setPendDespesa] = useState(0);
+  const [reenviandoDespesa, setReenviandoDespesa] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -44,11 +48,28 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     }
   }, [viagemId]);
 
-  // Ao focar (inclusive voltando da Baixa) recarrega — status da parada atualiza.
+  // Tenta esvaziar a fila de despesas offline; reporta o que o servidor rejeitou.
+  const reenviarDespesas = useCallback(async () => {
+    if ((await contarPendentesDespesaEntrega()) === 0) return;
+    setReenviandoDespesa(true);
+    try {
+      const r = await processarFilaDespesaEntrega();
+      if (r.descartadas.length) Alert.alert('Despesas rejeitadas pelo servidor', r.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
+    } finally { setReenviandoDespesa(false); }
+  }, []);
+
+  // Contador da fila ao vivo (banner).
+  useEffect(() => {
+    void contarPendentesDespesaEntrega().then(setPendDespesa);
+    return onFilaDespesaEntregaChange(setPendDespesa);
+  }, []);
+
+  // Ao focar (inclusive voltando da Baixa/Despesa) recarrega e tenta reenviar a fila.
   useFocusEffect(
     useCallback(() => {
       void carregar();
-    }, [carregar]),
+      void reenviarDespesas();
+    }, [carregar, reenviarDespesas]),
   );
 
   // Rastreamento foreground enquanto a viagem está em curso (Fase A).
@@ -145,6 +166,13 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       keyExtractor={(p) => p.id}
       ListHeaderComponent={
         <View>
+          {pendDespesa > 0 && (
+            <TouchableOpacity style={styles.filaBanner} onPress={() => void reenviarDespesas()} disabled={reenviandoDespesa}>
+              <Text style={styles.filaBannerTxt}>
+                {reenviandoDespesa ? 'Reenviando despesas…' : `💸 ${pendDespesa} despesa(s) aguardando sinal — toque para reenviar`}
+              </Text>
+            </TouchableOpacity>
+          )}
           {rastreando && (
             <View style={styles.rastreioBanner}>
               <Text style={styles.rastreioTxt}>📍 Localização ativa durante a viagem</Text>
@@ -322,6 +350,8 @@ const styles = StyleSheet.create({
   kmConfirmarTxt: { color: '#fff', fontWeight: '700' },
   kmCancelar: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
   kmCancelarTxt: { color: '#475569', fontWeight: '600' },
+  filaBanner: { backgroundColor: '#f59e0b', borderRadius: 8, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 8 },
+  filaBannerTxt: { color: '#fff', fontWeight: '700', fontSize: 12, textAlign: 'center' },
   despesaBtn: { borderWidth: 1, borderColor: '#b45309', backgroundColor: '#fffbeb', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, alignItems: 'center', marginBottom: 10 },
   despesaBtnTxt: { color: '#b45309', fontWeight: '700', fontSize: 13 },
   rastreioBanner: { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', borderWidth: 1, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginBottom: 8 },
