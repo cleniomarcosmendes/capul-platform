@@ -195,6 +195,14 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
               )}
             </View>
           )}
+          {viagem.situacao === 'EM_CURSO' && (
+            <TouchableOpacity
+              style={styles.despesaBtn}
+              onPress={() => navigation.navigate('DespesaEntrega', { viagemId: viagem.id, placa: viagem.veiculo?.placa })}
+            >
+              <Text style={styles.despesaBtnTxt}>💸 Lançar despesa (ex.: abastecer)</Text>
+            </TouchableOpacity>
+          )}
           <View style={styles.filtros}>
             {chips.map((c) => (
               <TouchableOpacity
@@ -314,6 +322,8 @@ const styles = StyleSheet.create({
   kmConfirmarTxt: { color: '#fff', fontWeight: '700' },
   kmCancelar: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
   kmCancelarTxt: { color: '#475569', fontWeight: '600' },
+  despesaBtn: { borderWidth: 1, borderColor: '#b45309', backgroundColor: '#fffbeb', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, alignItems: 'center', marginBottom: 10 },
+  despesaBtnTxt: { color: '#b45309', fontWeight: '700', fontSize: 13 },
   rastreioBanner: { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', borderWidth: 1, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginBottom: 8 },
   rastreioTxt: { color: '#047857', fontSize: 12, fontWeight: '600' },
   filtros: { flexDirection: 'row', gap: 8, marginBottom: 10 },

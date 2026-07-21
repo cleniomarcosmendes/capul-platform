@@ -7,6 +7,7 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { MinhasViagensScreen } from '../screens/MinhasViagensScreen';
 import { ViagemDetalheScreen } from '../screens/ViagemDetalheScreen';
+import { DespesaEntregaScreen } from '../screens/DespesaEntregaScreen';
 import { BaixaScreen } from '../screens/BaixaScreen';
 import { FrotaHomeScreen } from '../screens/FrotaHomeScreen';
 import { SaidaFrotaScreen } from '../screens/SaidaFrotaScreen';
@@ -19,6 +20,7 @@ export type RootStackParamList = {
   Home: undefined;
   MinhasViagens: undefined;
   ViagemDetalhe: { viagemId: string; numero: number };
+  DespesaEntrega: { viagemId: string; placa?: string };
   Baixa: { entregaId: string; entregaNumero: number; destinatario: string };
   FrotaHome: undefined;
   SaidaFrota: undefined;
@@ -68,6 +70,11 @@ export function RootNavigator() {
               name="ViagemDetalhe"
               component={ViagemDetalheScreen}
               options={({ route }) => ({ title: `Viagem #${route.params.numero}` })}
+            />
+            <Stack.Screen
+              name="DespesaEntrega"
+              component={DespesaEntregaScreen}
+              options={{ title: 'Lançar despesa' }}
             />
             <Stack.Screen
               name="Baixa"

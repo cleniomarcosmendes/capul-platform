@@ -47,7 +47,7 @@ export class DespesaController {
   // despesa na viagem (o cadastro de tipos, abaixo, segue só GESTOR_FROTA).
   // (O fluxo Supervisores/RDV tem endpoint PRÓPRIO: GET /supervisor/tipos-despesa.)
   @Get('tipos')
-  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('REGISTRADOR_FROTA', 'ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   listarTipos(@Query('ativos') ativos?: string) {
     return this.despesas.listarTipos(ativos === 'true' || ativos === '1');
   }
@@ -67,7 +67,7 @@ export class DespesaController {
   // ---- Fornecedores (cadastro próprio da logística) ----
   // Leitura liberada ao REGISTRADOR_FROTA — escolhe o fornecedor ao lançar despesa.
   @Get('fornecedores')
-  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  @Roles('REGISTRADOR_FROTA', 'ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
   listarFornecedores(@Query('ativos') ativos?: string) {
     return this.despesas.listarFornecedores(ativos === 'true' || ativos === '1');
   }
@@ -149,6 +149,19 @@ export class DespesaController {
     @Headers('x-condutor-token') condutorToken?: string,
   ) {
     return this.despesas.lancarNaViagem(dto, user, recibosDe(comprovantes), condutorToken);
+  }
+
+  /** Lançamento de despesa na ROTA DE ENTREGA (app do entregador) → custo do
+   *  veículo. Sem token de condutor: o entregador é o dono da rota. Recibos opcionais. */
+  @Post('viagem-entrega')
+  @Roles('ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
+  @UseInterceptors(AnyFilesInterceptor({ limits: { fileSize: 15 * 1024 * 1024, files: 5 } }))
+  lancarNaViagemEntrega(
+    @Body() dto: LancarDespesaViagemDto,
+    @CurrentUser() user: JwtPayload,
+    @UploadedFiles() comprovantes?: Express.Multer.File[],
+  ) {
+    return this.despesas.lancarNaViagemEntrega(dto, user, roleLogistica(user), recibosDe(comprovantes));
   }
 
   /** Download do recibo LEGADO (1 anexo, campo antigo) — escopo gestor/supervisor do veículo. */

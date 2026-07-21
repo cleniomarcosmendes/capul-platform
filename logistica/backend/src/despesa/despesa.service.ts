@@ -479,6 +479,64 @@ export class DespesaService {
   }
 
   /**
+   * Lançamento de despesa na ROTA DE ENTREGA (app do entregador) → CUSTO DO
+   * VEÍCULO. Diferente da viagem de FROTA: aqui NÃO há token de condutor — o
+   * entregador é o DONO da rota (motoristaId === user.sub) ou um gestor de
+   * entrega da filial. A despesa vincula o VEÍCULO da rota, então entra na
+   * Análise da Frota "de graça" (o custo agrega por veiculoId, não por tipo de
+   * viagem). Não há acerto/adiantamento do entregador — é só custo do carro:
+   * abastecimento (tipo sem aprovação) entra APROVADA; os demais nascem PENDENTE
+   * e o gestor de frota valida pela governança de veículo (assertPodeGerirVeiculo).
+   */
+  async lancarNaViagemEntrega(dto: LancarDespesaViagemDto, user: JwtPayload, role?: string, recibos?: ReciboBinario[]) {
+    const v = await this.prisma.viagem.findUnique({ where: { id: dto.viagemId } });
+    if (!v || v.tipo !== TipoViagem.ENTREGA) throw new NotFoundException('Rota de entrega não encontrada.');
+    if (v.filialId !== user.filialId) throw new ForbiddenException('Rota de outra filial.');
+    // Só o entregador dono da rota OU um gestor de entrega (OPERADOR/GESTOR/ADMIN).
+    const ehGestorEntrega = role === 'OPERADOR_ENTREGA' || role === 'GESTOR_ENTREGA' || role === 'ADMIN';
+    if (v.motoristaId !== user.sub && !ehGestorEntrega) {
+      throw new ForbiddenException('Só o entregador da rota (ou um gestor de entrega) pode lançar despesa nesta rota.');
+    }
+    if (!v.veiculoId) throw new BadRequestException('Rota sem veículo — sem veículo não há custo para lançar.');
+    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('Só é possível lançar despesa em rota em curso.');
+
+    const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
+    if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
+
+    // Idempotência (reenvio da mesma tela): devolve a existente sem duplicar.
+    if (dto.idempotencyKey) {
+      const ja = await this.prisma.despesaVeiculo.findUnique({ where: { idempotencyKey: dto.idempotencyKey } });
+      if (ja) return ja;
+    }
+
+    const { numeroDocumento, semNota } = this.normalizaDoc(dto);
+    await this.assertDocumentoUnico(v.filialId, v.veiculoId, numeroDocumento, tipo.id);
+
+    const autoAprova = !tipo.requerAprovacao;
+    const despesa = await this.prisma.despesaVeiculo.create({
+      data: {
+        filialId: v.filialId,
+        veiculoId: v.veiculoId,
+        viagemId: v.id,
+        tipoDespesaId: tipo.id,
+        valor: new Prisma.Decimal(dto.valor),
+        dataDespesa: new Date(),
+        fornecedorId: dto.fornecedorId || null,
+        fornecedor: dto.fornecedor?.trim() || null,
+        observacao: dto.observacao?.trim() || null,
+        numeroDocumento,
+        semNota,
+        situacao: autoAprova ? StatusDespesa.APROVADA : StatusDespesa.PENDENTE,
+        aprovadoEm: autoAprova ? new Date() : null, // auto-aprovada: sem revisor
+        criadoPorId: user.sub, // identidade real do entregador (autorNome fica p/ FROTA)
+        idempotencyKey: dto.idempotencyKey ?? null,
+      },
+    });
+    if (recibos?.length) await this.anexarComprovantes(despesa.id, despesa.filialId, recibos);
+    return despesa;
+  }
+
+  /**
    * Rateio de uma nota: 1 documento → vários TIPOS no mesmo veículo. Cada item
    * vira uma despesa (mesmo veículo/nota, tipo distinto), já APROVADA (lançamento
    * direto do supervisor/gestor). Tudo em transação — ou grava tudo, ou nada.
