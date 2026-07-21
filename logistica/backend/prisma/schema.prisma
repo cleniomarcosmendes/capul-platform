@@ -645,6 +645,12 @@ model Viagem {
   // acerto TRAVADO (sem novas despesas/adiantamento); reabrir volta a NULL.
   acertoEncerradoEm         DateTime?    @map("acerto_encerrado_em")
   acertoEncerradoPorId      String?      @map("acerto_encerrado_por_id")
+  // Encerramento FORÇADO pelo gestor de entrega: a rota ficou pendurada EM_CURSO
+  // (ex.: o entregador esqueceu o retorno). Neste caminho o KM final é OBRIGATÓRIO
+  // (mantém o odômetro íntegro); guarda quem forçou e quando — accountability
+  // distinta da conclusão feita pelo próprio entregador no app.
+  fechadoForcadoPorId       String?      @map("fechado_forcado_por_id")
+  fechadoForcadoEm          DateTime?    @map("fechado_forcado_em")
   // Vínculo Saída de frota → planejamento RDV (viagem SUPERVISOR): várias saídas
   // apontam p/ 1 RDV; o RDV soma o KM das saídas. Auto-relação na própria tabela.
   rdvViagemId               String?      @map("rdv_viagem_id")

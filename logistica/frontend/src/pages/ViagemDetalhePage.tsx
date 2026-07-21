@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowDown, ArrowLeft, ArrowUp, Camera, CheckCircle2, FileText, Loader2, Phone, Plus, Printer, Send, Sparkles, Trash2,
+  AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Camera, CheckCircle2, FileText, Loader2, Phone, Plus, Printer, Send, Sparkles, Trash2,
 } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { BaixaDialog } from '../components/BaixaDialog';
 import { useToast } from '../components/toast-context';
+import { useAuth } from '../contexts/AuthContext';
 import { maskTelefone } from '../utils/format';
 
 // Detalhe da viagem (padrão workspace): paradas na ordem da rota + ações por
@@ -56,6 +57,9 @@ export function ViagemDetalhePage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const { toast, confirm } = useToast();
+  const { logisticaRole } = useAuth();
+  // Encerramento FORÇADO da rota é ação de GESTÃO — só o gestor de entrega (e ADMIN).
+  const podeForcar = logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'ADMIN';
   const location = useLocation();
   // Volta para o LOCAL DE ORIGEM (Monitor da Frota, lista de Rotas de Entrega…)
   // via histórico; se abriu direto por link (sem histórico no app), fallback /viagens.
@@ -78,6 +82,12 @@ export function ViagemDetalhePage() {
   const [salvandoVm, setSalvandoVm] = useState(false);
   const [bairrosSel, setBairrosSel] = useState<string[]>([]);
   const [sugerindo, setSugerindo] = useState(false);
+  // Modal do encerramento forçado (gestor): KM final obrigatório + destino das
+  // entregas ainda não baixadas + observação.
+  const [forcarOpen, setForcarOpen] = useState(false);
+  const [kmForcar, setKmForcar] = useState('');
+  const [destinoForcar, setDestinoForcar] = useState<'ENTREGUE' | 'NAO_ENTREGUE'>('NAO_ENTREGUE');
+  const [obsForcar, setObsForcar] = useState('');
 
   const carregar = useCallback(async () => {
     try {
@@ -228,6 +238,18 @@ export function ViagemDetalhePage() {
     if (!ok) return;
     await acao(() => logisticaApi.post(`/viagens/${id}/concluir`, {}), 'Falha ao concluir.');
   }
+  // Encerramento FORÇADO (gestor): a rota ficou pendurada (o entregador esqueceu o
+  // retorno). O gestor lê o KM no painel do veículo → odômetro fica íntegro.
+  async function forcarEncerramento() {
+    const km = Number(kmForcar);
+    if (kmForcar === '' || !Number.isFinite(km) || km < 0) { toast('error', 'Informe o KM final (odômetro no painel).'); return; }
+    await acao(async () => {
+      await logisticaApi.post(`/viagens/${id}/forcar-encerramento`, {
+        kmFinal: km, marcarEntregasComo: destinoForcar, observacoes: obsForcar.trim() || undefined,
+      });
+      setForcarOpen(false); setKmForcar(''); setObsForcar(''); setDestinoForcar('NAO_ENTREGUE');
+    }, 'Falha ao forçar o encerramento.');
+  }
   // Recarrega a fila de pendentes (a entrega removida da viagem volta a ficar
   // disponível para adicionar — sem isso ela sumia das duas listas até o refresh).
   async function recarregarFila() {
@@ -309,6 +331,13 @@ export function ViagemDetalhePage() {
             <button onClick={() => void concluir()} disabled={busy}
               className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
               <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
+            </button>
+          )}
+          {v.situacao === 'EM_CURSO' && podeForcar && (
+            <button onClick={() => { setKmForcar(''); setObsForcar(''); setDestinoForcar('NAO_ENTREGUE'); setForcarOpen(true); }} disabled={busy}
+              title="A rota ficou pendurada (o entregador esqueceu o retorno) — force o fecho informando o KM do painel."
+              className="flex items-center gap-1.5 rounded-lg border border-amber-400 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+              <AlertTriangle className="h-3.5 w-3.5" /> Forçar encerramento
             </button>
           )}
         </div>
@@ -644,6 +673,65 @@ export function ViagemDetalhePage() {
             await carregar();
           }}
         />
+      )}
+
+      {forcarOpen && v && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <div className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5" />
+              <h3 className="text-base font-semibold">Forçar encerramento da rota #{v.numero}</h3>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              Use quando a rota ficou pendurada (o entregador esqueceu de registrar o retorno).
+              Leia o <b>KM no painel do veículo</b> — o odômetro é atualizado com esse valor.
+            </p>
+
+            {(() => {
+              const emViagem = v.paradas.filter((p) => p.entrega?.status === 'EM_VIAGEM').length;
+              return (
+                <>
+                  <label className="mt-4 block text-sm font-medium text-slate-700">KM final (odômetro)</label>
+                  <input type="number" inputMode="numeric" value={kmForcar} onChange={(e) => setKmForcar(e.target.value)}
+                    placeholder="KM no painel" min={0}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none" />
+
+                  <p className="mt-4 text-sm font-medium text-slate-700">
+                    {emViagem > 0
+                      ? `Há ${emViagem} entrega(s) ainda EM VIAGEM (não baixadas). O que houve com elas?`
+                      : 'Todas as entregas já foram baixadas.'}
+                  </p>
+                  {emViagem > 0 && (
+                    <div className="mt-2 space-y-2">
+                      <label className="flex items-start gap-2 text-sm text-slate-700">
+                        <input type="radio" name="destinoForcar" className="mt-0.5" checked={destinoForcar === 'NAO_ENTREGUE'} onChange={() => setDestinoForcar('NAO_ENTREGUE')} />
+                        <span><b>Não foram entregues</b> — marca como <i>Não entregue</i> (não fabrica entrega).</span>
+                      </label>
+                      <label className="flex items-start gap-2 text-sm text-slate-700">
+                        <input type="radio" name="destinoForcar" className="mt-0.5" checked={destinoForcar === 'ENTREGUE'} onChange={() => setDestinoForcar('ENTREGUE')} />
+                        <span><b>Foram entregues</b> — o entregador só esqueceu a baixa; marca como <i>Entregue</i>.</span>
+                      </label>
+                    </div>
+                  )}
+
+                  <label className="mt-4 block text-sm font-medium text-slate-700">Observação (opcional)</label>
+                  <input type="text" value={obsForcar} onChange={(e) => setObsForcar(e.target.value)} maxLength={255}
+                    placeholder="Ex.: retorno esquecido; KM lido na garagem"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-capul-500 focus:outline-none" />
+                </>
+              );
+            })()}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setForcarOpen(false)} disabled={busy}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancelar</button>
+              <button onClick={() => void forcarEncerramento()} disabled={busy}
+                className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />} Forçar encerramento
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

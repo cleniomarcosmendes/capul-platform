@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateViagemDto {
   @IsString() @MaxLength(40)
@@ -28,6 +28,18 @@ export class DespacharViagemDto {
 /** Conclusão da viagem no balcão — hodômetro de chegada (opcional). */
 export class ConcluirViagemDto {
   @IsOptional() @IsInt() @Min(0) kmFinal?: number;
+}
+
+/**
+ * Encerramento FORÇADO pelo gestor de entrega (rota pendurada — o entregador
+ * esqueceu o retorno). Aqui o KM final é OBRIGATÓRIO (mantém o odômetro íntegro).
+ * O gestor decide o destino das entregas ainda não baixadas — não se fabrica
+ * "entregue": é um juízo dele (ENTREGUE se de fato saíram; NAO_ENTREGUE senão).
+ */
+export class ForcarEncerramentoDto {
+  @IsInt() @Min(0) kmFinal!: number;
+  @IsIn(['ENTREGUE', 'NAO_ENTREGUE']) marcarEntregasComo!: 'ENTREGUE' | 'NAO_ENTREGUE';
+  @IsOptional() @IsString() @MaxLength(255) observacoes?: string;
 }
 
 /** "Iniciar entrega" no app: o motorista informa o KM de saída (no painel do

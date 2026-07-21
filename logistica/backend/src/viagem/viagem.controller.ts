@@ -5,7 +5,7 @@ import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { ViagemService } from './viagem.service.js';
 import { RotaService } from '../rota/rota.service.js';
-import { AdicionarEntregasDto, ConcluirViagemDto, CreateViagemDto, DespacharViagemDto, IniciarViagemDto, ReordenarViagemDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
+import { AdicionarEntregasDto, ConcluirViagemDto, CreateViagemDto, DespacharViagemDto, ForcarEncerramentoDto, IniciarViagemDto, ReordenarViagemDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
 
 @Controller('viagens')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
@@ -94,6 +94,14 @@ export class ViagemController {
   @Roles('ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   concluir(@Param('id') id: string, @Body() dto: ConcluirViagemDto, @CurrentUser() user: JwtPayload) {
     return this.viagens.concluir(id, user.filialId, user.sub, dto);
+  }
+
+  /** Encerramento FORÇADO pelo gestor de entrega (rota pendurada): KM final
+   *  obrigatório + auditoria. Só GESTOR_ENTREGA (e ADMIN via guard). */
+  @Post(':id/forcar-encerramento')
+  @Roles('GESTOR_ENTREGA')
+  forcarEncerramento(@Param('id') id: string, @Body() dto: ForcarEncerramentoDto, @CurrentUser() user: JwtPayload) {
+    return this.viagens.forcarEncerramento(id, dto, user.filialId, user.sub);
   }
 
   @Delete(':id/entregas/:entregaId')

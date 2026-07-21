@@ -1,10 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { SituacaoVeiculo, StatusEntrega, StatusViagem } from '@prisma/client';
+import { SituacaoVeiculo, StatusEntrega, StatusViagem, TipoViagem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
-import { CreateViagemDto, DespacharViagemDto, ConcluirViagemDto, IniciarViagemDto } from './dto.js';
+import { CreateViagemDto, DespacharViagemDto, ConcluirViagemDto, IniciarViagemDto, ForcarEncerramentoDto } from './dto.js';
 
 @Injectable()
 export class ViagemService {
@@ -324,6 +324,62 @@ export class ViagemService {
       return tx.viagem.update({
         where: { id },
         data: { situacao: StatusViagem.CONCLUIDA, dataHoraChegada: new Date(), kmFinal: kmFinal ?? undefined },
+        include: { paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } } },
+      });
+    });
+  }
+
+  /**
+   * Encerramento FORÇADO pelo gestor de entrega: fecha uma rota de entrega que
+   * ficou pendurada EM_CURSO (o entregador esqueceu o retorno). Diferente do
+   * `concluir` do app: o KM final é OBRIGATÓRIO (o gestor lê o painel do veículo
+   * na garagem → mantém o odômetro íntegro) e grava a auditoria de quem forçou.
+   * As entregas ainda EM_VIAGEM viram o que o gestor decidir (não fabrica
+   * "entregue"). Libera o veículo e atualiza o odômetro.
+   */
+  async forcarEncerramento(id: string, dto: ForcarEncerramentoDto, userFilialId?: string, userId?: string) {
+    const v = await this.prisma.viagem.findUnique({
+      where: { id },
+      include: { paradas: { select: { entregaId: true } } },
+    });
+    if (!v) throw new NotFoundException('Viagem não encontrada.');
+    if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
+    if (v.tipo !== TipoViagem.ENTREGA) throw new BadRequestException('Este encerramento forçado é só para rotas de entrega.');
+    if (v.situacao !== StatusViagem.EM_CURSO) {
+      throw new BadRequestException(`Só força o encerramento de rota EM_CURSO (atual: ${v.situacao}).`);
+    }
+    // KM final obrigatório e coerente com a saída — o odômetro não pode retroceder.
+    if (v.kmInicial != null && dto.kmFinal < v.kmInicial) {
+      throw new BadRequestException(`KM final (${dto.kmFinal}) menor que o KM de saída (${v.kmInicial}).`);
+    }
+    const kmFinal = dto.kmFinal;
+    const destino = dto.marcarEntregasComo === 'ENTREGUE' ? StatusEntrega.ENTREGUE : StatusEntrega.NAO_ENTREGUE;
+    const entregaIds = v.paradas.map((p) => p.entregaId).filter((x): x is string => !!x);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.entrega.updateMany({
+        where: { id: { in: entregaIds }, status: StatusEntrega.EM_VIAGEM },
+        // ENTREGUE carimba quando/quem (rastreabilidade); NAO_ENTREGUE só o status.
+        data: destino === StatusEntrega.ENTREGUE
+          ? { status: destino, dataHoraEntrega: new Date(), baixadoPorId: userId ?? null }
+          : { status: destino },
+      });
+      if (v.veiculoId) {
+        await tx.veiculo.update({
+          where: { id: v.veiculoId },
+          data: { situacao: SituacaoVeiculo.DISPONIVEL, kmAtual: kmFinal },
+        });
+      }
+      return tx.viagem.update({
+        where: { id },
+        data: {
+          situacao: StatusViagem.CONCLUIDA,
+          dataHoraChegada: new Date(),
+          kmFinal,
+          fechadoForcadoPorId: userId ?? null,
+          fechadoForcadoEm: new Date(),
+          observacoesChegada: dto.observacoes?.trim() || undefined,
+        },
         include: { paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } } },
       });
     });
