@@ -15,6 +15,7 @@ import type { RootStackParamList } from '../navigation';
 import { minhasViagens } from '../api/viagens';
 import { contarPendentes, onFilaChange, processarFila } from '../offline/filaBaixas';
 import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFilaDespesaEntrega } from '../offline/filaDespesaEntrega';
+import { contarPendentesKmEntrega, onFilaKmEntregaChange, processarFilaKmEntrega } from '../offline/filaKmEntrega';
 import type { Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -27,6 +28,7 @@ export function MinhasViagensScreen({ navigation }: Props) {
   const [erro, setErro] = useState('');
   const [pendentes, setPendentes] = useState(0);
   const [pendentesDespesa, setPendentesDespesa] = useState(0);
+  const [pendentesKm, setPendentesKm] = useState(0);
   const [reenviando, setReenviando] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -38,10 +40,12 @@ export function MinhasViagensScreen({ navigation }: Props) {
     }
   }, []);
 
-  // Tenta esvaziar as filas offline (baixas + despesas da rota); avisa o que o
+  // Tenta esvaziar as filas offline NA ORDEM CORRETA: baixas → despesas → KM.
+  // O KM (inclui o "encerrar", terminal) por ÚLTIMO — senão o encerrar concluiria
+  // a rota antes de uma baixa (com prova) ou despesa ainda pendente. Avisa o que o
   // servidor rejeitou em definitivo.
   const reenviarFila = useCallback(async () => {
-    if ((await contarPendentes()) === 0 && (await contarPendentesDespesaEntrega()) === 0) return;
+    if ((await contarPendentes()) === 0 && (await contarPendentesDespesaEntrega()) === 0 && (await contarPendentesKmEntrega()) === 0) return;
     setReenviando(true);
     try {
       const r = await processarFila();
@@ -52,13 +56,15 @@ export function MinhasViagensScreen({ navigation }: Props) {
         );
       }
       const rd = await processarFilaDespesaEntrega();
-      if (rd.descartadas.length > 0) {
+      const rk = await processarFilaKmEntrega();
+      const descartadas = [...rd.descartadas, ...rk.descartadas];
+      if (descartadas.length > 0) {
         Alert.alert(
-          'Despesas rejeitadas pelo servidor',
-          rd.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'),
+          'Rejeitado pelo servidor',
+          descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'),
         );
       }
-      if (r.enviadas > 0) await carregar();
+      if (r.enviadas > 0 || rk.enviadas > 0) await carregar();
     } finally {
       setReenviando(false);
     }
@@ -72,6 +78,10 @@ export function MinhasViagensScreen({ navigation }: Props) {
   useEffect(() => {
     void contarPendentesDespesaEntrega().then(setPendentesDespesa);
     return onFilaDespesaEntregaChange(setPendentesDespesa);
+  }, []);
+  useEffect(() => {
+    void contarPendentesKmEntrega().then(setPendentesKm);
+    return onFilaKmEntregaChange(setPendentesKm);
   }, []);
 
   // Recarrega ao focar a tela (volta do detalhe/baixa) e tenta reenviar a fila.
@@ -106,7 +116,7 @@ export function MinhasViagensScreen({ navigation }: Props) {
 
   return (
     <View style={{ flex: 1 }}>
-      {(pendentes > 0 || pendentesDespesa > 0) && (
+      {(pendentes > 0 || pendentesDespesa > 0 || pendentesKm > 0) && (
         <TouchableOpacity style={styles.fila} onPress={() => void reenviarFila()} disabled={reenviando}>
           <Text style={styles.filaTxt}>
             {reenviando
@@ -114,6 +124,7 @@ export function MinhasViagensScreen({ navigation }: Props) {
               : `${[
                   pendentes > 0 ? `${pendentes} baixa${pendentes === 1 ? '' : 's'}` : null,
                   pendentesDespesa > 0 ? `${pendentesDespesa} despesa${pendentesDespesa === 1 ? '' : 's'}` : null,
+                  pendentesKm > 0 ? `${pendentesKm} KM` : null,
                 ].filter(Boolean).join(' + ')} aguardando sinal — toque para reenviar`}
           </Text>
         </TouchableOpacity>

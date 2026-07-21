@@ -14,7 +14,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { obterViagem, iniciarEntrega, encerrarEntrega } from '../api/viagens';
+import { processarFila as processarFilaBaixas } from '../offline/filaBaixas';
+import { ehErroDeRede } from '../offline/filaFrota';
 import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFilaDespesaEntrega } from '../offline/filaDespesaEntrega';
+import { contarPendentesKmEntrega, onFilaKmEntregaChange, processarFilaKmEntrega, enfileirarKmEntrega } from '../offline/filaKmEntrega';
 import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, MAX_PARADAS_MAPS } from '../lib/navegar';
 import { useRastreamento } from '../lib/useRastreamento';
 import type { Parada, Viagem } from '../types/api';
@@ -34,8 +37,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [acaoKm, setAcaoKm] = useState<null | 'iniciar' | 'encerrar'>(null);
   const [kmInput, setKmInput] = useState('');
   const [salvandoKm, setSalvandoKm] = useState(false);
-  // Fila offline da despesa da rota (banner + reenvio).
+  // Filas offline da rota (banner + reenvio): despesa + KM de saída/retorno.
   const [pendDespesa, setPendDespesa] = useState(0);
+  const [pendKm, setPendKm] = useState(0);
   const [reenviandoDespesa, setReenviandoDespesa] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -48,28 +52,39 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     }
   }, [viagemId]);
 
-  // Tenta esvaziar a fila de despesas offline; reporta o que o servidor rejeitou.
-  const reenviarDespesas = useCallback(async () => {
-    if ((await contarPendentesDespesaEntrega()) === 0) return;
+  // Esvazia as filas offline da rota NA ORDEM CORRETA: baixas → despesas → KM.
+  // O KM (que inclui o "encerrar", terminal) vai por ÚLTIMO — senão o encerrar
+  // concluiria a rota antes de uma baixa/despesa ainda pendente.
+  const reenviarPendencias = useCallback(async () => {
+    const total = (await contarPendentesDespesaEntrega()) + (await contarPendentesKmEntrega());
+    if (total === 0) return;
     setReenviandoDespesa(true);
     try {
-      const r = await processarFilaDespesaEntrega();
-      if (r.descartadas.length) Alert.alert('Despesas rejeitadas pelo servidor', r.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
+      await processarFilaBaixas(); // baixas primeiro (prova antes do encerrar)
+      const rd = await processarFilaDespesaEntrega();
+      const rk = await processarFilaKmEntrega();
+      const descartadas = [...rd.descartadas, ...rk.descartadas];
+      if (descartadas.length) Alert.alert('Rejeitado pelo servidor', descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
+      if (rk.enviadas > 0) await carregar(); // o encerrar pode ter concluído a rota
     } finally { setReenviandoDespesa(false); }
-  }, []);
+  }, [carregar]);
 
-  // Contador da fila ao vivo (banner).
+  // Contadores das filas ao vivo (banner).
   useEffect(() => {
     void contarPendentesDespesaEntrega().then(setPendDespesa);
     return onFilaDespesaEntregaChange(setPendDespesa);
   }, []);
+  useEffect(() => {
+    void contarPendentesKmEntrega().then(setPendKm);
+    return onFilaKmEntregaChange(setPendKm);
+  }, []);
 
-  // Ao focar (inclusive voltando da Baixa/Despesa) recarrega e tenta reenviar a fila.
+  // Ao focar (inclusive voltando da Baixa/Despesa) recarrega e tenta reenviar as filas.
   useFocusEffect(
     useCallback(() => {
       void carregar();
-      void reenviarDespesas();
-    }, [carregar, reenviarDespesas]),
+      void reenviarPendencias();
+    }, [carregar, reenviarPendencias]),
   );
 
   // Rastreamento foreground enquanto a viagem está em curso (Fase A).
@@ -104,8 +119,20 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
         Alert.alert('Entrega encerrada', 'Rota concluída e veículo liberado.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
       }
     } catch (e) {
-      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
-      Alert.alert('Não foi possível', String(msg || 'Tente novamente.'));
+      if (ehErroDeRede(e)) {
+        if (acaoKm === 'iniciar') {
+          await enfileirarKmEntrega({ tipo: 'iniciar', viagemId: viagem.id, kmInicial: km });
+          setViagem((v) => (v ? { ...v, kmInicial: km } : v)); // otimista: reflete o KM de saída na UI
+          setAcaoKm(null);
+          Alert.alert('Salvo offline', 'Sem sinal — o KM de saída vai sincronizar quando a conexão voltar.');
+        } else {
+          await enfileirarKmEntrega({ tipo: 'encerrar', viagemId: viagem.id, kmFinal: km });
+          Alert.alert('Salvo offline', 'Sem sinal — a entrega vai ENCERRAR quando a conexão voltar.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        }
+      } else {
+        const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+        Alert.alert('Não foi possível', String(msg || 'Tente novamente.'));
+      }
     } finally {
       setSalvandoKm(false);
     }
@@ -166,10 +193,15 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       keyExtractor={(p) => p.id}
       ListHeaderComponent={
         <View>
-          {pendDespesa > 0 && (
-            <TouchableOpacity style={styles.filaBanner} onPress={() => void reenviarDespesas()} disabled={reenviandoDespesa}>
+          {(pendDespesa > 0 || pendKm > 0) && (
+            <TouchableOpacity style={styles.filaBanner} onPress={() => void reenviarPendencias()} disabled={reenviandoDespesa}>
               <Text style={styles.filaBannerTxt}>
-                {reenviandoDespesa ? 'Reenviando despesas…' : `💸 ${pendDespesa} despesa(s) aguardando sinal — toque para reenviar`}
+                {reenviandoDespesa
+                  ? 'Reenviando pendências…'
+                  : `📴 ${[
+                      pendDespesa > 0 ? `${pendDespesa} despesa${pendDespesa === 1 ? '' : 's'}` : null,
+                      pendKm > 0 ? `${pendKm} KM` : null,
+                    ].filter(Boolean).join(' + ')} aguardando sinal — toque para reenviar`}
               </Text>
             </TouchableOpacity>
           )}
