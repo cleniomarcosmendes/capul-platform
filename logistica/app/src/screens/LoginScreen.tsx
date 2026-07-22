@@ -48,8 +48,9 @@ export function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* ScrollView: centraliza quando cabe e ROLA quando o teclado abre — assim
-          o campo de senha nunca fica escondido atrás do teclado (Android). */}
+      {/* Card ANCORADO no topo (não centralizado): os campos ficam sempre acima
+          do teclado, independente do modo de teclado do Android (adjustResize/pan).
+          O ScrollView é rede de segurança — em tela baixa, rola até a senha. */}
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
@@ -111,7 +112,9 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: CAPUL },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  // Ancora o card no topo (paddingTop) em vez de centralizar — garante que a
+  // senha fique acima do teclado sem depender do windowSoftInputMode do Android.
+  scroll: { flexGrow: 1, justifyContent: 'flex-start', paddingTop: 96, paddingHorizontal: 24, paddingBottom: 24 },
   box: { backgroundColor: '#fff', borderRadius: 16, padding: 24, gap: 12 },
   titulo: { fontSize: 24, fontWeight: '700', color: CAPUL, textAlign: 'center' },
   sub: { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 8 },
