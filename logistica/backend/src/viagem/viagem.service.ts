@@ -340,7 +340,7 @@ export class ViagemService {
   async forcarEncerramento(id: string, dto: ForcarEncerramentoDto, userFilialId?: string, userId?: string) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
-      include: { paradas: { select: { entregaId: true } } },
+      include: { paradas: { select: { entregaId: true } }, veiculo: { select: { kmAtual: true } } },
     });
     if (!v) throw new NotFoundException('Viagem não encontrada.');
     if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
@@ -351,6 +351,11 @@ export class ViagemService {
     // KM final obrigatório e coerente com a saída — o odômetro não pode retroceder.
     if (v.kmInicial != null && dto.kmFinal < v.kmInicial) {
       throw new BadRequestException(`KM final (${dto.kmFinal}) menor que o KM de saída (${v.kmInicial}).`);
+    }
+    // Trava contra regressão do odômetro quando a rota não teve KM de saída
+    // (kmInicial nulo): o KM final não pode ficar abaixo do KM atual do veículo.
+    if (v.veiculo && dto.kmFinal < v.veiculo.kmAtual) {
+      throw new BadRequestException(`KM final (${dto.kmFinal}) menor que o KM atual do veículo (${v.veiculo.kmAtual}) — o odômetro não pode retroceder.`);
     }
     const kmFinal = dto.kmFinal;
     const destino = dto.marcarEntregasComo === 'ENTREGUE' ? StatusEntrega.ENTREGUE : StatusEntrega.NAO_ENTREGUE;
