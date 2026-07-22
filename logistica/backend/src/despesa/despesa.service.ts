@@ -502,6 +502,12 @@ export class DespesaService {
 
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
+    // A despesa da rota é CUSTO DO VEÍCULO — tipo de categoria INDIVÍDUO
+    // (alimentação etc.) não se aplica: na entrega não há acerto/RDV para
+    // recebê-la, e vinculada ao veículo distorceria o custo de frota.
+    if (tipo.categoria === 'INDIVIDUO') {
+      throw new BadRequestException('Tipo de despesa de indivíduo não se aplica à rota de entrega — lance apenas custos do veículo (ex.: combustível).');
+    }
 
     // Idempotência (reenvio da mesma tela): devolve a existente sem duplicar.
     if (dto.idempotencyKey) {
