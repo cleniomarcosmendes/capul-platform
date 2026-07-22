@@ -34,11 +34,14 @@ function basePendencia(overrides: Record<string, unknown> = {}) {
 describe('ProjetoPendenciaService — permissão de encerrar/alterar status', () => {
   let service: ProjetoPendenciaService;
   let prisma: ReturnType<typeof createPrismaMock>;
-  let helpers: { checkProjetoAccessChave: jest.Mock };
+  let helpers: { checkProjetoAccessChave: jest.Mock; notificarResponsavelProjeto: jest.Mock };
 
   beforeEach(async () => {
     prisma = createPrismaMock();
-    helpers = { checkProjetoAccessChave: jest.fn().mockResolvedValue(undefined) };
+    helpers = {
+      checkProjetoAccessChave: jest.fn().mockResolvedValue(undefined),
+      notificarResponsavelProjeto: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
