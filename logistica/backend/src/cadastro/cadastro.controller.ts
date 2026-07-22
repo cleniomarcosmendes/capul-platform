@@ -43,13 +43,15 @@ export class CadastroController {
   // monta suas visitas). Por isso libera, além de entrega, os papéis de frota e os do
   // RDV (SUPERVISOR/SUPERVISOR_FROTA/COORDENADOR). A escrita de cliente segue em entrega.
   @Get('busca')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA', 'COORDENADOR')
+  @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA', 'COORDENADOR')
   buscaUnificada(@Query('termo') termo: string, @CurrentUser() user: JwtPayload) {
     return this.busca.buscaUnificada(termo ?? '', filialDoUsuario(user));
   }
 
   // ---------- CEP (ViaCEP proxiado — CSP da plataforma é connect-src 'self') ----------
+  // REGISTRADOR_ENTREGA (caixa) precisa do CEP ao registrar a entrega no balcão.
   @Get('cep/:cep')
+  @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   buscarCep(@Param('cep') cep: string) {
     return this.cepService.buscar(cep);
   }

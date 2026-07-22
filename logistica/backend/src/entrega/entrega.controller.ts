@@ -29,8 +29,10 @@ export class EntregaController {
     return this.entregas.regeocodificarFilial(resolverFilialLeitura(user, filialId) ?? user.filialId);
   }
 
-  /** Lista (default PENDENTE = fila de montagem). Filtros: filialId, status. */
+  /** Lista (default PENDENTE = fila de montagem). Filtros: filialId, status.
+   *  REGISTRADOR_ENTREGA (caixa) inclui — precisa ver/editar as próprias entregas. */
   @Get()
+  @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   listar(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string, @Query('status') status?: StatusEntrega) {
     return this.entregas.list({ filialId: resolverFilialLeitura(user, filialId), status });
   }
@@ -42,6 +44,7 @@ export class EntregaController {
    */
   /** GRID (padrão workspace): todas as entregas com filtros; ordenação no cliente. */
   @Get('grid')
+  @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   grid(
     @CurrentUser() user: JwtPayload,
     @Query('status') status?: StatusEntrega,
@@ -70,6 +73,7 @@ export class EntregaController {
   }
 
   @Get(':id')
+  @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
   obter(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.entregas.findOne(id, user);
   }

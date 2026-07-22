@@ -7,13 +7,15 @@ import { useAuth } from '../contexts/AuthContext';
 // só descobre o 403 ao clicar). ADMIN passa em tudo.
 const GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA'];
 const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
+// Caixa/balcão: só REGISTRAR e ALTERAR entregas (não monta rota, não vê frota).
+const REGISTRO_ENTREGA = ['REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 const FROTA_GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
 
 const TILES = [
   { to: '/painel', icon: BarChart3, titulo: 'Painel', sub: 'Indicadores de entregas e frota', roles: GESTORES },
   { to: '/clientes', icon: MapPin, titulo: 'Endereços', sub: 'Consulta por telefone, nome ou matrícula', roles: ENTREGA },
-  { to: '/entregas/nova', icon: Package, titulo: 'Nova Entrega', sub: 'Cadastro com CEP e Protheus', roles: ENTREGA },
-  { to: '/entregas', icon: ClipboardList, titulo: 'Entregas', sub: 'Todas as entregas — filtros e edição', roles: ENTREGA },
+  { to: '/entregas/nova', icon: Package, titulo: 'Nova Entrega', sub: 'Cadastro com CEP e Protheus', roles: REGISTRO_ENTREGA },
+  { to: '/entregas', icon: ClipboardList, titulo: 'Entregas', sub: 'Todas as entregas — filtros e edição', roles: REGISTRO_ENTREGA },
   { to: '/comprovantes', icon: FileCheck, titulo: 'Comprovantes', sub: 'Provas de entrega (financeiro)', roles: ENTREGA },
   { to: '/veiculos', icon: Truck, titulo: 'Frota', sub: 'Cadastro de veículos', roles: FROTA_GESTORES },
   { to: '/viagens', icon: Route, titulo: 'Rotas de Entrega', sub: 'Montar rota, despachar e baixar', roles: ENTREGA },

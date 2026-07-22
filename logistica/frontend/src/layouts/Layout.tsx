@@ -7,6 +7,9 @@ import { useAuth } from '../contexts/AuthContext';
 // aqui é só visual). ADMIN vê tudo (tratado no filtro). Espelha a matriz de
 // acessos da Fase 2: condutor opera por matrícula+senha no terminal de frota.
 const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
+// Caixa/balcão (login PADRAO): só REGISTRAR e ALTERAR entregas — não monta rota,
+// não vê frota/comprovantes. Espelha o @Roles do backend (create/edit/operador).
+const REGISTRO_ENTREGA = ['REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
 const GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA'];
 // Gestão da FROTA que o Supervisor de Departamento também acessa (escopado ao seu
@@ -37,9 +40,9 @@ const navItems: NavEntry[] = [
   { to: '/analise-entregas', label: 'Análise de Entregas', icon: TrendingUp, roles: GESTORES },
   { to: '/frota/analise', label: 'Análise da Frota', icon: TrendingUp, roles: FROTA_GESTAO },
 
-  { section: 'ENTREGAS', roles: ENTREGA },
-  { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, roles: ENTREGA },
-  { to: '/entregas', label: 'Entregas', icon: ClipboardList, end: true, roles: ENTREGA },
+  { section: 'ENTREGAS', roles: REGISTRO_ENTREGA },
+  { to: '/entregas/nova', label: 'Nova Entrega', icon: Package, roles: REGISTRO_ENTREGA },
+  { to: '/entregas', label: 'Entregas', icon: ClipboardList, end: true, roles: REGISTRO_ENTREGA },
   { to: '/viagens', label: 'Rotas de Entrega', icon: Route, roles: ENTREGA },
   { to: '/comprovantes', label: 'Comprovantes', icon: FileCheck, roles: ENTREGA },
   { to: '/clientes', label: 'Endereços', icon: MapPin, roles: ENTREGA },
