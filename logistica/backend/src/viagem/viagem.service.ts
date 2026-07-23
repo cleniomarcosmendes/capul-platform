@@ -181,7 +181,13 @@ export class ViagemService {
       },
     });
     if (!v) throw new NotFoundException('Viagem não encontrada.');
-    if (user) assertPodeVerRegistro(user, v.filialId);
+    // O MOTORISTA sempre abre a SUA viagem (mesma regra da lista "minhas viagens",
+    // escopada por motoristaId — não por filial). Sem isto, a rota aparece na lista
+    // mas dá "não foi possível carregar" quando a filial ATIVA do entregador difere
+    // da filial da viagem: ele tem o papel ENTREGADOR na filial da viagem (validado
+    // no despacho), mas o filialId do JWT pode ser outro. Demais viewers (operador/
+    // gestor) seguem escopados por filial.
+    if (user && v.motoristaId !== user.sub) assertPodeVerRegistro(user, v.filialId);
     // Nome do motorista (core) — a lista já enriquece; o detalhe também precisa
     // (a tela de detalhe mostrava "—"; reporte do Clenio 12/06).
     // Nomes (core): motorista + quem deu cada baixa — respostas prontas pro
