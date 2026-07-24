@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -13,6 +13,7 @@ import { enfileirarDespesaEntrega } from '../offline/filaDespesaEntrega';
 import { SelectBusca } from '../components/SelectBusca';
 import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
+import { useScrollToFocusedInput } from '../lib/useScrollToFocusedInput';
 import type { TipoDespesa } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -26,17 +27,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DespesaEntrega'>;
  */
 export function DespesaEntregaScreen({ route, navigation }: Props) {
   const { viagemId, placa } = route.params;
-  const scrollRef = useRef<ScrollView>(null);
-  // Rola o campo focado para acima do teclado (mesmo padrão de SupervisorViagem/
-  // ViagemFrota) — resolve o teclado sobrepondo os campos de baixo.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const aoFocar = (e: any) => {
-    const resp = scrollRef.current?.getScrollResponder?.() as { scrollResponderScrollNativeHandleToKeyboard?: (n: number, off: number, prevent: boolean) => void } | undefined;
-    const node: number | undefined = e?.target;
-    if (resp?.scrollResponderScrollNativeHandleToKeyboard && node != null) {
-      resp.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
-    }
-  };
+  const { scrollRef, aoFocar } = useScrollToFocusedInput();
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [tipoId, setTipoId] = useState('');
   const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);

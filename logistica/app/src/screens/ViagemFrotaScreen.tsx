@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
@@ -20,6 +20,7 @@ import {
 } from '../offline/filaFrota';
 import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
+import { useScrollToFocusedInput, type AoFocar } from '../lib/useScrollToFocusedInput';
 import { useRastreamento } from '../lib/useRastreamento';
 import { useAuth } from '../auth/AuthContext';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
@@ -45,22 +46,11 @@ async function capturarCoordenadas(): Promise<{ latitude?: number; longitude?: n
 }
 
 /** Detalhe de uma viagem de frota EM CURSO: registrar retorno OU lançar despesa. */
-// Teclado: rola o campo focado pra cima do teclado (recurso nativo do ScrollView).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AoFocar = (e: any) => void;
-function fazerAoFocar(scrollRef: React.RefObject<ScrollView | null>): AoFocar {
-  return (e) => {
-    const resp = scrollRef.current?.getScrollResponder?.() as { scrollResponderScrollNativeHandleToKeyboard?: (n: number, off: number, prevent: boolean) => void } | undefined;
-    const node: number | undefined = e?.target;
-    if (resp?.scrollResponderScrollNativeHandleToKeyboard && node != null) resp.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
-  };
-}
-
 export function ViagemFrotaScreen({ route, navigation }: Props) {
   const { viagemId } = route.params;
   const { tipo } = useAuth();
-  const scrollRef = useRef<ScrollView>(null);
-  const aoFocar = fazerAoFocar(scrollRef);
+  // Teclado: mantém o campo focado acima do teclado (hook compartilhado).
+  const { scrollRef, aoFocar } = useScrollToFocusedInput();
   // PADRÃO (login compartilhado): exige identificar o condutor UMA vez ao abrir a
   // viagem (gate) → token cobre parada/despesa/retorno. INDIVIDUAL já é a pessoa.
   const ehIndividual = tipo === 'INDIVIDUAL';

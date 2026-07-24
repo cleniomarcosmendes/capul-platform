@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,6 +18,7 @@ import {
 } from '../api/supervisor';
 import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
+import { useScrollToFocusedInput } from '../lib/useScrollToFocusedInput';
 import {
   enfileirarSupervisor, processarFilaSupervisor, contarPendentesSupervisor, onFilaSupervisorChange, ehErroDeRede,
 } from '../offline/filaSupervisor';
@@ -114,17 +115,8 @@ function Badge({ bg, fg, label }: { bg: string; fg: string; label: string }) {
  *  visitas (apontar realizada/pulada na execução) e despesas (com comprovante). */
 export function SupervisorViagemScreen({ route }: Props) {
   const { viagemId } = route.params;
-  // Teclado: ao focar um campo, rola ele pra cima do teclado (recurso nativo do
-  // ScrollView) — resolve o teclado sobrepondo os campos das visitas/despesas.
-  const scrollRef = useRef<ScrollView>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const aoFocar = (e: any) => {
-    const resp = scrollRef.current?.getScrollResponder?.() as { scrollResponderScrollNativeHandleToKeyboard?: (n: number, off: number, prevent: boolean) => void } | undefined;
-    const node: number | undefined = e?.target;
-    if (resp?.scrollResponderScrollNativeHandleToKeyboard && node != null) {
-      resp.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
-    }
-  };
+  // Teclado: mantém o campo focado acima do teclado (hook compartilhado).
+  const { scrollRef, aoFocar } = useScrollToFocusedInput();
   const [v, setV] = useState<ViagemSupDetalhe | null>(null);
   const [ativs, setAtivs] = useState<AtividadeSup[]>([]);
   const [tipos, setTipos] = useState<TipoDespesaSup[]>([]);
