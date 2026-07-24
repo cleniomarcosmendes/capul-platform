@@ -27,6 +27,16 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DespesaEntrega'>;
 export function DespesaEntregaScreen({ route, navigation }: Props) {
   const { viagemId, placa } = route.params;
   const scrollRef = useRef<ScrollView>(null);
+  // Rola o campo focado para acima do teclado (mesmo padrão de SupervisorViagem/
+  // ViagemFrota) — resolve o teclado sobrepondo os campos de baixo.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const aoFocar = (e: any) => {
+    const resp = scrollRef.current?.getScrollResponder?.() as { scrollResponderScrollNativeHandleToKeyboard?: (n: number, off: number, prevent: boolean) => void } | undefined;
+    const node: number | undefined = e?.target;
+    if (resp?.scrollResponderScrollNativeHandleToKeyboard && node != null) {
+      resp.scrollResponderScrollNativeHandleToKeyboard(node, 110, true);
+    }
+  };
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
   const [tipoId, setTipoId] = useState('');
   const [fornecedores, setFornecedores] = useState<FornecedorDespesa[]>([]);
@@ -105,7 +115,7 @@ export function DespesaEntregaScreen({ route, navigation }: Props) {
         />
 
         <Text style={styles.label}>Valor (R$)</Text>
-        <TextInput style={styles.input} value={valor} onChangeText={(t) => setValor(maskMoeda(t))} keyboardType="decimal-pad" placeholder="0,00" editable={!salvando} />
+        <TextInput style={styles.input} onFocus={aoFocar} value={valor} onChangeText={(t) => setValor(maskMoeda(t))} keyboardType="decimal-pad" placeholder="0,00" editable={!salvando} />
 
         {fornecedores.length > 0 && (
           <>
@@ -121,10 +131,10 @@ export function DespesaEntregaScreen({ route, navigation }: Props) {
           </>
         )}
         <Text style={styles.label}>Fornecedor (livre, se não cadastrado)</Text>
-        <TextInput style={styles.input} value={fornecedor} onChangeText={setFornecedor} maxLength={120} editable={!salvando} />
+        <TextInput style={styles.input} onFocus={aoFocar} value={fornecedor} onChangeText={setFornecedor} maxLength={120} editable={!salvando} />
 
         <Text style={styles.label}>Nº nota / documento</Text>
-        <TextInput style={styles.input} value={semNota ? 'S/N' : numeroDocumento} onChangeText={setNumeroDocumento}
+        <TextInput style={styles.input} onFocus={aoFocar} value={semNota ? 'S/N' : numeroDocumento} onChangeText={setNumeroDocumento}
           editable={!salvando && !semNota} maxLength={60} placeholder="ex.: 12345 ou cupom do posto" />
         <TouchableOpacity style={[styles.chip, semNota && styles.chipOn]}
           onPress={() => { setSemNota((v) => !v); setNumeroDocumento(''); }} disabled={salvando}>
@@ -132,7 +142,7 @@ export function DespesaEntregaScreen({ route, navigation }: Props) {
         </TouchableOpacity>
 
         <Text style={styles.label}>Observação (opcional)</Text>
-        <TextInput style={styles.input} value={observacao} onChangeText={setObservacao} maxLength={255} editable={!salvando} />
+        <TextInput style={styles.input} onFocus={aoFocar} value={observacao} onChangeText={setObservacao} maxLength={255} editable={!salvando} />
 
         <Text style={styles.label}>Fotos do cupom (opcional, até {MAX_FOTOS_DESPESA})</Text>
         {fotoUris.length > 0 && (
@@ -162,7 +172,7 @@ export function DespesaEntregaScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
-  conteudo: { padding: 16 },
+  conteudo: { padding: 16, paddingBottom: 48 }, // folga p/ o último campo subir acima do teclado
   painel: { backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#e2e8f0' },
   label: { fontSize: 13, fontWeight: '600', color: '#475569', marginTop: 12 },
   dica: { fontSize: 12, color: '#64748b', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 },
