@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -273,6 +274,45 @@ export class DivergenciaController {
         resolvidaPor: user.id,
       },
     });
+  }
+
+  // ---------- Limpeza (reiniciar a análise) ----------
+
+  /**
+   * Apaga divergências para reiniciar a análise — "não armazenar dados antigos"
+   * depois de tratá-las. Por padrão apaga TODAS; aceita `?status=` para escopo
+   * (ABERTA/RESOLVIDA/IGNORADA). Operação DESTRUTIVA e irreversível: a linha some
+   * (não há resolvidaPor como nas outras ações), então registra em audit_log.
+   *
+   * ⚠️ O cruzamento é INCREMENTAL (movimento-based): divergências apagadas de
+   * contribuintes SEM movimento novo NÃO reaparecem sozinhas no próximo
+   * processamento — só quando houver movimento naquele contribuinte.
+   */
+  @Delete('limpar')
+  @RoleMinima('GESTOR_FISCAL')
+  async limpar(
+    @Query('status') status: string | undefined,
+    @CurrentUser() user: FiscalAuthenticatedUser,
+  ) {
+    const escopo =
+      status === 'ABERTA' || status === 'RESOLVIDA' || status === 'IGNORADA'
+        ? (status as StatusDivergencia)
+        : undefined; // undefined = todas
+    const where = escopo ? { status: escopo } : {};
+
+    const r = await this.prisma.cadastroDivergencia.deleteMany({ where });
+
+    await this.prisma.auditLog.create({
+      data: {
+        usuarioId: user.id,
+        usuarioEmail: user.email,
+        acao: 'DIVERGENCIAS_LIMPAR',
+        recurso: 'cadastro_divergencia',
+        payload: { removidas: r.count, escopo: escopo ?? 'TODAS' },
+      },
+    });
+
+    return { removidas: r.count, escopo: escopo ?? 'TODAS' };
   }
 
   // ---------- Ações em lote por contribuinte ----------

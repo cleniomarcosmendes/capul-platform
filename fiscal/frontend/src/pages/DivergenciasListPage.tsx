@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   Search,
   Lock,
+  Trash2,
 } from 'lucide-react';
 import { fiscalApi } from '../services/api';
 import { PageWrapper } from '../components/PageWrapper';
@@ -95,6 +96,7 @@ export function DivergenciasListPage() {
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
   const [atuandoEm, setAtuandoEm] = useState<string | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [limpando, setLimpando] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -169,6 +171,32 @@ export function DivergenciasListPage() {
       await load();
     } catch (err) {
       toast.error('Falha ao atualizar', extractApiError(err));
+    }
+  }
+
+  // Limpeza total: apaga TODAS as divergências para reiniciar a análise (não
+  // acumular dados antigos). Destrutivo e irreversível — confirmação forte.
+  async function handleLimpar() {
+    const total = data?.totalDivergencias ?? 0;
+    const ok = await confirm({
+      title: `Limpar TODAS as ${total} divergências?`,
+      description:
+        'Apaga o resultado do cruzamento por completo (abertas, resolvidas e ignoradas) para reiniciar a análise. ' +
+        'Ação IRREVERSÍVEL. Atenção: o cruzamento é incremental (movimento-based) — divergências de contribuintes ' +
+        'sem movimento novo só reaparecem quando houver movimento. Rode um novo processamento após limpar.',
+      variant: 'danger',
+      confirmLabel: 'Limpar tudo',
+    });
+    if (!ok) return;
+    try {
+      setLimpando(true);
+      const { data: resp } = await fiscalApi.delete<{ removidas: number }>('/divergencias/limpar');
+      toast.success('Divergências limpas', `${resp.removidas} divergência(s) removidas. Rode um novo processamento para nova análise.`);
+      await load();
+    } catch (err) {
+      toast.error('Falha ao limpar', extractApiError(err));
+    } finally {
+      setLimpando(false);
     }
   }
 
@@ -309,7 +337,7 @@ export function DivergenciasListPage() {
           />
         </label>
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <Button
             variant="secondary"
             size="sm"
@@ -319,6 +347,17 @@ export function DivergenciasListPage() {
             disabled={!data || data.items.length === 0}
           >
             Exportar Excel
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            leftIcon={<Trash2 className="h-4 w-4" />}
+            onClick={handleLimpar}
+            loading={limpando}
+            disabled={!data || (data.totalDivergencias ?? 0) === 0}
+            title="Apaga TODAS as divergências para reiniciar a análise (irreversível)."
+          >
+            Limpar tudo
           </Button>
         </div>
       </div>
