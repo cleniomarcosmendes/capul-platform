@@ -217,38 +217,6 @@ export class NfeController {
   }
 
   /**
-   * Lista NF-es com pendencias de correcao no Protheus (08/05/2026).
-   *
-   * Lista APENAS NF-es onde nossa aplicacao chamou grvXML e Protheus reportou
-   * pendencia operacional (preNotaFalhou ou pendenteAmarracao). NF-es gravadas
-   * por outros meios (importacao manual, integracao legada) nao aparecem aqui —
-   * nao temos as flags persistidas pra elas.
-   *
-   * Filtro overlay: 'pendentes' (default) = ainda nao resolvidas;
-   * 'resolvidas' = ja marcadas; 'todas' = sem filtro overlay.
-   */
-  @Get('pendencias')
-  @RoleMinima('OPERADOR_ENTRADA')
-  async listarPendencias(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('inconsistenciaFiltro') inconsistenciaFiltro?: string,
-    @Query('search') search?: string,
-  ) {
-    return this.documentoConsulta.listarPendencias({
-      page: page ? Number(page) : undefined,
-      limit: limit ? Number(limit) : undefined,
-      search,
-      inconsistenciaFiltro:
-        inconsistenciaFiltro === 'pendentes' ||
-        inconsistenciaFiltro === 'resolvidas' ||
-        inconsistenciaFiltro === 'todas'
-          ? inconsistenciaFiltro
-          : 'pendentes',
-    });
-  }
-
-  /**
    * Busca de NF-e (18/06/2026) — por NÚMERO da nota (9 dígitos, NÃO a chave)
    * ou por RAZÃO SOCIAL. 100% LOCAL: lê só `fiscal.documento_consulta`, nunca
    * dispara SEFAZ (protege o limite diário do CNPJ da CAPUL). O grid resultante

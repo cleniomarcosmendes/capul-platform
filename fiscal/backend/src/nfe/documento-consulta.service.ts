@@ -220,56 +220,6 @@ export class DocumentoConsultaService {
   }
 
   /**
-   * Lista NF-es com pendencias de correcao (08/05/2026).
-   *
-   * NF-es onde nossa app gravou via grvXML e Protheus retornou pendencia
-   * operacional (preNotaFalhou OU pendenteAmarracao). Conjunto finito —
-   * nao inclui NF-es gravadas por outros meios (sem flags persistidas).
-   */
-  async listarPendencias(filtros: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    inconsistenciaFiltro?: 'pendentes' | 'resolvidas' | 'todas';
-  }) {
-    const page = Math.max(1, filtros.page ?? 1);
-    const limit = Math.min(100, Math.max(1, filtros.limit ?? 20));
-    const skip = (page - 1) * limit;
-
-    // Base: NF-es onde nossa app gravou via grvXML e teve pendencia.
-    const where: any = {
-      protheusGrvXmlGravado: true,
-      OR: [
-        { protheusGrvPrenotaFalhou: true },
-        { protheusGrvPendAmarracao: true },
-      ],
-    };
-
-    if (filtros.search) {
-      where.chave = { contains: filtros.search.replace(/\D/g, '') };
-    }
-
-    if (filtros.inconsistenciaFiltro === 'pendentes' || !filtros.inconsistenciaFiltro) {
-      where.inconsistenciaResolvidaEm = null;
-    } else if (filtros.inconsistenciaFiltro === 'resolvidas') {
-      where.inconsistenciaResolvidaEm = { not: null };
-    }
-    // 'todas' = sem filtro adicional
-
-    const [total, items] = await Promise.all([
-      this.prisma.documentoConsulta.count({ where }),
-      this.prisma.documentoConsulta.findMany({
-        where,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        skip,
-        take: limit,
-      }),
-    ]);
-
-    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
-  }
-
-  /**
    * Marca pendencia como resolvida manualmente no Protheus.
    */
   async marcarInconsistenciaResolvida(params: {

@@ -85,8 +85,8 @@ export function NfeConsultaPage() {
   );
 
   // Pre-preenche chave + filial via query params (?chave=...&filial=...).
-  // Usado quando navega de /fiscal/nfe/pendencias clicando numa chave —
-  // operador chega na consulta com form pronto e dispara automaticamente.
+  // Usado por deep-links (ex.: clicar numa chave na Busca de NF-e) — o operador
+  // chega na consulta com o form pronto e dispara automaticamente.
   const [searchParams, setSearchParams] = useSearchParams();
   const autoConsultadoRef = useRef(false);
 
@@ -95,7 +95,7 @@ export function NfeConsultaPage() {
       .get<FilialResumo[]>('/filiais')
       .then((r) => {
         setFiliais(r.data);
-        // Query params tem precedencia (vem de link externo, ex: /fiscal/nfe/pendencias).
+        // Query params tem precedencia (vem de deep-link, ex.: Busca de NF-e).
         // Sem query params: usa filial atualmente selecionada se existe, senao default.
         const chaveParam = searchParams.get('chave');
         const filialParam = searchParams.get('filial');

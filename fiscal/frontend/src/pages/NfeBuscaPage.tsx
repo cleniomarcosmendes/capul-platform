@@ -72,7 +72,7 @@ export function NfeBuscaPage() {
   const [loading, setLoading] = useState(false);
   const [buscou, setBuscou] = useState(false);
 
-  // Debounce de 350ms — busca só após parar de digitar (padrão NfePendenciasPage).
+  // Debounce de 350ms — busca só após parar de digitar.
   useEffect(() => {
     const t = setTimeout(() => {
       setTermoDebounced(termo);

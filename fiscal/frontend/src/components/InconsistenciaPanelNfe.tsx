@@ -24,8 +24,7 @@ interface Props {
  * O backend persiste flags na consulta inicial (xmlNfe MISS → grvXML). Quando
  * operador consulta de novo a mesma chave (xmlNfe HIT em SZR010), os flags
  * antigos persistem — esse painel permite ao operador encerrar o ciclo manual
- * sem precisar criar tela nova de pendências NF-e (ela existe em /nfe/pendencias
- * pra varredura, mas o flow comum é descobrir aqui).
+ * (marcar/desmarcar resolvida) direto na própria consulta da chave.
  */
 export function InconsistenciaPanelNfe({ documentoId, inconsistencia, onChange }: Props) {
   const toast = useToast();
