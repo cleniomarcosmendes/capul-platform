@@ -49,6 +49,7 @@ export class ResumoSefazGeneratorService {
   // Alturas
   private readonly H_LINHA_CAMPO = 22; // altura padrão de cada campo (label+valor)
   private readonly H_LINHA_TABELA = 14; // altura padrão de cada linha de tabela
+  private readonly RESERVA_RODAPE = 14; // espaço reservado ao rodapé no fim de cada página
 
   async generate(parsed: NfeParsed, filial: string): Promise<Buffer> {
     const doc = new PDFDocument({
@@ -187,6 +188,8 @@ export class ResumoSefazGeneratorService {
   }
 
   private renderH2(doc: PDFKit.PDFDocument, texto: string, y: number): number {
+    // Não deixa o título de seção órfão no rodapé (reserva o título + 1ª linha).
+    y = this.quebrarSeNaoCabe(doc, y, this.FS_H2 + this.H_LINHA_TABELA + 6);
     doc
       .fillColor(this.COR_TITULO)
       .font(this.F_BOLD)
@@ -226,6 +229,10 @@ export class ResumoSefazGeneratorService {
       const alturaTotal = this.FS_LABEL + 3 + alturaTextoValor + 5;
       if (alturaTotal > alturaMaxima) alturaMaxima = alturaTotal;
     }
+
+    // Se a linha de campos não cabe, desce inteira p/ a próxima página (senão o
+    // PDFKit estoura a auto-quebra por caixa de campo).
+    y = this.quebrarSeNaoCabe(doc, y, alturaMaxima);
 
     // Segunda passada: desenha
     for (const campo of campos) {
@@ -422,6 +429,12 @@ export class ResumoSefazGeneratorService {
       if (total > alturaCalc) alturaCalc = total;
     });
 
+    // Se a linha não cabe na página atual, abre nova página e repete o cabeçalho
+    // da tabela — evita a auto-quebra do PDFKit (uma célula por página).
+    y = this.quebrarSeNaoCabe(doc, y, alturaCalc, (d, ny) =>
+      this.renderTabelaHeader(d, ny, cols, larguras),
+    );
+
     let x = this.MARGIN;
     if (opts.totalRow) {
       doc
@@ -451,19 +464,44 @@ export class ResumoSefazGeneratorService {
     return y + alturaCalc;
   }
 
+  /**
+   * Quebra de página quando o próximo bloco (de altura `alturaProximo`) não cabe
+   * antes do rodapé. Reinicia o `y` no topo da nova página e, se informado,
+   * redesenha um cabeçalho (ex.: header da tabela que continua). Retorna o `y`
+   * onde o bloco deve ser desenhado. Sem isto o PDFKit estoura a auto-quebra por
+   * célula (uma célula por página) em NF-e com muitos itens.
+   */
+  private quebrarSeNaoCabe(
+    doc: PDFKit.PDFDocument,
+    y: number,
+    alturaProximo: number,
+    redrawHeader?: (doc: PDFKit.PDFDocument, y: number) => number,
+  ): number {
+    const limite = this.PAGE_H - this.MARGIN - this.RESERVA_RODAPE;
+    if (y + alturaProximo <= limite) return y;
+    doc.addPage();
+    let ny = this.MARGIN;
+    if (redrawHeader) ny = redrawHeader(doc, ny);
+    return ny;
+  }
+
   private renderRodape(doc: PDFKit.PDFDocument, _parsed: NfeParsed, filial: string): void {
     const yRodape = this.PAGE_H - this.MARGIN + 6;
     const texto = `Resumo gerado em ${new Date().toLocaleString('pt-BR', {
       timeZone: 'America/Sao_Paulo',
     })} · Plataforma Capul · Filial ${filial}`;
-    doc
-      .fillColor('#666')
-      .font(this.F_ITALIC)
-      .fontSize(this.FS_RODAPE)
-      .text(texto, this.MARGIN, yRodape, {
+    // Rodapé em TODAS as páginas (o relatório pode ter várias com muitos itens).
+    const range = doc.bufferedPageRange();
+    for (let i = range.start; i < range.start + range.count; i++) {
+      doc.switchToPage(i);
+      doc.fillColor('#666').font(this.F_ITALIC).fontSize(this.FS_RODAPE);
+      // Numeração à esquerda, carimbo de geração à direita.
+      doc.text(`Página ${i - range.start + 1} de ${range.count}`, this.MARGIN, yRodape, {
         width: this.INNER_W,
-        align: 'right',
+        align: 'left',
       });
+      doc.text(texto, this.MARGIN, yRodape, { width: this.INNER_W, align: 'right' });
+    }
   }
 
   // ============================================================
