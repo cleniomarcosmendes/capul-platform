@@ -18,7 +18,8 @@ interface PainelFrota {
     despesasPendentes: number;
   };
   indicadores: {
-    custoTotalMes: number; kmRodadoMes: number; custoPorKm: number | null;
+    // custo* vem null para quem não pode ver valor (o backend omite).
+    custoTotalMes: number | null; kmRodadoMes: number; custoPorKm: number | null;
     rankingVeiculo: { placa: string; km: number }[];
     rankingDepartamento: { departamento: string; viagens: number }[];
   };
@@ -323,13 +324,20 @@ export function PainelFrotaPage() {
             <div className="py-10 text-center text-sm text-slate-400">Nenhum veículo em rota.</div>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {emCurso.map((v) => (
+              {emCurso.map((v) => {
+                // Rota de FROTA só abre para quem enxerga o detalhe dela no backend
+                // (assertViagemVisivel: gestor de frota/ADMIN/supervisor do veículo).
+                // Para os papéis de ENTREGA a linha de frota fica informativa — sem
+                // isso o clique levaria a um 404.
+                const abrivel = v.tipo !== 'FROTA' || ehGestorFrota;
+                return (
                 <li key={v.id}>
                   <button
                     type="button"
-                    onClick={() => navigate(v.tipo === 'FROTA' ? `/frota/viagens/${v.id}` : `/viagens/${v.id}`)}
-                    className="group flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition hover:bg-capul-50/60"
-                    title="Abrir rota"
+                    disabled={!abrivel}
+                    onClick={abrivel ? () => navigate(v.tipo === 'FROTA' ? `/frota/viagens/${v.id}` : `/viagens/${v.id}`) : undefined}
+                    className={`group flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition ${abrivel ? 'hover:bg-capul-50/60' : 'cursor-default'}`}
+                    title={abrivel ? 'Abrir rota' : 'Rota de frota — detalhe restrito à gestão de frota'}
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -345,11 +353,12 @@ export function PainelFrotaPage() {
                         <div>{fmtHora(v.dataHoraSaida)} <span className="text-slate-400">{desde(v.dataHoraSaida)}</span></div>
                         {v.paradas > 0 && <div className="inline-flex items-center gap-1 text-slate-400"><MapPin className="h-3 w-3" /> {v.paradas} parada(s)</div>}
                       </div>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-capul-500" />
+                      {abrivel && <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-capul-500" />}
                     </div>
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>
@@ -360,7 +369,7 @@ export function PainelFrotaPage() {
             <TrendingUp className="h-4 w-4 text-slate-400" /> Indicadores do mês
           </div>
           <div className={`grid gap-3 p-4 ${ehGestorFrota ? 'grid-cols-3' : 'grid-cols-1'}`}>
-            {ehGestorFrota && <Mini label="Custo total" valor={BRL(indicadores.custoTotalMes)} />}
+            {ehGestorFrota && <Mini label="Custo total" valor={indicadores.custoTotalMes != null ? BRL(indicadores.custoTotalMes) : '—'} />}
             <Mini label="KM rodado" valor={`${indicadores.kmRodadoMes.toLocaleString('pt-BR')} km`} />
             {ehGestorFrota && <Mini label="Custo por km" valor={indicadores.custoPorKm != null ? BRL(indicadores.custoPorKm) : '—'} />}
           </div>

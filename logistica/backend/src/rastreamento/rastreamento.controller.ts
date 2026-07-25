@@ -22,9 +22,11 @@ export class RastreamentoController {
     return this.rastreamento.registrar(dto, user);
   }
 
-  /** Mapa ao vivo: últimas posições das viagens em curso da filial (só gestores). */
+  /** Mapa ao vivo: últimas posições das viagens em curso da filial. Gestores +
+   *  Operador de Entrega — é o operador que atende o cliente no telefone e precisa
+   *  dizer onde a entrega está. Sempre escopado à filial do usuário. */
   @Get('ativos')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   ativos(@CurrentUser() user: JwtPayload) {
     return this.rastreamento.ativos(user.filialId!);
   }

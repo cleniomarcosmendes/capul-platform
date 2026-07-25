@@ -717,6 +717,16 @@ export class FrotaService {
   // ---- Painel tempo real da frota (monitoramento com recorte interno) ----
   async painelFrota(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
     const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    // Quem enxerga a frota da FILIAL INTEIRA no Monitor (sem recorte por veículo
+    // supervisionado): gestor de frota/ADMIN + os papéis de ENTREGA, que usam o
+    // Monitor para atender o cliente ("cadê a minha entrega?") e precisam ver as
+    // rotas na rua, não só os veículos de que são supervisores nominais. Só o
+    // Supervisor de Departamento continua recortado ao seu escopo.
+    const veFrotaDaFilial = ehGestor || role === 'GESTOR_ENTREGA' || role === 'OPERADOR_ENTREGA';
+    // Valor de custo é domínio do Gestor de Frota/ADMIN + Supervisor de Departamento
+    // (escopado). Espelha o gate da tela; aqui o payload também omite, senão o custo
+    // da filial vazava pela API mesmo com a UI escondendo.
+    const veCusto = ehGestor || role === 'SUPERVISOR_FROTA';
     if (!ehGestor && !user.filialId) throw new BadRequestException('Usuário sem filial definida.');
     // Gestor de frota/ADMIN monitoram a frota da empresa toda (cross-filial):
     // filialId undefined = sem filtro de filial nas queries abaixo. Demais: a sua.
@@ -726,11 +736,12 @@ export class FrotaService {
 
     // Despesas pendentes: gestor vê a filial; supervisor (do veículo ou de
     // departamento) só os veículos do seu escopo.
-    const veicSupervisor = ehGestor ? null : await this.veiculoIdsNoEscopo(user);
+    const veicSupervisor = veFrotaDaFilial ? null : await this.veiculoIdsNoEscopo(user);
     const despesaScope = veicSupervisor ? { veiculoId: { in: veicSupervisor } } : {};
     // Supervisor de Departamento: contadores, "na rua agora" e rankings do Monitor
     // também são recortados ao escopo (senão vazavam a filial inteira — placas, KM e
-    // condutor de outros departamentos). Gestor de Frota/ADMIN veem a filial toda.
+    // condutor de outros departamentos). Gestor de Frota/ADMIN e os papéis de
+    // ENTREGA veem a filial toda.
     const veicIdScope = veicSupervisor ? { id: { in: veicSupervisor } } : {};
     const viagemVeicScope = veicSupervisor ? { veiculoId: { in: veicSupervisor } } : {};
 
@@ -840,8 +851,11 @@ export class FrotaService {
         despesasPendentes,
       },
       indicadores: {
-        custoTotalMes, kmRodadoMes,
-        custoPorKm: kmRodadoMes > 0 ? custoTotalMes / kmRodadoMes : null,
+        // Custo só para quem pode ver valor; os demais recebem null (a tela já
+        // esconde o cartão, aqui o dado nem sai do backend).
+        custoTotalMes: veCusto ? custoTotalMes : null,
+        kmRodadoMes,
+        custoPorKm: veCusto && kmRodadoMes > 0 ? custoTotalMes / kmRodadoMes : null,
         rankingVeiculo, rankingDepartamento,
       },
     };

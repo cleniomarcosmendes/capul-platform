@@ -49,7 +49,10 @@ const navItems: NavEntry[] = [
 
   { section: 'FROTA', roles: FROTA_OP },
   { to: '/frota', label: 'Saída de Veículos', icon: Fuel, end: true, roles: FROTA_OP },
-  { to: '/frota/painel', label: 'Monitor da Frota', icon: CircleDot, roles: FROTA_GESTORES },
+  // Monitor entra em FROTA_OP: o Operador de Entrega atende o cliente que liga
+  // perguntando da entrega e precisa ver as rotas na rua / o mapa ao vivo. O custo
+  // continua escondido para ele (o backend nem envia).
+  { to: '/frota/painel', label: 'Monitor da Frota', icon: CircleDot, roles: FROTA_OP },
   { to: '/despesas', label: 'Custos da Frota', icon: Banknote, roles: FROTA_GESTAO },
   { to: '/frota/linha-km', label: 'Linha do KM', icon: Gauge, roles: FROTA_GESTORES },
   { to: '/veiculos', label: 'Veículos', icon: Car, roles: FROTA_GESTORES },

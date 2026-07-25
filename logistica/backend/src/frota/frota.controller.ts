@@ -170,9 +170,11 @@ export class FrotaController {
     return this.frota.hodometroFrota(user, mes ? parseInt(mes, 10) : undefined, ano ? parseInt(ano, 10) : undefined, veiculoId || undefined, departamentoId || undefined);
   }
 
-  /** Painel tempo real da frota (monitoramento) — gestores + Supervisor de Departamento (escopado). */
+  /** Painel tempo real da frota (monitoramento) — gestores + Supervisor de Departamento
+   *  (escopado) + Operador de Entrega (atende o cliente que liga perguntando da entrega:
+   *  precisa ver as rotas na rua). Valor de custo é omitido para quem não pode ver. */
   @Get('painel')
-  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
   painel(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('ano') ano?: string) {
     const agora = new Date();
     return this.frota.painelFrota(
