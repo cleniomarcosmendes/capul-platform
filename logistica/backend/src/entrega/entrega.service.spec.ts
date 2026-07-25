@@ -136,4 +136,37 @@ describe('EntregaService', () => {
       expect(r.status).toBe('ENTREGUE');
     });
   });
+
+  // A baixa pode gerar FOTO e ASSINATURA, mas `entrega.comprovanteId` guarda só
+  // a primária (a foto). A lista precisa devolver TODAS, senão a assinatura fica
+  // sem como ser aberta na tela de Comprovantes.
+  describe('buscarBaixadas — provas da entrega', () => {
+    const entregaBaixada = { id: 'e1', numero: 7, comprovanteId: 'cmp-foto', cupons: [] };
+
+    it('devolve as duas provas quando a baixa tem foto e assinatura', async () => {
+      prisma.entrega.findMany.mockResolvedValue([entregaBaixada]);
+      cofre.provasPorEntregas = jest.fn().mockResolvedValue(
+        new Map([['e1', [{ id: 'cmp-foto', tipo: 'FOTO' }, { id: 'cmp-assin', tipo: 'ASSINATURA' }]]]),
+      );
+
+      const [r] = await svc.buscarBaixadas({ filialId: 'f1' });
+
+      expect(r.provas).toEqual([
+        { id: 'cmp-foto', tipo: 'FOTO' },
+        { id: 'cmp-assin', tipo: 'ASSINATURA' },
+      ]);
+      expect(r.comprovanteTipo).toBe('FOTO'); // badge segue a primária
+    });
+
+    it('cofre indisponível não derruba a lista (degrada sem as provas)', async () => {
+      prisma.entrega.findMany.mockResolvedValue([entregaBaixada]);
+      cofre.provasPorEntregas = jest.fn().mockRejectedValue(new Error('cofre fora'));
+
+      const [r] = await svc.buscarBaixadas({ filialId: 'f1' });
+
+      expect(r.provas).toEqual([]);
+      expect(r.comprovanteTipo).toBeNull();
+      expect(r.numero).toBe(7); // a linha continua utilizável
+    });
+  });
 });

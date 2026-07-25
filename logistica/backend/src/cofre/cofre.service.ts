@@ -95,18 +95,25 @@ export class CofreService {
   }
 
   /**
-   * Tipo (FOTO|ASSINATURA) de vários comprovantes numa única query — join no
-   * app (cofre é DB isolado, sem JOIN SQL). Usado pela lista de baixadas pra
-   * badgear a prova sem N+1.
+   * TODAS as provas de várias entregas, numa query (join no app — cofre é DB
+   * isolado). Uma baixa pode gerar foto E assinatura; `entrega.comprovanteId`
+   * guarda só a primária, então quem quiser mostrar as duas precisa vir por aqui.
    */
-  async tiposPorIds(ids: string[]): Promise<Map<string, TipoComprovante>> {
-    const limpos = ids.filter(Boolean);
+  async provasPorEntregas(entregaIds: string[]): Promise<Map<string, { id: string; tipo: TipoComprovante }[]>> {
+    const limpos = entregaIds.filter(Boolean);
     if (limpos.length === 0) return new Map();
     const rows = await this.cofre.comprovante.findMany({
-      where: { id: { in: limpos } },
-      select: { id: true, tipo: true },
+      where: { entregaId: { in: limpos } },
+      select: { id: true, tipo: true, entregaId: true },
+      orderBy: { capturadoEm: 'asc' },
     });
-    return new Map(rows.map((r) => [r.id, r.tipo]));
+    const m = new Map<string, { id: string; tipo: TipoComprovante }[]>();
+    for (const r of rows) {
+      const lista = m.get(r.entregaId) ?? [];
+      lista.push({ id: r.id, tipo: r.tipo });
+      m.set(r.entregaId, lista);
+    }
+    return m;
   }
 
   /** Consulta do financeiro: por matrícula/cupom/nº de entrega (lastro). */

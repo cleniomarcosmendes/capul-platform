@@ -306,19 +306,25 @@ export class EntregaService {
       orderBy: { dataHoraEntrega: 'desc' },
       take: 200,
     });
-    // Badge da prova (FOTO|ASSINATURA): 1 query batched no cofre (join no app).
-    // Cofre é degradável — se cair, a lista sai sem o tipo (não quebra).
-    let tipos = new Map<string, string>();
+    // Provas da entrega: 1 query batched no cofre (join no app). Vem a LISTA —
+    // uma baixa pode ter foto E assinatura, e `comprovanteId` guarda só a
+    // primária (a assinatura ficava sem como ser aberta).
+    // Cofre é degradável — se cair, a lista sai sem as provas (não quebra).
+    let provasPorEntrega = new Map<string, { id: string; tipo: string }[]>();
     try {
-      const ids = entregas.map((e) => e.comprovanteId).filter((x): x is string => !!x);
-      tipos = await this.cofre.tiposPorIds(ids);
+      provasPorEntrega = await this.cofre.provasPorEntregas(entregas.map((e) => e.id));
     } catch {
-      /* cofre indisponível — segue sem o tipo */
+      /* cofre indisponível — segue sem as provas */
     }
-    return entregas.map((e) => ({
-      ...this.comTotal(e),
-      comprovanteTipo: e.comprovanteId ? tipos.get(e.comprovanteId) ?? null : null,
-    }));
+    return entregas.map((e) => {
+      const provas = provasPorEntrega.get(e.id) ?? [];
+      return {
+        ...this.comTotal(e),
+        provas,
+        // Mantido: badge da prova primária, consumido pela lista.
+        comprovanteTipo: e.comprovanteId ? provas.find((p) => p.id === e.comprovanteId)?.tipo ?? null : null,
+      };
+    });
   }
 
   async findOne(id: string, user?: JwtPayload) {

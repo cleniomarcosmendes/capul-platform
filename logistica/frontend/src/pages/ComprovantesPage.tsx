@@ -15,9 +15,19 @@ interface EntregaBaixada {
   temComprovante: boolean;
   comprovanteId: string | null;
   comprovanteTipo?: 'FOTO' | 'ASSINATURA' | null;
+  // TODAS as provas da baixa. `comprovanteId` guarda só a primária (a foto,
+  // quando há foto e assinatura) — sem esta lista a assinatura ficava sem como
+  // ser aberta por esta tela.
+  provas?: { id: string; tipo: 'FOTO' | 'ASSINATURA' }[];
   // Fonte primária de quem recebeu (a trilha do cofre é a reserva — nas provas
   // antigas/do app ela nem sempre traz o nome).
   recebedorNome?: string | null;
+}
+
+interface ProvaAberta {
+  id: string;
+  url: string;
+  meta: ComprovanteMeta;
 }
 
 interface ComprovanteMeta {
@@ -46,7 +56,7 @@ export function ComprovantesPage() {
   const [loading, setLoading] = useState(false);
   const [buscou, setBuscou] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [imagem, setImagem] = useState<{ url: string; meta: ComprovanteMeta; entrega: EntregaBaixada } | null>(null);
+  const [imagem, setImagem] = useState<{ provas: ProvaAberta[]; ativa: number; entrega: EntregaBaixada } | null>(null);
   const [imgBusy, setImgBusy] = useState<string | null>(null);
   const [reabrindo, setReabrindo] = useState<string | null>(null);
 
@@ -79,16 +89,33 @@ export function ComprovantesPage() {
     } finally { setLoading(false); }
   }
 
-  // Abre a prova: metadados (GPS/hash/recebedor) + binário (blob autenticado).
+  /** Fecha o modal soltando os blobs (senão cada abertura vaza memória). */
+  function fecharImagem() {
+    setImagem((atual) => {
+      atual?.provas.forEach((p) => URL.revokeObjectURL(p.url));
+      return null;
+    });
+  }
+
+  // Abre TODAS as provas da baixa: metadados (GPS/hash/recebedor) + binário
+  // (blob autenticado). Foto e assinatura convivem — o modal alterna entre elas.
   async function verProva(e: EntregaBaixada) {
-    if (!e.comprovanteId) return;
+    const ids = e.provas?.length ? e.provas.map((p) => p.id) : e.comprovanteId ? [e.comprovanteId] : [];
+    if (!ids.length) return;
     setImgBusy(e.id);
     try {
-      const [meta, bin] = await Promise.all([
-        logisticaApi.get<ComprovanteMeta>(`/comprovantes/${e.comprovanteId}`),
-        logisticaApi.get(`/comprovantes/${e.comprovanteId}/arquivo`, { responseType: 'blob' }),
-      ]);
-      setImagem({ url: URL.createObjectURL(bin.data as Blob), meta: meta.data, entrega: e });
+      const provas = await Promise.all(
+        ids.map(async (id) => {
+          const [meta, bin] = await Promise.all([
+            logisticaApi.get<ComprovanteMeta>(`/comprovantes/${id}`),
+            logisticaApi.get(`/comprovantes/${id}/arquivo`, { responseType: 'blob' }),
+          ]);
+          return { id, url: URL.createObjectURL(bin.data as Blob), meta: meta.data };
+        }),
+      );
+      // Abre na primária (a que a lista badgeia); as demais ficam nas abas.
+      const inicial = Math.max(0, provas.findIndex((p) => p.id === e.comprovanteId));
+      setImagem({ provas, ativa: inicial, entrega: e });
     } catch (err) {
       // Distinguir o motivo: um 403 genérico ("não foi possível") escondeu por
       // um bom tempo que o problema era permissão, não a prova.
@@ -150,13 +177,16 @@ export function ComprovantesPage() {
                     <td className="px-4 py-2 text-slate-600">{e.dataHoraEntrega ? new Date(e.dataHoraEntrega).toLocaleString('pt-BR') : '—'}</td>
                     <td className="px-4 py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {e.temComprovante && e.comprovanteId
+                        {e.temComprovante && (e.provas?.length || e.comprovanteId)
                           ? <button onClick={() => verProva(e)} disabled={imgBusy === e.id}
+                              title={(e.provas?.length ?? 0) > 1 ? e.provas!.map((p) => PROVA_LABEL[p.tipo]).join(' + ') : undefined}
                               className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                               {imgBusy === e.id
                                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 : e.comprovanteTipo === 'ASSINATURA' ? <PenLine className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
-                              {e.comprovanteTipo ? `Ver ${PROVA_LABEL[e.comprovanteTipo].toLowerCase()}` : 'Ver prova'}
+                              {(e.provas?.length ?? 0) > 1
+                                ? `Ver provas (${e.provas!.length})`
+                                : e.comprovanteTipo ? `Ver ${PROVA_LABEL[e.comprovanteTipo].toLowerCase()}` : 'Ver prova'}
                             </button>
                           : <span className="text-xs text-slate-400">sem prova</span>}
                         {e.status === 'NAO_ENTREGUE' && (
@@ -174,27 +204,45 @@ export function ComprovantesPage() {
             </table>}
       </div>
 
-      {imagem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={() => setImagem(null)}>
+      {imagem && (() => {
+        const prova = imagem.provas[imagem.ativa];
+        return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4" onClick={fecharImagem}>
           <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                {imagem.meta.tipo && (
-                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${imagem.meta.tipo === 'ASSINATURA' ? 'bg-violet-100 text-violet-700' : 'bg-capul-100 text-capul-700'}`}>
-                    {imagem.meta.tipo === 'ASSINATURA' ? <PenLine className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}
-                    {PROVA_LABEL[imagem.meta.tipo]}
+                {prova.meta.tipo && imagem.provas.length === 1 && (
+                  <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${prova.meta.tipo === 'ASSINATURA' ? 'bg-violet-100 text-violet-700' : 'bg-capul-100 text-capul-700'}`}>
+                    {prova.meta.tipo === 'ASSINATURA' ? <PenLine className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}
+                    {PROVA_LABEL[prova.meta.tipo]}
                   </span>
                 )}
                 <span>
                   Entrega #{imagem.entrega.numero} · {imagem.entrega.destinatarioNome}
                 </span>
               </div>
-              <button onClick={() => setImagem(null)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+              <button onClick={fecharImagem} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
             </div>
+
+            {/* Abas: a baixa pode ter foto E assinatura. Sem isto só a primária
+                (a foto) era alcançável e a assinatura ficava invisível. */}
+            {imagem.provas.length > 1 && (
+              <div className="mb-2 flex gap-1 border-b border-slate-100">
+                {imagem.provas.map((p, i) => (
+                  <button key={p.id} onClick={() => setImagem((a) => (a ? { ...a, ativa: i } : a))}
+                    className={`inline-flex items-center gap-1 rounded-t-lg px-3 py-1.5 text-xs font-medium ${
+                      i === imagem.ativa ? 'bg-slate-100 text-slate-800' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    {p.meta.tipo === 'ASSINATURA' ? <PenLine className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}
+                    {p.meta.tipo ? PROVA_LABEL[p.meta.tipo] : `Prova ${i + 1}`}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <img
-              src={imagem.url}
-              alt={imagem.meta.tipo === 'ASSINATURA' ? 'assinatura' : 'foto da entrega'}
-              className={`w-full rounded-lg ${imagem.meta.tipo === 'ASSINATURA' ? 'border border-slate-200 bg-white' : ''}`}
+              src={prova.url}
+              alt={prova.meta.tipo === 'ASSINATURA' ? 'assinatura' : 'foto da entrega'}
+              className={`w-full rounded-lg ${prova.meta.tipo === 'ASSINATURA' ? 'border border-slate-200 bg-white' : ''}`}
             />
             {/* Quem recebeu: a entrega é a fonte primária, a trilha do cofre a
                 reserva. O campo é opcional na baixa, então dizer "não informado"
@@ -202,23 +250,26 @@ export function ComprovantesPage() {
                 ninguém anotou, não ficar em dúvida se a tela escondeu. */}
             <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
               <span className="text-slate-500">Recebido por: </span>
-              {imagem.entrega.recebedorNome || imagem.meta.trilha?.recebedorNome
-                ? <span className="font-medium text-slate-700">{imagem.entrega.recebedorNome || imagem.meta.trilha?.recebedorNome}</span>
+              {imagem.entrega.recebedorNome || prova.meta.trilha?.recebedorNome
+                ? <span className="font-medium text-slate-700">{imagem.entrega.recebedorNome || prova.meta.trilha?.recebedorNome}</span>
                 : <span className="italic text-slate-400">não informado na baixa</span>}
               {imagem.entrega.dataHoraEntrega && (
                 <span className="text-slate-400"> · {new Date(imagem.entrega.dataHoraEntrega).toLocaleString('pt-BR')}</span>
               )}
             </div>
+            {/* Hash e GPS são POR PROVA — trocar de aba tem de trocar os dois,
+                senão a assinatura apareceria com o hash da foto. */}
             <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
-              <span className="break-all">SHA-256: {imagem.meta.hash}</span>
-              {imagem.meta.geoLat && imagem.meta.geoLng && (
+              <span className="break-all">SHA-256: {prova.meta.hash}</span>
+              {prova.meta.geoLat && prova.meta.geoLng && (
                 <a className="inline-flex shrink-0 items-center gap-1 text-capul-700 hover:underline" target="_blank" rel="noopener"
-                  href={`https://www.google.com/maps?q=${imagem.meta.geoLat},${imagem.meta.geoLng}`}><MapPin className="h-3.5 w-3.5" /> ver no mapa</a>
+                  href={`https://www.google.com/maps?q=${prova.meta.geoLat},${prova.meta.geoLng}`}><MapPin className="h-3.5 w-3.5" /> ver no mapa</a>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
