@@ -220,18 +220,40 @@ export class RotaService {
     return rota;
   }
 
-  /** Refinamento 2-opt: desfaz cruzamentos invertendo trechos enquanto melhorar. */
+  /**
+   * Refinamento 2-opt: desfaz cruzamentos invertendo trechos enquanto melhorar.
+   *
+   * Custo ASSIMÉTRICO: com OSRM, ir de A pra B não custa o mesmo que voltar de B
+   * pra A (mão única — em Unaí a matriz mostra 1798 m num sentido e 2207 m no
+   * outro entre os mesmos dois pontos). Inverter um trecho portanto muda o custo
+   * do MIOLO dele, não só o das duas arestas das pontas. Comparar só as pontas
+   * (como antes) aceitava trocas que pioravam a rota de rua — invisível pra quem
+   * usa, porque o número de km exibido também saía da conta errada.
+   *
+   * Com haversine as duas somas do miolo são idênticas e se cancelam, então esta
+   * fórmula geral cobre os dois modos sem caso especial.
+   *
+   * Também avalia a inversão que vai até a ÚLTIMA parada (rota aberta: esse
+   * trecho não tem aresta de fechamento) — o laço anterior parava antes dela.
+   */
   private duasOpt(rota: Ponto[], partida: Ponto, custo: Custo): Ponto[] {
     const r = [...rota];
-    const dist = (i: number) => (i < 0 ? partida : r[i]);
+    const antes = (i: number) => (i < 0 ? partida : r[i]);
     let melhorou = true;
     let guard = 0;
     while (melhorou && guard++ < 50) {
       melhorou = false;
-      for (let i = -1; i < r.length - 2; i++) {
-        for (let j = i + 2; j < r.length - 1; j++) {
-          const atual = custo(dist(i), r[i + 1]) + custo(r[j], r[j + 1]);
-          const trocado = custo(dist(i), r[j]) + custo(r[i + 1], r[j + 1]);
+      for (let i = -1; i < r.length - 1; i++) {
+        // Somas do miolo do trecho i+1..j nos dois sentidos, mantidas
+        // incrementalmente conforme j cresce (mantém o passe em O(n²)).
+        let mioloAtual = 0;
+        let mioloInvertido = 0;
+        for (let j = i + 2; j < r.length; j++) {
+          mioloAtual += custo(r[j - 1], r[j]);
+          mioloInvertido += custo(r[j], r[j - 1]);
+          const fecha = j + 1 < r.length;
+          const atual = custo(antes(i), r[i + 1]) + mioloAtual + (fecha ? custo(r[j], r[j + 1]) : 0);
+          const trocado = custo(antes(i), r[j]) + mioloInvertido + (fecha ? custo(r[i + 1], r[j + 1]) : 0);
           if (trocado < atual - 1e-9) {
             // inverte o trecho i+1..j
             let a = i + 1;
@@ -242,6 +264,7 @@ export class RotaService {
               b--;
             }
             melhorou = true;
+            break; // r mudou — as somas acumuladas deste i não valem mais
           }
         }
       }
