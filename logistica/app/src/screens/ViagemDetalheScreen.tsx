@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { obterViagem, iniciarEntrega, encerrarEntrega } from '../api/viagens';
+import { avisosEncerramento } from '../lib/avisosEncerramento';
 import { processarFila as processarFilaBaixas } from '../offline/filaBaixas';
 import { ehErroDeRede } from '../offline/filaFrota';
 import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFilaDespesaEntrega } from '../offline/filaDespesaEntrega';
@@ -108,6 +109,32 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       Alert.alert('KM de retorno', `O KM de retorno (${km}) é menor que o KM de saída (${viagem.kmInicial}).`);
       return;
     }
+
+    // Encerrar é TERMINAL e o backend marca toda entrega ainda EM_VIAGEM como
+    // ENTREGUE (viagem.service.ts:318) — ou seja, fabrica entrega sem prova.
+    // Antes isso acontecia calado, e virava o atalho para fechar a rota sem
+    // baixar ninguém. Agora exige um "sim" consciente, com o número na cara.
+    if (acaoKm === 'encerrar') {
+      const avisos = avisosEncerramento({
+        pendentes: entregasPendentes.length,
+        kmInicial: viagem.kmInicial ?? null,
+      });
+      if (avisos.length) {
+        const ok = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Encerrar a rota?',
+            `${avisos.join('\n\n')}\n\nIsso não tem volta pelo app.`,
+            [
+              { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Encerrar mesmo assim', style: 'destructive', onPress: () => resolve(true) },
+            ],
+            { cancelable: true, onDismiss: () => resolve(false) },
+          );
+        });
+        if (!ok) return;
+      }
+    }
+
     setSalvandoKm(true);
     try {
       if (acaoKm === 'iniciar') {
@@ -260,6 +287,14 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
                   <TouchableOpacity style={styles.kmBtnEncerrar} onPress={() => abrirAcaoKm('encerrar')}>
                     <Text style={styles.kmBtnEncerrarTxt}>🏁 Encerrar entrega (KM)</Text>
                   </TouchableOpacity>
+                  {/* O risco na cara ANTES do toque, não só na confirmação. */}
+                  {entregasPendentes.length > 0 && (
+                    <Text style={styles.kmAviso}>
+                      Encerrar agora marca {entregasPendentes.length} entrega
+                      {entregasPendentes.length === 1 ? '' : 's'} pendente
+                      {entregasPendentes.length === 1 ? '' : 's'} como ENTREGUE, sem comprovante.
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
