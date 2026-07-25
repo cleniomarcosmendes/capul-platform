@@ -5,6 +5,7 @@ import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { MapaRota } from '../components/MapaRota';
 
 // Montagem de viagem (página dedicada — redesenho 12/06 a pedido do Clenio):
 // modelo "carrinho": fila de pendentes à esquerda → rota em construção à
@@ -61,6 +62,11 @@ export function MontarViagemPage() {
   // ordem" mesmo sendo vizinha da filial.
   const [precisao, setPrecisao] = useState<Record<string, Precisao>>({});
   const [diag, setDiag] = useState<{ origemRota: OrigemRota; origemPrecisao: Precisao | null; aproximadas: number } | null>(null);
+  // Coordenadas devolvidas pela sugestão — alimentam o mapa e continuam válidas
+  // enquanto o operador reordena na mão (não precisa recalcular pra ver o efeito).
+  const [coordenadas, setCoordenadas] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [origemCoord, setOrigemCoord] = useState<{ lat: number; lng: number } | null>(null);
+  const [selecionada, setSelecionada] = useState<string | null>(null);
   const [bairrosSel, setBairrosSel] = useState<string[]>([]);
   const [busca, setBusca] = useState('');
   const [sugerindo, setSugerindo] = useState(false);
@@ -137,6 +143,20 @@ export function MontarViagemPage() {
     [ultimaSugestao, rota],
   );
 
+  // Paradas do mapa, na ordem atual da rota. Entrega adicionada DEPOIS da última
+  // sugestão ainda não tem coordenada — fica fora do mapa e é contada no rodapé.
+  const paradasMapa = useMemo(
+    () =>
+      rota.flatMap((id) => {
+        const c = coordenadas[id];
+        const e = porId.get(id);
+        if (!c || !e) return [];
+        return [{ id, rotulo: `#${e.numero} · ${e.destinatarioNome}`, lat: c.lat, lng: c.lng, precisao: precisao[id] }];
+      }),
+    [rota, coordenadas, porId, precisao],
+  );
+  const semPosicaoNoMapa = rota.length - paradasMapa.length;
+
   const volumesRota = useMemo(
     () => rota.reduce((s, id) => s + (porId.get(id)?.quantidadeVolumes ?? 0), 0),
     [rota, porId],
@@ -159,10 +179,13 @@ export function MontarViagemPage() {
       const { data } = await logisticaApi.post<{
         ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null; fonteDistancia?: 'OSRM' | 'HAVERSINE';
         precisao?: Record<string, Precisao>; origemRota?: OrigemRota; origemPrecisao?: Precisao | null; aproximadas?: number;
+        coordenadas?: Record<string, { lat: number; lng: number }>; origem?: { lat: number; lng: number } | null;
       }>('/viagens/sugerir-ordem', { filialId, entregaIds: rota });
       setRota(data.ordem);
       setUltimaSugestao(data.ordem);
       setPrecisao(data.precisao ?? {});
+      setCoordenadas(data.coordenadas ?? {});
+      setOrigemCoord(data.origem ?? null);
       setDiag({
         origemRota: data.origemRota ?? null,
         origemPrecisao: data.origemPrecisao ?? null,
@@ -373,7 +396,8 @@ export function MontarViagemPage() {
                   const p = precisao[id];
                   const info = p ? PRECISAO_INFO[p] : null;
                   return (
-                    <li key={id} className={`flex items-center gap-2 px-4 py-2 text-sm ${info?.aproximada ? 'bg-amber-50/60' : ''}`}>
+                    <li key={id}
+                      className={`flex items-center gap-2 px-4 py-2 text-sm ${selecionada === id ? 'bg-capul-50 ring-1 ring-inset ring-capul-300' : info?.aproximada ? 'bg-amber-50/60' : ''}`}>
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-capul-600 text-xs font-semibold text-white">{i + 1}</span>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-slate-700">
@@ -408,6 +432,15 @@ export function MontarViagemPage() {
               </ul>
             )}
           </div>
+
+          {paradasMapa.length > 0 && (
+            <MapaRota
+              paradas={paradasMapa}
+              origem={origemCoord}
+              semPosicao={semPosicaoNoMapa}
+              onSelecionar={setSelecionada}
+            />
+          )}
 
         </div>
       </div>

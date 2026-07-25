@@ -64,6 +64,30 @@ describe('RotaService.sugerirOrdem — transparência da localização', () => {
     expect(r.aproximadas).toBe(1);
   });
 
+  it('devolve as coordenadas usadas na conta (é com elas que o mapa desenha)', async () => {
+    const r = await svc({
+      'RUA PREFEITO JOAO COSTA, 1455': { ...UNAI_FILIAL, precisao: 'LOGRADOURO' },
+      'RUA A': { ...VIZINHA_DA_FILIAL, precisao: 'LOGRADOURO' },
+      'RUA B': { ...UNAI_CENTRO, precisao: 'CIDADE' },
+    }).sugerirOrdem('f1', ['A', 'B']);
+
+    expect(r.origem).toEqual(UNAI_FILIAL);
+    expect(r.coordenadas).toEqual({ A: VIZINHA_DA_FILIAL, B: UNAI_CENTRO });
+    // O pin de B fica onde o algoritmo pensou que ele estava — no centro da
+    // cidade — e não no endereço real. É esse descolamento que a tela sinaliza.
+    expect(r.precisao!['B']).toBe('CIDADE');
+  });
+
+  it('sem origem geocodificada o mapa não recebe ponto de partida', async () => {
+    const r = await svc({
+      'RUA A': { ...VIZINHA_DA_FILIAL, precisao: 'LOGRADOURO' },
+      'RUA B': { ...DISTANTE, precisao: 'LOGRADOURO' },
+    }).sugerirOrdem('f1', ['A', 'B']);
+
+    expect(r.origem).toBeNull();
+    expect(r.origemRota).toBe('PRIMEIRA_ENTREGA');
+  });
+
   it('origem = FILIAL quando o endereço da filial geocodifica, com a precisão dela', async () => {
     const r = await svc({
       'RUA PREFEITO JOAO COSTA, 1455': { ...UNAI_FILIAL, precisao: 'LOGRADOURO' },

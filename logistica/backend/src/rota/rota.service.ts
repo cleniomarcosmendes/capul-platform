@@ -115,6 +115,11 @@ export class RotaService {
     // aproximada (e que portanto podem ter caído fora de ordem).
     const precisao = Object.fromEntries(pontos.map((p) => [p.id, p.precisao ?? 'LOGRADOURO']));
     const aproximadas = pontos.filter((p) => ehAproximada(p.precisao)).length;
+    // Coordenadas de volta pra tela: é com elas que o mapa da montagem desenha os
+    // pins e o traçado, e continua desenhando quando o operador reordena na mão
+    // (sem novo cálculo). Mesmos pontos usados na conta — o mapa mostra o que o
+    // algoritmo enxergou, inclusive quando o ponto está errado.
+    const coordenadas = Object.fromEntries(pontos.map((p) => [p.id, { lat: p.lat, lng: p.lng }]));
 
     if (pontos.length < 2) {
       // Nada (ou um só) geocodificado — não há o que ordenar.
@@ -124,7 +129,9 @@ export class RotaService {
         geocodificadas: pontos.length,
         origemRota: null,
         origemPrecisao: null,
+        origem: null,
         precisao,
+        coordenadas,
         aproximadas,
         distanciaKm: null,
       };
@@ -165,7 +172,11 @@ export class RotaService {
       // Origem aproximada distorce a rota INTEIRA (é o ponto de partida de todas
       // as distâncias) — por isso vai separado, com aviso próprio na tela.
       origemPrecisao: origem?.precisao ?? null,
+      // Ponto de partida para o mapa (null quando a filial não geocodificou — aí a
+      // rota saiu da primeira entrega e o mapa não desenha marcador de origem).
+      origem: origem ? { lat: origem.lat, lng: origem.lng } : null,
       precisao,
+      coordenadas,
       aproximadas,
       fonteDistancia: matriz ? 'OSRM' : 'HAVERSINE',
       distanciaKm: Math.round(distanciaKm * 10) / 10,
