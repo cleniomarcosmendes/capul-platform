@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowDown, ArrowLeft, ArrowUp, Loader2, MapPin, Plus, Sparkles, Truck, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Loader2, MapPin, Plus, Sparkles, Truck, X } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,6 +20,20 @@ interface Entrega {
   quantidadeVolumes: number; criadoEm: string; horario?: string | null;
   tentativas?: number; geocodificavel?: boolean | null;
 }
+
+// Até onde o endereço foi localizado. CEP/LOGRADOURO = ponto na porta;
+// BAIRRO/CIDADE = âncora aproximada (o centroide do município chega a ficar mais
+// de 1 km do endereço real) — é a causa de uma parada vizinha da filial ser
+// tratada como distante e cair no fim da rota sugerida.
+type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE';
+type OrigemRota = 'FILIAL' | 'PRIMEIRA_ENTREGA' | null;
+
+const PRECISAO_INFO: Record<Precisao, { label: string; aproximada: boolean }> = {
+  CEP: { label: 'na porta', aproximada: false },
+  LOGRADOURO: { label: 'na porta', aproximada: false },
+  BAIRRO: { label: 'só o bairro', aproximada: true },
+  CIDADE: { label: 'centro da cidade', aproximada: true },
+};
 
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
 const SEM_BAIRRO = '__SEM__';
@@ -41,6 +55,12 @@ export function MontarViagemPage() {
   // Última ordem sugerida — o botão "Sugerir melhor rota" desabilita enquanto a
   // rota atual for IGUAL a ela; qualquer mudança (add/remover/mover) reabilita.
   const [ultimaSugestao, setUltimaSugestao] = useState<string[] | null>(null);
+  // Diagnóstico da última sugestão: até onde cada endereço foi localizado e de
+  // onde a rota partiu. Sem isso o operador não tem como saber que uma parada
+  // entrou na conta ancorada no centro da cidade — e por que ela "saiu fora de
+  // ordem" mesmo sendo vizinha da filial.
+  const [precisao, setPrecisao] = useState<Record<string, Precisao>>({});
+  const [diag, setDiag] = useState<{ origemRota: OrigemRota; origemPrecisao: Precisao | null; aproximadas: number } | null>(null);
   const [bairrosSel, setBairrosSel] = useState<string[]>([]);
   const [busca, setBusca] = useState('');
   const [sugerindo, setSugerindo] = useState(false);
@@ -138,9 +158,16 @@ export function MontarViagemPage() {
     try {
       const { data } = await logisticaApi.post<{
         ordem: string[]; semCoordenada: string[]; geocodificadas: number; distanciaKm: number | null; fonteDistancia?: 'OSRM' | 'HAVERSINE';
+        precisao?: Record<string, Precisao>; origemRota?: OrigemRota; origemPrecisao?: Precisao | null; aproximadas?: number;
       }>('/viagens/sugerir-ordem', { filialId, entregaIds: rota });
       setRota(data.ordem);
       setUltimaSugestao(data.ordem);
+      setPrecisao(data.precisao ?? {});
+      setDiag({
+        origemRota: data.origemRota ?? null,
+        origemPrecisao: data.origemPrecisao ?? null,
+        aproximadas: data.aproximadas ?? 0,
+      });
       const aviso = data.semCoordenada.length
         ? ` ${data.semCoordenada.length} sem localização foram pro fim — posicione com as setas.`
         : '';
@@ -308,6 +335,34 @@ export function MontarViagemPage() {
                 {sugerindo ? 'Calculando…' : rotaOtimizada ? '✓ Rota otimizada' : 'Sugerir melhor rota'}
               </button>
             </div>
+            {diag && (
+              <div className="space-y-1.5 border-b border-slate-100 bg-slate-50/70 px-4 py-2.5 text-xs">
+                <div className="flex items-center gap-1.5 text-slate-600">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  {diag.origemRota === 'FILIAL' ? (
+                    <span>
+                      Partida: <strong className="text-slate-700">endereço da filial</strong>
+                      {diag.origemPrecisao && PRECISAO_INFO[diag.origemPrecisao].aproximada && (
+                        <span className="text-amber-700"> — localizada só pelo {PRECISAO_INFO[diag.origemPrecisao].label}, o que distorce a rota inteira</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-amber-700">
+                      Partida: <strong>primeira entrega</strong> — o endereço da filial não foi localizado no mapa, então a rota não saiu da empresa
+                    </span>
+                  )}
+                </div>
+                {diag.aproximadas > 0 && (
+                  <div className="flex items-start gap-1.5 text-amber-700">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      {diag.aproximadas} {diag.aproximadas === 1 ? 'parada tem localização aproximada' : 'paradas têm localização aproximada'} e
+                      {diag.aproximadas === 1 ? ' pode' : ' podem'} sair fora de ordem — confira as marcadas abaixo e ajuste com as setas.
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
             {rota.length === 0 ? (
               <div className="p-6 text-sm text-slate-500">Adicione entregas da fila ao lado — a ordem daqui vira a sequência das paradas.</div>
             ) : (
@@ -315,8 +370,10 @@ export function MontarViagemPage() {
                 {rota.map((id, i) => {
                   const e = porId.get(id);
                   if (!e) return null;
+                  const p = precisao[id];
+                  const info = p ? PRECISAO_INFO[p] : null;
                   return (
-                    <li key={id} className="flex items-center gap-2 px-4 py-2 text-sm">
+                    <li key={id} className={`flex items-center gap-2 px-4 py-2 text-sm ${info?.aproximada ? 'bg-amber-50/60' : ''}`}>
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-capul-600 text-xs font-semibold text-white">{i + 1}</span>
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-slate-700">
@@ -325,9 +382,16 @@ export function MontarViagemPage() {
                             <span className="ml-1.5 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700"
                               title="Sem localização no mapa — posicione manualmente">⚠</span>
                           )}
+                          {info?.aproximada && (
+                            <span className="ml-1.5 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                              title="O endereço exato não foi encontrado no mapa. A rota usou uma posição aproximada, então esta parada pode estar fora de ordem.">
+                              <AlertTriangle className="h-2.5 w-2.5" /> {info.label}
+                            </span>
+                          )}
                         </div>
                         <div className="truncate text-xs text-slate-500">
                           {e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''} — {(e.endBairro ?? '').trim() || 'sem bairro'} · {e.quantidadeVolumes} vol
+                          {info && !info.aproximada && <span className="ml-1.5 text-slate-400">· localizada {info.label}</span>}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">

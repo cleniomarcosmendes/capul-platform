@@ -4,10 +4,21 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { GeocodeService } from './geocode.service.js';
 import { OsrmService } from './osrm.service.js';
 
+/** Até onde a geocodificação chegou naquele ponto (vem do GeocodeService). */
+type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE';
+
+/** BAIRRO/CIDADE = âncora aproximada: o ponto usado na conta pode estar a
+ *  centenas de metros (ou mais de 1 km, no centroide do município) do endereço
+ *  real. É o que faz uma entrega vizinha da filial parecer distante e cair no
+ *  fim da rota — por isso a ordem sugerida precisa admitir isso na tela. */
+const PRECISAO_APROXIMADA: readonly Precisao[] = ['BAIRRO', 'CIDADE'];
+const ehAproximada = (p?: Precisao) => p != null && PRECISAO_APROXIMADA.includes(p);
+
 interface Ponto {
   id: string;
   lat: number;
   lng: number;
+  precisao?: Precisao;
   /** Índice na matriz OSRM (0 = origem). Atribuído antes de ordenar. */
   mi?: number;
 }
@@ -84,7 +95,7 @@ export class RotaService {
         cep: e.endCep,
       });
       if (c) {
-        pontos.push({ id, lat: c.lat, lng: c.lng });
+        pontos.push({ id, lat: c.lat, lng: c.lng, precisao: c.precisao });
         const lat = r7(c.lat);
         const lng = r7(c.lng);
         if (e.geoLat == null || e.geoLng == null || Number(e.geoLat) !== lat || Number(e.geoLng) !== lng) {
@@ -100,6 +111,11 @@ export class RotaService {
       );
     }
 
+    // Precisão por entrega — a tela usa para marcar as paradas cuja posição é só
+    // aproximada (e que portanto podem ter caído fora de ordem).
+    const precisao = Object.fromEntries(pontos.map((p) => [p.id, p.precisao ?? 'LOGRADOURO']));
+    const aproximadas = pontos.filter((p) => ehAproximada(p.precisao)).length;
+
     if (pontos.length < 2) {
       // Nada (ou um só) geocodificado — não há o que ordenar.
       return {
@@ -107,6 +123,9 @@ export class RotaService {
         semCoordenada,
         geocodificadas: pontos.length,
         origemRota: null,
+        origemPrecisao: null,
+        precisao,
+        aproximadas,
         distanciaKm: null,
       };
     }
@@ -143,6 +162,11 @@ export class RotaService {
       semCoordenada,
       geocodificadas: pontos.length,
       origemRota: origem ? 'FILIAL' : 'PRIMEIRA_ENTREGA',
+      // Origem aproximada distorce a rota INTEIRA (é o ponto de partida de todas
+      // as distâncias) — por isso vai separado, com aviso próprio na tela.
+      origemPrecisao: origem?.precisao ?? null,
+      precisao,
+      aproximadas,
       fonteDistancia: matriz ? 'OSRM' : 'HAVERSINE',
       distanciaKm: Math.round(distanciaKm * 10) / 10,
     };
@@ -160,7 +184,7 @@ export class RotaService {
       uf: f.estado,
       cep: f.cep,
     });
-    return c ? { id: 'FILIAL', lat: c.lat, lng: c.lng } : null;
+    return c ? { id: 'FILIAL', lat: c.lat, lng: c.lng, precisao: c.precisao } : null;
   }
 
   /** Heurística construtiva: sempre vai pra entrega mais próxima ainda não visitada. */
