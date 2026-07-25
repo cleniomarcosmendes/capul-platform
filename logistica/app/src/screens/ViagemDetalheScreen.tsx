@@ -248,6 +248,15 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
                   ) : (
                     <Text style={styles.kmInfo}>🚚 KM de saída: {viagem.kmInicial}</Text>
                   )}
+                  {/* Sem KM de saída a rota fecha sem KM rodado (Linha do KM e
+                      custo por km ficam furados). A baixa fica travada até
+                      registrar — é digitar o hodômetro aqui mesmo, e o valor
+                      reflete otimista, então funciona sem sinal também. */}
+                  {viagem.kmInicial == null && (
+                    <Text style={styles.kmAviso}>
+                      ⚠ Registre o KM de saída para liberar as baixas desta rota.
+                    </Text>
+                  )}
                   <TouchableOpacity style={styles.kmBtnEncerrar} onPress={() => abrirAcaoKm('encerrar')}>
                     <Text style={styles.kmBtnEncerrarTxt}>🏁 Encerrar entrega (KM)</Text>
                   </TouchableOpacity>
@@ -290,6 +299,17 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       renderItem={({ item }) => (
         <ParadaCard
           parada={item}
+          // Trava: sem KM de saída não há baixa. O despacho (no balcão) já deixa
+          // a entrega EM_VIAGEM, então o backend aceitaria — quem garante que a
+          // rota "começou de verdade" é esta tela.
+          bloqueadoSemKm={viagem.kmInicial == null}
+          onBloqueado={() => {
+            Alert.alert(
+              'Registre a saída primeiro',
+              'Informe o KM de saída no painel do veículo para começar as entregas desta rota.',
+              [{ text: 'Registrar agora', onPress: () => abrirAcaoKm('iniciar') }, { text: 'Agora não', style: 'cancel' }],
+            );
+          }}
           onBaixar={(e) =>
             navigation.navigate('Baixa', {
               entregaId: e.id,
@@ -306,9 +326,13 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
 function ParadaCard({
   parada,
   onBaixar,
+  bloqueadoSemKm = false,
+  onBloqueado,
 }: {
   parada: Parada;
   onBaixar: (e: NonNullable<Parada['entrega']>) => void;
+  bloqueadoSemKm?: boolean;
+  onBloqueado?: () => void;
 }) {
   const e = parada.entrega;
   if (!e) {
@@ -352,8 +376,13 @@ function ParadaCard({
       </View>
 
       {e.status === 'EM_VIAGEM' ? (
-        <TouchableOpacity style={styles.btnBaixa} onPress={() => onBaixar(e)}>
-          <Text style={styles.btnBaixaTxt}>✓ Dar baixa</Text>
+        <TouchableOpacity
+          style={[styles.btnBaixa, bloqueadoSemKm && styles.btnBaixaOff]}
+          onPress={() => (bloqueadoSemKm ? onBloqueado?.() : onBaixar(e))}
+        >
+          <Text style={[styles.btnBaixaTxt, bloqueadoSemKm && styles.btnBaixaTxtOff]}>
+            {bloqueadoSemKm ? '🔒 Registre o KM de saída' : '✓ Dar baixa'}
+          </Text>
         </TouchableOpacity>
       ) : null}
     </View>
@@ -425,4 +454,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
   },
   btnBaixaTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  // Travado: cinza e "apagado", mas AINDA tocável — o toque explica o porquê e
+  // oferece registrar o KM na hora. Botão morto deixaria o entregador sem saída.
+  btnBaixaOff: { backgroundColor: '#e2e8f0' },
+  btnBaixaTxtOff: { color: '#64748b' },
+  kmAviso: { width: '100%', color: '#b45309', fontSize: 12, fontWeight: '600' },
 });
