@@ -1,4 +1,4 @@
-import { IsArray, IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsLatitude, IsLongitude, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class CreateViagemDto {
   @IsString() @MaxLength(40)
@@ -55,6 +55,30 @@ export class SugerirOrdemDto {
 
   @IsArray() @IsString({ each: true })
   entregaIds!: string[];
+}
+
+/** Correção manual da coordenada de uma parada — operador arrastou o pin. */
+export class CorrigirLocalDto {
+  @IsString() @MaxLength(40)
+  filialId!: string;
+
+  @IsString() @MaxLength(40)
+  entregaId!: string;
+
+  @IsLatitude()
+  lat!: number;
+
+  @IsLongitude()
+  lng!: number;
+}
+
+/** Desfaz a correção manual, devolvendo o endereço ao provedor de geocode. */
+export class ReverterLocalDto {
+  @IsString() @MaxLength(40)
+  filialId!: string;
+
+  @IsString() @MaxLength(40)
+  entregaId!: string;
 }
 
 /** Edição do RASCUNHO: define/troca veículo e motorista (12/06). */

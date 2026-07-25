@@ -26,7 +26,7 @@ interface Entrega {
 // BAIRRO/CIDADE = âncora aproximada (o centroide do município chega a ficar mais
 // de 1 km do endereço real) — é a causa de uma parada vizinha da filial ser
 // tratada como distante e cair no fim da rota sugerida.
-type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE';
+type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL';
 type OrigemRota = 'FILIAL' | 'PRIMEIRA_ENTREGA' | null;
 
 const PRECISAO_INFO: Record<Precisao, { label: string; aproximada: boolean }> = {
@@ -34,6 +34,7 @@ const PRECISAO_INFO: Record<Precisao, { label: string; aproximada: boolean }> = 
   LOGRADOURO: { label: 'na porta', aproximada: false },
   BAIRRO: { label: 'só o bairro', aproximada: true },
   CIDADE: { label: 'centro da cidade', aproximada: true },
+  MANUAL: { label: 'corrigida à mão', aproximada: false },
 };
 
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);
@@ -200,6 +201,48 @@ export function MontarViagemPage() {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
       toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao sugerir a ordem.');
     } finally { setSugerindo(false); }
+  }
+
+  /** Operador arrastou o pin: grava a coordenada certa e reflete na hora. */
+  async function corrigirLocal(id: string, lat: number, lng: number) {
+    try {
+      const { data } = await logisticaApi.post<{ lat: number; lng: number; precisao: Precisao; herdam: number }>(
+        '/viagens/corrigir-local', { filialId, entregaId: id, lat, lng },
+      );
+      setCoordenadas((c) => ({ ...c, [id]: { lat: data.lat, lng: data.lng } }));
+      setPrecisao((p) => ({ ...p, [id]: data.precisao }));
+      // A ordem sugerida foi calculada com o ponto ANTIGO — deixa de valer.
+      setUltimaSugestao(null);
+      const e = porId.get(id);
+      toast('success',
+        `Local de ${e?.destinatarioNome ?? 'entrega'} corrigido.` +
+        (data.herdam > 0 ? ` ${data.herdam} outra(s) entrega(s) no mesmo endereço herdam a correção.` : '') +
+        ' Use "Sugerir melhor rota" para recalcular a ordem.');
+    } catch (err) {
+      const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao corrigir o local.');
+    }
+  }
+
+  /** Desfaz a correção manual — arraste errado não pode ficar grudado. */
+  async function reverterLocal(id: string) {
+    try {
+      const { data } = await logisticaApi.post<{ lat: number; lng: number; precisao: Precisao } | null>(
+        '/viagens/reverter-local', { filialId, entregaId: id },
+      );
+      if (data) {
+        setCoordenadas((c) => ({ ...c, [id]: { lat: data.lat, lng: data.lng } }));
+        setPrecisao((p) => ({ ...p, [id]: data.precisao }));
+      } else {
+        setCoordenadas((c) => { const n = { ...c }; delete n[id]; return n; });
+        setPrecisao((p) => { const n = { ...p }; delete n[id]; return n; });
+      }
+      setUltimaSugestao(null);
+      toast('success', 'Correção desfeita — o endereço voltou à localização automática.');
+    } catch (err) {
+      const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao desfazer a correção.');
+    }
   }
 
   async function montar() {
@@ -408,8 +451,16 @@ export function MontarViagemPage() {
                           )}
                           {info?.aproximada && (
                             <span className="ml-1.5 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
-                              title="O endereço exato não foi encontrado no mapa. A rota usou uma posição aproximada, então esta parada pode estar fora de ordem.">
+                              title="O endereço exato não foi encontrado no mapa. A rota usou uma posição aproximada, então esta parada pode estar fora de ordem. Arraste o pin no mapa para corrigir.">
                               <AlertTriangle className="h-2.5 w-2.5" /> {info.label}
+                            </span>
+                          )}
+                          {p === 'MANUAL' && (
+                            <span className="ml-1.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700"
+                              title="Alguém arrastou o pin para o lugar certo. Vale também para as próximas entregas neste endereço.">
+                              <MapPin className="h-2.5 w-2.5" /> corrigida
+                              <button onClick={() => void reverterLocal(id)} title="Desfazer a correção manual"
+                                className="ml-0.5 rounded px-0.5 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-900">desfazer</button>
                             </span>
                           )}
                         </div>
@@ -439,6 +490,7 @@ export function MontarViagemPage() {
               origem={origemCoord}
               semPosicao={semPosicaoNoMapa}
               onSelecionar={setSelecionada}
+              onCorrigir={(id, lat, lng) => void corrigirLocal(id, lat, lng)}
             />
           )}
 

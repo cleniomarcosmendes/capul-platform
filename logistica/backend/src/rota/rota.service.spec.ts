@@ -34,6 +34,8 @@ const entrega = (id: string) => ({
 const geocodeMock = (mapa: Record<string, { lat: number; lng: number; precisao: string }>) =>
   ({
     geocodificar: jest.fn(async (e: any) => mapa[e.logradouro] ?? null),
+    definirManual: jest.fn(async (_e: any, lat: number, lng: number) => ({ lat, lng, precisao: 'MANUAL' })),
+    limparManual: jest.fn(async () => true),
   }) as any;
 
 const osrmOff = () => ({ matrizDistancia: jest.fn(async () => null) }) as any; // sem OSRM → haversine
@@ -207,5 +209,64 @@ describe('RotaService.sugerirOrdem — transparência da localização', () => {
       .sugerirOrdem('f1', ['A', 'B']);
     expect(ok.ordem).toEqual(['A', 'B']);
     expect(ok.aproximadas).toBe(0);
+  });
+});
+
+describe('RotaService — correção manual da coordenada (arrastar o pin)', () => {
+  let prisma: any;
+  let geocode: any;
+  let svc: RotaService;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    geocode = geocodeMock({ 'RUA A': { ...UNAI_CENTRO, precisao: 'CIDADE' } });
+    svc = new RotaService(prisma, geocode, osrmOff());
+    prisma.entrega.findFirst.mockResolvedValue(entrega('A'));
+    prisma.entrega.update.mockResolvedValue({});
+    prisma.entrega.count.mockResolvedValue(2);
+  });
+
+  it('grava a correção no geocode e reposiciona o pin da entrega', async () => {
+    const r = await svc.corrigirLocal('f1', 'e1', VIZINHA_DA_FILIAL.lat, VIZINHA_DA_FILIAL.lng, 'user-9');
+
+    expect(geocode.definirManual).toHaveBeenCalledWith(
+      expect.objectContaining({ logradouro: 'RUA A', cidade: 'UNAI' }),
+      VIZINHA_DA_FILIAL.lat,
+      VIZINHA_DA_FILIAL.lng,
+      'user-9',
+    );
+    expect(prisma.entrega.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { geoLat: VIZINHA_DA_FILIAL.lat, geoLng: VIZINHA_DA_FILIAL.lng } }),
+    );
+    expect(r.precisao).toBe('MANUAL');
+  });
+
+  it('informa quantas outras entregas do mesmo endereço herdam a correção', async () => {
+    const r = await svc.corrigirLocal('f1', 'e1', VIZINHA_DA_FILIAL.lat, VIZINHA_DA_FILIAL.lng, 'user-9');
+    // É o ganho real da correção: ela não conserta só esta parada.
+    expect(r.herdam).toBe(2);
+    expect(prisma.entrega.count).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { not: 'e1' }, filialId: 'f1' }) }),
+    );
+  });
+
+  it('não corrige entrega de outra filial', async () => {
+    prisma.entrega.findFirst.mockResolvedValue(null);
+    await expect(svc.corrigirLocal('f1', 'e1', -16.37, -46.89, 'user-9')).rejects.toThrow(/não encontrada/i);
+    expect(geocode.definirManual).not.toHaveBeenCalled();
+  });
+
+  it('reverter devolve o endereço ao provedor e reposiciona o pin', async () => {
+    const r = await svc.reverterLocal('f1', 'e1');
+
+    expect(geocode.limparManual).toHaveBeenCalled();
+    expect(geocode.geocodificar).toHaveBeenCalled(); // volta a resolver automático
+    expect(r).toEqual({ ...UNAI_CENTRO, precisao: 'CIDADE' });
+  });
+
+  it('reverter sem correção manual é erro (não apaga o cache do provedor)', async () => {
+    geocode.limparManual.mockResolvedValue(false);
+    await expect(svc.reverterLocal('f1', 'e1')).rejects.toThrow(/não tem correção manual/i);
+    expect(prisma.entrega.update).not.toHaveBeenCalled();
   });
 });

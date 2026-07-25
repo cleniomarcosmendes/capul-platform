@@ -777,9 +777,14 @@ model GeocodeCache {
   endereco String // texto enviado ao provedor (debug/auditoria)
   lat      Decimal? @db.Decimal(10, 7)
   lng      Decimal? @db.Decimal(10, 7)
-  fonte    String? // BRASILAPI_CEP | NOMINATIM
-  precisao String? // CEP | LOGRADOURO
+  fonte    String? // BRASILAPI_CEP | NOMINATIM | MANUAL
+  precisao String? // CEP | LOGRADOURO | BAIRRO | CIDADE | MANUAL
   criadoEm DateTime @default(now()) @map("criado_em")
+  // Correção manual (operador arrastou o pin no mapa da montagem de rota).
+  // fonte=MANUAL nunca é sobrescrita pelo provedor — vale para TODA entrega
+  // futura naquele endereço, então precisa de dono e data.
+  corrigidoPorId String?   @map("corrigido_por_id")
+  corrigidoEm    DateTime? @map("corrigido_em")
 
   @@map("geocode_cache")
   @@schema("logistica")

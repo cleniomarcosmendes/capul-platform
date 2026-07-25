@@ -5,7 +5,7 @@ import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { ViagemService } from './viagem.service.js';
 import { RotaService } from '../rota/rota.service.js';
-import { AdicionarEntregasDto, ConcluirViagemDto, CreateViagemDto, DespacharViagemDto, ForcarEncerramentoDto, IniciarViagemDto, ReordenarViagemDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
+import { AdicionarEntregasDto, ConcluirViagemDto, CorrigirLocalDto, CreateViagemDto, DespacharViagemDto, ForcarEncerramentoDto, IniciarViagemDto, ReordenarViagemDto, ReverterLocalDto, SugerirOrdemDto, UpdateViagemDto } from './dto.js';
 
 @Controller('viagens')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
@@ -30,6 +30,24 @@ export class ViagemController {
   sugerirOrdem(@Body() dto: SugerirOrdemDto, @CurrentUser() user: JwtPayload) {
     assertMesmaFilial(user, dto.filialId);
     return this.rota.sugerirOrdem(dto.filialId, dto.entregaIds);
+  }
+
+  /**
+   * Corrige à mão a coordenada de UMA parada (o operador arrastou o pin no mapa
+   * da montagem). Vale para as próximas entregas no mesmo endereço — é o que
+   * conserta na raiz o endereço que o provedor só resolve por município.
+   */
+  @Post('corrigir-local')
+  corrigirLocal(@Body() dto: CorrigirLocalDto, @CurrentUser() user: JwtPayload) {
+    assertMesmaFilial(user, dto.filialId);
+    return this.rota.corrigirLocal(dto.filialId, dto.entregaId, dto.lat, dto.lng, user.sub);
+  }
+
+  /** Desfaz a correção manual (arraste errado não pode ficar grudado). */
+  @Post('reverter-local')
+  reverterLocal(@Body() dto: ReverterLocalDto, @CurrentUser() user: JwtPayload) {
+    assertMesmaFilial(user, dto.filialId);
+    return this.rota.reverterLocal(dto.filialId, dto.entregaId);
   }
 
   @Get()

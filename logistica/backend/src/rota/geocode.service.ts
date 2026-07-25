@@ -15,8 +15,9 @@ export interface Coordenada {
   lat: number;
   lng: number;
   // Até onde a geocodificação chegou. LOGRADOURO/CEP = ponto preciso; BAIRRO/CIDADE
-  // = fallback aproximado (âncora na área certa quando a rua não existe no OSM).
-  precisao: 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE';
+  // = fallback aproximado (âncora na área certa quando a rua não existe no OSM);
+  // MANUAL = alguém arrastou o pin no mapa — vale mais que qualquer provedor.
+  precisao: 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL';
 }
 
 /**
@@ -103,6 +104,47 @@ export class GeocodeService {
       .catch(() => undefined); // corrida com request concorrente — cache é best-effort
 
     return coord ? { lat: coord.lat, lng: coord.lng, precisao: coord.precisao } : null;
+  }
+
+  /**
+   * Fixa a coordenada de um endereço À MÃO (operador arrastou o pin no mapa).
+   *
+   * Grava no MESMO cache que `geocodificar` consulta primeiro, com fonte=MANUAL
+   * — então a correção vale para toda entrega futura no mesmo endereço, e nem o
+   * "Recalcular localizações" a desfaz (aquele fluxo também passa pelo cache).
+   * É por isso que guarda autor e data: é uma decisão que afeta os outros.
+   */
+  async definirManual(e: EnderecoGeo, lat: number, lng: number, usuarioId: string): Promise<Coordenada> {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      throw new Error('Coordenada inválida.');
+    }
+    const { chave, texto } = this.chaveDe(e);
+    const dados = {
+      lat,
+      lng,
+      fonte: 'MANUAL',
+      precisao: 'MANUAL',
+      corrigidoPorId: usuarioId,
+      corrigidoEm: new Date(),
+    };
+    await this.prisma.geocodeCache.upsert({
+      where: { chave },
+      create: { chave, endereco: texto, ...dados },
+      update: dados,
+    });
+    this.logger.log(`Coordenada corrigida à mão por ${usuarioId}: ${texto} → ${lat},${lng}`);
+    return { lat, lng, precisao: 'MANUAL' };
+  }
+
+  /**
+   * Desfaz a correção manual: apaga a entrada do cache para que o endereço volte
+   * a ser resolvido pelo provedor na próxima consulta. Sem isso um arraste
+   * errado ficaria grudado e invisível.
+   */
+  async limparManual(e: EnderecoGeo): Promise<boolean> {
+    const { chave } = this.chaveDe(e);
+    const { count } = await this.prisma.geocodeCache.deleteMany({ where: { chave, fonte: 'MANUAL' } });
+    return count > 0;
   }
 
   private async viaBrasilApi(cep: string): Promise<(Coordenada & { fonte: string }) | null> {

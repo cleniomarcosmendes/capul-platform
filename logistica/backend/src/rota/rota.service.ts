@@ -5,7 +5,7 @@ import { GeocodeService } from './geocode.service.js';
 import { OsrmService } from './osrm.service.js';
 
 /** Até onde a geocodificação chegou naquele ponto (vem do GeocodeService). */
-type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE';
+type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL';
 
 /** BAIRRO/CIDADE = âncora aproximada: o ponto usado na conta pode estar a
  *  centenas de metros (ou mais de 1 km, no centroide do município) do endereço
@@ -181,6 +181,66 @@ export class RotaService {
       fonteDistancia: matriz ? 'OSRM' : 'HAVERSINE',
       distanciaKm: Math.round(distanciaKm * 10) / 10,
     };
+  }
+
+  /** Endereço da entrega no formato que o geocode indexa (mesma chave de cache). */
+  private enderecoDe(e: {
+    endLogradouro: string; endNumero: string | null; endBairro: string | null;
+    endCidade: string | null; endUf: string | null; endCep: string | null;
+  }) {
+    return {
+      logradouro: e.endLogradouro, numero: e.endNumero, bairro: e.endBairro,
+      cidade: e.endCidade, uf: e.endUf, cep: e.endCep,
+    };
+  }
+
+  private async entregaDaFilial(entregaId: string, filialId: string) {
+    const e = await this.prisma.entrega.findFirst({ where: { id: entregaId, filialId } });
+    // 404 (não 403) para não vazar a existência de entrega de outra filial.
+    if (!e) throw new BadRequestException('Entrega não encontrada nesta filial.');
+    return e;
+  }
+
+  /**
+   * Corrige à mão a coordenada de uma entrega (operador arrastou o pin).
+   *
+   * Grava no cache de geocode com fonte=MANUAL — logo vale para as PRÓXIMAS
+   * entregas no mesmo endereço, não só para esta. É o que fecha o buraco do
+   * fallback de município: sem isso o operador reordenava na mão toda semana.
+   */
+  async corrigirLocal(filialId: string, entregaId: string, lat: number, lng: number, usuarioId: string) {
+    const e = await this.entregaDaFilial(entregaId, filialId);
+    const end = this.enderecoDe(e);
+    const c = await this.geocode.definirManual(end, lat, lng, usuarioId);
+    const r7 = (n: number) => Math.round(n * 1e7) / 1e7;
+    await this.prisma.entrega.update({
+      where: { id: entregaId },
+      data: { geoLat: r7(c.lat), geoLng: r7(c.lng) },
+    });
+    // Quantas outras entregas passam a herdar a correção (mesmo endereço).
+    const herdam = await this.prisma.entrega.count({
+      where: {
+        filialId, id: { not: entregaId },
+        endLogradouro: e.endLogradouro, endNumero: e.endNumero,
+        endBairro: e.endBairro, endCidade: e.endCidade, endCep: e.endCep,
+      },
+    });
+    return { lat: c.lat, lng: c.lng, precisao: c.precisao, herdam };
+  }
+
+  /** Desfaz a correção manual e devolve o endereço ao provedor de geocode. */
+  async reverterLocal(filialId: string, entregaId: string) {
+    const e = await this.entregaDaFilial(entregaId, filialId);
+    const end = this.enderecoDe(e);
+    const tinha = await this.geocode.limparManual(end);
+    if (!tinha) throw new BadRequestException('Esta parada não tem correção manual para desfazer.');
+    const c = await this.geocode.geocodificar(end); // volta a resolver pelo provedor
+    const r7 = (n: number) => Math.round(n * 1e7) / 1e7;
+    await this.prisma.entrega.update({
+      where: { id: entregaId },
+      data: { geoLat: c ? r7(c.lat) : null, geoLng: c ? r7(c.lng) : null },
+    });
+    return c ? { lat: c.lat, lng: c.lng, precisao: c.precisao } : null;
   }
 
   private async origemDaFilial(filialId: string): Promise<Ponto | null> {
