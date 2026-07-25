@@ -15,6 +15,9 @@ interface EntregaBaixada {
   temComprovante: boolean;
   comprovanteId: string | null;
   comprovanteTipo?: 'FOTO' | 'ASSINATURA' | null;
+  // Fonte primária de quem recebeu (a trilha do cofre é a reserva — nas provas
+  // antigas/do app ela nem sempre traz o nome).
+  recebedorNome?: string | null;
 }
 
 interface ComprovanteMeta {
@@ -86,8 +89,15 @@ export function ComprovantesPage() {
         logisticaApi.get(`/comprovantes/${e.comprovanteId}/arquivo`, { responseType: 'blob' }),
       ]);
       setImagem({ url: URL.createObjectURL(bin.data as Blob), meta: meta.data, entrega: e });
-    } catch {
-      setErro('Não foi possível abrir a prova.');
+    } catch (err) {
+      // Distinguir o motivo: um 403 genérico ("não foi possível") escondeu por
+      // um bom tempo que o problema era permissão, não a prova.
+      const st = (err as { response?: { status?: number } }).response?.status;
+      setErro(
+        st === 403 ? 'Sem permissão para abrir o comprovante — fale com o gestor.'
+        : st === 404 ? 'A prova não foi encontrada no cofre.'
+        : 'Não foi possível abrir a prova. Tente de novo em instantes.',
+      );
     } finally { setImgBusy(null); }
   }
 
@@ -177,7 +187,6 @@ export function ComprovantesPage() {
                 )}
                 <span>
                   Entrega #{imagem.entrega.numero} · {imagem.entrega.destinatarioNome}
-                  {imagem.meta.trilha?.recebedorNome ? ` · Recebido por ${imagem.meta.trilha.recebedorNome}` : ''}
                 </span>
               </div>
               <button onClick={() => setImagem(null)} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
@@ -187,6 +196,19 @@ export function ComprovantesPage() {
               alt={imagem.meta.tipo === 'ASSINATURA' ? 'assinatura' : 'foto da entrega'}
               className={`w-full rounded-lg ${imagem.meta.tipo === 'ASSINATURA' ? 'border border-slate-200 bg-white' : ''}`}
             />
+            {/* Quem recebeu: a entrega é a fonte primária, a trilha do cofre a
+                reserva. O campo é opcional na baixa, então dizer "não informado"
+                é melhor que sumir com a linha — o financeiro precisa saber que
+                ninguém anotou, não ficar em dúvida se a tela escondeu. */}
+            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+              <span className="text-slate-500">Recebido por: </span>
+              {imagem.entrega.recebedorNome || imagem.meta.trilha?.recebedorNome
+                ? <span className="font-medium text-slate-700">{imagem.entrega.recebedorNome || imagem.meta.trilha?.recebedorNome}</span>
+                : <span className="italic text-slate-400">não informado na baixa</span>}
+              {imagem.entrega.dataHoraEntrega && (
+                <span className="text-slate-400"> · {new Date(imagem.entrega.dataHoraEntrega).toLocaleString('pt-BR')}</span>
+              )}
+            </div>
             <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
               <span className="break-all">SHA-256: {imagem.meta.hash}</span>
               {imagem.meta.geoLat && imagem.meta.geoLng && (
