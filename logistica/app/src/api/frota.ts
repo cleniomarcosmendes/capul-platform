@@ -80,6 +80,9 @@ export interface SaidaIndividualPayload {
   kmInicial: number;
   finalidade?: string;
   paradasPlanejadas?: ParadaPlanejadaApp[];
+  /** Só quando o usuário logado não tem matrícula no cadastro. SEM senha —
+   *  o login INDIVIDUAL já autenticou a pessoa (mesma regra do retorno). */
+  matricula?: string;
 }
 
 /** Registrar saída INDIVIDUAL — o próprio usuário logado é o condutor (sem senha). */

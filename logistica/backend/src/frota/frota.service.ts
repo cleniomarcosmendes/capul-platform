@@ -160,12 +160,26 @@ export class FrotaService {
    */
   async registrarSaidaIndividual(dto: SaidaIndividualDto, user: JwtPayload) {
     const col = await this.core.colaboradorDoUsuario(user.sub);
-    if (!col) {
+    if (col) return this.criarSaida(user, col.matricula, col.nome, dto);
+
+    // Sem matrícula no cadastro: aceita a informada na hora, SEM senha. O login
+    // INDIVIDUAL já autenticou a pessoa — cobrar a senha do portal RH seria uma
+    // 2ª senha para quem já entrou com a dela (mesma regra do RETORNO
+    // individual, 17/07 `a40a761`). A senha é do gate PADRAO, que é login
+    // compartilhado por gente que nem é usuária da plataforma.
+    // A matrícula ainda é validada contra o Protheus (`buscarNome` 404 se não
+    // existir): a viagem grava a CHAPA do funcionário, e é ela que amarra a
+    // responsabilidade e o vínculo com a RDV.
+    // Quem registrou fica auditado em `criadoPorId` de qualquer forma.
+    const informada = dto.matricula?.trim();
+    if (!informada) {
       throw new BadRequestException(
-        'Seu usuário não tem matrícula cadastrada. Peça ao administrador para cadastrá-la ou registre a saída informando matrícula e senha.',
+        'Seu usuário não tem matrícula cadastrada. Informe a sua matrícula para registrar a saída, ' +
+          'ou peça ao administrador para cadastrá-la no seu usuário (Configurador → Usuários).',
       );
     }
-    return this.criarSaida(user, col.matricula, col.nome, dto);
+    const cond = await this.buscarCondutor(informada); // 404 se não existir no Protheus
+    return this.criarSaida(user, cond.matricula, cond.nome, dto);
   }
 
   /** Núcleo da saída de frota — compartilhado pelos fluxos PADRAO e INDIVIDUAL. */

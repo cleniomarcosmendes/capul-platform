@@ -26,6 +26,12 @@ export function SaidaFrotaScreen({ navigation }: Props) {
   const { tipo, departamentoId, filialId } = useAuth();
   const ehIndividual = tipo === 'INDIVIDUAL';
 
+  // INDIVIDUAL sem matrícula no cadastro: o backend recusa e a tela abre um
+  // campo de matrícula — SEM senha. Pedir a senha do portal RH aqui seria uma
+  // 2ª senha para quem já entrou com a dele (regra de 17/07, `a40a761`: a senha
+  // é do gate PADRAO, login compartilhado por quem nem é usuário da plataforma).
+  const [precisaMatricula, setPrecisaMatricula] = useState(false);
+
   // --- Identificação (só PADRAO) ---
   const [matricula, setMatricula] = useState('');
   const [nome, setNome] = useState<string | null>(null);
@@ -147,8 +153,9 @@ export function SaidaFrotaScreen({ navigation }: Props) {
     }
   }
 
-  // INDIVIDUAL não precisa de credOk; PADRAO sim.
-  const identificado = ehIndividual || credOk;
+  // INDIVIDUAL não precisa de credOk; PADRAO sim. Se o backend pediu a
+  // matrícula (individual sem cadastro), ela vira obrigatória — mas só ela.
+  const identificado = (ehIndividual && (!precisaMatricula || !!matricula.trim())) || credOk;
   const podeRegistrar = identificado && !!veiculoId && km !== '' && Number(km) >= 0 && !salvando;
 
   async function registrar() {
@@ -165,6 +172,7 @@ export function SaidaFrotaScreen({ navigation }: Props) {
       const v = ehIndividual
         ? await registrarSaidaIndividual({
             veiculoId, kmInicial: Number(km), finalidade: finalidade.trim() || undefined, paradasPlanejadas: rota,
+            matricula: matricula.trim() || undefined, // só vai quando a tela pediu
           })
         : await registrarSaida({
             matricula: matricula.trim(), senha, veiculoId,
@@ -175,6 +183,17 @@ export function SaidaFrotaScreen({ navigation }: Props) {
       ]);
     } catch (e) {
       const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+      // Individual sem matrícula no cadastro: em vez de só informar o erro,
+      // abre o campo para ele digitar a dele e seguir na hora. Antes a mensagem
+      // sugeria "informe matrícula e senha" e a tela não oferecia campo nenhum.
+      if (ehIndividual && !precisaMatricula && /matr[íi]cula/i.test(String(msg))) {
+        setPrecisaMatricula(true);
+        Alert.alert(
+          'Informe sua matrícula',
+          'Seu usuário ainda não tem matrícula cadastrada. Informe a sua para registrar a saída — não precisa de senha.',
+        );
+        return;
+      }
       Alert.alert('Não foi possível registrar', String(msg || 'Tente novamente.'));
     } finally {
       setSalvando(false);
@@ -183,6 +202,26 @@ export function SaidaFrotaScreen({ navigation }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
+      {/* INDIVIDUAL sem matrícula no cadastro: pede SÓ a matrícula. Sem senha —
+          ele já entrou com a dele; a senha do portal RH é do gate PADRAO. */}
+      {ehIndividual && precisaMatricula && (
+        <>
+          <Text style={styles.passo}>1. Sua matrícula</Text>
+          <Text style={styles.dica}>
+            Seu usuário ainda não tem matrícula cadastrada. Informe a sua — não precisa de senha.
+            Para não pedir de novo, peça ao administrador para cadastrá-la no seu usuário.
+          </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="ex.: E01047 ou 001047"
+            value={matricula}
+            onChangeText={(t) => setMatricula(t.toUpperCase())}
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+        </>
+      )}
+
       {/* Passo 1 — Condutor (só PADRAO; INDIVIDUAL já está identificado pelo login) */}
       {!ehIndividual ? (
         <>

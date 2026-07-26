@@ -72,6 +72,17 @@ export class SaidaFrotaDto {
  * nem senha: o condutor é o próprio usuário logado (matrícula resolvida do core).
  */
 export class SaidaIndividualDto {
+  /**
+   * Matrícula informada na hora — SÓ usada quando o usuário logado não tem
+   * matrícula no cadastro (`core.usuarios.matricula`). SEM senha, de propósito:
+   * o login INDIVIDUAL já autenticou a pessoa, e cobrar uma segunda senha (a do
+   * portal RH) seria redundante. A senha existe para o login PADRAO, que é
+   * compartilhado por colaboradores que não são usuários da plataforma.
+   * Mesma regra do RETORNO individual (decisão 17/07, `a40a761`).
+   */
+  @IsOptional() @IsString() @MaxLength(20)
+  matricula?: string;
+
   // Adiantamento (opcional) já na saída — editável depois no detalhe da viagem.
   @IsOptional() @IsNumber() @Min(0)
   adiantamento?: number;
