@@ -291,6 +291,11 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [finalidade, setFinalidade] = useState('');
   const [localSaida, setLocalSaida] = useState('');
   const [departamentoSolicitanteId, setDepartamentoSolicitanteId] = useState('');
+  // INDIVIDUAL sem matrícula no cadastro: o backend aceita a informada (sem
+  // senha), mas a tela não tinha campo — o usuário lia um erro que mandava
+  // fazer algo impossível aqui. Mesmo defeito já corrigido no app.
+  const [precisaMatricula, setPrecisaMatricula] = useState(false);
+  const [matriculaInformada, setMatriculaInformada] = useState('');
   const [deptos, setDeptos] = useState<DeptoItem[]>([]);
   const [planejadas, setPlanejadas] = useState<ParadaPlan[]>([]); // rota planejada (pontos de parada)
   const [salvando, setSalvando] = useState(false);
@@ -451,6 +456,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           veiculoId,
           kmInicial: Number(kmInicial),
           dataHoraSaida: isoRetro(saiAntes, dataHoraSaida),
+          matricula: matriculaInformada.trim() || undefined, // só quando a tela pediu
           adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
@@ -476,7 +482,15 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       }
       reset(); setAberto(false); onDone();
     } catch (e) {
-      toast('error', errMsg(e, 'Falha ao registrar saída.'));
+      const msg = errMsg(e, 'Falha ao registrar saída.');
+      // Individual sem matrícula no cadastro: abre o campo em vez de só avisar.
+      // A mensagem manda informar a matrícula — a tela precisa ter onde.
+      if (ehIndividual && !precisaMatricula && /matr[íi]cula/i.test(msg)) {
+        setPrecisaMatricula(true);
+        toast('warning', 'Informe a sua matrícula no campo que apareceu — não precisa de senha.');
+      } else {
+        toast('error', msg);
+      }
     } finally {
       setSalvando(false);
     }
@@ -519,9 +533,26 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         <div>
           <PassoHeader n={1} titulo="Condutor" hint={ehIndividual ? 'Login pessoal — você é o condutor' : 'Matrícula e senha do portal RH'} />
           {ehIndividual ? (
-            <p className="rounded-lg bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700">
-              👤 {usuario?.nome ?? 'Você'} — a saída será registrada no seu nome (login pessoal, sem senha).
-            </p>
+            <>
+              <p className="rounded-lg bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700">
+                👤 {usuario?.nome ?? 'Você'} — a saída será registrada no seu nome (login pessoal, sem senha).
+              </p>
+              {precisaMatricula && (
+                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                  <label className="mb-1 block text-sm font-medium text-amber-800">Sua matrícula</label>
+                  <p className="mb-1.5 text-xs text-amber-700">
+                    Seu usuário ainda não tem matrícula cadastrada. Informe a sua — não precisa de senha.
+                    Para não pedir de novo, peça ao administrador para cadastrá-la (Configurador → Usuários).
+                  </p>
+                  <input
+                    value={matriculaInformada}
+                    onChange={(e) => setMatriculaInformada(e.target.value.toUpperCase())}
+                    placeholder="ex.: E01047 ou 001047"
+                    className="w-56 rounded-lg border border-amber-300 px-3 py-2 text-sm uppercase"
+                  />
+                </div>
+              )}
+            </>
           ) : (
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
             <div className="sm:col-span-6">
