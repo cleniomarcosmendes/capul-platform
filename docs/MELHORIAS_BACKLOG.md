@@ -40,6 +40,73 @@ esquecer — e sem poluir a conversa principal.
   split de não-componentes p/ Fast Refresh, deps estáveis, `no-explicit-any` tipado/justificado).
   **Em andamento (28/06).** Atualizar status conforme cada módulo for fechado.
 
+## Logística — RBAC e nomenclatura (levantado 26/07)
+
+Três itens que sairam de um caso real: a RENATA BORGES precisava aprovar o acerto
+das despesas do setor **e** acompanhar o resultado das entregas. O acesso ao
+painel foi resolvido no dia (`c21f09f`); estes três ficaram.
+
+### ⏳ 2026-07-26 — Papel `SUPERVISOR_FROTA` embute DUAS responsabilidades
+
+- **Sintoma:** ao receber o papel para aprovar acerto de frota, a pessoa passa a
+  ver também **Prestação de Contas (RDV)** no menu — processo com o qual pode
+  não ter relação. Na Renata a tela abre **vazia** (0 RDVs, 0 representantes no
+  departamento dela).
+- **Não é bug:** por desenho, `SUPERVISOR_FROTA` = "Supervisor de Departamento" =
+  administrador do RDV (com `COORDENADOR` aprovando o time e `SUPERVISOR`
+  planejando). O menu faz o que foi projetado. O problema é o papel **acumular**
+  "aprova acerto de despesa de frota" + "administra RDV".
+- **Ponto que não é cosmético:** com o papel, ela *pode cadastrar representantes*
+  no departamento dela (aba Equipe aceita `SUPERVISOR_FROTA`). Não destrói nada,
+  mas é porta provavelmente não intencional.
+- **Opções:** (a) deixar como está — impacto é menu com tela vazia; (b) esconder
+  o RDV quando o usuário não tem escopo (nenhum representante no depto) — resolve
+  o sintoma mas torna o menu dependente de dado, padrão novo no código;
+  (c) separar o papel em dois — correto conceitualmente, mais caro.
+- **Adiado porque:** 26/07 fechou com 3 defeitos de RBAC corrigidos; mexer em
+  papel no fim do dia, com deploy pendente, é onde se erra.
+
+### ⏳ 2026-07-26 — Dois "supervisor de departamento" com o mesmo nome
+
+- **Colisão:** o papel `SUPERVISOR_FROTA` aparece na UI como **"Supervisor de
+  Departamento"**, e o cadastro do **veículo** tem um campo **"supervisor"** —
+  nomes parecidos, eixos diferentes.
+- **Por que confunde (caso real):** a Renata É supervisora do veículo SUP01, e
+  isso **não** lhe dava direito de aprovar o acerto — aprovar segue o
+  *departamento do condutor* e exige o papel. Supervisionar o veículo dá direito
+  a **contestar**, não a aprovar (`despesa.service.ts:243` e a mensagem em `:626`).
+- **NÃO renomear o papel para "Supervisor de Frota":** colidiria com
+  `GESTOR_FROTA` ("Gestor de Frota"), que é justamente quem **não** aprova —
+  dois nomes quase iguais para poderes opostos.
+- **Sugestão:** manter o papel como "Supervisor de Departamento" (descreve o que
+  ele faz) e renomear o **campo do veículo** para **"Responsável pelo veículo"**.
+  Só rótulo — sem tocar em enum, API ou banco, igual ao que já se fez em
+  "Viagem→Rota" e "Gestão TI→Workspace".
+
+### ⏳ 2026-07-26 — Multi-perfil na logística (2 papéis no mesmo módulo)
+
+- **Necessidade:** pessoas como a Renata acumulam funções (aprovar acerto +
+  gestão de entregas). Hoje é 1 papel por pessoa no módulo.
+- **A estrutura JÁ suporta:** o unique é
+  `(usuario_id, modulo_id, departamento_id)` — dois papéis no mesmo módulo em
+  departamentos diferentes. E já existe na prática no Workspace
+  (`danielaelvira | WORKSPACE | SUPORTE + USUARIO_FINAL`). O JWT traz
+  `modulos[].departamentos[]` **com role própria**.
+- **O que impede:** a logística lê a role **denormalizada** —
+  `user.modulos.find(m => m.codigo === 'LOGISTICA')?.role`, que o
+  `build-modulos-payload.ts` documenta como "role do PRIMEIRO depto, mantida por
+  retrocompatibilidade". Cadastrar dois papéis hoje **não** daria os dois
+  acessos: daria um dos dois, dependendo da ordem no banco, **em silêncio**.
+- **Escopo real:** migrar para iterar `departamentos[]` nos ~15 pontos com
+  `roleLogistica` + `RolesGuard` + listas de papéis do app (`HomeScreen.tsx`) e
+  dos menus. É a "Sub-fase 1.6" que o próprio código antecipa, aplicada à
+  logística. Transversal e de RBAC → planejar, não improvisar.
+- **Paliativo em uso:** 1 papel por pessoa, escolhendo o mais abrangente, e
+  liberando telas pontuais por `@Roles` quando fizer sentido (foi o que
+  `c21f09f` fez com o painel).
+
+---
+
 ## ⭐ Logística Fase 2 (Frota/Portaria) — pendências da spec (ATACAR 15/06)
 
 Itens abertos do `Especificacao_Fase2_Frota_Portaria_Capul.docx` após a entrega do
