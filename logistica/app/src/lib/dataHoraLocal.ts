@@ -30,6 +30,23 @@ export function isoDeDataHora(data: string, hora: string): string | null {
   return dt.toISOString();
 }
 
+/**
+ * Máscara de digitação da DATA: "26072026" → "26/07/2026".
+ * Aplicada a cada tecla; o usuário só digita números.
+ */
+export function mascaraData(v: string): string {
+  const d = (v || '').replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
+/** Máscara de digitação da HORA: "0730" → "07:30". */
+export function mascaraHora(v: string): string {
+  const d = (v || '').replace(/\D/g, '').slice(0, 4);
+  return d.length <= 2 ? d : `${d.slice(0, 2)}:${d.slice(2)}`;
+}
+
 /** "26/07/2026" a partir de um Date — para pré-preencher o campo. */
 export function dataBR(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');

@@ -361,9 +361,12 @@ export class FrotaService {
       // continua valendo — a matrícula informada é conferida contra a da viagem.
       const informada = col?.matricula ?? dto.matricula?.trim();
       if (!informada) {
+        // "sua matrícula" induzia ao erro: quem registrou a saída em nome de
+        // outro precisa fechar com a matrícula DAQUELE condutor, não com a dele.
         throw new BadRequestException(
-          'Seu usuário não tem matrícula cadastrada. Informe a sua matrícula para fechar a viagem, ' +
-            'ou peça ao administrador para cadastrá-la no seu usuário (Configurador → Usuários).',
+          `Informe a matrícula do condutor desta viagem (${v.condutorNome ?? 'condutor'}) para fechá-la — ` +
+            'a mesma usada no registro da saída. Se a viagem é sua, peça ao administrador para cadastrar ' +
+            'a sua matrícula no seu usuário (Configurador → Usuários).',
         );
       }
       if (chapa(informada) !== chapa(v.condutorMatricula ?? '')) {

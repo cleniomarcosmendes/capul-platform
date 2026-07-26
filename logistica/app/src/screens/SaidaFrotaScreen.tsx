@@ -12,7 +12,7 @@ import {
   listarLocaisParada, type LocalParada,
 } from '../api/frota';
 import type { VeiculoFrota } from '../types/api';
-import { isoDeDataHora, dataBR, horaBR } from '../lib/dataHoraLocal';
+import { isoDeDataHora, dataBR, horaBR, mascaraData, mascaraHora } from '../lib/dataHoraLocal';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'SaidaFrota'>;
@@ -410,11 +410,11 @@ export function SaidaFrotaScreen({ navigation }: Props) {
               <View style={styles.linha}>
                 <TextInput
                   style={[styles.input, { flex: 1.3 }]} placeholder="26/07/2026" keyboardType="numeric"
-                  value={dataSaida} onChangeText={setDataSaida} editable={!salvando}
+                  value={dataSaida} onChangeText={(t) => setDataSaida(mascaraData(t))} maxLength={10} editable={!salvando}
                 />
                 <TextInput
                   style={[styles.input, { flex: 1 }]} placeholder="07:30" keyboardType="numeric"
-                  value={horaSaida} onChangeText={setHoraSaida} editable={!salvando}
+                  value={horaSaida} onChangeText={(t) => setHoraSaida(mascaraHora(t))} maxLength={5} editable={!salvando}
                 />
               </View>
               <TouchableOpacity onPress={() => { setSaiAntes(false); setDataSaida(dataBR(new Date())); setHoraSaida(horaBR(new Date())); }} disabled={salvando}>

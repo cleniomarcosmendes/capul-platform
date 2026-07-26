@@ -1,4 +1,35 @@
-import { isoDeDataHora, dataBR, horaBR } from '../dataHoraLocal';
+import { isoDeDataHora, dataBR, horaBR, mascaraData, mascaraHora } from '../dataHoraLocal';
+
+describe('máscaras de digitação', () => {
+  it('data: insere as barras conforme digita', () => {
+    expect(mascaraData('2')).toBe('2');
+    expect(mascaraData('26')).toBe('26');
+    expect(mascaraData('2607')).toBe('26/07');
+    expect(mascaraData('26072026')).toBe('26/07/2026');
+  });
+
+  it('hora: insere os dois-pontos conforme digita', () => {
+    expect(mascaraHora('0')).toBe('0');
+    expect(mascaraHora('07')).toBe('07');
+    expect(mascaraHora('0730')).toBe('07:30');
+  });
+
+  it('ignora o que não é dígito e não deixa passar do tamanho', () => {
+    expect(mascaraData('26/07/2026999')).toBe('26/07/2026');
+    expect(mascaraHora('07:30:59')).toBe('07:30');
+    expect(mascaraHora('ab12')).toBe('12');
+  });
+
+  it('apagar caractere volta ao formato anterior (não trava o backspace)', () => {
+    expect(mascaraData('26/0')).toBe('26/0');
+    expect(mascaraData('26/')).toBe('26');
+    expect(mascaraHora('07:')).toBe('07');
+  });
+
+  it('o resultado da máscara é aceito pelo conversor', () => {
+    expect(isoDeDataHora(mascaraData('26072026'), mascaraHora('0730'))).not.toBeNull();
+  });
+});
 
 // Campos de TEXTO (sem picker nativo, p/ não quebrar o OTA) => o operador digita
 // e a validação é nossa. 31/02 e hora 25:00 têm que morrer aqui, senão viram
