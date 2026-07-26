@@ -321,13 +321,6 @@ function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: Viag
   const [chegouAntes, setChegouAntes] = useState(false);
   const [dataChegada, setDataChegada] = useState(() => dataBR(new Date()));
   const [horaChegada, setHoraChegada] = useState(() => horaBR(new Date()));
-  // INDIVIDUAL sem matrícula no cadastro: o backend aceita a informada, mas a
-  // tela não tinha campo — o usuário abria a viagem e não conseguia fechar.
-  // Pede a matrícula DO CONDUTOR da viagem (regra "só quem iniciou fecha"), não
-  // a de quem está logado: quem registrou a saída em nome de outro fecha com a
-  // mesma matrícula que informou lá.
-  const [precisaMatricula, setPrecisaMatricula] = useState(false);
-  const [matriculaFecho, setMatriculaFecho] = useState('');
 
   // Identidade "só o condutor que iniciou fecha": PADRÃO via token do gate (header);
   // INDIVIDUAL é o próprio usuário logado (backend resolve a matrícula pelo cadastro).
@@ -348,21 +341,10 @@ function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: Viag
     try {
       await registrarRetorno(viagem.id, {
         kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined, dataHoraChegada,
-        matricula: matriculaFecho.trim() || undefined, // só vai quando a tela pediu
       });
       Alert.alert('Retorno registrado', `${viagem.placa} de volta.`, [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
       const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
-      // Mesma correção da saída: em vez de só informar o erro, abre o campo.
-      if (!precisaMatricula && /matr[íi]cula/i.test(String(msg))) {
-        setPrecisaMatricula(true);
-        Alert.alert(
-          'Informe a matrícula do condutor',
-          `Esta viagem está no nome de ${viagem.condutorNome ?? 'outro condutor'}. `
-          + 'Informe a matrícula dele para fechar — a mesma usada no registro da saída. Não precisa de senha.',
-        );
-        return;
-      }
       Alert.alert('Não foi possível registrar', String(msg || 'Tente novamente.'));
     } finally { setSalvando(false); }
   }
@@ -395,20 +377,6 @@ function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: Viag
           ? `Você (${viagem.condutorNome ?? 'condutor'}) fecha a própria viagem — informe o KM final.`
           : `Condutor ${viagem.condutorNome ?? ''} identificado — informe o KM final para fechar a viagem.`}
       </Text>
-      {precisaMatricula && (
-        <View style={styles.retroBox}>
-          <Text style={styles.label}>Matrícula do condutor da viagem</Text>
-          <Text style={styles.dica}>
-            Viagem no nome de {viagem.condutorNome ?? '—'}. Informe a matrícula dele — a mesma do
-            registro da saída. Não precisa de senha.
-          </Text>
-          <TextInput
-            style={styles.input} onFocus={aoFocar} placeholder="ex.: E01047 ou 001047"
-            value={matriculaFecho} onChangeText={(t) => setMatriculaFecho(t.toUpperCase())}
-            autoCapitalize="characters" autoCorrect={false} editable={!salvando}
-          />
-        </View>
-      )}
       <Text style={styles.label}>KM final (odômetro)</Text>
       <TextInput style={styles.input} onFocus={aoFocar} value={kmFinal} onChangeText={setKmFinal} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Observações (opcional)</Text>

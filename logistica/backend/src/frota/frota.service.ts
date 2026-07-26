@@ -359,17 +359,13 @@ export class FrotaService {
       // já aceita matrícula informada) e NÃO conseguia fechar: o veículo ficava
       // preso em EM_USO até um gestor forçar. A regra "só quem iniciou fecha"
       // continua valendo — a matrícula informada é conferida contra a da viagem.
-      const informada = col?.matricula ?? dto.matricula?.trim();
-      if (!informada) {
-        // "sua matrícula" induzia ao erro: quem registrou a saída em nome de
-        // outro precisa fechar com a matrícula DAQUELE condutor, não com a dele.
-        throw new BadRequestException(
-          `Informe a matrícula do condutor desta viagem (${v.condutorNome ?? 'condutor'}) para fechá-la — ` +
-            'a mesma usada no registro da saída. Se a viagem é sua, peça ao administrador para cadastrar ' +
-            'a sua matrícula no seu usuário (Configurador → Usuários).',
-        );
-      }
-      if (chapa(informada) !== chapa(v.condutorMatricula ?? '')) {
+      // Só dá para CONFERIR a identidade quando o usuário tem matrícula no
+      // cadastro. Sem ela, a viagem já sabe quem é o condutor e pedir que o
+      // usuário redigite essa matrícula não provaria nada — o número está
+      // escrito na própria tela ("Condutor: FULANO"). Era controle de fachada:
+      // não impedia ninguém e não deixava rastro. Trocado por accountability
+      // real: `fechadoPorId` grava QUEM fechou, em todos os fluxos.
+      if (col && chapa(col.matricula) !== chapa(v.condutorMatricula ?? '')) {
         throw new ForbiddenException('Só o condutor que iniciou pode fechar a viagem. Para corrigir, peça ao gestor de frota.');
       }
     } else {
@@ -392,7 +388,7 @@ export class FrotaService {
         `A data/hora de chegada é anterior à da saída (${v.dataHoraSaida.toLocaleString('pt-BR')}).`,
       );
     }
-    return this.fechar(id, v.veiculoId, dto.kmFinal, dto.observacoes ?? null, { dataHoraChegada: dataChegada });
+    return this.fechar(id, v.veiculoId, dto.kmFinal, dto.observacoes ?? null, { dataHoraChegada: dataChegada, fechadoPorId: user.sub });
   }
 
   /**
@@ -414,6 +410,7 @@ export class FrotaService {
     return this.fechar(id, v.veiculoId, dto.kmFinal, dto.observacoes?.trim() ?? null, {
       porteiroRetornoMatricula: porteiro.matricula,
       porteiroRetornoNome: porteiro.nome,
+      fechadoPorId: user.sub,
     });
   }
 
@@ -442,6 +439,7 @@ export class FrotaService {
       if (kmFinal < (dto.kmInicial ?? v.kmInicial ?? 0)) throw new BadRequestException('KM final menor que o KM de saída.');
       return this.fechar(id, v.veiculoId, kmFinal, dto.observacoesChegada ?? v.observacoesChegada ?? null, {
         kmInicial: dto.kmInicial, observacoesSaida: dto.observacoesSaida, adiantamento: dto.adiantamento,
+        fechadoPorId: user.sub,
       });
     }
     // Só edita (sem fechar).
@@ -589,7 +587,7 @@ export class FrotaService {
     return this.prisma.manutencaoVeiculo.findMany({ where: { veiculoId }, orderBy: { dataManutencao: 'desc' } });
   }
 
-  private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string; adiantamento?: number; porteiroRetornoMatricula?: string; porteiroRetornoNome?: string; dataHoraChegada?: Date }) {
+  private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string; adiantamento?: number; porteiroRetornoMatricula?: string; porteiroRetornoNome?: string; dataHoraChegada?: Date; fechadoPorId?: string }) {
     return this.prisma.$transaction(async (tx) => {
       const viagem = await tx.viagem.update({
         where: { id },
@@ -597,6 +595,9 @@ export class FrotaService {
           situacao: StatusViagem.CONCLUIDA,
           kmFinal,
           dataHoraChegada: extra?.dataHoraChegada ?? new Date(), // informada ou agora
+          // Accountability do RETORNO — antes ninguem sabia quem fechou.
+          fechadoPorId: extra?.fechadoPorId ?? null,
+          fechadoEm: new Date(),
           observacoesChegada: obsChegada,
           ...(extra?.kmInicial != null ? { kmInicial: extra.kmInicial } : {}),
           ...(extra?.observacoesSaida != null ? { observacoesSaida: extra.observacoesSaida } : {}),

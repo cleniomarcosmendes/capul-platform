@@ -645,6 +645,13 @@ model Viagem {
   // acerto TRAVADO (sem novas despesas/adiantamento); reabrir volta a NULL.
   acertoEncerradoEm         DateTime?    @map("acerto_encerrado_em")
   acertoEncerradoPorId      String?      @map("acerto_encerrado_por_id")
+  // Quem FECHOU a viagem (retorno) e quando. Antes ninguém sabia — havia
+  // `criadoPorId` (quem abriu) e `acertoEncerradoPorId` (quem encerrou o
+  // acerto), mas nada para o retorno. Vale para TODOS os fluxos (individual,
+  // PADRÃO e portaria) e é o que substitui, com rastro de verdade, a exigência
+  // de redigitar a matrícula do condutor quando ela não podia ser conferida.
+  fechadoPorId              String?      @map("fechado_por_id")
+  fechadoEm                 DateTime?    @map("fechado_em")
   // Encerramento FORÇADO pelo gestor de entrega: a rota ficou pendurada EM_CURSO
   // (ex.: o entregador esqueceu o retorno). Neste caminho o KM final é OBRIGATÓRIO
   // (mantém o odômetro íntegro); guarda quem forçou e quando — accountability
