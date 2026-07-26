@@ -309,48 +309,6 @@ o sistema funciona com a limitação documentada no modal.
 
 ## Processo & Deploy
 
-### ⏳ 2026-07-25 — Repetir a varredura de classes de defeito no Workspace, Fiscal e Inventário
-
-**Contexto:** em 25/07 varri a **logística** procurando irmãos de quatro classes
-de defeito encontradas no dia. Achei **um** defeito real e três classes limpas.
-As classes valem para os outros módulos, e a primeira já mordeu **duas vezes** só
-na logística — é a mais provável de existir lá também.
-
-**As quatro classes:**
-
-1. **Menu liberado ≠ backend liberado.** Item aparece no menu/tile para um papel
-   que o `@Roles` do controller não admite → a tela abre, lista e morre no
-   clique com 403. Aconteceu 2× na logística: `OPERADOR_ENTREGA` × cofre de
-   comprovantes (`7531175`) e `GESTOR_FROTA` × painel de entregas (`f4697de`).
-2. **Endpoint de leitura por `:id` sem recorte de filial/escopo** — dava para ler
-   registro de outra filial sabendo o id (`comprovantes/por-entrega`, corrigido
-   em `7531175`).
-3. **Fallback silencioso** — backend degrada e devolve um marcador que a tela
-   nunca lê, então o usuário não sabe que está vendo resultado degradado
-   (`origemRota: PRIMEIRA_ENTREGA` na sugestão de rota, corrigido em `f1429b2`).
-4. **Ação permitida fora de ordem** — transição de estado sem guarda, ou etapa
-   que parecia obrigatória e nunca foi (baixa sem "iniciar", `8e84ec8`).
-
-**Como varrer (o método importa):** o grep **não conclui** nada aqui — errou 3×
-na varredura da logística. `@Roles` pode vir antes OU depois do `@Get`, pode
-estar separado do `@Controller` por bloco de comentário, e guarda de estado pode
-morar dentro de helper (`rascunhoOuErro`). Levante a hipótese por grep e **bata
-no endpoint com token de cada papel** — o HTTP é a única fonte de verdade.
-Para a classe 1, o mais rápido é montar a matriz `item de menu × papel × código
-HTTP` e procurar 403 onde o menu mostra.
-
-**Cuidado ao testar a classe 4:** escolha casos que devem ser REJEITADOS
-(rejeição não muta). E atenção ao falso alarme: baixar entrega já terminal
-devolve **201 por idempotência deliberada** (reenvio da fila offline do app) —
-confirme no banco antes de chamar de bug.
-
-**Por que adiado:** decisão do Clenio em 25/07 — a varredura da logística nasceu
-do bug que ele estava testando; abrir os outros três módulos no mesmo dia
-desviaria o foco. Sem urgência conhecida: não há relato de 403 nesses módulos,
-só a suspeita estrutural.
-
-**Referência:** `memory/project_onda_logistica_24_25jul.md`.
-
 ### ⏳ 2026-05-30 — RolesGuard no auth-gateway + restringir leitura de usuários a staff
 
 **Contexto:** O fix `a56fa77` (security-review 30/05) fechou os WRITES do
@@ -837,6 +795,86 @@ infra dos PR1-3; trabalho extra é só a página de resultados unificada.
 ---
 
 ## Histórico (feitos)
+
+### ✅ 2026-07-26 — [FEITO] Repetir a varredura de classes de defeito no Workspace, Fiscal e Inventário
+
+**Executada em 26/07. Placar: 1 problema real em 3 módulos.**
+
+| módulo | resultado |
+|---|---|
+| **Fiscal** | ✅ limpo — a hierarquia `OPERADOR_ENTRADA < ANALISTA_CADASTRO < GESTOR_FISCAL < ADMIN_TI` é respeitada nos 14 itens de menu, nas abas de operação (cada uma com `minRole` próprio) e nas ações. As 2 abas sem checagem de papel são somente-leitura em nível já permitido. |
+| **Inventário** | 🔴 **6 rotas sem autenticação nenhuma** — corrigido em `41035b4` |
+| **Workspace** | ✅ limpo — `JwtAuthGuard` é `APP_GUARD` global, só `/health` é `@Public()`; endpoints sem token devolvem 401 |
+
+**O que foi corrigido no Inventário (`41035b4`):** `POST /api/v1/import/bulk`
+gravava em `SB1010/SB2010/SLK010/SB8010/SBZ010` **sem token e alcançável de
+fora** (o nginx proxia `/api/v1/import/`). Mais `update-status`,
+`items-for-assignment(/ids)`, `release-for-recount` e as duas `clear/{tabela}`
+(estas só internas). Removida a rota morta de `main.py` + auth no
+`include_router` do `import_data` + `get_current_active_user` nas demais.
+⚠️ `scripts/cleanup_inventories.py` passa a falhar com 403 — ele manda um token
+FALSO hardcoded e só funcionava porque a rota não validava nada.
+
+**Dois "achados" que morreram ao serem medidos** — vale mais que o achado real:
+
+1. No Workspace, um `USUARIO_FINAL` recebe **200** em 11 telas que o menu esconde
+   dele. Parecia exposição ampla. Medindo o **conteúdo**: `projetos` 0 vs 99,
+   `paradas` 0 vs 37, `contratos` 0 vs 36, `licenças` 0 vs 41 — o filtro está na
+   **camada de serviço** (o `findAll` recebe `user.sub` e `role`). Era
+   "autorizado porém vazio", não falha.
+2. `GET /equipes` devolve as 5 equipes a qualquer papel — mas é **deliberado e
+   documentado** em `equipe.service.ts:27-35`: a transferência de chamado precisa
+   enxergar até equipes privadas, e a abertura usa o `findSelecionaveis`
+   filtrado. Bloquear com `@Roles` quebraria Chamados e Base de Conhecimento
+   para os 105 `USUARIO_FINAL`. O `include: { usuario: true }` também foi
+   conferido: só `id/nome/username/email/departamentoId/preferencias`, nada
+   sensível.
+
+**Não testável no DEV:** `/ativos` e `/sla` devolvem 0 para todos os papéis —
+sem dado para distinguir "filtrado" de "vazio". Não afirmo que estão corretos.
+
+**Contexto original abaixo.**
+
+**Contexto:** em 25/07 varri a **logística** procurando irmãos de quatro classes
+de defeito encontradas no dia. Achei **um** defeito real e três classes limpas.
+As classes valem para os outros módulos, e a primeira já mordeu **duas vezes** só
+na logística — é a mais provável de existir lá também.
+
+**As quatro classes:**
+
+1. **Menu liberado ≠ backend liberado.** Item aparece no menu/tile para um papel
+   que o `@Roles` do controller não admite → a tela abre, lista e morre no
+   clique com 403. Aconteceu 2× na logística: `OPERADOR_ENTREGA` × cofre de
+   comprovantes (`7531175`) e `GESTOR_FROTA` × painel de entregas (`f4697de`).
+2. **Endpoint de leitura por `:id` sem recorte de filial/escopo** — dava para ler
+   registro de outra filial sabendo o id (`comprovantes/por-entrega`, corrigido
+   em `7531175`).
+3. **Fallback silencioso** — backend degrada e devolve um marcador que a tela
+   nunca lê, então o usuário não sabe que está vendo resultado degradado
+   (`origemRota: PRIMEIRA_ENTREGA` na sugestão de rota, corrigido em `f1429b2`).
+4. **Ação permitida fora de ordem** — transição de estado sem guarda, ou etapa
+   que parecia obrigatória e nunca foi (baixa sem "iniciar", `8e84ec8`).
+
+**Como varrer (o método importa):** o grep **não conclui** nada aqui — errou 3×
+na varredura da logística. `@Roles` pode vir antes OU depois do `@Get`, pode
+estar separado do `@Controller` por bloco de comentário, e guarda de estado pode
+morar dentro de helper (`rascunhoOuErro`). Levante a hipótese por grep e **bata
+no endpoint com token de cada papel** — o HTTP é a única fonte de verdade.
+Para a classe 1, o mais rápido é montar a matriz `item de menu × papel × código
+HTTP` e procurar 403 onde o menu mostra.
+
+**Cuidado ao testar a classe 4:** escolha casos que devem ser REJEITADOS
+(rejeição não muta). E atenção ao falso alarme: baixar entrega já terminal
+devolve **201 por idempotência deliberada** (reenvio da fila offline do app) —
+confirme no banco antes de chamar de bug.
+
+**Por que adiado:** decisão do Clenio em 25/07 — a varredura da logística nasceu
+do bug que ele estava testando; abrir os outros três módulos no mesmo dia
+desviaria o foco. Sem urgência conhecida: não há relato de 403 nesses módulos,
+só a suspeita estrutural.
+
+**Referência:** `memory/project_onda_logistica_24_25jul.md`.
+
 
 ### ✅ 2026-05-30 — 🔴 Fix segurança: ConfiguradorAdminGuard nos endpoints privilegiados de usuário
 
