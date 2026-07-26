@@ -9,6 +9,7 @@ import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CondutorTokenService } from '../common/condutor-token.service.js';
 import { LocalClienteService } from '../local/local-cliente.service.js';
+import { resolverDataEvento } from './data-evento.js';
 import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, type ParadaPlanejadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
@@ -187,10 +188,11 @@ export class FrotaService {
     user: JwtPayload,
     condutorMatricula: string,
     condutorNome: string,
-    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: ParadaPlanejadaDto[]; rdvViagemId?: string; adiantamento?: number },
+    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: ParadaPlanejadaDto[]; rdvViagemId?: string; adiantamento?: number; dataHoraSaida?: string },
   ) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
+    const dataSaida = resolverDataEvento(dados.dataHoraSaida, 'saída');
     const rdvViagemId = await this.resolverRdvDaSaida(filialId, condutorMatricula, dados.rdvViagemId);
 
     // Frota é recurso COMPARTILHADO: o condutor pode usar veículo de qualquer
@@ -228,7 +230,7 @@ export class FrotaService {
           localSaida: dados.localSaida ?? null,
           observacoesSaida: dados.finalidade ?? null,
           ...(dados.adiantamento != null ? { adiantamento: new Prisma.Decimal(dados.adiantamento) } : {}),
-          dataHoraSaida: new Date(),
+          dataHoraSaida: dataSaida, // informada (lançamento retroativo) ou agora
           criadoPorId: user.sub,
         },
       });
@@ -379,7 +381,15 @@ export class FrotaService {
     if (dto.kmFinal < (v.kmInicial ?? 0)) {
       throw new BadRequestException(`KM final (${dto.kmFinal}) menor que o KM de saída (${v.kmInicial}).`);
     }
-    return this.fechar(id, v.veiculoId, dto.kmFinal, dto.observacoes ?? null);
+    // Chegada informada (lançamento retroativo): não pode ser antes da saída —
+    // senão a viagem teria duração negativa e o relatório mostraria bobagem.
+    const dataChegada = resolverDataEvento(dto.dataHoraChegada, 'chegada');
+    if (v.dataHoraSaida && dataChegada.getTime() < v.dataHoraSaida.getTime()) {
+      throw new BadRequestException(
+        `A data/hora de chegada é anterior à da saída (${v.dataHoraSaida.toLocaleString('pt-BR')}).`,
+      );
+    }
+    return this.fechar(id, v.veiculoId, dto.kmFinal, dto.observacoes ?? null, { dataHoraChegada: dataChegada });
   }
 
   /**
@@ -576,14 +586,14 @@ export class FrotaService {
     return this.prisma.manutencaoVeiculo.findMany({ where: { veiculoId }, orderBy: { dataManutencao: 'desc' } });
   }
 
-  private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string; adiantamento?: number; porteiroRetornoMatricula?: string; porteiroRetornoNome?: string }) {
+  private async fechar(id: string, veiculoId: string | null, kmFinal: number, obsChegada: string | null, extra?: { kmInicial?: number; observacoesSaida?: string; adiantamento?: number; porteiroRetornoMatricula?: string; porteiroRetornoNome?: string; dataHoraChegada?: Date }) {
     return this.prisma.$transaction(async (tx) => {
       const viagem = await tx.viagem.update({
         where: { id },
         data: {
           situacao: StatusViagem.CONCLUIDA,
           kmFinal,
-          dataHoraChegada: new Date(),
+          dataHoraChegada: extra?.dataHoraChegada ?? new Date(), // informada ou agora
           observacoesChegada: obsChegada,
           ...(extra?.kmInicial != null ? { kmInicial: extra.kmInicial } : {}),
           ...(extra?.observacoesSaida != null ? { observacoesSaida: extra.observacoesSaida } : {}),

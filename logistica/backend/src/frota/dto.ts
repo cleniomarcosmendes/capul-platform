@@ -29,7 +29,20 @@ export class ValidarCondutorDto {
   senha!: string;
 }
 
+/**
+ * Data/hora REAL da saída (ISO 8601). Opcional — sem ela vale o instante do
+ * registro, que é o caso normal. Existe para o lançamento retroativo: quem saiu
+ * às pressas sem registrar informa depois a hora de verdade, e o KM rodado deixa
+ * de vir acompanhado de uma duração de minutos.
+ *
+ * NÃO precisa de migration nem de flag: `viagem.criadoEm` continua sendo o
+ * carimbo imutável de QUANDO foi registrado. Retroativo = `dataHoraSaida`
+ * anterior a `criadoEm`. As duas verdades ficam no banco, separadas.
+ */
 export class SaidaFrotaDto {
+  @IsOptional() @IsDateString()
+  dataHoraSaida?: string;
+
   // Adiantamento (opcional) já na SAÍDA — "para viajar, a 1ª coisa é o adiantamento".
   // Editável depois no detalhe da viagem (até o acerto encerrar).
   @IsOptional() @IsNumber() @Min(0)
@@ -82,6 +95,10 @@ export class SaidaIndividualDto {
    */
   @IsOptional() @IsString() @MaxLength(20)
   matricula?: string;
+
+  /** Data/hora REAL da saída — ver comentário em SaidaFrotaDto. */
+  @IsOptional() @IsDateString()
+  dataHoraSaida?: string;
 
   // Adiantamento (opcional) já na saída — editável depois no detalhe da viagem.
   @IsOptional() @IsNumber() @Min(0)
@@ -185,6 +202,11 @@ export class RetornoFrotaDto {
 
   @IsInt() @Min(0)
   kmFinal!: number;
+
+  /** Data/hora REAL da chegada (ISO 8601). Opcional — sem ela vale o instante do
+   *  registro. Simétrica à `dataHoraSaida`; o service exige que seja >= a saída. */
+  @IsOptional() @IsDateString()
+  dataHoraChegada?: string;
 
   @IsOptional() @IsString() @MaxLength(255)
   observacoes?: string;
