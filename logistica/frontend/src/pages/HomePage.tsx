@@ -5,14 +5,16 @@ import { useAuth } from '../contexts/AuthContext';
 // Grupos de papel espelham o menu lateral (Layout.tsx) — os tiles da home NÃO
 // devem oferecer o que o backend depois bloqueia (senão o entregador vê tudo e
 // só descobre o 403 ao clicar). ADMIN passa em tudo.
-const GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA'];
+// Painel é tela de gestão de ENTREGAS: o backend (painel.controller) não admite
+// GESTOR_FROTA, que via o tile e tomava 403. Espelha o menu (Layout.tsx).
+const GESTAO_ENTREGAS = ['GESTOR_ENTREGA'];
 const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 // Caixa/balcão: só REGISTRAR e ALTERAR entregas (não monta rota, não vê frota).
 const REGISTRO_ENTREGA = ['REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 const FROTA_GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
 
 const TILES = [
-  { to: '/painel', icon: BarChart3, titulo: 'Painel', sub: 'Indicadores de entregas e frota', roles: GESTORES },
+  { to: '/painel', icon: BarChart3, titulo: 'Painel', sub: 'Indicadores de entregas e frota', roles: GESTAO_ENTREGAS },
   { to: '/clientes', icon: MapPin, titulo: 'Endereços', sub: 'Consulta por telefone, nome ou matrícula', roles: ENTREGA },
   { to: '/entregas/nova', icon: Package, titulo: 'Nova Entrega', sub: 'Cadastro com CEP e Protheus', roles: REGISTRO_ENTREGA },
   { to: '/entregas', icon: ClipboardList, titulo: 'Entregas', sub: 'Todas as entregas — filtros e edição', roles: REGISTRO_ENTREGA },

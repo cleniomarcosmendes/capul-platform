@@ -11,7 +11,11 @@ const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 // não vê frota/comprovantes. Espelha o @Roles do backend (create/edit/operador).
 const REGISTRO_ENTREGA = ['REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
-const GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA'];
+// Telas de gestão de ENTREGAS (Painel, Indicadores, Análise). O backend
+// (painel.controller) só admite OPERADOR_ENTREGA/GESTOR_ENTREGA — o Gestor de
+// Frota via os itens no menu e tomava 403 em todos. A frota dele está na seção
+// FROTA + "Análise da Frota", que tem gate próprio.
+const GESTAO_ENTREGAS = ['GESTOR_ENTREGA'];
 // Gestão da FROTA que o Supervisor de Departamento também acessa (escopado ao seu
 // departamento no backend): Monitor, Linha do KM e Veículos.
 const FROTA_GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
@@ -34,10 +38,13 @@ type NavEntry =
 const navItems: NavEntry[] = [
   { to: '/', label: 'Início', icon: Home, end: true },
 
-  { section: 'GESTÃO', roles: GESTORES },
-  { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTORES },
-  { to: '/indicadores', label: 'Indicadores de Entrega', icon: TrendingUp, roles: GESTORES },
-  { to: '/analise-entregas', label: 'Análise de Entregas', icon: TrendingUp, roles: GESTORES },
+  // Sem `roles`: a seção sobrevive se QUALQUER item abaixo sobreviver (o filtro
+  // de órfãos remove o cabeçalho quando não sobra nenhum). Fixar papéis aqui
+  // esconderia o cabeçalho do Gestor de Frota e deixaria "Análise da Frota" solta.
+  { section: 'GESTÃO' },
+  { to: '/painel', label: 'Painel', icon: BarChart3, roles: GESTAO_ENTREGAS },
+  { to: '/indicadores', label: 'Indicadores de Entrega', icon: TrendingUp, roles: GESTAO_ENTREGAS },
+  { to: '/analise-entregas', label: 'Análise de Entregas', icon: TrendingUp, roles: GESTAO_ENTREGAS },
   { to: '/frota/analise', label: 'Análise da Frota', icon: TrendingUp, roles: FROTA_GESTAO },
 
   { section: 'ENTREGAS', roles: REGISTRO_ENTREGA },
