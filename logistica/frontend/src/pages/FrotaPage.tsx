@@ -252,6 +252,19 @@ function PassoHeader({ n, titulo, hint, ativo = true }: { n: number; titulo: str
   );
 }
 
+/**
+ * Data/hora do lançamento retroativo → ISO 8601, ou `undefined` p/ o backend
+ * carimbar o instante do registro. `datetime-local` entrega horário LOCAL sem
+ * fuso ("2026-07-26T07:30"); `new Date` interpreta como local e o toISOString
+ * converte certo. Campo vazio com o toggle ligado também vira undefined — não
+ * dá para o usuário "abrir e esquecer" e mandar data inválida.
+ */
+function isoRetro(ligado: boolean, valor: string): string | undefined {
+  if (!ligado || !valor) return undefined;
+  const d = new Date(valor);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
 function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () => void }) {
   const { toast } = useToast();
   const { logisticaRole, usuario } = useAuth();
@@ -270,6 +283,10 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   const [senha, setSenha] = useState('');
   const [veiculoId, setVeiculoId] = useState('');
   const [kmInicial, setKmInicial] = useState('');
+  // Lançamento retroativo: escondido por padrão (o normal é registrar na hora).
+  // Vazio = backend carimba agora. PORTARIA fica de fora: é presencial, no portão.
+  const [saiAntes, setSaiAntes] = useState(false);
+  const [dataHoraSaida, setDataHoraSaida] = useState('');
   const [adiantamento, setAdiantamento] = useState('');
   const [finalidade, setFinalidade] = useState('');
   const [localSaida, setLocalSaida] = useState('');
@@ -420,6 +437,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         await logisticaApi.post('/frota/viagens/individual', {
           veiculoId,
           kmInicial: Number(kmInicial),
+          dataHoraSaida: isoRetro(saiAntes, dataHoraSaida),
           adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
@@ -433,6 +451,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         await logisticaApi.post('/frota/viagens', {
           matricula: matricula.trim(), senha, veiculoId,
           kmInicial: Number(kmInicial),
+          dataHoraSaida: isoRetro(saiAntes, dataHoraSaida),
           adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
@@ -662,6 +681,29 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                 disabled={!podeAvancar}
                 className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />
+              {/* Lançamento retroativo — escondido por padrão. Só aparece fora da
+                  PORTARIA, que é presencial no portão e sempre em tempo real. */}
+              {modo !== 'PORTARIA' && (
+                !saiAntes ? (
+                  <button type="button" onClick={() => setSaiAntes(true)} disabled={!podeAvancar}
+                    className="mt-1.5 text-xs text-slate-500 hover:text-capul-700 disabled:opacity-50">
+                    Saída: agora · <span className="font-semibold text-capul-700">saiu antes?</span>
+                  </button>
+                ) : (
+                  <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">Quando a viagem começou de verdade</label>
+                    <input
+                      type="datetime-local" value={dataHoraSaida} onChange={(e) => setDataHoraSaida(e.target.value)}
+                      disabled={!podeAvancar}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+                    />
+                    <button type="button" onClick={() => { setSaiAntes(false); setDataHoraSaida(''); }}
+                      className="mt-1 text-xs font-semibold text-capul-700 hover:underline">
+                      Cancelar — usar o horário de agora
+                    </button>
+                  </div>
+                )
+              )}
             </div>
 
             <div className="sm:col-span-3">
@@ -977,6 +1019,9 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
   const [buscando, setBuscando] = useState(false);
   const [senha, setSenha] = useState('');
   const [kmFinal, setKmFinal] = useState('');
+  // Lançamento retroativo da chegada — simétrico à saída.
+  const [chegouAntes, setChegouAntes] = useState(false);
+  const [dataHoraChegada, setDataHoraChegada] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [credOk, setCredOk] = useState(false);
@@ -1039,6 +1084,7 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
         // INDIVIDUAL: sem matrícula/senha — o backend usa o usuário logado (JWT).
         ...(ehIndividual ? {} : { matricula: matricula.trim(), senha }),
         kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined,
+        dataHoraChegada: isoRetro(chegouAntes, dataHoraChegada),
       });
       toast('success', 'Retorno registrado.');
       onDone();
@@ -1109,6 +1155,25 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
             placeholder={`ex.: ≥ ${v.kmInicial ?? 0}`}
             className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
           />
+          {!chegouAntes ? (
+            <button type="button" onClick={() => setChegouAntes(true)} disabled={!podeAvancar}
+              className="mt-1.5 text-xs text-slate-500 hover:text-capul-700 disabled:opacity-50">
+              Chegada: agora · <span className="font-semibold text-capul-700">chegou antes?</span>
+            </button>
+          ) : (
+            <div className="mt-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Quando a viagem terminou de verdade</label>
+              <input
+                type="datetime-local" value={dataHoraChegada} onChange={(e) => setDataHoraChegada(e.target.value)}
+                disabled={!podeAvancar}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+              />
+              <button type="button" onClick={() => { setChegouAntes(false); setDataHoraChegada(''); }}
+                className="mt-1 text-xs font-semibold text-capul-700 hover:underline">
+                Cancelar — usar o horário de agora
+              </button>
+            </div>
+          )}
         </div>
         <div className={`min-w-[20rem] flex-1 ${podeAvancar ? '' : 'opacity-60'}`}>
           <label className="mb-1 block text-sm font-medium text-slate-600">Observações (opcional)</label>
