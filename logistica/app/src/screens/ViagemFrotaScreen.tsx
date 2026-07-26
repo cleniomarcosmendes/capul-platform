@@ -24,6 +24,7 @@ import { useScrollToFocusedInput, type AoFocar } from '../lib/useScrollToFocused
 import { useRastreamento } from '../lib/useRastreamento';
 import { useAuth } from '../auth/AuthContext';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
+import { isoDeDataHora, dataBR, horaBR } from '../lib/dataHoraLocal';
 
 const CAPUL = '#1e7d3a';
 const MAX_FOTOS_DESPESA = 5;
@@ -315,6 +316,11 @@ function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: Viag
   const [kmFinal, setKmFinal] = useState('');
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
+  // Lançamento retroativo — mesma ideia da saída: escondido por padrão, o link
+  // abre. Quem voltou e só conseguiu registrar depois informa a hora real.
+  const [chegouAntes, setChegouAntes] = useState(false);
+  const [dataChegada, setDataChegada] = useState(() => dataBR(new Date()));
+  const [horaChegada, setHoraChegada] = useState(() => horaBR(new Date()));
 
   // Identidade "só o condutor que iniciou fecha": PADRÃO via token do gate (header);
   // INDIVIDUAL é o próprio usuário logado (backend resolve a matrícula pelo cadastro).
@@ -322,10 +328,19 @@ function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: Viag
   const podeRegistrar = kmFinal !== '' && Number(kmFinal) >= 0 && !salvando;
 
   async function executar() {
+    let dataHoraChegada: string | undefined;
+    if (chegouAntes) {
+      const iso = isoDeDataHora(dataChegada, horaChegada);
+      if (!iso) {
+        Alert.alert('Data/hora da chegada', 'Confira a data e a hora — use dia/mês/ano e hora:minuto.');
+        return;
+      }
+      dataHoraChegada = iso;
+    }
     setSalvando(true);
     try {
       await registrarRetorno(viagem.id, {
-        kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined,
+        kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined, dataHoraChegada,
       });
       Alert.alert('Retorno registrado', `${viagem.placa} de volta.`, [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
@@ -366,6 +381,28 @@ function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: Viag
       <TextInput style={styles.input} onFocus={aoFocar} value={kmFinal} onChangeText={setKmFinal} keyboardType="numeric" editable={!salvando} />
       <Text style={styles.label}>Observações (opcional)</Text>
       <TextInput style={styles.input} onFocus={aoFocar} value={obs} onChangeText={setObs} maxLength={255} editable={!salvando} />
+
+      {!chegouAntes ? (
+        <TouchableOpacity onPress={() => setChegouAntes(true)} disabled={salvando}>
+          <Text style={styles.linkRetro}>
+            Chegada: agora ({dataBR(new Date())} {horaBR(new Date())}) · <Text style={styles.linkRetroAcao}>Cheguei antes?</Text>
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.retroBox}>
+          <Text style={styles.label}>Quando a viagem terminou de verdade</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TextInput style={[styles.input, { flex: 1.3 }]} onFocus={aoFocar} placeholder="26/07/2026" keyboardType="numeric"
+              value={dataChegada} onChangeText={setDataChegada} editable={!salvando} />
+            <TextInput style={[styles.input, { flex: 1 }]} onFocus={aoFocar} placeholder="18:40" keyboardType="numeric"
+              value={horaChegada} onChangeText={setHoraChegada} editable={!salvando} />
+          </View>
+          <TouchableOpacity onPress={() => { setChegouAntes(false); setDataChegada(dataBR(new Date())); setHoraChegada(horaBR(new Date())); }} disabled={salvando}>
+            <Text style={styles.linkRetroAcao}>Cancelar — usar o horário de agora</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <TouchableOpacity style={[styles.registrar, !podeRegistrar && styles.registrarOff]} onPress={registrar} disabled={!podeRegistrar}>
         {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Registrar retorno</Text>}
       </TouchableOpacity>
@@ -516,6 +553,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, fontWeight: '600', color: '#475569', marginTop: 8 },
   passo: { fontSize: 15, fontWeight: '800', color: CAPUL },
   err: { fontSize: 13, fontWeight: '600', color: '#b91c1c', marginTop: 4 },
+  linkRetro: { fontSize: 12, color: '#64748b', marginTop: 6 },
+  linkRetroAcao: { color: '#1e7d3a', fontWeight: '700' },
+  retroBox: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 10, gap: 6, marginTop: 6 },
   dica: { fontSize: 12, color: '#64748b', backgroundColor: '#f1f5f9', borderRadius: 8, padding: 8 },
   input: { borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#fff' },
   senhaWrap: { justifyContent: 'center' },

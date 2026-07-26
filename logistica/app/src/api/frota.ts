@@ -67,6 +67,8 @@ export interface SaidaPayload {
   kmInicial: number;
   finalidade?: string;
   paradasPlanejadas?: ParadaPlanejadaApp[];
+  /** ISO 8601 — só no lançamento retroativo ("Saí antes"). Sem ela vale agora. */
+  dataHoraSaida?: string;
 }
 
 /** Registrar saída PADRAO (revalida matrícula+senha no backend). */
@@ -80,6 +82,8 @@ export interface SaidaIndividualPayload {
   kmInicial: number;
   finalidade?: string;
   paradasPlanejadas?: ParadaPlanejadaApp[];
+  /** ISO 8601 — só no lançamento retroativo ("Saí antes"). Sem ela vale agora. */
+  dataHoraSaida?: string;
   /** Só quando o usuário logado não tem matrícula no cadastro. SEM senha —
    *  o login INDIVIDUAL já autenticou a pessoa (mesma regra do retorno). */
   matricula?: string;
@@ -97,6 +101,8 @@ export interface RetornoPayload {
   senha?: string;
   kmFinal: number;
   observacoes?: string;
+  /** ISO 8601 — só no lançamento retroativo ("Cheguei antes"). Sem ela vale agora. */
+  dataHoraChegada?: string;
 }
 
 /** Registrar retorno (só o próprio condutor; revalida senha). */

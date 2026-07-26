@@ -12,6 +12,7 @@ import {
   listarLocaisParada, type LocalParada,
 } from '../api/frota';
 import type { VeiculoFrota } from '../types/api';
+import { isoDeDataHora, dataBR, horaBR } from '../lib/dataHoraLocal';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'SaidaFrota'>;
@@ -31,6 +32,12 @@ export function SaidaFrotaScreen({ navigation }: Props) {
   // 2ª senha para quem já entrou com a dele (regra de 17/07, `a40a761`: a senha
   // é do gate PADRAO, login compartilhado por quem nem é usuário da plataforma).
   const [precisaMatricula, setPrecisaMatricula] = useState(false);
+
+  // Lançamento retroativo: o padrão é AGORA e nada aparece na tela — o caso
+  // normal segue com o mínimo de toques. O link "Saí antes?" abre os campos.
+  const [saiAntes, setSaiAntes] = useState(false);
+  const [dataSaida, setDataSaida] = useState(() => dataBR(new Date()));
+  const [horaSaida, setHoraSaida] = useState(() => horaBR(new Date()));
 
   // --- Identificação (só PADRAO) ---
   const [matricula, setMatricula] = useState('');
@@ -167,16 +174,31 @@ export function SaidaFrotaScreen({ navigation }: Props) {
     // App planeja por texto (uma parada por linha), sem cliente estruturado → itens {local}.
     const paradasPlanejadas = planejadasTxt.split('\n').map((l) => l.trim()).filter(Boolean).map((local) => ({ local }));
     const rota = paradasPlanejadas.length ? paradasPlanejadas : undefined;
+
+    // Data/hora informada só quando o usuário abriu "Saí antes". Valida ANTES de
+    // enviar: erro de digitação aqui vira 400 lá, e o operador perderia a viagem
+    // toda por causa de um "31/02".
+    let dataHoraSaida: string | undefined;
+    if (saiAntes) {
+      const iso = isoDeDataHora(dataSaida, horaSaida);
+      if (!iso) {
+        Alert.alert('Data/hora da saída', 'Confira a data e a hora — use dia/mês/ano e hora:minuto.');
+        return;
+      }
+      dataHoraSaida = iso;
+    }
     setSalvando(true);
     try {
       const v = ehIndividual
         ? await registrarSaidaIndividual({
             veiculoId, kmInicial: Number(km), finalidade: finalidade.trim() || undefined, paradasPlanejadas: rota,
             matricula: matricula.trim() || undefined, // só vai quando a tela pediu
+            dataHoraSaida,
           })
         : await registrarSaida({
             matricula: matricula.trim(), senha, veiculoId,
             kmInicial: Number(km), finalidade: finalidade.trim() || undefined, paradasPlanejadas: rota,
+            dataHoraSaida,
           });
       Alert.alert('Saída registrada', `${v.placa} · viagem #${v.numero}.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
@@ -372,6 +394,35 @@ export function SaidaFrotaScreen({ navigation }: Props) {
           />
           <Text style={styles.dica}>Toque nos atalhos do cadastro ou digite um por linha. Entram como planejadas; você dá baixa ("Cheguei") durante a viagem.</Text>
 
+          {/* Lançamento retroativo: escondido por padrão — o caso normal é sair
+              e registrar na hora. Quem saiu às pressas e registra na volta abre
+              aqui e informa a hora real, senão a viagem fica com duração de
+              minutos e cai no dia errado. */}
+          {!saiAntes ? (
+            <TouchableOpacity onPress={() => setSaiAntes(true)} disabled={salvando}>
+              <Text style={styles.linkRetro}>
+                Saída: agora ({dataBR(new Date())} {horaBR(new Date())}) · <Text style={styles.linkRetroAcao}>Saí antes?</Text>
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.retroBox}>
+              <Text style={styles.label}>Quando a viagem começou de verdade</Text>
+              <View style={styles.linha}>
+                <TextInput
+                  style={[styles.input, { flex: 1.3 }]} placeholder="26/07/2026" keyboardType="numeric"
+                  value={dataSaida} onChangeText={setDataSaida} editable={!salvando}
+                />
+                <TextInput
+                  style={[styles.input, { flex: 1 }]} placeholder="07:30" keyboardType="numeric"
+                  value={horaSaida} onChangeText={setHoraSaida} editable={!salvando}
+                />
+              </View>
+              <TouchableOpacity onPress={() => { setSaiAntes(false); setDataSaida(dataBR(new Date())); setHoraSaida(horaBR(new Date())); }} disabled={salvando}>
+                <Text style={styles.linkRetroAcao}>Cancelar — usar o horário de agora</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <TouchableOpacity style={[styles.registrar, !podeRegistrar && styles.registrarOff]} onPress={registrar} disabled={!podeRegistrar}>
             {salvando ? <ActivityIndicator color="#fff" /> : <Text style={styles.registrarTxt}>Registrar saída</Text>}
           </TouchableOpacity>
@@ -397,6 +448,9 @@ const styles = StyleSheet.create({
   btnBuscar: { backgroundColor: CAPUL, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center' },
   btnBuscarTxt: { color: '#fff', fontWeight: '700' },
   nome: { fontSize: 15, fontWeight: '600', color: '#0f172a', marginTop: 6 },
+  linkRetro: { fontSize: 12, color: '#64748b', marginTop: 4 },
+  linkRetroAcao: { color: '#1e7d3a', fontWeight: '700' },
+  retroBox: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 10, gap: 6, marginTop: 4 },
   dica: { fontSize: 12, color: '#64748b' },
   ok: { fontSize: 13, fontWeight: '700', color: CAPUL, marginTop: 4 },
   err: { fontSize: 13, fontWeight: '600', color: '#b91c1c', marginTop: 4 },
