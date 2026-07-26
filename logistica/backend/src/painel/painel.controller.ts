@@ -15,7 +15,11 @@ function filtroEntregaDe(q: Record<string, string>): FiltroEntrega {
 }
 
 @Controller('painel')
-@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
+// SUPERVISOR_FROTA (Supervisor de Departamento) entra: ele responde pelo setor —
+// aprova o acerto das despesas — e precisa acompanhar o resultado das entregas
+// dele. O recorte é o mesmo dos demais: por FILIAL. O painel não usa papel para
+// escopar dados (só `filialId, mes, ano`), então não há nada a mais a proteger.
+@Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'SUPERVISOR_FROTA')
 export class PainelController {
   constructor(private readonly painel: PainelService) {}
 

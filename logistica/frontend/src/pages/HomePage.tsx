@@ -5,9 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 // Grupos de papel espelham o menu lateral (Layout.tsx) — os tiles da home NÃO
 // devem oferecer o que o backend depois bloqueia (senão o entregador vê tudo e
 // só descobre o 403 ao clicar). ADMIN passa em tudo.
-// Painel é tela de gestão de ENTREGAS: o backend (painel.controller) não admite
-// GESTOR_FROTA, que via o tile e tomava 403. Espelha o menu (Layout.tsx).
-const GESTAO_ENTREGAS = ['GESTOR_ENTREGA'];
+// Painel é tela de gestão de ENTREGAS. GESTOR_FROTA fica de fora (via o tile e
+// tomava 403); SUPERVISOR_FROTA entra (responde pelo setor). Espelha o menu.
+const GESTAO_ENTREGAS = ['GESTOR_ENTREGA', 'SUPERVISOR_FROTA'];
 const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 // Caixa/balcão: só REGISTRAR e ALTERAR entregas (não monta rota, não vê frota).
 const REGISTRO_ENTREGA = ['REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];

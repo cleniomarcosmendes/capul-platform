@@ -11,11 +11,12 @@ const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 // não vê frota/comprovantes. Espelha o @Roles do backend (create/edit/operador).
 const REGISTRO_ENTREGA = ['REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
-// Telas de gestão de ENTREGAS (Painel, Indicadores, Análise). O backend
-// (painel.controller) só admite OPERADOR_ENTREGA/GESTOR_ENTREGA — o Gestor de
-// Frota via os itens no menu e tomava 403 em todos. A frota dele está na seção
-// FROTA + "Análise da Frota", que tem gate próprio.
-const GESTAO_ENTREGAS = ['GESTOR_ENTREGA'];
+// Telas de gestão de ENTREGAS (Painel, Indicadores, Análise). Espelha o
+// @Roles do painel.controller. GESTOR_FROTA fica de FORA: via os itens e tomava
+// 403 em todos (a frota dele está na seção FROTA + "Análise da Frota").
+// SUPERVISOR_FROTA (Supervisor de Departamento) ENTRA: responde pelo setor —
+// aprova o acerto das despesas — e acompanha o resultado das entregas dele.
+const GESTAO_ENTREGAS = ['GESTOR_ENTREGA', 'SUPERVISOR_FROTA'];
 // Gestão da FROTA que o Supervisor de Departamento também acessa (escopado ao seu
 // departamento no backend): Monitor, Linha do KM e Veículos.
 const FROTA_GESTORES = ['GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
