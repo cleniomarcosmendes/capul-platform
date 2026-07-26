@@ -187,12 +187,27 @@ export function EntregaNovaPage() {
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
   const ultimoValorRef = useRef<HTMLInputElement>(null);
   const matriculaRef = useRef<HTMLInputElement>(null);
+  const nomeRef = useRef<HTMLInputElement>(null);
+  const logradouroRef = useRef<HTMLInputElement>(null);
+  // Clicou em Salvar com a busca da matrícula ainda em voo: guarda a intenção e
+  // reenvia quando ela terminar (o efeito abaixo), com os campos já preenchidos.
+  const [submeterAposBusca, setSubmeterAposBusca] = useState(false);
+  // `enviar` num ref: o efeito precisa da versão mais recente (estado fresco dos
+  // campos que a busca acabou de preencher) sem virar dependência dele.
+  const enviarRef = useRef<(() => Promise<void>) | null>(null);
   const numeroRef = useRef<HTMLInputElement>(null);
   // Quando o telefone é preenchido por autofill, pula a próxima busca/dropdown.
   const pularBuscaTelRef = useRef(false);
 
   // Ao carregar a página, foca o primeiro campo (matrícula) — pronto pra digitar.
   useEffect(() => { if (!modoEdicao) matriculaRef.current?.focus(); }, [modoEdicao]);
+  // Reenvia o Salvar que ficou pendente enquanto a busca da matrícula corria.
+  useEffect(() => {
+    if (submeterAposBusca && !buscandoMat) {
+      setSubmeterAposBusca(false);
+      void enviarRef.current?.();
+    }
+  }, [submeterAposBusca, buscandoMat]);
 
   // Edição: carrega a entrega e pré-preenche. Só PENDENTE fora de viagem é
   // editável — senão volta pro detalhe (que explica o porquê).
@@ -544,13 +559,39 @@ export function EntregaNovaPage() {
     setTimeout(() => ultimoCupomRef.current?.focus(), 0);
   }
 
-  async function submit(e: FormEvent) {
+  /**
+   * O clique em "Salvar" logo após digitar a matrícula tira o foco do campo →
+   * `onBlur` → busca no Protheus (~200ms). Nome e Logradouro só chegam no FIM
+   * dessa busca; como eram `required` nativos, o navegador barrava o submit sem
+   * chamar este handler — o 1º clique morria calado e só o 2º gravava
+   * (diagnosticado no browser em 26/07: `invalid` nos dois campos, sem `submit`).
+   *
+   * Agora o formulário é `noValidate` e a validação é nossa: se a busca está em
+   * voo, marcamos a intenção e o efeito abaixo reenvia quando ela terminar — aí
+   * os campos já estão preenchidos. Um clique basta.
+   */
+  function submit(e: FormEvent) {
     e.preventDefault();
+    if (buscandoMat) { setSubmeterAposBusca(true); return; }
+    void enviar();
+  }
+  // Mantém o ref apontando p/ o `enviar` desta render (estado fresco).
+  enviarRef.current = enviar;
+
+  async function enviar() {
     if (!filialId) { toast('warning', 'Sem filial no perfil — selecione uma filial no Hub.'); return; }
     if (!origemVenda) { toast('warning', 'Informe a origem da venda (presencial, tele-venda ou outro).'); return; }
     // Login PADRAO (caixa): exige operador identificado (matrícula+senha 1x/sessão).
     const op = getOperador();
     if (ehPadrao && !op) { toast('warning', 'Identifique-se: informe matrícula e senha do operador.'); return; }
+    // Validação dos obrigatórios (era do navegador; o balão nativo passava
+    // despercebido — foi o que escondeu esta falha). Foca o campo que falta.
+    if (!destinatarioNome.trim()) {
+      toast('warning', 'Informe o nome do cliente.'); nomeRef.current?.focus(); return;
+    }
+    if (!logradouro.trim()) {
+      toast('warning', 'Informe o endereço (rua / avenida).'); logradouroRef.current?.focus(); return;
+    }
     setSalvando(true);
     if (modoEdicao) {
       // Edição (PATCH): só os campos editáveis; cupons substituem o conjunto.
@@ -645,7 +686,11 @@ export function EntregaNovaPage() {
       )}
       {DirtyDialog}
       {/* Formulário */}
-      <form onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white shadow-sm p-5">
+      {/* noValidate: a validação nativa rodava ANTES do onSubmit e barrava o
+          1º clique enquanto a busca da matrícula ainda preenchia Nome e
+          Logradouro — sem chamar nosso código e com um balão fácil de não ver.
+          Validamos em `enviar()`, com toast e foco no campo que falta. */}
+      <form noValidate onSubmit={submit} onKeyDown={bloquearEnterSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white shadow-sm p-5">
         <h2 className="text-lg font-semibold text-slate-800">
           {modoEdicao ? `Editar entrega${numeroEdicao ? ` #${numeroEdicao}` : ''}` : 'Nova entrega'}
         </h2>
@@ -697,7 +742,7 @@ export function EntregaNovaPage() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={lbl}>Nome do cliente *</label>
-            <input value={destinatarioNome} onChange={(e) => setDestinatarioNome(e.target.value)} required className={inp} placeholder="Nome de quem recebe" />
+            <input ref={nomeRef} value={destinatarioNome} onChange={(e) => setDestinatarioNome(e.target.value)} required className={inp} placeholder="Nome de quem recebe" />
           </div>
           <div className="relative">
             <label className={lbl}>Telefone</label>
@@ -808,7 +853,7 @@ export function EntregaNovaPage() {
           </div>
           <div className="col-span-4 lg:col-span-5">
             <label className={lbl}>Endereço de Entrega *</label>
-            <input value={logradouro} onChange={(e) => editEndereco(setLogradouro)(e.target.value)} required
+            <input ref={logradouroRef} value={logradouro} onChange={(e) => editEndereco(setLogradouro)(e.target.value)} required
               readOnly={travaCep.logradouro}
               className={`${inp} ${travaCep.logradouro ? 'bg-slate-50 text-slate-600' : ''}`} placeholder="Rua / Avenida" />
           </div>
