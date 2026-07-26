@@ -12,9 +12,18 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 // Entitlement por role (espelha a RBAC do backend — roles.guard.ts: ADMIN sempre).
 // Espelha os @Roles de frota.controller.ts e supervisor.controller.ts: se um papel
 // entrar lá, tem que entrar aqui, senão o app barra na porta quem a API autoriza.
+// ⚠️ E o inverso também: papel a MAIS aqui mostra tile que dá 403 ou tela vazia.
 const ROLES_FROTA = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA', 'ADMIN'];
 const ROLES_ENTREGA = ['ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'ADMIN'];
-const ROLES_SUPERVISOR = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR', 'COORDENADOR', 'ADMIN'];
+// RDV é processo INTERNO do setor: Supervisor de Área planeja, Coordenador
+// aprova o seu time, Supervisor de Departamento administra. Mesma lista do menu
+// web (`SUPERVISORES_MENU` em Layout.tsx) — não é coincidência, é a regra.
+// Antes esta lista trazia GESTOR_ENTREGA/GESTOR_FROTA (que o backend BARRA com
+// 403) e OPERADOR_ENTREGA/REGISTRADOR_FROTA (que entram mas veem tela vazia:
+// toda ação do supervisor.controller tem @Roles próprio sem eles). Verificado
+// 26/07 com token real: GESTOR_FROTA e GESTOR_ENTREGA -> 403; OPERADOR -> 200
+// com 0 registros.
+const ROLES_SUPERVISOR = ['SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA', 'ADMIN'];
 
 /**
  * Tela-lançador: o usuário escolhe entre Entregas e Frota. Cada card só fica
