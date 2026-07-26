@@ -378,6 +378,74 @@ espelhar em `logistica/app/src/screens/HomeScreen.tsx` (`ROLES_ENTREGA` / `ROLES
 `ROLES_SUPERVISOR`). Sem isso o app **barra na porta quem a API autoriza**.
 Testar com a **persona real** do papel, nunca com ADMIN (ADMIN passa em tudo e esconde o bug).
 
+### 2.7.2 Gate de RBAC: menu x backend (se mexeu em papel, menu ou @Roles)
+
+Classe de defeito que **mordeu 3x** (25-26/07): o item aparece no menu para um
+papel que o backend nao admite. A tela abre, lista e **morre no clique com 403**.
+Casos reais: `OPERADOR_ENTREGA` x cofre de comprovantes (`7531175`),
+`GESTOR_FROTA` x painel de entregas (`f4697de`).
+
+**Regra de ouro: grep levanta hipotese, HTTP conclui.** Na varredura de 26/07 o
+grep errou 3x — `@Roles` pode vir DEPOIS do `@Get`, pode estar separado do
+`@Controller` por bloco de comentario, e guarda de estado pode morar em helper
+(`rascunhoOuErro`). **Nunca feche o gate sem bater no endpoint.**
+
+```bash
+# 1) Monte a matriz: para cada item de menu, o papel que o menu mostra
+#    (frontend: layouts/Sidebar.tsx ou Layout.tsx) x o @Roles do endpoint.
+# 2) Bata no endpoint com token de CADA papel afetado. Procure 403 onde o
+#    menu mostra o item.
+TK=$(curl -sk -X POST https://localhost/api/v1/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"login":"<usuario_do_papel>","senha":"<senha>"}' \
+      | python3 -c "import sys,json;print(json.load(sys.stdin)['accessToken'])")
+curl -sk -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $TK" \
+     "https://localhost/api/v1/<modulo>/<rota-da-tela>"
+```
+
+⚠️ **200 nao e prova de exposicao, nem 403 e prova de bug.** Compare o
+**conteudo** entre um papel baixo e o ADMIN: no Workspace, 11 telas devolviam
+200 ao `USUARIO_FINAL` mas com lista **vazia** (o filtro esta na camada de
+servico). E o `GET /equipes` aberto e **decisao documentada** — bloquear
+quebraria Chamados para 105 usuarios. Explicite a decisao de design, nao
+silencie o achado.
+
+### 2.7.3 Endpoint novo: tem guarda? (obrigatorio no Inventario)
+
+- **NestJS** (gestao-ti, fiscal, logistica, auth-gateway): `JwtAuthGuard` e
+  `APP_GUARD` global — endpoint novo ja nasce autenticado, e `@Public()` e a
+  excecao. Conferir so a AUTORIZACAO (`@Roles` / `@RoleMinima` /
+  `@RequiresFuncionalidade`).
+- **Inventario (FastAPI)**: **NAO ha guarda global**. Rota sem `Depends(...)` de
+  auth fica ABERTA. Em 26/07 foram encontradas 6 assim, uma delas gravando em
+  tabela mestre e alcancavel de fora (`41035b4`).
+
+```bash
+# Rotas do inventario sem QUALQUER dependencia de auth (esperado: so /health)
+cd inventario/backend && python3 - <<'PY'
+import re
+L=open('app/main.py',encoding='utf-8').read().split('\n')
+r=re.compile(r'^@app\.(get|post|put|patch|delete)\("([^"]+)"')
+for i,l in enumerate(L):
+    m=r.match(l)
+    if not m: continue
+    sig=[]
+    for k in range(i+1,min(len(L),i+45)):
+        sig.append(L[k])
+        if L[k].rstrip().endswith('):'): break
+    s='\n'.join(sig)+l
+    if not any(x in s for x in ('current_user','require_staff_role','get_current','Depends(require')):
+        print(m.group(1).upper(), m.group(2))
+PY
+# Confirme com HTTP: sem token deve dar 401/403 (menos /health)
+```
+
+⚠️ **Antes de APAGAR um endpoint, procure consumidor** — inclusive scripts, nao
+so o frontend. Em 26/07 as `clear/{tabela}` pareciam mortas e eram usadas por
+`scripts/cleanup_inventories.py`; foram protegidas em vez de removidas. E
+remover uma rota nao garante que ela sumiu: pode haver **implementacao gemea**
+em outro arquivo (foi o caso do `import/bulk`) — confirme com HTTP que virou 404.
+
 ### 2.8 Revisao de Codigo (gate antes do push)
 
 Para features grandes ou que tocam **seguranca/RBAC/dados**, passar uma revisao
@@ -396,6 +464,14 @@ git diff --stat main...HEAD
 Triar achados por severidade (bug/seguranca > consistencia > estilo); corrigir
 em sub-fases verificadas (os testes da 2.1.1 pegam regressao). **Falso-positivo
 e decisao de design devem ser explicitados, nao silenciados.**
+
+**Mensagem de erro generica e defeito, nao detalhe.** Um `catch` que engole a
+resposta do servidor (`toast('Falha ao salvar.')`) esconde a causa e custa dias
+de diagnostico — aconteceu 3x: o 403 do cofre de comprovantes, o 500 que
+mascarava um 400 no `import/bulk`, e o clique duplo de 26/07. Ao revisar, marcar
+todo `catch` que descarta `error.response.data.message`. O ramo de edicao
+(PATCH) do cadastro de entrega ja fazia certo e o de criacao (POST) nao —
+divergencia dentro do MESMO arquivo passa despercebida sem esse olhar.
 
 ### 2.9 Relatorio Final
 Ao concluir, apresentar:
@@ -461,6 +537,8 @@ ALERTA APP ENTREGADOR:
 - [ ] Limpeza Docker (se necessario)
 - [ ] Impacto em migracao verificado (schema, docker-compose, Dockerfile)
 - [ ] **Impacto no app entregador verificado** (OTA x APK novo, REGRA DO BUMP, RBAC espelhada) — se mexeu em `logistica/app`
+- [ ] **Gate RBAC menu x backend** (2.7.2) — se mexeu em papel, menu ou `@Roles`. Bater no endpoint com token de cada papel; grep nao conclui
+- [ ] **Endpoint novo tem guarda** (2.7.3) — obrigatorio no Inventario (FastAPI sem guarda global); antes de apagar rota, procurar consumidor
 - [ ] **Revisao de codigo** (feature grande / toca seguranca) — gate antes do push
 - [ ] Relatorio apresentado
 
