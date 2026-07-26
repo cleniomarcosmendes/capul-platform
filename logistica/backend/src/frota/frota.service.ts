@@ -352,12 +352,19 @@ export class FrotaService {
       this.condutorToken.verificar(condutorToken, v.id);
     } else if (user.tipo === 'INDIVIDUAL') {
       const col = await this.core.colaboradorDoUsuario(user.sub);
-      if (!col) {
+      // Sem matrícula no cadastro: aceita a informada na hora, SEM senha —
+      // simétrico à SAÍDA individual. Sem isso o usuário abria a viagem (a saída
+      // já aceita matrícula informada) e NÃO conseguia fechar: o veículo ficava
+      // preso em EM_USO até um gestor forçar. A regra "só quem iniciou fecha"
+      // continua valendo — a matrícula informada é conferida contra a da viagem.
+      const informada = col?.matricula ?? dto.matricula?.trim();
+      if (!informada) {
         throw new BadRequestException(
-          'Seu usuário não tem matrícula cadastrada. Peça ao administrador para cadastrá-la ou feche a viagem informando matrícula e senha.',
+          'Seu usuário não tem matrícula cadastrada. Informe a sua matrícula para fechar a viagem, ' +
+            'ou peça ao administrador para cadastrá-la no seu usuário (Configurador → Usuários).',
         );
       }
-      if (chapa(col.matricula) !== chapa(v.condutorMatricula ?? '')) {
+      if (chapa(informada) !== chapa(v.condutorMatricula ?? '')) {
         throw new ForbiddenException('Só o condutor que iniciou pode fechar a viagem. Para corrigir, peça ao gestor de frota.');
       }
     } else {
