@@ -27,7 +27,11 @@ from app.core.constants import (
 from app.core.exceptions import safe_error_response
 
 # Importar autenticação do módulo correto
-from app.core.security import get_current_user as get_current_user_from_security, require_staff_role
+from app.core.security import (
+    get_current_user as get_current_user_from_security,
+    get_current_active_user,
+    require_staff_role,
+)
 
 # Configurar logging em JSON + correlation ID via X-Request-ID.
 # Auditoria observabilidade 26/04/2026 #1 — alinha com auth/gestao/fiscal.
@@ -438,7 +442,11 @@ get_current_user = get_current_user_from_security
 #         "timestamp": datetime.now().isoformat()
 #     }
 
-@app.delete("/clear/{table_name}")
+# ⚠️ Executa DELETE FROM direto. Estava SEM autenticação nenhuma (varredura de
+# 26/07): não é proxiada pelo nginx, então só era alcançável de dentro da rede
+# Docker — mas defesa em profundidade. Consumidor: scripts/cleanup_inventories.py,
+# que hoje manda um token FALSO hardcoded e passa a precisar de um token real.
+@app.delete("/clear/{table_name}", dependencies=[Depends(require_staff_role)])
 async def clear_table_simple(table_name: str, db: Session = Depends(get_db)):
     """Limpa dados de uma tabela específica - ENDPOINT SIMPLIFICADO"""
     try:
@@ -499,7 +507,10 @@ async def clear_table_simple(table_name: str, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao limpar tabela"))
 
-@app.delete("/api/v1/clear/{table_name}")
+# ⚠️ Idem à /clear/{table_name} acima — mesma operação destrutiva, mesma falta de
+# autenticação até 26/07. Há ainda uma terceira definição em
+# api/v1/endpoints/import_data.py:523, também sem auth.
+@app.delete("/api/v1/clear/{table_name}", dependencies=[Depends(require_staff_role)])
 async def clear_table(table_name: str, db: Session = Depends(get_db)):
     """Limpa dados de uma tabela específica"""
     try:
@@ -520,212 +531,12 @@ async def clear_table(table_name: str, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao limpar tabela"))
 
-@app.post("/api/v1/import/bulk")
-async def import_bulk_basic(request: dict, db: Session = Depends(get_db)):
-    """Importação básica para SB2010"""
-    try:
-        from sqlalchemy import text
-        table_name = request.get("table_name", "")
-        records = request.get("records", [])
-        
-        if table_name not in ["SB1010", "SB2010", "SLK010", "SB8010", "SBZ010"]:
-            raise HTTPException(status_code=400, detail=f"Tabela {table_name} não suportada")
-        
-        success_count = 0
-        error_count = 0
-        errors = []
-        
-        for record in records:
-            try:
-                data = record.get("data", {})
-                
-                # Limpeza básica - remover aspas duplas
-                cleaned_data = {}
-                for key, value in data.items():
-                    if isinstance(value, str) and value.startswith('"') and value.endswith('"'):
-                        cleaned_data[key.lower()] = value[1:-1]
-                    else:
-                        cleaned_data[key.lower()] = value
-                
-                # Inserir dados baseado na tabela
-                if table_name == "SB1010":
-                    # Filosofia: Importação flexível do Protheus - preencher campos faltantes
-                    mapped_data = {
-                        'b1_filial': cleaned_data.get('b1_filial', ''),
-                        'b1_cod': cleaned_data.get('b1_cod', ''),
-                        'b1_codbar': cleaned_data.get('b1_codbar', ''),
-                        'b1_desc': cleaned_data.get('b1_desc', ''),
-                        'b1_tipo': cleaned_data.get('b1_tipo', 'PA'),
-                        'b1_um': cleaned_data.get('b1_um', 'UN'),
-                        'b1_locpad': cleaned_data.get('b1_locpad', ''),
-                        'b1_grupo': cleaned_data.get('b1_grupo', ''),
-                        'b1_xcatgor': cleaned_data.get('b1_xcatgor', ''),
-                        'b1_xsubcat': cleaned_data.get('b1_xsubcat', ''),
-                        'b1_xsegmen': cleaned_data.get('b1_xsegmen', ''),
-                        'b1_rastro': cleaned_data.get('b1_rastro', 'N'),
-                        'b1_xgrinve': cleaned_data.get('b1_xgrinve', '')
-                    }
-                    
-                    sql = text("""
-                        INSERT INTO inventario.sb1010 (b1_filial, b1_cod, b1_codbar, b1_desc, b1_tipo, b1_um, b1_locpad, b1_grupo, b1_xcatgor, b1_xsubcat, b1_xsegmen, b1_rastro, b1_xgrinve)
-                        VALUES (:b1_filial, :b1_cod, :b1_codbar, :b1_desc, :b1_tipo, :b1_um, :b1_locpad, :b1_grupo, :b1_xcatgor, :b1_xsubcat, :b1_xsegmen, :b1_rastro, :b1_xgrinve)
-                        ON CONFLICT (b1_filial, b1_cod) 
-                        DO UPDATE SET 
-                            b1_codbar = EXCLUDED.b1_codbar,
-                            b1_desc = EXCLUDED.b1_desc,
-                            b1_tipo = EXCLUDED.b1_tipo,
-                            b1_um = EXCLUDED.b1_um,
-                            b1_locpad = EXCLUDED.b1_locpad,
-                            b1_grupo = EXCLUDED.b1_grupo,
-                            b1_xcatgor = EXCLUDED.b1_xcatgor,
-                            b1_xsubcat = EXCLUDED.b1_xsubcat,
-                            b1_xsegmen = EXCLUDED.b1_xsegmen,
-                            b1_rastro = EXCLUDED.b1_rastro,
-                            b1_xgrinve = EXCLUDED.b1_xgrinve,
-                            updated_at = CURRENT_TIMESTAMP
-                    """)
-                    
-                    # Usar dados mapeados para este caso
-                    db.execute(sql, mapped_data)
-                    success_count += 1
-                    continue  # Pular o db.execute(sql, cleaned_data) no final
-                
-                elif table_name.upper() == "SB2010":
-                    sql = text("""
-                        INSERT INTO inventario.sb2010 (b2_filial, b2_cod, b2_local, b2_qatu, b2_vatu1, b2_cm1, b2_qemp, b2_reserva)
-                        VALUES (:b2_filial, :b2_cod, :b2_local, :b2_qatu, :b2_vatu1, :b2_cm1, :b2_qemp, :b2_reserva)
-                        ON CONFLICT (b2_filial, b2_local, b2_cod) 
-                        DO UPDATE SET 
-                            b2_qatu = EXCLUDED.b2_qatu,
-                            b2_vatu1 = EXCLUDED.b2_vatu1,
-                            b2_cm1 = EXCLUDED.b2_cm1,
-                            b2_qemp = EXCLUDED.b2_qemp,
-                            b2_reserva = EXCLUDED.b2_reserva,
-                            updated_at = CURRENT_TIMESTAMP
-                    """)
-                    
-                    def clean_numeric(value, default=0):
-                        try:
-                            return float(str(value).strip().strip('"') or default)
-                        except:
-                            return default
-                    
-                    def clean_field(value, default=''):
-                        return str(value or default).strip().strip('"').strip()[:50]
-                    
-                    db.execute(sql, {
-                        'b2_filial': clean_field(record_data.get('B2_FILIAL')),
-                        'b2_cod': clean_field(record_data.get('B2_COD')),
-                        'b2_local': clean_field(record_data.get('B2_LOCAL')),
-                        'b2_qatu': clean_numeric(record_data.get('B2_QATU')),
-                        'b2_vatu1': clean_numeric(record_data.get('B2_VATU1')),
-                        'b2_cm1': clean_numeric(record_data.get('B2_CM1')),
-                        'b2_qemp': clean_numeric(record_data.get('b2_qemp', 0)),
-                        'b2_reserva': clean_numeric(record_data.get('b2_reserva', 0))
-                    })
-                    savepoint.commit()
-                    success_count += 1
-                
-                elif table_name.upper() == "SLK010":
-                    # Mapear campos do CSV para os campos da tabela
-                    mapped_data = {
-                        'slk_filial': cleaned_data.get('SLK_FILIAL', ''),
-                        'slk_codbar': cleaned_data.get('SLK_CODBAR', ''),
-                        'slk_produto': cleaned_data.get('SLK_PRODUTO', '')
-                    }
-                    
-                    sql = text("""
-                        INSERT INTO inventario.slk010 (slk_filial, slk_codbar, slk_produto)
-                        VALUES (:slk_filial, :slk_codbar, :slk_produto)
-                    """)
-                    
-                    # Usar dados mapeados para este caso
-                    db.execute(sql, mapped_data)
-                    success_count += 1
-                    continue  # Pular o db.execute(sql, cleaned_data) no final
-                
-                elif table_name.upper() == "SB8010":
-                    sql = text("""
-                        INSERT INTO inventario.sb8010 (b8_filial, b8_produto, b8_local, b8_lotectl, b8_numlote, b8_saldo, b8_dtvalid)
-                        VALUES (:b8_filial, :b8_produto, :b8_local, :b8_lotectl, :b8_numlote, :b8_saldo, :b8_dtvalid)
-                        ON CONFLICT (b8_filial, b8_produto, b8_local, b8_lotectl, b8_numlote) 
-                        DO UPDATE SET 
-                            b8_saldo = EXCLUDED.b8_saldo,
-                            b8_dtvalid = EXCLUDED.b8_dtvalid,
-                            updated_at = CURRENT_TIMESTAMP
-                    """)
-                    
-                    def clean_numeric(value, default=0):
-                        try:
-                            return float(str(value).strip().strip('"') or default)
-                        except:
-                            return default
-                    
-                    def clean_field(value, default=''):
-                        return str(value or default).strip().strip('"').strip()[:50]
-                    
-                    db.execute(sql, {
-                        'b8_filial': clean_field(record_data.get('b8_filial')),
-                        'b8_produto': clean_field(record_data.get('b8_produto')),
-                        'b8_local': clean_field(record_data.get('b8_local')),
-                        'b8_lotectl': clean_field(record_data.get('b8_lotectl')),
-                        'b8_numlote': clean_field(record_data.get('b8_numlote')),
-                        'b8_saldo': clean_numeric(record_data.get('b8_saldo')),
-                        'b8_dtvalid': clean_field(record_data.get('b8_dtvalid'))
-                    })
-                    savepoint.commit()
-                    success_count += 1
-                
-                elif table_name.upper() == "SBZ010":
-                    # Mapear campos do CSV para os campos da tabela (CSV tem BZ_LOCPAD, banco tem bz_local)
-                    mapped_data = {
-                        'bz_filial': cleaned_data.get('bz_filial', ''),
-                        'bz_cod': cleaned_data.get('bz_cod', ''),
-                        'bz_local': cleaned_data.get('bz_locpad', cleaned_data.get('bz_local', '')),  # CSV usa LOCPAD, banco usa LOCAL
-                        'bz_xlocal1': cleaned_data.get('bz_xlocal1', ''),
-                        'bz_xlocal2': cleaned_data.get('bz_xlocal2', ''),
-                        'bz_xlocal3': cleaned_data.get('bz_xlocal3', '')
-                    }
-                    
-                    sql = text("""
-                        INSERT INTO inventario.sbz010 (bz_filial, bz_cod, bz_local, bz_xlocal1, bz_xlocal2, bz_xlocal3)
-                        VALUES (:bz_filial, :bz_cod, :bz_local, :bz_xlocal1, :bz_xlocal2, :bz_xlocal3)
-                        ON CONFLICT (bz_filial, bz_cod) 
-                        DO UPDATE SET 
-                            bz_local = EXCLUDED.bz_local,
-                            bz_xlocal1 = EXCLUDED.bz_xlocal1,
-                            bz_xlocal2 = EXCLUDED.bz_xlocal2,
-                            bz_xlocal3 = EXCLUDED.bz_xlocal3,
-                            updated_at = CURRENT_TIMESTAMP
-                    """)
-                    
-                    # Usar dados mapeados para este caso
-                    db.execute(sql, mapped_data)
-                    success_count += 1
-                    continue  # Pular o db.execute(sql, cleaned_data) no final
-                
-                db.execute(sql, cleaned_data)
-                success_count += 1
-                
-            except Exception as e:
-                error_count += 1
-                errors.append({
-                    "line": record.get("line_number", 0),
-                    "error": str(e)
-                })
-        
-        db.commit()
-        
-        return {
-            "success_count": success_count,
-            "error_count": error_count,
-            "errors": errors,
-            "total_processed": len(records)
-        }
-        
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=safe_error_response(e, "na importação"))
+# REMOVIDO em 26/07/2026 — POST /api/v1/import/bulk.
+# Gravava direto em SB1010/SB2010/SLK010/SB8010/SBZ010 SEM autenticacao nenhuma
+# e era alcancavel de fora (o nginx proxia /api/v1/import/). Nao tinha nenhum
+# consumidor: nao era chamado pelo frontend nem por script — so aparecia no
+# plano de migracao (docs/plano-migracao-inventario-v1.md). A importacao real
+# usa /api/v1/import-produtos e os endpoints de api/v1/endpoints/import_*.py.
 
 @app.get("/health", tags=["Health"])
 async def health_check(db: Session = Depends(get_db)):
@@ -1828,7 +1639,8 @@ async def filter_products_codes_only(
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao buscar códigos de produtos"))
 
 
-@app.get("/api/v1/inventories/{inventory_id}/items-for-assignment/ids", tags=["Counting Lists"])
+@app.get("/api/v1/inventories/{inventory_id}/items-for-assignment/ids", tags=["Counting Lists"],
+         dependencies=[Depends(get_current_active_user)])
 async def get_items_for_assignment_ids(
     inventory_id: str,
     list_id: str = Query(None),
@@ -6035,7 +5847,8 @@ async def record_product_count(
         logger.error(f"❌ Erro ao registrar contagem: {e}")
         raise HTTPException(status_code=500, detail=safe_error_response(e, "ao registrar contagem"))
 
-@app.post("/api/v1/inventory/lists/{inventory_list_id}/release-for-recount")
+@app.post("/api/v1/inventory/lists/{inventory_list_id}/release-for-recount",
+          dependencies=[Depends(get_current_active_user)])
 async def release_items_for_recount(
     inventory_list_id: str,
     db: Session = Depends(get_db)
@@ -8263,7 +8076,12 @@ if auth_router:
         logger.error(f"❌ Erro ao registrar router de autenticação: {e}")
 
 try:
-    app.include_router(import_router, prefix="/api/v1")
+    # Auth no ponto de inclusão cobre as 4 rotas do router de uma vez
+    # (/import/bulk, /import/tables, /import/validate, /import/clear/{tabela}).
+    # Todas estavam SEM autenticação (varredura 26/07) e são alcançáveis de fora
+    # — o nginx proxia /api/v1/import/. `bulk` grava em SB1010/SB2010/... e
+    # `clear` apaga tabela inteira: são operações de staff, não de operador.
+    app.include_router(import_router, prefix="/api/v1", dependencies=[Depends(require_staff_role)])
     logger.info("✅ Router de importação registrado")
 except Exception as e:
     logger.error(f"❌ Erro ao registrar router de importação: {e}")
@@ -9252,7 +9070,8 @@ except Exception as e:
 # NOTA: GET /inventories/{inventory_id}/counting-lists movido para counting_lists.py router
 
 # ✅ ENDPOINT: Itens do inventário para atribuição a listas de contagem
-@app.get("/api/v1/inventories/{inventory_id}/items-for-assignment", tags=["Counting Lists"])
+@app.get("/api/v1/inventories/{inventory_id}/items-for-assignment", tags=["Counting Lists"],
+         dependencies=[Depends(get_current_active_user)])
 async def get_items_for_assignment(
     inventory_id: str,
     list_id: str = Query(None, description="ID da lista atual (para marcar itens 'nesta lista')"),
@@ -9507,7 +9326,12 @@ async def get_items_for_assignment(
 
 
 # 🆕 ENDPOINT DEFINITIVO - LIBERAR LISTA ESPECÍFICA
-@app.post("/api/v1/counting-lists/{list_id}/release", tags=["Counting Lists"])
+# Existe uma versão GÊMEA (com auth) em api/v1/endpoints/counting_lists.py, que
+# hoje vence por ordem de registro — o probe sem token devolve 403. Esta aqui
+# ficava sem auth: bastava alguém reordenar o include_router p/ ela passar a
+# valer e o endpoint abrir. Autenticação explícita fecha o risco latente.
+@app.post("/api/v1/counting-lists/{list_id}/release", tags=["Counting Lists"],
+          dependencies=[Depends(get_current_active_user)])
 async def release_counting_list(list_id: str, db: Session = Depends(get_db)):
     """Liberar uma lista específica para contagem - SOLUÇÃO DEFINITIVA"""
     try:
@@ -9640,7 +9464,8 @@ async def release_counting_list(list_id: str, db: Session = Depends(get_db)):
 
 
 # 🔧 ENDPOINT PARA CORRIGIR STATUS DO INVENTÁRIO PRINCIPAL
-@app.post("/api/v1/inventory/{inventory_id}/update-status", tags=["Inventory"])
+@app.post("/api/v1/inventory/{inventory_id}/update-status", tags=["Inventory"],
+          dependencies=[Depends(get_current_active_user)])
 async def update_inventory_status(
     inventory_id: str,
     status: str,
