@@ -98,8 +98,8 @@ Plataforma corporativa modular com microservicos independentes:
 - **Supervisores/RDV**: planejamentos + workflow de aprovação do coordenador + fechamento mensal (prestação de contas de representantes). **Adiantamento** lançado pelos 3 perfis (coordenador, supervisor de departamento e o próprio **supervisor de área em auto-serviço** — nasce PENDENTE e o coordenador aprova/rejeita; só APROVADO entra no saldo da RDV). Visita: rótulo contextual (planejar × registrar). **App = execução** (o planejamento é feito no desktop). Ver `memory/project_rdv_adiantamento_tres_perfis.md`
 - **Geolocalização de campo (Fase A)**: locais do cliente (`LocalCliente`) aprendidos das marcações de campo (consolidação por medóide, robusta a outlier) — o Protheus não tem esse dado. **SEDE** (visita técnica → tipo PROPRIEDADE) × **SILO/ponto de entrega** (entrega de ração rural → tipo ENTREGA) são locais distintos; entrega urbana não gera geo. "Ver no mapa" usa a coordenada consolidada. Gravar no Protheus = Fase C (futura). Ver `memory/project_geo_local_cliente.md`
 - **Despesa com vários comprovantes** (foto/PDF, até 5): tabela `anexo_despesa` (cofre/MinIO), padrão em supervisor + frota, web + app, convivendo com o comprovante único legado. Ver `memory/project_despesa_multi_anexo.md`
-- **Gestão de Frota**: saída de veículos, adiantamento/acerto de viagem, manutenção, linha do KM, custos/análise (custo de frota restrito a GESTOR_FROTA/ADMIN)
-- **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota
+- **Gestão de Frota**: saída de veículos, adiantamento/acerto de viagem, manutenção, linha do KM, custos/análise (custo de frota restrito a GESTOR_FROTA/ADMIN). Saída e retorno aceitam **data/hora informada** (lançamento retroativo de quem saiu às pressas; teto de 7 dias, futuro barrado) — `criadoEm` segue sendo o carimbo de *quando foi registrado* e `fechadoPorId`/`fechadoEm` registram **quem fechou** a viagem.
+- **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota. A precisão de cada parada é exibida na montagem (o fallback de município fica a ~1,2 km e reordenava a rota), e o operador **corrige a coordenada arrastando o pin** — gravado no **cache de geocode** (`fonte=MANUAL`), então vale para as próximas entregas no mesmo endereço e sobrevive ao recálculo. Mapa da rota com pins numerados a partir da filial.
 - Backend NestJS 11 + Prisma 6 (schema `logistica` + `core` read-only via `$queryRaw`), porta 3003, prefixo `/api/v1/logistica`
 - Frontend React 19 + Vite 7, base `/entregas/`, porta 5177; app entregador/supervisor em Expo (`logistica/app`)
 - Escopo por **filial** (entregas/veiculos/viagens/cadastros — filiais sao cidades diferentes); **Gestor de Entregas é papel de FILIAL** (só ADMIN é global; GESTOR_FROTA cross-filial só p/ veículos). RBAC: `OPERADOR_ENTREGA`/`GESTOR_ENTREGA`/`GESTOR_FROTA`/`REGISTRADOR_FROTA`/`COORDENADOR`/`SUPERVISOR`/`SUPERVISOR_FROTA` (ADMIN sempre)
@@ -274,4 +274,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 22/07/2026*
+*Ultima atualizacao: 26/07/2026*
