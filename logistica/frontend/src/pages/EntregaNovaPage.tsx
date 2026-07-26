@@ -926,18 +926,13 @@ export function EntregaNovaPage() {
         </div>
         </div>
 
-        {/* Trava durante a busca da matrícula: clicar aqui logo após digitá-la
-            dispara o onBlur da busca (~600ms no Protheus) junto com o submit.
-            Como o nome do cliente só chega no fim da busca e o campo é
-            `required`, o navegador barrava o submit SEM chamar o onSubmit — o
-            1º clique morria calado e só o 2º salvava. O onBlur re-renderiza
-            ainda no mousedown, então o botão já está desabilitado quando o
-            clique sairia. Rótulo próprio: clique morto sem explicação foi
-            exatamente o problema relatado. */}
-        <button type="submit" disabled={salvando || buscandoMat}
+        {/* NÃO desabilitar durante `buscandoMat`: o clique aqui dispara o onBlur
+            da matrícula, que INICIA a busca — desabilitar nesse instante mata o
+            próprio clique que deveria salvar (tentativa de 26/07, revertida). */}
+        <button type="submit" disabled={salvando}
           className="flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
-          {salvando || buscandoMat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
-          {buscandoMat ? 'Buscando cliente…' : modoEdicao ? 'Salvar alterações' : 'Salvar entrega'}
+          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+          {modoEdicao ? 'Salvar alterações' : 'Salvar entrega'}
         </button>
       </form>
     </div>
