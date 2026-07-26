@@ -343,9 +343,22 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
     if (!aberto) return;
     const filialId = usuario?.filialAtual?.id;
     coreApi.get<DeptoItem[]>('/departamentos', { params: filialId ? { filialId } : undefined })
-      .then((r) => setDeptos(r.data))
+      .then((r) => {
+        setDeptos(r.data);
+        // Pré-seleciona o departamento DO USUÁRIO: quem registra a saída quase
+        // sempre pede o veículo para o próprio setor. Vinha em branco em 87%
+        // das viagens (4 de 30), o que cegava a análise de custo de frota por
+        // departamento. Continua editável — quem pede para outro setor troca.
+        // Só aplica se o depto do usuário existe na lista da filial, e nunca
+        // sobrescreve escolha já feita.
+        setDepartamentoSolicitanteId((atual) => {
+          if (atual) return atual;
+          const meu = usuario?.departamentoId;
+          return meu && r.data.some((d) => d.id === meu) ? meu : '';
+        });
+      })
       .catch(() => setDeptos([]));
-  }, [aberto, usuario?.filialAtual?.id]);
+  }, [aberto, usuario?.filialAtual?.id, usuario?.departamentoId]);
 
   // Busca os RDVs do mês do condutor (auto-match = 1º) quando a matrícula é conhecida.
   useEffect(() => {

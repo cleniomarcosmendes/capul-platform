@@ -69,6 +69,8 @@ export interface SaidaPayload {
   paradasPlanejadas?: ParadaPlanejadaApp[];
   /** ISO 8601 — só no lançamento retroativo ("Saí antes"). Sem ela vale agora. */
   dataHoraSaida?: string;
+  /** Departamento do usuário — ver SaidaIndividualPayload. */
+  departamentoSolicitanteId?: string;
 }
 
 /** Registrar saída PADRAO (revalida matrícula+senha no backend). */
@@ -87,6 +89,10 @@ export interface SaidaIndividualPayload {
   /** Só quando o usuário logado não tem matrícula no cadastro. SEM senha —
    *  o login INDIVIDUAL já autenticou a pessoa (mesma regra do retorno). */
   matricula?: string;
+  /** Quem pediu o veículo. O app manda o departamento do usuário automaticamente
+   *  (sem campo na tela): alimenta a análise de custo de frota por departamento,
+   *  que estava cega porque a saída pelo celular nunca informava isso. */
+  departamentoSolicitanteId?: string;
 }
 
 /** Registrar saída INDIVIDUAL — o próprio usuário logado é o condutor (sem senha). */

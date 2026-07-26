@@ -194,11 +194,13 @@ export function SaidaFrotaScreen({ navigation }: Props) {
             veiculoId, kmInicial: Number(km), finalidade: finalidade.trim() || undefined, paradasPlanejadas: rota,
             matricula: matricula.trim() || undefined, // só vai quando a tela pediu
             dataHoraSaida,
+            departamentoSolicitanteId: departamentoId || undefined,
           })
         : await registrarSaida({
             matricula: matricula.trim(), senha, veiculoId,
             kmInicial: Number(km), finalidade: finalidade.trim() || undefined, paradasPlanejadas: rota,
             dataHoraSaida,
+            departamentoSolicitanteId: departamentoId || undefined,
           });
       Alert.alert('Saída registrada', `${v.placa} · viagem #${v.numero}.`, [
         { text: 'OK', onPress: () => navigation.goBack() },

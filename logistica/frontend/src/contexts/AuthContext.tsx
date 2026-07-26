@@ -19,6 +19,9 @@ export interface UsuarioLogado {
   filiais?: FilialResumo[];
   // Tipo do login (do JWT): 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico/caixa).
   tipo?: string | null;
+  // Departamento do usuário (do JWT) — default do "departamento solicitante".
+  departamentoId?: string | null;
+  departamentoNome?: string | null;
 }
 
 interface AuthContextType {
@@ -30,14 +33,23 @@ interface AuthContextType {
 }
 
 /** Lê o `tipo` (INDIVIDUAL/PADRAO) direto do access token (JWT). */
-function tipoDoToken(token: string | null): string | null {
-  if (!token) return null;
+/** Campos que só existem no JWT (o /me não os devolve): tipo do login e o
+ *  departamento do usuário — este último pré-seleciona o "departamento
+ *  solicitante" da saída de veículo, que vinha em branco em 87% das viagens. */
+function dadosDoToken(token: string | null): { tipo: string | null; departamentoId: string | null; departamentoNome: string | null } {
+  const vazio = { tipo: null, departamentoId: null, departamentoNome: null };
+  if (!token) return vazio;
   try {
     const p = token.split('.')[1];
-    if (!p) return null;
-    return JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/'))).tipo ?? null;
+    if (!p) return vazio;
+    const c = JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/')));
+    return {
+      tipo: c.tipo ?? null,
+      departamentoId: c.departamentoId ?? null,
+      departamentoNome: c.departamentoNome ?? null,
+    };
   } catch {
-    return null;
+    return vazio;
   }
 }
 
@@ -55,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     authApi
       .get<UsuarioLogado>('/me')
-      .then((r) => setUsuario({ ...r.data, tipo: tipoDoToken(token) }))
+      .then((r) => setUsuario({ ...r.data, ...dadosDoToken(token) }))
       .catch(() => {
         localStorage.removeItem('accessToken');
         window.location.href = '/';
