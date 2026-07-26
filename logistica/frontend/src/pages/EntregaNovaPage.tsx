@@ -609,8 +609,12 @@ export function EntregaNovaPage() {
       toast('success', `Entrega nº ${data.numero} registrada.`);
       resetForm();
       setDirty(false);
-    } catch {
-      toast('error', 'Falha ao registrar entrega.');
+    } catch (err) {
+      // Antes engolia a mensagem do backend e dizia só "Falha ao registrar
+      // entrega." — o operador não tinha como saber QUAL campo o servidor
+      // recusou. O ramo de edição (PATCH) logo acima já fazia isso certo.
+      const m = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao registrar entrega.');
     } finally {
       setSalvando(false);
     }
@@ -922,10 +926,18 @@ export function EntregaNovaPage() {
         </div>
         </div>
 
-        <button type="submit" disabled={salvando}
+        {/* Trava durante a busca da matrícula: clicar aqui logo após digitá-la
+            dispara o onBlur da busca (~600ms no Protheus) junto com o submit.
+            Como o nome do cliente só chega no fim da busca e o campo é
+            `required`, o navegador barrava o submit SEM chamar o onSubmit — o
+            1º clique morria calado e só o 2º salvava. O onBlur re-renderiza
+            ainda no mousedown, então o botão já está desabilitado quando o
+            clique sairia. Rótulo próprio: clique morto sem explicação foi
+            exatamente o problema relatado. */}
+        <button type="submit" disabled={salvando || buscandoMat}
           className="flex items-center gap-2 rounded-lg bg-capul-600 px-5 py-2 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50">
-          {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
-          {modoEdicao ? 'Salvar alterações' : 'Salvar entrega'}
+          {salvando || buscandoMat ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+          {buscandoMat ? 'Buscando cliente…' : modoEdicao ? 'Salvar alterações' : 'Salvar entrega'}
         </button>
       </form>
     </div>
