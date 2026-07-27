@@ -19,6 +19,7 @@ import {
 import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
 import { useScrollToFocusedInput } from '../lib/useScrollToFocusedInput';
+import { useAuth } from '../auth/AuthContext';
 import {
   enfileirarSupervisor, processarFilaSupervisor, contarPendentesSupervisor, onFilaSupervisorChange, ehErroDeRede,
 } from '../offline/filaSupervisor';
@@ -87,6 +88,7 @@ function msg(e: unknown, fb: string) {
 const PLAN_LABEL: Record<string, string> = {
   RASCUNHO: 'Em preparação', ENVIADO: 'Enviado (aguarda coordenador)', APROVADO: 'Aprovado',
   AJUSTADO: 'Ajustado (revisar)', REJEITADO: 'Rejeitado', EM_EXECUCAO: 'Em execução', CONCLUIDO: 'Concluído',
+  CANCELADO: 'Cancelado',
 };
 const VIS: Record<string, { l: string; bg: string; fg: string }> = {
   PLANEJADA: { l: 'Planejada', bg: '#fef3c7', fg: '#b45309' },
@@ -117,6 +119,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   const { viagemId } = route.params;
   // Teclado: mantém o campo focado acima do teclado (hook compartilhado).
   const { scrollRef, aoFocar } = useScrollToFocusedInput();
+  const { role } = useAuth();
   const [v, setV] = useState<ViagemSupDetalhe | null>(null);
   const [ativs, setAtivs] = useState<AtividadeSup[]>([]);
   const [tipos, setTipos] = useState<TipoDespesaSup[]>([]);
@@ -180,9 +183,14 @@ export function SupervisorViagemScreen({ route }: Props) {
     else if (r.enviadas) Alert.alert('Sincronizado', `${r.enviadas} registro(s) enviado(s).`);
   };
 
-  const concluida = v?.situacao === 'CONCLUIDA';
   const sp = v?.statusPlanejamento ?? null;
+  // Trava os lançamentos: concluída (histórico) OU cancelada — nos dois casos o backend
+  // recusa visita/despesa, então a tela não pode oferecer o que vai dar erro.
+  const concluida = v?.situacao === 'CONCLUIDA' || sp === 'CANCELADO';
   const emExecucao = sp === 'EM_EXECUCAO';
+  // Quem aprova (coordenador / supervisor de departamento / admin) — usado só para
+  // explicar que a decisão é no desktop. O app não aprova: é ferramenta de execução.
+  const podeAprovar = role === 'COORDENADOR' || role === 'SUPERVISOR_FROTA' || role === 'ADMIN';
   // Aprovado mas ainda não iniciado: há visitas planejadas esperando o "Liberar para execução".
   const temPlanejadaPendente = (v?.paradas ?? []).some((p) => (p.status ?? 'PLANEJADA') === 'PLANEJADA');
 
@@ -364,8 +372,19 @@ export function SupervisorViagemScreen({ route }: Props) {
             <TouchableOpacity style={[styles.wfBtn, styles.wfBtnAlt, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(concluirPlanejamentoApp, 'Planejamento concluído.')}><Text style={[styles.wfBtnTxt, styles.wfBtnTxtAlt]}>Concluir</Text></TouchableOpacity>
           )}
         </View>
+        {sp === 'CANCELADO' && (
+          <Text style={styles.cancelado}>
+            ⛔ Planejamento cancelado{v.motivoCancelamento ? ` — ${v.motivoCancelamento}` : ''}. Não aceita mais visitas nem despesas.
+          </Text>
+        )}
         {(sp === 'RASCUNHO' || sp === 'AJUSTADO' || sp === 'REJEITADO' || sp === 'ENVIADO') && (
           <Text style={styles.coment}>✎ O planejamento é montado e enviado ao coordenador no computador. Aqui você executa quando aprovado.</Text>
+        )}
+        {/* O app é EXECUÇÃO: aprovar/ajustar/rejeitar e cancelar ficam no desktop. Sem
+            este aviso, o coordenador abria um planejamento ENVIADO e não achava o que
+            fazer — a única pendência da tela era justamente a que ele não pode resolver aqui. */}
+        {sp === 'ENVIADO' && podeAprovar && (
+          <Text style={styles.coment}>🖥️ A aprovação é feita no computador (Entregas › Supervisores › Coordenação). O app é para a execução em campo.</Text>
         )}
       </View>
 
@@ -566,6 +585,7 @@ const styles = StyleSheet.create({
   hSub: { fontSize: 13, color: '#64748b', marginTop: 2 },
   hStatus: { flexDirection: 'row', marginTop: 8 },
   coment: { marginTop: 8, fontSize: 12, color: '#075985', backgroundColor: '#e0f2fe', borderRadius: 8, padding: 8 },
+  cancelado: { marginTop: 8, fontSize: 12, color: '#9f1239', backgroundColor: '#ffe4e6', borderRadius: 8, padding: 8 },
   wfRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   wfBtn: { backgroundColor: CAPUL, borderRadius: 8, paddingVertical: 10, paddingHorizontal: 14 },
   wfBtnTxt: { color: '#fff', fontWeight: '700', fontSize: 13 },

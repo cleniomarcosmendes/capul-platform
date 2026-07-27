@@ -8,7 +8,7 @@ import { LOGISTICA_BASE } from './config';
 // visita nasce PLANEJADA e é apontada REALIZADA/PULADA na execução; a despesa
 // nasce PENDENTE e o coordenador decide (aprovação é feita no desktop). Região
 // foi REMOVIDA — município vem do cliente/digitação.
-export type StatusPlanejamento = 'RASCUNHO' | 'ENVIADO' | 'APROVADO' | 'AJUSTADO' | 'REJEITADO' | 'EM_EXECUCAO' | 'CONCLUIDO';
+export type StatusPlanejamento = 'RASCUNHO' | 'ENVIADO' | 'APROVADO' | 'AJUSTADO' | 'REJEITADO' | 'EM_EXECUCAO' | 'CONCLUIDO' | 'CANCELADO';
 export type StatusVisita = 'PLANEJADA' | 'REALIZADA' | 'PULADA';
 export type SituacaoDespesa = 'PENDENTE' | 'APROVADA' | 'CONTESTADA';
 
@@ -17,6 +17,8 @@ export interface ViagemSup {
   statusPlanejamento?: StatusPlanejamento | null;
   adiantamento?: string | number | null; condutorNome?: string | null;
   comentarioCoordenador?: string | null;
+  // Cancelamento por força maior (decidido no desktop pelo coordenador/departamento).
+  motivoCancelamento?: string | null;
   _count?: { paradas: number; despesas: number };
 }
 export type ConfiancaLocal = 'SEM_DADO' | 'PROVISORIA' | 'CONFIRMADA';

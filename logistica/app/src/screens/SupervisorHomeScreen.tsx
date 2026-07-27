@@ -13,6 +13,7 @@ const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR
 const PLAN_LABEL: Record<string, string> = {
   RASCUNHO: 'Em preparação', ENVIADO: 'Enviado (aguarda coordenador)', APROVADO: 'Aprovado',
   AJUSTADO: 'Ajustado (revisar)', REJEITADO: 'Rejeitado', EM_EXECUCAO: 'Em execução', CONCLUIDO: 'Concluído',
+  CANCELADO: 'Cancelado',
 };
 const planLabel = (s?: string | null) => (s ? PLAN_LABEL[s] ?? s : '—');
 
