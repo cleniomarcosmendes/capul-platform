@@ -11,6 +11,7 @@ function modelMock() {
     updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     upsert: jest.fn().mockResolvedValue({ ultimoNumero: 1 }),
     delete: jest.fn().mockResolvedValue({}),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     count: jest.fn().mockResolvedValue(0),
     groupBy: jest.fn().mockResolvedValue([]),
   };
@@ -33,6 +34,7 @@ export function createPrismaMock(): Record<string, any> {
     tipoDespesa: modelMock(),
     manutencaoVeiculo: modelMock(),
     supervisor: modelMock(),
+    supervisorDepartamento: modelMock(),
     adiantamento: modelMock(),
     localCliente: modelMock(),
     anexoDespesa: modelMock(),

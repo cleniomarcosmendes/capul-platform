@@ -1,10 +1,10 @@
-import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, StreamableFile, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, StreamableFile, UploadedFile, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
-import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DefinirSupervisorDepartamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /** Converte o arquivo do multer no binário do comprovante (ou undefined). */
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
@@ -42,6 +42,23 @@ export class SupervisorController {
   @Roles('SUPERVISOR_FROTA')
   atualizarSupervisor(@Param('id') id: string, @Body() dto: AtualizarSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.atualizarSupervisor(id, dto, user);
+  }
+
+  // ---- Quem responde por cada departamento no RDV (aba Equipe) ----
+  // Leitura: quem já vê a aba. ESCRITA: só ADMIN (checado no serviço) — esta tabela é a
+  // FONTE da autoridade do SUPERVISOR_FROTA; se ele a editasse, se acrescentaria em
+  // qualquer departamento e aprovaria a prestação de contas de quem quisesse.
+  @Get('departamentos-responsavel')
+  supervisoresDepartamento(@CurrentUser() user: JwtPayload) {
+    return this.svc.listarSupervisoresDepartamento(user);
+  }
+  @Put('departamentos-responsavel/:departamentoId')
+  definirSupervisorDepartamento(@Param('departamentoId') departamentoId: string, @Body() dto: DefinirSupervisorDepartamentoDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.definirSupervisorDepartamento(departamentoId, dto.usuarioId, user);
+  }
+  @Delete('departamentos-responsavel/:departamentoId')
+  removerSupervisorDepartamento(@Param('departamentoId') departamentoId: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.removerSupervisorDepartamento(departamentoId, user);
   }
 
   // ---- Atividades ----

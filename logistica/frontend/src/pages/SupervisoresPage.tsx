@@ -283,6 +283,10 @@ function AtividadesTab() {
 interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; ativo: boolean }
 interface CoreUser { id: string; nome?: string; nomeFantasia?: string; matricula?: string | null; departamento?: { id: string; nome: string } | null; permissoes?: { modulo: { codigo: string }; roleModulo: { codigo: string } }[] }
 interface DeptItem { id: string; nome: string }
+/** Quem responde por um departamento no RDV — antes isso era DERIVADO dos veículos que
+ *  a pessoa supervisiona (`veiculo.supervisorId`), campo que existe para dizer quem
+ *  responde pelo VEÍCULO. Agora é explícito aqui. */
+interface RespDepto { departamentoId: string; usuarioId: string }
 // Representantes do RDV cadastráveis na equipe:
 // - SUPERVISOR de área  → roteia ao COORDENADOR (campo "Coordenador").
 // - COORDENADOR         → roteia ao Supervisor de Departamento POR DEPARTAMENTO
@@ -294,7 +298,8 @@ const ehRepresentante = (u: CoreUser) => ehSupervisorArea(u) || ehCoordenador(u)
 
 function EquipeTab() {
   const { toast } = useToast();
-  const { usuario } = useAuth();
+  const { usuario, logisticaRole } = useAuth();
+  const ehAdmin = logisticaRole === 'ADMIN';
   const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
   const [itens, setItens] = useState<Supervisor[]>([]);
   const [usuarios, setUsuarios] = useState<CoreUser[]>([]);
@@ -308,18 +313,23 @@ function EquipeTab() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editCoord, setEditCoord] = useState('');
   const [editDepto, setEditDepto] = useState('');
+  // Amarração departamento → Supervisor de Departamento (fonte da autoridade no RDV).
+  const [respDepto, setRespDepto] = useState<RespDepto[]>([]);
+  const [editRespId, setEditRespId] = useState<string | null>(null); // departamentoId em edição
+  const [editRespUser, setEditRespUser] = useState('');
 
   const carregar = async () => {
     setLoading(true);
     try {
-      const [s, u, d] = await Promise.all([
+      const [s, u, d, r] = await Promise.all([
         logisticaApi.get<Supervisor[]>('/supervisor/supervisores'),
         filialId ? coreApi.get<CoreUser[]>('/usuarios', { params: { filialId } }) : Promise.resolve({ data: [] as CoreUser[] }),
         // Departamentos que ESTE usuário pode escolher: o Supervisor de Departamento vê
         // só os seus; ADMIN vê todos. Mesmo endpoint escopado da Análise de Custos.
         logisticaApi.get<DeptItem[]>('/frota/departamentos-filtro').catch(() => ({ data: [] as DeptItem[] })),
+        logisticaApi.get<RespDepto[]>('/supervisor/departamentos-responsavel').catch(() => ({ data: [] as RespDepto[] })),
       ]);
-      setItens(s.data); setUsuarios(u.data); setDepartamentos(d.data);
+      setItens(s.data); setUsuarios(u.data); setDepartamentos(d.data); setRespDepto(r.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a equipe.')); } finally { setLoading(false); }
   };
   const deptNome = (id?: string | null) => (id ? (departamentos.find((d) => d.id === id)?.nome ?? id.slice(0, 8)) : null);
@@ -373,9 +383,86 @@ function EquipeTab() {
     try { await logisticaApi.patch(`/supervisor/supervisores/${s.id}`, { ativo: !s.ativo }); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
+  // Amarração departamento → responsável. Escrita SÓ ADMIN (o backend barra): esta é a
+  // fonte da autoridade do Supervisor de Departamento; se ele mesmo editasse,
+  // se acrescentaria em qualquer departamento e aprovaria a prestação de contas alheia.
+  const salvarResponsavel = async (departamentoId: string) => {
+    if (!editRespUser) { toast('warning', 'Selecione o responsável.'); return; }
+    try {
+      await logisticaApi.put(`/supervisor/departamentos-responsavel/${departamentoId}`, { usuarioId: editRespUser });
+      toast('success', 'Responsável pelo departamento definido.');
+      setEditRespId(null); setEditRespUser(''); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao definir o responsável.')); }
+  };
+  const limparResponsavel = async (departamentoId: string) => {
+    try {
+      await logisticaApi.delete(`/supervisor/departamentos-responsavel/${departamentoId}`);
+      toast('success', 'Responsável removido — o departamento fica sem aprovador até você definir outro.');
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
+  };
+  const respDe = (deptoId: string) => respDepto.find((r) => r.departamentoId === deptoId);
+  const nomeUsuarioPorId = (id?: string | null) => (id ? (usuarios.find((u) => u.id === id)?.nome ?? usuarios.find((u) => u.id === id)?.nomeFantasia ?? id.slice(0, 8)) : null);
+  // Candidatos: quem tem o papel Supervisor de Departamento na Logística.
+  const candidatosResp = usuarios.filter((u) => temRoleLogistica(u, 'SUPERVISOR_FROTA'));
 
   return (
     <div>
+      {/* Quem responde por cada departamento no RDV. Antes isso era DEDUZIDO dos veículos
+          que a pessoa supervisiona — campo da frota, cujo sentido é "responsável pelo
+          veículo". Ficar sem veículo tirava a autoridade sobre o RDV em silêncio. */}
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 className="text-sm font-semibold text-slate-800">Supervisores de Departamento</h3>
+        <p className="mb-3 mt-1 text-xs text-slate-500">
+          Quem aprova a prestação de contas de cada departamento (e o RDV dos coordenadores dele).
+          {ehAdmin ? ' Definido pela administração.' : ' Definido pela administração — aqui é só consulta.'}
+        </p>
+        {departamentos.length === 0 ? (
+          <p className="text-sm text-slate-400">Nenhum departamento disponível.</p>
+        ) : (
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead><tr><th className={th}>Departamento</th><th className={th}>Responsável</th>{ehAdmin && <th className={th}>Ações</th>}</tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {departamentos.map((d) => {
+                const r = respDe(d.id);
+                return (
+                  <tr key={d.id}>
+                    <td className="px-4 py-3 text-sm text-slate-700">{d.nome}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {editRespId === d.id ? (
+                        <select value={editRespUser} onChange={(e) => setEditRespUser(e.target.value)} className={inp}>
+                          <option value="">— selecione</option>
+                          {candidatosResp.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
+                        </select>
+                      ) : r ? (
+                        <span className="text-slate-700">{nomeUsuarioPorId(r.usuarioId)}</span>
+                      ) : (
+                        <span className="text-amber-600">— sem responsável (ninguém aprova este departamento)</span>
+                      )}
+                    </td>
+                    {ehAdmin && (
+                      <td className="px-4 py-3 text-sm">
+                        {editRespId === d.id ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => void salvarResponsavel(d.id)} className="text-emerald-600 hover:text-emerald-700" title="Salvar"><Check className="h-4 w-4" /></button>
+                            <button onClick={() => { setEditRespId(null); setEditRespUser(''); }} className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-3">
+                            <button onClick={() => { setEditRespId(d.id); setEditRespUser(r?.usuarioId ?? ''); }} className="text-xs text-capul-600 hover:underline">{r ? 'Trocar' : 'Definir'}</button>
+                            {r && <button onClick={() => void limparResponsavel(d.id)} className="text-xs text-rose-500 hover:underline">Remover</button>}
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-slate-500">Monte o time: cadastre os <b>supervisores de área</b> (roteiam ao seu <b>coordenador</b>) e os <b>coordenadores</b> (roteiam ao <b>Supervisor de Departamento</b>, por departamento) — o cadastro é o que permite criar e aprovar planejamentos/despesas.</p>
         <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700"><Plus className="h-4 w-4" /> Novo cadastro</button>

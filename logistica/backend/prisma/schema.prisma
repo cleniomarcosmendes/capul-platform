@@ -839,6 +839,30 @@ model Supervisor {
   @@schema("logistica")
 }
 
+/// Quem é o SUPERVISOR DE DEPARTAMENTO (role SUPERVISOR_FROTA) de cada departamento,
+/// para efeito do RDV. Antes isso era DERIVADO dos veículos que a pessoa supervisiona
+/// (`veiculo.supervisorId` + `departamentoLotacaoId`) — um acoplamento acidental: aquele
+/// campo existe para dizer quem responde pelo VEÍCULO (controle de frota), não para
+/// definir autoridade sobre prestação de contas. O efeito colateral era silencioso: o
+/// supervisor ficava sem veículo vinculado e perdia o RDV do departamento sem aviso.
+/// A frota continua usando `veiculo.supervisorId` (lá o significado é o correto).
+/// Um responsável por departamento/filial (@@unique) — trocar a pessoa é 1 linha.
+model SupervisorDepartamento {
+  id             String   @id @default(uuid())
+  filialId       String   @map("filial_id")
+  // core.departamentos.id e core.usuarios.id — String sem FK (convenção do schema:
+  // core é read-only para a logística).
+  departamentoId String   @map("departamento_id")
+  usuarioId      String   @map("usuario_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+  criadoPorId    String   @map("criado_por_id")
+
+  @@unique([filialId, departamentoId])
+  @@index([usuarioId])
+  @@map("supervisor_departamento")
+  @@schema("logistica")
+}
+
 /// Encerramento mensal do RDV (TEMA 2): presença = mês ENCERRADO (trava despesas e
 /// adiantamentos do supervisor no mês); reabrir remove a linha.
 model FechamentoRdv {

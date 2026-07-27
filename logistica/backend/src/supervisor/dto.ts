@@ -154,3 +154,9 @@ export class EditarDespesaSupervisorDto {
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
 }
 // Edição de visita reusa o AdicionarVisitaDto (todos os campos já opcionais).
+
+/** Define quem responde por um departamento no RDV (aba Equipe). Só ADMIN escreve —
+ *  ver `definirSupervisorDepartamento`. */
+export class DefinirSupervisorDepartamentoDto {
+  @IsString() @IsNotEmpty() @MaxLength(40) usuarioId!: string;
+}

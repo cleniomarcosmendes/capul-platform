@@ -277,16 +277,64 @@ export class SupervisorService {
   private ehAdmin(user: JwtPayload): boolean { return this.roleLog(user) === 'ADMIN'; }
   private ehSupervisorDepto(user: JwtPayload): boolean { return this.roleLog(user) === 'SUPERVISOR_FROTA'; }
 
-  /** Departamentos que o Supervisor de Departamento (SUPERVISOR_FROTA) cobre — MESMA
-   *  fonte da frota: os departamentos dos veículos que ele supervisiona. Uma só
-   *  definição de "os departamentos dele" no módulo. Vazio → não cobre nenhum. */
+  /** Departamentos que o Supervisor de Departamento (SUPERVISOR_FROTA) cobre NO RDV.
+   *  Fonte: a amarração EXPLÍCITA `supervisor_departamento`, mantida na aba Equipe.
+   *
+   *  Antes vinha dos veículos que ele supervisiona (`veiculo.supervisorId`) — mas
+   *  aquele campo diz quem responde pelo VEÍCULO (controle de frota), não quem tem
+   *  autoridade sobre prestação de contas. Além de conceitualmente errado, falhava em
+   *  silêncio: tirar o último veículo da pessoa a removia do RDV do departamento sem
+   *  nenhum aviso. A FROTA segue derivando do veículo (lá o significado é o certo) —
+   *  não unificar as duas de novo. Vazio → não cobre nenhum departamento. */
   private async deptosDoSupervisorDepto(user: JwtPayload): Promise<string[]> {
-    const rows = await this.prisma.veiculo.findMany({
-      where: { filialId: user.filialId ?? undefined, supervisorId: user.sub },
-      select: { departamentoLotacaoId: true },
-      distinct: ['departamentoLotacaoId'],
+    const rows = await this.prisma.supervisorDepartamento.findMany({
+      where: { filialId: user.filialId ?? undefined, usuarioId: user.sub },
+      select: { departamentoId: true },
     });
-    return rows.map((r) => r.departamentoLotacaoId).filter((x): x is string => !!x);
+    return rows.map((r) => r.departamentoId);
+  }
+
+  // ---- Amarração Supervisor de Departamento × departamento (aba Equipe) ----
+
+  /** Lista a amarração da filial (quem responde por cada departamento no RDV).
+   *  Leitura liberada a quem já vê a aba Equipe — é organograma, não dado sensível. */
+  listarSupervisoresDepartamento(user: JwtPayload) {
+    return this.prisma.supervisorDepartamento.findMany({
+      where: { filialId: filialDoUsuario(user) },
+      orderBy: { departamentoId: 'asc' },
+    });
+  }
+
+  /**
+   * Define (ou troca) o responsável por um departamento.
+   *
+   * ⚠️ Só ADMIN escreve — e isto é deliberado. Esta tabela é a FONTE da autoridade do
+   * SUPERVISOR_FROTA no RDV: se ele pudesse editá-la, se acrescentaria em qualquer
+   * departamento e passaria a aprovar a prestação de contas de quem quisesse. É a
+   * mesma classe de furo do gate de 14/07 (quem é supervisionado não escreve o
+   * cadastro que define quem o supervisiona). O Supervisor de Departamento VÊ a
+   * amarração; quem muda é a administração.
+   */
+  async definirSupervisorDepartamento(departamentoId: string, usuarioId: string, user: JwtPayload) {
+    if (!this.ehAdmin(user)) throw new ForbiddenException('Só a administração define o responsável por um departamento.');
+    const filialId = filialDoUsuario(user);
+    if (!departamentoId?.trim() || !usuarioId?.trim()) throw new BadRequestException('Informe o departamento e o responsável.');
+    await this.core.validarDepartamento(departamentoId);
+    await this.core.validarUsuario(usuarioId, 'Responsável');
+    return this.prisma.supervisorDepartamento.upsert({
+      where: { filialId_departamentoId: { filialId, departamentoId } },
+      update: { usuarioId, criadoPorId: user.sub, criadoEm: new Date() },
+      create: { filialId, departamentoId, usuarioId, criadoPorId: user.sub },
+    });
+  }
+
+  /** Remove o responsável de um departamento (fica sem supervisor — ninguém aprova por
+   *  ele até que se defina outro; falha fechada, de propósito). */
+  async removerSupervisorDepartamento(departamentoId: string, user: JwtPayload) {
+    if (!this.ehAdmin(user)) throw new ForbiddenException('Só a administração remove o responsável por um departamento.');
+    const filialId = filialDoUsuario(user);
+    await this.prisma.supervisorDepartamento.deleteMany({ where: { filialId, departamentoId } });
+    return { ok: true };
   }
 
   /** Filtro Prisma de quais representantes o usuário alcança no RDV: ADMIN todos da
