@@ -439,39 +439,76 @@ describe('SupervisorService conteúdo do RDV — escopo dono/coordenador/depto',
   });
 });
 
-// ⭐ Segregação de função no dinheiro: quem LANÇOU a despesa não decide sobre ela,
-// nem sendo o coordenador do representante (o gate de 14/07 fechou só o lado do
-// SUPERVISOR). ADMIN é break-glass, como nos demais gates do serviço.
-describe('SupervisorService.decidirDespesa — quem lançou não aprova', () => {
+// ⭐ Autoridade lança → despesa JÁ NASCE APROVADA (27/07, decisão do Clenio: quem
+// está no topo da pirâmide não pede aval de si mesmo). A segregação de função deixou
+// de ser um `if` e virou estrutural: só o representante cria PENDENTE, e ele nunca
+// decide o próprio. Regra por REPRESENTANTE, não por papel — o coordenador que também
+// tem RDV próprio não é autoridade sobre o seu.
+describe('SupervisorService.lancarDespesa — situação inicial conforme quem lança', () => {
   let prisma: any;
   let svc: SupervisorService;
   beforeEach(() => {
     prisma = createPrismaMock();
     svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
-    prisma.despesaVeiculo.update.mockResolvedValue({ id: 'd1' });
+    prisma.tipoDespesa.findFirst.mockResolvedValue({ id: 't1', categoria: 'INDIVIDUO', ativo: true });
+    prisma.despesaVeiculo.create.mockResolvedValue({ id: 'd1' });
   });
   const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
-  const despesa = (criadoPorId: string) => ({
-    id: 'd1', viagemId: 'v1', filialId: 'f1', criadoPorId,
-    viagem: { tipo: 'SUPERVISOR', filialId: 'f1', supervisorRegistro: { coordenadorId: 'u1', departamentoId: 'd1' } },
+  const plan = (reg: any) => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    criadoPorId: 'outro', mesReferencia: 202607, supervisorRegistroId: 's1', veiculoId: null, supervisorRegistro: reg,
+  });
+  const dto = { tipoDespesaId: 't1', valor: 50, data: '2026-07-10' } as any;
+
+  it('Supervisor de Departamento no SEU depto → nasce APROVADA (topo da pirâmide)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan({ coordenadorId: 'outro-coord', matricula: 'E09999', departamentoId: 'd1' }));
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]);
+    await svc.lancarDespesa('v1', dto, comRole('SUPERVISOR_FROTA'));
+    const data = prisma.despesaVeiculo.create.mock.calls[0][0].data;
+    expect(data.situacao).toBe('APROVADA');
+    expect(data.aprovadoPorId).toBe('u1');
   });
 
-  it('COORDENADOR que LANÇOU a despesa → 403 (não aprova a própria)', async () => {
-    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u1'));
-    await expect(svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+  it('COORDENADOR no RDV do SEU representante → nasce APROVADA', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan({ coordenadorId: 'u1', matricula: 'E09999', departamentoId: 'd-outro' }));
+    await svc.lancarDespesa('v1', dto, comRole('COORDENADOR'));
+    expect(prisma.despesaVeiculo.create.mock.calls[0][0].data.situacao).toBe('APROVADA');
+  });
+
+  it('COORDENADOR no RDV PRÓPRIO (ele é o representante) → PENDENTE, não é autoridade sobre si', async () => {
+    // cadastro do próprio coordenador: sem coordenadorId (roteia pelo departamento).
+    prisma.viagem.findUnique.mockResolvedValue(plan({ coordenadorId: null, matricula: 'E01047', departamentoId: 'd-outro' }));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Coord dono' }]); // é o dono → pode lançar
+    await svc.lancarDespesa('v1', dto, comRole('COORDENADOR'));
+    const data = prisma.despesaVeiculo.create.mock.calls[0][0].data;
+    expect(data.situacao).toBe('PENDENTE');
+    expect(data.aprovadoPorId).toBeNull();
+  });
+
+  it('SUPERVISOR de área no próprio RDV → PENDENTE (segue precisando de aval)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan({ coordenadorId: 'algum-coord', matricula: 'E01047', departamentoId: 'd-outro' }));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: '1047', nome: 'Dono' }]);
+    await svc.lancarDespesa('v1', dto, comRole('SUPERVISOR'));
+    expect(prisma.despesaVeiculo.create.mock.calls[0][0].data.situacao).toBe('PENDENTE');
+  });
+
+  it('a despesa PENDENTE do representante segue indecidível por ele (segregação estrutural)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({
+      id: 'd1', viagemId: 'v1', filialId: 'f1', criadoPorId: 'u1',
+      viagem: { tipo: 'SUPERVISOR', filialId: 'f1', supervisorRegistro: { coordenadorId: 'outro-coord', departamentoId: 'd-outro' } },
+    });
+    await expect(svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('SUPERVISOR'))).rejects.toThrow(ForbiddenException);
     expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
   });
 
-  it('COORDENADOR que NÃO lançou → aprova normalmente', async () => {
-    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('supervisor-de-campo'));
-    await svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('COORDENADOR'));
-    expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBe('APROVADA');
-  });
-
-  it('ADMIN (break-glass) decide mesmo tendo lançado', async () => {
-    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u1'));
-    await svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('ADMIN'));
-    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+  it('a autoridade PODE contestar depois um lançamento que ela mesma fez', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({
+      id: 'd1', viagemId: 'v1', filialId: 'f1', criadoPorId: 'u1',
+      viagem: { tipo: 'SUPERVISOR', filialId: 'f1', supervisorRegistro: { coordenadorId: 'u1', departamentoId: 'd1' } },
+    });
+    prisma.despesaVeiculo.update.mockResolvedValue({ id: 'd1' });
+    await svc.decidirDespesa('v1', 'd1', 'CONTESTADA', 'lancei errado', comRole('COORDENADOR'));
+    expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBe('CONTESTADA');
   });
 });
 

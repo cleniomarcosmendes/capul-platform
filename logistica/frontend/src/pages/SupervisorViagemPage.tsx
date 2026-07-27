@@ -365,6 +365,7 @@ export function SupervisorViagemPage() {
     if (!dTipo || !dValor) { toast('warning', 'Escolha o tipo e informe o valor.'); return; }
     setSalvandoDesp(true);
     const url = editDespId ? `/supervisor/viagens/${id}/despesas/${editDespId}` : `/supervisor/viagens/${id}/despesas`;
+    let resp: { data?: unknown } | undefined;
     try {
       // Com comprovante(s) → multipart (FormData); sem → JSON. O backend aceita os dois.
       if (dRecibos.length) {
@@ -375,12 +376,15 @@ export function SupervisorViagemPage() {
         if (dFornecedor.trim()) fd.append('fornecedor', dFornecedor.trim());
         if (dObs.trim()) fd.append('observacao', dObs.trim());
         dRecibos.forEach((f) => fd.append('comprovantes', f));
-        if (editDespId) await logisticaApi.patch(url, fd); else await logisticaApi.post(url, fd);
+        resp = editDespId ? await logisticaApi.patch(url, fd) : await logisticaApi.post(url, fd);
       } else {
         const body = { tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined, fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined };
-        if (editDespId) await logisticaApi.patch(url, body); else await logisticaApi.post(url, body);
+        resp = editDespId ? await logisticaApi.patch(url, body) : await logisticaApi.post(url, body);
       }
-      toast('success', editDespId ? 'Despesa atualizada.' : 'Despesa lançada.');
+      // Lançada por quem tem autoridade sobre o representante já nasce APROVADA (27/07)
+      // — o aviso conta o que o backend decidiu em vez de prometer "aguarda aprovação".
+      const jaAprovada = (resp?.data as { situacao?: string } | undefined)?.situacao === 'APROVADA';
+      toast('success', editDespId ? 'Despesa atualizada.' : jaAprovada ? 'Despesa lançada e já aprovada.' : 'Despesa lançada — aguarda aprovação.');
       limparDesp(); await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao salvar despesa.')); } finally { setSalvandoDesp(false); }
   };

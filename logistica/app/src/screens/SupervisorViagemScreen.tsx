@@ -303,9 +303,9 @@ export function SupervisorViagemScreen({ route }: Props) {
       fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined, idempotencyKey: uuid(),
     };
     try {
-      await lancarDespesaApp(despViagemId, payload, fotos);
+      const situacao = await lancarDespesaApp(despViagemId, payload, fotos);
       limparDespesa(); setShowDespesa(false); await carregar();
-      Alert.alert('Pronto', 'Despesa lançada (aguarda aprovação do coordenador).');
+      Alert.alert('Pronto', situacao === 'APROVADA' ? 'Despesa lançada e já aprovada.' : 'Despesa lançada (aguarda aprovação do coordenador).');
     } catch (e) {
       if (ehErroDeRede(e)) {
         await enfileirarSupervisor({ id: payload.idempotencyKey!, rotulo: `Despesa: ${brl(payload.valor)}`, acao: { tipo: 'despesa', viagemId: despViagemId, payload, fotoUris: fotos } });

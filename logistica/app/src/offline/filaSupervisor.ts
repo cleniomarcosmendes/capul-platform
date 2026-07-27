@@ -70,7 +70,9 @@ async function enviar(acao: AcaoSupervisor): Promise<void> {
   switch (acao.tipo) {
     case 'visita': return await adicionarVisitaApp(acao.viagemId, acao.payload);
     case 'apontar': return await apontarVisitaApp(acao.viagemId, acao.paradaId, acao.status, { latitude: acao.latitude, longitude: acao.longitude, precisaoM: acao.precisaoM, noLocal: acao.noLocal, motivoPulada: acao.motivoPulada });
-    case 'despesa': return await lancarDespesaApp(acao.viagemId, acao.payload, acao.fotoUris);
+    // O reenvio da fila descarta a situação devolvida (PENDENTE/APROVADA): quem a usa
+    // é o aviso do lançamento online; aqui a tela recarrega e mostra o estado real.
+    case 'despesa': { await lancarDespesaApp(acao.viagemId, acao.payload, acao.fotoUris); return; }
   }
 }
 

@@ -351,6 +351,20 @@ export class SupervisorService {
     throw new ForbiddenException('Apenas o coordenador do representante (ou o Supervisor de Departamento) pode decidir.');
   }
 
+  /** Versão booleana do `assertPodeDecidir`: este usuário é a AUTORIDADE que decide
+   *  sobre ESTE representante? Note que é por representante, não por papel — um
+   *  COORDENADOR que também tem RDV próprio NÃO é autoridade sobre o seu (o cadastro
+   *  dele roteia para o coordenador/departamento dele), então a despesa dele continua
+   *  precisando de aval. É essa distinção que impede o papel de virar auto-aprovação. */
+  private async ehAutoridadeSobre(reg: { coordenadorId: string | null; departamentoId: string | null } | null | undefined, user: JwtPayload): Promise<boolean> {
+    try {
+      await this.assertPodeDecidir(reg, user);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ---- Workflow do planejamento (supervisor envia · coordenador decide) ----
   private async planejamentoOuErro(id: string, filialId: string) {
     const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, matricula: true, departamentoId: true } } } });
@@ -782,6 +796,7 @@ export class SupervisorService {
     }
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
+    const autoridade = await this.ehAutoridadeSobre(v.supervisorRegistro, user);
     // INDIVÍDUO não tem veículo; VEÍCULO usa o veículo da viagem (se houver).
     const veiculoId = tipo.categoria === 'INDIVIDUO' ? null : v.veiculoId;
     const dataDespesa = this.parseData(dto.data);
@@ -796,10 +811,16 @@ export class SupervisorService {
         dataDespesa,
         fornecedor: dto.fornecedor?.trim() || null,
         observacao: dto.observacao?.trim() || null,
-        // Redesenho 6d: despesa do supervisor nasce PENDENTE — o coordenador
-        // aprova/rejeita (comprovante é opcional, mas lastreia a decisão). Só
+        // Redesenho 6d: a despesa do representante nasce PENDENTE — o coordenador
+        // aprova/rejeita (comprovante é opcional, mas lastreia a decisão) e só
         // APROVADA entra na RDV.
-        situacao: 'PENDENTE',
+        // 27/07: quando quem lança É a autoridade que decidiria essa despesa
+        // (coordenador daquele representante / Supervisor de Departamento do depto /
+        // ADMIN), ela JÁ NASCE APROVADA — pedir aval de si mesmo não acrescenta
+        // controle, só trava o lançamento. Mesma regra que o adiantamento já usa.
+        situacao: autoridade ? 'APROVADA' : 'PENDENTE',
+        aprovadoPorId: autoridade ? user.sub : null,
+        aprovadoEm: autoridade ? new Date() : null,
         criadoPorId: user.sub,
         idempotencyKey: dto.idempotencyKey ?? null,
       },
@@ -821,16 +842,11 @@ export class SupervisorService {
     if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
     if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
     await this.assertPodeDecidir(d.viagem.supervisorRegistro, user);
-    // Segregação de função (dinheiro): quem LANÇOU a despesa não a aprova/contesta,
-    // nem sendo o coordenador do representante. O back-office pode lançar pelo
-    // representante — mas aí a decisão fica com o outro lado (Supervisor de
-    // Departamento / ADMIN). Espelha o gate de 14/07, que fechou o mesmo furo do
-    // lado do SUPERVISOR e deixou este em aberto. ADMIN é exceção (break-glass,
-    // igual a todos os outros gates deste serviço) — em PROD ADMIN é a TI, não o
-    // coordenador que presta contas.
-    if (d.criadoPorId === user.sub && !this.ehAdmin(user)) {
-      throw new ForbiddenException('Você lançou esta despesa — a decisão cabe ao Supervisor de Departamento ou a outro aprovador.');
-    }
+    // Segregação de função: NÃO é um `if` aqui, é estrutural. Quem lança sendo a
+    // autoridade daquele representante já cria APROVADA (não passa por aqui); quem
+    // lança sem ser (o próprio representante) cria PENDENTE e o `assertPodeDecidir`
+    // acima nunca o deixa decidir o próprio. Uma trava de "quem lançou não decide"
+    // só atrapalharia a autoridade a contestar depois um lançamento que ela mesma fez.
     if (decisao === 'CONTESTADA' && !motivo?.trim()) throw new BadRequestException('Informe o motivo da rejeição da despesa.');
     return this.prisma.despesaVeiculo.update({
       where: { id: despesaId },

@@ -90,11 +90,11 @@ export async function adicionarVisitaApp(id: string, body: NovaVisita): Promise<
  * Comprovantes (fotos do recibo) OPCIONAIS — caso de uso forte no campo: fotografar
  * na hora (várias). Com foto(s) → multipart; sem → JSON. Backend aceita os dois.
  */
-export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUris?: string[]): Promise<void> {
+export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUris?: string[]): Promise<SituacaoDespesa> {
   const fotos = (fotoUris ?? []).filter(Boolean);
   if (!fotos.length) {
-    await api.post(`${B}/viagens/${id}/despesas`, body);
-    return;
+    const { data } = await api.post<{ situacao?: SituacaoDespesa }>(`${B}/viagens/${id}/despesas`, body);
+    return data?.situacao ?? 'PENDENTE';
   }
   const form = new FormData();
   form.append('tipoDespesaId', body.tipoDespesaId);
@@ -111,10 +111,13 @@ export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUris?:
       type: isPng ? 'image/png' : 'image/jpeg',
     } as unknown as Blob);
   });
-  await api.post(`${B}/viagens/${id}/despesas`, form, {
+  const { data } = await api.post<{ situacao?: SituacaoDespesa }>(`${B}/viagens/${id}/despesas`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 90_000,
   });
+  // A despesa lançada por quem TEM autoridade sobre o representante já nasce APROVADA
+  // (27/07) — a mensagem no app precisa refletir o que o backend decidiu, não supor.
+  return data?.situacao ?? 'PENDENTE';
 }
 /** Apontamento da visita (6c): PLANEJADA → REALIZADA ou PULADA (na execução).
  *  `extra` leva GPS + precisão + confirmação "no local" (alimenta a consolidação). */
