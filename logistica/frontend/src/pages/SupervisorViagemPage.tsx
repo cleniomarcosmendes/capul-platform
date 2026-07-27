@@ -49,6 +49,7 @@ const MAX_ANEXOS = 5;
 interface ViagemDetalhe {
   id: string; numero: number; situacao: string; statusPlanejamento?: string | null; comentarioCoordenador?: string | null;
   mesReferencia?: number | null;
+  motivoCancelamento?: string | null; canceladoEm?: string | null;
   condutorNome?: string | null; condutorMatricula?: string | null;
   supervisorRegistro?: { id: string; nome: string; coordenadorId?: string | null } | null;
   paradas: Visita[]; despesas: DespesaV[];
@@ -80,6 +81,7 @@ const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
   REJEITADO: { label: 'Rejeitado', cls: 'bg-rose-100 text-rose-700' },
   EM_EXECUCAO: { label: 'Em execução', cls: 'bg-indigo-100 text-indigo-700' },
   CONCLUIDO: { label: 'Concluído', cls: 'bg-slate-100 text-slate-600' },
+  CANCELADO: { label: 'Cancelado', cls: 'bg-rose-100 text-rose-700' },
 };
 const statusPlan = (s?: string | null) => STATUS_PLAN[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 const th = 'px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500';
@@ -159,6 +161,9 @@ export function SupervisorViagemPage() {
   const [motivoRej, setMotivoRej] = useState('');
   const [decPlan, setDecPlan] = useState<'AJUSTADO' | 'REJEITADO' | null>(null); // decisão do planejamento (ajuste/rejeição pedem comentário)
   const [comPlan, setComPlan] = useState('');
+  // Força maior depois do aval (cancelar / devolver p/ reconfiguração) — ambos com texto obrigatório.
+  const [acaoForca, setAcaoForca] = useState<'CANCELAR' | 'DEVOLVER' | null>(null);
+  const [txtForca, setTxtForca] = useState('');
   const [atividades, setAtividades] = useState<Atividade[]>([]);
   const [loading, setLoading] = useState(true);
   // form da visita
@@ -226,7 +231,9 @@ export function SupervisorViagemPage() {
     logisticaApi.get<LocalConsolidado[]>(`/local/cliente/${encodeURIComponent(m)}`).then((r) => setLocais(r.data)).catch(() => setLocais([]));
   }, [clienteMatricula]);
 
-  const concluida = v?.situacao === 'CONCLUIDA';
+  // Trava os formulários de lançamento. Concluída (histórico) OU cancelada: nos dois
+  // casos o backend recusa visita/despesa — a tela não pode oferecer o que vai dar erro.
+  const travada = v?.situacao === 'CONCLUIDA' || v?.statusPlanejamento === 'CANCELADO';
   // Fase de planejamento (espelha o backend): a visita adicionada aqui nasce PLANEJADA
   // (monta o roteiro). Fora disso ela nasce REALIZADA (visita de fato, em campo).
   // "Planejamento" (montar o roteiro) = TUDO antes da execução começar. ENVIADO e
@@ -296,8 +303,27 @@ export function SupervisorViagemPage() {
     catch (e) { toast('error', errMsg(e, 'Falha ao concluir.')); }
   };
   const reabrir = async () => {
-    try { await logisticaApi.patch(`/supervisor/viagens/${id}/reabrir`); toast('success', 'Viagem reaberta para correção.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao reabrir.')); }
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/reabrir`);
+      toast('success', v?.statusPlanejamento === 'CANCELADO' ? 'Planejamento reativado — voltou para ajuste.' : 'Viagem reaberta para correção.');
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao reabrir.')); }
+  };
+  // Força maior depois do aval: cancelar (a viagem não vai acontecer) ou devolver para
+  // reconfiguração (volta a AJUSTADO e o representante reenvia). Ambos exigem texto.
+  const cancelarPlanejamento = async (motivo: string) => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/cancelar`, { motivo });
+      toast('success', 'Planejamento cancelado.');
+      setAcaoForca(null); setTxtForca(''); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao cancelar o planejamento.')); }
+  };
+  const devolverPlanejamento = async (comentario: string) => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/devolver`, { comentario });
+      toast('success', 'Devolvido para reconfiguração.');
+      setAcaoForca(null); setTxtForca(''); await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao devolver o planejamento.')); }
   };
   const enviar = async () => {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/enviar`); toast('success', 'Enviado ao coordenador.'); await carregar(); }
@@ -434,8 +460,54 @@ export function SupervisorViagemPage() {
             <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir</button>}
           {v.statusPlanejamento === 'CONCLUIDO' &&
             <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">Reabrir para corrigir</button>}
+          {/* Força maior DEPOIS do aval — Ajustar/Rejeitar só existem no ENVIADO. Só a
+              autoridade que aprova (coordenador do representante / Supervisor de Departamento). */}
+          {(v.statusPlanejamento === 'APROVADO' || v.statusPlanejamento === 'EM_EXECUCAO') && podeAprovarDespesa && (
+            <>
+              <button onClick={() => { setAcaoForca('DEVOLVER'); setTxtForca(''); }} className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100" title="Volta para o representante reconfigurar e reenviar">Devolver p/ reconfigurar</button>
+              <button onClick={() => { setAcaoForca('CANCELAR'); setTxtForca(''); }} className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100" title="A viagem não vai acontecer (força maior)">Cancelar planejamento</button>
+            </>
+          )}
+          {v.statusPlanejamento === 'CANCELADO' && podeAprovarDespesa &&
+            <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100" title="Cancelado por engano: reativa e volta para ajuste">Reativar planejamento</button>}
         </div>
       </div>
+
+      {/* Cancelado: o motivo fica à vista — é o rastro de por que a viagem aprovada não saiu. */}
+      {v.statusPlanejamento === 'CANCELADO' && (
+        <div className="mb-6 rounded-xl border border-rose-200 bg-rose-50/60 p-4 text-sm text-rose-800">
+          <b>Planejamento cancelado{v.canceladoEm ? ` em ${fmtData(v.canceladoEm)}` : ''}.</b>
+          {v.motivoCancelamento ? <> Motivo: {v.motivoCancelamento}</> : null}
+          <span className="mt-1 block text-xs text-rose-700">Não recebe mais visitas nem despesas, e não entra na prestação de contas do mês. As despesas que estavam pendentes foram rejeitadas junto.</span>
+        </div>
+      )}
+
+      {/* Confirmação da ação de força maior (as duas exigem texto). */}
+      {acaoForca && (
+        <div className={`mb-6 rounded-xl border p-4 ${acaoForca === 'CANCELAR' ? 'border-rose-200 bg-rose-50/60' : 'border-sky-200 bg-sky-50/60'}`}>
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            {acaoForca === 'CANCELAR' ? 'Motivo do cancelamento *' : 'O que precisa ser reconfigurado? *'}
+          </label>
+          <textarea value={txtForca} onChange={(e) => setTxtForca(e.target.value)} rows={2} maxLength={500} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            placeholder={acaoForca === 'CANCELAR' ? 'Ex.: representante afastado; veículo quebrado; região remanejada…' : 'Ex.: trocar a região; refazer a sequência de visitas…'} />
+          <p className="mt-2 text-xs text-slate-600">
+            {acaoForca === 'CANCELAR'
+              ? 'O planejamento sai da prestação de contas e para de aceitar lançamentos. Despesas pendentes serão rejeitadas com este motivo — se houver despesa já APROVADA, resolva-a antes.'
+              : 'Volta para "Ajustado": o representante corrige e reenvia. As visitas apontadas e as despesas já lançadas continuam como estão.'}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => {
+                if (!txtForca.trim()) { toast('warning', acaoForca === 'CANCELAR' ? 'Informe o motivo do cancelamento.' : 'Informe o que reconfigurar.'); return; }
+                if (acaoForca === 'CANCELAR') void cancelarPlanejamento(txtForca.trim()); else void devolverPlanejamento(txtForca.trim());
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium text-white ${acaoForca === 'CANCELAR' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-capul-600 hover:bg-capul-700'}`}>
+              Confirmar {acaoForca === 'CANCELAR' ? 'cancelamento' : 'devolução'}
+            </button>
+            <button onClick={() => { setAcaoForca(null); setTxtForca(''); }} className="text-xs text-slate-500 hover:text-slate-700">Voltar</button>
+          </div>
+        </div>
+      )}
 
       {/* Painel de decisão do coordenador (ajuste/rejeição exigem comentário). */}
       {v.statusPlanejamento === 'ENVIADO' && podeAprovarDespesa && (
@@ -489,7 +561,7 @@ export function SupervisorViagemPage() {
         </div>
       )}
 
-      {!concluida && (
+      {!travada && (
         <form onSubmit={adicionar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="mb-1 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : emPlanejamento ? 'Incluir cliente no planejamento' : 'Registrar visita fora do plano'}</h2>
           {!editVisitaId && emPlanejamento && <p className="mb-4 text-xs text-sky-800">📋 Monte o roteiro: adicione os clientes que pretende visitar. Você aponta como realizada/pulada durante a execução.</p>}
@@ -584,7 +656,7 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3 text-slate-500">{p.atividade?.nome ?? '—'}</td>
                 <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${statusVisita(p.status).cls}`}>{statusVisita(p.status).label}</span></td>
                 <td className="px-4 py-3 text-slate-400">{p.observacao ?? '—'}</td>
-                <td className="px-4 py-3">{!concluida && (
+                <td className="px-4 py-3">{!travada && (
                   <div className="flex items-center gap-2">
                     {v.statusPlanejamento === 'EM_EXECUCAO' && p.status === 'PLANEJADA' && (
                       <>
@@ -604,10 +676,10 @@ export function SupervisorViagemPage() {
 
       <div className="mb-2 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">Despesas do mês ({v.despesas.length}) <span className="text-xs font-normal text-slate-400">— total {brl(totalDespesas)}</span></h2>
-        {!concluida && <button onClick={() => { if (showDesp) { limparDesp(); } else { limparDesp(); setShowDesp(true); } }} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-capul-700"><Plus className="h-3.5 w-3.5" /> Nova despesa</button>}
+        {!travada && <button onClick={() => { if (showDesp) { limparDesp(); } else { limparDesp(); setShowDesp(true); } }} className="inline-flex items-center gap-1 rounded-lg bg-capul-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-capul-700"><Plus className="h-3.5 w-3.5" /> Nova despesa</button>}
       </div>
 
-      {showDesp && !concluida && (
+      {showDesp && !travada && (
         <form onSubmit={lancarDespesa} className="mb-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{editDespId ? 'Editar despesa' : 'Nova despesa'}</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -676,7 +748,7 @@ export function SupervisorViagemPage() {
                     {(d.anexos ?? []).map((a, i) => (
                       <span key={a.id} className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
                         <button onClick={() => void verAnexo(d.id, a.id)} className="inline-flex items-center gap-0.5 hover:text-capul-600" title="Ver comprovante"><Paperclip className="h-3 w-3" />{(d.comprovanteObjectKey ? i + 2 : i + 1)}</button>
-                        {!concluida && <button onClick={() => void removerAnexo(d.id, a.id)} className="text-rose-400 hover:text-rose-600" title="Remover anexo"><Trash2 className="h-3 w-3" /></button>}
+                        {!travada && <button onClick={() => void removerAnexo(d.id, a.id)} className="text-rose-400 hover:text-rose-600" title="Remover anexo"><Trash2 className="h-3 w-3" /></button>}
                       </span>
                     ))}
                     {podeAprovarDespesa && d.situacao === 'PENDENTE' && (
@@ -685,7 +757,7 @@ export function SupervisorViagemPage() {
                         <button onClick={() => { setRejDesp(d.id); setMotivoRej(''); }} className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 hover:bg-rose-100">Rejeitar</button>
                       </>
                     )}
-                    {!concluida && (
+                    {!travada && (
                       <>
                         <button onClick={() => abrirEdicaoDesp(d)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
                         <button onClick={() => void removerDespesa(d.id)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>

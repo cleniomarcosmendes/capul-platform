@@ -32,6 +32,7 @@ const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
   REJEITADO: { label: 'Rejeitado', cls: 'bg-rose-100 text-rose-700' },
   EM_EXECUCAO: { label: 'Em execução', cls: 'bg-indigo-100 text-indigo-700' },
   CONCLUIDO: { label: 'Concluído', cls: 'bg-slate-100 text-slate-600' },
+  CANCELADO: { label: 'Cancelado', cls: 'bg-rose-100 text-rose-700' },
 };
 const statusPlan = (s?: string | null) => STATUS_PLAN[s ?? ''] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 
