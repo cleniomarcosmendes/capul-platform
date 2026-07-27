@@ -1273,3 +1273,37 @@ astigmatismo (halo). Por isso fica como **opção do usuário**, não default.
 - Revisar contraste WCAG AA em todos os componentes (cards, badges, inputs).
 - **Não** é um passo de layout — é projeto próprio. Avaliar prioridade depois do
   rollout de layout do Workspace.
+
+---
+
+## [Logística/RDV] Pontos em aberto da onda de 27/07
+
+**Contexto:** onda de 8 commits no RDV (escopo do conteúdo, cancelar/devolver
+planejamento, despesa da autoridade nascendo aprovada, adiantamento só-leitura no
+app, e a amarração explícita Supervisor de Departamento × departamento). Tudo
+entregue e verificado; o que segue são resíduos de decisão, não pendência técnica.
+
+### 1. Departamento com DOIS supervisores — o modelo admite um só
+A migration `20260727180000_supervisor_departamento` tem `@@unique(filial,
+departamento)`. No DEV, um departamento da filial matriz tinha dois supervisores
+entre seus veículos (`clenio` e `supdept01`) e ficou **sem responsável de
+propósito** (conceder autoridade sobre dinheiro no chute é pior). **Decidir:** um
+departamento pode legitimamente ter titular + substituto? Se sim, o unique vira
+`(filial, departamento, usuario)` e a tela passa a listar N responsáveis.
+**Verificar após o deploy:** a tela Equipe › Supervisores de Departamento mostra
+em amarelo os departamentos sem responsável — em PROD isso depende do estado de
+`veiculo.supervisorId` de lá.
+
+### 2. Auto-serviço de adiantamento no desktop — manter?
+Em 27/07 o lançamento de adiantamento saiu do app (ficou só leitura). No
+**desktop** o supervisor de área ainda lança o próprio (nasce PENDENTE, o
+coordenador decide) — a decisão dos 3 perfis segue valendo. **Decidir:** se a
+intenção era tirar o auto-serviço de vez, some também do desktop e o lançamento
+passa a ser exclusivo de coordenador/departamento.
+
+### 3. Frota × RDV: duas fontes de "departamento", de propósito
+O RDV agora usa `supervisor_departamento`; a **frota** segue derivando de
+`veiculo.supervisorId` + `departamentoLotacaoId`. É intencional (lá o campo
+significa "responsável pelo veículo"). **Não reunificar** — está comentado no
+código dos dois lados. Se um dia a frota também precisar de amarração explícita,
+é outra decisão, não uma "correção de inconsistência".
