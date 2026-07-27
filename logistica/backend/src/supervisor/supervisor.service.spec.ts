@@ -357,3 +357,119 @@ describe('SupervisorService.criarViagemSupervisor — exige cadastro + coordenad
     expect(prisma.viagem.create).not.toHaveBeenCalled();
   });
 });
+
+// ⭐ Escopo do CONTEÚDO do RDV (visitas/despesas). Antes essas rotas checavam só a
+// filial: qualquer papel do @Roles da classe — inclusive OPERADOR_ENTREGA e um
+// supervisor COLEGA — lançava/removia visita e despesa no RDV alheio. Agora valem as
+// MESMAS pessoas de enviar/iniciar: dono (por matrícula), coordenador dele, Supervisor
+// de Departamento do depto, ADMIN.
+describe('SupervisorService conteúdo do RDV — escopo dono/coordenador/depto', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+  // Planejamento de OUTRO representante: dono E09999, coordenador 'outro-coord', depto 'd-outro'.
+  const planAlheio = () => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    criadoPorId: 'outro', mesReferencia: 202607, supervisorRegistroId: 's-outro', veiculoId: null,
+    supervisorRegistro: { coordenadorId: 'outro-coord', matricula: 'E09999', departamentoId: 'd-outro' },
+  });
+  const planDoMeuTime = () => ({ ...planAlheio(), supervisorRegistro: { coordenadorId: 'u1', matricula: 'E09999', departamentoId: 'd-outro' } });
+
+  it('adicionarVisita: SUPERVISOR COLEGA (matrícula diferente) → 403 e NÃO cria a visita', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planAlheio());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Colega' }]); // chapa ≠ E09999
+    await expect(svc.adicionarVisita('v1', { clienteNome: 'X' } as any, comRole('SUPERVISOR'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.parada.create).not.toHaveBeenCalled();
+  });
+
+  it('adicionarVisita: OPERADOR_ENTREGA (não participa do RDV) → 403', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planAlheio());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Operador' }]);
+    await expect(svc.adicionarVisita('v1', { clienteNome: 'X' } as any, comRole('OPERADOR_ENTREGA'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.parada.create).not.toHaveBeenCalled();
+  });
+
+  it('apontarVisita: COORDENADOR de OUTRO time → 403 e NÃO aponta', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planAlheio()); // coordenadorId = 'outro-coord'
+    await expect(svc.apontarVisita('v1', 'p1', { status: 'REALIZADA' } as any, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.parada.update).not.toHaveBeenCalled();
+  });
+
+  it('apontarVisita: COORDENADOR do representante → aponta (fluxo legítimo preservado)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planDoMeuTime());
+    prisma.parada.findUnique.mockResolvedValue({ id: 'p1', viagemId: 'v1', localClienteId: null, latitude: null });
+    prisma.parada.update.mockResolvedValue({ id: 'p1', status: 'REALIZADA', localClienteId: null });
+    await svc.apontarVisita('v1', 'p1', { status: 'REALIZADA' } as any, comRole('COORDENADOR'));
+    expect(prisma.parada.update.mock.calls[0][0].data.status).toBe('REALIZADA');
+  });
+
+  it('lancarDespesa: SUPERVISOR COLEGA no RDV alheio → 403 e NÃO cria a despesa', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planAlheio());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Colega' }]);
+    await expect(svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 50 } as any, comRole('SUPERVISOR'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
+  });
+
+  it('removerDespesa: COORDENADOR de OUTRO time → 403 e NÃO apaga', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planAlheio());
+    await expect(svc.removerDespesa('v1', 'd1', comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.despesaVeiculo.delete).not.toHaveBeenCalled();
+  });
+
+  it('concluirViagemSupervisor: SUPERVISOR COLEGA → 403 (não fecha o RDV do outro)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planAlheio());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Colega' }]);
+    await expect(svc.concluirViagemSupervisor('v1', comRole('SUPERVISOR'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('Supervisor de Departamento no SEU depto lança visita (decide por departamento, sem matrícula)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue({ ...planAlheio(), supervisorRegistro: { coordenadorId: 'outro-coord', matricula: 'E09999', departamentoId: 'd1' } });
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]);
+    prisma.parada.count.mockResolvedValue(0);
+    prisma.parada.create.mockResolvedValue({ id: 'p9', status: 'REALIZADA', localClienteId: null });
+    await svc.adicionarVisita('v1', { clienteNome: 'X' } as any, comRole('SUPERVISOR_FROTA'));
+    expect(prisma.parada.create).toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+// ⭐ Segregação de função no dinheiro: quem LANÇOU a despesa não decide sobre ela,
+// nem sendo o coordenador do representante (o gate de 14/07 fechou só o lado do
+// SUPERVISOR). ADMIN é break-glass, como nos demais gates do serviço.
+describe('SupervisorService.decidirDespesa — quem lançou não aprova', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.despesaVeiculo.update.mockResolvedValue({ id: 'd1' });
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+  const despesa = (criadoPorId: string) => ({
+    id: 'd1', viagemId: 'v1', filialId: 'f1', criadoPorId,
+    viagem: { tipo: 'SUPERVISOR', filialId: 'f1', supervisorRegistro: { coordenadorId: 'u1', departamentoId: 'd1' } },
+  });
+
+  it('COORDENADOR que LANÇOU a despesa → 403 (não aprova a própria)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u1'));
+    await expect(svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
+  });
+
+  it('COORDENADOR que NÃO lançou → aprova normalmente', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('supervisor-de-campo'));
+    await svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('COORDENADOR'));
+    expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBe('APROVADA');
+  });
+
+  it('ADMIN (break-glass) decide mesmo tendo lançado', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u1'));
+    await svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('ADMIN'));
+    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+  });
+});

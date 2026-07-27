@@ -395,6 +395,18 @@ export class SupervisorService {
     throw new ForbiddenException('Apenas o representante dono do planejamento, o coordenador dele ou o Supervisor de Departamento pode fazer isso.');
   }
 
+  /** Carrega o planejamento JÁ com o dono/gestor conferido — atalho para as operações
+   *  de CONTEÚDO do RDV (visita e despesa). Antes essas rotas checavam só a filial, de
+   *  modo que qualquer papel do @Roles da classe (inclusive OPERADOR_ENTREGA e um
+   *  supervisor COLEGA) lançava/removia visita e despesa no RDV alheio — o mesmo furo
+   *  que `enviar`/`iniciar` já fechavam. O escopo agora é único: dono (por matrícula),
+   *  coordenador dele, Supervisor de Departamento do depto, ou ADMIN. */
+  private async planejamentoDoDono(id: string, user: JwtPayload) {
+    const v = await this.planejamentoOuErro(id, filialDoUsuario(user));
+    await this.assertDonoOuGestorPlanejamento(v, user);
+    return v;
+  }
+
   async enviarPlanejamento(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
@@ -510,9 +522,7 @@ export class SupervisorService {
   // ---- Visitas (paradas) da viagem ----
   async adicionarVisita(viagemId: string, dto: AdicionarVisitaDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
-    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
-    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    const v = await this.planejamentoDoDono(viagemId, user);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para adicionar visitas.');
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     if (dto.atividadeId) {
@@ -589,9 +599,7 @@ export class SupervisorService {
    *  efetiva / obs / data) ou PULADA. Só faz sentido em execução. */
   async apontarVisita(viagemId: string, paradaId: string, dto: ApontarVisitaDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
-    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Planejamento não encontrado.');
-    if (v.filialId !== filialId) throw new ForbiddenException('Planejamento de outra filial.');
+    const v = await this.planejamentoDoDono(viagemId, user);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Planejamento concluído — reabra para apontar.');
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
@@ -630,23 +638,16 @@ export class SupervisorService {
   }
 
   async removerVisita(viagemId: string, paradaId: string, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
-    const p = await this.prisma.parada.findUnique({
-      where: { id: paradaId },
-      include: { viagem: { select: { id: true, tipo: true, filialId: true, situacao: true } } },
-    });
-    if (!p || p.viagemId !== viagemId || p.viagem.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Visita não encontrada.');
-    if (p.viagem.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
-    if (p.viagem.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover visitas.');
+    const v = await this.planejamentoDoDono(viagemId, user);
+    const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
+    if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover visitas.');
     await this.prisma.parada.delete({ where: { id: paradaId } });
     return { ok: true };
   }
 
   async concluirViagemSupervisor(id: string, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
-    const v = await this.prisma.viagem.findUnique({ where: { id } });
-    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
-    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    const v = await this.planejamentoDoDono(id, user);
     if (v.situacao === StatusViagem.CONCLUIDA) return v;
     return this.prisma.viagem.update({
       where: { id },
@@ -657,9 +658,7 @@ export class SupervisorService {
   // ---- Despesas da viagem do supervisor (compõem a RDV) ----
   async lancarDespesa(viagemId: string, dto: LancarDespesaSupervisorDto, user: JwtPayload, recibos?: ReciboBinario[]) {
     const filialId = filialDoUsuario(user);
-    const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
-    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
-    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    const v = await this.planejamentoDoDono(viagemId, user);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para lançar despesas.');
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     // Fila offline (app): reenvio com a mesma chave não duplica a despesa.
@@ -697,7 +696,8 @@ export class SupervisorService {
   }
 
   /** Decisão do coordenador sobre a despesa (6d): APROVADA ou CONTESTADA (rejeita,
-   *  com motivo). Só o coordenador do supervisor (ou gestor) decide. */
+   *  com motivo). Só o coordenador do supervisor (ou gestor) decide — e nunca quem
+   *  lançou (segregação de função). */
   async decidirDespesa(viagemId: string, despesaId: string, decisao: 'APROVADA' | 'CONTESTADA', motivo: string | undefined, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const d = await this.prisma.despesaVeiculo.findUnique({
@@ -707,6 +707,16 @@ export class SupervisorService {
     if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
     if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
     await this.assertPodeDecidir(d.viagem.supervisorRegistro, user);
+    // Segregação de função (dinheiro): quem LANÇOU a despesa não a aprova/contesta,
+    // nem sendo o coordenador do representante. O back-office pode lançar pelo
+    // representante — mas aí a decisão fica com o outro lado (Supervisor de
+    // Departamento / ADMIN). Espelha o gate de 14/07, que fechou o mesmo furo do
+    // lado do SUPERVISOR e deixou este em aberto. ADMIN é exceção (break-glass,
+    // igual a todos os outros gates deste serviço) — em PROD ADMIN é a TI, não o
+    // coordenador que presta contas.
+    if (d.criadoPorId === user.sub && !this.ehAdmin(user)) {
+      throw new ForbiddenException('Você lançou esta despesa — a decisão cabe ao Supervisor de Departamento ou a outro aprovador.');
+    }
     if (decisao === 'CONTESTADA' && !motivo?.trim()) throw new BadRequestException('Informe o motivo da rejeição da despesa.');
     return this.prisma.despesaVeiculo.update({
       where: { id: despesaId },
@@ -721,14 +731,13 @@ export class SupervisorService {
   }
 
   async removerDespesa(viagemId: string, despesaId: string, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
+    const v = await this.planejamentoDoDono(viagemId, user);
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id: despesaId },
-      include: { viagem: { select: { tipo: true, filialId: true, situacao: true } }, anexos: { select: { objectKey: true } } },
+      include: { anexos: { select: { objectKey: true } } },
     });
-    if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
-    if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
-    if (d.viagem?.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover despesas.');
+    if (!d || d.viagemId !== viagemId) throw new NotFoundException('Despesa não encontrada.');
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover despesas.');
     // Limpa os binários (comprovante legado + anexos) — as linhas AnexoDespesa somem por cascade.
     const chaves = [d.comprovanteObjectKey, ...d.anexos.map((a) => a.objectKey)].filter((k): k is string => !!k);
     for (const k of chaves) {
@@ -784,13 +793,10 @@ export class SupervisorService {
 
   async editarVisita(viagemId: string, paradaId: string, dto: AdicionarVisitaDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const p = await this.prisma.parada.findUnique({
-      where: { id: paradaId },
-      include: { viagem: { select: { tipo: true, filialId: true, situacao: true } } },
-    });
-    if (!p || p.viagemId !== viagemId || p.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Visita não encontrada.');
-    if (p.viagem.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
-    if (p.viagem.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
+    const v = await this.planejamentoDoDono(viagemId, user);
+    const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
+    if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
     if (dto.atividadeId) {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
@@ -812,13 +818,10 @@ export class SupervisorService {
 
   async editarDespesa(viagemId: string, despesaId: string, dto: EditarDespesaSupervisorDto, user: JwtPayload, recibo?: ReciboBinario) {
     const filialId = filialDoUsuario(user);
-    const d = await this.prisma.despesaVeiculo.findUnique({
-      where: { id: despesaId },
-      include: { viagem: { select: { tipo: true, filialId: true, situacao: true, veiculoId: true, mesReferencia: true } } },
-    });
-    if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
-    if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
-    if (d.viagem.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
+    const v = await this.planejamentoDoDono(viagemId, user);
+    const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId } });
+    if (!d || d.viagemId !== viagemId) throw new NotFoundException('Despesa não encontrada.');
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
     // Trocar o tipo reclassifica a categoria → recalcula se tem veículo.
     let tipoId: string | undefined;
     let veiculoId: string | null | undefined;
@@ -826,10 +829,10 @@ export class SupervisorService {
       const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
       if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
       tipoId = tipo.id;
-      veiculoId = tipo.categoria === 'INDIVIDUO' ? null : d.viagem.veiculoId;
+      veiculoId = tipo.categoria === 'INDIVIDUO' ? null : v.veiculoId;
     }
     // Editar a data também respeita o mês do planejamento (RDV é mensal).
-    if (dto.data !== undefined) this.assertDataNoMes(this.parseData(dto.data), d.viagem.mesReferencia, 'despesa');
+    if (dto.data !== undefined) this.assertDataNoMes(this.parseData(dto.data), v.mesReferencia, 'despesa');
     // Troca do comprovante: sobe o novo e remove o antigo (best-effort).
     if (recibo) {
       if (d.comprovanteObjectKey) {
