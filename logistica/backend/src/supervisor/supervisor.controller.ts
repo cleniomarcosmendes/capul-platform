@@ -4,7 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
-import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /** Converte o arquivo do multer no binário do comprovante (ou undefined). */
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
@@ -103,6 +103,20 @@ export class SupervisorController {
   @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   decidirPlanejamento(@Param('id') id: string, @Body() dto: DecidirPlanejamentoDto, @CurrentUser() user: JwtPayload) {
     return this.svc.decidirPlanejamento(id, dto.decisao, dto.comentario, user);
+  }
+  /** Força maior DEPOIS do aval: Ajustar/Rejeitar só valem no ENVIADO. Mesma
+   *  autoridade que decide (coordenador do representante / Supervisor de Departamento). */
+  @Patch('viagens/:id/cancelar')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
+  cancelarPlanejamento(@Param('id') id: string, @Body() dto: CancelarPlanejamentoDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.cancelarPlanejamento(id, dto.motivo, user);
+  }
+  /** Meio-termo entre seguir e cancelar: devolve o aprovado/em execução para o
+   *  representante reconfigurar e reenviar (volta a AJUSTADO). */
+  @Patch('viagens/:id/devolver')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
+  devolverPlanejamento(@Param('id') id: string, @Body() dto: DevolverPlanejamentoDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.devolverPlanejamento(id, dto.comentario, user);
   }
   @Patch('viagens/:id/iniciar')
   @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')

@@ -70,6 +70,13 @@ enum StatusPlanejamento {
   REJEITADO
   EM_EXECUCAO
   CONCLUIDO
+  // Força maior depois do aval (Jul/2026): a viagem não vai acontecer (representante
+  // afastado, veículo quebrado, região remanejada). Antes só existia Ajustar/Rejeitar,
+  // que valem apenas no ENVIADO — depois de APROVADO o planejamento ficava pendurado
+  // para sempre, e "cancelar" na prática virava esvaziar as visitas e concluir (RDV
+  // concluído e vazio, sujando histórico e fechamento). CANCELADO não entra na
+  // prestação de contas; reabrir (Supervisor de Departamento) desfaz.
+  CANCELADO
   @@schema("logistica")
 }
 
@@ -639,6 +646,11 @@ model Viagem {
   aprovadoPorId             String?      @map("aprovado_por_id")
   aprovadoEm                DateTime?    @map("aprovado_em")
   comentarioCoordenador     String?      @map("comentario_coordenador")
+  // Cancelamento do planejamento (força maior). Motivo é OBRIGATÓRIO na regra de
+  // negócio — a coluna é nullable só porque as linhas antigas não têm.
+  canceladoPorId            String?      @map("cancelado_por_id")
+  canceladoEm               DateTime?    @map("cancelado_em")
+  motivoCancelamento        String?      @map("motivo_cancelamento")
   criadoEm                  DateTime     @default(now()) @map("criado_em")
   criadoPorId               String       @map("criado_por_id")
   // Encerramento do ACERTO (independente da conclusão da viagem): presença =

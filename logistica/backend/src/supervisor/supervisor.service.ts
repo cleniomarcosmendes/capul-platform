@@ -399,6 +399,14 @@ export class SupervisorService {
     return v;
   }
 
+  /** Planejamento cancelado é histórico: não recebe visita, despesa nem conclusão.
+   *  Reabrir (Supervisor de Departamento) reativa se o cancelamento foi engano. */
+  private assertNaoCancelado(v: { statusPlanejamento: StatusPlanejamento | null; situacao: StatusViagem }) {
+    if (v.statusPlanejamento === 'CANCELADO' || v.situacao === StatusViagem.CANCELADA) {
+      throw new BadRequestException('Planejamento cancelado — reative pelo Supervisor de Departamento para voltar a lançar.');
+    }
+  }
+
   /** ids dos cadastros de representante que correspondem à matrícula do usuário logado
    *  — `chapa` normaliza prefixo/zeros, mesma regra do owner-check da escrita. */
   private async registrosDoUsuario(user: JwtPayload): Promise<string[]> {
@@ -454,6 +462,82 @@ export class SupervisorService {
     return this.prisma.viagem.update({
       where: { id },
       data: { statusPlanejamento: decisao, aprovadoPorId: user.sub, aprovadoEm: new Date(), comentarioCoordenador: comentario?.trim() || null },
+    });
+  }
+
+  /**
+   * Cancela o planejamento por FORÇA MAIOR (representante afastado, veículo quebrado,
+   * região remanejada) — o caminho que faltava depois do aval: Ajustar/Rejeitar só
+   * valem no ENVIADO, e sem isto o planejamento aprovado ficava pendurado para sempre
+   * (ou virava um RDV concluído e vazio, sujando histórico e fechamento).
+   *
+   * Quem cancela é a autoridade que aprova (coordenador do representante / Supervisor
+   * de Departamento / ADMIN) e o motivo é obrigatório — cancelamento sem justificativa
+   * é o que apaga o rastro de uma viagem que já consumiu dinheiro.
+   *
+   * Dinheiro: despesa já APROVADA barra o cancelamento (o valor entrou na prestação de
+   * contas — resolva antes, contestando ou fechando o mês). As PENDENTES são
+   * contestadas junto, com o motivo do cancelamento: senão ficariam órfãs na fila do
+   * coordenador, esperando decisão sobre uma viagem que não existe mais.
+   */
+  async cancelarPlanejamento(id: string, motivo: string | undefined, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.planejamentoOuErro(id, filialId);
+    await this.assertPodeDecidir(v.supervisorRegistro, user);
+    if (!motivo?.trim()) throw new BadRequestException('Informe o motivo do cancelamento.');
+    if (v.statusPlanejamento === 'CANCELADO') throw new BadRequestException('Planejamento já cancelado.');
+    if (v.statusPlanejamento === 'CONCLUIDO' || v.situacao === StatusViagem.CONCLUIDA) {
+      throw new BadRequestException('Planejamento concluído — reabra (Supervisor de Departamento) antes de cancelar.');
+    }
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    const aprovadas = await this.prisma.despesaVeiculo.count({ where: { viagemId: id, situacao: 'APROVADA' } });
+    if (aprovadas > 0) {
+      throw new BadRequestException(`Este planejamento tem ${aprovadas} despesa(s) já APROVADA(s) — resolva-as antes de cancelar (o valor já entrou na prestação de contas).`);
+    }
+    const just = motivo.trim();
+    return this.prisma.$transaction(async (tx) => {
+      await tx.despesaVeiculo.updateMany({
+        where: { viagemId: id, situacao: 'PENDENTE' },
+        data: { situacao: 'CONTESTADA', motivoContestacao: `Planejamento cancelado: ${just}`, aprovadoPorId: user.sub, aprovadoEm: new Date() },
+      });
+      return tx.viagem.update({
+        where: { id },
+        data: {
+          statusPlanejamento: 'CANCELADO',
+          situacao: StatusViagem.CANCELADA,
+          motivoCancelamento: just,
+          canceladoPorId: user.sub,
+          canceladoEm: new Date(),
+        },
+      });
+    });
+  }
+
+  /**
+   * Devolve o planejamento APROVADO/EM_EXECUCAO para reconfiguração — o meio-termo
+   * entre seguir e cancelar (mudou a rota, trocou a região). Volta para AJUSTADO, que
+   * é o estado que o `enviar` já aceita reenviar, então o ciclo fecha sem status novo.
+   * Não desfaz o que já foi executado: visitas apontadas e despesas lançadas
+   * continuam lá — é reconfiguração, não estorno.
+   */
+  async devolverPlanejamento(id: string, comentario: string | undefined, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.planejamentoOuErro(id, filialId);
+    await this.assertPodeDecidir(v.supervisorRegistro, user);
+    if (!comentario?.trim()) throw new BadRequestException('Informe o que precisa ser reconfigurado.');
+    if (!['APROVADO', 'EM_EXECUCAO'].includes(v.statusPlanejamento ?? '')) {
+      throw new BadRequestException('Só devolve para reconfiguração planejamento aprovado ou em execução (no ENVIADO use Ajustar/Rejeitar).');
+    }
+    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Planejamento concluído — reabra antes de devolver.');
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    return this.prisma.viagem.update({
+      where: { id },
+      data: {
+        statusPlanejamento: 'AJUSTADO',
+        comentarioCoordenador: comentario.trim(),
+        aprovadoPorId: user.sub,
+        aprovadoEm: new Date(),
+      },
     });
   }
 
@@ -548,6 +632,7 @@ export class SupervisorService {
   async adicionarVisita(viagemId: string, dto: AdicionarVisitaDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
+    this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para adicionar visitas.');
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     if (dto.atividadeId) {
@@ -625,6 +710,7 @@ export class SupervisorService {
   async apontarVisita(viagemId: string, paradaId: string, dto: ApontarVisitaDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
+    this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Planejamento concluído — reabra para apontar.');
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
@@ -664,6 +750,7 @@ export class SupervisorService {
 
   async removerVisita(viagemId: string, paradaId: string, user: JwtPayload) {
     const v = await this.planejamentoDoDono(viagemId, user);
+    this.assertNaoCancelado(v);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover visitas.');
@@ -673,6 +760,7 @@ export class SupervisorService {
 
   async concluirViagemSupervisor(id: string, user: JwtPayload) {
     const v = await this.planejamentoDoDono(id, user);
+    this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) return v;
     return this.prisma.viagem.update({
       where: { id },
@@ -684,6 +772,7 @@ export class SupervisorService {
   async lancarDespesa(viagemId: string, dto: LancarDespesaSupervisorDto, user: JwtPayload, recibos?: ReciboBinario[]) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
+    this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para lançar despesas.');
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     // Fila offline (app): reenvio com a mesma chave não duplica a despesa.
@@ -757,6 +846,7 @@ export class SupervisorService {
 
   async removerDespesa(viagemId: string, despesaId: string, user: JwtPayload) {
     const v = await this.planejamentoDoDono(viagemId, user);
+    this.assertNaoCancelado(v);
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id: despesaId },
       include: { anexos: { select: { objectKey: true } } },
@@ -806,6 +896,17 @@ export class SupervisorService {
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
     await this.assertEscopoSupervisor(v.supervisorRegistro, user);
+    // Cancelado por engano: reabrir REATIVA e devolve para AJUSTADO (o representante
+    // reconfigura e reenvia), limpando o rastro do cancelamento. As despesas que o
+    // cancelamento contestou NÃO voltam sozinhas para PENDENTE — quem decidiu que
+    // eram inválidas foi o coordenador, e ressuscitá-las em massa reabriria valores
+    // que ele já recusou; ele reavalia uma a uma se for o caso.
+    if (v.situacao === StatusViagem.CANCELADA || v.statusPlanejamento === 'CANCELADO') {
+      return this.prisma.viagem.update({
+        where: { id },
+        data: { situacao: StatusViagem.EM_CURSO, statusPlanejamento: 'AJUSTADO', canceladoPorId: null, canceladoEm: null, motivoCancelamento: null },
+      });
+    }
     if (v.situacao !== StatusViagem.CONCLUIDA) return v;
     return this.prisma.viagem.update({
       where: { id },
@@ -816,6 +917,7 @@ export class SupervisorService {
   async editarVisita(viagemId: string, paradaId: string, dto: AdicionarVisitaDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
+    this.assertNaoCancelado(v);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
@@ -841,6 +943,7 @@ export class SupervisorService {
   async editarDespesa(viagemId: string, despesaId: string, dto: EditarDespesaSupervisorDto, user: JwtPayload, recibo?: ReciboBinario) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
+    this.assertNaoCancelado(v);
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId } });
     if (!d || d.viagemId !== viagemId) throw new NotFoundException('Despesa não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');

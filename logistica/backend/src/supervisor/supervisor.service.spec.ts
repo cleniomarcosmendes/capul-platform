@@ -534,3 +534,119 @@ describe('SupervisorService leitura do RDV — escopo', () => {
     expect(storage.get).not.toHaveBeenCalled();
   });
 });
+
+// ⭐ Força maior DEPOIS do aval: até aqui só existiam Ajustar/Rejeitar (válidos no
+// ENVIADO), então o planejamento aprovado ficava pendurado para sempre — ou virava um
+// RDV concluído e vazio. CANCELADO tira da prestação de contas; devolver reconfigura.
+describe('SupervisorService cancelar/devolver planejamento', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.viagem.update.mockResolvedValue({ id: 'v1' });
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+  const plan = (statusPlanejamento: string, situacao = 'EM_CURSO') => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao, statusPlanejamento, criadoPorId: 'outro',
+    mesReferencia: 202607, supervisorRegistroId: 's1',
+    supervisorRegistro: { coordenadorId: 'u1', matricula: 'E09999', departamentoId: 'd1' },
+  });
+
+  it('cancelar sem motivo → 400 (o motivo é o único rastro do que aconteceu)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    await expect(svc.cancelarPlanejamento('v1', '  ', comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('cancelar APROVADO: marca CANCELADO/CANCELADA com motivo, autor e data', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    prisma.despesaVeiculo.count.mockResolvedValue(0);
+    await svc.cancelarPlanejamento('v1', 'Representante afastado', comRole('COORDENADOR'));
+    const data = prisma.viagem.update.mock.calls[0][0].data;
+    expect(data.statusPlanejamento).toBe('CANCELADO');
+    expect(data.situacao).toBe('CANCELADA');
+    expect(data.motivoCancelamento).toBe('Representante afastado');
+    expect(data.canceladoPorId).toBe('u1');
+  });
+
+  it('cancelar contesta as despesas PENDENTES (senão ficam órfãs na fila do coordenador)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('EM_EXECUCAO'));
+    prisma.despesaVeiculo.count.mockResolvedValue(0);
+    await svc.cancelarPlanejamento('v1', 'Veículo quebrado', comRole('COORDENADOR'));
+    const arg = prisma.despesaVeiculo.updateMany.mock.calls[0][0];
+    expect(arg.where).toEqual({ viagemId: 'v1', situacao: 'PENDENTE' });
+    expect(arg.data.situacao).toBe('CONTESTADA');
+    expect(arg.data.motivoContestacao).toContain('Veículo quebrado');
+  });
+
+  it('cancelar com despesa já APROVADA → 400 (dinheiro já entrou na prestação de contas)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('EM_EXECUCAO'));
+    prisma.despesaVeiculo.count.mockResolvedValue(2);
+    await expect(svc.cancelarPlanejamento('v1', 'motivo', comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('cancelar planejamento CONCLUÍDO → 400 (reabra antes)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('CONCLUIDO', 'CONCLUIDA'));
+    await expect(svc.cancelarPlanejamento('v1', 'motivo', comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+  });
+
+  it('cancelar com o mês do RDV encerrado → 400', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    prisma.fechamentoRdv.findUnique.mockResolvedValue({ id: 'f1' }); // mês fechado
+    await expect(svc.cancelarPlanejamento('v1', 'motivo', comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+  });
+
+  it('cancelar de COORDENADOR de OUTRO time → 403', async () => {
+    prisma.viagem.findUnique.mockResolvedValue({ ...plan('APROVADO'), supervisorRegistro: { coordenadorId: 'outro', matricula: 'E09999', departamentoId: 'd-outro' } });
+    await expect(svc.cancelarPlanejamento('v1', 'motivo', comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+  });
+
+  it('depois de cancelado: lançar despesa → 400 (não recebe mais nada)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('CANCELADO', 'CANCELADA'));
+    await expect(svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 10 } as any, comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+    expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
+  });
+
+  it('depois de cancelado: adicionar visita → 400', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('CANCELADO', 'CANCELADA'));
+    await expect(svc.adicionarVisita('v1', { clienteNome: 'X' } as any, comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+    expect(prisma.parada.create).not.toHaveBeenCalled();
+  });
+
+  it('reabrir um CANCELADO reativa como AJUSTADO e limpa o rastro do cancelamento', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('CANCELADO', 'CANCELADA'));
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]);
+    await svc.reabrirViagem('v1', comRole('SUPERVISOR_FROTA'));
+    const data = prisma.viagem.update.mock.calls[0][0].data;
+    expect(data.situacao).toBe('EM_CURSO');
+    expect(data.statusPlanejamento).toBe('AJUSTADO');
+    expect(data.motivoCancelamento).toBeNull();
+  });
+
+  it('devolver APROVADO → AJUSTADO (o representante reconfigura e reenvia)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    await svc.devolverPlanejamento('v1', 'Trocar a região', comRole('COORDENADOR'));
+    const data = prisma.viagem.update.mock.calls[0][0].data;
+    expect(data.statusPlanejamento).toBe('AJUSTADO');
+    expect(data.comentarioCoordenador).toBe('Trocar a região');
+  });
+
+  it('devolver EM_EXECUCAO → AJUSTADO (força maior no meio da viagem)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('EM_EXECUCAO'));
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]); // depto do rep
+    await svc.devolverPlanejamento('v1', 'Rota mudou', comRole('SUPERVISOR_FROTA'));
+    expect(prisma.viagem.update.mock.calls[0][0].data.statusPlanejamento).toBe('AJUSTADO');
+  });
+
+  it('devolver um ENVIADO → 400 (ali o caminho é Ajustar/Rejeitar)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    await expect(svc.devolverPlanejamento('v1', 'comentario', comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+  });
+
+  it('devolver sem comentário → 400', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    await expect(svc.devolverPlanejamento('v1', '', comRole('COORDENADOR'))).rejects.toThrow(BadRequestException);
+  });
+});

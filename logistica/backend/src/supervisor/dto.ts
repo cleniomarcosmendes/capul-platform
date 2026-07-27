@@ -8,6 +8,18 @@ export class DecidirPlanejamentoDto {
   @IsOptional() @IsString() @MaxLength(500) comentario?: string;
 }
 
+/** Cancelamento por força maior (depois do aval). Motivo OBRIGATÓRIO: é o único
+ *  rastro de por que a viagem aprovada não aconteceu. */
+export class CancelarPlanejamentoDto {
+  @IsString() @IsNotEmpty() @MaxLength(500) motivo!: string;
+}
+
+/** Devolver o planejamento aprovado/em execução para reconfiguração (volta a
+ *  AJUSTADO). Comentário OBRIGATÓRIO — diz o que mudar. */
+export class DevolverPlanejamentoDto {
+  @IsString() @IsNotEmpty() @MaxLength(500) comentario!: string;
+}
+
 // ---- Adiantamento (mensal, vários) ----
 export class LancarAdiantamentoDto {
   @IsString() @IsNotEmpty() @MaxLength(40) supervisorId!: string;
