@@ -39,7 +39,8 @@ describe('SupervisorService.rdv (RDV por planejamento)', () => {
   it('consulta despesas filtrando por situacao APROVADA (não soma PENDENTE/CONTESTADA)', async () => {
     prisma.viagem.findUnique.mockResolvedValue(viagemBase);
     await svc.rdv('v1', user());
-    const arg = prisma.viagem.findUnique.mock.calls[0][0];
+    // A ÚLTIMA chamada é a query da RDV — a primeira é o gate de escopo do planejamento.
+    const arg = prisma.viagem.findUnique.mock.calls.at(-1)![0];
     expect(arg.include.despesas.where).toEqual({ situacao: 'APROVADA' });
   });
 
@@ -471,5 +472,65 @@ describe('SupervisorService.decidirDespesa — quem lançou não aprova', () => 
     prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u1'));
     await svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('ADMIN'));
     expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+  });
+});
+
+// ⭐ Escopo de LEITURA: a listagem devolvia todos os RDVs da filial (no app, o
+// supervisor via a prestação de contas dos colegas) e o detalhe/RDV/comprovante
+// abriam qualquer um. Agora espelham o escopo da escrita.
+describe('SupervisorService leitura do RDV — escopo', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  it('listar (COORDENADOR): filtra por time + o que ele criou + o SEU cadastro', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Coord' }]);
+    prisma.supervisor.findMany.mockResolvedValue([{ id: 's-meu', matricula: '1047' }, { id: 's-outro', matricula: 'E09999' }]);
+    await svc.listarViagensSupervisor(comRole('COORDENADOR'));
+    const where = prisma.viagem.findMany.mock.calls[0][0].where;
+    expect(where.OR).toEqual([
+      { criadoPorId: 'u1' },
+      { supervisorRegistro: { coordenadorId: 'u1' } },
+      { supervisorRegistroId: { in: ['s-meu'] } }, // chapa('1047') === chapa('E01047')
+    ]);
+  });
+
+  it('listar (Supervisor de Departamento): filtra pelos SEUS departamentos', async () => {
+    prisma.veiculo.findMany.mockResolvedValue([{ departamentoLotacaoId: 'd1' }]);
+    prisma.$queryRaw.mockResolvedValue([]); // sem matrícula no login
+    await svc.listarViagensSupervisor(comRole('SUPERVISOR_FROTA'));
+    const where = prisma.viagem.findMany.mock.calls[0][0].where;
+    expect(where.OR).toContainEqual({ supervisorRegistro: { departamentoId: { in: ['d1'] } } });
+  });
+
+  it('listar (ADMIN): SEM filtro de escopo — vê a filial inteira', async () => {
+    await svc.listarViagensSupervisor(comRole('ADMIN'));
+    const where = prisma.viagem.findMany.mock.calls[0][0].where;
+    expect(where.OR).toBeUndefined();
+    expect(where.filialId).toBe('f1');
+  });
+
+  it('obterViagemSupervisor: planejamento de OUTRO time → 403', async () => {
+    prisma.viagem.findUnique.mockResolvedValue({
+      id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', criadoPorId: 'outro',
+      supervisorRegistro: { coordenadorId: 'outro-coord', matricula: 'E09999', departamentoId: 'd-outro' },
+      paradas: [], despesas: [], saidasVinculadas: [],
+    });
+    await expect(svc.obterViagemSupervisor('v1', comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+  });
+
+  it('obterReciboDespesa: comprovante de RDV alheio → 403 (não baixa do cofre)', async () => {
+    const storage = storageMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storage, locaisMock());
+    prisma.viagem.findUnique.mockResolvedValue({
+      id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', criadoPorId: 'outro',
+      supervisorRegistro: { coordenadorId: 'outro-coord', matricula: 'E09999', departamentoId: 'd-outro' },
+    });
+    await expect(svc.obterReciboDespesa('v1', 'd1', comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+    expect(storage.get).not.toHaveBeenCalled();
   });
 });

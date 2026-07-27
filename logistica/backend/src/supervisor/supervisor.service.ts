@@ -58,26 +58,18 @@ export class SupervisorService {
 
   /** Baixa um anexo específico da despesa (stream). Escopo por filial/viagem-supervisor. */
   async obterAnexoDespesa(viagemId: string, despesaId: string, anexoId: string, user: JwtPayload): Promise<{ buffer: Buffer; mimeType: string }> {
-    const filialId = filialDoUsuario(user);
-    const a = await this.prisma.anexoDespesa.findUnique({
-      where: { id: anexoId },
-      include: { despesa: { select: { viagemId: true, filialId: true, viagem: { select: { tipo: true } } } } },
-    });
-    if (!a || a.despesaId !== despesaId || a.despesa.viagemId !== viagemId || a.despesa.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Anexo não encontrado.');
-    if (a.despesa.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    await this.planejamentoDoDono(viagemId, user);
+    const a = await this.prisma.anexoDespesa.findUnique({ where: { id: anexoId }, include: { despesa: { select: { viagemId: true } } } });
+    if (!a || a.despesaId !== despesaId || a.despesa.viagemId !== viagemId) throw new NotFoundException('Anexo não encontrado.');
     const buffer = await this.storage.get(a.objectKey);
     return { buffer, mimeType: a.mime ?? 'application/octet-stream' };
   }
 
   /** Remove um anexo da despesa (some do cofre + do banco). */
   async removerAnexoDespesa(viagemId: string, despesaId: string, anexoId: string, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
-    const a = await this.prisma.anexoDespesa.findUnique({
-      where: { id: anexoId },
-      include: { despesa: { select: { viagemId: true, filialId: true, viagem: { select: { tipo: true } } } } },
-    });
-    if (!a || a.despesaId !== despesaId || a.despesa.viagemId !== viagemId || a.despesa.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Anexo não encontrado.');
-    if (a.despesa.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    await this.planejamentoDoDono(viagemId, user);
+    const a = await this.prisma.anexoDespesa.findUnique({ where: { id: anexoId }, include: { despesa: { select: { viagemId: true } } } });
+    if (!a || a.despesaId !== despesaId || a.despesa.viagemId !== viagemId) throw new NotFoundException('Anexo não encontrado.');
     await this.storage.remove(a.objectKey).catch(() => undefined);
     await this.prisma.anexoDespesa.delete({ where: { id: anexoId } });
     return { ok: true };
@@ -407,6 +399,36 @@ export class SupervisorService {
     return v;
   }
 
+  /** ids dos cadastros de representante que correspondem à matrícula do usuário logado
+   *  — `chapa` normaliza prefixo/zeros, mesma regra do owner-check da escrita. */
+  private async registrosDoUsuario(user: JwtPayload): Promise<string[]> {
+    const u = await this.matriculaDoUsuario(user.sub);
+    if (!u?.matricula?.trim()) return [];
+    const alvo = chapa(u.matricula);
+    const regs = await this.prisma.supervisor.findMany({
+      where: { filialId: filialDoUsuario(user) },
+      select: { id: true, matricula: true },
+    });
+    return regs.filter((r) => chapa(r.matricula) === alvo).map((r) => r.id);
+  }
+
+  /** Quais planejamentos o usuário ALCANÇA na LEITURA — espelha o escopo da escrita
+   *  (`assertDonoOuGestorPlanejamento`). Sem isso a listagem devolvia todos os RDVs da
+   *  filial: no app, o supervisor via a prestação de contas dos colegas (valores,
+   *  despesas e comprovantes de terceiros). ADMIN vê a filial inteira. */
+  private async escopoPlanejamentoWhere(user: JwtPayload): Promise<Prisma.ViagemWhereInput> {
+    if (this.ehAdmin(user)) return {};
+    const or: Prisma.ViagemWhereInput[] = [{ criadoPorId: user.sub }];
+    if (this.ehSupervisorDepto(user)) {
+      or.push({ supervisorRegistro: { departamentoId: { in: await this.deptosDoSupervisorDepto(user) } } });
+    } else {
+      or.push({ supervisorRegistro: { coordenadorId: user.sub } });
+    }
+    const meus = await this.registrosDoUsuario(user);
+    if (meus.length) or.push({ supervisorRegistroId: { in: meus } });
+    return { OR: or };
+  }
+
   async enviarPlanejamento(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
@@ -469,12 +491,13 @@ export class SupervisorService {
     });
   }
 
-  listarViagensSupervisor(user: JwtPayload, mes?: number, situacao?: string) {
+  async listarViagensSupervisor(user: JwtPayload, mes?: number, situacao?: string) {
     const filialId = filialDoUsuario(user);
     return this.prisma.viagem.findMany({
       where: {
         filialId,
         tipo: TipoViagem.SUPERVISOR,
+        ...(await this.escopoPlanejamentoWhere(user)),
         ...(mes ? { mesReferencia: mes } : {}),
         ...(situacao ? { situacao: situacao as StatusViagem } : {}),
       },
@@ -490,7 +513,7 @@ export class SupervisorService {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
       include: {
-        supervisorRegistro: { select: { id: true, nome: true, coordenadorId: true } },
+        supervisorRegistro: { select: { id: true, nome: true, coordenadorId: true, matricula: true, departamentoId: true } },
         paradas: {
           orderBy: { sequencia: 'asc' },
           include: {
@@ -513,6 +536,8 @@ export class SupervisorService {
     });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
+    // Abrir o RDV alheio expõe despesas e comprovantes de terceiros — mesmo escopo da escrita.
+    await this.assertDonoOuGestorPlanejamento(v, user);
     // KM total rodado no RDV = soma dos KMs das saídas vinculadas já fechadas.
     const kmTotalSaidas = (v.saidasVinculadas ?? []).reduce(
       (s, sd) => s + (sd.kmFinal != null && sd.kmInicial != null ? sd.kmFinal - sd.kmInicial : 0), 0);
@@ -748,15 +773,12 @@ export class SupervisorService {
   }
 
   /** Download do comprovante da despesa (o coordenador vê antes de decidir).
-   *  Escopo por filial: quem enxerga o planejamento enxerga o recibo. */
+   *  Quem enxerga o planejamento enxerga o recibo — e o escopo do planejamento é o
+   *  dono/coordenador/depto, não a filial inteira (nota fiscal é dado de terceiro). */
   async obterReciboDespesa(viagemId: string, despesaId: string, user: JwtPayload): Promise<{ buffer: Buffer; mimeType: string }> {
-    const filialId = filialDoUsuario(user);
-    const d = await this.prisma.despesaVeiculo.findUnique({
-      where: { id: despesaId },
-      include: { viagem: { select: { tipo: true, filialId: true } } },
-    });
-    if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
-    if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    await this.planejamentoDoDono(viagemId, user);
+    const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId } });
+    if (!d || d.viagemId !== viagemId) throw new NotFoundException('Despesa não encontrada.');
     if (!d.comprovanteObjectKey) throw new NotFoundException('Esta despesa não tem comprovante anexado.');
     const buffer = await this.storage.get(d.comprovanteObjectKey);
     return { buffer, mimeType: d.comprovanteMime ?? 'application/octet-stream' };
@@ -861,6 +883,8 @@ export class SupervisorService {
    */
   async rdv(viagemId: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
+    // A folha do RDV é a prestação de contas de UMA pessoa: mesmo escopo do detalhe.
+    await this.planejamentoDoDono(viagemId, user);
     const v = await this.prisma.viagem.findUnique({
       where: { id: viagemId },
       include: {
