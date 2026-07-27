@@ -12,7 +12,7 @@ import {
   removerDespesaApp, editarDespesaApp,
   iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor,
   listarAtividadesSup, listarTiposDespesaSup,
-  meuCadastroSup, listarAdiantamentosSup, lancarAdiantamentoSup, removerAdiantamentoSup,
+  meuCadastroSup, listarAdiantamentosSup,
   type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup, type NovaVisita, type NovaDespesa,
   type MeuCadastroSup, type AdiantamentoSup, type VisitaSup, type ViagemSup,
 } from '../api/supervisor';
@@ -140,11 +140,10 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [despViagemId, setDespViagemId] = useState(viagemId); // planejamento-alvo da despesa
   const [editDespId, setEditDespId] = useState<string | null>(null); // despesa em edição (senão: novo lançamento)
   const [planejamentos, setPlanejamentos] = useState<ViagemSup[]>([]); // do mês, p/ o seletor
-  // adiantamentos do mês (auto-serviço do supervisor de área — só o SEU cadastro)
+  // Adiantamentos do mês do próprio representante — SÓ LEITURA no app (o lançamento
+  // ficou no desktop, 27/07). Continua carregando porque é o que explica o saldo da RDV.
   const [meuSup, setMeuSup] = useState<MeuCadastroSup | null>(null);
   const [adiants, setAdiants] = useState<AdiantamentoSup[]>([]);
-  const [advValor, setAdvValor] = useState(''); const [advData, setAdvData] = useState(''); const [advObs, setAdvObs] = useState('');
-  const [salvA, setSalvA] = useState(false);
 
   const carregar = useCallback(async () => {
     const [d, a, t] = await Promise.all([
@@ -324,29 +323,6 @@ export function SupervisorViagemScreen({ route }: Props) {
     ]);
   };
 
-  const limparAdiant = () => { setAdvValor(''); setAdvData(''); setAdvObs(''); };
-  const salvarAdiantamento = async () => {
-    if (!meuSup) { Alert.alert('Adiantamento', 'Seu cadastro de supervisor ainda não foi montado no time. Peça ao coordenador para te cadastrar.'); return; }
-    if (!v?.mesReferencia) { Alert.alert('Adiantamento', 'Mês da viagem indefinido.'); return; }
-    if (parseMoeda(advValor) <= 0) { Alert.alert('Adiantamento', 'Informe o valor do adiantamento.'); return; }
-    if (advData.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(advData.trim())) { Alert.alert('Adiantamento', 'Data inválida — use o formato AAAA-MM-DD (ou deixe vazio para hoje).'); return; }
-    setSalvA(true);
-    try {
-      await lancarAdiantamentoSup({ supervisorId: meuSup.id, mesReferencia: v.mesReferencia, valor: parseMoeda(advValor), data: advData.trim() || undefined, observacao: advObs.trim() || undefined });
-      limparAdiant(); await carregar();
-      Alert.alert('Pronto', 'Adiantamento lançado — aguardando aprovação do coordenador.');
-    } catch (e) { Alert.alert('Erro', msg(e, 'Falha ao lançar o adiantamento.')); } finally { setSalvA(false); }
-  };
-  const removerAdiant = (id: string) => {
-    Alert.alert('Remover adiantamento', 'Confirma remover este adiantamento?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Remover', style: 'destructive', onPress: async () => {
-        try { await removerAdiantamentoSup(id); await carregar(); }
-        catch (e) { Alert.alert('Erro', msg(e, 'Falha ao remover o adiantamento.')); }
-      } },
-    ]);
-  };
-
   if (carregando) return <View style={styles.center}><ActivityIndicator size="large" color={CAPUL} /></View>;
   if (!v) return <View style={styles.center}><Text>Planejamento não encontrado.</Text></View>;
 
@@ -405,16 +381,12 @@ export function SupervisorViagemScreen({ route }: Props) {
                   <Text style={styles.itemSub}>{fmtData(a.dataAdiantamento)}{a.observacao ? ` · ${a.observacao}` : ''}</Text>
                   {a.situacao === 'REJEITADO' && a.motivoRejeicao ? <Text style={styles.advRej}>Motivo: {a.motivoRejeicao}</Text> : null}
                 </View>
-                <TouchableOpacity onPress={() => removerAdiant(a.id)}><Text style={styles.advDel}>Remover</Text></TouchableOpacity>
               </View>
             );
           })}
-          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={advValor} onChangeText={(t) => setAdvValor(maskMoeda(t))} />
-          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Data AAAA-MM-DD (opcional — hoje)" value={advData} onChangeText={setAdvData} autoCapitalize="none" />
-          <TextInput style={styles.input} onFocus={aoFocar} placeholder="Observação (opcional)" value={advObs} onChangeText={setAdvObs} />
-          <TouchableOpacity style={[styles.btn, salvA && styles.btnOff]} onPress={() => void salvarAdiantamento()} disabled={salvA}>
-            <Text style={styles.btnTxt}>{salvA ? 'Salvando…' : 'Lançar adiantamento'}</Text>
-          </TouchableOpacity>
+          {/* Adiantamento é SÓ LEITURA no app (27/07): lançar/remover ficou no desktop.
+              A lista fica porque é ela que explica o saldo da RDV para quem está em campo. */}
+          <Text style={styles.coment}>💻 O lançamento do adiantamento é feito no computador (Entregas › Supervisores).</Text>
         </View>
       )}
 
