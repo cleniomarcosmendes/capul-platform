@@ -26,8 +26,8 @@ export class SupervisorController {
 
   // ---- Cadastro de Supervisor de Área + vínculo (Fase 6a) ----
   @Get('supervisores')
-  supervisores(@CurrentUser() user: JwtPayload, @Query('ativos') ativos?: string) {
-    return this.svc.listarSupervisores(user, ativos === 'true');
+  supervisores(@CurrentUser() user: JwtPayload, @Query('ativos') ativos?: string, @Query('filialId') filialId?: string) {
+    return this.svc.listarSupervisores(user, ativos === 'true', filialId);
   }
   // Escrita do cadastro ("montar o time" — inclui gravar `coordenadorId`, que define quem
   // aprova a prestação de contas): SÓ o Supervisor de Departamento (nos SEUS departamentos)
@@ -35,13 +35,13 @@ export class SupervisorController {
   // como coordenador e aprovaria as próprias despesas). O self-service do RDV só LÊ isto.
   @Post('supervisores')
   @Roles('SUPERVISOR_FROTA')
-  criarSupervisor(@Body() dto: CriarSupervisorDto, @CurrentUser() user: JwtPayload) {
-    return this.svc.criarSupervisor(dto, user);
+  criarSupervisor(@Body() dto: CriarSupervisorDto, @CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.criarSupervisor(dto, user, filialId);
   }
   @Patch('supervisores/:id')
   @Roles('SUPERVISOR_FROTA')
-  atualizarSupervisor(@Param('id') id: string, @Body() dto: AtualizarSupervisorDto, @CurrentUser() user: JwtPayload) {
-    return this.svc.atualizarSupervisor(id, dto, user);
+  atualizarSupervisor(@Param('id') id: string, @Body() dto: AtualizarSupervisorDto, @CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.atualizarSupervisor(id, dto, user, filialId);
   }
 
   // ---- Quem responde por cada departamento no RDV (aba Equipe) ----
@@ -49,21 +49,21 @@ export class SupervisorController {
   // FONTE da autoridade do SUPERVISOR_FROTA; se ele a editasse, se acrescentaria em
   // qualquer departamento e aprovaria a prestação de contas de quem quisesse.
   @Get('departamentos-responsavel')
-  supervisoresDepartamento(@CurrentUser() user: JwtPayload) {
-    return this.svc.listarSupervisoresDepartamento(user);
+  supervisoresDepartamento(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.listarSupervisoresDepartamento(user, filialId);
   }
   /** Departamentos DA FILIAL — seletor do "adicionar departamento" da amarração. */
   @Get('departamentos-filial')
-  departamentosDaFilial(@CurrentUser() user: JwtPayload) {
-    return this.svc.departamentosDaFilial(user);
+  departamentosDaFilial(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.departamentosDaFilial(user, filialId);
   }
   @Put('departamentos-responsavel/:departamentoId')
-  definirSupervisorDepartamento(@Param('departamentoId') departamentoId: string, @Body() dto: DefinirSupervisorDepartamentoDto, @CurrentUser() user: JwtPayload) {
-    return this.svc.definirSupervisorDepartamento(departamentoId, dto.usuarioId, user);
+  definirSupervisorDepartamento(@Param('departamentoId') departamentoId: string, @Body() dto: DefinirSupervisorDepartamentoDto, @CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.definirSupervisorDepartamento(departamentoId, dto.usuarioId, user, filialId);
   }
   @Delete('departamentos-responsavel/:departamentoId')
-  removerSupervisorDepartamento(@Param('departamentoId') departamentoId: string, @CurrentUser() user: JwtPayload) {
-    return this.svc.removerSupervisorDepartamento(departamentoId, user);
+  removerSupervisorDepartamento(@Param('departamentoId') departamentoId: string, @CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.removerSupervisorDepartamento(departamentoId, user, filialId);
   }
 
   // ---- Atividades ----

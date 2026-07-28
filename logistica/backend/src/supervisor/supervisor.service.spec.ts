@@ -791,3 +791,60 @@ describe('SupervisorService — amarração Supervisor de Departamento × depart
     expect(core.departamentosDaFilial).toHaveBeenCalledWith('f1');
   });
 });
+
+// ⭐ 28/07: o ADMIN é global por política (`podeVerOutrasFiliais`), mas a aba Equipe
+// usava só a filial do token — logado na matriz, ele não alcançava o time das outras 34
+// filiais sem trocar a filial da SESSÃO no Hub. Agora informa a filial alvo; para os
+// demais papéis o parâmetro é IGNORADO (a filial vem do token, como no resto do módulo).
+describe('SupervisorService — filial alvo da aba Equipe (ADMIN global)', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  let core: any;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    core = {
+      validarFilial: jest.fn(), validarDepartamento: jest.fn(), validarUsuario: jest.fn(),
+      departamentoEhDaFilial: jest.fn().mockResolvedValue(true),
+      nomesDepartamentos: jest.fn().mockResolvedValue(new Map()),
+      nomesUsuarios: jest.fn().mockResolvedValue(new Map()),
+      departamentosDaFilial: jest.fn().mockResolvedValue([]),
+    };
+    svc = new SupervisorService(prisma, condutorMock(), core, storageMock(), locaisMock());
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  it('ADMIN informando outra filial: lista o time DELA (e valida a filial no core)', async () => {
+    prisma.supervisor.findMany.mockResolvedValue([]);
+    await svc.listarSupervisores(comRole('ADMIN'), false, 'f2');
+    expect(core.validarFilial).toHaveBeenCalledWith('f2');
+    expect(prisma.supervisor.findMany.mock.calls[0][0].where.filialId).toBe('f2');
+  });
+
+  it('Supervisor de Departamento informando outra filial: IGNORADO, fica na do token', async () => {
+    prisma.supervisor.findMany.mockResolvedValue([]);
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([]);
+    await svc.listarSupervisores(comRole('SUPERVISOR_FROTA'), false, 'f2');
+    expect(core.validarFilial).not.toHaveBeenCalled();
+    expect(prisma.supervisor.findMany.mock.calls[0][0].where.filialId).toBe('f1');
+  });
+
+  it('a amarração também segue a filial alvo do ADMIN (leitura e escrita)', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([]);
+    prisma.supervisor.groupBy.mockResolvedValue([]);
+    await svc.listarSupervisoresDepartamento(comRole('ADMIN'), 'f2');
+    expect(prisma.supervisorDepartamento.findMany.mock.calls[0][0].where).toEqual({ filialId: 'f2' });
+
+    prisma.supervisorDepartamento.upsert.mockResolvedValue({ id: 'sd1' });
+    await svc.definirSupervisorDepartamento('d9', 'u9', comRole('ADMIN'), 'f2');
+    // o departamento é conferido contra a filial ALVO, não contra a do token
+    expect(core.departamentoEhDaFilial).toHaveBeenCalledWith('d9', 'f2');
+    expect(prisma.supervisorDepartamento.upsert.mock.calls[0][0].where).toEqual({ filialId_departamentoId: { filialId: 'f2', departamentoId: 'd9' } });
+  });
+
+  it('criar representante na filial alvo grava nela (não na do token)', async () => {
+    prisma.supervisor.findFirst.mockResolvedValue(null);
+    prisma.supervisor.create.mockResolvedValue({ id: 's1' });
+    await svc.criarSupervisor({ matricula: 'E1', nome: 'X', departamentoId: 'd9' } as any, comRole('ADMIN'), 'f2');
+    expect(prisma.supervisor.create.mock.calls[0][0].data.filialId).toBe('f2');
+  });
+});

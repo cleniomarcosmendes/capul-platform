@@ -76,8 +76,29 @@ export class SupervisorService {
   }
 
   // ---- Cadastro de Supervisor de Área + vínculo com o coordenador (Fase 6a) ----
-  async listarSupervisores(user: JwtPayload, somenteAtivos?: boolean) {
-    const filialId = filialDoUsuario(user);
+  /**
+   * Filial em que a aba Equipe está operando.
+   *
+   * O JWT carrega UMA filial ativa e o módulo inteiro trabalha com ela. Mas o ADMIN é
+   * global por política (ver `podeVerOutrasFiliais` em filial-scope) e a Equipe é tela
+   * de CONFIGURAÇÃO: obrigá-lo a trocar a filial da SESSÃO no Hub para montar o time de
+   * cada uma das 35 filiais é atrito sem ganho de segurança. Então ele pode informar
+   * `filialId` e a aba inteira segue esse alvo — a sessão não muda.
+   *
+   * Para os demais papéis o parâmetro é IGNORADO (não 403): a filial vem sempre do
+   * token, como em todo o resto do módulo. Ignorar em vez de barrar evita que um
+   * cliente desatualizado quebre, e o efeito é o mesmo — ninguém sai da própria filial.
+   */
+  private async filialAlvo(user: JwtPayload, filialId?: string): Promise<string> {
+    const propria = filialDoUsuario(user);
+    const alvo = filialId?.trim();
+    if (!alvo || alvo === propria || !this.ehAdmin(user)) return propria;
+    await this.core.validarFilial(alvo);
+    return alvo;
+  }
+
+  async listarSupervisores(user: JwtPayload, somenteAtivos?: boolean, filialIdAlvo?: string) {
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
     const escopo = await this.escopoSupervisorWhere(user);
     const lista = await this.prisma.supervisor.findMany({
       where: { filialId, ...escopo, ...(somenteAtivos ? { ativo: true } : {}) },
@@ -88,8 +109,8 @@ export class SupervisorService {
     return lista.map((s) => ({ ...s, coordenadorNome: s.coordenadorId ? (nomes.get(s.coordenadorId) ?? null) : null }));
   }
 
-  async criarSupervisor(dto: CriarSupervisorDto, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
+  async criarSupervisor(dto: CriarSupervisorDto, user: JwtPayload, filialIdAlvo?: string) {
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
     const departamentoId = dto.departamentoId?.trim() || null;
     await this.assertPodeGerirDepartamento(departamentoId, user);
     const matricula = dto.matricula.trim().toUpperCase();
@@ -101,8 +122,8 @@ export class SupervisorService {
     });
   }
 
-  async atualizarSupervisor(id: string, dto: AtualizarSupervisorDto, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
+  async atualizarSupervisor(id: string, dto: AtualizarSupervisorDto, user: JwtPayload, filialIdAlvo?: string) {
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
     const s = await this.prisma.supervisor.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('Supervisor não encontrado.');
     if (s.filialId !== filialId) throw new ForbiddenException('Supervisor de outra filial.');
@@ -310,8 +331,8 @@ export class SupervisorService {
    * responsável é grave: departamento com gente e sem aprovador trava a prestação de
    * contas; sem gente, é só um departamento que ainda não entrou no RDV.
    */
-  async listarSupervisoresDepartamento(user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
+  async listarSupervisoresDepartamento(user: JwtPayload, filialIdAlvo?: string) {
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
     const [amarracoes, porDepto] = await Promise.all([
       this.prisma.supervisorDepartamento.findMany({ where: { filialId } }),
       this.prisma.supervisor.groupBy({
@@ -346,8 +367,8 @@ export class SupervisorService {
   /** Departamentos da filial do usuário — alimenta o seletor "adicionar departamento"
    *  da amarração. Escopado por filial: o catálogo global deixaria escolher um
    *  departamento de outra filial e gravar uma amarração que nunca teria efeito. */
-  departamentosDaFilial(user: JwtPayload) {
-    return this.core.departamentosDaFilial(filialDoUsuario(user));
+  async departamentosDaFilial(user: JwtPayload, filialIdAlvo?: string) {
+    return this.core.departamentosDaFilial(await this.filialAlvo(user, filialIdAlvo));
   }
 
   /**
@@ -360,9 +381,9 @@ export class SupervisorService {
    * cadastro que define quem o supervisiona). O Supervisor de Departamento VÊ a
    * amarração; quem muda é a administração.
    */
-  async definirSupervisorDepartamento(departamentoId: string, usuarioId: string, user: JwtPayload) {
+  async definirSupervisorDepartamento(departamentoId: string, usuarioId: string, user: JwtPayload, filialIdAlvo?: string) {
     if (!this.ehAdmin(user)) throw new ForbiddenException('Só a administração define o responsável por um departamento.');
-    const filialId = filialDoUsuario(user);
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
     if (!departamentoId?.trim() || !usuarioId?.trim()) throw new BadRequestException('Informe o departamento e o responsável.');
     await this.core.validarDepartamento(departamentoId);
     await this.core.validarUsuario(usuarioId, 'Responsável');
@@ -382,9 +403,9 @@ export class SupervisorService {
 
   /** Remove o responsável de um departamento (fica sem supervisor — ninguém aprova por
    *  ele até que se defina outro; falha fechada, de propósito). */
-  async removerSupervisorDepartamento(departamentoId: string, user: JwtPayload) {
+  async removerSupervisorDepartamento(departamentoId: string, user: JwtPayload, filialIdAlvo?: string) {
     if (!this.ehAdmin(user)) throw new ForbiddenException('Só a administração remove o responsável por um departamento.');
-    const filialId = filialDoUsuario(user);
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
     await this.prisma.supervisorDepartamento.deleteMany({ where: { filialId, departamentoId } });
     return { ok: true };
   }

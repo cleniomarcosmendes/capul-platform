@@ -304,7 +304,15 @@ function EquipeTab() {
   const { toast } = useToast();
   const { usuario, logisticaRole } = useAuth();
   const ehAdmin = logisticaRole === 'ADMIN';
-  const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
+  const filialSessao = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
+  // ADMIN é global por política e a Equipe é tela de CONFIGURAÇÃO: ele escolhe a filial
+  // aqui, sem trocar a filial da SESSÃO no Hub (seriam 35 idas e voltas). Os demais
+  // papéis não veem o seletor e seguem a filial do token — o backend IGNORA o parâmetro
+  // para eles, então isto é conveniência, não porta de escape.
+  const [filialAlvo, setFilialAlvo] = useState(filialSessao);
+  const filialId = ehAdmin ? (filialAlvo || filialSessao) : filialSessao;
+  const qFilial = { params: { filialId } };
+  const filiaisDoUsuario = (usuario?.filiais ?? []).slice().sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'));
   const [itens, setItens] = useState<Supervisor[]>([]);
   const [usuarios, setUsuarios] = useState<CoreUser[]>([]);
   const [departamentos, setDepartamentos] = useState<DeptItem[]>([]);
@@ -328,13 +336,13 @@ function EquipeTab() {
     setLoading(true);
     try {
       const [s, u, d, r, df] = await Promise.all([
-        logisticaApi.get<Supervisor[]>('/supervisor/supervisores'),
+        logisticaApi.get<Supervisor[]>('/supervisor/supervisores', qFilial),
         filialId ? coreApi.get<CoreUser[]>('/usuarios', { params: { filialId } }) : Promise.resolve({ data: [] as CoreUser[] }),
         // Departamentos que ESTE usuário pode escolher: o Supervisor de Departamento vê
         // só os seus; ADMIN vê todos. Mesmo endpoint escopado da Análise de Custos.
         logisticaApi.get<DeptItem[]>('/frota/departamentos-filtro').catch(() => ({ data: [] as DeptItem[] })),
-        logisticaApi.get<RespDepto[]>('/supervisor/departamentos-responsavel').catch(() => ({ data: [] as RespDepto[] })),
-        logisticaApi.get<DeptItem[]>('/supervisor/departamentos-filial').catch(() => ({ data: [] as DeptItem[] })),
+        logisticaApi.get<RespDepto[]>('/supervisor/departamentos-responsavel', qFilial).catch(() => ({ data: [] as RespDepto[] })),
+        logisticaApi.get<DeptItem[]>('/supervisor/departamentos-filial', qFilial).catch(() => ({ data: [] as DeptItem[] })),
       ]);
       setItens(s.data); setUsuarios(u.data); setDepartamentos(d.data); setRespDepto(r.data); setDeptosFilial(df.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a equipe.')); } finally { setLoading(false); }
@@ -376,18 +384,18 @@ function EquipeTab() {
     if (!deptId) { toast('warning', 'Selecione o departamento.'); return; }
     setSalvando(true);
     try {
-      await logisticaApi.post('/supervisor/supervisores', { matricula: u.matricula.trim(), nome: nomeUser(u), departamentoId: deptId, coordenadorId: coordenadorId || undefined });
+      await logisticaApi.post('/supervisor/supervisores', { matricula: u.matricula.trim(), nome: nomeUser(u), departamentoId: deptId, coordenadorId: coordenadorId || undefined }, qFilial);
       toast('success', 'Supervisor de área cadastrado.');
       setShowForm(false); setUsuarioId(''); setDeptId(''); setCoordenadorId('');
       await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao cadastrar.')); } finally { setSalvando(false); }
   };
   const salvarEdicao = async (id: string) => {
-    try { await logisticaApi.patch(`/supervisor/supervisores/${id}`, { departamentoId: editDepto, coordenadorId: editCoord }); toast('success', 'Cadastro atualizado.'); setEditId(null); await carregar(); }
+    try { await logisticaApi.patch(`/supervisor/supervisores/${id}`, { departamentoId: editDepto, coordenadorId: editCoord }, qFilial); toast('success', 'Cadastro atualizado.'); setEditId(null); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
   const toggle = async (s: Supervisor) => {
-    try { await logisticaApi.patch(`/supervisor/supervisores/${s.id}`, { ativo: !s.ativo }); await carregar(); }
+    try { await logisticaApi.patch(`/supervisor/supervisores/${s.id}`, { ativo: !s.ativo }, qFilial); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
   // Amarração departamento → responsável. Escrita SÓ ADMIN (o backend barra): esta é a
@@ -396,14 +404,14 @@ function EquipeTab() {
   const salvarResponsavel = async (departamentoId: string) => {
     if (!editRespUser) { toast('warning', 'Selecione o responsável.'); return; }
     try {
-      await logisticaApi.put(`/supervisor/departamentos-responsavel/${departamentoId}`, { usuarioId: editRespUser });
+      await logisticaApi.put(`/supervisor/departamentos-responsavel/${departamentoId}`, { usuarioId: editRespUser }, qFilial);
       toast('success', 'Responsável pelo departamento definido.');
       setEditRespId(null); setEditRespUser(''); await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao definir o responsável.')); }
   };
   const limparResponsavel = async (departamentoId: string) => {
     try {
-      await logisticaApi.delete(`/supervisor/departamentos-responsavel/${departamentoId}`);
+      await logisticaApi.delete(`/supervisor/departamentos-responsavel/${departamentoId}`, qFilial);
       toast('success', 'Responsável removido — o departamento fica sem aprovador até você definir outro.');
       await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
@@ -413,6 +421,18 @@ function EquipeTab() {
 
   return (
     <div>
+      {/* ADMIN opera a aba em qualquer filial sem trocar a da sessão. As DUAS listas
+          (departamentos e representantes) seguem este seletor. */}
+      {ehAdmin && filiaisDoUsuario.length > 1 && (
+        <div className="mb-4 flex items-center gap-2">
+          <label className="text-sm font-medium text-slate-700">Filial:</label>
+          <select value={filialId} onChange={(e) => setFilialAlvo(e.target.value)} className="w-80 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500">
+            {filiaisDoUsuario.map((f) => <option key={f.id} value={f.id}>{f.nome ?? f.codigo ?? f.id}{f.id === filialSessao ? ' (sua filial)' : ''}</option>)}
+          </select>
+          <span className="text-xs text-slate-400">A filial da sua sessão não muda.</span>
+        </div>
+      )}
+
       {/* Quem responde por cada departamento no RDV. Antes isso era DEDUZIDO dos veículos
           que a pessoa supervisiona — campo da frota, cujo sentido é "responsável pelo
           veículo". Ficar sem veículo tirava a autoridade sobre o RDV em silêncio.
