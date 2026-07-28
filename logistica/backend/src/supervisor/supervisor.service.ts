@@ -296,13 +296,58 @@ export class SupervisorService {
 
   // ---- Amarração Supervisor de Departamento × departamento (aba Equipe) ----
 
-  /** Lista a amarração da filial (quem responde por cada departamento no RDV).
-   *  Leitura liberada a quem já vê a aba Equipe — é organograma, não dado sensível. */
-  listarSupervisoresDepartamento(user: JwtPayload) {
-    return this.prisma.supervisorDepartamento.findMany({
-      where: { filialId: filialDoUsuario(user) },
-      orderBy: { departamentoId: 'asc' },
-    });
+  /**
+   * Quem responde por cada departamento no RDV, NA FILIAL DO USUÁRIO.
+   *
+   * Devolve só os departamentos que participam do RDV: os que têm representante
+   * cadastrado na Equipe + os que já têm responsável. O catálogo inteiro não serve
+   * aqui — `core.departamentos` é POR FILIAL (unique filial+nome), então listar tudo
+   * traz dezenas de linhas com nomes repetidos ("Agroveterinaria" existe em 16
+   * filiais) e transforma o aviso de "sem responsável" numa parede de vermelho sobre
+   * departamentos que não têm ninguém no RDV.
+   *
+   * `representantes` (quantos estão cadastrados) é o que diz se a falta de
+   * responsável é grave: departamento com gente e sem aprovador trava a prestação de
+   * contas; sem gente, é só um departamento que ainda não entrou no RDV.
+   */
+  async listarSupervisoresDepartamento(user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const [amarracoes, porDepto] = await Promise.all([
+      this.prisma.supervisorDepartamento.findMany({ where: { filialId } }),
+      this.prisma.supervisor.groupBy({
+        by: ['departamentoId'],
+        where: { filialId, ativo: true, departamentoId: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+    const ids = [...new Set([
+      ...amarracoes.map((a) => a.departamentoId),
+      ...porDepto.map((s) => s.departamentoId).filter((x): x is string => !!x),
+    ])];
+    const [nomesDep, nomesUsr] = await Promise.all([
+      this.core.nomesDepartamentos(ids),
+      this.core.nomesUsuarios(amarracoes.map((a) => a.usuarioId)),
+    ]);
+    const contagem = new Map(porDepto.map((s) => [s.departamentoId, s._count._all]));
+    return ids
+      .map((id) => {
+        const a = amarracoes.find((x) => x.departamentoId === id);
+        return {
+          departamentoId: id,
+          departamentoNome: nomesDep.get(id) ?? id.slice(0, 8),
+          usuarioId: a?.usuarioId ?? null,
+          responsavelNome: a ? (nomesUsr.get(a.usuarioId) ?? a.usuarioId.slice(0, 8)) : null,
+          representantes: contagem.get(id) ?? 0,
+        };
+      })
+      .sort((x, y) => x.departamentoNome.localeCompare(y.departamentoNome, 'pt-BR'));
+  }
+
+  /** Departamentos da filial do usuário — alimenta o seletor "adicionar departamento"
+   *  da amarração. Escopado por filial: o catálogo global deixaria escolher um
+   *  departamento de outra filial e gravar uma amarração que nunca teria efeito. */
+  departamentosDaFilial(user: JwtPayload) {
+    return this.core.departamentosDaFilial(filialDoUsuario(user));
   }
 
   /**
@@ -321,6 +366,13 @@ export class SupervisorService {
     if (!departamentoId?.trim() || !usuarioId?.trim()) throw new BadRequestException('Informe o departamento e o responsável.');
     await this.core.validarDepartamento(departamentoId);
     await this.core.validarUsuario(usuarioId, 'Responsável');
+    // O departamento tem que ser DESTA filial. `core.departamentos` é por filial, e a
+    // amarração grava a filial do usuário: aceitar um departamento de outra filial
+    // criaria uma linha (minha filial × departamento alheio) que nunca casaria com
+    // representante nenhum — autoridade fantasma, silenciosa.
+    if (!(await this.core.departamentoEhDaFilial(departamentoId, filialId))) {
+      throw new BadRequestException('Este departamento é de outra filial — troque de filial para definir o responsável dele.');
+    }
     return this.prisma.supervisorDepartamento.upsert({
       where: { filialId_departamentoId: { filialId, departamentoId } },
       update: { usuarioId, criadoPorId: user.sub, criadoEm: new Date() },

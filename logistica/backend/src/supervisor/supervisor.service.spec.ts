@@ -698,7 +698,13 @@ describe('SupervisorService — amarração Supervisor de Departamento × depart
   let core: any;
   beforeEach(() => {
     prisma = createPrismaMock();
-    core = { validarDepartamento: jest.fn(), validarUsuario: jest.fn() };
+    core = {
+      validarDepartamento: jest.fn(), validarUsuario: jest.fn(),
+      departamentoEhDaFilial: jest.fn().mockResolvedValue(true),
+      nomesDepartamentos: jest.fn().mockResolvedValue(new Map()),
+      nomesUsuarios: jest.fn().mockResolvedValue(new Map()),
+      departamentosDaFilial: jest.fn().mockResolvedValue([]),
+    };
     svc = new SupervisorService(prisma, condutorMock(), core, storageMock(), locaisMock());
   });
   const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
@@ -754,9 +760,34 @@ describe('SupervisorService — amarração Supervisor de Departamento × depart
     expect(prisma.supervisorDepartamento.deleteMany).toHaveBeenCalledWith({ where: { filialId: 'f1', departamentoId: 'd9' } });
   });
 
-  it('listar devolve a amarração da filial do usuário', async () => {
+  // ⭐ 28/07: a tela listava o CATÁLOGO inteiro (`core.departamentos` é por filial e tem
+  // nomes repetidos — "Agroveterinaria" em 16 filiais), virando dezenas de linhas
+  // indistinguíveis e uma parede de "sem responsável". Agora vêm só os departamentos que
+  // PARTICIPAM do RDV da filial: com representante ativo ou já com responsável.
+  it('listar traz só os departamentos com representante OU com responsável, da filial', async () => {
     prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1', usuarioId: 'u7' }]);
-    await svc.listarSupervisoresDepartamento(comRole('SUPERVISOR_FROTA'));
+    prisma.supervisor.groupBy.mockResolvedValue([{ departamentoId: 'd2', _count: { _all: 3 } }]);
+    core.nomesDepartamentos.mockResolvedValue(new Map([['d1', 'Compras'], ['d2', 'Vendas']]));
+    core.nomesUsuarios.mockResolvedValue(new Map([['u7', 'Fulano']]));
+    const r: any = await svc.listarSupervisoresDepartamento(comRole('SUPERVISOR_FROTA'));
     expect(prisma.supervisorDepartamento.findMany.mock.calls[0][0].where).toEqual({ filialId: 'f1' });
+    expect(prisma.supervisor.groupBy.mock.calls[0][0].where).toEqual({ filialId: 'f1', ativo: true, departamentoId: { not: null } });
+    expect(r.map((x: any) => x.departamentoNome)).toEqual(['Compras', 'Vendas']); // ordenado por nome
+    expect(r.find((x: any) => x.departamentoId === 'd1')).toMatchObject({ responsavelNome: 'Fulano', representantes: 0 });
+    // Departamento COM gente e SEM responsável — é o caso que trava a prestação de contas.
+    expect(r.find((x: any) => x.departamentoId === 'd2')).toMatchObject({ usuarioId: null, representantes: 3 });
+  });
+
+  // ⭐ Integridade: a amarração grava a filial do USUÁRIO. Aceitar departamento de outra
+  // filial criaria (minha filial × departamento alheio) — autoridade fantasma, silenciosa.
+  it('ADMIN definindo departamento de OUTRA filial → 400 (não grava)', async () => {
+    core.departamentoEhDaFilial.mockResolvedValue(false);
+    await expect(svc.definirSupervisorDepartamento('d-outra-filial', 'u9', comRole('ADMIN'))).rejects.toThrow(BadRequestException);
+    expect(prisma.supervisorDepartamento.upsert).not.toHaveBeenCalled();
+  });
+
+  it('departamentosDaFilial usa a filial do usuário (não o catálogo global)', async () => {
+    await svc.departamentosDaFilial(comRole('ADMIN'));
+    expect(core.departamentosDaFilial).toHaveBeenCalledWith('f1');
   });
 });

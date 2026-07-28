@@ -286,7 +286,11 @@ interface DeptItem { id: string; nome: string }
 /** Quem responde por um departamento no RDV — antes isso era DERIVADO dos veículos que
  *  a pessoa supervisiona (`veiculo.supervisorId`), campo que existe para dizer quem
  *  responde pelo VEÍCULO. Agora é explícito aqui. */
-interface RespDepto { departamentoId: string; usuarioId: string }
+interface RespDepto {
+  departamentoId: string; departamentoNome: string;
+  usuarioId: string | null; responsavelNome: string | null;
+  representantes: number;
+}
 // Representantes do RDV cadastráveis na equipe:
 // - SUPERVISOR de área  → roteia ao COORDENADOR (campo "Coordenador").
 // - COORDENADOR         → roteia ao Supervisor de Departamento POR DEPARTAMENTO
@@ -317,19 +321,22 @@ function EquipeTab() {
   const [respDepto, setRespDepto] = useState<RespDepto[]>([]);
   const [editRespId, setEditRespId] = useState<string | null>(null); // departamentoId em edição
   const [editRespUser, setEditRespUser] = useState('');
+  const [deptosFilial, setDeptosFilial] = useState<DeptItem[]>([]); // seletor "adicionar departamento"
+  const [addDeptoId, setAddDeptoId] = useState('');
 
   const carregar = async () => {
     setLoading(true);
     try {
-      const [s, u, d, r] = await Promise.all([
+      const [s, u, d, r, df] = await Promise.all([
         logisticaApi.get<Supervisor[]>('/supervisor/supervisores'),
         filialId ? coreApi.get<CoreUser[]>('/usuarios', { params: { filialId } }) : Promise.resolve({ data: [] as CoreUser[] }),
         // Departamentos que ESTE usuário pode escolher: o Supervisor de Departamento vê
         // só os seus; ADMIN vê todos. Mesmo endpoint escopado da Análise de Custos.
         logisticaApi.get<DeptItem[]>('/frota/departamentos-filtro').catch(() => ({ data: [] as DeptItem[] })),
         logisticaApi.get<RespDepto[]>('/supervisor/departamentos-responsavel').catch(() => ({ data: [] as RespDepto[] })),
+        logisticaApi.get<DeptItem[]>('/supervisor/departamentos-filial').catch(() => ({ data: [] as DeptItem[] })),
       ]);
-      setItens(s.data); setUsuarios(u.data); setDepartamentos(d.data); setRespDepto(r.data);
+      setItens(s.data); setUsuarios(u.data); setDepartamentos(d.data); setRespDepto(r.data); setDeptosFilial(df.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a equipe.')); } finally { setLoading(false); }
   };
   const deptNome = (id?: string | null) => (id ? (departamentos.find((d) => d.id === id)?.nome ?? id.slice(0, 8)) : null);
@@ -401,8 +408,6 @@ function EquipeTab() {
       await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
   };
-  const respDe = (deptoId: string) => respDepto.find((r) => r.departamentoId === deptoId);
-  const nomeUsuarioPorId = (id?: string | null) => (id ? (usuarios.find((u) => u.id === id)?.nome ?? usuarios.find((u) => u.id === id)?.nomeFantasia ?? id.slice(0, 8)) : null);
   // Candidatos: quem tem o papel Supervisor de Departamento na Logística.
   const candidatosResp = usuarios.filter((u) => temRoleLogistica(u, 'SUPERVISOR_FROTA'));
 
@@ -410,56 +415,83 @@ function EquipeTab() {
     <div>
       {/* Quem responde por cada departamento no RDV. Antes isso era DEDUZIDO dos veículos
           que a pessoa supervisiona — campo da frota, cujo sentido é "responsável pelo
-          veículo". Ficar sem veículo tirava a autoridade sobre o RDV em silêncio. */}
+          veículo". Ficar sem veículo tirava a autoridade sobre o RDV em silêncio.
+          Lista só os departamentos que PARTICIPAM do RDV nesta filial (com representante
+          ou já com responsável): `core.departamentos` é POR FILIAL e tem nomes repetidos
+          — "Agroveterinaria" existe em 16 filiais —, então o catálogo inteiro virava
+          dezenas de linhas indistinguíveis e uma parede de "sem responsável". */}
       <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-800">Supervisores de Departamento</h3>
         <p className="mb-3 mt-1 text-xs text-slate-500">
           Quem aprova a prestação de contas de cada departamento (e o RDV dos coordenadores dele).
-          {ehAdmin ? ' Definido pela administração.' : ' Definido pela administração — aqui é só consulta.'}
+          Aparecem os departamentos desta filial com representante cadastrado ou com responsável já definido.
+          {ehAdmin ? '' : ' Definido pela administração — aqui é só consulta.'}
         </p>
-        {departamentos.length === 0 ? (
-          <p className="text-sm text-slate-400">Nenhum departamento disponível.</p>
+        {respDepto.length === 0 ? (
+          <p className="text-sm text-slate-400">Nenhum departamento participa do RDV nesta filial ainda — cadastre representantes abaixo.</p>
         ) : (
           <table className="min-w-full divide-y divide-slate-200">
-            <thead><tr><th className={th}>Departamento</th><th className={th}>Responsável</th>{ehAdmin && <th className={th}>Ações</th>}</tr></thead>
+            <thead><tr><th className={th}>Departamento</th><th className={th}>Representantes</th><th className={th}>Responsável</th>{ehAdmin && <th className={th}>Ações</th>}</tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {departamentos.map((d) => {
-                const r = respDe(d.id);
-                return (
-                  <tr key={d.id}>
-                    <td className="px-4 py-3 text-sm text-slate-700">{d.nome}</td>
+              {respDepto.map((r) => (
+                <tr key={r.departamentoId}>
+                  <td className="px-4 py-3 text-sm text-slate-700">{r.departamentoNome}</td>
+                  <td className="px-4 py-3 text-sm text-slate-500">{r.representantes}</td>
+                  <td className="px-4 py-3 text-sm">
+                    {editRespId === r.departamentoId ? (
+                      <select value={editRespUser} onChange={(e) => setEditRespUser(e.target.value)} className={inp}>
+                        <option value="">— selecione</option>
+                        {candidatosResp.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
+                      </select>
+                    ) : r.responsavelNome ? (
+                      <span className="text-slate-700">{r.responsavelNome}</span>
+                    ) : r.representantes > 0 ? (
+                      // Sem aprovador COM gente no departamento: trava a prestação de contas — aí sim é alarme.
+                      <span className="text-rose-600">— sem responsável ({r.representantes} representante(s) sem aprovador)</span>
+                    ) : (
+                      <span className="text-slate-400">— sem responsável</span>
+                    )}
+                  </td>
+                  {ehAdmin && (
                     <td className="px-4 py-3 text-sm">
-                      {editRespId === d.id ? (
-                        <select value={editRespUser} onChange={(e) => setEditRespUser(e.target.value)} className={inp}>
-                          <option value="">— selecione</option>
-                          {candidatosResp.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}</option>)}
-                        </select>
-                      ) : r ? (
-                        <span className="text-slate-700">{nomeUsuarioPorId(r.usuarioId)}</span>
+                      {editRespId === r.departamentoId ? (
+                        <div className="flex gap-2">
+                          <button onClick={() => void salvarResponsavel(r.departamentoId)} className="text-emerald-600 hover:text-emerald-700" title="Salvar"><Check className="h-4 w-4" /></button>
+                          <button onClick={() => { setEditRespId(null); setEditRespUser(''); }} className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
+                        </div>
                       ) : (
-                        <span className="text-amber-600">— sem responsável (ninguém aprova este departamento)</span>
+                        <div className="flex gap-3">
+                          <button onClick={() => { setEditRespId(r.departamentoId); setEditRespUser(r.usuarioId ?? ''); }} className="text-xs text-capul-600 hover:underline">{r.usuarioId ? 'Trocar' : 'Definir'}</button>
+                          {r.usuarioId && <button onClick={() => void limparResponsavel(r.departamentoId)} className="text-xs text-rose-500 hover:underline">Remover</button>}
+                        </div>
                       )}
                     </td>
-                    {ehAdmin && (
-                      <td className="px-4 py-3 text-sm">
-                        {editRespId === d.id ? (
-                          <div className="flex gap-2">
-                            <button onClick={() => void salvarResponsavel(d.id)} className="text-emerald-600 hover:text-emerald-700" title="Salvar"><Check className="h-4 w-4" /></button>
-                            <button onClick={() => { setEditRespId(null); setEditRespUser(''); }} className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-3">
-                            <button onClick={() => { setEditRespId(d.id); setEditRespUser(r?.usuarioId ?? ''); }} className="text-xs text-capul-600 hover:underline">{r ? 'Trocar' : 'Definir'}</button>
-                            {r && <button onClick={() => void limparResponsavel(d.id)} className="text-xs text-rose-500 hover:underline">Remover</button>}
-                          </div>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+                  )}
+                </tr>
+              ))}
             </tbody>
           </table>
+        )}
+        {/* Adiantar a amarração de um departamento que ainda não tem representante.
+            Só os DESTA filial — o backend recusa departamento de outra. */}
+        {ehAdmin && deptosFilial.length > 0 && (
+          <div className="mt-3 flex items-end gap-2 border-t border-slate-100 pt-3">
+            <div className="w-80">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Adicionar outro departamento desta filial</label>
+              <select value={addDeptoId} onChange={(e) => setAddDeptoId(e.target.value)} className={inp}>
+                <option value="">— selecione</option>
+                {deptosFilial.filter((d) => !respDepto.some((r) => r.departamentoId === d.id)).map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+              </select>
+            </div>
+            <button
+              onClick={() => {
+                if (!addDeptoId) { toast('warning', 'Selecione o departamento.'); return; }
+                const dep = deptosFilial.find((d) => d.id === addDeptoId);
+                setRespDepto((prev) => [...prev, { departamentoId: addDeptoId, departamentoNome: dep?.nome ?? addDeptoId, usuarioId: null, responsavelNome: null, representantes: 0 }]);
+                setEditRespId(addDeptoId); setEditRespUser(''); setAddDeptoId('');
+              }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">Adicionar</button>
+          </div>
         )}
       </div>
 

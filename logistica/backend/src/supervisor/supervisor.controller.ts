@@ -52,6 +52,11 @@ export class SupervisorController {
   supervisoresDepartamento(@CurrentUser() user: JwtPayload) {
     return this.svc.listarSupervisoresDepartamento(user);
   }
+  /** Departamentos DA FILIAL — seletor do "adicionar departamento" da amarração. */
+  @Get('departamentos-filial')
+  departamentosDaFilial(@CurrentUser() user: JwtPayload) {
+    return this.svc.departamentosDaFilial(user);
+  }
   @Put('departamentos-responsavel/:departamentoId')
   definirSupervisorDepartamento(@Param('departamentoId') departamentoId: string, @Body() dto: DefinirSupervisorDepartamentoDto, @CurrentUser() user: JwtPayload) {
     return this.svc.definirSupervisorDepartamento(departamentoId, dto.usuarioId, user);

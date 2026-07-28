@@ -59,6 +59,24 @@ export class CoreLookupService {
       SELECT id, TRIM(nome) AS nome FROM "core"."departamentos" ORDER BY TRIM(nome)`);
   }
 
+  /** Departamentos de UMA filial. `core.departamentos` é por filial (unique
+   *  filial+nome): o mesmo nome existe em várias — "Agroveterinaria" aparece 16
+   *  vezes no catálogo. Listagem global em tela de filial vira ruído indistinguível
+   *  (e deixa escolher o departamento de outra filial). */
+  async departamentosDaFilial(filialId: string): Promise<{ id: string; nome: string }[]> {
+    if (!filialId) return [];
+    return this.prisma.$queryRaw<{ id: string; nome: string }[]>(Prisma.sql`
+      SELECT id, TRIM(nome) AS nome FROM "core"."departamentos" WHERE filial_id = ${filialId} ORDER BY TRIM(nome)`);
+  }
+
+  /** O departamento pertence a esta filial? Guarda de integridade para gravações
+   *  escopadas por filial. */
+  async departamentoEhDaFilial(departamentoId: string, filialId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT id FROM "core"."departamentos" WHERE id = ${departamentoId} AND filial_id = ${filialId} LIMIT 1`);
+    return rows.length > 0;
+  }
+
   /** id → nome de usuário (colaborador). */
   async nomesUsuarios(ids: string[]): Promise<Map<string, string>> {
     const u = [...new Set(ids.filter(Boolean))];
