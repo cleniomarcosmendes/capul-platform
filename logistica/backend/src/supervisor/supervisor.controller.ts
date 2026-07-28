@@ -52,6 +52,12 @@ export class SupervisorController {
   supervisoresDepartamento(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
     return this.svc.listarSupervisoresDepartamento(user, filialId);
   }
+  /** Filiais que já têm RDV montado — o ADMIN abre a aba já numa delas (a matriz, filial
+   *  principal dele, costuma não ter representante e a tela abriria vazia). */
+  @Get('filiais-rdv')
+  filiaisComRdv(@CurrentUser() user: JwtPayload) {
+    return this.svc.filiaisComRdv(user);
+  }
   /** Departamentos DA FILIAL — seletor do "adicionar departamento" da amarração. */
   @Get('departamentos-filial')
   departamentosDaFilial(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {

@@ -848,3 +848,37 @@ describe('SupervisorService — filial alvo da aba Equipe (ADMIN global)', () =>
     expect(prisma.supervisor.create.mock.calls[0][0].data.filialId).toBe('f2');
   });
 });
+
+// ⭐ 28/07: o seletor de filial da aba Equipe abria na filial principal do ADMIN (a
+// matriz administrativa), que não tem representante — tela vazia, com cara de que
+// sumiu tudo. O padrão passa a ser a filial que TEM RDV montado, resolvido por dado
+// (não por UUID fixo no código: se outra filial começar a usar, continua certo).
+describe('SupervisorService.filiaisComRdv', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  // ⚠️ O peso é o representante COM DEPARTAMENTO — é ele que vira linha na tela. Contar
+  // representante sem departamento levava o padrão para a matriz (11 de seed, nenhum com
+  // departamento), que abriria vazia do mesmo jeito. Não regredir para `where: {ativo}`.
+  it('ADMIN: ordena por representante COM departamento; sem depto só entra na lista (peso 0)', async () => {
+    prisma.supervisor.groupBy
+      .mockResolvedValueOnce([{ filialId: 'fB', _count: { _all: 2 } }])                       // com departamento
+      .mockResolvedValueOnce([{ filialId: 'fA', _count: { _all: 11 } }, { filialId: 'fB', _count: { _all: 2 } }]); // quaisquer
+    prisma.supervisorDepartamento.groupBy.mockResolvedValue([{ filialId: 'fC', _count: { _all: 1 } }]);
+    const r = await svc.filiaisComRdv(comRole('ADMIN'));
+    expect(r[0]).toEqual({ filialId: 'fB', representantes: 2 }); // ganha de fA apesar de fA ter 11 sem depto
+    expect(r.map((x) => x.filialId).sort()).toEqual(['fA', 'fB', 'fC']);
+    expect(prisma.supervisor.groupBy.mock.calls[0][0].where).toEqual({ ativo: true, departamentoId: { not: null } });
+  });
+
+  it('não-ADMIN: devolve só a própria filial (não enumera as outras)', async () => {
+    const r = await svc.filiaisComRdv(comRole('SUPERVISOR_FROTA'));
+    expect(r).toEqual([{ filialId: 'f1', representantes: 0 }]);
+    expect(prisma.supervisor.groupBy).not.toHaveBeenCalled();
+  });
+});

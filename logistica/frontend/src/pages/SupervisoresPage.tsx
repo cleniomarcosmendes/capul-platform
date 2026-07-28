@@ -309,7 +309,13 @@ function EquipeTab() {
   // aqui, sem trocar a filial da SESSÃO no Hub (seriam 35 idas e voltas). Os demais
   // papéis não veem o seletor e seguem a filial do token — o backend IGNORA o parâmetro
   // para eles, então isto é conveniência, não porta de escape.
-  const [filialAlvo, setFilialAlvo] = useState(filialSessao);
+  // Padrão do seletor: a filial onde o RDV realmente acontece — a filial principal do
+  // ADMIN é a matriz administrativa, que não tem representante e abriria a tela vazia.
+  // Resolvido pelo backend (`filiais-rdv`), não fixo no código: se outra filial começar a
+  // usar o RDV, o padrão continua certo sozinho. A última escolha do admin tem
+  // precedência (fica no navegador).
+  const CHAVE_FILIAL = 'logistica:rdv:equipe:filial';
+  const [filialAlvo, setFilialAlvo] = useState('');
   const filialId = ehAdmin ? (filialAlvo || filialSessao) : filialSessao;
   const qFilial = { params: { filialId } };
   const filiaisDoUsuario = (usuario?.filiais ?? []).slice().sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'));
@@ -355,6 +361,25 @@ function EquipeTab() {
     const dep = usuarios.find((u) => u.id === cid)?.departamento?.id;
     return dep && departamentos.some((d) => d.id === dep) ? dep : '';
   };
+  // Resolve a filial inicial UMA vez (só ADMIN): última escolhida → a filial da sessão
+  // se ela tiver RDV → a filial com mais representantes → a da sessão.
+  useEffect(() => {
+    if (!ehAdmin) return;
+    const salva = localStorage.getItem(CHAVE_FILIAL);
+    if (salva && (usuario?.filiais ?? []).some((f) => f.id === salva)) { setFilialAlvo(salva); return; }
+    logisticaApi.get<{ filialId: string; representantes: number }[]>('/supervisor/filiais-rdv')
+      .then((r) => {
+        const comRdv = r.data ?? []; // já vem ordenado por representantes COM departamento
+        // "Estar na lista" não basta: a matriz aparece nela por ter representantes de
+        // seed, todos SEM departamento — abrir ali daria a mesma tela vazia. Só fica na
+        // filial da sessão se ela de fato tiver gente que aparece na tela.
+        const naSessao = comRdv.find((f) => f.filialId === filialSessao)?.representantes ?? 0;
+        setFilialAlvo(naSessao > 0 ? filialSessao : (comRdv[0]?.filialId ?? filialSessao));
+      })
+      .catch(() => setFilialAlvo(filialSessao));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ehAdmin, filialSessao]);
+
   useEffect(() => {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -426,7 +451,7 @@ function EquipeTab() {
       {ehAdmin && filiaisDoUsuario.length > 1 && (
         <div className="mb-4 flex items-center gap-2">
           <label className="text-sm font-medium text-slate-700">Filial:</label>
-          <select value={filialId} onChange={(e) => setFilialAlvo(e.target.value)} className="w-80 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500">
+          <select value={filialId} onChange={(e) => { setFilialAlvo(e.target.value); localStorage.setItem(CHAVE_FILIAL, e.target.value); }} className="w-80 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500">
             {filiaisDoUsuario.map((f) => <option key={f.id} value={f.id}>{f.nome ?? f.codigo ?? f.id}{f.id === filialSessao ? ' (sua filial)' : ''}</option>)}
           </select>
           <span className="text-xs text-slate-400">A filial da sua sessão não muda.</span>

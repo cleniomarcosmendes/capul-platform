@@ -97,6 +97,38 @@ export class SupervisorService {
     return alvo;
   }
 
+  /**
+   * Filiais que já têm RDV montado (representante ativo ou responsável definido), da
+   * que tem mais gente para a que tem menos.
+   *
+   * Serve para o ADMIN abrir a aba Equipe já na filial onde o RDV acontece. A filial
+   * principal dele é a matriz administrativa, que normalmente não tem representante
+   * nenhum — abrir ali mostra tela vazia e passa a impressão de que sumiu tudo.
+   * Preferimos isto a fixar uma filial no código: se amanhã outra começar a usar o RDV,
+   * o padrão continua certo sozinho.
+   */
+  async filiaisComRdv(user: JwtPayload): Promise<{ filialId: string; representantes: number }[]> {
+    const propria = filialDoUsuario(user);
+    if (!this.ehAdmin(user)) return [{ filialId: propria, representantes: 0 }];
+    const [comDepto, quaisquer, amarracoes] = await Promise.all([
+      // O peso é o representante COM departamento: é ele que vira linha na tela. Contar
+      // representante sem departamento levaria o padrão para a matriz — que tem 11 de
+      // seed, nenhum com departamento, e abriria igualmente vazia.
+      this.prisma.supervisor.groupBy({ by: ['filialId'], where: { ativo: true, departamentoId: { not: null } }, _count: { _all: true } }),
+      this.prisma.supervisor.groupBy({ by: ['filialId'], where: { ativo: true }, _count: { _all: true } }),
+      this.prisma.supervisorDepartamento.groupBy({ by: ['filialId'], _count: { _all: true } }),
+    ]);
+    const mapa = new Map<string, number>();
+    // Entram na lista (peso 0) as filiais que têm alguma coisa de RDV; o peso vem de quem
+    // realmente aparece na tela.
+    for (const a of amarracoes) mapa.set(a.filialId, 0);
+    for (const q of quaisquer) mapa.set(q.filialId, 0);
+    for (const c of comDepto) mapa.set(c.filialId, c._count._all);
+    return [...mapa.entries()]
+      .map(([filialId, representantes]) => ({ filialId, representantes }))
+      .sort((a, b) => b.representantes - a.representantes);
+  }
+
   async listarSupervisores(user: JwtPayload, somenteAtivos?: boolean, filialIdAlvo?: string) {
     const filialId = await this.filialAlvo(user, filialIdAlvo);
     const escopo = await this.escopoSupervisorWhere(user);
