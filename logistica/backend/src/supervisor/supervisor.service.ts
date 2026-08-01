@@ -1281,9 +1281,12 @@ export class SupervisorService {
     // despesa que o coordenador tinha CONTESTADO e relançava limpa, como PENDENTE — a
     // rejeição sumia sem deixar rastro. Enquanto está pendente ele apaga à vontade: é
     // dele e ninguém analisou ainda.
-    if (d.situacao !== 'PENDENTE' && !(await this.ehAutoridadeSobre(v.supervisorRegistro, user))) {
+    // Já passou por decisão alguma vez? `aprovadoPorId` é gravado tanto no APROVADA
+    // quanto no CONTESTADA, e sobrevive à volta para PENDENTE — então ele é o marcador
+    // de histórico. Olhar só a `situacao` atual permitia lavar a decisão com uma edição.
+    if ((d.situacao !== 'PENDENTE' || d.aprovadoPorId) && !(await this.ehAutoridadeSobre(v.supervisorRegistro, user))) {
       throw new ForbiddenException(
-        `Esta despesa já foi ${d.situacao === 'APROVADA' ? 'aprovada' : 'contestada'} — só quem aprova pode removê-la. Para corrigir o valor, edite a despesa (ela volta para análise).`,
+        'Esta despesa já passou por análise — só quem aprova pode removê-la. Para corrigir o valor, edite a despesa (ela volta para análise).',
       );
     }
     // Limpa os binários (comprovante legado + anexos) — as linhas AnexoDespesa somem por cascade.
@@ -1427,6 +1430,25 @@ export class SupervisorService {
     const mexeNoDinheiro = dto.valor !== undefined || dto.tipoDespesaId !== undefined
       || dto.data !== undefined || dto.veiculoId !== undefined;
     const jaDecidida = d.situacao !== 'PENDENTE';
+    // ⭐ QUEM NÃO LANÇOU NÃO MEXE NO VALOR (01/08, achado do /security-review).
+    //
+    // `decidirDespesa` deixa o DONO conferir o que lançaram PARA ele, e ancora a trava
+    // de auto-aprovação em `criadoPorId`. Só que editar era autorizado por
+    // `planejamentoDoDono` — que aceita o dono — e não mexia em `criadoPorId`. As duas
+    // guardas não compunham: o representante reescrevia o valor de uma linha lançada
+    // pelo coordenador (R$ 50 → R$ 5.000, sem sair de PENDENTE) e em seguida "conferia"
+    // como se não fosse dele. Reproduzido no DEV antes da correção.
+    //
+    // Quem discorda do que lançaram para si tem o caminho certo: CONTESTAR. Aí quem
+    // lançou corrige — e é ele quem responde pelo número.
+    if (mexeNoDinheiro && !this.ehAdmin(user) && d.criadoPorId !== user.sub) {
+      const autoridadeEdita = await this.ehAutoridadeSobre(v.supervisorRegistro, user);
+      if (!autoridadeEdita) {
+        throw new ForbiddenException(
+          'Esta despesa foi lançada por outra pessoa — você não altera o valor dela. Se não reconhece o lançamento, conteste: quem lançou corrige.',
+        );
+      }
+    }
     const redecisao: Prisma.DespesaVeiculoUncheckedUpdateInput = {};
     if (mexeNoDinheiro && jaDecidida) {
       const autoridade = await this.ehAutoridadeSobre(v.supervisorRegistro, user);
@@ -1435,7 +1457,12 @@ export class SupervisorService {
       if (autoridade) {
         Object.assign(redecisao, { aprovadoPorId: user.sub, aprovadoEm: new Date() });
       } else {
-        Object.assign(redecisao, { situacao: 'PENDENTE', aprovadoPorId: null, aprovadoEm: null, motivoContestacao: null });
+        // Volta para análise, MAS preserva `aprovadoPorId`/`aprovadoEm` como registro de
+        // que esta linha já passou por decisão — é o que `removerDespesa` consulta.
+        // Zerar os dois (como eu fazia) devolvia a despesa ao estado "nunca decidida" e
+        // reabria a exclusão: contestada → edita → PENDENTE → apaga → relança limpa,
+        // exatamente o caminho que a guarda de ontem queria fechar.
+        Object.assign(redecisao, { situacao: 'PENDENTE', motivoContestacao: null });
       }
     }
     return this.prisma.despesaVeiculo.update({

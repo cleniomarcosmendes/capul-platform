@@ -1223,23 +1223,26 @@ describe('SupervisorService — a decisão vale para o valor decidido', () => {
   });
 
   it('representante edita o VALOR de despesa APROVADA → volta para PENDENTE', async () => {
-    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', tipoDespesaId: 't1', veiculoId: null });
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
     await svc.editarDespesa('v1', 'd1', { valor: 9999 } as any, rep());
     const d0 = prisma.despesaVeiculo.update.mock.calls[0][0].data;
     expect(d0.situacao).toBe('PENDENTE');
     expect(d0.motivoContestacao).toBeNull();
-    expect(d0.aprovadoPorId).toBeNull();
+    // `aprovadoPorId` é PRESERVADO de propósito (01/08): é o marcador de "já passou por
+    // análise" que `removerDespesa` consulta. Zerá-lo devolvia a linha ao estado "nunca
+    // decidida" e reabria a exclusão — contestada → edita → PENDENTE → apaga → relança.
+    expect(d0.aprovadoPorId).toBeUndefined();
     expect(Object.keys(d0)).not.toContain('decididoPorId');
   });
 
   it('editar só a OBSERVAÇÃO não reabre a aprovação (não mexe no dinheiro)', async () => {
-    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', tipoDespesaId: 't1', veiculoId: null });
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
     await svc.editarDespesa('v1', 'd1', { observacao: 'nota fiscal 123' } as any, rep());
     expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBeUndefined();
   });
 
   it('a AUTORIDADE editando mantém aprovada, mas RECARIMBA a decisão (é dela, sobre o valor novo)', async () => {
-    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', tipoDespesaId: 't1', veiculoId: null });
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
     await svc.editarDespesa('v1', 'd1', { valor: 120 } as any, coord());
     const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
     expect(data.situacao).toBeUndefined();
@@ -1270,7 +1273,7 @@ describe('SupervisorService — a decisão vale para o valor decidido', () => {
 
   it('mês FECHADO trava a edição da despesa (o lançar já travava; editar não)', async () => {
     prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
-    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', tipoDespesaId: 't1', veiculoId: null });
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
     await expect(svc.editarDespesa('v1', 'd1', { valor: 10 } as any, rep())).rejects.toThrow(/RDV do mês encerrado/);
   });
 
@@ -1362,5 +1365,79 @@ describe('SupervisorService.decidirDespesa — quem confere é a outra ponta', (
     prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Colega' }]);
     await expect(svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('SUPERVISOR', 'u-colega')))
       .rejects.toThrow(ForbiddenException);
+  });
+});
+
+// ⭐⭐ FURO ACHADO PELO /security-review (01/08) e reproduzido no DEV: R$ 50 lançados
+// pelo coordenador viravam R$ 5.000 e o PRÓPRIO representante aprovava.
+//
+// `decidirDespesa` ancora a trava de auto-aprovação em `criadoPorId`, mas `editarDespesa`
+// autorizava pelo DONO e não mexia nesse campo — as duas guardas não compunham. O dono
+// reescrevia o valor de uma linha lançada por outro (sem sair de PENDENTE, então sem
+// reabrir a decisão) e em seguida "conferia" como se não fosse dele.
+describe('SupervisorService — quem não lançou não mexe no valor', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const rep = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const plan = () => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1', veiculoId: 've1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.viagem.findUnique.mockResolvedValue(plan());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // o logado é o dono
+    prisma.despesaVeiculo.update.mockResolvedValue({ id: 'd1' });
+    prisma.tipoDespesa.findUnique.mockResolvedValue({ id: 't1', nome: 'Alimentação', categoria: 'INDIVIDUO' });
+  });
+
+  it('o DONO não altera o valor de despesa lançada por OUTRO (era a escada para a auto-aprovação)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', criadoPorId: 'u-coord', tipoDespesaId: 't1', veiculoId: null });
+    await expect(svc.editarDespesa('v1', 'd1', { valor: 5000 } as any, rep()))
+      .rejects.toThrow(/lançada por outra pessoa/);
+    expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
+  });
+
+  it('…mas altera campo que não é dinheiro (observação) na despesa lançada por outro', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', criadoPorId: 'u-coord', tipoDespesaId: 't1', veiculoId: null });
+    await svc.editarDespesa('v1', 'd1', { observacao: 'recibo 12' } as any, rep());
+    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+  });
+
+  it('o DONO altera normalmente o valor da despesa que ELE lançou', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
+    await svc.editarDespesa('v1', 'd1', { valor: 80 } as any, rep());
+    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+  });
+
+  it('a AUTORIDADE corrige o valor da despesa que o representante lançou', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Coord' }]); // não é o dono
+    await svc.editarDespesa('v1', 'd1', { valor: 80 } as any, coord());
+    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+  });
+
+  // MÉDIO do mesmo review: a volta para PENDENTE não pode reabrir a exclusão.
+  it('editar despesa decidida PRESERVA o marcador de decisão (aprovadoPorId)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'CONTESTADA', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
+    await svc.editarDespesa('v1', 'd1', { valor: 80 } as any, rep());
+    const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
+    expect(data.situacao).toBe('PENDENTE');
+    expect(Object.keys(data)).not.toContain('aprovadoPorId'); // NÃO é zerado
+  });
+
+  it('despesa que já passou por análise não é apagada pelo representante, mesmo de volta em PENDENTE', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', aprovadoPorId: 'u-coord', criadoPorId: 'u-rep', anexos: [] });
+    await expect(svc.removerDespesa('v1', 'd1', rep())).rejects.toThrow(/já passou por análise/);
+    expect(prisma.despesaVeiculo.delete).not.toHaveBeenCalled();
+  });
+
+  it('despesa nunca decidida segue removível pelo representante', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', aprovadoPorId: null, criadoPorId: 'u-rep', anexos: [] });
+    await svc.removerDespesa('v1', 'd1', rep());
+    expect(prisma.despesaVeiculo.delete).toHaveBeenCalled();
   });
 });
