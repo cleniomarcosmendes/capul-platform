@@ -13,7 +13,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 // Espelha os @Roles de frota.controller.ts e supervisor.controller.ts: se um papel
 // entrar lá, tem que entrar aqui, senão o app barra na porta quem a API autoriza.
 // ⚠️ E o inverso também: papel a MAIS aqui mostra tile que dá 403 ou tela vazia.
-const ROLES_FROTA = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA', 'ADMIN'];
+// COORDENADOR entrou em 01/08: ele tem RDV próprio e vai a campo igual ao supervisor
+// de área, mas o papel é mais novo que a Frota e as listas não tinham sido revisitadas
+// — o supervisor pegava veículo e o coordenador dele não. Agora acompanha o SUPERVISOR
+// nas rotas de operação (saída individual, paradas, despesa, retorno, acerto); gestão
+// (manutenção, painel, custos) e portaria continuam fora.
+const ROLES_FROTA = ['REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA', 'ADMIN'];
 const ROLES_ENTREGA = ['ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'ADMIN'];
 // RDV é processo INTERNO do setor: Supervisor de Área planeja, Coordenador
 // aprova o seu time, Supervisor de Departamento administra. Mesma lista do menu

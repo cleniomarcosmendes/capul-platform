@@ -25,7 +25,7 @@ export class FrotaController {
    *  matrícula, no mês, não concluídos. Alimenta o seletor do form de Saída (o 1º
    *  é o auto-match). */
   @Get('rdv-candidatos')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   rdvCandidatos(@CurrentUser() user: JwtPayload, @Query('matricula') matricula?: string) {
     return this.frota.rdvCandidatosDoCondutor(user, matricula ?? '');
   }
@@ -33,7 +33,7 @@ export class FrotaController {
   /** Valida matrícula+senha — SEMPRE 200 com {valida, motivo} (nunca 401). PORTARIA
    *  usa p/ validar o porteiro inline (mesma checagem do condutor). */
   @Post('condutor/validar')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   validarCondutor(@Body() dto: ValidarCondutorDto) {
     return this.frota.validarCondutor(dto.matricula, dto.senha);
   }
@@ -55,7 +55,7 @@ export class FrotaController {
   /** Saída por usuário INDIVIDUAL (já autenticado): condutor = próprio usuário, sem
    *  senha. SUPERVISOR liberado p/ registrar a PRÓPRIA saída e vinculá-la ao RDV. */
   @Post('viagens/individual')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   saidaIndividual(@Body() dto: SaidaIndividualDto, @CurrentUser() user: JwtPayload) {
     return this.frota.registrarSaidaIndividual(dto, user);
   }
@@ -87,14 +87,14 @@ export class FrotaController {
   // PORTARIA precisa ler a lista/detalhe p/ o "Retorno pela portaria" (método
   // @Roles substitui o da classe — daí repetir os operacionais + PORTARIA).
   @Get('viagens')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   listar(@CurrentUser() user: JwtPayload, @Query('situacao') situacao?: StatusViagem) {
     return this.frota.listar(user, situacao);
   }
 
   /** Detalhe de uma viagem de frota (página de operações). */
   @Get('viagens/:id')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   obterViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.obterViagem(id, user);
   }
@@ -102,21 +102,21 @@ export class FrotaController {
   /** Despesas lançadas na viagem (lista da tela de detalhe). PORTARIA lê p/ abrir
    *  o detalhe no "Retorno pela portaria". */
   @Get('viagens/:id/despesas')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   despesasDaViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.despesasDaViagem(id, user);
   }
 
   /** Acerto da viagem (despesas × adiantamento → saldo) — folha imprimível. */
   @Get('viagens/:id/acerto')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   acerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.acertoViagem(id, user);
   }
 
   /** Registrar retorno (só o próprio condutor). SUPERVISOR fecha a sua saída. */
   @Post('viagens/:id/retorno')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   retorno(@Param('id') id: string, @Body() dto: RetornoFrotaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.registrarRetorno(id, dto, user, condutorToken);
   }
@@ -138,12 +138,12 @@ export class FrotaController {
   /** Encerrar / reabrir o ACERTO da viagem — trava despesa+adiantamento, INDEPENDENTE
    *  da conclusão (o veículo já foi liberado ao entregar). Gestor/dono (serviço). */
   @Post('viagens/:id/encerrar-acerto')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   encerrarAcerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.encerrarAcerto(id, user, roleLogistica(user));
   }
   @Post('viagens/:id/reabrir-acerto')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   reabrirAcerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.reabrirAcerto(id, user, roleLogistica(user));
   }
@@ -194,7 +194,7 @@ export class FrotaController {
   /** Cadastro de locais/pontos de parada. Sem `scope` → todos (cadastro);
    *  com `scope=true` → só os relevantes p/ a saída (filial + veículo/depto/global). */
   @Get('locais')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   listarLocais(
     @Query('ativos') ativos?: string,
     @Query('scope') scope?: string,
@@ -223,7 +223,7 @@ export class FrotaController {
 
   /** Paradas (pontos de rota / "caderno" da viagem). PORTARIA lê p/ abrir o detalhe. */
   @Get('viagens/:id/paradas')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   listarParadas(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.frota.listarParadas(id, user);
   }
@@ -233,34 +233,34 @@ export class FrotaController {
   // libera o módulo; QUEM opera a viagem é barrado por identidade em assertOpera
   // (quem registrou a saída / supervisor do veículo / gestão da frota / condutor token).
   @Post('viagens/:id/paradas')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   adicionarParada(@Param('id') id: string, @Body() dto: AddParadaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.adicionarParada(id, dto, user, condutorToken);
   }
 
   /** Planeja N paradas (visitas) — status PLANEJADA. */
   @Post('viagens/:id/paradas/planejar')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   planejarParadas(@Param('id') id: string, @Body() dto: PlanejarParadasDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.planejarParadas(id, dto, user, condutorToken);
   }
 
   /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional). */
   @Patch('viagens/:id/paradas/:paradaId/checkin')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   checkinParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @Body() dto: CheckinParadaDto, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.checkinParada(id, paradaId, dto, user, condutorToken);
   }
 
   /** Marca uma parada planejada como PULADA. */
   @Patch('viagens/:id/paradas/:paradaId/pular')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   pularParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.pularParada(id, paradaId, user, condutorToken);
   }
 
   @Delete('viagens/:id/paradas/:paradaId')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   removerParada(@Param('id') id: string, @Param('paradaId') paradaId: string, @CurrentUser() user: JwtPayload, @Headers('x-condutor-token') condutorToken?: string) {
     return this.frota.removerParada(id, paradaId, user, condutorToken);
   }

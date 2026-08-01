@@ -47,7 +47,7 @@ export class DespesaController {
   // despesa na viagem (o cadastro de tipos, abaixo, segue só GESTOR_FROTA).
   // (O fluxo Supervisores/RDV tem endpoint PRÓPRIO: GET /supervisor/tipos-despesa.)
   @Get('tipos')
-  @Roles('REGISTRADOR_FROTA', 'ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'PORTARIA', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('REGISTRADOR_FROTA', 'ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   listarTipos(@Query('ativos') ativos?: string) {
     return this.despesas.listarTipos(ativos === 'true' || ativos === '1');
   }
