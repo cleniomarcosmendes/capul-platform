@@ -464,9 +464,19 @@ export function SupervisorViagemPage() {
               <button onClick={() => { setDecPlan('REJEITADO'); setComPlan(''); }} className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100">Rejeitar</button>
             </>
           )}
-          {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') &&
+          {/* Enviar e liberar para execução são atos do representante — quem aprova não
+              fecha o ciclo sozinho (enviar em nome dele e aprovar em seguida). Sem esta
+              nota o aprovador só veria a barra vazia e não saberia o que falta. */}
+          {v.souDono === false && ['RASCUNHO', 'AJUSTADO', 'REJEITADO', 'APROVADO'].includes(v.statusPlanejamento ?? '') && (
+            <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">
+              {v.statusPlanejamento === 'APROVADO'
+                ? `Aprovado — aguardando ${v.condutorNome ?? 'o representante'} liberar para execução.`
+                : `Aguardando ${v.condutorNome ?? 'o representante'} enviar para aprovação.`}
+            </span>
+          )}
+          {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') && v.souDono !== false &&
             <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">Enviar ao coordenador</button>}
-          {v.statusPlanejamento === 'APROVADO' &&
+          {v.statusPlanejamento === 'APROVADO' && v.souDono !== false &&
             <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
           {v.statusPlanejamento === 'EM_EXECUCAO' && v.souDono !== false &&
             <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir</button>}

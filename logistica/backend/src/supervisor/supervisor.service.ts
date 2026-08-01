@@ -683,7 +683,13 @@ export class SupervisorService {
   async enviarPlanejamento(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
-    await this.assertDonoOuGestorPlanejamento(v, user);
+    // ENVIAR é do representante: significa "meu plano está pronto, avalie". Com o
+    // gestor podendo enviar, o ciclo fechava numa pessoa só — o aprovador enviava em
+    // nome do representante e aprovava em seguida, e o aval virava formalidade (foi o
+    // que apareceu no DEV: a Supervisora de Departamento enviou e aprovou o
+    // planejamento do coordenador em sequência). Quem monta o roteiro continua sendo
+    // os dois; quem declara que ele está pronto é o dono.
+    await this.assertDonoDoPlanejamento(v, user);
     // Sem coordenador NEM departamento não há para quem enviar (órfão). Coordenador roteia
     // p/ o coordenador; departamento roteia p/ o supervisor de departamento (caso do RDV
     // do próprio coordenador). Barra o envio se não houver nenhum dos dois.
@@ -787,7 +793,10 @@ export class SupervisorService {
   async iniciarExecucao(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
-    await this.assertDonoOuGestorPlanejamento(v, user);
+    // "Liberar para execução" abre o apontamento em campo — é o representante dizendo
+    // que vai sair. Mesmo dono de apontar/concluir; o app tem o botão, então isso não
+    // prende ninguém ao desktop.
+    await this.assertDonoDoPlanejamento(v, user);
     if (!['APROVADO', 'AJUSTADO'].includes(v.statusPlanejamento ?? '')) {
       throw new BadRequestException('Só inicia execução de planejamento aprovado/ajustado.');
     }
