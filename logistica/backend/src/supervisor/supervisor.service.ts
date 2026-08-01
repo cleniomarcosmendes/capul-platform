@@ -1537,9 +1537,22 @@ export class SupervisorService {
     await this.assertEscopoSupervisor(sup, user);
     if (dto.mesReferencia % 100 < 1 || dto.mesReferencia % 100 > 12) throw new BadRequestException('Mês de referência inválido (AAAAMM).');
     await this.assertRdvAberto(dto.supervisorId, dto.mesReferencia);
-    // Auto-serviço do supervisor de área nasce PENDENTE (o coordenador aprova). O
-    // lançamento do coordenador/departamento/admin já nasce APROVADO (são a autoridade).
-    const ehAutoServico = this.roleLog(user) === 'SUPERVISOR';
+    // ⭐ Adiantamento é lançado por QUEM APROVA aquele representante — nunca por ele
+    // mesmo (01/08, decisão do Clenio; fecha o item 2 do backlog de 27/07). O
+    // auto-serviço tinha saído do app em 27/07 e continuava no desktop, nascendo
+    // PENDENTE para o coordenador decidir; agora sai de vez e o lançamento é da
+    // autoridade, já APROVADO.
+    //
+    // A trava é por AUTORIDADE e não por papel: assim o coordenador não lança o
+    // próprio (o cadastro dele roteia para o Supervisor de Departamento, que lança),
+    // e afrouxar o @Roles por engano não reabre o auto-serviço. Quem está no topo da
+    // pirâmide é autoridade sobre si e segue lançando o seu — mesma regra da despesa
+    // (27/07): não se pede aval a si mesmo.
+    if (!(await this.ehAutoridadeSobre(sup, user))) {
+      throw new ForbiddenException(
+        'O adiantamento é lançado por quem aprova a sua prestação de contas (coordenador ou supervisor de departamento) — peça a ele.',
+      );
+    }
     const dataAdiantamento = this.parseData(dto.data);
     this.assertDataNoMes(dataAdiantamento, dto.mesReferencia, 'adiantamento');
     return this.prisma.adiantamento.create({
@@ -1547,9 +1560,10 @@ export class SupervisorService {
         supervisorId: dto.supervisorId, mesReferencia: dto.mesReferencia,
         valor: new Prisma.Decimal(dto.valor), dataAdiantamento,
         observacao: dto.observacao?.trim() || null, lancadoPorId: user.sub,
-        situacao: ehAutoServico ? 'PENDENTE' : 'APROVADO',
-        decididoPorId: ehAutoServico ? null : user.sub,
-        decididoEm: ehAutoServico ? null : new Date(),
+        // Sempre a autoridade (checado acima) → já nasce decidido.
+        situacao: 'APROVADO',
+        decididoPorId: user.sub,
+        decididoEm: new Date(),
       },
     });
   }

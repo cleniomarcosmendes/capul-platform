@@ -872,11 +872,11 @@ function FechamentoTab() {
     <div>
       <p className="mb-4 text-sm text-slate-500">
         {ehSupervisorArea
-          ? <><b>Seus adiantamentos e a sua RDV do mês.</b> Lance o adiantamento a qualquer momento — antes, durante ou depois da viagem (pode haver vários no mês). Ao lado, a sua RDV agregada (saldo = adiantamentos − despesas aprovadas). O encerramento do mês é feito pelo coordenador.</>
+          ? <><b>Seus adiantamentos e a sua RDV do mês.</b> Quem lança o adiantamento é o seu coordenador (ou o supervisor de departamento) — aqui você acompanha. Ao lado, a sua RDV agregada (saldo = adiantamentos − despesas aprovadas). O encerramento do mês também é feito pelo coordenador.</>
           : <>Adiantamentos e RDV do mês, por supervisor. <b>Lance o adiantamento a qualquer momento</b> — antes, durante ou depois da viagem (pode haver vários no mês). Ao lado, a RDV agregada do mês (saldo = adiantamentos − despesas aprovadas) e o <b>encerramento</b> do mês (ao final, trava lançamentos).</>}
       </p>
       {ehSupervisorArea && meuCadastro === null ? (
-        <p className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-700">Seu cadastro de supervisor de área ainda não foi montado no time desta filial (ou seu login não tem matrícula). Peça ao Supervisor de Departamento para te cadastrar com um coordenador — depois você poderá lançar seus adiantamentos aqui.</p>
+        <p className="rounded-lg bg-amber-50 px-3 py-3 text-sm text-amber-700">Seu cadastro de supervisor de área ainda não foi montado no time desta filial (ou seu login não tem matrícula). Peça ao Supervisor de Departamento para te cadastrar com um coordenador — depois seus adiantamentos e sua RDV aparecem aqui.</p>
       ) : (
       <>
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -911,12 +911,20 @@ function FechamentoTab() {
                         <td className="py-2 font-medium">{brl(a.valor)}</td>
                         <td className="py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${adiantBadge(a.situacao).cls}`} title={a.situacao === 'REJEITADO' ? (a.motivoRejeicao ?? '') : ''}>{adiantBadge(a.situacao).label}</span></td>
                         <td className="py-2 text-slate-500">{a.observacao ?? ''}</td>
-                        <td className="py-2 text-right"><button onClick={() => void remover(a.id)} className="text-xs text-rose-600 hover:underline">Remover</button></td>
+                        <td className="py-2 text-right">{!ehSupervisorArea && <button onClick={() => void remover(a.id)} className="text-xs text-rose-600 hover:underline">Remover</button>}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
+              {/* Lançar adiantamento é de quem APROVA o representante (01/08): saiu do app
+                  em 27/07 e agora sai do desktop — ninguém lança o próprio. O supervisor
+                  de área continua vendo os dele. */}
+              {ehSupervisorArea ? (
+                <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-400">
+                  O adiantamento é lançado pelo seu coordenador (ou pelo supervisor de departamento) — peça a ele.
+                </p>
+              ) : (
               <form onSubmit={lancar} className="mt-3 border-t border-slate-100 pt-3">
                 <div className="grid grid-cols-2 gap-2">
                   <input type="number" step="0.01" min="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor R$" className={inp} />
@@ -925,6 +933,7 @@ function FechamentoTab() {
                 <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional)" maxLength={255} className={`${inp} mt-2`} />
                 <button type="submit" className="mt-2 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700">Lançar adiantamento</button>
               </form>
+              )}
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -169,20 +169,22 @@ export class SupervisorController {
   }
 
   // ---- Adiantamentos (mensais, vários) + RDV mensal ----
-  // Lançar/remover: o COORDENADOR, o Supervisor de Departamento e o próprio SUPERVISOR de
-  // área (auto-serviço, só no SEU cadastro — escopo aplicado no serviço). Encerrar o mês
-  // (fechar/reabrir) NÃO é do supervisionado — segue coordenador/departamento.
+  // Lançar/remover adiantamento: só quem APROVA o representante (coordenador ou
+  // supervisor de departamento). O auto-serviço do supervisor de área saiu do app em
+  // 27/07 e do desktop em 01/08 — ninguém lança o próprio adiantamento. Ele continua
+  // LENDO os seus (o @Roles da classe cobre o GET). Encerrar o mês (fechar/reabrir)
+  // também não é do supervisionado.
   @Get('adiantamentos')
   adiantamentos(@CurrentUser() user: JwtPayload, @Query('supervisorId') supervisorId: string, @Query('mes') mes: string) {
     return this.svc.listarAdiantamentos(user, supervisorId, Number(mes));
   }
   @Post('adiantamentos')
-  @Roles('COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   lancarAdiantamento(@Body() dto: LancarAdiantamentoDto, @CurrentUser() user: JwtPayload) {
     return this.svc.lancarAdiantamento(dto, user);
   }
   @Delete('adiantamentos/:id')
-  @Roles('COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   removerAdiantamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.removerAdiantamento(id, user);
   }

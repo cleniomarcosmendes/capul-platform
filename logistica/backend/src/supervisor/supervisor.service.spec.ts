@@ -183,12 +183,15 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
 
   // ⭐ Auto-serviço (mudança 15/07): o próprio SUPERVISOR de área lança/vê o adiantamento
   // do SEU cadastro (casado pela matrícula do login) — mas nunca o de outro representante.
-  it('lancarAdiantamento SUPERVISOR no SEU cadastro (matrícula bate, tolera prefixo/zeros) → lança', async () => {
+  // ⭐ Auto-serviço de adiantamento ENCERRADO (01/08): saiu do app em 27/07 e agora do
+  // desktop. Quem lança é quem APROVA aquele representante — ninguém lança o próprio.
+  // A trava é por AUTORIDADE, não por papel: afrouxar o @Roles por engano não reabre.
+  it('lancarAdiantamento SUPERVISOR no PRÓPRIO cadastro → 403 (auto-serviço encerrado)', async () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'algum-coord', matricula: 'E01047' });
-    prisma.$queryRaw.mockResolvedValue([{ matricula: '1047', nome: 'Dono' }]); // chapa('1047') === chapa('E01047')
-    prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });
-    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('SUPERVISOR'))).resolves.toBeDefined();
-    expect(prisma.adiantamento.create).toHaveBeenCalled();
+    prisma.$queryRaw.mockResolvedValue([{ matricula: '1047', nome: 'Dono' }]); // é ele mesmo
+    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('SUPERVISOR')))
+      .rejects.toThrow(/lançado por quem aprova/);
+    expect(prisma.adiantamento.create).not.toHaveBeenCalled();
   });
   it('lancarAdiantamento SUPERVISOR em cadastro de OUTRO (matrícula difere) → 403', async () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'outro-coord', matricula: 'E09999' });
@@ -217,13 +220,14 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
   // ⭐ Aprovação do adiantamento (15/07): auto-serviço do supervisor nasce PENDENTE; o
   // lançamento do coordenador/departamento já nasce APROVADO. Só o coordenador (ou depto)
   // decide — nunca o supervisionado.
-  it('lancarAdiantamento SUPERVISOR (auto-serviço) → nasce PENDENTE', async () => {
-    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'algum-coord', matricula: 'E01047' });
-    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Dono' }]);
-    prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });
-    await svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('SUPERVISOR'));
-    expect(prisma.adiantamento.create.mock.calls[0][0].data.situacao).toBe('PENDENTE');
-    expect(prisma.adiantamento.create.mock.calls[0][0].data.decididoPorId).toBeNull();
+  // O COORDENADOR não lança o PRÓPRIO adiantamento: o cadastro dele roteia para o
+  // Supervisor de Departamento, que é quem lança. Mesma segregação da despesa.
+  it('lancarAdiantamento COORDENADOR no cadastro DELE MESMO → 403', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: null, departamentoId: 'd1', matricula: 'E01047' });
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Coord' }]);
+    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('COORDENADOR')))
+      .rejects.toThrow(/lançado por quem aprova/);
+    expect(prisma.adiantamento.create).not.toHaveBeenCalled();
   });
   it('lancarAdiantamento COORDENADOR → já nasce APROVADO (com decididoPor)', async () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'u1' });
