@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, MapPin, Paperclip, Pencil, Plus, Printer, Search, Trash2, User } from 'lucide-react';
 import { logisticaApi } from '../services/api';
@@ -333,9 +333,30 @@ export function SupervisorViagemPage() {
     try { await logisticaApi.delete(`/supervisor/viagens/${id}/visitas/${visita.id}`); toast('success', 'Visita removida.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
   };
-  const apontar = async (visita: Visita, status: 'REALIZADA' | 'PULADA') => {
-    try { await logisticaApi.patch(`/supervisor/viagens/${id}/visitas/${visita.id}/apontar`, { status }); toast('success', status === 'REALIZADA' ? 'Visita realizada.' : 'Visita pulada.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao apontar a visita.')); }
+  const apontar = async (visita: Visita, status: 'REALIZADA' | 'PULADA', observacao?: string) => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/visitas/${visita.id}/apontar`, { status, ...(observacao !== undefined ? { observacao } : {}) });
+      toast('success', status === 'REALIZADA' ? 'Visita realizada.' : 'Visita pulada.');
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao apontar a visita.')); }
+  };
+  /**
+   * Realizar abre o RELATO da visita — o que foi tratado/coletado em campo. Grava em
+   * `parada.observacao`, que já é a coluna "Obs / Motivo" do relatório mensal de
+   * visitas: o que for escrito aqui sai impresso.
+   *
+   * Nasce preenchido com a observação que já estiver na visita (a anotação de quando o
+   * roteiro foi montado, às vezes escrita pelo coordenador), para COMPLEMENTAR em vez
+   * de apagar sem ver. Opcional — dá para confirmar sem escrever nada.
+   */
+  const [relatoVisita, setRelatoVisita] = useState<Visita | null>(null);
+  const [relato, setRelato] = useState('');
+  const confirmarRealizada = async () => {
+    if (!relatoVisita) return;
+    const v = relatoVisita;
+    setRelatoVisita(null);
+    await apontar(v, 'REALIZADA', relato.trim());
+    setRelato('');
   };
   const salvarVeiculo = async () => {
     try {
@@ -735,7 +756,8 @@ export function SupervisorViagemPage() {
             {v.paradas.length === 0 ? (
               <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">Nenhuma visita ainda.</td></tr>
             ) : v.paradas.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50">
+            <React.Fragment key={p.id}>
+              <tr className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-slate-500">{p.sequencia}</td>
                 <td className="px-4 py-3">{fmtData(p.dataHora)}</td>
                 <td className="px-4 py-3"><span className="font-medium text-slate-700">{p.clienteNome ?? '—'}</span>{p.clienteMatricula && <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-500">{p.clienteMatricula}</span>}</td>
@@ -760,7 +782,7 @@ export function SupervisorViagemPage() {
                   <div className="flex items-center gap-2">
                     {v.statusPlanejamento === 'EM_EXECUCAO' && p.status === 'PLANEJADA' && v.souDono !== false && (
                       <>
-                        <button onClick={() => void apontar(p, 'REALIZADA')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100" title="Marcar como realizada">Realizar</button>
+                        <button onClick={() => { setRelatoVisita(p); setRelato(p.observacao ?? ''); }} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100" title="Marcar como realizada e anotar o que foi tratado">Realizar</button>
                         <button onClick={() => void apontar(p, 'PULADA')} className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-50" title="Não realizada">Pular</button>
                       </>
                     )}
@@ -769,6 +791,31 @@ export function SupervisorViagemPage() {
                   </div>
                 )}</td>
               </tr>
+              {/* Relato da visita: abre embaixo da linha ao clicar em "Realizar". Vai
+                  para a coluna "Obs / Motivo" do relatório mensal de visitas. */}
+              {relatoVisita?.id === p.id && (
+                <tr key={`${p.id}-relato`} className="bg-emerald-50/40">
+                  <td colSpan={8} className="px-4 py-3">
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      O que foi tratado nesta visita <span className="font-normal text-slate-400">— sai no relatório de visitas do mês (opcional)</span>
+                    </label>
+                    <div className="flex items-start gap-2">
+                      <textarea
+                        value={relato}
+                        onChange={(e) => setRelato(e.target.value)}
+                        maxLength={500}
+                        rows={2}
+                        autoFocus
+                        placeholder="Ex.: cliente pediu orçamento de 20 t; retornar em 15 dias"
+                        className="w-full max-w-2xl rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500"
+                      />
+                      <button onClick={() => void confirmarRealizada()} className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">Confirmar visita</button>
+                      <button onClick={() => { setRelatoVisita(null); setRelato(''); }} className="shrink-0 px-2 py-2 text-sm text-slate-500 hover:text-slate-700">Cancelar</button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
             ))}
           </tbody>
         </table>

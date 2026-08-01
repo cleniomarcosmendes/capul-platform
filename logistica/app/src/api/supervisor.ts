@@ -155,7 +155,7 @@ export async function apontarVisitaApp(
   id: string,
   paradaId: string,
   status: 'REALIZADA' | 'PULADA',
-  extra?: { latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean; motivoPulada?: string },
+  extra?: { latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean; motivoPulada?: string; observacao?: string },
 ): Promise<void> {
   await api.patch(`${B}/viagens/${id}/visitas/${paradaId}/apontar`, { status, ...(extra ?? {}) });
 }

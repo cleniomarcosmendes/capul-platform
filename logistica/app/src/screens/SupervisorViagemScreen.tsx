@@ -227,13 +227,13 @@ export function SupervisorViagemScreen({ route }: Props) {
     } finally { setSalvV(false); }
   };
 
-  const apontar = async (paradaId: string, status: 'REALIZADA' | 'PULADA', motivoPulada?: string) => {
+  const apontar = async (paradaId: string, status: 'REALIZADA' | 'PULADA', motivoPulada?: string, observacao?: string) => {
     // GPS só faz sentido na visita REALIZADA (onde ele esteve); PULADA não captura.
     const coords = status === 'REALIZADA' ? await capturarCoordenadas() : {};
     // Confirmação: só marcações "no local" ensinam a localização do cliente (evita marcar
     // da estrada/cidade). Pergunta só na REALIZADA e só se houver GPS.
     const noLocal = status === 'REALIZADA' && coords.latitude != null ? await confirmarNoLocal() : undefined;
-    const extra = { ...coords, ...(noLocal !== undefined ? { noLocal } : {}), ...(motivoPulada ? { motivoPulada } : {}) };
+    const extra = { ...coords, ...(noLocal !== undefined ? { noLocal } : {}), ...(motivoPulada ? { motivoPulada } : {}), ...(observacao ? { observacao } : {}) };
     try { await apontarVisitaApp(viagemId, paradaId, status, extra); await carregar(); }
     catch (e) {
       if (ehErroDeRede(e)) {
@@ -242,6 +242,27 @@ export function SupervisorViagemScreen({ route }: Props) {
       } else { Alert.alert('Erro', msg(e, 'Falha ao apontar a visita.')); }
     }
   };
+  /**
+   * Realizar abre o RELATO da visita: o que foi coletado em campo (pedido, pendência,
+   * combinado com o cliente). Vai para `parada.observacao`, que já é a coluna
+   * "Obs / Motivo" do relatório mensal de visitas — então o que ele escrever aqui sai
+   * impresso, sem precisar voltar no computador.
+   *
+   * Nasce preenchido com a observação que já estiver na visita (a anotação de quando o
+   * roteiro foi montado, muitas vezes escrita pelo coordenador): assim ele COMPLEMENTA
+   * em vez de apagar sem ver. O campo é opcional — dá para realizar sem escrever nada.
+   */
+  const [relatoId, setRelatoId] = useState<string | null>(null);
+  const [relato, setRelato] = useState('');
+  const [relatando, setRelatando] = useState(false);
+  const abrirRelato = (p: VisitaSup) => { setRelatoId(p.id); setRelato(p.observacao ?? ''); };
+  const confirmarRealizada = async () => {
+    if (!relatoId) return;
+    setRelatando(true);
+    try { await apontar(relatoId, 'REALIZADA', undefined, relato.trim() || undefined); setRelatoId(null); setRelato(''); }
+    finally { setRelatando(false); }
+  };
+
   // Pular exige justificativa → abre o modal; confirmar chama apontar(..., 'PULADA', motivo).
   const [pularId, setPularId] = useState<string | null>(null);
   const [motivoPular, setMotivoPular] = useState('');
@@ -467,7 +488,7 @@ export function SupervisorViagemScreen({ route }: Props) {
             })()}
             {emExecucao && p.status === 'PLANEJADA' && (
               <View style={styles.apRow}>
-                <TouchableOpacity style={[styles.apBtn, styles.apOk]} onPress={() => void apontar(p.id, 'REALIZADA')}><Text style={styles.apOkTxt}>Realizar</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.apBtn, styles.apOk]} onPress={() => abrirRelato(p)}><Text style={styles.apOkTxt}>Realizar</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.apBtn} onPress={() => { setPularId(p.id); setMotivoPular(''); }}><Text style={styles.apTxt}>Pular</Text></TouchableOpacity>
               </View>
             )}
@@ -570,6 +591,32 @@ export function SupervisorViagemScreen({ route }: Props) {
           </View>
         );
       })}
+
+      {/* Relato da visita: o que foi coletado em campo. Vai para a coluna "Obs / Motivo"
+          do relatório mensal de visitas. Opcional — dá para realizar sem escrever. */}
+      <Modal visible={relatoId !== null} transparent animationType="fade" onRequestClose={() => setRelatoId(null)}>
+        <View style={styles.modalFundo}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitulo}>Realizar visita</Text>
+            <Text style={styles.modalSub}>Anote o que foi tratado/coletado — sai no relatório de visitas do mês. Pode deixar em branco.</Text>
+            <TextInput
+              style={[styles.input, styles.modalInput]}
+              onFocus={aoFocar}
+              placeholder="Ex.: cliente pediu orçamento de 20 t; retornar em 15 dias"
+              value={relato}
+              onChangeText={setRelato}
+              maxLength={500}
+              multiline
+            />
+            <View style={styles.formBtns}>
+              <TouchableOpacity style={[styles.btn, styles.btnFlex, relatando && styles.btnOff]} disabled={relatando} onPress={() => void confirmarRealizada()}>
+                <Text style={styles.btnTxt}>{relatando ? 'Salvando…' : 'Confirmar visita'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setRelatoId(null); setRelato(''); }} disabled={relatando}><Text style={styles.cancelTxt}>Cancelar</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Não reconheço a despesa: exige motivo — é o que quem lançou vai ler. */}
       <Modal visible={naoReconhecoId !== null} transparent animationType="fade" onRequestClose={() => setNaoReconhecoId(null)}>
