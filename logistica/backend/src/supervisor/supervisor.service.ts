@@ -602,7 +602,7 @@ export class SupervisorService {
       return; // planejamento sem cadastro vinculado: o criador é o dono
     }
     throw new ForbiddenException(
-      'Só o representante dono do planejamento aponta a visita e conclui o RDV. Como aprovador você pode incluir, alterar e excluir itens do roteiro, aprovar, devolver ou cancelar.',
+      'Só o representante dono do planejamento envia para aprovação, libera para execução, aponta visita e conclui o RDV. Como aprovador você pode incluir, alterar e excluir itens do roteiro, aprovar, ajustar, devolver, rejeitar, cancelar e reabrir.',
     );
   }
 
