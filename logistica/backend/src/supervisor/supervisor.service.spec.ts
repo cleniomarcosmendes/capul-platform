@@ -1113,3 +1113,65 @@ describe('SupervisorService — veículo do planejamento', () => {
     expect(prisma.despesaVeiculo.updateMany).not.toHaveBeenCalled();
   });
 });
+
+// ⭐ Despesa de VEÍCULO passou a exigir o carro (01/08). Antes caía em nulo quando o
+// planejamento não tinha veículo — que era SEMPRE, porque nenhuma tela preenchia o
+// campo — e o valor sumia de Custos da Frota sem aviso nenhum. Falhar é melhor do que
+// perder o custo em silêncio.
+describe('SupervisorService — veículo da despesa', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const dono = () => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const planCom = (veiculoId: string | null) => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    criadoPorId: 'u1', mesReferencia: 202608, supervisorRegistroId: 's1', veiculoId,
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Dono' }]);
+    prisma.despesaVeiculo.create.mockResolvedValue({ id: 'd1' });
+    prisma.veiculo.findFirst.mockResolvedValue({ id: 've-plan' });
+  });
+  const combustivel = { id: 't1', nome: 'Combustível', categoria: 'VEICULO', ativo: true };
+  const alimentacao = { id: 't2', nome: 'Alimentação', categoria: 'INDIVIDUO', ativo: true };
+
+  it('categoria VEÍCULO herda o carro do planejamento', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planCom('ve-plan'));
+    prisma.tipoDespesa.findFirst.mockResolvedValue(combustivel);
+    await svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 80, data: '2026-08-05' } as any, dono());
+    expect(prisma.despesaVeiculo.create.mock.calls[0][0].data.veiculoId).toBe('ve-plan');
+  });
+
+  it('veiculoId na despesa sobrepõe o do planejamento (pegou outro carro)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planCom('ve-plan'));
+    prisma.tipoDespesa.findFirst.mockResolvedValue(combustivel);
+    prisma.veiculo.findFirst.mockResolvedValue({ id: 've-outro' });
+    await svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 80, data: '2026-08-05', veiculoId: 've-outro' } as any, dono());
+    expect(prisma.despesaVeiculo.create.mock.calls[0][0].data.veiculoId).toBe('ve-outro');
+  });
+
+  it('VEÍCULO sem carro no planejamento nem na despesa → 400 (não grava sem veículo)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planCom(null));
+    prisma.tipoDespesa.findFirst.mockResolvedValue(combustivel);
+    await expect(svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 80, data: '2026-08-05' } as any, dono()))
+      .rejects.toThrow(/não entra no custo da frota/);
+    expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
+  });
+
+  it('categoria INDIVÍDUO segue sem veículo, mesmo com o planejamento tendo carro', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planCom('ve-plan'));
+    prisma.tipoDespesa.findFirst.mockResolvedValue(alimentacao);
+    await svc.lancarDespesa('v1', { tipoDespesaId: 't2', valor: 30, data: '2026-08-05' } as any, dono());
+    expect(prisma.despesaVeiculo.create.mock.calls[0][0].data.veiculoId).toBeNull();
+  });
+
+  it('veículo de OUTRA filial → 400', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(planCom('ve-plan'));
+    prisma.tipoDespesa.findFirst.mockResolvedValue(combustivel);
+    prisma.veiculo.findFirst.mockResolvedValue(null); // não existe nesta filial
+    await expect(svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 80, data: '2026-08-05', veiculoId: 've-alheio' } as any, dono()))
+      .rejects.toThrow(/não encontrado nesta filial/);
+  });
+});

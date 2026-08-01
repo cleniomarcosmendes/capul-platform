@@ -138,6 +138,9 @@ export class LancarDespesaSupervisorDto {
   @IsOptional() @IsDateString() data?: string;
   @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
+  // Veículo DESTA despesa (categoria VEÍCULO). Ausente = herda o do planejamento;
+  // informado = a pessoa usou outro carro nesta viagem.
+  @IsOptional() @IsString() @MaxLength(40) veiculoId?: string;
   // Fila offline do app: dedup no reenvio (chave única na despesa).
   @IsOptional() @IsString() @MaxLength(64) idempotencyKey?: string;
 }
@@ -148,6 +151,8 @@ export class EditarViagemSupervisorDto {
 }
 export class EditarDespesaSupervisorDto {
   @IsOptional() @IsString() @MaxLength(40) tipoDespesaId?: string;
+  // Corrige o carro de UMA despesa (o combustível foi no outro veículo).
+  @IsOptional() @IsString() @MaxLength(40) veiculoId?: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0.01) valor?: number; // @Type: multipart manda string
   @IsOptional() @IsDateString() data?: string;
   @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;

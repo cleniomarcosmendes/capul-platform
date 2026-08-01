@@ -46,7 +46,7 @@ const STATUS_VISITA: Record<string, { label: string; cls: string }> = {
 };
 const statusVisita = (s?: string | null) => STATUS_VISITA[s ?? 'REALIZADA'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 interface AnexoV { id: string; mime?: string | null; ordem?: number }
-interface DespesaV { id: string; valor: number | string; situacao: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null; anexos?: AnexoV[] }
+interface DespesaV { id: string; valor: number | string; situacao: string; veiculoId?: string | null; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null; anexos?: AnexoV[] }
 const MAX_ANEXOS = 5;
 interface VeiculoOpc { id: string; placa: string; modelo?: string | null; ativo?: boolean }
 interface ViagemDetalhe {
@@ -194,6 +194,9 @@ export function SupervisorViagemPage() {
   const [tipos, setTipos] = useState<{ id: string; nome: string; categoria: string; ativo?: boolean }[]>([]);
   const [showDesp, setShowDesp] = useState(false);
   const [dTipo, setDTipo] = useState('');
+  // Veículo DESTA despesa: nasce com o do planejamento e pode ser trocado (a pessoa
+  // pegou outro carro nesta viagem). Só aparece na categoria VEÍCULO.
+  const [dVeiculo, setDVeiculo] = useState('');
   const [dValor, setDValor] = useState('');
   const [dData, setDData] = useState('');
   // Troca do veículo do RDV. Vale daqui pra frente: despesa já lançada NÃO é
@@ -271,6 +274,9 @@ export function SupervisorViagemPage() {
   // Então o aprovador inclui cliente enquanto é planejamento, e depois só edita/remove
   // o que já existe. Editar segue liberado (o backend também permite).
   const podeIncluirVisita = emPlanejamento || v?.souDono !== false;
+  // Categoria do tipo escolhido decide se a despesa tem veículo (combustível/pedágio
+  // têm; alimentação/hospedagem não).
+  const tipoSelEhVeiculo = tipos.find((t) => t.id === dTipo)?.categoria === 'VEICULO';
   const ehCoordDesteSup = !!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id;
   const podeDecidirAdiantamento = logisticaRole === 'ADMIN' || logisticaRole === 'SUPERVISOR_FROTA' || (logisticaRole === 'COORDENADOR' && ehCoordDesteSup);
 
@@ -364,11 +370,12 @@ export function SupervisorViagemPage() {
     catch (e) { toast('error', errMsg(e, 'Falha ao iniciar.')); }
   };
 
-  const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); setDRecibos([]); };
+  const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); setDRecibos([]); setDVeiculo(''); };
   const abrirEdicaoDesp = (d: DespesaV) => {
     setEditDespId(d.id); setShowDesp(true);
     setDTipo(d.tipoDespesaId ?? ''); setDValor(String(d.valor)); setDForn(d.fornecedor ?? ''); setDObs(d.observacao ?? '');
     setDData(d.dataDespesa ? new Date(d.dataDespesa).toISOString().slice(0, 10) : ''); setDRecibos([]);
+    setDVeiculo(d.veiculoId ?? v?.veiculoId ?? '');
   };
   // Abre um blob (comprovante legado ou anexo) numa aba nova.
   const abrirBlob = async (rota: string) => {
@@ -405,10 +412,11 @@ export function SupervisorViagemPage() {
         if (dData) fd.append('data', dData);
         if (dFornecedor.trim()) fd.append('fornecedor', dFornecedor.trim());
         if (dObs.trim()) fd.append('observacao', dObs.trim());
+        if (dVeiculo) fd.append('veiculoId', dVeiculo);
         dRecibos.forEach((f) => fd.append('comprovantes', f));
         resp = editDespId ? await logisticaApi.patch(url, fd) : await logisticaApi.post(url, fd);
       } else {
-        const body = { tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined, fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined };
+        const body = { tipoDespesaId: dTipo, valor: Number(dValor), data: dData || undefined, fornecedor: dFornecedor.trim() || undefined, observacao: dObs.trim() || undefined, veiculoId: dVeiculo || undefined };
         resp = editDespId ? await logisticaApi.patch(url, body) : await logisticaApi.post(url, body);
       }
       // Lançada por quem tem autoridade sobre o representante já nasce APROVADA (27/07)
@@ -766,12 +774,36 @@ export function SupervisorViagemPage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-slate-500">Tipo *</label>
-              <select value={dTipo} onChange={(e) => setDTipo(e.target.value)} className={inp}>
+              <select
+                value={dTipo}
+                onChange={(e) => {
+                  setDTipo(e.target.value);
+                  // Escolheu um tipo de veículo e ainda não há carro no campo → puxa o
+                  // do planejamento, que é o caso normal.
+                  const cat = tipos.find((t) => t.id === e.target.value)?.categoria;
+                  if (cat === 'VEICULO' && !dVeiculo) setDVeiculo(v.veiculoId ?? '');
+                }}
+                className={inp}
+              >
                 <option value="">—</option>
                 {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome} ({t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'})</option>)}
               </select>
             </div>
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Valor (R$) *</label><input type="number" step="0.01" min="0" value={dValor} onChange={(e) => setDValor(e.target.value)} className={inp} /></div>
+            {/* Só na categoria VEÍCULO: alimentação/hospedagem é do indivíduo e não tem
+                carro. Nasce com o do planejamento; trocar aqui cobre a viagem em que a
+                pessoa pegou outro veículo. */}
+            {tipoSelEhVeiculo && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Veículo *</label>
+                <select value={dVeiculo} onChange={(e) => setDVeiculo(e.target.value)} className={inp}>
+                  <option value="">— escolha o veículo</option>
+                  {veiculos.filter((ve) => ve.ativo !== false).map((ve) => (
+                    <option key={ve.id} value={ve.id}>{ve.placa}{ve.modelo ? ` — ${ve.modelo}` : ''}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Data</label><DataInput value={dData} onChange={setDData} className={inp} />{foraDoMes(dData, v.mesReferencia) && <p className="mt-1 text-xs text-amber-600">Fora do mês do planejamento ({fmtMes(v.mesReferencia)}).</p>}</div>
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Fornecedor</label><input value={dFornecedor} onChange={(e) => setDForn(e.target.value)} maxLength={120} className={inp} /></div>
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={dObs} onChange={(e) => setDObs(e.target.value)} maxLength={500} className={inp} /></div>

@@ -1161,8 +1161,23 @@ export class SupervisorService {
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     const autoridade = await this.ehAutoridadeSobre(v.supervisorRegistro, user);
-    // INDIVÍDUO não tem veículo; VEÍCULO usa o veículo da viagem (se houver).
-    const veiculoId = tipo.categoria === 'INDIVIDUO' ? null : v.veiculoId;
+    // INDIVÍDUO (alimentação, hospedagem) não tem veículo. VEÍCULO (combustível,
+    // pedágio) herda o carro do planejamento, mas aceita OUTRO na despesa: a pessoa
+    // pode ter pegado um carro diferente numa viagem do mês.
+    //
+    // E passou a EXIGIR o carro. Antes caía em nulo quando o planejamento não tinha
+    // veículo — que era sempre — e o valor sumia de Custos da Frota sem nenhum aviso.
+    // Falhar aqui é melhor do que perder o custo em silêncio.
+    const veiculoId = tipo.categoria === 'INDIVIDUO' ? null : (dto.veiculoId?.trim() || v.veiculoId);
+    if (tipo.categoria !== 'INDIVIDUO') {
+      if (!veiculoId) {
+        throw new BadRequestException(
+          `Informe o veículo desta despesa de ${tipo.nome.toLowerCase()} — sem ele o valor não entra no custo da frota. Defina o veículo do planejamento ou escolha um na despesa.`,
+        );
+      }
+      const ve = await this.prisma.veiculo.findFirst({ where: { id: veiculoId, filialId } });
+      if (!ve) throw new BadRequestException('Veículo da despesa não encontrado nesta filial.');
+    }
     const dataDespesa = this.parseData(dto.data);
     this.assertDataNoMes(dataDespesa, v.mesReferencia, 'despesa');
     const d = await this.prisma.despesaVeiculo.create({
@@ -1330,11 +1345,26 @@ export class SupervisorService {
     // Trocar o tipo reclassifica a categoria → recalcula se tem veículo.
     let tipoId: string | undefined;
     let veiculoId: string | null | undefined;
+    // Categoria vigente: a nova (se trocou o tipo) ou a que a despesa já tem.
+    let categoria: string | null = null;
     if (dto.tipoDespesaId) {
       const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
       if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
       tipoId = tipo.id;
-      veiculoId = tipo.categoria === 'INDIVIDUO' ? null : v.veiculoId;
+      categoria = tipo.categoria;
+      veiculoId = tipo.categoria === 'INDIVIDUO' ? null : (dto.veiculoId?.trim() || d.veiculoId || v.veiculoId);
+    } else if (dto.veiculoId !== undefined) {
+      // Corrige só o carro ("o combustível foi no outro veículo"), sem mexer no tipo.
+      const atual = await this.prisma.tipoDespesa.findUnique({ where: { id: d.tipoDespesaId } });
+      categoria = atual?.categoria ?? null;
+      if (categoria === 'INDIVIDUO') throw new BadRequestException('Despesa de indivíduo não tem veículo.');
+      veiculoId = dto.veiculoId.trim() || null;
+    }
+    // Mesma exigência do lançamento: despesa de veículo sem carro sumiria do custo.
+    if (categoria && categoria !== 'INDIVIDUO') {
+      if (!veiculoId) throw new BadRequestException('Informe o veículo desta despesa — sem ele o valor não entra no custo da frota.');
+      const ve = await this.prisma.veiculo.findFirst({ where: { id: veiculoId, filialId } });
+      if (!ve) throw new BadRequestException('Veículo da despesa não encontrado nesta filial.');
     }
     // Editar a data também respeita o mês do planejamento (RDV é mensal).
     if (dto.data !== undefined) this.assertDataNoMes(this.parseData(dto.data), v.mesReferencia, 'despesa');

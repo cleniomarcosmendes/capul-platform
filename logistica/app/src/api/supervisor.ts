@@ -21,9 +21,14 @@ export const PAPEL_LABEL: Record<string, string> = {
 };
 export const papelLabel = (p?: string | null) => (p ? PAPEL_LABEL[p] ?? p : 'Representante');
 
+/** Veículo da frota — seletor da despesa de categoria VEÍCULO. */
+export interface VeiculoSup { id: string; placa: string; modelo?: string | null; ativo?: boolean }
+
 export interface ViagemSup {
   id: string; numero: number; situacao: string; mesReferencia?: number | null;
   papelRepresentante?: string | null; departamentoNome?: string | null; aprovadorNome?: string | null;
+  // Veículo do RDV: a despesa de combustível/pedágio herda este carro.
+  veiculoId?: string | null; veiculo?: { id: string; placa: string; modelo?: string | null } | null;
   statusPlanejamento?: StatusPlanejamento | null;
   adiantamento?: string | number | null; condutorNome?: string | null;
   comentarioCoordenador?: string | null;
@@ -48,6 +53,7 @@ export interface VisitaSup {
 }
 export interface DespesaSup {
   id: string; valor: number | string; dataDespesa?: string | null; situacao?: SituacaoDespesa | null;
+  veiculoId?: string | null;
   fornecedor?: string | null; observacao?: string | null; tipoDespesaId?: string | null;
   comprovanteObjectKey?: string | null;
   anexos?: { id: string; mime?: string | null }[];
@@ -70,6 +76,8 @@ export interface NovaVisita {
 }
 export interface NovaDespesa {
   tipoDespesaId: string; valor: number; data?: string; fornecedor?: string; observacao?: string;
+  // Veículo DESTA despesa. Ausente = herda o do planejamento.
+  veiculoId?: string;
   idempotencyKey?: string; // fila offline: dedup no reenvio
 }
 
@@ -91,7 +99,7 @@ export async function obterViagemSupervisor(id: string): Promise<ViagemSupDetalh
 export async function removerDespesaApp(viagemId: string, despesaId: string): Promise<void> {
   await api.delete(`${B}/viagens/${viagemId}/despesas/${despesaId}`);
 }
-export interface EditarDespesa { tipoDespesaId?: string; valor?: number; data?: string; fornecedor?: string; observacao?: string }
+export interface EditarDespesa { tipoDespesaId?: string; valor?: number; data?: string; fornecedor?: string; observacao?: string; veiculoId?: string }
 /** Edita os dados de uma despesa (tipo/valor/fornecedor/obs). Não troca os comprovantes. */
 export async function editarDespesaApp(viagemId: string, despesaId: string, body: EditarDespesa): Promise<void> {
   await api.patch(`${B}/viagens/${viagemId}/despesas/${despesaId}`, body);
@@ -116,6 +124,7 @@ export async function lancarDespesaApp(id: string, body: NovaDespesa, fotoUris?:
   if (body.data) form.append('data', body.data);
   if (body.fornecedor) form.append('fornecedor', body.fornecedor);
   if (body.observacao) form.append('observacao', body.observacao);
+  if (body.veiculoId) form.append('veiculoId', body.veiculoId);
   if (body.idempotencyKey) form.append('idempotencyKey', body.idempotencyKey);
   fotos.forEach((uri, i) => {
     const isPng = uri.toLowerCase().endsWith('.png');
@@ -182,4 +191,10 @@ export async function listarTiposDespesaSup(): Promise<TipoDespesaSup[]> {
   // do controller da frota (/despesas/tipos exigia role de frota).
   const { data } = await api.get<TipoDespesaSup[]>(`${B}/tipos-despesa`);
   return data.filter((t) => t.ativo !== false);
+}
+
+/** Veículos da filial — seletor da despesa de veículo no app. */
+export async function listarVeiculosSup(): Promise<VeiculoSup[]> {
+  const { data } = await api.get<VeiculoSup[]>(`${LOGISTICA_BASE}/veiculos`);
+  return data;
 }

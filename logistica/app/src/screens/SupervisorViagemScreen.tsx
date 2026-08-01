@@ -10,10 +10,10 @@ import { SelectBusca } from '../components/SelectBusca';
 import {
   obterViagemSupervisor, adicionarVisitaApp, lancarDespesaApp, apontarVisitaApp,
   removerDespesaApp, editarDespesaApp,
-  iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor, papelLabel,
+  iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor, papelLabel, listarVeiculosSup,
   listarAtividadesSup, listarTiposDespesaSup,
   meuCadastroSup, listarAdiantamentosSup,
-  type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup, type NovaVisita, type NovaDespesa,
+  type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup, type VeiculoSup, type NovaVisita, type NovaDespesa,
   type MeuCadastroSup, type AdiantamentoSup, type VisitaSup, type ViagemSup,
 } from '../api/supervisor';
 import { uuid } from '../lib/uuid';
@@ -133,6 +133,10 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [showVisita, setShowVisita] = useState(false); // form de visita/oportunidade recolhido
   // form despesa
   const [tipoId, setTipoId] = useState(''); const [valor, setValor] = useState(''); const [dForn, setDForn] = useState(''); const [dObs, setDObs] = useState('');
+  // Veículo DESTA despesa (só categoria VEÍCULO). Nasce com o do planejamento; trocar
+  // cobre a viagem em que a pessoa pegou outro carro. Sem veículo o backend recusa —
+  // o valor sumiria do custo da frota.
+  const [dVeiculo, setDVeiculo] = useState(''); const [veiculos, setVeiculos] = useState<VeiculoSup[]>([]);
   const [dData, setDData] = useState(''); // data da despesa (opcional, AAAA-MM-DD → hoje se vazio)
   const [fotoUris, setFotoUris] = useState<string[]>([]); // comprovantes (fotos) — vários
   const [salvD, setSalvD] = useState(false);
@@ -150,6 +154,9 @@ export function SupervisorViagemScreen({ route }: Props) {
       obterViagemSupervisor(viagemId), listarAtividadesSup(), listarTiposDespesaSup(),
     ]);
     setV(d); setAtivs(a); setTipos(t);
+    // Veículos p/ o seletor da despesa. Best-effort: sem eles a despesa ainda herda o
+    // carro do planejamento — só não dá pra trocar.
+    try { setVeiculos(await listarVeiculosSup()); } catch { /* silencioso */ }
     // Adiantamentos do mês (auto-serviço): resolve o próprio cadastro e lista o mês da
     // viagem. Falha aqui não bloqueia visitas/despesas (bloco isolado).
     try {
@@ -267,12 +274,13 @@ export function SupervisorViagemScreen({ route }: Props) {
   };
   const removerFoto = (i: number) => setFotoUris((prev) => prev.filter((_, idx) => idx !== i));
 
-  const limparDespesa = () => { setTipoId(''); setValor(''); setDData(''); setDForn(''); setDObs(''); setFotoUris([]); setEditDespId(null); setDespViagemId(viagemId); };
+  const limparDespesa = () => { setDVeiculo(''); setTipoId(''); setValor(''); setDData(''); setDForn(''); setDObs(''); setFotoUris([]); setEditDespId(null); setDespViagemId(viagemId); };
   // Abre o form já preenchido com a despesa (edição de tipo/valor/fornecedor/obs — os
   // comprovantes ficam como estão). Só metadados: por isso escondemos foto/planejamento.
   const abrirEdicaoDesp = (d: ViagemSupDetalhe['despesas'][number]) => {
     setEditDespId(d.id);
     setTipoId(d.tipoDespesaId ?? (d.tipoDespesa ? (tipos.find((t) => t.nome === d.tipoDespesa?.nome)?.id ?? '') : ''));
+    setDVeiculo(d.veiculoId ?? v?.veiculoId ?? '');
     setValor(maskMoeda(String(Math.round(Number(d.valor) * 100))));
     setDData(d.dataDespesa ? String(d.dataDespesa).slice(0, 10) : '');
     setDForn(d.fornecedor ?? ''); setDObs(d.observacao ?? ''); setFotoUris([]);
@@ -290,6 +298,7 @@ export function SupervisorViagemScreen({ route }: Props) {
         await editarDespesaApp(viagemId, editDespId, {
           tipoDespesaId: tipoId, valor: parseMoeda(valor), data,
           fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined,
+          veiculoId: dVeiculo || undefined,
         });
         limparDespesa(); setShowDespesa(false); await carregar();
         Alert.alert('Pronto', 'Despesa atualizada.');
@@ -299,7 +308,8 @@ export function SupervisorViagemScreen({ route }: Props) {
     const fotos = fotoUris;
     const payload: NovaDespesa = {
       tipoDespesaId: tipoId, valor: parseMoeda(valor), data,
-      fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined, idempotencyKey: uuid(),
+      fornecedor: dForn.trim() || undefined, observacao: dObs.trim() || undefined,
+      veiculoId: dVeiculo || undefined, idempotencyKey: uuid(),
     };
     try {
       const situacao = await lancarDespesaApp(despViagemId, payload, fotos);
@@ -458,7 +468,27 @@ export function SupervisorViagemScreen({ route }: Props) {
           {!editDespId && planejamentos.length > 1 && (
             <SelectBusca valor={despViagemId} opcoes={planejamentos.map((p) => ({ id: p.id, nome: `Planejamento #${p.numero}${p.id === viagemId ? ' (este)' : ''}`, subtitulo: fmtMes(p.mesReferencia) }))} onChange={setDespViagemId} placeholder="A qual planejamento pertence" />
           )}
-          <SelectBusca valor={tipoId} opcoes={tipos.map((t) => ({ id: t.id, nome: t.nome, subtitulo: t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo' }))} onChange={setTipoId} placeholder="Tipo de despesa" />
+          <SelectBusca
+            valor={tipoId}
+            opcoes={tipos.map((t) => ({ id: t.id, nome: t.nome, subtitulo: t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo' }))}
+            onChange={(novo) => {
+              setTipoId(novo);
+              // Tipo de VEÍCULO e campo ainda vazio → puxa o carro do planejamento
+              // (caso normal), deixando a troca para quem pegou outro carro.
+              if (tipos.find((t) => t.id === novo)?.categoria === 'VEICULO' && !dVeiculo) setDVeiculo(v?.veiculoId ?? '');
+            }}
+            placeholder="Tipo de despesa"
+          />
+          {/* Só na categoria VEÍCULO: alimentação/hospedagem é do indivíduo. Sem carro
+              o backend recusa — o valor não chegaria em Custos da Frota. */}
+          {tipos.find((t) => t.id === tipoId)?.categoria === 'VEICULO' && (
+            <SelectBusca
+              valor={dVeiculo}
+              opcoes={veiculos.filter((ve) => ve.ativo !== false).map((ve) => ({ id: ve.id, nome: ve.placa, subtitulo: ve.modelo ?? undefined }))}
+              onChange={setDVeiculo}
+              placeholder="Veículo desta despesa"
+            />
+          )}
           <TextInput style={styles.input} onFocus={aoFocar} placeholder="Valor R$ 0,00" keyboardType="decimal-pad" value={valor} onChangeText={(t) => setValor(maskMoeda(t))} />
           <TextInput style={styles.input} onFocus={aoFocar} placeholder="Data AAAA-MM-DD (opcional — hoje)" value={dData} onChangeText={setDData} autoCapitalize="none" keyboardType="numbers-and-punctuation" />
           <TextInput style={styles.input} onFocus={aoFocar} placeholder="Fornecedor" value={dForn} onChangeText={setDForn} />
