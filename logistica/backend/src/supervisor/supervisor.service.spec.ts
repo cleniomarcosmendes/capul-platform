@@ -1055,3 +1055,61 @@ describe('SupervisorService.filiaisComRdv', () => {
     expect(prisma.supervisor.groupBy).not.toHaveBeenCalled();
   });
 });
+
+// ⭐ Sugestão de veículo no planejamento (01/08). A despesa do RDV já lia
+// `viagem.veiculoId`, mas NINGUÉM preenchia esse campo — 10 de 10 planejamentos com
+// nulo — então todo combustível do RDV nascia sem veículo e sumia do custo da frota.
+// Agora o planejamento nasce com o carro que o cadastro aponta para o representante.
+describe('SupervisorService — veículo do planejamento', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.supervisor.findFirst.mockResolvedValue({ id: 's1', matricula: '005274', nome: 'Kelver', coordenadorId: 'u-coord', departamentoId: 'd1' });
+    prisma.contadorSequencial.upsert.mockResolvedValue({ ultimoNumero: 40 });
+    prisma.viagem.create.mockResolvedValue({ id: 'v-novo' });
+  });
+  const gestor = () => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR_FROTA' }] }) as any;
+  const dto = (extra: any = {}) => ({ mesReferencia: 202608, supervisorRegistroId: 's1', ...extra });
+
+  it('sem veiculoId no payload → sugere o veículo cujo responsável é o representante', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    prisma.veiculo.findMany.mockResolvedValue([
+      { id: 've-kelver', supervisorAreaMatricula: 'E05274' },
+      { id: 've-outro', supervisorAreaMatricula: 'E09999' },
+    ]);
+    await svc.criarViagemSupervisor(dto() as any, gestor());
+    expect(prisma.viagem.create.mock.calls[0][0].data.veiculoId).toBe('ve-kelver');
+  });
+
+  it('string VAZIA = escolha do operador ("carro próprio") → NÃO sobrepõe com a sugestão', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    prisma.veiculo.findMany.mockResolvedValue([{ id: 've-kelver', supervisorAreaMatricula: 'E05274' }]);
+    await svc.criarViagemSupervisor(dto({ veiculoId: '' }) as any, gestor());
+    expect(prisma.viagem.create.mock.calls[0][0].data.veiculoId).toBeNull();
+    expect(prisma.veiculo.findMany).not.toHaveBeenCalled(); // nem consulta a sugestão
+  });
+
+  it('DOIS veículos do mesmo representante → não sugere nenhum (não chuta o custo)', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    prisma.veiculo.findMany.mockResolvedValue([
+      { id: 've-a', supervisorAreaMatricula: '005274' },
+      { id: 've-b', supervisorAreaMatricula: 'E05274' },
+    ]);
+    await svc.criarViagemSupervisor(dto() as any, gestor());
+    expect(prisma.viagem.create.mock.calls[0][0].data.veiculoId).toBeNull();
+  });
+
+  it('trocar o veículo NÃO reponta as despesas já lançadas', async () => {
+    prisma.viagem.findUnique.mockResolvedValue({
+      id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', statusPlanejamento: 'EM_EXECUCAO', situacao: 'EM_CURSO',
+      criadoPorId: 'u1', supervisorRegistro: { coordenadorId: 'u1', matricula: 'E09999', departamentoId: 'd1' },
+    });
+    prisma.veiculo.findFirst.mockResolvedValue({ id: 've-novo' });
+    prisma.viagem.update.mockResolvedValue({ id: 'v1' });
+    await svc.definirVeiculoPlanejamento('v1', 've-novo', { sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] } as any);
+    expect(prisma.viagem.update.mock.calls[0][0].data.veiculoId).toBe('ve-novo');
+    expect(prisma.despesaVeiculo.updateMany).not.toHaveBeenCalled();
+  });
+});

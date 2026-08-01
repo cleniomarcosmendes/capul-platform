@@ -48,6 +48,7 @@ const statusVisita = (s?: string | null) => STATUS_VISITA[s ?? 'REALIZADA'] ?? {
 interface AnexoV { id: string; mime?: string | null; ordem?: number }
 interface DespesaV { id: string; valor: number | string; situacao: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null; anexos?: AnexoV[] }
 const MAX_ANEXOS = 5;
+interface VeiculoOpc { id: string; placa: string; modelo?: string | null; ativo?: boolean }
 interface ViagemDetalhe {
   id: string; numero: number; situacao: string; statusPlanejamento?: string | null; comentarioCoordenador?: string | null;
   mesReferencia?: number | null;
@@ -61,6 +62,8 @@ interface ViagemDetalhe {
   souDono?: boolean;
   // Papel real do representante + onde ele responde + quem aprova.
   papelRepresentante?: string | null; departamentoNome?: string | null; aprovadorNome?: string | null;
+  // Veículo do RDV — as despesas de categoria VEÍCULO herdam este carro.
+  veiculoId?: string | null; veiculo?: { id: string; placa: string; modelo?: string | null } | null;
   // Saídas de veículo (frota) vinculadas a este RDV → o KM vem daqui.
   kmTotalSaidas?: number;
   saidasVinculadas?: { id: string; numero: number; kmInicial?: number | null; kmFinal?: number | null; situacao: string; veiculo?: { placa?: string | null } | null }[];
@@ -193,6 +196,11 @@ export function SupervisorViagemPage() {
   const [dTipo, setDTipo] = useState('');
   const [dValor, setDValor] = useState('');
   const [dData, setDData] = useState('');
+  // Troca do veículo do RDV. Vale daqui pra frente: despesa já lançada NÃO é
+  // repontada — quem trocou de carro no meio do mês tem exatamente isso.
+  const [veiculos, setVeiculos] = useState<VeiculoOpc[]>([]);
+  const [editandoVeiculo, setEditandoVeiculo] = useState(false);
+  const [veiculoSel, setVeiculoSel] = useState('');
   const [dFornecedor, setDForn] = useState('');
   const [dObs, setDObs] = useState('');
   const [dRecibos, setDRecibos] = useState<File[]>([]); // comprovantes (foto/PDF) — vários
@@ -214,12 +222,14 @@ export function SupervisorViagemPage() {
       // o planejamento (só desabilita os dropdowns).
       const d = await logisticaApi.get<ViagemDetalhe>(`/supervisor/viagens/${id}`);
       setV(d.data);
-      const [a, t] = await Promise.allSettled([
+      const [a, t, ve] = await Promise.allSettled([
         logisticaApi.get<Atividade[]>('/supervisor/atividades', { params: { ativos: true } }),
         logisticaApi.get<{ id: string; nome: string; categoria: string; ativo?: boolean }[]>('/supervisor/tipos-despesa'),
+        logisticaApi.get<VeiculoOpc[]>('/veiculos'),
       ]);
       setAtividades(a.status === 'fulfilled' ? a.value.data : []);
       setTipos(t.status === 'fulfilled' ? t.value.data.filter((x) => x.ativo !== false) : []);
+      setVeiculos(ve.status === 'fulfilled' ? ve.value.data : []);
       // Adiantamentos do mês (para a aprovação do coordenador) — best-effort: se o
       // usuário não alcança o supervisor (fora da coordenação), o backend barra e some.
       if (d.data.supervisorRegistro?.id && d.data.mesReferencia) {
@@ -309,6 +319,14 @@ export function SupervisorViagemPage() {
   const apontar = async (visita: Visita, status: 'REALIZADA' | 'PULADA') => {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/visitas/${visita.id}/apontar`, { status }); toast('success', status === 'REALIZADA' ? 'Visita realizada.' : 'Visita pulada.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao apontar a visita.')); }
+  };
+  const salvarVeiculo = async () => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/veiculo`, { veiculoId: veiculoSel });
+      toast('success', veiculoSel ? 'Veículo do planejamento atualizado.' : 'Veículo removido do planejamento.');
+      setEditandoVeiculo(false);
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao trocar o veículo.')); }
   };
   const concluir = async () => {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/concluir`); toast('success', 'Viagem concluída.'); await carregar(); }
@@ -451,6 +469,32 @@ export function SupervisorViagemPage() {
             <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${statusPlan(v.statusPlanejamento).cls}`}>{statusPlan(v.statusPlanejamento).label}</span>
           </p>
           {v.aprovadorNome && <p className="mt-0.5 text-xs text-slate-400">Aprovação com: {v.aprovadorNome}</p>}
+          {/* Veículo do RDV: as despesas de combustível/pedágio herdam este carro. Sem
+              ele, o custo não chega em Custos da Frota — daí o aviso em âmbar. */}
+          <p className="mt-0.5 text-xs text-slate-400">
+            Veículo:{' '}
+            {editandoVeiculo ? (
+              <span className="inline-flex items-center gap-1 align-middle">
+                <select value={veiculoSel} onChange={(e) => setVeiculoSel(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-xs">
+                  <option value="">— sem veículo</option>
+                  {veiculos.filter((ve) => ve.ativo !== false).map((ve) => (
+                    <option key={ve.id} value={ve.id}>{ve.placa}{ve.modelo ? ` — ${ve.modelo}` : ''}</option>
+                  ))}
+                </select>
+                <button onClick={() => void salvarVeiculo()} className="rounded bg-capul-600 px-2 py-1 text-xs font-medium text-white hover:bg-capul-700">Salvar</button>
+                <button onClick={() => setEditandoVeiculo(false)} className="px-1 text-xs text-slate-400 hover:text-slate-600">cancelar</button>
+              </span>
+            ) : (
+              <>
+                {v.veiculo
+                  ? <b className="text-slate-600">{v.veiculo.placa}{v.veiculo.modelo ? ` — ${v.veiculo.modelo}` : ''}</b>
+                  : <span className="text-amber-600">sem veículo — despesa de combustível/pedágio não entrará no custo da frota</span>}
+                {!travada && (
+                  <button onClick={() => { setVeiculoSel(v.veiculoId ?? ''); setEditandoVeiculo(true); }} className="ml-2 text-capul-600 hover:underline">trocar</button>
+                )}
+              </>
+            )}
+          </p>
           {v.comentarioCoordenador && (v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') && (
             <p className="mt-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs text-sky-800"><b>Coordenador:</b> {v.comentarioCoordenador}</p>
           )}

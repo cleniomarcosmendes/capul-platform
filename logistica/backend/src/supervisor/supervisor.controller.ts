@@ -4,7 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
-import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DefinirSupervisorDepartamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DefinirSupervisorDepartamentoDto, DefinirVeiculoPlanejamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /** Converte o arquivo do multer no binário do comprovante (ou undefined). */
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
@@ -125,6 +125,14 @@ export class SupervisorController {
   // Atores: o SUPERVISOR dono envia/inicia o seu; o COORDENADOR e o Supervisor de
   // Departamento decidem (cada um no seu escopo). Operador/registrador NÃO participam da
   // aprovação. Decidir nunca é do supervisionado (ele não decide o próprio).
+  // Veículo do planejamento — dado de PLANEJAMENTO (o aprovador também mexe, mesmo
+  // escopo de incluir/alterar item do roteiro), não de execução.
+  @Patch('viagens/:id/veiculo')
+  @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
+  definirVeiculoPlanejamento(@Param('id') id: string, @Body() dto: DefinirVeiculoPlanejamentoDto, @CurrentUser() user: JwtPayload) {
+    return this.svc.definirVeiculoPlanejamento(id, dto.veiculoId ?? null, user);
+  }
+
   @Patch('viagens/:id/enviar')
   @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
   enviarPlanejamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {

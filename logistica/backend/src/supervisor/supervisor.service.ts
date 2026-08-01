@@ -220,6 +220,26 @@ export class SupervisorService {
 
 
   // ---- Viagem mensal do supervisor (container da RDV) ----
+  /**
+   * Veículo que o cadastro aponta como sendo DESTE representante — a sugestão do
+   * planejamento (`veiculo.supervisorAreaMatricula`, definido em Veículos).
+   *
+   * Casa pela chapa normalizada porque o campo do veículo e a matrícula do cadastro
+   * podem ter sido digitados em formatos diferentes. Mais de um veículo apontando
+   * para a mesma pessoa não sugere nada: escolher um por conta própria mandaria o
+   * custo para o carro errado calado — melhor o operador dizer qual é.
+   */
+  private async veiculoSugerido(matricula: string | null, filialId: string): Promise<string | null> {
+    if (!matricula?.trim()) return null;
+    const alvo = chapa(matricula);
+    const candidatos = await this.prisma.veiculo.findMany({
+      where: { filialId, ativo: true, supervisorAreaMatricula: { not: null } },
+      select: { id: true, supervisorAreaMatricula: true },
+    });
+    const meus = candidatos.filter((v) => v.supervisorAreaMatricula && chapa(v.supervisorAreaMatricula) === alvo);
+    return meus.length === 1 ? meus[0].id : null;
+  }
+
   async criarViagemSupervisor(dto: CriarViagemSupervisorDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const mm = dto.mesReferencia % 100;
@@ -291,6 +311,14 @@ export class SupervisorService {
     }
     const supervisorRegistroId = reg.id;
 
+    // Veículo: o cliente manda o que está no seletor (o desktop já pré-seleciona a
+    // sugestão e deixa trocar). Campo AUSENTE = cliente antigo → cai na sugestão do
+    // cadastro. String vazia = o operador tirou de propósito ("este mês vou de carro
+    // próprio") e é respeitada — sem isso, a sugestão desfaria a escolha dele.
+    const veiculoId = dto.veiculoId === undefined
+      ? await this.veiculoSugerido(supMatricula, filialId)
+      : (dto.veiculoId || null);
+
     return this.prisma.$transaction(async (tx) => {
       const contador = await tx.contadorSequencial.upsert({
         where: { filialId_escopo: { filialId, escopo: 'VIAGEM' } },
@@ -307,7 +335,7 @@ export class SupervisorService {
           statusPlanejamento: 'RASCUNHO',
           supervisorRegistroId,
           mesReferencia: dto.mesReferencia,
-          veiculoId: dto.veiculoId ?? null,
+          veiculoId,
           condutorMatricula: supMatricula,
           condutorNome: supNome,
           dataHoraSaida: new Date(),
@@ -689,6 +717,28 @@ export class SupervisorService {
     return { OR: or };
   }
 
+  /**
+   * Troca o veículo do planejamento.
+   *
+   * Só vale daqui para frente: as despesas JÁ LANÇADAS ficam no veículo em que
+   * nasceram. Quem trocou de carro no meio do mês tem exatamente isso — parte do
+   * combustível num carro, parte no outro — e repontar em massa apagaria esse fato
+   * (decisão do Clenio, 01/08). Corrigir uma despesa específica é feito nela mesma.
+   *
+   * É dado de PLANEJAMENTO, não de execução: o aprovador também mexe (mesmo escopo
+   * de incluir/alterar item do roteiro).
+   */
+  async definirVeiculoPlanejamento(id: string, veiculoId: string | null, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.planejamentoDoDono(id, user);
+    this.assertNaoCancelado(v);
+    if (veiculoId) {
+      const ve = await this.prisma.veiculo.findFirst({ where: { id: veiculoId, filialId, ativo: true } });
+      if (!ve) throw new BadRequestException('Veículo não encontrado (ou inativo) nesta filial.');
+    }
+    return this.prisma.viagem.update({ where: { id }, data: { veiculoId: veiculoId || null } });
+  }
+
   async enviarPlanejamento(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
@@ -912,6 +962,8 @@ export class SupervisorService {
       where: { id },
       include: {
         supervisorRegistro: { select: { id: true, nome: true, coordenadorId: true, matricula: true, departamentoId: true } },
+        // Veículo do RDV — é dele que a despesa herda o carro.
+        veiculo: { select: { id: true, placa: true, modelo: true } },
         paradas: {
           orderBy: { sequencia: 'asc' },
           include: {

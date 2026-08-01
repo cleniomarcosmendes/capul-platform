@@ -153,6 +153,11 @@ export class EditarDespesaSupervisorDto {
   @IsOptional() @IsString() @MaxLength(120) fornecedor?: string;
   @IsOptional() @IsString() @MaxLength(500) observacao?: string;
 }
+/** Troca o veículo do planejamento. '' (vazio) = remover o vínculo ("este mês vou
+ *  de carro próprio"). Só vale daqui pra frente: despesa já lançada não é repontada. */
+export class DefinirVeiculoPlanejamentoDto {
+  @IsOptional() @IsString() @MaxLength(40) veiculoId?: string;
+}
 // Edição de visita reusa o AdicionarVisitaDto (todos os campos já opcionais).
 
 /** Define quem responde por um departamento no RDV (aba Equipe). Só ADMIN escreve —

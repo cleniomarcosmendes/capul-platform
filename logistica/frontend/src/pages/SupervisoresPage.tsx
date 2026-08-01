@@ -129,17 +129,27 @@ function ViagensTab() {
   // do time JÁ CADASTRADO (aba Equipe), sem matrícula/senha. O backend valida o escopo.
   const [equipe, setEquipe] = useState<Supervisor[]>([]);
   const [supRegistroId, setSupRegistroId] = useState('');
+  // Veículo do planejamento: sugerido a partir de quem é o responsável no cadastro do
+  // veículo (Veículos › "Coordenador / Supervisor de Área responsável") e alterável.
+  // É ele que as despesas do RDV herdam — sem isso o combustível ficava sem veículo e
+  // sumia do custo da frota.
+  const [veiculos, setVeiculos] = useState<VeiculoOpc[]>([]);
+  const [veiculoId, setVeiculoId] = useState('');
+  const [meuCadastro, setMeuCadastro] = useState<{ matricula: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const carregar = async () => {
     setLoading(true);
     try {
-      const [v, eq] = await Promise.all([
+      const [v, eq, ve, meu] = await Promise.all([
         logisticaApi.get<ViagemSup[]>('/supervisor/viagens'),
         // Só o gestor precisa do time (o supervisor/coordenador cria o próprio, por login).
         ehSupervisorLogado ? Promise.resolve({ data: [] as Supervisor[] }) : logisticaApi.get<Supervisor[]>('/supervisor/supervisores'),
+        logisticaApi.get<VeiculoOpc[]>('/veiculos', { params: { situacao: undefined } }).catch(() => ({ data: [] as VeiculoOpc[] })),
+        // Auto-serviço: preciso da MINHA matrícula para achar o veículo que é meu.
+        ehSupervisorLogado ? logisticaApi.get<{ matricula: string }>('/supervisor/meu-cadastro').catch(() => ({ data: null })) : Promise.resolve({ data: null }),
       ]);
-      setViagens(v.data); setEquipe(eq.data);
+      setViagens(v.data); setEquipe(eq.data); setVeiculos(ve.data ?? []); setMeuCadastro(meu.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar planejamentos.')); } finally { setLoading(false); }
   };
   useEffect(() => {
@@ -148,6 +158,17 @@ function ViagensTab() {
   }, []);
 
   const timeAtivo = equipe.filter((s) => s.ativo);
+
+  // Sugere o veículo assim que dá para saber de QUEM é o planejamento: o próprio
+  // logado (auto-serviço) ou o representante escolhido pelo gestor. Continua
+  // alterável — a sugestão é ponto de partida, não imposição.
+  useEffect(() => {
+    const matricula = ehSupervisorLogado
+      ? meuCadastro?.matricula
+      : timeAtivo.find((s) => s.id === supRegistroId)?.matricula;
+    setVeiculoId(sugerirVeiculo(veiculos, matricula));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supRegistroId, veiculos, meuCadastro, showForm]);
 
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,9 +182,12 @@ function ViagensTab() {
         // Supervisor/coordenador logado: backend identifica pelo JWT (auto-serviço).
         // Gestor: envia o representante selecionado (cadastro), sem senha.
         ...(ehSupervisorLogado ? {} : { supervisorRegistroId: supRegistroId }),
+        // Sempre explícito (inclusive '' = sem veículo): o backend só cai na sugestão
+        // dele quando o campo vem AUSENTE, de cliente antigo.
+        veiculoId,
       });
       toast('success', 'Planejamento criado — agora inclua os clientes do roteiro.');
-      setShowForm(false); setMes(''); setSupRegistroId('');
+      setShowForm(false); setMes(''); setSupRegistroId(''); setVeiculoId('');
       // Abre direto o planejamento (form "Incluir cliente no planejamento" já à mão).
       if (data?.id) { navigate(`/supervisores/viagens/${data.id}`); return; }
       await carregar();
@@ -186,6 +210,19 @@ function ViagensTab() {
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Mês de referência *</label>
               <MesRefField value={mes} onChange={setMes} required />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Veículo</label>
+              <select value={veiculoId} onChange={(e) => setVeiculoId(e.target.value)} className={inp}>
+                <option value="">— sem veículo (carro próprio / carona)</option>
+                {veiculos.filter((v) => v.ativo !== false).map((v) => (
+                  <option key={v.id} value={v.id}>{v.placa}{v.modelo ? ` — ${v.modelo}` : ''}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-400">
+                Sugerido a partir do responsável no cadastro do veículo. É o veículo que as
+                despesas deste RDV vão herdar — dá para trocar aqui e em cada despesa.
+              </p>
             </div>
             {ehSupervisorLogado ? (
             <div className="flex items-end">
@@ -326,6 +363,20 @@ function AtividadesTab() {
 }
 
 // ---------------- Equipe (supervisores + vínculo com coordenador) ----------------
+/** Veículo para o seletor do planejamento. `supervisorAreaMatricula` é quem o cadastro
+ *  aponta como responsável — a base da sugestão. */
+interface VeiculoOpc { id: string; placa: string; modelo?: string | null; ativo?: boolean; supervisorAreaMatricula?: string | null }
+/** Mesma normalização do backend (E+5 dígitos). */
+const chapaFe = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
+/** Veículo cujo responsável é esta matrícula. Dois veículos apontando para a mesma
+ *  pessoa não sugerem nada — escolher sozinho mandaria o custo para o carro errado. */
+const sugerirVeiculo = (veiculos: VeiculoOpc[], matricula?: string | null) => {
+  if (!matricula?.trim()) return '';
+  const alvo = chapaFe(matricula);
+  const meus = veiculos.filter((v) => v.ativo !== false && v.supervisorAreaMatricula && chapaFe(v.supervisorAreaMatricula) === alvo);
+  return meus.length === 1 ? meus[0].id : '';
+};
+
 interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; papel?: string | null; ativo: boolean }
 interface CoreUser { id: string; nome?: string; nomeFantasia?: string; matricula?: string | null; departamento?: { id: string; nome: string } | null; permissoes?: { modulo: { codigo: string }; roleModulo: { codigo: string } }[] }
 interface DeptItem { id: string; nome: string }
