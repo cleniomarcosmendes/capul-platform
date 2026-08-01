@@ -78,8 +78,9 @@ type TabKey = 'viagens' | 'coordenacao' | 'fechamento' | 'atividades' | 'equipe'
 
 // Abas visíveis por perfil (defesa em profundidade — o backend barra as escritas):
 // ADMIN + Supervisor de Departamento (admin do RDV) = tudo · Coordenador = Planejamentos
-// + Coordenação + Fechamento · Supervisor de Área = Planejamentos + Fechamento (só o SEU,
-// auto-serviço: lança adiantamento e vê a própria RDV — sem seletor, sem encerrar mês).
+// + Coordenação + Fechamento · Supervisor de Área = Planejamentos + Fechamento (só o SEU:
+// ACOMPANHA os adiantamentos e a própria RDV — sem seletor, sem encerrar mês e, desde
+// 01/08, sem LANÇAR adiantamento: quem lança é quem aprova).
 // Gestores de entrega/frota saíram do RDV (backend os barra) — não recebem abas de admin.
 function abasDoPerfil(role: string | null): TabKey[] {
   if (role === 'ADMIN' || role === 'SUPERVISOR_FROTA') return ['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'];
