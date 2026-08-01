@@ -572,8 +572,13 @@ export function SupervisorViagemPage() {
             <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
           {v.statusPlanejamento === 'EM_EXECUCAO' && v.souDono !== false &&
             <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir</button>}
-          {v.statusPlanejamento === 'CONCLUIDO' &&
+          {/* Reabrir é ato de QUEM APROVA (coordenador do representante / supervisor de
+              departamento). Sem este gate o botão aparecia para todo mundo — inclusive
+              para o próprio representante, que tomava 403 ao clicar. */}
+          {v.statusPlanejamento === 'CONCLUIDO' && podeAprovarDespesa &&
             <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">Reabrir para corrigir</button>}
+          {v.statusPlanejamento === 'CONCLUIDO' && !podeAprovarDespesa &&
+            <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Concluído — peça ao coordenador para reabrir, se precisar corrigir.</span>}
           {/* Força maior DEPOIS do aval — Ajustar/Rejeitar só existem no ENVIADO. Só a
               autoridade que aprova (coordenador do representante / Supervisor de Departamento). */}
           {(v.statusPlanejamento === 'APROVADO' || v.statusPlanejamento === 'EM_EXECUCAO') && podeAprovarDespesa && (

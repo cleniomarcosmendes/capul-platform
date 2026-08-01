@@ -226,8 +226,13 @@ export class SupervisorController {
   editarViagem(@Param('id') id: string, @Body() dto: EditarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.editarViagem(id, dto, user);
   }
+  // Reabrir UM planejamento concluído (para corrigir/lançar o que faltou). O
+  // COORDENADOR entrou em 01/08: ele já reabria o MÊS INTEIRO do time
+  // (`rdv-mensal/reabrir`), que é o poder maior, mas tomava "Perfil insuficiente" num
+  // planejamento só — inconsistência, não decisão. O escopo continua no serviço
+  // (`assertEscopoSupervisor`): ele alcança só quem ele coordena.
   @Patch('viagens/:id/reabrir')
-  @Roles('SUPERVISOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   reabrirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.svc.reabrirViagem(id, user);
   }
