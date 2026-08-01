@@ -8,6 +8,7 @@ import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { DataInput } from '../components/DataInput';
 import { papelLabel } from './supervisor-utils';
+import { MoedaInput } from '../components/MoedaInput';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
@@ -392,7 +393,7 @@ export function VeiculoFormPage() {
                     <div><label className={lbl}>Data</label><DataInput value={mData} onChange={setMData} className={inp} /></div>
                     <div>
                       <label className={lbl}>Custo (R$)</label>
-                      <input type="number" step="0.01" min={0} value={mCusto} onChange={(e) => setMCusto(e.target.value)} placeholder="opcional" className={inp} />
+                      <MoedaInput value={mCusto} onChange={setMCusto} placeholder="opcional" className={inp} />
                       {/* O gestor precisa saber que o custo já entra na Análise — senão
                           ele lança a mesma nota de novo em /despesas/nova e duplica. */}
                       <p className="mt-1 text-xs text-slate-500">Vira uma despesa aprovada do veículo (tipo Manutenção). Não lance de novo em Despesas.</p>

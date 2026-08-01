@@ -5,6 +5,7 @@ import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { MapaFrota } from '../components/MapaFrota';
+import { MoedaInput } from '../components/MoedaInput';
 
 // Painel tempo real da frota (monitoramento com recorte interno). "Tempo real"
 // via polling (auto-refresh 30s) — sem websocket. Padrão workspace.
@@ -289,7 +290,7 @@ export function PainelFrotaPage() {
                         </select>
                       </div>
                       <div><label className="mb-1 block text-xs font-medium text-slate-500">KM na manutenção</label><input type="number" min={0} value={mKm} onChange={(e) => setMKm(e.target.value)} className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
-                      <div><label className="mb-1 block text-xs font-medium text-slate-500">Custo (R$)</label><input type="number" step="0.01" min={0} value={mCusto} onChange={(e) => setMCusto(e.target.value)} placeholder="opcional" className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
+                      <div><label className="mb-1 block text-xs font-medium text-slate-500">Custo (R$)</label><MoedaInput value={mCusto} onChange={setMCusto} placeholder="opcional" className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" /></div>
                     </div>
                     <input value={mMotivo} onChange={(e) => setMMotivo(e.target.value)} maxLength={255} placeholder="Motivo / observação" className="mt-2 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
                     <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">

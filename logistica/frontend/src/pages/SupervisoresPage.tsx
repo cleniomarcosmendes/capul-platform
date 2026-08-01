@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { errMsg } from './frota-utils';
 import { DataInput } from '../components/DataInput';
 import { papelLabel } from './supervisor-utils';
+import { MoedaInput } from '../components/MoedaInput';
 
 // Módulo Supervisores / RDV (Fase 3b): viagem mensal (prestação de contas) +
 // catálogos (Atividade de visita) e prestação de contas. Indústria de Ração.
@@ -927,7 +928,7 @@ function FechamentoTab() {
               ) : (
               <form onSubmit={lancar} className="mt-3 border-t border-slate-100 pt-3">
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="number" step="0.01" min="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor R$" className={inp} />
+                  <MoedaInput value={valor} onChange={setValor} placeholder="Valor R$ 0,00" className={inp} />
                   <DataInput value={data} onChange={setData} className={inp} />
                 </div>
                 <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional)" maxLength={255} className={`${inp} mt-2`} />

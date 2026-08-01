@@ -8,6 +8,7 @@ import { BuscaClienteParada } from '../components/BuscaClienteParada';
 import { useAuth } from '../contexts/AuthContext';
 import { maskMoeda, parseMoeda } from '../utils/format';
 import { SIT_META, fmtDateTime, errMsg } from './frota-utils';
+import { MoedaInput } from '../components/MoedaInput';
 
 // Controle de FROTA (terminal da portaria). O CONDUTOR se identifica por
 // matrícula+senha (Protheus, só funcionário ativo) — diferente da ENTREGA, em
@@ -752,8 +753,8 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
 
             <div className="sm:col-span-3">
               <label className="mb-1 block text-sm font-medium text-slate-600">Adiantamento (R$)</label>
-              <input
-                type="number" min="0" step="0.01" value={adiantamento} onChange={(e) => setAdiantamento(e.target.value)}
+              <MoedaInput
+                value={adiantamento} onChange={setAdiantamento}
                 disabled={!podeAvancar} placeholder="opcional"
                 className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               />

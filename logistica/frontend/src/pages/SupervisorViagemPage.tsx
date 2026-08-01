@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { errMsg } from './frota-utils';
 import { papelLabel } from './supervisor-utils';
 import { DataInput } from '../components/DataInput';
+import { MoedaInput } from '../components/MoedaInput';
 
 interface Atividade { id: string; nome: string; ativo: boolean }
 interface Visita {
@@ -799,7 +800,7 @@ export function SupervisorViagemPage() {
                 {tipos.map((t) => <option key={t.id} value={t.id}>{t.nome} ({t.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'})</option>)}
               </select>
             </div>
-            <div><label className="mb-1 block text-xs font-medium text-slate-500">Valor (R$) *</label><input type="number" step="0.01" min="0" value={dValor} onChange={(e) => setDValor(e.target.value)} className={inp} /></div>
+            <div><label className="mb-1 block text-xs font-medium text-slate-500">Valor (R$) *</label><MoedaInput value={dValor} onChange={setDValor} className={inp} /></div>
             {/* Só na categoria VEÍCULO: alimentação/hospedagem é do indivíduo e não tem
                 carro. Nasce com o do planejamento; trocar aqui cobre a viagem em que a
                 pessoa pegou outro veículo. */}
