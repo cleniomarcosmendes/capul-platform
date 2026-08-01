@@ -54,12 +54,19 @@ export interface VisitaSup {
 export interface DespesaSup {
   id: string; valor: number | string; dataDespesa?: string | null; situacao?: SituacaoDespesa | null;
   veiculoId?: string | null;
+  /** Quem LANÇOU. Quem lança não aprova o próprio lançamento — é o que decide se
+   *  os botões de conferência aparecem para este usuário. */
+  criadoPorId?: string | null;
   fornecedor?: string | null; observacao?: string | null; tipoDespesaId?: string | null;
   comprovanteObjectKey?: string | null;
   anexos?: { id: string; mime?: string | null }[];
   tipoDespesa?: { nome: string; categoria: string } | null;
 }
-export interface ViagemSupDetalhe extends ViagemSup { paradas: VisitaSup[]; despesas: DespesaSup[] }
+export interface ViagemSupDetalhe extends ViagemSup {
+  paradas: VisitaSup[]; despesas: DespesaSup[];
+  /** O logado é o representante DONO deste RDV (ou ADMIN). */
+  souDono?: boolean;
+}
 export interface AtividadeSup { id: string; nome: string; ativo?: boolean }
 export interface TipoDespesaSup { id: string; nome: string; categoria: string; ativo?: boolean }
 export type SituacaoAdiantamento = 'PENDENTE' | 'APROVADO' | 'REJEITADO';
@@ -197,4 +204,15 @@ export async function listarTiposDespesaSup(): Promise<TipoDespesaSup[]> {
 export async function listarVeiculosSup(): Promise<VeiculoSup[]> {
   const { data } = await api.get<VeiculoSup[]>(`${LOGISTICA_BASE}/veiculos`);
   return data;
+}
+
+/**
+ * Confere a despesa: APROVADA (confirmo) ou CONTESTADA (não reconheço).
+ *
+ * Quem decide é quem NÃO lançou. No app o caso típico é o representante conferindo
+ * o que o coordenador lançou no RDV dele — a despesa entra na conta do
+ * representante, então a confirmação é dele.
+ */
+export async function decidirDespesaApp(viagemId: string, despesaId: string, decisao: 'APROVADA' | 'CONTESTADA', motivo?: string): Promise<void> {
+  await api.patch(`${B}/viagens/${viagemId}/despesas/${despesaId}/decidir`, { decisao, motivo });
 }

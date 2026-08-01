@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { doRefresh, loginRequest, setAccessToken, setOnAuthFailure } from '../api/client';
 import { getDeviceId } from './deviceId';
 import { clearTokens, getRefresh, saveTokens } from './storage';
-import { papelLogistica, tipoUsuario, departamentoUsuario, filialUsuario } from '../lib/jwt';
+import { papelLogistica, tipoUsuario, departamentoUsuario, filialUsuario, usuarioIdDoToken } from '../lib/jwt';
 
 type Status = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -11,6 +11,8 @@ interface AuthState {
   // Papel na Logística (do JWT) — decide a tela inicial: ENTREGADOR vê entregas;
   // os demais (operador/gestor/frota PADRÃO) veem a Frota.
   role: string | null;
+  /** id do usuário logado — quem lança a despesa não aprova o próprio lançamento. */
+  usuarioId: string | null;
   // Tipo do usuário: 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico). Decide se
   // a saída de frota pede matrícula+senha (PADRAO) ou usa o próprio login (INDIVIDUAL).
   tipo: string | null;
@@ -27,6 +29,7 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [role, setRole] = useState<string | null>(null);
+  const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [tipo, setTipo] = useState<string | null>(null);
   const [departamentoId, setDepartamentoId] = useState<string | null>(null);
   const [filialId, setFilialId] = useState<string | null>(null);
@@ -34,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Deriva role/tipo/departamento/filial de um access token (ou limpa, se null).
   const aplicarToken = useCallback((access: string | null) => {
     setRole(papelLogistica(access));
+    setUsuarioId(usuarioIdDoToken(access));
     setTipo(tipoUsuario(access));
     setDepartamentoId(departamentoUsuario(access));
     setFilialId(filialUsuario(access));
@@ -95,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [aplicarToken]);
 
   return (
-    <AuthContext.Provider value={{ status, role, tipo, departamentoId, filialId, login, logout }}>
+    <AuthContext.Provider value={{ status, role, usuarioId, tipo, departamentoId, filialId, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

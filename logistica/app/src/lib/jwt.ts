@@ -3,6 +3,7 @@
 // pra decidir o que o usuário pode operar (lançador FROTA/ENTREGA).
 
 interface JwtPayload {
+  sub?: string;
   modulos?: { codigo: string; role: string }[];
   tipo?: string;
   departamentoId?: string;
@@ -73,6 +74,12 @@ function decodePayload(accessToken: string | null): JwtPayload | null {
 
 export function papelLogistica(accessToken: string | null): string | null {
   return decodePayload(accessToken)?.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role ?? null;
+}
+
+/** id do usuário logado. Usado para saber QUEM lançou a despesa: quem lança não
+ *  aprova o próprio lançamento, então o app precisa comparar com `criadoPorId`. */
+export function usuarioIdDoToken(accessToken: string | null): string | null {
+  return decodePayload(accessToken)?.sub ?? null;
 }
 
 /** Tipo do usuário: 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico). */

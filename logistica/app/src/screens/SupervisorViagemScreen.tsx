@@ -10,7 +10,7 @@ import { SelectBusca } from '../components/SelectBusca';
 import {
   obterViagemSupervisor, adicionarVisitaApp, lancarDespesaApp, apontarVisitaApp,
   removerDespesaApp, editarDespesaApp,
-  iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor, papelLabel, listarVeiculosSup,
+  iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor, papelLabel, listarVeiculosSup, decidirDespesaApp,
   listarAtividadesSup, listarTiposDespesaSup,
   meuCadastroSup, listarAdiantamentosSup,
   type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup, type VeiculoSup, type NovaVisita, type NovaDespesa,
@@ -119,7 +119,7 @@ export function SupervisorViagemScreen({ route }: Props) {
   const { viagemId } = route.params;
   // Teclado: mantém o campo focado acima do teclado (hook compartilhado).
   const { scrollRef, aoFocar } = useScrollToFocusedInput();
-  const { role } = useAuth();
+  const { role, usuarioId } = useAuth();
   const [v, setV] = useState<ViagemSupDetalhe | null>(null);
   const [ativs, setAtivs] = useState<AtividadeSup[]>([]);
   const [tipos, setTipos] = useState<TipoDespesaSup[]>([]);
@@ -273,6 +273,19 @@ export function SupervisorViagemScreen({ route }: Props) {
     if (!r.canceled) setFotoUris((prev) => [...prev, ...r.assets.map((a) => a.uri)].slice(0, MAX_FOTOS_DESPESA));
   };
   const removerFoto = (i: number) => setFotoUris((prev) => prev.filter((_, idx) => idx !== i));
+
+  // Confere a despesa que OUTRA pessoa lançou no meu RDV (o coordenador digitou o
+  // comprovante que eu mandei). Contestar exige motivo — vira a justificativa que ele lê.
+  const [naoReconhecoId, setNaoReconhecoId] = useState<string | null>(null);
+  const [motivoNaoRec, setMotivoNaoRec] = useState('');
+  const conferirDespesa = async (despesaId: string, decisao: 'APROVADA' | 'CONTESTADA', motivo?: string) => {
+    try {
+      await decidirDespesaApp(viagemId, despesaId, decisao, motivo);
+      setNaoReconhecoId(null); setMotivoNaoRec('');
+      await carregar();
+      Alert.alert('Pronto', decisao === 'APROVADA' ? 'Despesa confirmada.' : 'Despesa devolvida a quem lançou.');
+    } catch (e) { Alert.alert('Erro', msg(e, 'Falha ao conferir a despesa.')); }
+  };
 
   const limparDespesa = () => { setDVeiculo(''); setTipoId(''); setValor(''); setDData(''); setDForn(''); setDObs(''); setFotoUris([]); setEditDespId(null); setDespViagemId(viagemId); };
   // Abre o form já preenchido com a despesa (edição de tipo/valor/fornecedor/obs — os
@@ -536,6 +549,18 @@ export function SupervisorViagemScreen({ route }: Props) {
               <Badge bg={st.bg} fg={st.fg} label={st.l} />
             </View>
             <Text style={styles.itemSub}>{d.tipoDespesa?.categoria === 'INDIVIDUO' ? 'Indivíduo' : 'Veículo'}{(() => { const n = (d.anexos?.length ?? 0) + (d.comprovanteObjectKey ? 1 : 0); return n ? ` · 📎 ${n} comprovante${n > 1 ? 's' : ''}` : ''; })()}</Text>
+            {/* Conferência: a despesa entra na conta do REPRESENTANTE, então quando
+                OUTRA pessoa lança no RDV dele (o coordenador digitando um comprovante
+                que ele mandou) é ELE quem confirma. Quem lançou não aprova o próprio. */}
+            {!concluida && d.situacao === 'PENDENTE' && !!d.criadoPorId && d.criadoPorId !== usuarioId && (
+              <View style={styles.itemAcoes}>
+                <TouchableOpacity onPress={() => void conferirDespesa(d.id, 'APROVADA')}><Text style={styles.itemOk}>✓ Confirmar</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => setNaoReconhecoId(d.id)}><Text style={styles.advDel}>Não reconheço</Text></TouchableOpacity>
+              </View>
+            )}
+            {!concluida && d.situacao === 'PENDENTE' && d.criadoPorId === usuarioId && (
+              <Text style={styles.itemAguarda}>aguardando conferência</Text>
+            )}
             {!concluida && d.situacao !== 'APROVADA' && (
               <View style={styles.itemAcoes}>
                 <TouchableOpacity onPress={() => abrirEdicaoDesp(d)}><Text style={styles.itemEdit}>Editar</Text></TouchableOpacity>
@@ -545,6 +570,27 @@ export function SupervisorViagemScreen({ route }: Props) {
           </View>
         );
       })}
+
+      {/* Não reconheço a despesa: exige motivo — é o que quem lançou vai ler. */}
+      <Modal visible={naoReconhecoId !== null} transparent animationType="fade" onRequestClose={() => setNaoReconhecoId(null)}>
+        <View style={styles.modalFundo}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitulo}>Não reconheço esta despesa</Text>
+            <Text style={styles.modalSub}>Ela foi lançada por outra pessoa na sua prestação de contas. Diga o motivo — quem lançou vai ler.</Text>
+            <TextInput style={[styles.input, styles.modalInput]} onFocus={aoFocar} placeholder="Ex.: não fui eu quem gastou" value={motivoNaoRec} onChangeText={setMotivoNaoRec} multiline />
+            <View style={styles.formBtns}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnFlex, !motivoNaoRec.trim() && styles.btnOff]}
+                disabled={!motivoNaoRec.trim()}
+                onPress={() => void conferirDespesa(naoReconhecoId!, 'CONTESTADA', motivoNaoRec.trim())}
+              >
+                <Text style={styles.btnTxt}>Devolver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { setNaoReconhecoId(null); setMotivoNaoRec(''); }}><Text style={styles.cancelTxt}>Cancelar</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Pular visita: exige justificativa (vai pro relatório de visitas). */}
       <Modal visible={pularId !== null} transparent animationType="fade" onRequestClose={() => setPularId(null)}>
@@ -641,6 +687,8 @@ const styles = StyleSheet.create({
   advDel: { color: '#e11d48', fontWeight: '600', fontSize: 13 },
   itemAcoes: { flexDirection: 'row', gap: 18, marginTop: 8 },
   itemEdit: { color: CAPUL, fontWeight: '600', fontSize: 13 },
+  itemOk: { color: '#047857', fontWeight: '700', fontSize: 13 },
+  itemAguarda: { color: '#94a3b8', fontSize: 12, marginTop: 6, fontStyle: 'italic' },
   dica: { fontSize: 12, color: '#64748b', marginTop: 10, fontStyle: 'italic' },
   mapLink: { color: CAPUL, fontWeight: '600', fontSize: 13, marginTop: 6 },
   addBtn: { borderWidth: 1.5, borderColor: CAPUL, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: '#fff' },
