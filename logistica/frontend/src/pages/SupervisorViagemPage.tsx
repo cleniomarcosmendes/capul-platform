@@ -46,7 +46,7 @@ const STATUS_VISITA: Record<string, { label: string; cls: string }> = {
 };
 const statusVisita = (s?: string | null) => STATUS_VISITA[s ?? 'REALIZADA'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 interface AnexoV { id: string; mime?: string | null; ordem?: number }
-interface DespesaV { id: string; valor: number | string; situacao: string; veiculoId?: string | null; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null; anexos?: AnexoV[] }
+interface DespesaV { id: string; valor: number | string; situacao: string; veiculoId?: string | null; criadoPorId?: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null; anexos?: AnexoV[] }
 const MAX_ANEXOS = 5;
 interface VeiculoOpc { id: string; placa: string; modelo?: string | null; ativo?: boolean }
 interface ViagemDetalhe {
@@ -268,6 +268,16 @@ export function SupervisorViagemPage() {
   // de Departamento (SUPERVISOR_FROTA) — o backend valida o escopo por departamento. Sem o
   // SUPERVISOR_FROTA aqui, o supervisor de departamento não via o painel de aprovação.
   const podeAprovarDespesa = ehGestor || logisticaRole === 'SUPERVISOR_FROTA' || (!!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id);
+  /**
+   * Quem confere a despesa é quem NÃO lançou.
+   *
+   * No caminho normal o representante lança e a autoridade aprova. Na exceção (a
+   * autoridade lança no RDV do representante — ele mandou o comprovante e ela digitou)
+   * quem confere é o REPRESENTANTE, porque a despesa entra na conta dele.
+   */
+  const souODono = v?.souDono !== false;
+  const confereEstaDespesa = (d: DespesaV) =>
+    d.situacao === 'PENDENTE' && d.criadoPorId !== usuario?.id && (souODono || podeAprovarDespesa);
   // Quem decide ADIANTAMENTO: só ADMIN, Supervisor de Departamento ou o COORDENADOR deste
   // supervisor (gestores de entrega/frota NÃO — espelha o @Roles do backend).
   // Durante a EXECUÇÃO a visita incluída nasce REALIZADA — é execução, não roteiro.
@@ -864,11 +874,21 @@ export function SupervisorViagemPage() {
                         {!travada && <button onClick={() => void removerAnexo(d.id, a.id)} className="text-rose-400 hover:text-rose-600" title="Remover anexo"><Trash2 className="h-3 w-3" /></button>}
                       </span>
                     ))}
-                    {podeAprovarDespesa && d.situacao === 'PENDENTE' && (
+                    {/* Rótulo pelo papel de quem olha: para o representante isto é
+                        CONFERIR um lançamento feito por outro na conta dele; para a
+                        autoridade é aprovar o que ele lançou. */}
+                    {confereEstaDespesa(d) && (
                       <>
-                        <button onClick={() => void decidirDespesa(d.id, 'APROVADA')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">Aprovar</button>
-                        <button onClick={() => { setRejDesp(d.id); setMotivoRej(''); }} className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 hover:bg-rose-100">Rejeitar</button>
+                        <button onClick={() => void decidirDespesa(d.id, 'APROVADA')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100">
+                          {souODono && !podeAprovarDespesa ? 'Confirmar' : 'Aprovar'}
+                        </button>
+                        <button onClick={() => { setRejDesp(d.id); setMotivoRej(''); }} className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 hover:bg-rose-100">
+                          {souODono && !podeAprovarDespesa ? 'Não reconheço' : 'Rejeitar'}
+                        </button>
                       </>
+                    )}
+                    {d.situacao === 'PENDENTE' && d.criadoPorId === usuario?.id && (
+                      <span className="text-[11px] text-slate-400" title="Quem lança não aprova o próprio lançamento">aguardando conferência</span>
                     )}
                     {!travada && (
                       <>

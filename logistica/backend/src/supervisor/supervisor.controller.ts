@@ -285,10 +285,13 @@ export class SupervisorController {
   removerAnexoDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Param('anexoId') anexoId: string, @CurrentUser() user: JwtPayload) {
     return this.svc.removerAnexoDespesa(id, despesaId, anexoId, user);
   }
-  // Decisão do coordenador sobre a despesa (6d): aprovar / rejeitar (contestar).
-  // Só coordenador/gestor — o supervisionado nunca aprova a própria despesa.
+  // Decisão sobre a despesa (6d): aprovar / contestar. Quem decide é quem NÃO lançou
+  // (serviço) — no caminho normal a autoridade aprova o que o representante lançou;
+  // na exceção (autoridade lançou no RDV de outro) quem CONFERE é o representante,
+  // porque a despesa entra na conta dele. Por isso SUPERVISOR entra no @Roles: ele
+  // segue sem poder decidir o que ele mesmo lançou.
   @Patch('viagens/:id/despesas/:despesaId/decidir')
-  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA', 'SUPERVISOR')
   decidirDespesa(@Param('id') id: string, @Param('despesaId') despesaId: string, @Body() dto: DecidirDespesaDto, @CurrentUser() user: JwtPayload) {
     return this.svc.decidirDespesa(id, despesaId, dto.decisao, dto.motivo, user);
   }

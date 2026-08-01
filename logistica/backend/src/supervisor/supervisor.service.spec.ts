@@ -571,19 +571,35 @@ describe('SupervisorService.lancarDespesa — situação inicial conforme quem l
   });
   const dto = { tipoDespesaId: 't1', valor: 50, data: '2026-07-10' } as any;
 
-  it('Supervisor de Departamento no SEU depto → nasce APROVADA (topo da pirâmide)', async () => {
+  // ⭐ 01/08: a despesa entra na conta do REPRESENTANTE — é ele quem "paga". Então a
+  // autoridade lançando no RDV de OUTRO nasce PENDENTE e quem CONFERE é o dono. Antes
+  // nascia APROVADA: o coordenador lançava e aprovava, e o representante era debitado
+  // sem nunca ter visto. O caso é raro (o rep manda o comprovante e o coordenador
+  // digita), mas é dinheiro dele. "Nasce aprovada" fica só para o RDV PRÓPRIO da
+  // autoridade — o topo da pirâmide, que não tem a quem pedir aval (regra de 27/07).
+  it('Supervisor de Departamento no RDV de um REPRESENTANTE → PENDENTE (o dono confere)', async () => {
     prisma.viagem.findUnique.mockResolvedValue(plan({ coordenadorId: 'outro-coord', matricula: 'E09999', departamentoId: 'd1' }));
     prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    await svc.lancarDespesa('v1', dto, comRole('SUPERVISOR_FROTA'));
+    const data = prisma.despesaVeiculo.create.mock.calls[0][0].data;
+    expect(data.situacao).toBe('PENDENTE');
+    expect(data.aprovadoPorId).toBeNull();
+  });
+
+  it('Supervisor de Departamento no RDV DELE MESMO → APROVADA (topo da pirâmide)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan({ coordenadorId: null, matricula: 'E01047', departamentoId: 'd1' }));
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Sup.Depto' }]); // é o dono
     await svc.lancarDespesa('v1', dto, comRole('SUPERVISOR_FROTA'));
     const data = prisma.despesaVeiculo.create.mock.calls[0][0].data;
     expect(data.situacao).toBe('APROVADA');
     expect(data.aprovadoPorId).toBe('u1');
   });
 
-  it('COORDENADOR no RDV do SEU representante → nasce APROVADA', async () => {
+  it('COORDENADOR no RDV do SEU representante → PENDENTE (quem confere é o representante)', async () => {
     prisma.viagem.findUnique.mockResolvedValue(plan({ coordenadorId: 'u1', matricula: 'E09999', departamentoId: 'd-outro' }));
     await svc.lancarDespesa('v1', dto, comRole('COORDENADOR'));
-    expect(prisma.despesaVeiculo.create.mock.calls[0][0].data.situacao).toBe('APROVADA');
+    expect(prisma.despesaVeiculo.create.mock.calls[0][0].data.situacao).toBe('PENDENTE');
   });
 
   it('COORDENADOR no RDV PRÓPRIO (ele é o representante) → PENDENTE, não é autoridade sobre si', async () => {
@@ -1283,5 +1299,68 @@ describe('SupervisorService — a decisão vale para o valor decidido', () => {
       supervisor: { filialId: 'f1', coordenadorId: 'u-coord', departamentoId: 'd1', matricula: 'E01047' },
     });
     await expect(svc.removerAdiantamento('a1', rep())).rejects.toThrow(/RDV do mês encerrado/);
+  });
+});
+
+// ⭐ QUEM DECIDE É QUEM NÃO LANÇOU (01/08). A despesa entra na conta do REPRESENTANTE,
+// então quando a autoridade lança no RDV dele quem confere é ele — não a autoridade
+// que digitou. Aprovar o próprio lançamento é que fica barrado; CONTESTAR o próprio
+// segue livre (é ato contra o lançamento, e é como se desfaz um "lancei errado" sem
+// apagar o rastro — decisão de 27/07).
+describe('SupervisorService.decidirDespesa — quem confere é a outra ponta', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const comRole = (role: string, sub = 'u1') => ({ sub, filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+  const despesa = (criadoPorId: string) => ({
+    id: 'd1', viagemId: 'v1', filialId: 'f1', criadoPorId,
+    viagem: { tipo: 'SUPERVISOR', filialId: 'f1', criadoPorId: 'u-rep', supervisorRegistro: { coordenadorId: 'u-coord', departamentoId: 'd1', matricula: 'E01047' } },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.despesaVeiculo.update.mockResolvedValue({ id: 'd1' });
+  });
+
+  it('coordenador lançou no RDV do representante → o REPRESENTANTE confere', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u-coord'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // o logado é o dono
+    await svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('SUPERVISOR', 'u-rep'));
+    expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBe('APROVADA');
+  });
+
+  it('coordenador NÃO aprova a despesa que ele mesmo lançou', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u-coord'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Coord' }]); // não é o dono
+    await expect(svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('COORDENADOR', 'u-coord')))
+      .rejects.toThrow(/não aprova o próprio lançamento/);
+    expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
+  });
+
+  it('mas PODE contestar o próprio lançamento ("lancei errado")', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u-coord'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Coord' }]);
+    await svc.decidirDespesa('v1', 'd1', 'CONTESTADA', 'lancei errado', comRole('COORDENADOR', 'u-coord'));
+    expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBe('CONTESTADA');
+  });
+
+  it('caminho NORMAL preservado: representante lançou → a autoridade aprova', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u-rep'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Coord' }]); // não é o dono
+    await svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('COORDENADOR', 'u-coord'));
+    expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBe('APROVADA');
+  });
+
+  it('representante NÃO aprova a despesa que ele mesmo lançou (segregação de 14/07 intacta)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u-rep'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]);
+    await expect(svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('SUPERVISOR', 'u-rep')))
+      .rejects.toThrow(/não aprova o próprio lançamento/);
+  });
+
+  it('um COLEGA (nem dono, nem autoridade) não decide', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa('u-rep'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Colega' }]);
+    await expect(svc.decidirDespesa('v1', 'd1', 'APROVADA', undefined, comRole('SUPERVISOR', 'u-colega')))
+      .rejects.toThrow(ForbiddenException);
   });
 });

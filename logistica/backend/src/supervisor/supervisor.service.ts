@@ -1161,6 +1161,8 @@ export class SupervisorService {
     const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
     if (!tipo) throw new BadRequestException('Tipo de despesa inválido ou inativo.');
     const autoridade = await this.ehAutoridadeSobre(v.supervisorRegistro, user);
+    // Nasce aprovada só quando a autoridade lança no PRÓPRIO RDV (topo da pirâmide).
+    const nasceAprovada = autoridade && await this.ehDonoDoPlanejamento(v, user);
     // INDIVÍDUO (alimentação, hospedagem) não tem veículo. VEÍCULO (combustível,
     // pedágio) herda o carro do planejamento, mas aceita OUTRO na despesa: a pessoa
     // pode ter pegado um carro diferente numa viagem do mês.
@@ -1193,13 +1195,15 @@ export class SupervisorService {
         // Redesenho 6d: a despesa do representante nasce PENDENTE — o coordenador
         // aprova/rejeita (comprovante é opcional, mas lastreia a decisão) e só
         // APROVADA entra na RDV.
-        // 27/07: quando quem lança É a autoridade que decidiria essa despesa
-        // (coordenador daquele representante / Supervisor de Departamento do depto /
-        // ADMIN), ela JÁ NASCE APROVADA — pedir aval de si mesmo não acrescenta
-        // controle, só trava o lançamento. Mesma regra que o adiantamento já usa.
-        situacao: autoridade ? 'APROVADA' : 'PENDENTE',
-        aprovadoPorId: autoridade ? user.sub : null,
-        aprovadoEm: autoridade ? new Date() : null,
+        // 27/07: quem lança sendo a autoridade que decidiria a própria despesa não
+        // pede aval de si mesmo — nasce APROVADA. Mas isso vale só quando o RDV é DELE:
+        // a despesa entra na conta do REPRESENTANTE (é ele quem "paga"), então a
+        // autoridade lançando no RDV de OUTRO nasce PENDENTE e quem confere é o dono
+        // (01/08). Sem isso o coordenador lançava e aprovava, e o representante era
+        // debitado sem nunca ter visto — o caso é raro, mas é dinheiro dele.
+        situacao: nasceAprovada ? 'APROVADA' : 'PENDENTE',
+        aprovadoPorId: nasceAprovada ? user.sub : null,
+        aprovadoEm: nasceAprovada ? new Date() : null,
         criadoPorId: user.sub,
         idempotencyKey: dto.idempotencyKey ?? null,
       },
@@ -1216,11 +1220,35 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id: despesaId },
-      include: { viagem: { select: { tipo: true, filialId: true, supervisorRegistro: { select: { coordenadorId: true, departamentoId: true } } } } },
+      include: { viagem: { select: { tipo: true, filialId: true, criadoPorId: true, supervisorRegistro: { select: { coordenadorId: true, departamentoId: true, matricula: true } } } } },
     });
     if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
     if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
-    await this.assertPodeDecidir(d.viagem.supervisorRegistro, user);
+    // ⭐ QUEM DECIDE É QUEM NÃO LANÇOU (01/08).
+    //
+    // No caminho normal o representante lança e a autoridade aprova. Mas a autoridade
+    // também pode lançar no RDV de OUTRO (exceção rara: o representante manda o
+    // comprovante e o coordenador digita) — e aí a despesa entra na conta do
+    // REPRESENTANTE, que é quem "paga". Antes ela nascia APROVADA e ninguém conferia:
+    // o coordenador lançava e aprovava, e o representante era debitado sem ver.
+    //
+    // Agora nasce PENDENTE e o DONO confere. Quem lançou nunca decide o próprio
+    // lançamento — nem o representante, nem a autoridade. ADMIN passa (suporte).
+    if (!this.ehAdmin(user)) {
+      // APROVAR o próprio lançamento é que não pode. CONTESTAR continua livre para
+      // quem lançou: é ato CONTRA o próprio lançamento, nunca um benefício, e é como
+      // se desfaz um "lancei errado" deixando o motivo registrado (decisão de 27/07 —
+      // apagar existiria, mas some com o rastro).
+      if (decisao === 'APROVADA' && d.criadoPorId === user.sub) {
+        throw new ForbiddenException('Quem lança a despesa não aprova o próprio lançamento — quem confere é a outra ponta.');
+      }
+      // O dono confere o que lançaram PARA ele; fora isso, decide a autoridade.
+      const souDono = await this.ehDonoDoPlanejamento(
+        { criadoPorId: d.viagem?.criadoPorId ?? null, supervisorRegistro: d.viagem?.supervisorRegistro ?? null },
+        user,
+      );
+      if (!souDono) await this.assertPodeDecidir(d.viagem.supervisorRegistro, user);
+    }
     // Segregação de função: NÃO é um `if` aqui, é estrutural. Quem lança sendo a
     // autoridade daquele representante já cria APROVADA (não passa por aqui); quem
     // lança sem ser (o próprio representante) cria PENDENTE e o `assertPodeDecidir`
