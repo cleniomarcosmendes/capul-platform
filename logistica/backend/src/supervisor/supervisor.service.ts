@@ -67,9 +67,23 @@ export class SupervisorService {
 
   /** Remove um anexo da despesa (some do cofre + do banco). */
   async removerAnexoDespesa(viagemId: string, despesaId: string, anexoId: string, user: JwtPayload) {
-    await this.planejamentoDoDono(viagemId, user);
-    const a = await this.prisma.anexoDespesa.findUnique({ where: { id: anexoId }, include: { despesa: { select: { viagemId: true } } } });
+    const v = await this.planejamentoDoDono(viagemId, user);
+    const a = await this.prisma.anexoDespesa.findUnique({
+      where: { id: anexoId },
+      include: { despesa: { select: { viagemId: true, situacao: true, aprovadoPorId: true } } },
+    });
     if (!a || a.despesaId !== despesaId || a.despesa.viagemId !== viagemId) throw new NotFoundException('Anexo não encontrado.');
+    // ⭐ O comprovante é a EVIDÊNCIA do valor aprovado. Esta rota não tinha trava
+    // nenhuma de estado: o representante apagava o recibo de uma despesa já APROVADA
+    // (reproduzido na varredura de 01/08 — 200, anexo zerado) e o valor continuava
+    // aprovado, agora sem lastro. Mesma regra da remoção da despesa: depois de
+    // decidida, só quem aprova mexe; e mês encerrado não se altera.
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    if ((a.despesa.situacao !== 'PENDENTE' || a.despesa.aprovadoPorId) && !(await this.ehAutoridadeSobre(v.supervisorRegistro, user))) {
+      throw new ForbiddenException(
+        'Esta despesa já passou por análise — o comprovante dela não pode ser removido. Fale com quem aprova.',
+      );
+    }
     await this.storage.remove(a.objectKey).catch(() => undefined);
     await this.prisma.anexoDespesa.delete({ where: { id: anexoId } });
     return { ok: true };
@@ -1128,6 +1142,8 @@ export class SupervisorService {
   async removerVisita(viagemId: string, paradaId: string, user: JwtPayload) {
     const v = await this.planejamentoDoDono(viagemId, user);
     this.assertNaoCancelado(v);
+    // Mês encerrado trava também a visita — `adicionar` e `apontar` já travavam.
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover visitas.');
@@ -1220,10 +1236,15 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const d = await this.prisma.despesaVeiculo.findUnique({
       where: { id: despesaId },
-      include: { viagem: { select: { tipo: true, filialId: true, criadoPorId: true, supervisorRegistro: { select: { coordenadorId: true, departamentoId: true, matricula: true } } } } },
+      include: { viagem: { select: { tipo: true, filialId: true, criadoPorId: true, supervisorRegistroId: true, mesReferencia: true, supervisorRegistro: { select: { coordenadorId: true, departamentoId: true, matricula: true } } } } },
     });
     if (!d || d.viagemId !== viagemId || d.viagem?.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Despesa não encontrada.');
     if (d.filialId !== filialId) throw new ForbiddenException('Despesa de outra filial.');
+    // Mês encerrado não se decide: aprovar/contestar mexe no SALDO de uma prestação de
+    // contas já fechada. `lancarDespesa` e `decidirAdiantamento` já respeitavam o
+    // fechamento; esta rota não — dava para contestar uma despesa aprovada depois do
+    // mês fechado e mudar o valor devido (reproduzido na varredura de 01/08).
+    await this.assertRdvAberto(d.viagem?.supervisorRegistroId, d.viagem?.mesReferencia);
     // ⭐ QUEM DECIDE É QUEM NÃO LANÇOU (01/08).
     //
     // No caminho normal o representante lança e a autoridade aprova. Mas a autoridade
@@ -1354,6 +1375,8 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
     this.assertNaoCancelado(v);
+    // Mês encerrado trava também a visita — `adicionar` e `apontar` já travavam.
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');

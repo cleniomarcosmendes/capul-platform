@@ -13,7 +13,9 @@ const coreMock = () => ({
   nomesDepartamentos: jest.fn().mockResolvedValue(new Map()),
   nomesUsuarios: jest.fn().mockResolvedValue(new Map()),
 }) as any;
-const storageMock = () => ({ put: jest.fn(), get: jest.fn(), remove: jest.fn() }) as any;
+// `remove` DEVOLVE PROMISE no serviço real (o código faz `.catch()` no retorno) — o
+// mock precisa refletir isso, senão o teste quebra por TypeError e não pelo motivo real.
+const storageMock = () => ({ put: jest.fn(), get: jest.fn(), remove: jest.fn().mockResolvedValue(undefined) }) as any;
 const locaisMock = () => ({ consolidar: jest.fn().mockResolvedValue({}), listarPorCliente: jest.fn(), criar: jest.fn() }) as any;
 
 describe('SupervisorService.rdv (RDV por planejamento)', () => {
@@ -1439,5 +1441,81 @@ describe('SupervisorService — quem não lançou não mexe no valor', () => {
     prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', aprovadoPorId: null, criadoPorId: 'u-rep', anexos: [] });
     await svc.removerDespesa('v1', 'd1', rep());
     expect(prisma.despesaVeiculo.delete).toHaveBeenCalled();
+  });
+});
+
+// ⭐ Achados da VARREDURA de consistência (01/08), eixo "invariantes por entidade".
+// O padrão que se repetiu a semana toda: `lancar` validava direito e as operações
+// vizinhas herdaram menos. Sobraram tres casos — dois com peso financeiro.
+describe('SupervisorService — varredura: mês fechado e evidência', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const rep = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const plan = () => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    criadoPorId: 'u-rep', mesReferencia: 202609, supervisorRegistroId: 's1', veiculoId: 've1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  const mesFechado = () => prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202609 });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.viagem.findUnique.mockResolvedValue(plan());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // logado = dono
+  });
+
+  // B1 — decidir mexe no SALDO; mês fechado não se decide (decidirAdiantamento já travava).
+  it('decidirDespesa com o mês FECHADO → barrado', async () => {
+    mesFechado();
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({
+      id: 'd1', viagemId: 'v1', filialId: 'f1', criadoPorId: 'u-rep',
+      viagem: { tipo: 'SUPERVISOR', filialId: 'f1', criadoPorId: 'u-rep', supervisorRegistroId: 's1', mesReferencia: 202609, supervisorRegistro: { coordenadorId: 'u-coord', departamentoId: 'd1', matricula: 'E01047' } },
+    });
+    await expect(svc.decidirDespesa('v1', 'd1', 'CONTESTADA', 'x', coord())).rejects.toThrow(/RDV do mês encerrado/);
+    expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
+  });
+
+  // B2 — o comprovante é a EVIDÊNCIA do valor aprovado.
+  it('representante NÃO apaga o comprovante de despesa já decidida', async () => {
+    prisma.anexoDespesa.findUnique.mockResolvedValue({
+      id: 'a1', despesaId: 'd1', objectKey: 'k',
+      despesa: { viagemId: 'v1', situacao: 'APROVADA', aprovadoPorId: 'u-coord' },
+    });
+    await expect(svc.removerAnexoDespesa('v1', 'd1', 'a1', rep())).rejects.toThrow(/já passou por análise/);
+    expect(prisma.anexoDespesa.delete).not.toHaveBeenCalled();
+  });
+
+  it('…mas apaga o comprovante enquanto a despesa está PENDENTE', async () => {
+    prisma.anexoDespesa.findUnique.mockResolvedValue({
+      id: 'a1', despesaId: 'd1', objectKey: 'k',
+      despesa: { viagemId: 'v1', situacao: 'PENDENTE', aprovadoPorId: null },
+    });
+    await svc.removerAnexoDespesa('v1', 'd1', 'a1', rep());
+    expect(prisma.anexoDespesa.delete).toHaveBeenCalled();
+  });
+
+  it('comprovante com o mês FECHADO → barrado mesmo estando PENDENTE', async () => {
+    mesFechado();
+    prisma.anexoDespesa.findUnique.mockResolvedValue({
+      id: 'a1', despesaId: 'd1', objectKey: 'k',
+      despesa: { viagemId: 'v1', situacao: 'PENDENTE', aprovadoPorId: null },
+    });
+    await expect(svc.removerAnexoDespesa('v1', 'd1', 'a1', rep())).rejects.toThrow(/RDV do mês encerrado/);
+  });
+
+  // B3 — visita não mexe em dinheiro, mas alimenta o relatório do mês.
+  it('removerVisita com o mês FECHADO → barrado', async () => {
+    mesFechado();
+    prisma.parada.findUnique.mockResolvedValue({ id: 'p1', viagemId: 'v1' });
+    await expect(svc.removerVisita('v1', 'p1', rep())).rejects.toThrow(/RDV do mês encerrado/);
+    expect(prisma.parada.delete).not.toHaveBeenCalled();
+  });
+
+  it('editarVisita com o mês FECHADO → barrado', async () => {
+    mesFechado();
+    prisma.parada.findUnique.mockResolvedValue({ id: 'p1', viagemId: 'v1' });
+    await expect(svc.editarVisita('v1', 'p1', { clienteNome: 'X' } as any, rep())).rejects.toThrow(/RDV do mês encerrado/);
+    expect(prisma.parada.update).not.toHaveBeenCalled();
   });
 });

@@ -221,8 +221,11 @@ export class SupervisorController {
   }
 
   // ---- Administração (Fase 5): correções do Supervisor de Departamento / ADMIN ----
+  // COORDENADOR entrou em 01/08 (varredura): ele decide, cancela, devolve e reabre o
+  // planejamento do time, mas não editava este campo — mesma lacuna que o `reabrir`
+  // tinha, no método vizinho. O escopo segue no serviço (`assertEscopoSupervisor`).
   @Patch('viagens/:id')
-  @Roles('SUPERVISOR_FROTA')
+  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
   editarViagem(@Param('id') id: string, @Body() dto: EditarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
     return this.svc.editarViagem(id, dto, user);
   }
