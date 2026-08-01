@@ -7,11 +7,12 @@ import { VeiculoService } from './veiculo.service.js';
 import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 
 @Controller('veiculos')
-// Leitura (listar/obter) liberada também ao REGISTRADOR_FROTA — precisa enxergar
-// veículos disponíveis pra registrar a saída. ESCRITA (criar/editar/excluir) tem
-// @Roles próprio SEM ele (gestão de cadastro é de gestor/admin). PORTARIA também
-// lê (listar/obter) p/ escolher o veículo na "Saída pela portaria"; as escritas
-// (POST/PATCH/DELETE) têm @Roles próprio SEM PORTARIA.
+// Leitura (listar/obter) é larga: REGISTRADOR_FROTA e PORTARIA precisam enxergar os
+// veículos disponíveis para registrar a saída, e o supervisor/coordenador para escolher
+// o carro do RDV. ESCRITA (criar/editar/inativar) é só de GESTOR de frota/entrega —
+// @Roles próprio em cada uma. O SUPERVISOR_FROTA ("Supervisor de Departamento") LÊ os
+// veículos do departamento dele mas NÃO escreve: ele responde por viagem/acerto/despesa/
+// custo, e o cadastro é decisão estratégica do gestor de frota.
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
 export class VeiculoController {
   constructor(private readonly veiculos: VeiculoService) {}
@@ -26,17 +27,23 @@ export class VeiculoController {
    * ganhar acesso ao RDV. Devolve só matrícula/nome/papel, nada de prestação de contas.
    */
   @Get('representantes')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   representantes(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
     // Sem filial resolvida (ADMIN sem informar) não há Equipe a listar — devolve vazio
     // em vez de varrer as 35 filiais.
     return this.veiculos.representantesDaFilial(resolverFilialLeitura(user, filialId) ?? '');
   }
 
+  // Cadastro de veículo é de GESTOR (o comentário da classe sempre disse isso; o código
+  // é que trazia OPERADOR_ENTREGA junto). Fechado em 01/08 na varredura: ele não tem
+  // caminho de tela para cá — "Veículos" não está no menu dele —, então era porta só de
+  // API. E o cadastro deixou de ser inócuo: `supervisorAreaMatricula` virou a origem da
+  // SUGESTÃO de veículo do planejamento, ou seja, quem edita o veículo decide em que
+  // carro o combustível do representante vai cair.
   @Post()
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   criar(@Body() dto: CreateVeiculoDto, @CurrentUser() user: JwtPayload) {
-    // Gestor de frota/entrega/admin cadastra em qualquer filial; operador só na própria.
+    // Gestor de frota/entrega/admin cadastra em qualquer filial; os demais, só na própria.
     if (!podeVerOutrasFiliais(user)) assertMesmaFilial(user, dto.filialId);
     return this.veiculos.create(dto, user.sub);
   }
@@ -71,7 +78,7 @@ export class VeiculoController {
   }
 
   @Patch(':id')
-  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   atualizar(@Param('id') id: string, @Body() dto: UpdateVeiculoDto, @CurrentUser() user: JwtPayload) {
     // Quem vê todas as filiais edita veículo de qualquer filial (escopo undefined).
     return this.veiculos.update(id, dto, user.sub, podeVerOutrasFiliais(user) ? undefined : user.filialId);

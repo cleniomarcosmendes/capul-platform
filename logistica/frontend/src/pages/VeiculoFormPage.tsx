@@ -284,6 +284,10 @@ export function VeiculoFormPage() {
       </Link>
 
       <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white shadow-sm p-5">
+        {/* Quem não gere o cadastro (Supervisor de Departamento) CONSULTA: o Salvar já
+            era escondido, mas os campos seguiam editáveis — a pessoa digitava e nada
+            acontecia. O fieldset desabilita todos de uma vez, sem tocar em 17 inputs. */}
+        <fieldset disabled={!podeGerir} className="contents">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
           <Truck className="h-5 w-5 text-capul-600" /> {modoEdicao ? `Editar veículo ${placa}` : 'Novo veículo'}
         </h2>
@@ -437,6 +441,14 @@ export function VeiculoFormPage() {
             <p className="mt-1 text-xs text-slate-400">Salve o veículo para registrar manutenções.</p>
           ))}
         </div>
+
+        </fieldset>
+
+        {!podeGerir && (
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            Consulta — o cadastro do veículo (incluindo manutenção) é do Gestor de Frota.
+          </p>
+        )}
 
         <div className="flex items-center justify-between gap-2">
           <div>

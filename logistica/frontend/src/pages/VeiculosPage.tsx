@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, Plus } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 // Frota (padrão workspace): LISTA em grid ordenável + chips de situação;
 // clique na linha abre o form de edição (/veiculos/:id/editar).
@@ -26,6 +27,9 @@ type SortKey = 'placa' | 'modelo' | 'tipo' | 'situacao' | 'supervisor' | 'kmAtua
 type SortDir = 'asc' | 'desc';
 
 export function VeiculosPage() {
+  const { logisticaRole } = useAuth();
+  // Mesma lista do backend (POST/PATCH /veiculos) — ADMIN passa pelo guard.
+  const podeGerirVeiculo = ['ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA'].includes(logisticaRole ?? '');
   const navigate = useNavigate();
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);
@@ -87,11 +91,16 @@ export function VeiculosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Frota</h2>
-          <p className="text-sm text-slate-500">Veículos da logística — clique numa linha para editar.</p>
+          <p className="text-sm text-slate-500">Veículos da logística — clique numa linha para {podeGerirVeiculo ? 'editar' : 'consultar'}.</p>
         </div>
-        <Link to="/veiculos/novo" className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
-          <Plus className="h-4 w-4" /> Novo veículo
-        </Link>
+        {/* Cadastrar é de gestor. O Supervisor de Departamento consulta a frota do
+            departamento dele: sem este gate ele clicava em "Novo veículo" e caía num
+            formulário sem botão de salvar. */}
+        {podeGerirVeiculo && (
+          <Link to="/veiculos/novo" className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
+            <Plus className="h-4 w-4" /> Novo veículo
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-1.5 rounded-xl border border-slate-200 bg-white shadow-sm p-4">
