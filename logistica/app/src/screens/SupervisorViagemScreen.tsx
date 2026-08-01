@@ -10,7 +10,7 @@ import { SelectBusca } from '../components/SelectBusca';
 import {
   obterViagemSupervisor, adicionarVisitaApp, lancarDespesaApp, apontarVisitaApp,
   removerDespesaApp, editarDespesaApp,
-  iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor,
+  iniciarExecucaoApp, concluirPlanejamentoApp, listarViagensSupervisor, papelLabel,
   listarAtividadesSup, listarTiposDespesaSup,
   meuCadastroSup, listarAdiantamentosSup,
   type ViagemSupDetalhe, type AtividadeSup, type TipoDespesaSup, type NovaVisita, type NovaDespesa,
@@ -335,7 +335,7 @@ export function SupervisorViagemScreen({ route }: Props) {
       )}
       <View style={styles.header}>
         <Text style={styles.hTitle}>Planejamento #{v.numero} · {fmtMes(v.mesReferencia)}</Text>
-        <Text style={styles.hSub}>Supervisor: {v.condutorNome ?? '—'} · Adiant.: {brl(v.adiantamento)}</Text>
+        <Text style={styles.hSub}>{papelLabel(v.papelRepresentante)}: {v.condutorNome ?? '—'} · Adiant.: {brl(v.adiantamento)}</Text>
         <View style={styles.hStatus}><Badge bg="#e2e8f0" fg="#334155" label={sp ? PLAN_LABEL[sp] ?? sp : '—'} /></View>
         {v.comentarioCoordenador && (sp === 'AJUSTADO' || sp === 'REJEITADO') && (
           <Text style={styles.coment}>Coordenador: {v.comentarioCoordenador}</Text>

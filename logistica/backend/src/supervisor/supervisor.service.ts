@@ -137,8 +137,17 @@ export class SupervisorService {
       orderBy: { nome: 'asc' },
     });
     const coordIds = [...new Set(lista.map((s) => s.coordenadorId).filter((x): x is string => !!x))];
-    const nomes = coordIds.length ? await this.core.nomesUsuarios(coordIds) : new Map<string, string>();
-    return lista.map((s) => ({ ...s, coordenadorNome: s.coordenadorId ? (nomes.get(s.coordenadorId) ?? null) : null }));
+    // Papel vem da role no módulo (Configurador), não do cadastro do RDV — a Equipe
+    // mostra "Coordenador" x "Supervisor de Área" em vez de tratar todos como supervisor.
+    const [nomes, papeis] = await Promise.all([
+      coordIds.length ? this.core.nomesUsuarios(coordIds) : Promise.resolve(new Map<string, string>()),
+      this.papeisDosRepresentantes(lista.map((s) => s.matricula)),
+    ]);
+    return lista.map((s) => ({
+      ...s,
+      coordenadorNome: s.coordenadorId ? (nomes.get(s.coordenadorId) ?? null) : null,
+      papel: papeis.get(chapa(s.matricula)) ?? null,
+    }));
   }
 
   async criarSupervisor(dto: CriarSupervisorDto, user: JwtPayload, filialIdAlvo?: string) {
@@ -827,11 +836,60 @@ export class SupervisorService {
     });
   }
 
+  /**
+   * Papel do representante no RDV, a partir da role dele no módulo LOGISTICA.
+   *
+   * O cadastro (`logistica.supervisor`) guarda matrícula e nome — o papel está na
+   * permissão do módulo, no Configurador. Sem isto a tela chamava todo mundo de
+   * "Supervisor", inclusive o coordenador. Quem não tem conta/papel no módulo fica
+   * `null` e a tela mostra o rótulo neutro.
+   */
+  private async papeisDosRepresentantes(matriculas: (string | null | undefined)[]): Promise<Map<string, string>> {
+    const chapas = [...new Set(matriculas.filter((m): m is string => !!m?.trim()).map(chapa))];
+    return chapas.length ? this.core.papeisLogisticaPorChapa(chapas) : new Map();
+  }
+
+  /**
+   * Acrescenta ao planejamento QUEM EXECUTA e QUEM APROVA — as duas perguntas que a
+   * lista não respondia (mostrava só o nome, sem papel, departamento ou aprovador).
+   *
+   * O aprovador segue a mesma rota do `enviar`: quem tem coordenador vinculado roteia
+   * para ele; quem não tem (caso do próprio coordenador) roteia para o responsável do
+   * departamento. Se não houver nenhum dos dois o planejamento é órfão — e agora isso
+   * fica visível na lista, em vez de só estourar no envio.
+   */
+  private async enriquecerRepresentantes<
+    T extends { supervisorRegistro?: { matricula: string; departamentoId: string | null; coordenadorId: string | null } | null },
+  >(itens: T[], filialId: string) {
+    if (!itens.length) return itens.map((v) => ({ ...v, papelRepresentante: null as string | null, departamentoNome: null as string | null, aprovadorNome: null as string | null }));
+    const deptoIds = [...new Set(itens.map((v) => v.supervisorRegistro?.departamentoId).filter((x): x is string => !!x))];
+    const coordIds = [...new Set(itens.map((v) => v.supervisorRegistro?.coordenadorId).filter((x): x is string => !!x))];
+    const amarracoes = deptoIds.length
+      ? await this.prisma.supervisorDepartamento.findMany({ where: { filialId, departamentoId: { in: deptoIds } } })
+      : [];
+    const [papeis, nomesDep, nomesUsr] = await Promise.all([
+      this.papeisDosRepresentantes(itens.map((v) => v.supervisorRegistro?.matricula)),
+      deptoIds.length ? this.core.nomesDepartamentos(deptoIds) : Promise.resolve(new Map<string, string>()),
+      this.core.nomesUsuarios([...coordIds, ...amarracoes.map((a) => a.usuarioId)]),
+    ]);
+    const respDoDepto = new Map(amarracoes.map((a) => [a.departamentoId, a.usuarioId]));
+    return itens.map((v) => {
+      const reg = v.supervisorRegistro;
+      const respId = reg?.coordenadorId ?? (reg?.departamentoId ? respDoDepto.get(reg.departamentoId) : undefined);
+      return {
+        ...v,
+        papelRepresentante: reg?.matricula ? (papeis.get(chapa(reg.matricula)) ?? null) : null,
+        departamentoNome: reg?.departamentoId ? (nomesDep.get(reg.departamentoId) ?? null) : null,
+        aprovadorNome: respId ? (nomesUsr.get(respId) ?? null) : null,
+      };
+    });
+  }
+
   /** `escopo='meus'` (app) devolve SÓ o RDV do próprio usuário; sem o parâmetro
    *  mantém a listagem do desktop (o meu + o do time que eu coordeno/aprovo). */
   async listarViagensSupervisor(user: JwtPayload, mes?: number, situacao?: string, escopo?: string) {
     const filialId = filialDoUsuario(user);
-    return this.prisma.viagem.findMany({
+    const viagens = await this.prisma.viagem.findMany({
       where: {
         filialId,
         tipo: TipoViagem.SUPERVISOR,
@@ -841,9 +899,11 @@ export class SupervisorService {
       },
       orderBy: [{ mesReferencia: 'desc' }, { numero: 'desc' }],
       include: {
+        supervisorRegistro: { select: { id: true, nome: true, matricula: true, departamentoId: true, coordenadorId: true } },
         _count: { select: { paradas: true, despesas: true } },
       },
     });
+    return this.enriquecerRepresentantes(viagens, filialId);
   }
 
   async obterViagemSupervisor(id: string, user: JwtPayload) {
@@ -882,7 +942,9 @@ export class SupervisorService {
     // `souDono` separa planejar de executar na tela: o aprovador edita o roteiro,
     // mas apontar visita e concluir são do representante.
     const souDono = await this.ehDonoDoPlanejamento(v, user);
-    return { ...v, kmTotalSaidas, souDono };
+    // Papel/departamento/aprovador: a tela chamava todo representante de "Supervisor".
+    const [enriquecida] = await this.enriquecerRepresentantes([v], filialId);
+    return { ...enriquecida, kmTotalSaidas, souDono };
   }
 
   // ---- Visitas (paradas) da viagem ----

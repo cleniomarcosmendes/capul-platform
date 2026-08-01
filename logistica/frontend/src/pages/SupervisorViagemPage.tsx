@@ -5,6 +5,8 @@ import { logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { errMsg } from './frota-utils';
+import { papelLabel } from './supervisor-utils';
+import { DataInput } from '../components/DataInput';
 
 interface Atividade { id: string; nome: string; ativo: boolean }
 interface Visita {
@@ -57,6 +59,8 @@ interface ViagemDetalhe {
   // aprova monta o roteiro, mas apontar visita e concluir são do dono — o backend
   // responde isso porque a regra é por matrícula, que a tela não tem.
   souDono?: boolean;
+  // Papel real do representante + onde ele responde + quem aprova.
+  papelRepresentante?: string | null; departamentoNome?: string | null; aprovadorNome?: string | null;
   // Saídas de veículo (frota) vinculadas a este RDV → o KM vem daqui.
   kmTotalSaidas?: number;
   saidasVinculadas?: { id: string; numero: number; kmInicial?: number | null; kmFinal?: number | null; situacao: string; veiculo?: { placa?: string | null } | null }[];
@@ -439,10 +443,14 @@ export function SupervisorViagemPage() {
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-800">Planejamento #{v.numero} · {fmtMes(v.mesReferencia)}</h1>
+          {/* Papel real do representante (vem da role no módulo), não "Supervisor" fixo
+              — o coordenador também tem RDV próprio e aparecia como supervisor. */}
           <p className="mt-1 text-sm text-slate-500">
-            Supervisor: {v.condutorNome ?? '—'}
+            {papelLabel(v.papelRepresentante)}: {v.condutorNome ?? '—'}
+            {v.departamentoNome && <span className="text-slate-400"> · {v.departamentoNome}</span>}
             <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${statusPlan(v.statusPlanejamento).cls}`}>{statusPlan(v.statusPlanejamento).label}</span>
           </p>
+          {v.aprovadorNome && <p className="mt-0.5 text-xs text-slate-400">Aprovação com: {v.aprovadorNome}</p>}
           {v.comentarioCoordenador && (v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') && (
             <p className="mt-1 rounded-lg bg-sky-50 px-3 py-1.5 text-xs text-sky-800"><b>Coordenador:</b> {v.comentarioCoordenador}</p>
           )}
@@ -619,7 +627,7 @@ export function SupervisorViagemPage() {
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Município</label><input value={municipio} onChange={(e) => setMunicipio(e.target.value)} maxLength={120} className={inp} /></div>
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Propriedade / fazenda</label><input value={propriedade} onChange={(e) => setPropriedade(e.target.value)} maxLength={120} className={inp} /></div>
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Atividade</label><select value={atividadeId} onChange={(e) => setAtividadeId(e.target.value)} className={inp}><option value="">—</option>{atividades.map((a) => <option key={a.id} value={a.id}>{a.nome}</option>)}</select></div>
-            <div><label className="mb-1 block text-xs font-medium text-slate-500">Data da visita</label><input type="date" value={dataVisita} onChange={(e) => setDataVisita(e.target.value)} className={inp} />{foraDoMes(dataVisita, v.mesReferencia) && <p className="mt-1 text-xs text-amber-600">Fora do mês do planejamento ({fmtMes(v.mesReferencia)}).</p>}</div>
+            <div><label className="mb-1 block text-xs font-medium text-slate-500">Data da visita</label><DataInput value={dataVisita} onChange={setDataVisita} className={inp} />{foraDoMes(dataVisita, v.mesReferencia) && <p className="mt-1 text-xs text-amber-600">Fora do mês do planejamento ({fmtMes(v.mesReferencia)}).</p>}</div>
           </div>
           <div className="mt-3"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={observacao} onChange={(e) => setObs(e.target.value)} maxLength={500} className={inp} /></div>
           <div className="mt-4 flex gap-3">
@@ -720,7 +728,7 @@ export function SupervisorViagemPage() {
               </select>
             </div>
             <div><label className="mb-1 block text-xs font-medium text-slate-500">Valor (R$) *</label><input type="number" step="0.01" min="0" value={dValor} onChange={(e) => setDValor(e.target.value)} className={inp} /></div>
-            <div><label className="mb-1 block text-xs font-medium text-slate-500">Data</label><input type="date" value={dData} onChange={(e) => setDData(e.target.value)} className={inp} />{foraDoMes(dData, v.mesReferencia) && <p className="mt-1 text-xs text-amber-600">Fora do mês do planejamento ({fmtMes(v.mesReferencia)}).</p>}</div>
+            <div><label className="mb-1 block text-xs font-medium text-slate-500">Data</label><DataInput value={dData} onChange={setDData} className={inp} />{foraDoMes(dData, v.mesReferencia) && <p className="mt-1 text-xs text-amber-600">Fora do mês do planejamento ({fmtMes(v.mesReferencia)}).</p>}</div>
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Fornecedor</label><input value={dFornecedor} onChange={(e) => setDForn(e.target.value)} maxLength={120} className={inp} /></div>
             <div className="sm:col-span-2"><label className="mb-1 block text-xs font-medium text-slate-500">Observação</label><input value={dObs} onChange={(e) => setDObs(e.target.value)} maxLength={500} className={inp} /></div>
             <div className="sm:col-span-4">

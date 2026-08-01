@@ -12,8 +12,18 @@ export type StatusPlanejamento = 'RASCUNHO' | 'ENVIADO' | 'APROVADO' | 'AJUSTADO
 export type StatusVisita = 'PLANEJADA' | 'REALIZADA' | 'PULADA';
 export type SituacaoDespesa = 'PENDENTE' | 'APROVADA' | 'CONTESTADA';
 
+/** Papel do representante no RDV — vem da role dele no módulo LOGISTICA. O
+ *  cabeçalho dizia "Supervisor:" fixo, e o coordenador também tem RDV próprio. */
+export const PAPEL_LABEL: Record<string, string> = {
+  COORDENADOR: 'Coordenador',
+  SUPERVISOR: 'Supervisor de Área',
+  SUPERVISOR_FROTA: 'Supervisor de Departamento',
+};
+export const papelLabel = (p?: string | null) => (p ? PAPEL_LABEL[p] ?? p : 'Representante');
+
 export interface ViagemSup {
   id: string; numero: number; situacao: string; mesReferencia?: number | null;
+  papelRepresentante?: string | null; departamentoNome?: string | null; aprovadorNome?: string | null;
   statusPlanejamento?: StatusPlanejamento | null;
   adiantamento?: string | number | null; condutorNome?: string | null;
   comentarioCoordenador?: string | null;

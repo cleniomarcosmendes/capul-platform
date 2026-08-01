@@ -77,6 +77,42 @@ export class CoreLookupService {
     return rows.length > 0;
   }
 
+  /**
+   * chapa normalizada → papel do usuário no módulo LOGISTICA.
+   *
+   * O cadastro do RDV (`logistica.supervisor`) guarda matrícula e nome, não o papel:
+   * quem é coordenador e quem é supervisor de área está na permissão do módulo, no
+   * Configurador. Sem isto a tela chamava todo representante de "Supervisor" —
+   * inclusive o coordenador.
+   *
+   * O casamento é pela CHAPA normalizada (E+5 dígitos), a mesma regra que o resto do
+   * módulo usa para comparar matrícula: `E01047`, `01047` e `1047` são a mesma pessoa.
+   */
+  async papeisLogisticaPorChapa(chapas: string[]): Promise<Map<string, string>> {
+    const u = [...new Set(chapas.filter(Boolean))];
+    if (!u.length) return new Map();
+    const rows = await this.prisma.$queryRaw<{ chapa: string; role: string }[]>(Prisma.sql`
+      SELECT 'E' || LPAD(RIGHT(REGEXP_REPLACE(us.matricula, '\\D', '', 'g'), 5), 5, '0') AS chapa,
+             rm.codigo AS role
+      FROM "core"."usuarios" us
+      JOIN "core"."permissoes_modulo" pm ON pm.usuario_id = us.id AND pm.status = 'ATIVO'
+      JOIN "core"."modulos_sistema" m ON m.id = pm.modulo_id AND m.codigo = 'LOGISTICA'
+      JOIN "core"."roles_modulo" rm ON rm.id = pm.role_modulo_id
+      WHERE us.matricula IS NOT NULL
+        AND 'E' || LPAD(RIGHT(REGEXP_REPLACE(us.matricula, '\\D', '', 'g'), 5), 5, '0') IN (${Prisma.join(u)})
+      -- Duas contas podem colapsar na MESMA chapa (acontece no DEV: um login de teste
+      -- e a pessoa real). Ordenar por relevância no RDV e ficar com a primeira torna o
+      -- rótulo determinístico, em vez de depender da ordem que o banco devolveu.
+      ORDER BY CASE rm.codigo
+                 WHEN 'COORDENADOR' THEN 1
+                 WHEN 'SUPERVISOR_FROTA' THEN 2
+                 WHEN 'SUPERVISOR' THEN 3
+                 ELSE 9 END`);
+    const mapa = new Map<string, string>();
+    for (const r of rows) if (!mapa.has(r.chapa)) mapa.set(r.chapa, r.role);
+    return mapa;
+  }
+
   /** id → nome de usuário (colaborador). */
   async nomesUsuarios(ids: string[]): Promise<Map<string, string>> {
     const u = [...new Set(ids.filter(Boolean))];

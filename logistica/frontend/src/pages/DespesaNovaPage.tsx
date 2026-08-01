@@ -6,6 +6,7 @@ import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { maskMoeda, parseMoeda, moedaParaInput } from '../utils/format';
+import { DataInput } from '../components/DataInput';
 
 // Lançamento de despesa em PÁGINA dedicada (modelo da Nova Entrega: Lista →
 // Formulário). A tela /despesas é o painel; aqui é só o cadastro. Lançamento
@@ -377,7 +378,7 @@ export function DespesaNovaPage() {
           )}
           <div>
             <label className={lbl}>Data</label>
-            <input type="date" value={dataDespesa} onChange={(e) => setDataDespesa(e.target.value)} className={inp} />
+            <DataInput value={dataDespesa} onChange={setDataDespesa} className={inp} />
           </div>
           <div>
             <label className={lbl}>Nº nota / documento {rateio && '*'}</label>

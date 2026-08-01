@@ -6,6 +6,7 @@ import { maskPlaca } from '../utils/format';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
+import { DataInput } from '../components/DataInput';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
@@ -379,7 +380,7 @@ export function VeiculoFormPage() {
                       </select>
                     </div>
                     <div><label className={lbl}>KM na manutenção</label><input type="number" min={0} value={mKm} onChange={(e) => setMKm(e.target.value)} placeholder={kmAtual || '0'} className={inp} /></div>
-                    <div><label className={lbl}>Data</label><input type="date" value={mData} onChange={(e) => setMData(e.target.value)} className={inp} /></div>
+                    <div><label className={lbl}>Data</label><DataInput value={mData} onChange={setMData} className={inp} /></div>
                     <div>
                       <label className={lbl}>Custo (R$)</label>
                       <input type="number" step="0.01" min={0} value={mCusto} onChange={(e) => setMCusto(e.target.value)} placeholder="opcional" className={inp} />

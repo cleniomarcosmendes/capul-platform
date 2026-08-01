@@ -5,7 +5,14 @@ import { createPrismaMock } from '../common/testing/prisma-mock';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const user = (filialId: string | null = 'f1') => ({ sub: 'u1', filialId, modulos: [{ codigo: 'LOGISTICA', role: 'ADMIN' }] }) as any;
 const condutorMock = () => ({ validar: jest.fn() }) as any;
-const coreMock = () => ({}) as any;
+// Lookups no schema `core` (read-only) usados ao enriquecer o planejamento com papel,
+// departamento e aprovador. Vazios por padrão: cada teste que se importa com o rótulo
+// sobrescreve o que precisa.
+const coreMock = () => ({
+  papeisLogisticaPorChapa: jest.fn().mockResolvedValue(new Map()),
+  nomesDepartamentos: jest.fn().mockResolvedValue(new Map()),
+  nomesUsuarios: jest.fn().mockResolvedValue(new Map()),
+}) as any;
 const storageMock = () => ({ put: jest.fn(), get: jest.fn(), remove: jest.fn() }) as any;
 const locaisMock = () => ({ consolidar: jest.fn().mockResolvedValue({}), listarPorCliente: jest.fn(), criar: jest.fn() }) as any;
 
@@ -171,7 +178,7 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
   });
   it('lancarAdiantamento coordenador em supervisor alheio → 403', async () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'outro-coord' });
-    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
   });
 
   // ⭐ Auto-serviço (mudança 15/07): o próprio SUPERVISOR de área lança/vê o adiantamento
@@ -180,13 +187,13 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'algum-coord', matricula: 'E01047' });
     prisma.$queryRaw.mockResolvedValue([{ matricula: '1047', nome: 'Dono' }]); // chapa('1047') === chapa('E01047')
     prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });
-    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('SUPERVISOR'))).resolves.toBeDefined();
+    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('SUPERVISOR'))).resolves.toBeDefined();
     expect(prisma.adiantamento.create).toHaveBeenCalled();
   });
   it('lancarAdiantamento SUPERVISOR em cadastro de OUTRO (matrícula difere) → 403', async () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'outro-coord', matricula: 'E09999' });
     prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Outro' }]); // chapa ≠ E09999
-    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('SUPERVISOR'))).rejects.toThrow(ForbiddenException);
+    await expect(svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('SUPERVISOR'))).rejects.toThrow(ForbiddenException);
     expect(prisma.adiantamento.create).not.toHaveBeenCalled();
   });
   it('meuCadastroSupervisor resolve o cadastro do supervisor logado pela matrícula do login', async () => {
@@ -202,6 +209,11 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
     await expect(svc.meuCadastroSupervisor(comRole('SUPERVISOR'))).resolves.toBeNull();
   });
 
+  // O adiantamento sem data explícita usa HOJE, e o serviço exige data DENTRO do mês
+  // do planejamento. Fixar 202607 fazia estes testes quebrarem sozinhos na virada do
+  // mês (01/08 a suíte amanheceu vermelha sem ninguém ter mexido no código).
+  const mesDeHoje = () => { const d = new Date(); return d.getFullYear() * 100 + d.getMonth() + 1; };
+
   // ⭐ Aprovação do adiantamento (15/07): auto-serviço do supervisor nasce PENDENTE; o
   // lançamento do coordenador/departamento já nasce APROVADO. Só o coordenador (ou depto)
   // decide — nunca o supervisionado.
@@ -209,14 +221,14 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'algum-coord', matricula: 'E01047' });
     prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Dono' }]);
     prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });
-    await svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('SUPERVISOR'));
+    await svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('SUPERVISOR'));
     expect(prisma.adiantamento.create.mock.calls[0][0].data.situacao).toBe('PENDENTE');
     expect(prisma.adiantamento.create.mock.calls[0][0].data.decididoPorId).toBeNull();
   });
   it('lancarAdiantamento COORDENADOR → já nasce APROVADO (com decididoPor)', async () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'u1' });
     prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });
-    await svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: 202607, valor: 100 } as any, comRole('COORDENADOR'));
+    await svc.lancarAdiantamento({ supervisorId: 's1', mesReferencia: mesDeHoje(), valor: 100 } as any, comRole('COORDENADOR'));
     expect(prisma.adiantamento.create.mock.calls[0][0].data.situacao).toBe('APROVADO');
     expect(prisma.adiantamento.create.mock.calls[0][0].data.decididoPorId).toBe('u1');
   });
@@ -650,6 +662,51 @@ describe('SupervisorService leitura do RDV — escopo', () => {
     await svc.listarViagensSupervisor(comRole('ADMIN'), undefined, undefined, 'meus');
     const where = prisma.viagem.findMany.mock.calls[0][0].where;
     expect(where.OR).toEqual([{ supervisorRegistroId: null, criadoPorId: 'u1' }]);
+  });
+
+  // ⭐ A lista dizia só o nome sob o rótulo fixo "Supervisor" — o coordenador, que
+  // também tem RDV próprio, aparecia como supervisor. O papel vem da role no módulo
+  // (Configurador) e o aprovador segue a MESMA rota do `enviar`: quem tem coordenador
+  // roteia para ele; quem não tem roteia para o responsável do departamento.
+  it('listar: anexa papel do representante e o coordenador como aprovador', async () => {
+    const core = coreMock();
+    core.papeisLogisticaPorChapa.mockResolvedValue(new Map([['E05274', 'SUPERVISOR']]));
+    core.nomesDepartamentos.mockResolvedValue(new Map([['d1', 'Vendas Internas e Externas']]));
+    core.nomesUsuarios.mockResolvedValue(new Map([['u-coord', 'Fabricio Silva Neiva']]));
+    svc = new SupervisorService(prisma, condutorMock(), core, storageMock(), locaisMock());
+    prisma.viagem.findMany.mockResolvedValue([{
+      id: 'v1', numero: 25,
+      supervisorRegistro: { id: 's1', nome: 'Kelver', matricula: '005274', departamentoId: 'd1', coordenadorId: 'u-coord' },
+    }]);
+    const [v] = await svc.listarViagensSupervisor(comRole('ADMIN')) as any[];
+    expect(v.papelRepresentante).toBe('SUPERVISOR');
+    expect(v.departamentoNome).toBe('Vendas Internas e Externas');
+    expect(v.aprovadorNome).toBe('Fabricio Silva Neiva');
+  });
+
+  it('listar: SEM coordenador, o aprovador é o responsável do DEPARTAMENTO (caso do coordenador)', async () => {
+    const core = coreMock();
+    core.papeisLogisticaPorChapa.mockResolvedValue(new Map([['E03448', 'COORDENADOR']]));
+    core.nomesUsuarios.mockResolvedValue(new Map([['u-lidyane', 'Lidyane Aparecida Costa Rocha']]));
+    svc = new SupervisorService(prisma, condutorMock(), core, storageMock(), locaisMock());
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1', usuarioId: 'u-lidyane' }]);
+    prisma.viagem.findMany.mockResolvedValue([{
+      id: 'v1', numero: 26,
+      supervisorRegistro: { id: 's2', nome: 'Fabricio', matricula: '003448', departamentoId: 'd1', coordenadorId: null },
+    }]);
+    const [v] = await svc.listarViagensSupervisor(comRole('ADMIN')) as any[];
+    expect(v.papelRepresentante).toBe('COORDENADOR');
+    expect(v.aprovadorNome).toBe('Lidyane Aparecida Costa Rocha');
+  });
+
+  it('listar: sem coordenador NEM responsável de departamento → aprovador nulo (planejamento órfão)', async () => {
+    prisma.viagem.findMany.mockResolvedValue([{
+      id: 'v1', numero: 32,
+      supervisorRegistro: { id: 's3', nome: 'Seed', matricula: 'SEED9001', departamentoId: null, coordenadorId: null },
+    }]);
+    const [v] = await svc.listarViagensSupervisor(comRole('ADMIN')) as any[];
+    expect(v.aprovadorNome).toBeNull();
+    expect(v.papelRepresentante).toBeNull();
   });
 
   it('listar (Supervisor de Departamento): filtra pelos SEUS departamentos', async () => {

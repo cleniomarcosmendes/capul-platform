@@ -5,6 +5,8 @@ import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { errMsg } from './frota-utils';
+import { DataInput } from '../components/DataInput';
+import { papelLabel } from './supervisor-utils';
 
 // Módulo Supervisores / RDV (Fase 3b): viagem mensal (prestação de contas) +
 // catálogos (Atividade de visita) e prestação de contas. Indústria de Ração.
@@ -13,10 +15,44 @@ interface Atividade { id: string; nome: string; ativo: boolean; filialId?: strin
 interface ViagemSup {
   id: string; numero: number; situacao: string; statusPlanejamento?: string | null; mesReferencia?: number | null;
   condutorNome?: string | null; condutorMatricula?: string | null;
+  // Quem EXECUTA (papel real, vindo da role no módulo) e quem APROVA — a lista
+  // mostrava só o nome, e chamava todo representante de "Supervisor".
+  papelRepresentante?: string | null; departamentoNome?: string | null; aprovadorNome?: string | null;
   _count?: { paradas: number; despesas: number };
 }
 
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
+
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+/**
+ * Mês de referência em dois selects (mês + ano), no formato "YYYY-MM".
+ *
+ * Era um `<input type="month">`: o calendarinho nativo só abre clicando no ícone
+ * minúsculo à direita — clicar no campo apenas dá foco, e a impressão é de que a tela
+ * travou. Fora que o Firefox nem implementa o tipo (degrada para texto livre). Dois
+ * selects abrem com um clique em qualquer navegador e não deixam digitar mês inválido.
+ */
+function MesRefField({ value, onChange, required }: { value: string; onChange: (v: string) => void; required?: boolean }) {
+  const hoje = new Date();
+  const [ano, mes] = value ? value.split('-') : ['', ''];
+  const anoAtual = hoje.getFullYear();
+  // Janela curta e suficiente: fechamento retroativo do ano passado até o ano que vem.
+  const anos = [anoAtual - 1, anoAtual, anoAtual + 1];
+  const set = (novoAno: string, novoMes: string) => onChange(novoAno && novoMes ? `${novoAno}-${novoMes}` : '');
+  return (
+    <div className="flex gap-2">
+      <select value={mes} onChange={(e) => set(ano || String(anoAtual), e.target.value)} required={required} className={inp} aria-label="Mês">
+        <option value="">— mês</option>
+        {MESES.map((nome, i) => <option key={nome} value={String(i + 1).padStart(2, '0')}>{nome}</option>)}
+      </select>
+      <select value={ano} onChange={(e) => set(e.target.value, mes || String(hoje.getMonth() + 1).padStart(2, '0'))} required={required} className={inp} aria-label="Ano">
+        <option value="">— ano</option>
+        {anos.map((a) => <option key={a} value={String(a)}>{a}</option>)}
+      </select>
+    </div>
+  );
+}
 const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const fmtData = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const th = 'px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500';
@@ -149,7 +185,7 @@ function ViagensTab() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Mês de referência *</label>
-              <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} required className={inp} />
+              <MesRefField value={mes} onChange={setMes} required />
             </div>
             {ehSupervisorLogado ? (
             <div className="flex items-end">
@@ -157,7 +193,7 @@ function ViagensTab() {
             </div>
             ) : (
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor ou Coordenador *</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Representante (supervisor de área ou coordenador) *</label>
               <select value={supRegistroId} onChange={(e) => setSupRegistroId(e.target.value)} className={inp}>
                 <option value="">— selecione pelo nome</option>
                 {timeAtivo.map((s) => <option key={s.id} value={s.id}>{s.nome}{s.matricula ? ` · ${s.matricula}` : ''}</option>)}
@@ -182,13 +218,23 @@ function ViagensTab() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full">
-            <thead><tr className="bg-slate-50"><th className={th}>#</th><th className={th}>Mês</th><th className={th}>Supervisor</th><th className={th}>Visitas / Despesas</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
+            {/* Quem executa (com o papel real) · onde · quem aprova. Antes a lista dizia
+                só o nome sob o rótulo fixo "Supervisor", e não dava para saber de quem
+                era a vez — nem que o planejamento estava órfão de aprovador. */}
+            <thead><tr className="bg-slate-50"><th className={th}>#</th><th className={th}>Mês</th><th className={th}>Quem executa</th><th className={th}>Departamento</th><th className={th}>Aprovação com</th><th className={th}>Visitas / Despesas</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {viagens.map((v) => (
                 <tr key={v.id} onClick={() => navigate(`/supervisores/viagens/${v.id}`)} className="cursor-pointer hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-capul-700">{v.numero}</td>
                   <td className="px-4 py-3">{fmtMes(v.mesReferencia)}</td>
-                  <td className="px-4 py-3">{v.condutorNome ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className="font-medium text-slate-700">{v.condutorNome ?? '—'}</span>
+                    <span className="block text-xs text-slate-400">{papelLabel(v.papelRepresentante)}</span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500">{v.departamentoNome ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-500">
+                    {v.aprovadorNome ?? <span className="text-amber-600" title="Sem coordenador nem responsável de departamento — não há para quem enviar">sem aprovador</span>}
+                  </td>
                   <td className="px-4 py-3 text-slate-500">{v._count?.paradas ?? 0} / {v._count?.despesas ?? 0}</td>
                   <td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${statusPlan(v.statusPlanejamento).cls}`}>{statusPlan(v.statusPlanejamento).label}</span></td>
                   <td className="px-4 py-3 text-xs text-capul-600">Abrir →</td>
@@ -280,7 +326,7 @@ function AtividadesTab() {
 }
 
 // ---------------- Equipe (supervisores + vínculo com coordenador) ----------------
-interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; ativo: boolean }
+interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; papel?: string | null; ativo: boolean }
 interface CoreUser { id: string; nome?: string; nomeFantasia?: string; matricula?: string | null; departamento?: { id: string; nome: string } | null; permissoes?: { modulo: { codigo: string }; roleModulo: { codigo: string } }[] }
 interface DeptItem { id: string; nome: string }
 /** Quem responde por um departamento no RDV — antes isso era DERIVADO dos veículos que
@@ -593,12 +639,16 @@ function EquipeTab() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full">
-            <thead><tr className="bg-slate-50"><th className={th}>Matrícula</th><th className={th}>Nome</th><th className={th}>Departamento</th><th className={th}>Coordenador</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
+            {/* O papel não é do cadastro do RDV — vem da role no módulo (Configurador).
+                Mostrá-lo aqui é o que dá sentido à coluna Coordenador: supervisor de
+                área responde a um coordenador; coordenador responde ao departamento. */}
+            <thead><tr className="bg-slate-50"><th className={th}>Matrícula</th><th className={th}>Nome</th><th className={th}>Papel</th><th className={th}>Departamento</th><th className={th}>Coordenador</th><th className={th}>Status</th><th className={th}>Ações</th></tr></thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {itens.map((s) => (
                 <tr key={s.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-mono text-slate-700">{s.matricula}</td>
                   <td className="px-4 py-3 font-medium text-slate-700">{s.nome}</td>
+                  <td className="px-4 py-3 text-slate-500">{papelLabel(s.papel)}</td>
                   <td className="px-4 py-3">
                     {editId === s.id ? (
                       <select value={editDepto} onChange={(e) => setEditDepto(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
@@ -780,7 +830,7 @@ function FechamentoTab() {
       <>
       <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor</label>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Representante</label>
           {ehSupervisorArea ? (
             <div className={`${inp} bg-slate-50 text-slate-600`}>{meuCadastro ? `Você — ${meuCadastro.nome} (${meuCadastro.matricula})` : 'Carregando…'}</div>
           ) : (
@@ -792,7 +842,7 @@ function FechamentoTab() {
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Mês</label>
-          <input type="month" value={mesInput} onChange={(e) => setMesInput(e.target.value)} className={inp} />
+          <MesRefField value={mesInput} onChange={setMesInput} />
         </div>
       </div>
 
@@ -819,7 +869,7 @@ function FechamentoTab() {
               <form onSubmit={lancar} className="mt-3 border-t border-slate-100 pt-3">
                 <div className="grid grid-cols-2 gap-2">
                   <input type="number" step="0.01" min="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor R$" className={inp} />
-                  <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={inp} />
+                  <DataInput value={data} onChange={setData} className={inp} />
                 </div>
                 <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Observação (opcional)" maxLength={255} className={`${inp} mt-2`} />
                 <button type="submit" className="mt-2 rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700">Lançar adiantamento</button>
