@@ -7,11 +7,17 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { DataInput } from '../components/DataInput';
+import { papelLabel } from './supervisor-utils';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
+/** Equipe do RDV da filial — quem pode ser o representante responsável pelo veículo. */
+interface Representante { matricula: string; nome: string; papel?: string | null }
+/** Mesma normalização do backend (E+5 dígitos): `003448`, `3448` e `E03448` são a
+ *  mesma pessoa. Sem isso a conferência local divergiria da validação do save. */
+const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
 interface Manutencao {
   id: string; tipo: 'PREVENTIVA' | 'CORRETIVA'; km: number; dataManutencao: string;
   motivo?: string | null; custo?: string | number | null; reiniciouCiclo: boolean; kmProximaGerada?: number | null;
@@ -59,11 +65,13 @@ export function VeiculoFormPage() {
   const [filialOriginal, setFilialOriginal] = useState('');
   const [departamentoLotacaoId, setDepartamentoId] = useState('');
   const [supervisorId, setSupervisorId] = useState('');
-  // Supervisor de ÁREA (atendente técnico, por matrícula Protheus) — distinto do
-  // "Supervisor responsável" (encarregado). O nome é resolvido no Protheus.
+  // REPRESENTANTE responsável (coordenador OU supervisor de área) que fica com o
+  // veículo — distinto do "Supervisor responsável" (encarregado que gerencia). O nome
+  // e o papel são resolvidos na Equipe do RDV da filial, mesma regra do backend.
   const [supervisorAreaMatricula, setSupAreaMat] = useState('');
   const [supervisorAreaNome, setSupAreaNome] = useState('');
-  const [buscandoArea, setBuscandoArea] = useState(false);
+  const [supAreaPapel, setSupAreaPapel] = useState<string | null>(null);
+  const [representantes, setRepresentantes] = useState<Representante[]>([]);
   const [situacao, setSituacao] = useState('DISPONIVEL');
   const [ativo, setAtivo] = useState(true);
   const [inativando, setInativando] = useState(false);
@@ -101,11 +109,13 @@ export function VeiculoFormPage() {
   useEffect(() => {
     if (!filialId) { setDepartamentos([]); setUsuarios([]); return; }
     void (async () => {
-      const [d, u] = await Promise.all([
+      const [d, u, r] = await Promise.all([
         coreApi.get<CoreItem[]>('/departamentos', { params: { filialId } }).catch(() => ({ data: [] })),
         coreApi.get<CoreItem[]>('/usuarios', { params: { filialId } }).catch(() => ({ data: [] })),
+        // Equipe do RDV desta filial: quem pode ser o responsável pelo veículo.
+        logisticaApi.get<Representante[]>('/veiculos/representantes', { params: { filialId } }).catch(() => ({ data: [] })),
       ]);
-      setDepartamentos(d.data); setUsuarios(u.data);
+      setDepartamentos(d.data); setUsuarios(u.data); setRepresentantes(r.data);
     })();
   }, [filialId]);
 
@@ -175,19 +185,17 @@ export function VeiculoFormPage() {
     } finally { setSalvandoManut(false); }
   }
 
-  // Resolve o nome do supervisor de área pela matrícula (Protheus, mesmo endpoint
-  // do condutor). Só GESTOR_FROTA etc. chegam aqui (têm acesso a /frota/condutor).
-  async function buscarSupervisorArea() {
+  // Resolve o responsável pela matrícula na EQUIPE do RDV desta filial — a MESMA
+  // regra que o backend aplica ao salvar. Antes buscava no Protheus: achava o nome
+  // de qualquer funcionário e o save falhava depois, com o operador sem entender por
+  // quê. A lista já veio na carga da tela, então a conferência é local e instantânea.
+  function buscarSupervisorArea() {
     const m = supervisorAreaMatricula.trim();
-    if (!m) { setSupAreaNome(''); return; }
-    setBuscandoArea(true);
-    try {
-      const { data } = await logisticaApi.post<{ matricula: string; nome: string }>('/frota/condutor', { matricula: m });
-      setSupAreaNome(data.nome);
-    } catch {
-      setSupAreaNome('');
-      toast('warning', 'Matrícula do supervisor de área não encontrada no Protheus.');
-    } finally { setBuscandoArea(false); }
+    if (!m) { setSupAreaNome(''); setSupAreaPapel(null); return; }
+    const achado = representantes.find((r) => chapa(r.matricula) === chapa(m));
+    if (achado) { setSupAreaNome(achado.nome); setSupAreaPapel(achado.papel ?? null); return; }
+    setSupAreaNome(''); setSupAreaPapel(null);
+    toast('warning', 'Matrícula não está na Equipe (RDV) desta filial. Cadastre o representante em Supervisores › Equipe primeiro.');
   }
 
   async function submit(e: FormEvent) {
@@ -213,7 +221,6 @@ export function VeiculoFormPage() {
       supervisorId,
       // Supervisor de área: em edição '' remove o vínculo; no cadastro vazio = não envia.
       supervisorAreaMatricula: supervisorAreaMatricula.trim() || (modoEdicao ? '' : undefined),
-      supervisorAreaNome: supervisorAreaNome.trim() || undefined,
       ...(modoEdicao ? { situacao } : {}),
     };
     try {
@@ -325,24 +332,26 @@ export function VeiculoFormPage() {
         </div>
 
         <div>
-          <label className={lbl}>Supervisor de Área — atendente técnico (opcional)</label>
+          <label className={lbl}>Coordenador / Supervisor de Área responsável (opcional)</label>
           <div className="mt-1 flex items-start gap-2">
             <input
               value={supervisorAreaMatricula}
               onChange={(e) => { setSupAreaMat(e.target.value.toUpperCase()); setSupAreaNome(''); }}
-              onBlur={() => void buscarSupervisorArea()}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void buscarSupervisorArea(); } }}
-              placeholder="Matrícula Protheus (ex.: E05222)"
+              onBlur={buscarSupervisorArea}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); buscarSupervisorArea(); } }}
+              list="representantes-rdv"
+              placeholder="Matrícula (ex.: 003448)"
               maxLength={20}
               className="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono uppercase focus:border-capul-500 focus:outline-none"
             />
-            <button type="button" onClick={() => void buscarSupervisorArea()} disabled={buscandoArea || !supervisorAreaMatricula.trim()}
-              className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-              {buscandoArea ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
-            </button>
-            {supervisorAreaNome && <span className="self-center text-sm font-medium text-emerald-700">👤 {supervisorAreaNome}</span>}
+            {/* Sem botão "Buscar": a conferência é local (a Equipe já veio na carga da
+                tela), então resolve no blur/Enter, sem espera nem spinner. */}
+            <datalist id="representantes-rdv">
+              {representantes.map((r) => <option key={r.matricula} value={r.matricula}>{r.nome}</option>)}
+            </datalist>
+            {supervisorAreaNome && <span className="self-center text-sm font-medium text-emerald-700">👤 {supervisorAreaNome}{supAreaPapel && <span className="ml-1 font-normal text-slate-500">({papelLabel(supAreaPapel)})</span>}</span>}
           </div>
-          <p className="mt-1 text-xs text-slate-400">Colaborador que fica com <b>este veículo</b> para as visitas (funcionário Protheus, por matrícula). Diferente do "Supervisor responsável" (encarregado que gerencia). A troca fica registrada no histórico.</p>
+          <p className="mt-1 text-xs text-slate-400"><b>Coordenador</b> ou <b>supervisor de área</b> que fica com <b>este veículo</b> para as visitas — tem que estar cadastrado em Supervisores › Equipe desta filial. É daqui que o planejamento do RDV <b>sugere o veículo</b> das despesas. Diferente do "Supervisor responsável" (encarregado que gerencia). A troca fica registrada no histórico.</p>
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">

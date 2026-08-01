@@ -6,12 +6,67 @@ import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 
+/** Normaliza matrícula → chapa E-prefixada (E+5 díg.), colapsando `E01047`/`01047`/
+ *  `1047`. Mesma regra do RDV e da frota — é o que permite casar o responsável do
+ *  veículo com o cadastro da Equipe independentemente de como foi digitado. */
+const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
+
 @Injectable()
 export class VeiculoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly core: CoreLookupService,
   ) {}
+
+  /**
+   * Resolve o REPRESENTANTE responsável pelo veículo (quem fica com o carro para as
+   * visitas) a partir da matrícula digitada.
+   *
+   * Antes o campo era texto livre de 20 caracteres, sem conferência: no DEV convivem
+   * `E02336` num veículo e `005274` em outro — o mesmo dado em dois formatos. Isso
+   * passou a importar quando o campo deixou de ser decorativo e virou a origem da
+   * SUGESTÃO de veículo do planejamento: matrícula errada ou em outro formato faz a
+   * sugestão simplesmente não aparecer, calada.
+   *
+   * Regra: tem que ser alguém da Equipe (RDV) DESTA filial — supervisor de área ou
+   * coordenador, indistintamente (o coordenador também tem carro e RDV próprio). O
+   * nome vem do cadastro, então não dá mais para divergir do que está na Equipe.
+   * Devolve a matrícula NORMALIZADA (chapa E+5), como o resto do módulo.
+   */
+  private async resolverResponsavelArea(matricula: string | null, filialId: string): Promise<{ matricula: string; nome: string } | null> {
+    const bruto = matricula?.trim();
+    if (!bruto) return null;
+    const alvo = chapa(bruto);
+    const equipe = await this.prisma.supervisor.findMany({
+      where: { filialId, ativo: true },
+      select: { matricula: true, nome: true },
+    });
+    const achado = equipe.find((s) => chapa(s.matricula) === alvo);
+    if (!achado) {
+      throw new BadRequestException(
+        `Matrícula ${bruto} não está cadastrada na Equipe (RDV) desta filial. Cadastre o representante em Supervisores › Equipe antes de vinculá-lo ao veículo.`,
+      );
+    }
+    return { matricula: alvo, nome: achado.nome };
+  }
+
+  /** Equipe do RDV da filial (matrícula normalizada + nome + papel) — alimenta o
+   *  seletor de responsável do cadastro de veículo. Papel vem da role no módulo. */
+  async representantesDaFilial(filialId: string) {
+    if (!filialId) return [];
+    const equipe = await this.prisma.supervisor.findMany({
+      where: { filialId, ativo: true },
+      orderBy: { nome: 'asc' },
+      select: { matricula: true, nome: true },
+    });
+    const papeis = await this.core.papeisLogisticaPorChapa(equipe.map((s) => chapa(s.matricula)));
+    return equipe.map((s) => ({
+      matricula: chapa(s.matricula),
+      matriculaOriginal: s.matricula,
+      nome: s.nome,
+      papel: papeis.get(chapa(s.matricula)) ?? null,
+    }));
+  }
 
   /** Anexa os nomes do core (filial/depto/supervisor) a cada veículo. */
   private async enriquecer<T extends { filialId: string; departamentoLotacaoId: string; supervisorId: string }>(veiculos: T[]) {
@@ -34,10 +89,11 @@ export class VeiculoService {
    */
   async create(dto: CreateVeiculoDto, criadoPorId: string) {
     // Valida os FKs do core antes de gravar (evita ID órfão).
-    await Promise.all([
+    const [, , , responsavel] = await Promise.all([
       this.core.validarFilial(dto.filialId),
       this.core.validarDepartamento(dto.departamentoLotacaoId),
       this.core.validarUsuario(dto.supervisorId, 'Supervisor'),
+      this.resolverResponsavelArea(dto.supervisorAreaMatricula ?? null, dto.filialId),
     ]);
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -66,8 +122,10 @@ export class VeiculoService {
               : null,
             departamentoLotacaoId: dto.departamentoLotacaoId,
             supervisorId: dto.supervisorId,
-            supervisorAreaMatricula: dto.supervisorAreaMatricula?.trim().toUpperCase() || null,
-            supervisorAreaNome: dto.supervisorAreaNome?.trim() || null,
+            // Nome vem do cadastro da Equipe (não do que o operador digitou) —
+            // assim a tela do veículo nunca diverge de Supervisores › Equipe.
+            supervisorAreaMatricula: responsavel?.matricula ?? null,
+            supervisorAreaNome: responsavel?.nome ?? null,
           },
         });
         await tx.veiculoSupervisorHistorico.create({
@@ -216,10 +274,14 @@ export class VeiculoService {
     ]);
 
     const trocaSupervisor = dto.supervisorId && dto.supervisorId !== atual.supervisorId;
-    // Supervisor de área (matrícula): undefined = não mexe; '' = remover; senão troca.
-    const novaMatriculaArea = dto.supervisorAreaMatricula === undefined
+    // Representante responsável (matrícula): undefined = não mexe; '' = remover; senão
+    // troca. Passa pela Equipe da filial de DESTINO — trocar a filial e manter um
+    // responsável que não existe lá deixaria a sugestão do planejamento apontando para
+    // fora do escopo.
+    const responsavelArea = dto.supervisorAreaMatricula === undefined
       ? undefined
-      : dto.supervisorAreaMatricula.trim().toUpperCase() || null;
+      : await this.resolverResponsavelArea(dto.supervisorAreaMatricula, trocaFilial ? dto.filialId! : atual.filialId);
+    const novaMatriculaArea = responsavelArea === undefined ? undefined : (responsavelArea?.matricula ?? null);
     const trocaArea = novaMatriculaArea !== undefined && novaMatriculaArea !== atual.supervisorAreaMatricula;
 
     // Re-agenda a próxima revisão quando o intervalo vier no update. Base = km da
@@ -255,7 +317,8 @@ export class VeiculoService {
           supervisorId: dto.supervisorId,
           ...(novaMatriculaArea !== undefined ? {
             supervisorAreaMatricula: novaMatriculaArea,
-            supervisorAreaNome: novaMatriculaArea ? (dto.supervisorAreaNome?.trim() || null) : null,
+            // Nome sempre do cadastro da Equipe — nunca do que veio no DTO.
+            supervisorAreaNome: responsavelArea?.nome ?? null,
           } : {}),
           ativo: dto.ativo,
         },
@@ -277,7 +340,7 @@ export class VeiculoService {
             veiculoId: id,
             matriculaAnterior: atual.supervisorAreaMatricula,
             matriculaNova: novaMatriculaArea,
-            nomeNovo: dto.supervisorAreaNome?.trim() || null,
+            nomeNovo: responsavelArea?.nome ?? null,
             alteradoPorId,
           },
         });

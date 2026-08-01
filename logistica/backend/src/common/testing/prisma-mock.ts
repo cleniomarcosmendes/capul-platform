@@ -27,6 +27,7 @@ export function createPrismaMock(): Record<string, any> {
     entregaCupom: modelMock(),
     veiculo: modelMock(),
     veiculoSupervisorHistorico: modelMock(),
+    veiculoSupervisorAreaHistorico: modelMock(),
     clienteLocal: modelMock(),
     enderecoEntrega: modelMock(),
     contadorSequencial: modelMock(),

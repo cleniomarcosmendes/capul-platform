@@ -43,10 +43,11 @@ export class CreateVeiculoDto {
   @IsString() @MaxLength(40)
   supervisorId!: string;
 
-  // Supervisor de ÁREA (atendente técnico, por MATRÍCULA Protheus) — opcional.
-  // Distinto do supervisorId (encarregado que gerencia o veículo).
+  // REPRESENTANTE responsável (coordenador OU supervisor de área) que fica com o
+  // veículo para as visitas — por MATRÍCULA, validada contra a Equipe do RDV da
+  // filial. Distinto do supervisorId (encarregado que gerencia o veículo). O NOME
+  // não vem do cliente: é lido do cadastro da Equipe, para não divergir dele.
   @IsOptional() @IsString() @MaxLength(20) supervisorAreaMatricula?: string;
-  @IsOptional() @IsString() @MaxLength(120) supervisorAreaNome?: string;
 }
 
 export class UpdateVeiculoDto {
@@ -71,9 +72,8 @@ export class UpdateVeiculoDto {
   @IsOptional() @IsString() @MaxLength(40) departamentoLotacaoId?: string;
   // Troca de supervisor → registra histórico.
   @IsOptional() @IsString() @MaxLength(40) supervisorId?: string;
-  // Troca do supervisor de ÁREA (matrícula Protheus) → registra histórico próprio.
-  // '' (string vazia) = remover o vínculo.
+  // Troca do REPRESENTANTE responsável (matrícula) → registra histórico próprio.
+  // '' (string vazia) = remover o vínculo. Nome vem da Equipe, não do cliente.
   @IsOptional() @IsString() @MaxLength(20) supervisorAreaMatricula?: string;
-  @IsOptional() @IsString() @MaxLength(120) supervisorAreaNome?: string;
   @IsOptional() @IsBoolean() ativo?: boolean;
 }

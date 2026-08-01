@@ -11,6 +11,14 @@ const ENTREGA = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 // não vê frota/comprovantes. Espelha o @Roles do backend (create/edit/operador).
 const REGISTRO_ENTREGA = ['REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA'];
 const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA'];
+// "Saída de Veículos" é o caderno digital da frota: vale para QUALQUER colaborador que
+// pega um carro da empresa, não é privilégio de gestor nem processo do RDV. SUPERVISOR
+// e COORDENADOR entraram em 01/08 — ambos têm veículo alocado para o trabalho e o
+// backend já os autoriza nas rotas de operação; só o app oferecia esse caminho, o que
+// obrigava a pegar o celular para registrar uma saída que o computador ao lado resolve.
+// Lista PRÓPRIA (não estendi FROTA_OP) porque o Monitor da Frota — que também usa
+// FROTA_OP — responde 403 para eles: item de menu a mais abre tela vazia.
+const FROTA_SAIDA = [...FROTA_OP, 'SUPERVISOR', 'COORDENADOR'];
 // Telas de gestão de ENTREGAS (Painel, Indicadores, Análise). Espelha o
 // @Roles do painel.controller. GESTOR_FROTA fica de FORA: via os itens e tomava
 // 403 em todos (a frota dele está na seção FROTA + "Análise da Frota").
@@ -55,8 +63,8 @@ const navItems: NavEntry[] = [
   { to: '/comprovantes', label: 'Comprovantes', icon: FileCheck, roles: ENTREGA },
   { to: '/clientes', label: 'Endereços', icon: MapPin, roles: ENTREGA },
 
-  { section: 'FROTA', roles: FROTA_OP },
-  { to: '/frota', label: 'Saída de Veículos', icon: Fuel, end: true, roles: FROTA_OP },
+  { section: 'FROTA', roles: FROTA_SAIDA },
+  { to: '/frota', label: 'Saída de Veículos', icon: Fuel, end: true, roles: FROTA_SAIDA },
   // Monitor entra em FROTA_OP: o Operador de Entrega atende o cliente que liga
   // perguntando da entrega e precisa ver as rotas na rua / o mapa ao vivo. O custo
   // continua escondido para ele (o backend nem envia).

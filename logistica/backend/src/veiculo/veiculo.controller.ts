@@ -16,6 +16,23 @@ import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 export class VeiculoController {
   constructor(private readonly veiculos: VeiculoService) {}
 
+  /**
+   * Equipe do RDV (supervisores de área + coordenadores) da filial, para o cadastro
+   * do veículo escolher o REPRESENTANTE responsável.
+   *
+   * Endpoint próprio em vez de reusar `/supervisor/supervisores`: aquele é do módulo
+   * de RDV e barra o gestor de frota de propósito (o RDV é processo interno do setor).
+   * Aqui é o inverso — quem cadastra veículo é gestor de frota e precisa da lista, sem
+   * ganhar acesso ao RDV. Devolve só matrícula/nome/papel, nada de prestação de contas.
+   */
+  @Get('representantes')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
+  representantes(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    // Sem filial resolvida (ADMIN sem informar) não há Equipe a listar — devolve vazio
+    // em vez de varrer as 35 filiais.
+    return this.veiculos.representantesDaFilial(resolverFilialLeitura(user, filialId) ?? '');
+  }
+
   @Post()
   @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA')
   criar(@Body() dto: CreateVeiculoDto, @CurrentUser() user: JwtPayload) {
