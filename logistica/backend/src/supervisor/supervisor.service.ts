@@ -1248,6 +1248,16 @@ export class SupervisorService {
     });
     if (!d || d.viagemId !== viagemId) throw new NotFoundException('Despesa não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover despesas.');
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    // ⭐ Depois de DECIDIDA, só a autoridade apaga. Sem isto o representante apagava a
+    // despesa que o coordenador tinha CONTESTADO e relançava limpa, como PENDENTE — a
+    // rejeição sumia sem deixar rastro. Enquanto está pendente ele apaga à vontade: é
+    // dele e ninguém analisou ainda.
+    if (d.situacao !== 'PENDENTE' && !(await this.ehAutoridadeSobre(v.supervisorRegistro, user))) {
+      throw new ForbiddenException(
+        `Esta despesa já foi ${d.situacao === 'APROVADA' ? 'aprovada' : 'contestada'} — só quem aprova pode removê-la. Para corrigir o valor, edite a despesa (ela volta para análise).`,
+      );
+    }
     // Limpa os binários (comprovante legado + anexos) — as linhas AnexoDespesa somem por cascade.
     const chaves = [d.comprovanteObjectKey, ...d.anexos.map((a) => a.objectKey)].filter((k): k is string => !!k);
     for (const k of chaves) {
@@ -1342,6 +1352,8 @@ export class SupervisorService {
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId } });
     if (!d || d.viagemId !== viagemId) throw new NotFoundException('Despesa não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
+    // Mês encerrado não se mexe — `lancarDespesa` já respeitava isso, editar não.
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     // Trocar o tipo reclassifica a categoria → recalcula se tem veículo.
     let tipoId: string | undefined;
     let veiculoId: string | null | undefined;
@@ -1375,6 +1387,29 @@ export class SupervisorService {
       }
       await this.anexarReciboDespesa(despesaId, filialId, recibo);
     }
+    // ⭐ A decisão vale para o VALOR que foi decidido. Editar valor/tipo/data/veículo de
+    // uma despesa já decidida devolve ela para análise — antes o aval ficava colado no
+    // número novo: uma despesa aprovada em R$ 50 virava R$ 5.000 e seguia APROVADA, sem
+    // ninguém rever. Fornecedor, observação e comprovante não mexem no dinheiro e não
+    // reabrem.
+    //
+    // Quando quem edita É a autoridade sobre o representante, a despesa continua
+    // APROVADA — mas com o carimbo REFEITO (quem/quando), porque a decisão passa a ser
+    // dele sobre o valor novo. Espelha a regra de 27/07 do lançamento.
+    const mexeNoDinheiro = dto.valor !== undefined || dto.tipoDespesaId !== undefined
+      || dto.data !== undefined || dto.veiculoId !== undefined;
+    const jaDecidida = d.situacao !== 'PENDENTE';
+    const redecisao: Prisma.DespesaVeiculoUncheckedUpdateInput = {};
+    if (mexeNoDinheiro && jaDecidida) {
+      const autoridade = await this.ehAutoridadeSobre(v.supervisorRegistro, user);
+      // Campos da DESPESA são aprovadoPorId/aprovadoEm (decididoPorId/decididoEm são
+      // do Adiantamento) — trocar os dois derruba o update com 500.
+      if (autoridade) {
+        Object.assign(redecisao, { aprovadoPorId: user.sub, aprovadoEm: new Date() });
+      } else {
+        Object.assign(redecisao, { situacao: 'PENDENTE', aprovadoPorId: null, aprovadoEm: null, motivoContestacao: null });
+      }
+    }
     return this.prisma.despesaVeiculo.update({
       where: { id: despesaId },
       data: {
@@ -1384,6 +1419,7 @@ export class SupervisorService {
         dataDespesa: dto.data !== undefined ? this.parseData(dto.data) : undefined,
         fornecedor: dto.fornecedor !== undefined ? (dto.fornecedor.trim() || null) : undefined,
         observacao: dto.observacao !== undefined ? (dto.observacao.trim() || null) : undefined,
+        ...redecisao,
       },
       include: { tipoDespesa: { select: { nome: true, categoria: true } } },
     });
@@ -1551,6 +1587,15 @@ export class SupervisorService {
     const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true, departamentoId: true, matricula: true } } } });
     if (!a || a.supervisor.filialId !== filialId) throw new NotFoundException('Adiantamento não encontrado.');
     await this.assertEscopoSupervisor(a.supervisor, user);
+    await this.assertRdvAberto(a.supervisorId, a.mesReferencia);
+    // ⭐ Adiantamento aprovado é DÍVIDA do representante: só o APROVADO entra no saldo,
+    // então apagar aumenta o que a empresa deve a ele. Só a autoridade tira. Enquanto
+    // PENDENTE (auto-serviço, ninguém decidiu) ele mesmo pode remover.
+    if (a.situacao !== 'PENDENTE' && !(await this.ehAutoridadeSobre(a.supervisor, user))) {
+      throw new ForbiddenException(
+        `Este adiantamento já foi ${a.situacao === 'APROVADO' ? 'aprovado' : 'rejeitado'} — só quem aprova pode removê-lo.`,
+      );
+    }
     await this.prisma.adiantamento.delete({ where: { id } });
     return { ok: true };
   }

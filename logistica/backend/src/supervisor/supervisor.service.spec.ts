@@ -1175,3 +1175,109 @@ describe('SupervisorService — veículo da despesa', () => {
       .rejects.toThrow(/não encontrado nesta filial/);
   });
 });
+
+// ⭐ A APROVAÇÃO PRECISA GRUDAR NO VALOR (01/08). Reproduzido no DEV com as personas
+// reais: despesa aprovada em R$ 5.000 virou R$ 9.999 e seguiu APROVADA; despesa
+// CONTESTADA foi apagada pelo próprio representante e relançada limpa; e o
+// supervisionado apagou o adiantamento APROVADO dele (adiantamento é dívida — apagar
+// aumenta o que a empresa lhe deve). O padrão: `lancar` validava direito, mas `editar`
+// e `remover` herdaram só o escopo — o que pode ser tocado DEPOIS de decidido nunca
+// tinha sido delimitado.
+describe('SupervisorService — a decisão vale para o valor decidido', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const rep = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const plan = () => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1', veiculoId: 've1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.viagem.findUnique.mockResolvedValue(plan());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // o logado É o dono
+    prisma.despesaVeiculo.update.mockResolvedValue({ id: 'd1' });
+    prisma.tipoDespesa.findUnique.mockResolvedValue({ id: 't1', nome: 'Alimentação', categoria: 'INDIVIDUO' });
+  });
+
+  it('representante edita o VALOR de despesa APROVADA → volta para PENDENTE', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', tipoDespesaId: 't1', veiculoId: null });
+    await svc.editarDespesa('v1', 'd1', { valor: 9999 } as any, rep());
+    const d0 = prisma.despesaVeiculo.update.mock.calls[0][0].data;
+    expect(d0.situacao).toBe('PENDENTE');
+    expect(d0.motivoContestacao).toBeNull();
+    expect(d0.aprovadoPorId).toBeNull();
+    expect(Object.keys(d0)).not.toContain('decididoPorId');
+  });
+
+  it('editar só a OBSERVAÇÃO não reabre a aprovação (não mexe no dinheiro)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', tipoDespesaId: 't1', veiculoId: null });
+    await svc.editarDespesa('v1', 'd1', { observacao: 'nota fiscal 123' } as any, rep());
+    expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBeUndefined();
+  });
+
+  it('a AUTORIDADE editando mantém aprovada, mas RECARIMBA a decisão (é dela, sobre o valor novo)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', tipoDespesaId: 't1', veiculoId: null });
+    await svc.editarDespesa('v1', 'd1', { valor: 120 } as any, coord());
+    const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
+    expect(data.situacao).toBeUndefined();
+    // Campo da DESPESA é aprovadoPorId (decididoPorId é do Adiantamento). O mock aceita
+    // qualquer chave, então só o teste de ponta a ponta pegou a troca — daí a asserção
+    // pelo nome exato.
+    expect(data.aprovadoPorId).toBe('u-coord');
+    expect(Object.keys(data)).not.toContain('decididoPorId');
+  });
+
+  it('representante NÃO apaga despesa CONTESTADA (era o caminho "some e volta limpa")', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'CONTESTADA', anexos: [] });
+    await expect(svc.removerDespesa('v1', 'd1', rep())).rejects.toThrow(ForbiddenException);
+    expect(prisma.despesaVeiculo.delete).not.toHaveBeenCalled();
+  });
+
+  it('representante apaga a própria despesa PENDENTE (ninguém analisou ainda)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', anexos: [] });
+    await svc.removerDespesa('v1', 'd1', rep());
+    expect(prisma.despesaVeiculo.delete).toHaveBeenCalled();
+  });
+
+  it('a autoridade apaga despesa já decidida', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', anexos: [] });
+    await svc.removerDespesa('v1', 'd1', coord());
+    expect(prisma.despesaVeiculo.delete).toHaveBeenCalled();
+  });
+
+  it('mês FECHADO trava a edição da despesa (o lançar já travava; editar não)', async () => {
+    prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', tipoDespesaId: 't1', veiculoId: null });
+    await expect(svc.editarDespesa('v1', 'd1', { valor: 10 } as any, rep())).rejects.toThrow(/RDV do mês encerrado/);
+  });
+
+  it('supervisionado NÃO apaga o adiantamento APROVADO dele (é dívida)', async () => {
+    prisma.adiantamento.findUnique.mockResolvedValue({
+      id: 'a1', supervisorId: 's1', mesReferencia: 202608, situacao: 'APROVADO',
+      supervisor: { filialId: 'f1', coordenadorId: 'u-coord', departamentoId: 'd1', matricula: 'E01047' },
+    });
+    await expect(svc.removerAdiantamento('a1', rep())).rejects.toThrow(ForbiddenException);
+    expect(prisma.adiantamento.delete).not.toHaveBeenCalled();
+  });
+
+  it('supervisionado apaga o próprio adiantamento PENDENTE (auto-serviço, sem decisão)', async () => {
+    prisma.adiantamento.findUnique.mockResolvedValue({
+      id: 'a1', supervisorId: 's1', mesReferencia: 202608, situacao: 'PENDENTE',
+      supervisor: { filialId: 'f1', coordenadorId: 'u-coord', departamentoId: 'd1', matricula: 'E01047' },
+    });
+    await svc.removerAdiantamento('a1', rep());
+    expect(prisma.adiantamento.delete).toHaveBeenCalled();
+  });
+
+  it('mês FECHADO trava a remoção do adiantamento', async () => {
+    prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
+    prisma.adiantamento.findUnique.mockResolvedValue({
+      id: 'a1', supervisorId: 's1', mesReferencia: 202608, situacao: 'PENDENTE',
+      supervisor: { filialId: 'f1', coordenadorId: 'u-coord', departamentoId: 'd1', matricula: 'E01047' },
+    });
+    await expect(svc.removerAdiantamento('a1', rep())).rejects.toThrow(/RDV do mês encerrado/);
+  });
+});
