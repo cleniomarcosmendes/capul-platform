@@ -65,8 +65,12 @@ export interface NovaDespesa {
 
 const B = `${LOGISTICA_BASE}/supervisor`;
 
+/** Planejamentos do PRÓPRIO usuário. `escopo=meus` é obrigatório aqui: sem ele o
+ *  backend devolve também o RDV do time (o coordenador aprova o do supervisor de
+ *  área, e o Supervisor de Departamento o do coordenador) — correto no desktop,
+ *  errado no app, onde a lista significa "para eu executar em campo". */
 export async function listarViagensSupervisor(situacao?: string): Promise<ViagemSup[]> {
-  const { data } = await api.get<ViagemSup[]>(`${B}/viagens`, { params: situacao ? { situacao } : {} });
+  const { data } = await api.get<ViagemSup[]>(`${B}/viagens`, { params: { escopo: 'meus', ...(situacao ? { situacao } : {}) } });
   return data;
 }
 export async function obterViagemSupervisor(id: string): Promise<ViagemSupDetalhe> {

@@ -566,6 +566,61 @@ export class SupervisorService {
     return v;
   }
 
+  /**
+   * EXECUÇÃO é ato do representante — só o dono (ou ADMIN, para suporte).
+   *
+   * Planejar e executar são coisas diferentes e estavam no mesmo cadeado
+   * (`assertDonoOuGestorPlanejamento`): como o aprovador PODE mexer nos itens do
+   * roteiro durante a aprovação, ele também apontava a visita como realizada e
+   * concluía o RDV do subordinado. No app — que é execução em campo — isso apareceu
+   * como o coordenador executando o planejamento do supervisor de área junto com o
+   * seu, no mesmo aparelho e no mesmo ponto de GPS.
+   *
+   * A autoridade continua inteira no que é dela: incluir/alterar/excluir item,
+   * aprovar, ajustar, devolver, rejeitar, cancelar e reabrir. O que ela não faz é
+   * dizer que ESTEVE no cliente.
+   */
+  private async assertDonoDoPlanejamento(
+    v: { criadoPorId: string | null; supervisorRegistro: { matricula: string } | null },
+    user: JwtPayload,
+  ) {
+    if (this.ehAdmin(user)) return;
+    const supMat = v.supervisorRegistro?.matricula;
+    if (supMat) {
+      const u = await this.matriculaDoUsuario(user.sub);
+      if (u?.matricula && chapa(u.matricula) === chapa(supMat)) return;
+    } else if (v.criadoPorId && v.criadoPorId === user.sub) {
+      return; // planejamento sem cadastro vinculado: o criador é o dono
+    }
+    throw new ForbiddenException(
+      'Só o representante dono do planejamento aponta a visita e conclui o RDV. Como aprovador você pode incluir, alterar e excluir itens do roteiro, aprovar, devolver ou cancelar.',
+    );
+  }
+
+  /** Carrega o planejamento conferindo o DONO — para os atos de execução
+   *  (apontar visita, concluir). Ver `assertDonoDoPlanejamento`. */
+  private async planejamentoParaExecutar(id: string, user: JwtPayload) {
+    const v = await this.planejamentoOuErro(id, filialDoUsuario(user));
+    await this.assertDonoDoPlanejamento(v, user);
+    return v;
+  }
+
+  /** Versão booleana do `assertDonoDoPlanejamento` — vai no detalhe do planejamento
+   *  (`souDono`) para a tela esconder os botões de execução em vez de deixar o
+   *  aprovador clicar e tomar 403. A regra de dono é por matrícula (`chapa`), que o
+   *  frontend não tem; então quem responde é o backend. */
+  private async ehDonoDoPlanejamento(
+    v: { criadoPorId: string | null; supervisorRegistro: { matricula: string } | null },
+    user: JwtPayload,
+  ): Promise<boolean> {
+    try {
+      await this.assertDonoDoPlanejamento(v, user);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Planejamento cancelado é histórico: não recebe visita, despesa nem conclusão.
    *  Reabrir (Supervisor de Departamento) reativa se o cancelamento foi engano. */
   private assertNaoCancelado(v: { statusPlanejamento: StatusPlanejamento | null; situacao: StatusViagem }) {
@@ -591,7 +646,8 @@ export class SupervisorService {
    *  (`assertDonoOuGestorPlanejamento`). Sem isso a listagem devolvia todos os RDVs da
    *  filial: no app, o supervisor via a prestação de contas dos colegas (valores,
    *  despesas e comprovantes de terceiros). ADMIN vê a filial inteira. */
-  private async escopoPlanejamentoWhere(user: JwtPayload): Promise<Prisma.ViagemWhereInput> {
+  private async escopoPlanejamentoWhere(user: JwtPayload, somenteMeus = false): Promise<Prisma.ViagemWhereInput> {
+    if (somenteMeus) return this.escopoSomenteMeusWhere(user);
     if (this.ehAdmin(user)) return {};
     const or: Prisma.ViagemWhereInput[] = [{ criadoPorId: user.sub }];
     if (this.ehSupervisorDepto(user)) {
@@ -600,6 +656,26 @@ export class SupervisorService {
       or.push({ supervisorRegistro: { coordenadorId: user.sub } });
     }
     const meus = await this.registrosDoUsuario(user);
+    if (meus.length) or.push({ supervisorRegistroId: { in: meus } });
+    return { OR: or };
+  }
+
+  /**
+   * Escopo do APP (execução em campo): só o MEU RDV — nada do time.
+   *
+   * A listagem larga acima é a do desktop, e ali ela está certa: o coordenador
+   * monta e ajusta o planejamento do seu supervisor de área, e o Supervisor de
+   * Departamento faz o mesmo com o do coordenador. Mas o app é execução, e o que
+   * ele lista o usuário entende como "para eu executar" — foi assim que um
+   * coordenador realizou, no mesmo aparelho, o próprio RDV e o do subordinado.
+   *
+   * Note que não é filtro de papel e sim de VÍNCULO: o coordenador continua vendo o
+   * RDV dele aqui (ele também é representante, com cadastro e matrícula). Quem não
+   * tem cadastro vinculado cai no `criadoPorId` — mesmo dono que a execução exige.
+   */
+  private async escopoSomenteMeusWhere(user: JwtPayload): Promise<Prisma.ViagemWhereInput> {
+    const meus = await this.registrosDoUsuario(user);
+    const or: Prisma.ViagemWhereInput[] = [{ supervisorRegistroId: null, criadoPorId: user.sub }];
     if (meus.length) or.push({ supervisorRegistroId: { in: meus } });
     return { OR: or };
   }
@@ -742,13 +818,15 @@ export class SupervisorService {
     });
   }
 
-  async listarViagensSupervisor(user: JwtPayload, mes?: number, situacao?: string) {
+  /** `escopo='meus'` (app) devolve SÓ o RDV do próprio usuário; sem o parâmetro
+   *  mantém a listagem do desktop (o meu + o do time que eu coordeno/aprovo). */
+  async listarViagensSupervisor(user: JwtPayload, mes?: number, situacao?: string, escopo?: string) {
     const filialId = filialDoUsuario(user);
     return this.prisma.viagem.findMany({
       where: {
         filialId,
         tipo: TipoViagem.SUPERVISOR,
-        ...(await this.escopoPlanejamentoWhere(user)),
+        ...(await this.escopoPlanejamentoWhere(user, escopo === 'meus')),
         ...(mes ? { mesReferencia: mes } : {}),
         ...(situacao ? { situacao: situacao as StatusViagem } : {}),
       },
@@ -792,7 +870,10 @@ export class SupervisorService {
     // KM total rodado no RDV = soma dos KMs das saídas vinculadas já fechadas.
     const kmTotalSaidas = (v.saidasVinculadas ?? []).reduce(
       (s, sd) => s + (sd.kmFinal != null && sd.kmInicial != null ? sd.kmFinal - sd.kmInicial : 0), 0);
-    return { ...v, kmTotalSaidas };
+    // `souDono` separa planejar de executar na tela: o aprovador edita o roteiro,
+    // mas apontar visita e concluir são do representante.
+    const souDono = await this.ehDonoDoPlanejamento(v, user);
+    return { ...v, kmTotalSaidas, souDono };
   }
 
   // ---- Visitas (paradas) da viagem ----
@@ -800,6 +881,11 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
     this.assertNaoCancelado(v);
+    // Montar o roteiro é do aprovador também (ele inclui/altera/exclui item na
+    // aprovação). Mas DEPOIS de liberado para execução a visita incluída nasce
+    // REALIZADA (ver abaixo) — aí é o mesmo ato de `apontarVisita` por outra porta,
+    // e só o dono declara que esteve no cliente.
+    if (v.statusPlanejamento === 'EM_EXECUCAO') await this.assertDonoDoPlanejamento(v, user);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para adicionar visitas.');
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     if (dto.atividadeId) {
@@ -876,7 +962,8 @@ export class SupervisorService {
    *  efetiva / obs / data) ou PULADA. Só faz sentido em execução. */
   async apontarVisita(viagemId: string, paradaId: string, dto: ApontarVisitaDto, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const v = await this.planejamentoDoDono(viagemId, user);
+    // Apontar é execução: só o dono (ver assertDonoDoPlanejamento).
+    const v = await this.planejamentoParaExecutar(viagemId, user);
     this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Planejamento concluído — reabra para apontar.');
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
@@ -926,7 +1013,8 @@ export class SupervisorService {
   }
 
   async concluirViagemSupervisor(id: string, user: JwtPayload) {
-    const v = await this.planejamentoDoDono(id, user);
+    // Concluir encerra a execução — mesmo dono de `apontarVisita`.
+    const v = await this.planejamentoParaExecutar(id, user);
     this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) return v;
     return this.prisma.viagem.update({

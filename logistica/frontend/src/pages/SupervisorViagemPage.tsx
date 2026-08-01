@@ -53,6 +53,10 @@ interface ViagemDetalhe {
   condutorNome?: string | null; condutorMatricula?: string | null;
   supervisorRegistro?: { id: string; nome: string; coordenadorId?: string | null } | null;
   paradas: Visita[]; despesas: DespesaV[];
+  // O logado é o representante DONO deste RDV (por matrícula) ou ADMIN. Quem
+  // aprova monta o roteiro, mas apontar visita e concluir são do dono — o backend
+  // responde isso porque a regra é por matrícula, que a tela não tem.
+  souDono?: boolean;
   // Saídas de veículo (frota) vinculadas a este RDV → o KM vem daqui.
   kmTotalSaidas?: number;
   saidasVinculadas?: { id: string; numero: number; kmInicial?: number | null; kmFinal?: number | null; situacao: string; veiculo?: { placa?: string | null } | null }[];
@@ -249,6 +253,10 @@ export function SupervisorViagemPage() {
   const podeAprovarDespesa = ehGestor || logisticaRole === 'SUPERVISOR_FROTA' || (!!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id);
   // Quem decide ADIANTAMENTO: só ADMIN, Supervisor de Departamento ou o COORDENADOR deste
   // supervisor (gestores de entrega/frota NÃO — espelha o @Roles do backend).
+  // Durante a EXECUÇÃO a visita incluída nasce REALIZADA — é execução, não roteiro.
+  // Então o aprovador inclui cliente enquanto é planejamento, e depois só edita/remove
+  // o que já existe. Editar segue liberado (o backend também permite).
+  const podeIncluirVisita = emPlanejamento || v?.souDono !== false;
   const ehCoordDesteSup = !!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id;
   const podeDecidirAdiantamento = logisticaRole === 'ADMIN' || logisticaRole === 'SUPERVISOR_FROTA' || (logisticaRole === 'COORDENADOR' && ehCoordDesteSup);
 
@@ -460,7 +468,7 @@ export function SupervisorViagemPage() {
             <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">Enviar ao coordenador</button>}
           {v.statusPlanejamento === 'APROVADO' &&
             <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
-          {v.statusPlanejamento === 'EM_EXECUCAO' &&
+          {v.statusPlanejamento === 'EM_EXECUCAO' && v.souDono !== false &&
             <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir</button>}
           {v.statusPlanejamento === 'CONCLUIDO' &&
             <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">Reabrir para corrigir</button>}
@@ -565,7 +573,14 @@ export function SupervisorViagemPage() {
         </div>
       )}
 
-      {!travada && (
+      {!travada && !editVisitaId && !podeIncluirVisita && (
+        <p className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
+          Este RDV está <b>em execução</b> e é de {v.condutorNome ?? 'outro representante'} — quem registra a visita em campo é ele.
+          Como aprovador você continua podendo editar ou remover as visitas do roteiro, decidir despesas e devolver ou cancelar o planejamento.
+        </p>
+      )}
+
+      {!travada && (editVisitaId || podeIncluirVisita) && (
         <form onSubmit={adicionar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="mb-1 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : emPlanejamento ? 'Incluir cliente no planejamento' : 'Registrar visita fora do plano'}</h2>
           {!editVisitaId && emPlanejamento && <p className="mb-4 text-xs text-sky-800">📋 Monte o roteiro: adicione os clientes que pretende visitar. Você aponta como realizada/pulada durante a execução.</p>}
@@ -662,7 +677,7 @@ export function SupervisorViagemPage() {
                 <td className="px-4 py-3 text-slate-400">{p.observacao ?? '—'}</td>
                 <td className="px-4 py-3">{!travada && (
                   <div className="flex items-center gap-2">
-                    {v.statusPlanejamento === 'EM_EXECUCAO' && p.status === 'PLANEJADA' && (
+                    {v.statusPlanejamento === 'EM_EXECUCAO' && p.status === 'PLANEJADA' && v.souDono !== false && (
                       <>
                         <button onClick={() => void apontar(p, 'REALIZADA')} className="rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100" title="Marcar como realizada">Realizar</button>
                         <button onClick={() => void apontar(p, 'PULADA')} className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-50" title="Não realizada">Pular</button>

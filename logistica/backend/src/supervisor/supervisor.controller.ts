@@ -96,9 +96,12 @@ export class SupervisorController {
 
 
   // ---- Viagem mensal do supervisor ----
+  // `escopo=meus` é o que o APP manda: em campo cada um executa o SEU RDV. Sem o
+  // parâmetro vale a listagem do desktop, que inclui o time (o aprovador monta e
+  // ajusta o planejamento do subordinado).
   @Get('viagens')
-  viagens(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('situacao') situacao?: string) {
-    return this.svc.listarViagensSupervisor(user, mes ? Number(mes) : undefined, situacao);
+  viagens(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('situacao') situacao?: string, @Query('escopo') escopo?: string) {
+    return this.svc.listarViagensSupervisor(user, mes ? Number(mes) : undefined, situacao, escopo);
   }
   @Get('viagens/:id')
   viagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
