@@ -11,7 +11,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SupervisorHome'>;
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
 const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const PLAN_LABEL: Record<string, string> = {
-  RASCUNHO: 'Em preparação', ENVIADO: 'Enviado (aguarda coordenador)', APROVADO: 'Aprovado',
+  RASCUNHO: 'Em preparação', ENVIADO: 'Enviado (aguarda aprovação)', APROVADO: 'Aprovado',
   AJUSTADO: 'Ajustado (revisar)', REJEITADO: 'Rejeitado', EM_EXECUCAO: 'Em execução', CONCLUIDO: 'Concluído',
   CANCELADO: 'Cancelado',
 };

@@ -70,7 +70,7 @@ const pill = (ativo: boolean) => `rounded-full px-2 py-1 text-xs font-medium ${a
 // Ciclo do planejamento (rótulo + cor).
 const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
   RASCUNHO: { label: 'Em preparação', cls: 'bg-slate-100 text-slate-600' },
-  ENVIADO: { label: 'Enviado (aguarda coordenador)', cls: 'bg-amber-100 text-amber-700' },
+  ENVIADO: { label: 'Enviado (aguarda aprovação)', cls: 'bg-amber-100 text-amber-700' },
   APROVADO: { label: 'Aprovado', cls: 'bg-emerald-100 text-emerald-700' },
   AJUSTADO: { label: 'Ajustado (revisar)', cls: 'bg-sky-100 text-sky-700' },
   REJEITADO: { label: 'Rejeitado', cls: 'bg-rose-100 text-rose-700' },

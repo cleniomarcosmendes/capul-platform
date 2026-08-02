@@ -1519,3 +1519,60 @@ describe('SupervisorService — varredura: mês fechado e evidência', () => {
     expect(prisma.parada.update).not.toHaveBeenCalled();
   });
 });
+
+// ⭐ ENVIADO = está na MESA DO APROVADOR — o roteiro congela para o dono (02/08).
+// Reportado pelo Clenio no planejamento #47: ele enviou para aprovação e continuou
+// incluindo visita. O coordenador avaliaria uma coisa e aprovaria outra, sem saber que
+// mudou. O caminho de volta já existia (Ajustar/Rejeitar) — faltava a trava.
+describe('SupervisorService — roteiro congela enquanto aguarda aprovação', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const dono = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const plan = (statusPlanejamento: string) => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento,
+    criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1', veiculoId: 've1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // logado = dono
+    prisma.parada.count.mockResolvedValue(0);
+    prisma.parada.create.mockResolvedValue({ id: 'p9', status: 'PLANEJADA', localClienteId: null });
+    prisma.parada.findUnique.mockResolvedValue({ id: 'p1', viagemId: 'v1' });
+  });
+
+  it('DONO não inclui visita com o planejamento ENVIADO', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    await expect(svc.adicionarVisita('v1', { clienteNome: 'X' } as any, dono()))
+      .rejects.toThrow(/aguardando aprovação/);
+    expect(prisma.parada.create).not.toHaveBeenCalled();
+  });
+
+  it('DONO não edita nem remove visita com o planejamento ENVIADO', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    await expect(svc.editarVisita('v1', 'p1', { clienteNome: 'Y' } as any, dono())).rejects.toThrow(/aguardando aprovação/);
+    await expect(svc.removerVisita('v1', 'p1', dono())).rejects.toThrow(/aguardando aprovação/);
+    expect(prisma.parada.delete).not.toHaveBeenCalled();
+  });
+
+  it('o APROVADOR mexe no roteiro durante a análise (é o que ele está fazendo ali)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Coord' }]); // não é o dono
+    await svc.adicionarVisita('v1', { clienteNome: 'X' } as any, coord());
+    expect(prisma.parada.create).toHaveBeenCalled();
+  });
+
+  it('devolvido para AJUSTADO, o dono volta a editar (é o vai e volta)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('AJUSTADO'));
+    await svc.adicionarVisita('v1', { clienteNome: 'X' } as any, dono());
+    expect(prisma.parada.create).toHaveBeenCalled();
+  });
+
+  it('em RASCUNHO o dono monta à vontade', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('RASCUNHO'));
+    await svc.adicionarVisita('v1', { clienteNome: 'X' } as any, dono());
+    expect(prisma.parada.create).toHaveBeenCalled();
+  });
+});

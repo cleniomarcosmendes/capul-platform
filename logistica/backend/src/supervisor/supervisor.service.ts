@@ -673,6 +673,33 @@ export class SupervisorService {
     }
   }
 
+  /**
+   * ENVIADO = está na MESA DO APROVADOR — o roteiro congela para o dono.
+   *
+   * Sem isto o representante enviava para aprovação e continuava incluindo cliente: o
+   * coordenador avaliava uma coisa e aprovava outra, sem nem saber que mudou
+   * (reportado pelo Clenio no planejamento #47, 02/08). É a mesma ideia da regra da
+   * despesa — a decisão vale para o que foi decidido.
+   *
+   * O APROVADOR continua mexendo, porque é o que ele está fazendo ali: incluir,
+   * alterar e excluir item durante a análise é regra de negócio confirmada. E o
+   * caminho de volta já existe e não muda: ele usa **Ajustar** (devolve com
+   * comentário) ou **Rejeitar**, e o representante reenvia.
+   *
+   * Só vale para o ROTEIRO (visitas). Despesa segue livre: ela não é o objeto da
+   * aprovação do planejamento e tem o aval dela, por lançamento.
+   */
+  private async assertRoteiroEditavel(
+    v: { statusPlanejamento: StatusPlanejamento | null; supervisorRegistro: { coordenadorId: string | null; departamentoId: string | null } | null },
+    user: JwtPayload,
+  ) {
+    if (v.statusPlanejamento !== 'ENVIADO') return;
+    if (await this.ehAutoridadeSobre(v.supervisorRegistro, user)) return;
+    throw new BadRequestException(
+      'Este planejamento está aguardando aprovação — o roteiro não pode mudar enquanto está sendo avaliado. Peça a quem aprova para devolver (Ajustar) e o roteiro volta a ficar editável.',
+    );
+  }
+
   /** Planejamento cancelado é histórico: não recebe visita, despesa nem conclusão.
    *  Reabrir (Supervisor de Departamento) reativa se o cancelamento foi engano. */
   private assertNaoCancelado(v: { statusPlanejamento: StatusPlanejamento | null; situacao: StatusViagem }) {
@@ -1022,6 +1049,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
     this.assertNaoCancelado(v);
+    await this.assertRoteiroEditavel(v, user);
     // Montar o roteiro é do aprovador também (ele inclui/altera/exclui item na
     // aprovação). Mas DEPOIS de liberado para execução a visita incluída nasce
     // REALIZADA (ver abaixo) — aí é o mesmo ato de `apontarVisita` por outra porta,
@@ -1146,6 +1174,7 @@ export class SupervisorService {
   async removerVisita(viagemId: string, paradaId: string, user: JwtPayload) {
     const v = await this.planejamentoDoDono(viagemId, user);
     this.assertNaoCancelado(v);
+    await this.assertRoteiroEditavel(v, user);
     // Mês encerrado trava também a visita — `adicionar` e `apontar` já travavam.
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
@@ -1379,6 +1408,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(viagemId, user);
     this.assertNaoCancelado(v);
+    await this.assertRoteiroEditavel(v, user);
     // Mês encerrado trava também a visita — `adicionar` e `apontar` já travavam.
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });

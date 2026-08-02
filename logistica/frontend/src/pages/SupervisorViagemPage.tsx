@@ -87,7 +87,7 @@ const brl = (v: unknown) => (v == null ? '—' : Number(v).toLocaleString('pt-BR
 const fmtData = (s?: string | null) => (s ? new Date(s).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const STATUS_PLAN: Record<string, { label: string; cls: string }> = {
   RASCUNHO: { label: 'Em preparação', cls: 'bg-slate-100 text-slate-600' },
-  ENVIADO: { label: 'Enviado (aguarda coordenador)', cls: 'bg-amber-100 text-amber-700' },
+  ENVIADO: { label: 'Enviado (aguarda aprovação)', cls: 'bg-amber-100 text-amber-700' },
   APROVADO: { label: 'Aprovado', cls: 'bg-emerald-100 text-emerald-700' },
   AJUSTADO: { label: 'Ajustado (revisar)', cls: 'bg-sky-100 text-sky-700' },
   REJEITADO: { label: 'Rejeitado', cls: 'bg-rose-100 text-rose-700' },
@@ -567,7 +567,7 @@ export function SupervisorViagemPage() {
             </span>
           )}
           {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') && v.souDono !== false &&
-            <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">Enviar ao coordenador</button>}
+            <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700" title="Depois de enviar, o roteiro fica travado até quem aprova devolver ou decidir">Enviar para aprovação</button>}
           {v.statusPlanejamento === 'APROVADO' && v.souDono !== false &&
             <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
           {v.statusPlanejamento === 'EM_EXECUCAO' && v.souDono !== false &&

@@ -86,7 +86,7 @@ function msg(e: unknown, fb: string) {
 }
 
 const PLAN_LABEL: Record<string, string> = {
-  RASCUNHO: 'Em preparação', ENVIADO: 'Enviado (aguarda coordenador)', APROVADO: 'Aprovado',
+  RASCUNHO: 'Em preparação', ENVIADO: 'Enviado (aguarda aprovação)', APROVADO: 'Aprovado',
   AJUSTADO: 'Ajustado (revisar)', REJEITADO: 'Rejeitado', EM_EXECUCAO: 'Em execução', CONCLUIDO: 'Concluído',
   CANCELADO: 'Cancelado',
 };
