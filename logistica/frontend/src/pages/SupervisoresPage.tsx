@@ -847,7 +847,10 @@ function FechamentoTab() {
   // undefined = carregando o próprio cadastro · null = ainda não montado no time.
   const [meuCadastro, setMeuCadastro] = useState<SupItem | null | undefined>(ehSupervisorArea ? undefined : null);
   const [supId, setSupId] = useState('');
-  const [mesInput, setMesInput] = useState('');
+  // Mês corrente já selecionado: a aba abria em branco e não carregava nada até o
+  // usuário escolher o mês na mão — sendo que o RDV consultado é quase sempre o do mês
+  // em curso. Continua editável. (Mesmo padrão do "Novo planejamento".)
+  const [mesInput, setMesInput] = useState(mesCorrente);
   const mes = mesInput ? Number(mesInput.replace('-', '')) : 0;
   const [adiantamentos, setAdiantamentos] = useState<Adiant[]>([]);
   const [rdv, setRdv] = useState<RdvMensal | null>(null);
