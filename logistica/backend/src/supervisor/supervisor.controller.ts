@@ -100,8 +100,8 @@ export class SupervisorController {
   // parâmetro vale a listagem do desktop, que inclui o time (o aprovador monta e
   // ajusta o planejamento do subordinado).
   @Get('viagens')
-  viagens(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('situacao') situacao?: string, @Query('escopo') escopo?: string) {
-    return this.svc.listarViagensSupervisor(user, mes ? Number(mes) : undefined, situacao, escopo);
+  viagens(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('situacao') situacao?: string, @Query('escopo') escopo?: string, @Query('filialId') filialId?: string) {
+    return this.svc.listarViagensSupervisor(user, mes ? Number(mes) : undefined, situacao, escopo, filialId);
   }
   @Get('viagens/:id')
   viagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
@@ -109,8 +109,8 @@ export class SupervisorController {
   }
   @Post('viagens')
   @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
-  criarViagem(@Body() dto: CriarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
-    return this.svc.criarViagemSupervisor(dto, user);
+  criarViagem(@Body() dto: CriarViagemSupervisorDto, @CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.criarViagemSupervisor(dto, user, filialId);
   }
   // Concluir o RDV: o próprio SUPERVISOR (fecha o seu), o COORDENADOR e o Supervisor de
   // Departamento — mesmos atores do workflow (enviar/decidir/iniciar). O escopo (filial +

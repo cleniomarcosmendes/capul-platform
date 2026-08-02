@@ -254,8 +254,9 @@ export class SupervisorService {
     return meus.length === 1 ? meus[0].id : null;
   }
 
-  async criarViagemSupervisor(dto: CriarViagemSupervisorDto, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
+  async criarViagemSupervisor(dto: CriarViagemSupervisorDto, user: JwtPayload, filialIdAlvo?: string) {
+    // Criar na filial que a aba está mostrando (ADMIN); os demais, na própria.
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
     const mm = dto.mesReferencia % 100;
     if (mm < 1 || mm > 12) throw new BadRequestException('Mês de referência inválido — use AAAAMM (ex.: 202605).');
     if (dto.veiculoId) {
@@ -951,8 +952,11 @@ export class SupervisorService {
 
   /** `escopo='meus'` (app) devolve SÓ o RDV do próprio usuário; sem o parâmetro
    *  mantém a listagem do desktop (o meu + o do time que eu coordeno/aprovo). */
-  async listarViagensSupervisor(user: JwtPayload, mes?: number, situacao?: string, escopo?: string) {
-    const filialId = filialDoUsuario(user);
+  async listarViagensSupervisor(user: JwtPayload, mes?: number, situacao?: string, escopo?: string, filialIdAlvo?: string) {
+    // ADMIN opera a aba em outra filial sem trocar a da sessão (mesma conveniência da
+    // aba Equipe). `filialAlvo` IGNORA o parâmetro para os demais papéis — quem não é
+    // ADMIN segue preso à filial do token, então isto não é porta de escape.
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
     const viagens = await this.prisma.viagem.findMany({
       where: {
         filialId,

@@ -24,6 +24,13 @@ interface ViagemSup {
 
 const fmtMes = (m?: number | null) => (m ? `${String(m % 100).padStart(2, '0')}/${Math.floor(m / 100)}` : '—');
 
+/** "YYYY-MM" de hoje — padrão do mês de referência (o planejamento quase sempre é do
+ *  mês em curso). */
+const mesCorrente = () => {
+  const h = new Date();
+  return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 /**
@@ -115,7 +122,7 @@ export function SupervisoresPage() {
 // ---------------- Viagens mensais ----------------
 function ViagensTab() {
   const { toast } = useToast();
-  const { logisticaRole } = useAuth();
+  const { usuario, logisticaRole } = useAuth();
   // Auto-serviço: o próprio supervisor logado cria seu planejamento (identificado
   // pelo login), sem matrícula+senha. Gestor segue informando matrícula+senha.
   // Cria o PRÓPRIO RDV em auto-serviço (login): supervisor de área e coordenador (o RDV
@@ -126,11 +133,26 @@ function ViagensTab() {
   const [viagens, setViagens] = useState<ViagemSup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [mes, setMes] = useState('');
+  // Mês corrente já preenchido — o planejamento quase sempre é do mês em curso
+  // (01/08, pedido do Clenio). Continua editável pelos dois selects.
+  const [mes, setMes] = useState(mesCorrente);
   // Gestor/Supervisor de Departamento cria PARA um representante: seleciona pelo nome
   // do time JÁ CADASTRADO (aba Equipe), sem matrícula/senha. O backend valida o escopo.
   const [equipe, setEquipe] = useState<Supervisor[]>([]);
   const [supRegistroId, setSupRegistroId] = useState('');
+  /**
+   * Filial da aba (ADMIN). Diferente da aba Equipe, aqui o padrão é a **filial do
+   * usuário** — decisão do Clenio (01/08): ele troca quando precisar. Sem o seletor, o
+   * ADMIN (lotado na matriz) via só o planejamento da matriz e parecia que a tela
+   * estava vazia; agora ele VÊ em que filial está.
+   *
+   * Os demais papéis não veem o seletor e o backend ignora o parâmetro para eles.
+   */
+  const [filialAlvo, setFilialAlvo] = useState('');
+  const filialSessao = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
+  const ehAdminRdv = logisticaRole === 'ADMIN';
+  const filialId = ehAdminRdv ? (filialAlvo || filialSessao) : filialSessao;
+  const filiaisDoUsuario = (usuario?.filiais ?? []).slice().sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'));
   // Veículo do planejamento: sugerido a partir de quem é o responsável no cadastro do
   // veículo (Veículos › "Coordenador / Supervisor de Área responsável") e alterável.
   // É ele que as despesas do RDV herdam — sem isso o combustível ficava sem veículo e
@@ -144,10 +166,10 @@ function ViagensTab() {
     setLoading(true);
     try {
       const [v, eq, ve, meu] = await Promise.all([
-        logisticaApi.get<ViagemSup[]>('/supervisor/viagens'),
+        logisticaApi.get<ViagemSup[]>('/supervisor/viagens', { params: { filialId } }),
         // Só o gestor precisa do time (o supervisor/coordenador cria o próprio, por login).
-        ehSupervisorLogado ? Promise.resolve({ data: [] as Supervisor[] }) : logisticaApi.get<Supervisor[]>('/supervisor/supervisores'),
-        logisticaApi.get<VeiculoOpc[]>('/veiculos', { params: { situacao: undefined } }).catch(() => ({ data: [] as VeiculoOpc[] })),
+        ehSupervisorLogado ? Promise.resolve({ data: [] as Supervisor[] }) : logisticaApi.get<Supervisor[]>('/supervisor/supervisores', { params: { filialId } }),
+        logisticaApi.get<VeiculoOpc[]>('/veiculos', { params: { filialId } }).catch(() => ({ data: [] as VeiculoOpc[] })),
         // Auto-serviço: preciso da MINHA matrícula para achar o veículo que é meu.
         ehSupervisorLogado ? logisticaApi.get<{ matricula: string }>('/supervisor/meu-cadastro').catch(() => ({ data: null })) : Promise.resolve({ data: null }),
       ]);
@@ -157,7 +179,7 @@ function ViagensTab() {
   useEffect(() => {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filialId]);
 
   const timeAtivo = equipe.filter((s) => s.ativo);
 
@@ -187,9 +209,10 @@ function ViagensTab() {
         // Sempre explícito (inclusive '' = sem veículo): o backend só cai na sugestão
         // dele quando o campo vem AUSENTE, de cliente antigo.
         veiculoId,
-      });
+      }, { params: { filialId } });
       toast('success', 'Planejamento criado — agora inclua os clientes do roteiro.');
-      setShowForm(false); setMes(''); setSupRegistroId(''); setVeiculoId('');
+      // Mês volta ao corrente (padrão), não a vazio.
+      setShowForm(false); setMes(mesCorrente()); setSupRegistroId(''); setVeiculoId('');
       // Abre direto o planejamento (form "Incluir cliente no planejamento" já à mão).
       if (data?.id) { navigate(`/supervisores/viagens/${data.id}`); return; }
       await carregar();
@@ -199,6 +222,19 @@ function ViagensTab() {
 
   return (
     <div>
+      {/* ADMIN opera a aba em qualquer filial sem trocar a da SESSÃO. Padrão = a filial
+          dele; ele muda quando precisa (decisão do Clenio). Sem isto ele via só os
+          planejamentos da matriz, sem nenhuma pista de por quê. */}
+      {ehAdminRdv && filiaisDoUsuario.length > 1 && (
+        <div className="mb-4 flex items-center gap-2">
+          <label className="text-sm font-medium text-slate-700">Filial:</label>
+          <select value={filialId} onChange={(e) => setFilialAlvo(e.target.value)} className="w-80 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500">
+            {filiaisDoUsuario.map((f) => <option key={f.id} value={f.id}>{f.nome ?? f.codigo ?? f.id}{f.id === filialSessao ? ' (sua filial)' : ''}</option>)}
+          </select>
+          <span className="text-xs text-slate-400">A filial da sua sessão não muda.</span>
+        </div>
+      )}
+
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-slate-500">O supervisor cria o planejamento (visitas) e envia ao coordenador para aprovação; depois executa e presta contas.</p>
         <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700">
