@@ -369,6 +369,12 @@ export class ChamadoCoreService {
         { titulo: { contains: searchTerm, mode: 'insensitive' } },
         { descricao: { contains: searchTerm, mode: 'insensitive' } },
         { solicitante: { nome: { contains: searchTerm, mode: 'insensitive' } } },
+        // CLIENTE externo (SAC e Venda Ativa): digitar a matrícula do SA1010 ou o
+        // nome do cliente traz os chamados dele. É o que responde "todos os contatos
+        // deste cliente" sem precisar de tela nova — reusa a busca que o usuário já
+        // conhece. A visibilidade do chamado continua sendo a da própria listagem.
+        { clienteMatricula: { contains: searchTerm, mode: 'insensitive' } },
+        { clienteNome: { contains: searchTerm, mode: 'insensitive' } },
         // Busca profunda: varre comentarios/historico (campo descricao).
         // Visibilidade por role aplicada via histVisibilidade.
         {

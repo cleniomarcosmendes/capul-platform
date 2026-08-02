@@ -309,7 +309,7 @@ export function ChamadosListPage() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Buscar em titulo, descricao, comentarios..."
+                  placeholder="Buscar em titulo, descricao, comentarios, cliente..."
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                   className="border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white w-64"
@@ -545,6 +545,16 @@ export function ChamadosListPage() {
                           <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">PRIVADO</span>
                         )}
                       </div>
+                      {/* Cliente externo (SAC / Venda Ativa): mostra de QUEM é o
+                          chamado — sem isso, buscar pela matrícula traria linhas sem
+                          nenhuma pista de por que casaram. */}
+                      {(c.clienteNome || c.clienteMatricula) && (
+                        <span className="block text-[11px] text-slate-500 max-w-[250px] truncate">
+                          {c.clienteMatricula && <span className="font-mono">{c.clienteMatricula}</span>}
+                          {c.clienteMatricula && c.clienteNome ? ' · ' : ''}
+                          {c.clienteNome}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusColors[c.status]}`}>

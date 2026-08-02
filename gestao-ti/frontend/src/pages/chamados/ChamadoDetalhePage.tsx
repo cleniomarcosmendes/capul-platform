@@ -201,6 +201,10 @@ export function ChamadoDetalhePage() {
   const isTecnicoAtribuido = chamado?.tecnicoId === usuario?.id;
   // SAC: chamado é SAC se a EQUIPE que o atende tem atendeSac (não o departamento).
   const ehSac = chamado?.equipeAtual?.atendeSac ?? false;
+  /** Venda Ativa — mesma detecção do SAC, pela EQUIPE que atende. */
+  const ehVendaAtiva = chamado?.equipeAtual?.vendaAtiva ?? false;
+  /** Rótulo do bloco de cliente: os dois têm cliente externo, com sentidos opostos. */
+  const rotuloCliente = ehVendaAtiva ? 'Cliente (Venda Ativa)' : 'Cliente (SAC)';
   // No SAC, candidatos a "em cópia" = só o roster de apoiadores.
   const candidatosCopia: { id: string; nome: string; username: string }[] = ehSac ? apoiadoresSac : usuariosNaoTI;
   const canEditHeader = isSolicitante || isGestor;
@@ -830,7 +834,7 @@ export function ChamadoDetalhePage() {
               {ehSac ? (
                 <>
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Cliente (SAC)</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{rotuloCliente}</span>
                     {podeMovimentar && !editandoCliente && (
                       <button onClick={iniciarEdicaoCliente} className="inline-flex items-center gap-1 text-xs text-capul-600 hover:underline">
                         <Edit3 className="w-3 h-3" /> Editar
@@ -858,6 +862,9 @@ export function ChamadoDetalhePage() {
                     </div>
                   ) : (
                     <>
+                      {chamado.clienteMatricula && (
+                        <InfoRow label="Matrícula"><span className="text-xs font-mono text-slate-600">{chamado.clienteMatricula}</span></InfoRow>
+                      )}
                       <InfoRow label="Nome"><span className="text-xs text-slate-600 font-medium">{chamado.clienteNome || '—'}</span></InfoRow>
                       <InfoRow label="E-mail">{chamado.clienteEmail
                         ? <span className="text-xs text-slate-600">{chamado.clienteEmail}</span>
@@ -868,8 +875,11 @@ export function ChamadoDetalhePage() {
                 </>
               ) : (
                 <>
+                  {chamado.clienteMatricula && (
+                    <InfoRow label="Matrícula"><span className="text-xs font-mono text-slate-600">{chamado.clienteMatricula}</span></InfoRow>
+                  )}
                   {chamado.clienteNome && (
-                    <InfoRow label="Cliente (SAC)"><span className="text-xs text-slate-600 font-medium">{chamado.clienteNome}</span></InfoRow>
+                    <InfoRow label={rotuloCliente}><span className="text-xs text-slate-600 font-medium">{chamado.clienteNome}</span></InfoRow>
                   )}
                   {chamado.clienteEmail && (
                     <InfoRow label="E-mail"><span className="text-xs text-slate-600">{chamado.clienteEmail}</span></InfoRow>
