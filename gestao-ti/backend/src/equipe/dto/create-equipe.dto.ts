@@ -59,6 +59,13 @@ export class CreateEquipeDto {
   @IsBoolean()
   atendeSac?: boolean;
 
+  // VENDA ATIVA — equipe do comercial que registra CONTATO com cliente. Ao escolher
+  // uma equipe assim, o formulário pede a matrícula do cliente (SA1010) e grava o
+  // cliente identificado (campos de cliente, como o SAC). Excludente com atendeSac.
+  @IsOptional()
+  @IsBoolean()
+  vendaAtiva?: boolean;
+
   @IsOptional()
   @IsString()
   @MaxLength(255)

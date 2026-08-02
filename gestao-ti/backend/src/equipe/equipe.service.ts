@@ -172,6 +172,7 @@ export class EquipeService {
     // do depto-alvo silenciosamente.
     if (user) assertDepartamentoDoUser(user, null, departamentoId);
 
+    this.assertModalidadeCoerente(dto.atendeSac, dto.vendaAtiva);
     return this.prisma.equipe.create({
       data: {
         nome: dto.nome,
@@ -183,6 +184,7 @@ export class EquipeService {
         restritaVisibilidade: dto.restritaVisibilidade,
         apoioSac: dto.apoioSac,
         atendeSac: dto.atendeSac,
+        vendaAtiva: dto.vendaAtiva,
         emailEquipe: dto.emailEquipe,
         ordem: dto.ordem,
         departamentoId,
@@ -190,8 +192,32 @@ export class EquipeService {
     });
   }
 
+  /**
+   * SAC e VENDA ATIVA são modalidades DIFERENTES da mesma equipe e não se acumulam.
+   *
+   * As duas abrem o bloco de cliente no formulário, mas com sentidos opostos: no SAC o
+   * cliente procurou a empresa (canal de origem, e-mail de retorno); na Venda Ativa a
+   * empresa procurou o cliente. Ligar as duas faria o formulário ter de adivinhar qual
+   * bloco mostrar, e o relatório de uma poluiria o da outra.
+   *
+   * Quem precisa das duas cria DUAS equipes — o flag é por equipe, não por
+   * departamento, justamente para permitir isso.
+   */
+  private assertModalidadeCoerente(atendeSac?: boolean | null, vendaAtiva?: boolean | null) {
+    if (atendeSac && vendaAtiva) {
+      throw new BadRequestException(
+        'Uma equipe é de SAC ou de Venda Ativa — não as duas. Crie uma equipe para cada modalidade (o comportamento é por equipe, não por departamento).',
+      );
+    }
+  }
+
   async update(id: string, dto: UpdateEquipeDto, user?: JwtPayload) {
     const equipe = await this.findOne(id);
+    // No update o DTO pode trazer só UM dos flags — vale a combinação RESULTANTE.
+    this.assertModalidadeCoerente(
+      dto.atendeSac ?? equipe.atendeSac,
+      dto.vendaAtiva ?? equipe.vendaAtiva,
+    );
 
     // Onda 3 S10 sweep (26/05) — fecha IDOR cross-depto na edição (bug_011
     // completou-se só no create; security-review #1 sinalizou).

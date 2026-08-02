@@ -17,6 +17,7 @@ interface FormData {
   restritaVisibilidade: boolean;
   apoioSac: boolean;
   atendeSac: boolean;
+  vendaAtiva: boolean;
   emailEquipe: string;
   ordem: number;
   /** Workspace Onda 2 C2.8 — depto-dono explícito no form (antes vinha
@@ -34,6 +35,7 @@ const initialForm: FormData = {
   restritaVisibilidade: false,
   apoioSac: false,
   atendeSac: false,
+  vendaAtiva: false,
   emailEquipe: '',
   ordem: 0,
   departamentoId: '',
@@ -75,6 +77,7 @@ export function EquipeFormPage() {
             restritaVisibilidade: equipe.restritaVisibilidade ?? false,
             apoioSac: equipe.apoioSac ?? false,
             atendeSac: equipe.atendeSac ?? false,
+            vendaAtiva: equipe.vendaAtiva ?? false,
             emailEquipe: equipe.emailEquipe || '',
             ordem: equipe.ordem,
             departamentoId: equipe.departamentoId ?? '',
@@ -326,6 +329,26 @@ export function EquipeFormPage() {
                 Quando marcada, os <b>chamados abertos para esta equipe são tratados como SAC</b>
                 (mostram os dados do cliente e o "responder ao cliente"). Use numa equipe
                 dedicada — assim o mesmo workspace pode ter equipe de SAC e equipe de chamado normal.
+              </span>
+            </label>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="vendaAtiva"
+              checked={form.vendaAtiva}
+              disabled={form.atendeSac}
+              onChange={(e) => handleChange('vendaAtiva', e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded border-slate-300 text-capul-600 focus:ring-capul-600 disabled:opacity-40"
+            />
+            <label htmlFor="vendaAtiva" className={form.atendeSac ? 'text-sm text-slate-400' : 'text-sm text-slate-700'}>
+              Equipe de Venda Ativa (contato com cliente)
+              <span className="block text-xs text-slate-500">
+                Quando marcada, o chamado aberto para esta equipe <b>pede a matrícula do cliente</b>
+                {' '}(Protheus/SA1010) e registra o contato no nome dele. Serve para prospecção e
+                retomada, com histórico por cliente. Use numa equipe dedicada.
+                {form.atendeSac && <b className="block text-amber-700">Indisponível: a equipe já é de atendimento ao SAC. Uma equipe é de SAC <i>ou</i> de Venda Ativa — crie uma para cada.</b>}
               </span>
             </label>
           </div>

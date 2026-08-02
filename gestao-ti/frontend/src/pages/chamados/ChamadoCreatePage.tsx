@@ -196,7 +196,20 @@ export function ChamadoCreatePage() {
   const [clienteBuscaMsg, setClienteBuscaMsg] = useState<{ ok: boolean; texto: string } | null>(null);
   // Chamado é SAC se a EQUIPE escolhida atende SAC (não o departamento — um
   // workspace pode ter equipe de SAC e equipe de chamado normal).
-  const ehSac = equipes.find((e) => e.id === equipeAtualId)?.atendeSac ?? false;
+  const equipeSelecionada = equipes.find((e) => e.id === equipeAtualId);
+  const ehSac = equipeSelecionada?.atendeSac ?? false;
+  /**
+   * VENDA ATIVA — equipe do comercial registrando CONTATO com cliente. Mesmo padrão do
+   * SAC: o comportamento vem da EQUIPE escolhida, não do departamento.
+   *
+   * Reusa o MESMO bloco de cliente do SAC (matrícula → busca no Protheus → nome), por
+   * decisão do Clenio: o cliente vai em campo estruturado, e o ASSUNTO fica livre para
+   * dizer do que trata o contato ("Oferta de ração", "Retomada") em vez de repetir
+   * matrícula e nome.
+   */
+  const ehVendaAtiva = equipeSelecionada?.vendaAtiva ?? false;
+  /** Modalidades com cliente EXTERNO — escondem os campos de TI (software, IP, ativo). */
+  const ehCliente = ehSac || ehVendaAtiva;
   // No SAC o seletor de cópia vem do ROSTER (apoiadores); fora, dos não-TI.
   const candidatosCopia: { id: string; nome: string; username: string }[] = ehSac ? apoiadoresSac : usuariosNaoTI;
 
@@ -370,24 +383,25 @@ export function ChamadoCreatePage() {
         prioridade,
         // Campos de TI (software/módulo/IP/filial-depto do solicitante) não se aplicam
         // a chamado de SAC (cliente externo) — não enviar quando ehSac.
-        softwareId: !ehSac && softwareId ? softwareId : undefined,
-        softwareModuloId: !ehSac && softwareModuloId ? softwareModuloId : undefined,
-        softwareNome: !ehSac && softwareNome ? softwareNome : undefined,
-        moduloNome: !ehSac && moduloNome ? moduloNome : undefined,
+        softwareId: !ehCliente && softwareId ? softwareId : undefined,
+        softwareModuloId: !ehCliente && softwareModuloId ? softwareModuloId : undefined,
+        softwareNome: !ehCliente && softwareNome ? softwareNome : undefined,
+        moduloNome: !ehCliente && moduloNome ? moduloNome : undefined,
         catalogoServicoId: catalogoServicoId || undefined,
         projetoId: projetoIdParam || undefined,
-        filialId: (!ehSac && !isUsuarioFinal && filialId && filialId !== usuario?.filialAtual?.id) ? filialId : undefined,
-        departamentoId: (!ehSac && !isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
-        ipMaquina: !ehSac && ipMaquina ? ipMaquina : undefined,
+        filialId: (!ehCliente && !isUsuarioFinal && filialId && filialId !== usuario?.filialAtual?.id) ? filialId : undefined,
+        departamentoId: (!ehCliente && !isUsuarioFinal && departamentoId && departamentoId !== usuario?.departamento.id) ? departamentoId : undefined,
+        ipMaquina: !ehCliente && ipMaquina ? ipMaquina : undefined,
         ativoId: ativoId || undefined,
         matriculaColaborador: isUsuarioPadrao && matriculaColaborador ? matriculaColaborador.trim() : undefined,
         nomeColaborador: isUsuarioPadrao && nomeColaborador ? nomeColaborador.trim() : undefined,
         senhaColaborador: isUsuarioPadrao && matriculaColaborador && senhaColaborador ? senhaColaborador : undefined,
         copiasUsuariosIds: copiasIds.length > 0 ? copiasIds : undefined,
         // SAC (Fase 1) — dados do cliente só quando o workspace é SAC.
-        clienteNome: ehSac && clienteNome.trim() ? clienteNome.trim() : undefined,
-        clienteEmail: ehSac && clienteEmail.trim() ? clienteEmail.trim() : undefined,
-        clienteTelefone: ehSac && clienteTelefone.trim() ? clienteTelefone.trim() : undefined,
+        clienteMatricula: ehCliente && clienteMatricula.trim() ? clienteMatricula.trim() : undefined,
+        clienteNome: ehCliente && clienteNome.trim() ? clienteNome.trim() : undefined,
+        clienteEmail: ehCliente && clienteEmail.trim() ? clienteEmail.trim() : undefined,
+        clienteTelefone: ehCliente && clienteTelefone.trim() ? clienteTelefone.trim() : undefined,
         canalOrigem: ehSac && canalOrigem ? canalOrigem : undefined,
       });
 
@@ -686,7 +700,7 @@ export function ChamadoCreatePage() {
           )}
 
           {/* Filial e Departamento — somente para tecnicos; oculto no SAC (cliente externo) */}
-          {!isUsuarioFinal && !ehSac && (
+          {!isUsuarioFinal && !ehCliente && (
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3">
               <p className="text-xs text-slate-500">Altere caso esteja abrindo em nome de outro setor/filial</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -755,7 +769,7 @@ export function ChamadoCreatePage() {
             </div>
           )}
 
-          {!ehSac && (
+          {!ehCliente && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">IP da Maquina (acesso remoto)</label>
             <input
@@ -785,7 +799,7 @@ export function ChamadoCreatePage() {
             </div>
           )}
 
-          {!ehSac && (
+          {!ehCliente && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Software (opcional)</label>
@@ -821,10 +835,11 @@ export function ChamadoCreatePage() {
           </div>
           )}
 
-          {/* SAC (Fase 1) — dados do cliente externo (o colaborador registra em nome dele) */}
-          {ehSac && (
+          {/* Cliente externo — SAC (o cliente procurou a empresa) e VENDA ATIVA (a
+              empresa procurou o cliente). Mesmo bloco, mesma busca por matrícula. */}
+          {ehCliente && (
             <div className="rounded-lg border border-sky-200 bg-sky-50/60 p-4 space-y-3">
-              <p className="text-sm font-semibold text-sky-800">Dados do cliente (SAC)</p>
+              <p className="text-sm font-semibold text-sky-800">Dados do cliente ({ehVendaAtiva ? 'Venda Ativa' : 'SAC'})</p>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Matrícula do cliente (cooperado)</label>
                 <div className="flex gap-2">

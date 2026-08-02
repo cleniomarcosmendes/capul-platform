@@ -87,8 +87,18 @@ export class CreateChamadoDto {
   @MaxLength(60)
   senhaColaborador?: string;
 
-  // SAC (Fase 1) — dados do cliente externo (o colaborador registra em nome dele).
-  // Só fazem sentido no workspace SAC; o frontend exibe condicionalmente (1c).
+  // Dados do CLIENTE externo — usados no SAC (o cliente procurou a empresa) e na
+  // VENDA ATIVA (a empresa procurou o cliente). O frontend exibe o bloco conforme o
+  // flag da equipe escolhida.
+  //
+  // A MATRÍCULA (SA1010) é o que torna o cliente consultável depois: com ela dá para
+  // listar os chamados de um cliente e achar quem está sem contato há N dias. Sem
+  // ela, só sobraria procurar o nome dentro do texto.
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  clienteMatricula?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(150)

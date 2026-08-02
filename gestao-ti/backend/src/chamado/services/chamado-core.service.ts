@@ -794,7 +794,9 @@ export class ChamadoCoreService {
         ipMaquina: dto.ipMaquina,
         matriculaColaborador: dto.matriculaColaborador,
         nomeColaborador: dto.nomeColaborador?.trim() || undefined,
-        // SAC — dados do cliente externo (só preenchidos no workspace SAC).
+        // Cliente externo — SAC e Venda Ativa. Matrícula normalizada em maiúsculas
+        // (o SA1010 usa código alfanumérico) para a consulta por cliente casar.
+        clienteMatricula: dto.clienteMatricula?.trim().toUpperCase() || undefined,
         clienteNome: dto.clienteNome?.trim() || undefined,
         clienteEmail: dto.clienteEmail?.trim() || undefined,
         clienteTelefone: dto.clienteTelefone?.trim() || undefined,

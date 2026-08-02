@@ -196,6 +196,16 @@ model Equipe {
   // apoioSac (roster). É o que define "chamado é SAC" (por EQUIPE, não por depto):
   // um workspace pode ter equipe de SAC E equipe de chamado normal.
   atendeSac            Boolean     @default(false) @map("atende_sac")
+  // VENDA ATIVA (02/08) — equipe do comercial que usa o chamado como registro de
+  // CONTATO com cliente (prospecção/retomada). Mesmo padrão do SAC: o comportamento
+  // vem da EQUIPE, não do departamento. Ao escolher uma equipe assim, o formulário
+  // pede a MATRÍCULA do cliente (SA1010) e grava cliente IDENTIFICADO — nos campos de
+  // cliente, como o SAC faz, e não no texto do assunto (que segue livre para dizer do
+  // que trata o contato).
+  //
+  // Excludente com `atendeSac`: as duas abrem o bloco de cliente e disputariam o mesmo
+  // formulário — o serviço barra a combinação.
+  vendaAtiva           Boolean     @default(false) @map("venda_ativa")
   emailEquipe          String?     @map("email_equipe")
   ordem                Int         @default(0)
   status               StatusGeral @default(ATIVO)
@@ -535,6 +545,10 @@ model Chamado {
   // SAC — dados do CLIENTE externo (o colaborador registra em nome dele; o
   // cliente não é usuário do sistema). Nullable: só preenchidos nos chamados SAC.
   // `clienteEmail` habilita o e-mail de saída (Fase 2); telefone é contato à parte.
+  // Matrícula do cliente no Protheus (SA1010). É ela que torna o cliente CONSULTÁVEL —
+  // sem isso, "todos os chamados do cliente X" viraria busca por string. O SAC já
+  // buscava o cliente por matrícula mas DESCARTAVA o número; agora ele fica.
+  clienteMatricula     String?         @map("cliente_matricula")
   clienteNome          String?         @map("cliente_nome")
   clienteEmail         String?         @map("cliente_email")
   clienteTelefone      String?         @map("cliente_telefone")

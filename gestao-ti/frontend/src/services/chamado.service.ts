@@ -53,6 +53,7 @@ interface CreateChamadoPayload {
   /** IDs de usuarios a colocar em copia. Backend rejeita membros de Equipe. */
   copiasUsuariosIds?: string[];
   /** SAC (Fase 1) — dados do cliente externo (só no workspace SAC). */
+  clienteMatricula?: string;
   clienteNome?: string;
   clienteEmail?: string;
   clienteTelefone?: string;

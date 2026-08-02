@@ -58,6 +58,9 @@ export interface Equipe {
   apoioSac?: boolean;
   // SAC: equipe de ATENDIMENTO ao SAC (recebe os chamados de SAC) — marca o chamado como SAC.
   atendeSac?: boolean;
+  // VENDA ATIVA: equipe do comercial que registra CONTATO com cliente (matrícula do
+  // SA1010 no campo de cliente, como o SAC). Excludente com atendeSac.
+  vendaAtiva?: boolean;
   emailEquipe: string | null;
   ordem: number;
   status: 'ATIVO' | 'INATIVO';
@@ -210,6 +213,8 @@ export interface EquipeResumo {
   cor: string | null;
   // SAC: a equipe que atende o chamado é de atendimento ao SAC? (detecção no detalhe)
   atendeSac?: boolean;
+  // Venda Ativa: mesma detecção, para a modalidade do comercial.
+  vendaAtiva?: boolean;
 }
 
 export interface FilialResumo {
@@ -280,6 +285,8 @@ export interface Chamado {
   matriculaColaborador: string | null;
   nomeColaborador: string | null;
   // SAC (Fase 1) — dados do cliente externo (preenchidos só no workspace SAC).
+  // Matrícula do cliente no Protheus (SA1010) — SAC e Venda Ativa.
+  clienteMatricula?: string | null;
   clienteNome?: string | null;
   clienteEmail?: string | null;
   clienteTelefone?: string | null;
