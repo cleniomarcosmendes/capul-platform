@@ -1294,12 +1294,20 @@ departamento pode legitimamente ter titular + substituto? Se sim, o unique vira
 em amarelo os departamentos sem responsável — em PROD isso depende do estado de
 `veiculo.supervisorId` de lá.
 
-### 2. Auto-serviço de adiantamento no desktop — manter?
-Em 27/07 o lançamento de adiantamento saiu do app (ficou só leitura). No
-**desktop** o supervisor de área ainda lança o próprio (nasce PENDENTE, o
-coordenador decide) — a decisão dos 3 perfis segue valendo. **Decidir:** se a
-intenção era tirar o auto-serviço de vez, some também do desktop e o lançamento
-passa a ser exclusivo de coordenador/departamento.
+### 2. ✅ RESOLVIDO em 01/08 — auto-serviço de adiantamento encerrado
+Decisão do Clenio: **tirar de vez**. O lançamento saiu também do desktop
+(`086447a`) e virou ato de **quem aprova** aquele representante.
+
+A trava ficou por **AUTORIDADE**, não por papel — com duas consequências que vale
+ter em mente:
+- o **coordenador também não lança o próprio**: o cadastro dele roteia para o
+  Supervisor de Departamento, que passa a lançar o adiantamento dele;
+- afrouxar o `@Roles` por engano no futuro **não reabre** o auto-serviço.
+
+Quem está no topo da pirâmide (Sup. de Departamento sobre o próprio departamento)
+segue lançando o seu — é autoridade sobre si, mesma regra que a despesa já usava
+desde 27/07. O estado `PENDENTE` deixa de nascer; `decidir` continua no ar para
+resolver os pendentes legados.
 
 ### 3. Frota × RDV: duas fontes de "departamento", de propósito
 O RDV agora usa `supervisor_departamento`; a **frota** segue derivando de
@@ -1307,3 +1315,43 @@ O RDV agora usa `supervisor_departamento`; a **frota** segue derivando de
 significa "responsável pelo veículo"). **Não reunificar** — está comentado no
 código dos dois lados. Se um dia a frota também precisar de amarração explícita,
 é outra decisão, não uma "correção de inconsistência".
+
+
+---
+
+## [Logística/RDV] Pontos em aberto da onda de 31/07–01/08
+
+**Contexto:** 12 commits em dois dias, disparados pelos testes do Clenio com as
+personas reais (lidyanerocha → fabricioneiva → kelvereduardo). Três princípios
+ficaram estabelecidos e estão nos testes:
+
+1. **Planejar ≠ executar** — montar o roteiro é do time; *enviar*, *liberar*,
+   *apontar visita* e *concluir* são do **dono**.
+2. **Despesa de veículo tem veículo** — cadastro do veículo aponta o responsável →
+   planejamento sugere → despesa herda. Categoria VEÍCULO exige o carro.
+3. **A decisão vale para o valor decidido** — editar valor/tipo/data/veículo de
+   despesa decidida devolve para análise; depois de decidido só a autoridade
+   apaga; `editar`/`remover` respeitam o fechamento do mês.
+
+E uma regra transversal: **quem decide é quem não lançou** (aprovar o próprio
+lançamento é barrado; *contestar* o próprio segue livre, porque é ato contra o
+próprio lançamento).
+
+### 1. Supervisor de Departamento e a manutenção — RESOLVIDO, mas registrar o porquê
+Decisão do Clenio (01/08): **manutenção é do Gestor de Frota**. Ele consulta a
+tela de Veículos (campos desabilitados, sem "Novo veículo", sem registrar
+manutenção) e continua vendo o **custo** dela em Custos da Frota, porque a
+manutenção gera despesa. O dinheiro chega nele, a operação não.
+
+### 2. Relato da visita reusa `parada.observacao` — separar um dia?
+O relato escrito no apontamento grava no MESMO campo da observação de
+planejamento, e o formulário abre pré-preenchido com ela para o representante
+**complementar** em vez de apagar. **Decidir se um dia vale separar** "anotação do
+roteiro" (escrita por quem monta) de "relato de campo" (escrito por quem executa)
+— seriam +1 migration e uma coluna a mais no relatório de visitas.
+
+### 3. `editarViagem` — o que esse campo ainda faz?
+`PATCH /supervisor/viagens/:id` edita `viagem.adiantamento`, um campo que parece
+**anterior** à tabela `adiantamento` (que hoje é a fonte do saldo). O coordenador
+ganhou acesso em 01/08 por consistência, mas **vale conferir se o campo ainda é
+usado em algum cálculo** ou se é resíduo — se for resíduo, sai do modelo.
