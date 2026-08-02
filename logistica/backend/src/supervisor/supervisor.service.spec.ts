@@ -1601,3 +1601,53 @@ describe('SupervisorService — roteiro congela enquanto aguarda aprovação', (
     expect(prisma.parada.create.mock.calls[0][0].data.status).toBe('REALIZADA');
   });
 });
+
+
+// ⭐ "Puxar de volta" (02/08): congelar o roteiro no ENVIADO criou um vai e volta —
+// esqueceu um cliente depois de enviar, tinha que pedir ao aprovador para devolver.
+// Retirar TIRA da fila de aprovação, então a garantia continua de pé: ninguém decide
+// sobre algo que mudou por baixo.
+describe('SupervisorService.retirarDaAprovacao', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const dono = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const outro = () => ({ sub: 'u-x', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const plan = (st: string) => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: st,
+    criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.viagem.update.mockResolvedValue({ id: 'v1' });
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // logado = dono
+  });
+
+  it('o DONO puxa de volta o ENVIADO → volta a RASCUNHO', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    await svc.retirarDaAprovacao('v1', dono());
+    const data = prisma.viagem.update.mock.calls[0][0].data;
+    expect(data.statusPlanejamento).toBe('RASCUNHO');
+    // Comentário de uma devolução anterior se referia à versão antiga.
+    expect(data.comentarioCoordenador).toBeNull();
+  });
+
+  it('não puxa de volta o que JÁ FOI DECIDIDO (aprovado)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    await expect(svc.retirarDaAprovacao('v1', dono())).rejects.toThrow(/ainda não foi decidido/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('não puxa de volta planejamento de OUTRO', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Colega' }]);
+    await expect(svc.retirarDaAprovacao('v1', outro())).rejects.toThrow(ForbiddenException);
+  });
+
+  it('mês FECHADO trava a retirada', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
+    await expect(svc.retirarDaAprovacao('v1', dono())).rejects.toThrow(/RDV do mês encerrado/);
+  });
+});

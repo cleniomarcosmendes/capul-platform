@@ -358,6 +358,13 @@ export function SupervisorViagemPage() {
     await apontar(v, 'REALIZADA', relato.trim());
     setRelato('');
   };
+  const retirar = async () => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/retirar`);
+      toast('success', 'Planejamento puxado de volta — o roteiro voltou a ficar editável.');
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao puxar de volta.')); }
+  };
   const salvarVeiculo = async () => {
     try {
       await logisticaApi.patch(`/supervisor/viagens/${id}/veiculo`, { veiculoId: veiculoSel });
@@ -549,6 +556,13 @@ export function SupervisorViagemPage() {
             </>
           ) : null}
           {/* Decisão do coordenador/gestor sobre o planejamento ENVIADO — aqui, com tudo à vista. */}
+          {/* O DONO puxa de volta o que ainda não foi decidido: congelar o roteiro no
+              ENVIADO criava um vai e volta pelo aprovador só para incluir um cliente
+              esquecido. Sai da fila de aprovação, então ninguém decide sobre algo que
+              mudou por baixo. */}
+          {v.statusPlanejamento === 'ENVIADO' && v.souDono !== false && (
+            <button onClick={() => void retirar()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50" title="Tira da fila de aprovação e volta para rascunho, para você editar e reenviar">Puxar de volta</button>
+          )}
           {v.statusPlanejamento === 'ENVIADO' && podeAprovarDespesa && (
             <>
               <button onClick={() => void decidirPlanejamento('APROVADO')} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Aprovar</button>

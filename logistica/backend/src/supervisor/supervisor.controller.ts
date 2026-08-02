@@ -133,6 +133,14 @@ export class SupervisorController {
     return this.svc.definirVeiculoPlanejamento(id, dto.veiculoId ?? null, user);
   }
 
+  // Puxar de volta o que ainda NÃO foi decidido — ato do dono, elimina a espera pelo
+  // aprovador quando ele mesmo percebe que faltou algo. Ver `retirarDaAprovacao`.
+  @Patch('viagens/:id/retirar')
+  @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
+  retirarDaAprovacao(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.svc.retirarDaAprovacao(id, user);
+  }
+
   @Patch('viagens/:id/enviar')
   @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
   enviarPlanejamento(@Param('id') id: string, @CurrentUser() user: JwtPayload) {

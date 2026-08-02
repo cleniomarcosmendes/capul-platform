@@ -814,6 +814,37 @@ export class SupervisorService {
     return this.prisma.viagem.update({ where: { id }, data: { statusPlanejamento: 'ENVIADO' } });
   }
 
+  /**
+   * O representante PUXA DE VOLTA o planejamento que enviou — ENVIADO → RASCUNHO.
+   *
+   * Congelar o roteiro no ENVIADO (02/08) criou um vai e volta: esqueceu um cliente
+   * depois de enviar, tinha que pedir ao aprovador para devolver. Isto elimina a
+   * espera sem afrouxar a garantia — puxar de volta TIRA o planejamento da fila de
+   * aprovação, então ninguém decide sobre algo que mudou por baixo. Ele reenvia
+   * quando terminar.
+   *
+   * Só antes de decidido: depois de APROVADO/AJUSTADO/REJEITADO a palavra já é do
+   * aprovador, e o caminho passa a ser "Devolver p/ reconfigurar".
+   *
+   * É ato do DONO — a autoridade não precisa disto (ela decide).
+   */
+  async retirarDaAprovacao(id: string, user: JwtPayload) {
+    const filialId = filialDoUsuario(user);
+    const v = await this.planejamentoOuErro(id, filialId);
+    await this.assertDonoDoPlanejamento(v, user);
+    this.assertNaoCancelado(v);
+    if (v.statusPlanejamento !== 'ENVIADO') {
+      throw new BadRequestException('Só dá para puxar de volta um planejamento que está aguardando aprovação e ainda não foi decidido.');
+    }
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    // Volta a RASCUNHO e limpa o comentário de uma devolução anterior — ele se referia
+    // à versão antiga e confundiria na próxima leitura.
+    return this.prisma.viagem.update({
+      where: { id },
+      data: { statusPlanejamento: 'RASCUNHO', comentarioCoordenador: null },
+    });
+  }
+
   async decidirPlanejamento(id: string, decisao: 'APROVADO' | 'AJUSTADO' | 'REJEITADO', comentario: string | undefined, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoOuErro(id, filialId);
