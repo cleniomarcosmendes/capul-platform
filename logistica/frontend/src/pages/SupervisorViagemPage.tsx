@@ -285,6 +285,16 @@ export function SupervisorViagemPage() {
   // Então o aprovador inclui cliente enquanto é planejamento, e depois só edita/remove
   // o que já existe. Editar segue liberado (o backend também permite).
   const podeIncluirVisita = emPlanejamento || v?.souDono !== false;
+  /**
+   * O roteiro CONGELA a partir do envio: em ENVIADO está na mesa de quem aprova, e em
+   * APROVADO é o que será executado. Só quem aprova mexe; o dono usa "Puxar de volta"
+   * (no ENVIADO) ou pede "Devolver p/ reconfigurar" (no APROVADO).
+   *
+   * Sem este gate a tela seguia oferecendo o formulário e os ícones de editar/remover,
+   * e o backend recusava com 400 — a tela prometendo o que a API nega, que é
+   * justamente o que passamos a semana consertando.
+   */
+  const roteiroCongelado = (v?.statusPlanejamento === 'ENVIADO' || v?.statusPlanejamento === 'APROVADO') && !podeAprovarDespesa;
   // Categoria do tipo escolhido decide se a despesa tem veículo (combustível/pedágio
   // têm; alimentação/hospedagem não).
   const tipoSelEhVeiculo = tipos.find((t) => t.id === dTipo)?.categoria === 'VEICULO';
@@ -551,8 +561,8 @@ export function SupervisorViagemPage() {
               supervisor no mês, não só este. Precisam do supervisor + mês da viagem. */}
           {v.supervisorRegistro?.id && v.mesReferencia ? (
             <>
-              <button onClick={() => navigate(`/supervisores/rdv-mensal/${v.supervisorRegistro!.id}/${v.mesReferencia}`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> RDV do mês</button>
-              <button onClick={() => navigate(`/supervisores/rdv-mensal/${v.supervisorRegistro!.id}/${v.mesReferencia}/visitas`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"><Printer className="h-4 w-4" /> Visitas do mês</button>
+              <button onClick={() => navigate(`/supervisores/rdv-mensal/${v.supervisorRegistro!.id}/${v.mesReferencia}`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-400 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"><Printer className="h-4 w-4" /> RDV do mês</button>
+              <button onClick={() => navigate(`/supervisores/rdv-mensal/${v.supervisorRegistro!.id}/${v.mesReferencia}/visitas`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-400 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"><Printer className="h-4 w-4" /> Visitas do mês</button>
             </>
           ) : null}
           {/* Decisão do coordenador/gestor sobre o planejamento ENVIADO — aqui, com tudo à vista. */}
@@ -561,7 +571,7 @@ export function SupervisorViagemPage() {
               esquecido. Sai da fila de aprovação, então ninguém decide sobre algo que
               mudou por baixo. */}
           {v.statusPlanejamento === 'ENVIADO' && v.souDono !== false && (
-            <button onClick={() => void retirar()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50" title="Tira da fila de aprovação e volta para rascunho, para você editar e reenviar">Puxar de volta</button>
+            <button onClick={() => void retirar()} className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100" title="Tira da fila de aprovação e volta para rascunho, para você editar e reenviar">Puxar de volta</button>
           )}
           {v.statusPlanejamento === 'ENVIADO' && podeAprovarDespesa && (
             <>
@@ -585,7 +595,7 @@ export function SupervisorViagemPage() {
           {v.statusPlanejamento === 'APROVADO' && v.souDono !== false &&
             <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
           {v.statusPlanejamento === 'EM_EXECUCAO' && v.souDono !== false &&
-            <button onClick={() => void concluir()} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Concluir</button>}
+            <button onClick={() => void concluir()} className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Concluir</button>}
           {/* Reabrir é ato de QUEM APROVA (coordenador do representante / supervisor de
               departamento). Sem este gate o botão aparecia para todo mundo — inclusive
               para o próprio representante, que tomava 403 ao clicar. */}
@@ -694,14 +704,22 @@ export function SupervisorViagemPage() {
         </div>
       )}
 
-      {!travada && !editVisitaId && !podeIncluirVisita && (
+      {!travada && roteiroCongelado && (
+        <p className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
+          {v.statusPlanejamento === 'ENVIADO'
+            ? <>Este planejamento está <b>aguardando aprovação</b> — o roteiro não muda enquanto está sendo avaliado. Use <b>“Puxar de volta”</b> no topo para editar e reenviar.</>
+            : <>Este planejamento já foi <b>aprovado</b> — o roteiro não muda mais, senão o que será executado deixa de ser o que foi aprovado. Peça a quem aprova para <b>“Devolver p/ reconfigurar”</b>.</>}
+        </p>
+      )}
+
+      {!travada && !roteiroCongelado && !editVisitaId && !podeIncluirVisita && (
         <p className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
           Este RDV está <b>em execução</b> e é de {v.condutorNome ?? 'outro representante'} — quem registra a visita em campo é ele.
           Como aprovador você continua podendo editar ou remover as visitas do roteiro, decidir despesas e devolver ou cancelar o planejamento.
         </p>
       )}
 
-      {!travada && (editVisitaId || podeIncluirVisita) && (
+      {!travada && !roteiroCongelado && (editVisitaId || podeIncluirVisita) && (
         <form onSubmit={adicionar} className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="mb-1 text-sm font-semibold text-slate-700">{editVisitaId ? 'Editar visita' : emPlanejamento ? 'Incluir cliente no planejamento' : 'Registrar visita fora do plano'}</h2>
           {!editVisitaId && emPlanejamento && <p className="mb-4 text-xs text-sky-800">📋 Monte o roteiro: adicione os clientes que pretende visitar. Você aponta como realizada/pulada durante a execução.</p>}
@@ -805,8 +823,12 @@ export function SupervisorViagemPage() {
                         <button onClick={() => void apontar(p, 'PULADA')} className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-50" title="Não realizada">Pular</button>
                       </>
                     )}
-                    <button onClick={() => abrirEdicaoVisita(p)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
-                    <button onClick={() => void remover(p)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                    {!roteiroCongelado && (
+                      <>
+                        <button onClick={() => abrirEdicaoVisita(p)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
+                        <button onClick={() => void remover(p)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                      </>
+                    )}
                   </div>
                 )}</td>
               </tr>
