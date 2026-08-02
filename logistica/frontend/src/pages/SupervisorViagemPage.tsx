@@ -633,10 +633,15 @@ export function SupervisorViagemPage() {
           </label>
           <textarea value={txtForca} onChange={(e) => setTxtForca(e.target.value)} rows={2} maxLength={500} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             placeholder={acaoForca === 'CANCELAR' ? 'Ex.: representante afastado; veículo quebrado; região remanejada…' : 'Ex.: trocar a região; refazer a sequência de visitas…'} />
+          {/* O texto diz a CONSEQUÊNCIA, não o nome do estado: quem devolve um
+              planejamento APROVADO está desfazendo a própria aprovação e vai ter de
+              aprovar de novo depois. Antes só dizia 'volta para "Ajustado"'. */}
           <p className="mt-2 text-xs text-slate-600">
             {acaoForca === 'CANCELAR'
               ? 'O planejamento sai da prestação de contas e para de aceitar lançamentos. Despesas pendentes serão rejeitadas com este motivo — se houver despesa já APROVADA, resolva-a antes.'
-              : 'Volta para "Ajustado": o representante corrige e reenvia. As visitas apontadas e as despesas já lançadas continuam como estão.'}
+              : v.statusPlanejamento === 'EM_EXECUCAO'
+                ? <><b>A execução é interrompida e a aprovação desfeita.</b> O roteiro volta a ficar editável para o representante, que corrige e <b>reenvia para aprovação</b> — você precisará aprovar de novo. As visitas já apontadas e as despesas lançadas continuam como estão.</>
+                : <><b>A aprovação é desfeita.</b> O roteiro volta a ficar editável para o representante, que corrige e <b>reenvia para aprovação</b> — você precisará aprovar de novo. As despesas já lançadas continuam como estão.</>}
           </p>
           <div className="mt-2 flex gap-2">
             <button
