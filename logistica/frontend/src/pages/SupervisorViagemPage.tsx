@@ -860,7 +860,13 @@ export function SupervisorViagemPage() {
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-500">Veículo *</label>
                 <select value={dVeiculo} onChange={(e) => setDVeiculo(e.target.value)} className={inp}>
-                  <option value="">— escolha o veículo</option>
+                  {/* A opção vazia só existe quando NÃO há veículo no planejamento para
+                      herdar. Com ela sempre presente, limpar o campo (marcado com *)
+                      fazia o backend cair no veículo do planejamento e salvar CALADO
+                      num carro diferente do que a tela mostrava — apareceu no teste
+                      assistido de 01/08. Sem veículo no planejamento, a opção aparece e
+                      o backend recusa, que é o comportamento correto. */}
+                  {!v.veiculoId && <option value="">— escolha o veículo</option>}
                   {veiculos.filter((ve) => ve.ativo !== false).map((ve) => (
                     <option key={ve.id} value={ve.id}>{ve.placa}{ve.modelo ? ` — ${ve.modelo}` : ''}</option>
                   ))}
