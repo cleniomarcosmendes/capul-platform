@@ -674,17 +674,25 @@ export class SupervisorService {
   }
 
   /**
-   * ENVIADO = está na MESA DO APROVADOR — o roteiro congela para o dono.
+   * A partir do ENVIO, o roteiro sai das mãos do dono.
    *
-   * Sem isto o representante enviava para aprovação e continuava incluindo cliente: o
-   * coordenador avaliava uma coisa e aprovava outra, sem nem saber que mudou
-   * (reportado pelo Clenio no planejamento #47, 02/08). É a mesma ideia da regra da
-   * despesa — a decisão vale para o que foi decidido.
+   * - **ENVIADO** — está na MESA DO APROVADOR. Sem isto o representante enviava e
+   *   continuava incluindo cliente: o aprovador avaliava uma coisa e aprovava outra,
+   *   sem nem saber que mudou (Clenio, planejamento #47, 02/08).
+   * - **APROVADO** — é o roteiro que SERÁ executado. Incluir depois do aval expande em
+   *   silêncio o que foi aprovado (decisão do Clenio, 02/08).
    *
-   * O APROVADOR continua mexendo, porque é o que ele está fazendo ali: incluir,
-   * alterar e excluir item durante a análise é regra de negócio confirmada. E o
-   * caminho de volta já existe e não muda: ele usa **Ajustar** (devolve com
-   * comentário) ou **Rejeitar**, e o representante reenvia.
+   * Mesma ideia da regra da despesa: **a decisão vale para o que foi decidido**.
+   *
+   * O APROVADOR continua mexendo nos dois estados — é o que ele está fazendo ali, e
+   * incluir/alterar/excluir item na análise é regra de negócio confirmada.
+   *
+   * Os dois caminhos de volta já existiam e não mudam: no ENVIADO, **Ajustar**
+   * (devolve com comentário) ou **Rejeitar**; no APROVADO, **Devolver p/
+   * reconfigurar**. Os dois levam a AJUSTADO, onde o dono volta a montar e reenvia.
+   *
+   * Durante a **EXECUÇÃO** o roteiro reabre para o dono — ali a visita incluída é
+   * realidade de campo, não plano (nasce REALIZADA). Ver `adicionarVisita`.
    *
    * Só vale para o ROTEIRO (visitas). Despesa segue livre: ela não é o objeto da
    * aprovação do planejamento e tem o aval dela, por lançamento.
@@ -693,10 +701,13 @@ export class SupervisorService {
     v: { statusPlanejamento: StatusPlanejamento | null; supervisorRegistro: { coordenadorId: string | null; departamentoId: string | null } | null },
     user: JwtPayload,
   ) {
-    if (v.statusPlanejamento !== 'ENVIADO') return;
+    const emAnalise = v.statusPlanejamento === 'ENVIADO';
+    if (!emAnalise && v.statusPlanejamento !== 'APROVADO') return;
     if (await this.ehAutoridadeSobre(v.supervisorRegistro, user)) return;
     throw new BadRequestException(
-      'Este planejamento está aguardando aprovação — o roteiro não pode mudar enquanto está sendo avaliado. Peça a quem aprova para devolver (Ajustar) e o roteiro volta a ficar editável.',
+      emAnalise
+        ? 'Este planejamento está aguardando aprovação — o roteiro não pode mudar enquanto está sendo avaliado. Peça a quem aprova para devolver (Ajustar) e ele volta a ficar editável.'
+        : 'Este planejamento já foi APROVADO — o roteiro não muda mais, senão o que será executado deixa de ser o que foi aprovado. Peça a quem aprova para "Devolver p/ reconfigurar".',
     );
   }
 

@@ -1575,4 +1575,29 @@ describe('SupervisorService — roteiro congela enquanto aguarda aprovação', (
     await svc.adicionarVisita('v1', { clienteNome: 'X' } as any, dono());
     expect(prisma.parada.create).toHaveBeenCalled();
   });
+
+  // ⭐ APROVADO também congela (decisão do Clenio, 02/08): incluir depois do aval
+  // expande em silêncio o que foi aprovado — o que será executado deixaria de ser o
+  // que foi aprovado. Saída: "Devolver p/ reconfigurar".
+  it('DONO não inclui visita com o planejamento APROVADO', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    await expect(svc.adicionarVisita('v1', { clienteNome: 'X' } as any, dono()))
+      .rejects.toThrow(/já foi APROVADO/);
+    expect(prisma.parada.create).not.toHaveBeenCalled();
+  });
+
+  it('o APROVADOR ainda ajusta o roteiro APROVADO', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Coord' }]);
+    await svc.adicionarVisita('v1', { clienteNome: 'X' } as any, coord());
+    expect(prisma.parada.create).toHaveBeenCalled();
+  });
+
+  // Na EXECUÇÃO o roteiro reabre para o dono: ali a visita é realidade de campo
+  // (nasce REALIZADA), não plano. Regra que já existia e não pode ter sido quebrada.
+  it('EM_EXECUCAO o dono volta a incluir (visita fora do plano)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('EM_EXECUCAO'));
+    await svc.adicionarVisita('v1', { clienteNome: 'X' } as any, dono());
+    expect(prisma.parada.create.mock.calls[0][0].data.status).toBe('REALIZADA');
+  });
 });
