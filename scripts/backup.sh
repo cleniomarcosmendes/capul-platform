@@ -18,9 +18,12 @@
 #   ./backup.sh restore-from-prod backups/backup_full_20260511_PRD.tar.gz
 #     → restaura banco + uploads de um backup PRD num servidor HOM.
 #       PRESERVA: código, .env, certs A1, redis.
-#       Sanitiza: endpoints PROD→HOM, ambiente_ativo=HOM, freio de mão ON.
+#       Sanitiza: endpoints PROD→HOM, ambiente_ativo=HOM, freio de mão ON,
+#                 poller de e-mail do SAC OFF, lembretes de chamado OFF.
 #       DESTRUTIVO no banco (DROP + CREATE) — confirmação obrigatória.
 #       Use APENAS em ambiente de homologação, NUNCA em produção.
+#       Ao final imprime os passos que seguem MANUAIS (Protheus de leitura de
+#       volta p/ PRODUCAO, cert A1, .env, apagar o tarball) — ler antes de subir.
 # =============================================================================
 
 set -e
@@ -555,8 +558,14 @@ backup_full() {
 # RESTORE PRD → HOM
 # =============================================================================
 # Restaura um backup_full_*.tar.gz de PROD num servidor de HOMOLOGAÇÃO,
-# preservando .env, código e configs locais do HOM. Sanitiza endpoints e
-# flags fiscais pra HOMOLOGAÇÃO após o restore.
+# preservando .env, código e configs locais do HOM. Sanitiza, após o restore:
+# endpoints, flags fiscais, o poller de e-mail do SAC e os lembretes de chamado.
+#
+# A sanitização precisa cobrir TUDO que (a) tem o liga/desliga no BANCO — e
+# portanto chega junto com o dump de PROD — e (b) produz efeito para FORA do
+# ambiente (e-mail ao cliente, gravação no Protheus, consulta à SEFAZ). Ao
+# adicionar um cron/integração nova ao produto, incluir aqui na etapa 7 — o SAC
+# ficou de fora por 3 meses porque entrou depois deste script (visto em 03/08).
 #
 # Uso: ./backup.sh restore-from-prod <caminho/do/backup_full_*.tar.gz>
 #
@@ -764,8 +773,32 @@ UPDATE fiscal.ambiente_config
        ultima_alteracao_em = NOW(),
        ultima_alteracao_por = 'backup.sh:restore-from-prod'
  WHERE id = 1;
+
+-- 7.3 SAC: desligar o consumo automático de e-mail.
+--
+-- CRÍTICO. O `enabled` vem do BANCO (portanto, de PRODUÇÃO), mas a credencial
+-- IMAP/SMTP vem do `.env` — que este restore PRESERVA (é o do ambiente de
+-- destino). Se o `.env` do HOM apontar para a caixa real do SAC e a PROD estiver
+-- com o poller ligado, o HOM passa a consumir o e-mail REAL do cliente: marca
+-- \Seen, o poller de PROD passa a ignorar aquelas mensagens, e o e-mail do
+-- cliente SE PERDE. A saída é simétrica — resposta iria ao cliente de verdade.
+-- Gate do poller: @Interval(60_000) em sac-email.service.ts (pollAgendado),
+-- que respeita enabled + pause_sync.
+UPDATE gestao_ti.sac_email_config
+   SET enabled = false,
+       pause_sync = true,
+       updated_at = NOW(),
+       updated_by = 'backup.sh:restore-from-prod'
+ WHERE id = 1;
+
+-- 7.4 Lembretes de chamado parado: cron horário que manda e-mail e AUTO-FECHA
+-- chamado. Os destinatários vieram no dump — são pessoas reais.
+UPDATE gestao_ti.chamado_lembrete_config
+   SET enabled = false
+ WHERE id = 1;
 SQL
-    log_success "  → configs sanitizadas (endpoints HOM, ambiente HOMOLOGACAO, freio de mão ON)."
+    log_success "  → configs sanitizadas (endpoints HOM, ambiente HOMOLOGACAO, freio de mão ON,"
+    log_success "     poller do SAC OFF, lembretes de chamado OFF)."
 
     # --- Limpeza + status final ---------------------------------------------
     rm -rf "$restore_tmp"
@@ -776,6 +809,10 @@ SQL
         "SELECT modulo, operacao, ambiente, ativo FROM core.integracoes_api_endpoints WHERE modulo='FISCAL' ORDER BY operacao, ambiente;"
     docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c \
         "SELECT ambiente_ativo, pause_sync, cte_distribuicao_ativo, cte_protheus_grava_ativo FROM fiscal.ambiente_config WHERE id=1;"
+    docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c \
+        "SELECT enabled AS sac_enabled, pause_sync AS sac_pausado FROM gestao_ti.sac_email_config WHERE id=1;"
+    docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -c \
+        "SELECT enabled AS lembretes_enabled FROM gestao_ti.chamado_lembrete_config WHERE id=1;"
 
     echo ""
     echo -e "${GREEN}${BOLD}============================================================${NC}"
@@ -786,6 +823,47 @@ SQL
     echo "    1. docker compose up -d  (subir todos os serviços)"
     echo "    2. Confirmar URL/credenciais do Protheus HOM no Configurador"
     echo "    3. Smoke test: login + consulta básica"
+    echo ""
+    echo -e "  ${YELLOW}${BOLD}Ainda MANUAIS — o script não faz (e por quê):${NC}"
+    echo ""
+    echo -e "  ${YELLOW}a) Protheus de LEITURA volta para PRODUCAO.${NC} A etapa 7.1 joga TODO"
+    echo "     endpoint ativo para HOMOLOGACAO. Como o ambiente usa a credencial BASIC"
+    echo "     de produção, leitura em HOM responde 401 — sintoma: \"Matrícula não"
+    echo "     encontrada\" na Frota, Portaria, Chamado e RDV. Regra: leitura -> PRODUCAO,"
+    echo "     escrita fiscal -> fica em HOMOLOGACAO. Não é automático de propósito:"
+    echo "     religar endpoint de PRODUCAO é o oposto de sanitizar, e a classificação"
+    echo "     depende do efeito colateral de cada operação. Rodar num ÚNICO psql -c:"
+    echo ""
+    echo "       BEGIN;"
+    echo "       UPDATE core.integracoes_api_endpoints e SET ativo=false, updated_at=NOW()"
+    echo "         FROM core.integracoes_api i WHERE i.id=e.integracao_id"
+    echo "          AND i.codigo='PROTHEUS' AND e.ambiente='HOMOLOGACAO' AND e.ativo=true"
+    echo "          AND ((e.modulo='GESTAO_TI' AND e.operacao IN ('INFOCLIENTES','clienteSac','infoFuncionario','loginPortal'))"
+    echo "            OR (e.modulo='LOGISTICA' AND e.operacao IN ('clienteEndereco'))"
+    echo "            OR (e.modulo='FISCAL'    AND e.operacao IN ('cadastroFiscal','xmlNfe','xmlFilDestino')));"
+    echo "       UPDATE core.integracoes_api_endpoints e SET ativo=true, updated_at=NOW()"
+    echo "         FROM core.integracoes_api i WHERE i.id=e.integracao_id"
+    echo "          AND i.codigo='PROTHEUS' AND e.ambiente='PRODUCAO' AND e.ativo=false"
+    echo "          AND ((e.modulo='GESTAO_TI' AND e.operacao IN ('INFOCLIENTES','clienteSac','infoFuncionario','loginPortal'))"
+    echo "            OR (e.modulo='LOGISTICA' AND e.operacao IN ('clienteEndereco'))"
+    echo "            OR (e.modulo='FISCAL'    AND e.operacao IN ('cadastroFiscal','xmlNfe','xmlFilDestino')));"
+    echo "       COMMIT;"
+    echo ""
+    echo -e "     ${YELLOW}grvXML e eventosNfe (escrevem no Protheus) e o INVENTARIO inteiro${NC}"
+    echo -e "     ${YELLOW}CONTINUAM em HOMOLOGACAO.${NC}"
+    echo ""
+    echo -e "  ${YELLOW}b) Certificado A1:${NC} o banco veio de PROD apontando para um .pfx que não"
+    echo "     existe no bind mount deste host. Re-subir pela tela (Configurador)."
+    echo ""
+    echo -e "  ${YELLOW}c) .env:${NC} conferir SAC_IMAP_*/SMTP_* e SAC_EMAIL_DEV_REDIRECT. Os"
+    echo "     destinatários agora são pessoas REAIS (vieram no dump)."
+    echo ""
+    echo -e "  ${RED}d) APAGAR o backup_full_*.tar.gz deste host${NC} — ele empacota /opt/capul-platform"
+    echo "     inteiro, então carrega o .env de PRODUÇÃO em texto claro (JWT_SECRET,"
+    echo "     PROTHEUS_API_AUTH, senhas SMTP/IMAP)."
+    echo ""
+    echo -e "  ${YELLOW}Não entram no backup:${NC} bancos do cofre e do RFB — os deste host seguem"
+    echo "  intactos (anexo/prova referenciado pelo dump restaurado vira órfão)."
     echo ""
 }
 
