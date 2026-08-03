@@ -68,6 +68,14 @@ Plataforma corporativa modular com microservicos independentes:
   respostas prontas, indicadores e SLA. Telas gateadas por funcionalidade
   (`SAC_TRIAGEM`/`SAC_INDICADOR`/`SAC_TEMPLATE`/`SAC_EMAIL_CONFIG`). Ver
   `docs/AVALIACAO_SAC_WORKSPACE.md` e `docs/PLANO_SAC_FASE3_EMAIL_ENTRADA.md`.
+- **Venda Ativa** (02/08/2026): o comercial usa o Chamado como registro de **contato
+  com cliente** (prospecção/retomada). Mesmo padrão do SAC — o comportamento vem da
+  **EQUIPE** (`equipes_ti.venda_ativa`), não do departamento, e as duas modalidades são
+  **excludentes** na mesma equipe. Ao escolher a equipe, o formulário pede a matrícula
+  do cliente (SA1010), busca no Protheus e grava o cliente em **campo estruturado**
+  (`chamados.cliente_matricula`, indexada) — **não** no assunto, que fica livre para
+  dizer do que trata o contato. Buscar pela matrícula/nome na listagem traz todos os
+  contatos daquele cliente.
 - Docs: `gestao-ti/docs/documentacao-tecnica-v1.md`
 
 ### 4. Inventario (`/inventario`)
@@ -280,4 +288,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 01/08/2026*
+*Ultima atualizacao: 02/08/2026*
