@@ -1355,3 +1355,50 @@ roteiro" (escrita por quem monta) de "relato de campo" (escrito por quem executa
 **anterior** à tabela `adiantamento` (que hoje é a fonte do saldo). O coordenador
 ganhou acesso em 01/08 por consistência, mas **vale conferir se o campo ainda é
 usado em algum cálculo** ou se é resíduo — se for resíduo, sai do modelo.
+
+---
+
+## [Inventário] Pendências levantadas em 02/08/2026
+
+**Como apareceu:** a suíte do Inventário quebrava na coleta do pytest. Ao corrigir
+(`96b1ec2`), descobriu-se que os dois arquivos `test_*.py` do módulo eram **scripts de
+diagnóstico** — nenhum `assert`, `print()` e chamada à API de **produção** do Protheus.
+O módulo nunca teve teste automatizado.
+
+**Tratar quando houver trabalho no Inventário** — não vale abrir frente só para isto.
+
+### 1. Sem cobertura de regra de negócio
+Hoje há só `test_smoke.py` (o app importa e `/health` responde). Isso pega import
+quebrado, e nada mais. **Descoberto, sem teste:**
+
+- **contagem multi-ciclo** — avanço de ciclo, encerrar × avançar (são coisas
+  diferentes: ver `feedback_inventario_encerrar_vs_avancar_ciclo`), contagem cega;
+- **handoff de supervisor** — a regra de preservar contagens já foi bug uma vez;
+- **sincronização Protheus** — parser da resposta e o `sync` da migration 014;
+- **RBAC** — `OPERATOR` não vê saldo.
+
+Ordem sugerida: começar por **handoff** e **encerrar × avançar ciclo**, que são as que
+já produziram bug e envolvem estado.
+
+### 2. Credencial de produção do Protheus no código — 2 ocorrências restantes
+`96b1ec2` tirou a do script (`diag_api_protheus.py`, agora via
+`PROTHEUS_INVENTARIO_AUTH`). **Continuam:**
+
+```
+inventario/backend/app/core/config.py:59, :136     ← valor FIXO
+inventario/backend/app/core/protheus_config.py:118 ← default do os.getenv
+```
+
+Não foram tocadas de propósito: mexer no default sem alinhamento pode derrubar a
+integração se a env não estiver definida nos ambientes.
+
+⚠️ **A credencial está no histórico do git.** Removê-la do código **não** a invalida —
+o caminho é **rotacionar no Protheus** e então deixar o código exigir a env. Faz parte
+do Anexo B de `docs/PENDENCIAS_PROTHEUS_10052026_SEGURANCA.md` (achado de 10/05, ainda
+aberto), e depende do Marco/Protheus, não só de nós.
+
+### 3. Scripts soltos na raiz do backend
+`run_migration.py`, `update_b2_xentpos.py`, `update_sb2_cm1.py`, `update_sb2_cm1_v2.py`
+e os dois `diag_*` convivem com o código da aplicação. Avaliar mover para `scripts/`
+— some o risco de coleta acidental pelo pytest e fica claro o que é aplicação e o que
+é ferramenta de operação.
