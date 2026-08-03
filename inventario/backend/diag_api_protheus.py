@@ -1,13 +1,29 @@
 #!/usr/bin/env python3
 """
-Script para testar API Protheus e diagnosticar erro 500
+Script MANUAL de diagnóstico da API Protheus (erro 500 por armazém).
+
+NÃO é teste automatizado — bate na API de PRODUÇÃO. O nome começava com `test_`, o
+que fazia o pytest coletá-lo junto da suíte: `test_api(filial, armazem)` virava um
+teste cujos parâmetros o pytest tentava resolver como fixtures inexistentes, e a
+suíte do Inventário terminava com erro. Renomeado para `diag_` em 02/08/2026.
+
+Uso:
+    export PROTHEUS_INVENTARIO_AUTH="<basic base64>"
+    python diag_api_protheus.py
 """
 import httpx
 import json
+import os
+import sys
 import time
 
-PROTHEUS_API_URL = "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES/inventario/produtos"
-PROTHEUS_AUTH = "QVBJQ0FQVUw6QXAxQzRwdTFQUkQ="
+PROTHEUS_API_URL = os.getenv(
+    "PROTHEUS_INVENTARIO_URL",
+    "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES/inventario/produtos",
+)
+# Sem credencial embutida: ela vem do ambiente. O valor estava fixo aqui e é um dos
+# locais listados no Anexo B de `docs/PENDENCIAS_PROTHEUS_10052026_SEGURANCA.md`.
+PROTHEUS_AUTH = os.getenv("PROTHEUS_INVENTARIO_AUTH", "")
 
 def test_api(filial, armazem):
     """Testa chamada à API Protheus"""
@@ -64,6 +80,9 @@ def test_api(filial, armazem):
         print(f"❌ Erro inesperado: {type(e).__name__}: {e}")
 
 if __name__ == "__main__":
+    if not PROTHEUS_AUTH:
+        print("PROTHEUS_INVENTARIO_AUTH nao definido — exporte a credencial antes de rodar.")
+        sys.exit(1)
     print("="*80)
     print("DIAGNÓSTICO DE ERRO NA API PROTHEUS")
     print("="*80)

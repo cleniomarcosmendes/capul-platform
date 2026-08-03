@@ -143,7 +143,7 @@ openssl rand -base64 24
 ```
 docker-compose.yml:208, :211 (fallback nos modulos Inventario e Fiscal)
 auth-gateway/prisma/seed.ts:320
-inventario/backend/test_api_protheus.py:10
+inventario/backend/diag_api_protheus.py  ✅ RESOLVIDO 02/08 — credencial saiu do arquivo (vem de PROTHEUS_INVENTARIO_AUTH); arquivo renomeado de test_ para diag_
 inventario/backend/app/core/config.py:59, :136
 inventario/backend/app/core/protheus_config.py:118
 inventario/docs/PLANO_CONTINUIDADE_INTEGRACAO_PROTHEUS.md:253
