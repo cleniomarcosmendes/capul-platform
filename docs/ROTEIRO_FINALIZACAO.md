@@ -1,7 +1,7 @@
 # Roteiro de Finalizacao - Capul Platform
 
-**Versao**: 1.5
-**Data**: 06/06/2026
+**Versao**: 1.6
+**Data**: 02/08/2026
 **Objetivo**: Procedimento padrao apos finalizar ajustes no sistema
 
 **Modulos cobertos**: auth-gateway, hub, gestao-ti, inventario, configurador, **fiscal**, **logistica**
@@ -118,8 +118,12 @@ git log -5    # Verificar commits recentes
 # Backend gestao-ti
 cd gestao-ti/backend && npx tsc --noEmit
 
-# Frontend gestao-ti
-cd gestao-ti/frontend && npx tsc --noEmit
+# Frontends (Vite) — `tsc -b`, NAO `--noEmit`
+# O tsconfig.json deles e arquivo-SOLUCAO (`files: []` + `references`): com
+# `--noEmit` o tsc compila ZERO arquivo e sai 0, dando falsa aprovacao. Descoberto
+# em 01/08/2026 com um erro proposital que passou batido. `tsc -b` e o que o
+# `npm run build` usa. Backends (NestJS) e o app (Expo) seguem com `--noEmit`.
+cd gestao-ti/frontend && npx tsc -b
 
 # Auth gateway
 cd auth-gateway && npx tsc --noEmit
@@ -128,13 +132,13 @@ cd auth-gateway && npx tsc --noEmit
 cd fiscal/backend && npx tsc --noEmit
 
 # Frontend fiscal (React + Vite)
-cd fiscal/frontend && npx tsc --noEmit
+cd fiscal/frontend && npx tsc -b
 
 # Backend logistica (NestJS 11 + Prisma 6)
 cd logistica/backend && npx tsc --noEmit
 
 # Frontend logistica (React + Vite)
-cd logistica/frontend && npx tsc --noEmit
+cd logistica/frontend && npx tsc -b
 
 # App entregador/supervisor (Expo — NAO sobe em container, ver 2.7.1)
 cd logistica/app && npm run typecheck
@@ -188,6 +192,18 @@ docker compose exec fiscal-backend sh -c 'ls -la /app/certs/'
 A partir de 05/05/2026 (v1.4), Prisma migrations sao aplicadas automaticamente
 pelos init jobs `*-migrate` no `docker compose up -d`. Esta verificacao serve
 como **auditoria pos-deploy**, nao como passo de aplicacao.
+
+> ⚠️ **Criou migration nesta sessao? Builde o JOB tambem** (01/08/2026). Os jobs
+> `*-migrate` tem `build:` proprio no compose: rebuildar so o backend deixa a imagem
+> do job com o `prisma/migrations/` antigo, e ele imprime **"No pending migrations to
+> apply."** — a mensagem de SUCESSO, nao de erro.
+> ```bash
+> docker compose build <modulo>-backend <modulo>-migrate
+> docker compose up -d --force-recreate <modulo>-migrate
+> # conferir NO BANCO, nao no log:
+> docker compose exec -T postgres psql -U capul_user -d capul_platform \
+>   -c "SELECT migration_name FROM public._prisma_migrations WHERE migration_name LIKE '<prefixo>%';"
+> ```
 
 ```bash
 # Auditoria agregada schema x migrations (todos os backends Prisma de uma vez)
