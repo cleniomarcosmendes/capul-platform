@@ -584,6 +584,15 @@ class Counting(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Migration 015 — rastreabilidade da captura offline (app mobile).
+    # idempotency_key: dedupe de reenvio da fila do app (o upsert por
+    #   (item, ciclo) ja evita duplicar VALOR; a chave evita reprocessar
+    #   efeito colateral e diz qual captura gerou qual gravacao).
+    # counted_at_client: hora no aparelho. Ordena capturas do MESMO aparelho;
+    #   nao e comparavel entre aparelhos distintos (para isso existe o lease).
+    idempotency_key = Column(Text, unique=True)
+    counted_at_client = Column(DateTime(timezone=True))
+
     # Relacionamentos
     inventory_item = relationship("InventoryItem", back_populates="countings")
     counted_by_user = relationship("User", back_populates="countings")
@@ -1074,6 +1083,17 @@ class CountingList(Base):
     # após devolução do contador). Default ORIGINAL = sequência original (retrocompatível).
     sort_order = Column(String(30), default='ORIGINAL')
 
+    # Migration 015 — lease da lista por DISPOSITIVO (item 0.5).
+    # O modelo ja garante um contador por ciclo (counter_cycle_N), mas nada
+    # amarrava em quantos aparelhos esse contador pode estar — e ja existem
+    # duas superficies web alem do app. O lease nao e lock distribuido (o app
+    # conta offline sem falar com o servidor): ele reduz a janela e torna a
+    # colisao DETECTAVEL, em vez de last-write-wins silencioso.
+    lease_token = Column(UUID(as_uuid=True))
+    lease_device_id = Column(Text)
+    lease_user_id = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"))
+    lease_at = Column(DateTime(timezone=True))
+
     # Timestamps de controle desta lista
     released_at = Column(DateTime(timezone=True))
     released_by = Column(UUID(as_uuid=True), ForeignKey("inventario.users.id"))
@@ -1132,6 +1152,13 @@ class CountingListItem(Base):
     # Migration 012: marcação de revisão pelo supervisor (handoff DEVOLVIDA)
     revisar_no_ciclo = Column(Boolean, default=False, nullable=False)
     motivo_revisao = Column(Text)
+
+    # Migration 015: item que virou ZERO no fecho do handoff, em vez de ter
+    # sido contado ativamente. A regra do preenchimento NAO muda — zero e
+    # contagem legitima. Isto e so o rastro por item, que antes existia apenas
+    # agregado no historico ("N itens gravados como zero"). Limpo quando chega
+    # contagem nova para o item, igual ao revisar_no_ciclo.
+    zerado_no_fecho = Column(Boolean, default=False, nullable=False)
 
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now())

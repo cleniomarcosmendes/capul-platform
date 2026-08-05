@@ -35,6 +35,60 @@ def _check_not_closed(inventory):
         )
 
 
+def _is_staff(user) -> bool:
+    """ADMIN/SUPERVISOR. Aceita Enum ou string — o campo role aparece das duas
+    formas dependendo de como o usuário foi carregado (UNIFIED_AUTH x tabela)."""
+    role = getattr(user, "role", None)
+    role = getattr(role, "value", role)
+    return str(role).upper() in ("ADMIN", "SUPERVISOR")
+
+
+# Campos que revelam o saldo do sistema. Nomes variam entre os endpoints, por
+# isso a lista é ampla — melhor remover um campo inexistente do que deixar
+# passar.
+_CAMPOS_SALDO = ("expected_quantity", "system_qty", "expected", "saldo", "variacao", "difference")
+
+
+def aplicar_contagem_cega(product_data: dict, user, counting_list) -> dict:
+    """
+    Fase 0 / item 0.2 — projeção server-side da CONTAGEM CEGA.
+
+    Contagem cega só é cega se o OPERATOR não chega ao saldo por nenhum caminho.
+    Até aqui quem escondia era o frontend, o que quer dizer que qualquer cliente
+    com o JWT do OPERATOR lia o saldo. Com o app offline isso pioraria: o payload
+    passaria a ficar PERSISTIDO no aparelho do operador.
+
+    ⚠️ Isto NÃO é `require_staff_role` no endpoint. Existe nota antiga dizendo
+    para não bloquear estes endpoints server-side — e está certa: o OPERATOR
+    PRECISA chamá-los para contar. O que se faz aqui é devolver MENOS CAMPOS
+    para ele. Não confundir projeção com bloqueio ao revisar.
+
+    ⚠️ Chamar DEPOIS de qualquer cálculo que use os campos removidos
+    (`finalQuantity` usa `expected_quantity`).
+
+    Ciclos anteriores respeitam `show_previous_counts`, que já é a decisão do
+    supervisor no ato de liberar (migration 010, default False = cega).
+
+    ⚠️ Remove apenas ciclos ANTERIORES ao corrente. O `count_cycle_N` do ciclo
+    ATUAL não pode sair nunca: é dele que a tela de contagem deriva o que já foi
+    contado (`useCountingData.ts` monta contados/pendentes a partir da
+    count_cycle real, não do status). Removê-lo faria todo item voltar a
+    aparecer como pendente para o operador.
+    """
+    if _is_staff(user):
+        return product_data
+
+    for campo in _CAMPOS_SALDO:
+        product_data.pop(campo, None)
+
+    if not bool(getattr(counting_list, "show_previous_counts", False)):
+        ciclo_atual = getattr(counting_list, "current_cycle", 1) or 1
+        for anterior in range(1, ciclo_atual):
+            product_data.pop(f"count_cycle_{anterior}", None)
+
+    return product_data
+
+
 @router.get("/inventories/{inventory_id}/lists/{list_id}/products")
 async def get_list_products(
     inventory_id: str,
@@ -237,6 +291,9 @@ async def get_list_products(
             else:
                 product_data["finalQuantity"] = None
 
+            # Item 0.2 — DEPOIS do finalQuantity, que usa expected_quantity.
+            aplicar_contagem_cega(product_data, current_user, counting_list)
+
             result_data["data"]["products"].append(product_data)
 
         # Aplica sort_order definido pelo supervisor no Liberar.
@@ -384,6 +441,9 @@ async def get_inventory_counting_lists(
             "created_by": str(cl.created_by) if cl.created_by else None,
             "updated_at": cl.updated_at.isoformat() if cl.updated_at else None,
             "show_previous_counts": bool(cl.show_previous_counts),
+            # Item 0.5 — o supervisor precisa ver que existe aparelho com a
+            # lista baixada ANTES de liberar, devolver ou cobrar.
+            **_lease_payload(cl),
         })
 
     return result
@@ -410,6 +470,9 @@ async def my_counting_lists(
         SELECT
             cl.id, cl.list_name, cl.current_cycle, cl.list_status, cl.sort_order,
             cl.show_previous_counts,
+            -- Item 0.5: estado do lease já na listagem, para o contador ver que
+            -- a lista está baixada num aparelho ANTES de abrir e começar.
+            cl.lease_token, cl.lease_device_id, cl.lease_user_id, cl.lease_at,
             cl.inventory_id,
             il.name as inventory_name,
             il.warehouse,
@@ -462,6 +525,7 @@ async def my_counting_lists(
             "counted_items": counted,
             "pending_items": max(0, total - counted),
             "progress_percentage": round((counted / total) * 100, 1) if total > 0 else 0.0,
+            **_lease_payload(row),
         })
 
     return {"items": items, "total": len(items)}
@@ -497,6 +561,15 @@ async def get_counting_list_details(
         "counted_items": len([i for i in items if i.status == CountingStatus.COUNTED]),
         "pending_items": len([i for i in items if i.status == CountingStatus.PENDING])
     }
+
+    # Item 0.5 — o `**__dict__` acima despejaria o `lease_token` cru, e o token
+    # É a credencial do lease: quem o lê consegue gravar como se fosse o
+    # aparelho dono. Remover e devolver só o estado (ativo/quem/desde quando).
+    response.pop("lease_token", None)
+    response.pop("lease_device_id", None)
+    response.pop("lease_user_id", None)
+    response.pop("lease_at", None)
+    response.update(_lease_payload(counting_list))
 
     return response
 
@@ -930,6 +1003,13 @@ async def handoff_counting_list(
             it.last_counted_at = func.now()
             it.last_counted_by = current_user.id
             it.status = CountingStatus.COUNTED
+            # Migration 015 / item 0.3 — rastro POR ITEM do preenchimento.
+            # A regra não muda: zero é contagem legítima e o preenchimento é a
+            # semântica de "varri a lista, o que sobrou eu não achei". O que
+            # esta marca resolve é que, sem ela, o item preenchido fica
+            # indistinguível de uma contagem ativa (0 + COUNTED + o operador em
+            # last_counted_by) e o único rastro era o total no histórico.
+            it.zerado_no_fecho = True
             zerados += 1
 
     counting_list.list_status = 'AGUARDANDO_REVISAO'
@@ -1083,6 +1163,161 @@ async def aguardando_revisao_count(
     return {"count": int(n or 0)}
 
 
+def _lease_payload(counting_list) -> dict:
+    """
+    Item 0.5 — estado do lease para os endpoints de LEITURA.
+
+    Avisar só no 409 da gravação é tarde: a pessoa já abriu a lista e se
+    posicionou para trabalhar. Este bloco vai nas telas (Minhas Listas, detalhe
+    da lista, visão do supervisor) para o aviso chegar ANTES de começar.
+
+    Expõe também de QUEM é o aparelho: o lease é por dispositivo, mas quem olha
+    precisa saber a quem cobrar — "dispositivo a3f…" sozinho não serve.
+    """
+    ativo = bool(getattr(counting_list, 'lease_token', None))
+    if not ativo:
+        return {"lease_ativo": False}
+    device = counting_list.lease_device_id or ""
+    return {
+        "lease_ativo": True,
+        # Só o sufixo: identifica o aparelho sem despejar o id inteiro na tela.
+        "lease_device_id": device[-4:] if len(device) > 4 else device,
+        "lease_user_id": str(counting_list.lease_user_id) if counting_list.lease_user_id else None,
+        "lease_at": counting_list.lease_at.isoformat() if counting_list.lease_at else None,
+    }
+
+
+@router.post("/counting-lists/{list_id}/checkout")
+async def checkout_counting_list(
+    list_id: UUID,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Item 0.5 — o app "retira" a lista para contagem offline e recebe um
+    `lease_token` que deve acompanhar cada contagem enviada depois.
+
+    Não é lock distribuído: o app conta offline sem falar com o servidor. Serve
+    para (a) avisar as outras superfícies que existe aparelho com a lista
+    baixada e (b) tornar a colisão detectável na sincronização, em vez de
+    last-write-wins silencioso.
+
+    Retomar o checkout no MESMO aparelho renova o lease (o app pode reinstalar
+    ou perder o token local); vindo de outro aparelho, é recusado.
+    """
+    device_id = (payload or {}).get("device_id")
+    if not device_id:
+        raise HTTPException(status_code=400, detail="device_id é obrigatório para o checkout.")
+
+    counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
+    if not counting_list:
+        raise HTTPException(status_code=404, detail="Lista de contagem não encontrada")
+
+    _check_not_closed(
+        db.query(InventoryList).filter(InventoryList.id == counting_list.inventory_id).first()
+    )
+
+    if counting_list.list_status != 'EM_CONTAGEM':
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "erro": "LISTA_NAO_ESTA_EM_CONTAGEM",
+                "mensagem": f"A lista não está em contagem (status: {counting_list.list_status}).",
+                "list_status": counting_list.list_status,
+            },
+        )
+
+    if not _is_staff(current_user) and not _is_counter_for_current_cycle(counting_list, current_user.id):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "erro": "CONTADOR_NAO_ATRIBUIDO",
+                "mensagem": "Você não é o contador atribuído ao ciclo atual desta lista.",
+                "cycle": counting_list.current_cycle,
+            },
+        )
+
+    if counting_list.lease_token and counting_list.lease_device_id != device_id:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "erro": "LISTA_EM_USO_OUTRO_DISPOSITIVO",
+                "mensagem": "Esta lista já está baixada em outro aparelho.",
+                **_lease_payload(counting_list),
+            },
+        )
+
+    import uuid as _uuid
+    token = _uuid.uuid4()
+    counting_list.lease_token = token
+    counting_list.lease_device_id = device_id
+    counting_list.lease_user_id = current_user.id
+    counting_list.lease_at = func.now()
+    db.commit()
+
+    logger.info(f"📥 [LEASE] lista {list_id} retirada pelo aparelho {device_id} (user {current_user.id})")
+    return {"lease_token": str(token), "counting_list_id": str(list_id)}
+
+
+@router.delete("/counting-lists/{list_id}/checkout")
+async def release_counting_list(
+    list_id: UUID,
+    lease_token: Optional[str] = Query(None, description="Token do lease a liberar"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Item 0.5 — devolve a lista. O app chama ao terminar de sincronizar.
+
+    ESCAPE HATCH OBRIGATÓRIO: ADMIN/SUPERVISOR liberam sem token. Sem isso, um
+    aparelho perdido ou um operador desligado congelariam a lista para sempre.
+    O evento fica no histórico de handoff, que já existe.
+    """
+    counting_list = db.query(CountingList).filter(CountingList.id == list_id).first()
+    if not counting_list:
+        raise HTTPException(status_code=404, detail="Lista de contagem não encontrada")
+
+    if not counting_list.lease_token:
+        return {"message": "Lista já estava livre.", "lease_ativo": False}
+
+    forcado = False
+    if lease_token and str(counting_list.lease_token) == str(lease_token):
+        pass  # devolução normal, pelo próprio aparelho
+    elif _is_staff(current_user):
+        forcado = True
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "erro": "LEASE_DE_OUTRO_DISPOSITIVO",
+                "mensagem": "Só o aparelho que retirou a lista (ou um supervisor) pode liberá-la.",
+            },
+        )
+
+    device_anterior = counting_list.lease_device_id
+    counting_list.lease_token = None
+    counting_list.lease_device_id = None
+    counting_list.lease_user_id = None
+    counting_list.lease_at = None
+
+    if forcado:
+        db.add(CountingListHandoffHistory(
+            list_id=list_id,
+            evento='LEASE_LIBERADO',
+            ator_id=current_user.id,
+            ciclo=counting_list.current_cycle,
+            observacao=f"Lease do aparelho {device_anterior} liberado por supervisor/admin.",
+        ))
+        logger.warning(
+            f"⚠️ [LEASE] lista {list_id} liberada À FORÇA por {current_user.id} "
+            f"(aparelho anterior: {device_anterior})"
+        )
+
+    db.commit()
+    return {"message": "Lista liberada.", "lease_ativo": False, "forcado": forcado}
+
+
 @router.get("/counting-lists/{list_id}/handoff-history")
 async def get_handoff_history(
     list_id: UUID,
@@ -1231,6 +1466,8 @@ async def get_counting_list_items(
                     "last_counted_at": counting_item.last_counted_at.isoformat() if counting_item.last_counted_at else None,
                     "last_counted_by": str(counting_item.last_counted_by) if counting_item.last_counted_by else None
                 }
+                # Item 0.2 — projeção da contagem cega por papel.
+                aplicar_contagem_cega(product_data, current_user, counting_list)
                 products.append(product_data)
 
             return {
@@ -1313,6 +1550,10 @@ async def get_my_counting_items(
             "current_count": getattr(item, count_field),
             "status": "COUNTED" if getattr(item, count_field) is not None else "PENDING"
         }
+        # Item 0.2 — projeção da contagem cega por papel. `current_count` é o
+        # ciclo CORRENTE (já resolvido em count_field) e por isso permanece:
+        # é o que diz ao contador o que ele mesmo já contou.
+        aplicar_contagem_cega(item_data, current_user, counting_list)
 
         if item_data["status"] == "PENDING":
             pending.append(item_data)

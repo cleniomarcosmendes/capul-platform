@@ -3,6 +3,19 @@
 *Escrito em 05/08/2026. Detalhamento endpoint a endpoint da Fase 0 do plano de
 contagem offline. As demais fases estão descritas ao final, em resumo.*
 
+> ## ✅ IMPLEMENTADO em 05/08/2026 — backend
+> Os cinco itens estão no código e verdes no DEV (suíte do Inventário: 31 → 55).
+> Migration 015 aplicada. **Falta o frontend web** consumir os campos novos.
+> Ponto de retomada e o que fazer a seguir: `docs/RETOMAR_INVENTARIO_OFFLINE_06AGO.md`
+>
+> Duas correções de rumo durante a implementação, que contrariam versões
+> anteriores deste documento — ler antes de mexer:
+> 1. **O zero do handoff está certo** e a regra não mudou (ver item 0.3).
+> 2. **A projeção da contagem cega remove só ciclos ANTERIORES.** Remover o
+>    `count_cycle_N` do ciclo corrente faria todo item voltar a aparecer como
+>    pendente para o operador — a tela deriva contados/pendentes da count_cycle
+>    real, não do status.
+
 ---
 
 ## 1. Contexto

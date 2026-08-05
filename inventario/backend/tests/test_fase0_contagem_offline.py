@@ -1,0 +1,504 @@
+"""
+Fase 0 da contagem offline no app — gates dos itens 0.1 a 0.5.
+Ver docs/PLANO_INVENTARIO_MOBILE_OFFLINE_FASE0.md
+
+Chama os handlers/validadores diretamente (não via HTTP), mesmo padrão de
+test_handoff_supervisor.py.
+
+⚠️ Rodar por `./run-tests.sh` — `tests/` está no .dockerignore, então `pytest`
+   dentro do container coleta só o test_smoke.py da raiz.
+
+O teste que NÃO pode voltar nunca é o de ciclo divergente (0.1): sem ele, uma
+contagem offline do 1º ciclo sincronizada depois do avanço sobrescreve em
+silêncio o trabalho do contador do 2º.
+"""
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+
+from app.models.models import (
+    CountingList,
+    CountingListItem,
+    CountingListHandoffHistory,
+    Counting,
+)
+from app.api.v1.endpoints.counting_lists import (
+    aplicar_contagem_cega,
+    handoff_counting_list,
+    checkout_counting_list,
+    release_counting_list,
+)
+from app.main import _validar_captura_offline
+
+
+# --------------------------------------------------------------------------
+# helpers
+# --------------------------------------------------------------------------
+
+def _captura(**kw):
+    """Objeto no formato de RegisterCountRequest, só com o que o validador lê."""
+    base = dict(
+        counting_list_id=None,
+        expected_cycle=None,
+        idempotency_key=None,
+        counted_at_client=None,
+        lease_token=None,
+        force=False,
+    )
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+def _erro(exc_info) -> str:
+    detail = exc_info.value.detail
+    return detail.get("erro") if isinstance(detail, dict) else str(detail)
+
+
+# ==========================================================================
+# 0.1 — Ciclo carimbado pelo cliente
+# ==========================================================================
+
+def test_01_ciclo_divergente_e_recusado(db_session, test_counting_list, test_counting_list_items):
+    """⭐ A regressão que corrompe inventário em silêncio.
+
+    Contagem capturada no ciclo 1 chegando com a lista já no ciclo 2 tem que
+    ser RECUSADA. Antes ela era gravada como contagem do ciclo 2 e o upsert por
+    (item, ciclo) sobrescrevia o valor do outro contador.
+    """
+    test_counting_list.current_cycle = 2
+    db_session.flush()
+    item = test_counting_list_items[0]
+
+    with pytest.raises(HTTPException) as exc:
+        _validar_captura_offline(
+            db=db_session,
+            count_data=_captura(counting_list_id=str(test_counting_list.id), expected_cycle=1),
+            counting_list=test_counting_list,
+            cycle_number=2,
+            item_uuid=item.inventory_item_id,
+            current_user=SimpleNamespace(id=uuid4()),
+        )
+
+    assert exc.value.status_code == 409
+    assert _erro(exc) == "CICLO_DIVERGENTE"
+    assert exc.value.detail["expected_cycle"] == 1
+    assert exc.value.detail["current_cycle"] == 2
+
+
+def test_01_ciclo_igual_passa(db_session, test_counting_list, test_counting_list_items):
+    item = test_counting_list_items[0]
+    _validar_captura_offline(
+        db=db_session,
+        count_data=_captura(counting_list_id=str(test_counting_list.id), expected_cycle=1),
+        counting_list=test_counting_list,
+        cycle_number=1,
+        item_uuid=item.inventory_item_id,
+        current_user=SimpleNamespace(id=uuid4()),
+    )
+
+
+def test_01_lista_divergente_e_recusada(db_session, test_counting_list, test_counting_list_items):
+    """Item que mudou de lista entre a captura e a sincronização."""
+    item = test_counting_list_items[0]
+    with pytest.raises(HTTPException) as exc:
+        _validar_captura_offline(
+            db=db_session,
+            count_data=_captura(counting_list_id=str(uuid4()), expected_cycle=1),
+            counting_list=test_counting_list,
+            cycle_number=1,
+            item_uuid=item.inventory_item_id,
+            current_user=SimpleNamespace(id=uuid4()),
+        )
+    assert exc.value.status_code == 409
+    assert _erro(exc) == "LISTA_DIVERGENTE"
+
+
+def test_01_retrocompat_sem_campos_novos(db_session, test_counting_list, test_counting_list_items):
+    """Cliente legado (a web de hoje) não envia nada disso e não pode quebrar."""
+    item = test_counting_list_items[0]
+    _validar_captura_offline(
+        db=db_session,
+        count_data=_captura(),
+        counting_list=test_counting_list,
+        cycle_number=1,
+        item_uuid=item.inventory_item_id,
+        current_user=SimpleNamespace(id=uuid4()),
+    )
+
+
+# ==========================================================================
+# 0.2 — Saldo fora do payload do OPERATOR
+# ==========================================================================
+
+def _payload_produto():
+    return {
+        "id": str(uuid4()),
+        "product_code": "000001",
+        "expected_quantity": 1234.5,
+        "system_qty": 1234.5,
+        "count_cycle_1": 10.0,
+        "count_cycle_2": 12.0,
+        "count_cycle_3": None,
+        "finalQuantity": 12.0,
+    }
+
+
+def test_02_operator_nao_recebe_saldo(test_counting_list, test_operator_user):
+    out = aplicar_contagem_cega(_payload_produto(), test_operator_user, test_counting_list)
+    assert "expected_quantity" not in out
+    assert "system_qty" not in out
+
+
+def test_02_supervisor_recebe_saldo(test_counting_list, test_supervisor_user):
+    out = aplicar_contagem_cega(_payload_produto(), test_supervisor_user, test_counting_list)
+    assert out["expected_quantity"] == 1234.5
+    assert out["system_qty"] == 1234.5
+
+
+def test_02_ciclo_atual_nunca_e_removido(db_session, test_counting_list, test_operator_user):
+    """⚠️ O count_cycle do ciclo CORRENTE não pode sair nunca.
+
+    É dele que a tela deriva o que já foi contado (useCountingData monta
+    contados/pendentes a partir da count_cycle real, não do status). Removê-lo
+    faria todo item voltar a aparecer como pendente para o operador.
+    """
+    test_counting_list.current_cycle = 1
+    test_counting_list.show_previous_counts = False
+    db_session.flush()
+
+    out = aplicar_contagem_cega(_payload_produto(), test_operator_user, test_counting_list)
+    assert out["count_cycle_1"] == 10.0
+
+
+def test_02_ciclos_anteriores_saem_quando_cega(db_session, test_counting_list, test_operator_user):
+    test_counting_list.current_cycle = 3
+    test_counting_list.show_previous_counts = False
+    db_session.flush()
+
+    out = aplicar_contagem_cega(_payload_produto(), test_operator_user, test_counting_list)
+    assert "count_cycle_1" not in out
+    assert "count_cycle_2" not in out
+    assert "count_cycle_3" in out  # ciclo corrente permanece
+
+
+def test_02_show_previous_counts_true_devolve_anteriores(db_session, test_counting_list, test_operator_user):
+    """A decisão é do supervisor no Liberar — o servidor só passa a honrá-la."""
+    test_counting_list.current_cycle = 3
+    test_counting_list.show_previous_counts = True
+    db_session.flush()
+
+    out = aplicar_contagem_cega(_payload_produto(), test_operator_user, test_counting_list)
+    assert out["count_cycle_1"] == 10.0
+    assert out["count_cycle_2"] == 12.0
+
+
+def test_02_final_quantity_sobrevive_para_operator(db_session, test_counting_list, test_operator_user):
+    """Regressão do `.pop()`: finalQuantity é calculado a partir do
+    expected_quantity, então tem que ser resolvido ANTES da projeção."""
+    out = aplicar_contagem_cega(_payload_produto(), test_operator_user, test_counting_list)
+    assert out["finalQuantity"] == 12.0
+
+
+# ==========================================================================
+# 0.3 — Rastro do preenchimento do handoff
+# ==========================================================================
+
+def test_03_handoff_marca_zerado_no_fecho(
+    db_session, test_counting_list, test_counting_list_items, test_supervisor_user
+):
+    """Item não contado vira 0 E fica marcado; item contado como 0 NÃO é marcado.
+
+    A regra do preenchimento não muda — zero é contagem legítima. A marca só
+    diz de onde o zero veio.
+    """
+    test_counting_list.list_status = 'EM_CONTAGEM'
+    contado_zero, nao_contado = test_counting_list_items[0], test_counting_list_items[1]
+    contado_zero.count_cycle_1 = Decimal("0")
+    nao_contado.count_cycle_1 = None
+    db_session.flush()
+
+    asyncio.run(handoff_counting_list(
+        list_id=test_counting_list.id, db=db_session, current_user=test_supervisor_user
+    ))
+
+    db_session.refresh(contado_zero)
+    db_session.refresh(nao_contado)
+    assert nao_contado.count_cycle_1 == 0
+    assert nao_contado.zerado_no_fecho is True, "preenchido no fecho tem que ficar marcado"
+    assert contado_zero.zerado_no_fecho is False, "zero CONTADO não é preenchimento"
+
+
+def test_03_handoff_preserva_item_ja_contado(
+    db_session, test_counting_list, test_counting_list_items, test_supervisor_user
+):
+    """Proteção da regra: o handoff só toca count_cycle_N NULL. Se alguém
+    'consertar' isso para sobrescrever tudo com zero, este teste cai."""
+    test_counting_list.list_status = 'EM_CONTAGEM'
+    item = test_counting_list_items[0]
+    item.count_cycle_1 = Decimal("42")
+    db_session.flush()
+
+    asyncio.run(handoff_counting_list(
+        list_id=test_counting_list.id, db=db_session, current_user=test_supervisor_user
+    ))
+
+    db_session.refresh(item)
+    assert item.count_cycle_1 == 42
+
+
+def test_03_handoff_ciclo2_ignora_item_que_nao_precisa_recontagem(
+    db_session, test_counting_list, test_counting_list_items, test_supervisor_user
+):
+    test_counting_list.list_status = 'EM_CONTAGEM'
+    test_counting_list.current_cycle = 2
+    fora, dentro = test_counting_list_items[0], test_counting_list_items[1]
+    fora.needs_count_cycle_2 = False
+    dentro.needs_count_cycle_2 = True
+    db_session.flush()
+
+    asyncio.run(handoff_counting_list(
+        list_id=test_counting_list.id, db=db_session, current_user=test_supervisor_user
+    ))
+
+    db_session.refresh(fora)
+    db_session.refresh(dentro)
+    assert fora.count_cycle_2 is None, "item fora do ciclo 2 não pode ser preenchido"
+    assert dentro.count_cycle_2 == 0
+
+
+# ==========================================================================
+# 0.4 — Ordenação (idempotência é testada pelo caminho do endpoint)
+# ==========================================================================
+
+def test_04_captura_mais_velha_e_recusada(
+    db_session, test_counting_list, test_counting_list_items, test_operator_user
+):
+    """O operador conta 10, corrige para 12, e as duas sobem fora de ordem."""
+    item = test_counting_list_items[0]
+    agora = datetime.now(timezone.utc)
+
+    db_session.add(Counting(
+        id=uuid4(),
+        inventory_item_id=item.inventory_item_id,
+        quantity=Decimal("12"),
+        counted_by=test_operator_user.id,
+        count_number=1,
+        counted_at_client=agora,
+    ))
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        _validar_captura_offline(
+            db=db_session,
+            count_data=_captura(counted_at_client=agora - timedelta(minutes=5)),
+            counting_list=test_counting_list,
+            cycle_number=1,
+            item_uuid=item.inventory_item_id,
+            current_user=test_operator_user,
+        )
+    assert _erro(exc) == "CONTAGEM_DESATUALIZADA"
+
+
+def test_04_captura_mais_nova_passa(
+    db_session, test_counting_list, test_counting_list_items, test_operator_user
+):
+    item = test_counting_list_items[0]
+    agora = datetime.now(timezone.utc)
+    db_session.add(Counting(
+        id=uuid4(),
+        inventory_item_id=item.inventory_item_id,
+        quantity=Decimal("10"),
+        counted_by=test_operator_user.id,
+        count_number=1,
+        counted_at_client=agora - timedelta(minutes=5),
+    ))
+    db_session.flush()
+
+    _validar_captura_offline(
+        db=db_session,
+        count_data=_captura(counted_at_client=agora),
+        counting_list=test_counting_list,
+        cycle_number=1,
+        item_uuid=item.inventory_item_id,
+        current_user=test_operator_user,
+    )
+
+
+# ==========================================================================
+# 0.5 — Lease por dispositivo
+# ==========================================================================
+
+def _com_lease(counting_list, db, device="dev-aaa"):
+    counting_list.lease_token = uuid4()
+    counting_list.lease_device_id = device
+    counting_list.lease_at = datetime.now(timezone.utc)
+    db.flush()
+    return counting_list.lease_token
+
+
+def test_05_sem_lease_web_grava_como_hoje(
+    db_session, test_counting_list, test_counting_list_items, test_operator_user
+):
+    """Retrocompatibilidade: lista sem lease se comporta exatamente como antes."""
+    item = test_counting_list_items[0]
+    _validar_captura_offline(
+        db=db_session,
+        count_data=_captura(),
+        counting_list=test_counting_list,
+        cycle_number=1,
+        item_uuid=item.inventory_item_id,
+        current_user=test_operator_user,
+    )
+
+
+def test_05_web_sem_token_com_lease_ativo_avisa(
+    db_session, test_counting_list, test_counting_list_items, test_operator_user
+):
+    _com_lease(test_counting_list, db_session)
+    item = test_counting_list_items[0]
+
+    with pytest.raises(HTTPException) as exc:
+        _validar_captura_offline(
+            db=db_session,
+            count_data=_captura(),
+            counting_list=test_counting_list,
+            cycle_number=1,
+            item_uuid=item.inventory_item_id,
+            current_user=test_operator_user,
+        )
+    assert exc.value.status_code == 409
+    assert _erro(exc) == "LISTA_EM_USO_OUTRO_DISPOSITIVO"
+    assert exc.value.detail["lease_device_id"]
+
+
+def test_05_force_grava_e_invalida_o_lease(
+    db_session, test_counting_list, test_counting_list_items, test_operator_user
+):
+    """Decisão humana informada: passa a contar E derruba o lease, para o app
+    descobrir na sincronização em vez de sobrescrever calado."""
+    _com_lease(test_counting_list, db_session)
+    item = test_counting_list_items[0]
+
+    _validar_captura_offline(
+        db=db_session,
+        count_data=_captura(force=True),
+        counting_list=test_counting_list,
+        cycle_number=1,
+        item_uuid=item.inventory_item_id,
+        current_user=test_operator_user,
+    )
+    assert test_counting_list.lease_token is None
+
+
+def test_05_app_com_token_invalidado_e_recusado(
+    db_session, test_counting_list, test_counting_list_items, test_operator_user
+):
+    """O app estava offline; alguém contou na web com force. Ao sincronizar, ele
+    NÃO pode sobrescrever — tem que descobrir."""
+    _com_lease(test_counting_list, db_session)
+    item = test_counting_list_items[0]
+    token_velho = str(uuid4())
+
+    with pytest.raises(HTTPException) as exc:
+        _validar_captura_offline(
+            db=db_session,
+            count_data=_captura(lease_token=token_velho),
+            counting_list=test_counting_list,
+            cycle_number=1,
+            item_uuid=item.inventory_item_id,
+            current_user=test_operator_user,
+        )
+    assert _erro(exc) == "LEASE_INVALIDO"
+
+
+def test_05_app_com_token_valido_passa(
+    db_session, test_counting_list, test_counting_list_items, test_operator_user
+):
+    token = _com_lease(test_counting_list, db_session)
+    item = test_counting_list_items[0]
+
+    _validar_captura_offline(
+        db=db_session,
+        count_data=_captura(lease_token=str(token)),
+        counting_list=test_counting_list,
+        cycle_number=1,
+        item_uuid=item.inventory_item_id,
+        current_user=test_operator_user,
+    )
+
+
+def test_05_checkout_e_recusado_para_outro_aparelho(
+    db_session, test_counting_list, test_supervisor_user
+):
+    test_counting_list.list_status = 'EM_CONTAGEM'
+    _com_lease(test_counting_list, db_session, device="dev-aaa")
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(checkout_counting_list(
+            list_id=test_counting_list.id,
+            payload={"device_id": "dev-bbb"},
+            db=db_session,
+            current_user=test_supervisor_user,
+        ))
+    assert _erro(exc) == "LISTA_EM_USO_OUTRO_DISPOSITIVO"
+
+
+def test_05_checkout_do_mesmo_aparelho_renova(
+    db_session, test_counting_list, test_supervisor_user
+):
+    """O app pode perder o token local (reinstalação) — o mesmo aparelho retoma."""
+    test_counting_list.list_status = 'EM_CONTAGEM'
+    antigo = _com_lease(test_counting_list, db_session, device="dev-aaa")
+
+    resp = asyncio.run(checkout_counting_list(
+        list_id=test_counting_list.id,
+        payload={"device_id": "dev-aaa"},
+        db=db_session,
+        current_user=test_supervisor_user,
+    ))
+    assert resp["lease_token"] != str(antigo)
+
+
+def test_05_supervisor_libera_lease_a_forca(
+    db_session, test_counting_list, test_supervisor_user
+):
+    """Escape hatch obrigatório: sem ele, aparelho perdido congela a lista."""
+    _com_lease(test_counting_list, db_session)
+
+    resp = asyncio.run(release_counting_list(
+        list_id=test_counting_list.id,
+        lease_token=None,
+        db=db_session,
+        current_user=test_supervisor_user,
+    ))
+
+    assert resp["forcado"] is True
+    assert test_counting_list.lease_token is None
+
+    evento = db_session.query(CountingListHandoffHistory).filter(
+        CountingListHandoffHistory.list_id == test_counting_list.id,
+        CountingListHandoffHistory.evento == 'LEASE_LIBERADO',
+    ).first()
+    assert evento is not None, "liberação forçada tem que ficar no histórico"
+
+
+def test_05_operator_nao_libera_lease_de_outro(
+    db_session, test_counting_list, test_operator_user
+):
+    _com_lease(test_counting_list, db_session)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(release_counting_list(
+            list_id=test_counting_list.id,
+            lease_token=None,
+            db=db_session,
+            current_user=test_operator_user,
+        ))
+    assert exc.value.status_code == 403

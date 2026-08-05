@@ -401,6 +401,20 @@ class RegisterCountRequest(BaseModel):
     # Novo campo para produtos com múltiplos lotes
     lot_counts: Optional[List[LotCount]] = None
 
+    # --- Fase 0 da contagem offline (itens 0.1 / 0.4 / 0.5) ---
+    # Todos OPCIONAIS por retrocompatibilidade: a web de hoje não envia e o
+    # comportamento antigo é preservado. Quando a web passar a enviar,
+    # counting_list_id e expected_cycle devem virar OBRIGATÓRIOS e o caminho
+    # legado sai. Enquanto isso, ausência é logada em WARN.
+    counting_list_id: Optional[str] = None
+    expected_cycle: Optional[int] = None
+    idempotency_key: Optional[str] = None
+    counted_at_client: Optional[datetime] = None
+    lease_token: Optional[str] = None
+    # Confirmação humana explícita de que se quer contar mesmo com a lista em
+    # uso por outro dispositivo — invalida o lease. Ver item 0.5.
+    force: bool = False
+
 # =================================
 # FUNÇÕES DE SEGURANÇA SIMPLES
 # =================================
@@ -6334,6 +6348,155 @@ class SimpleCountRequest(BaseModel):
     location: Optional[str] = None
     lot_counts: Optional[List[LotCount]] = None
 
+    # Fase 0 — espelham RegisterCountRequest; este é o endpoint que a tela de
+    # contagem (e o futuro app) usa de fato.
+    counting_list_id: Optional[str] = None
+    expected_cycle: Optional[int] = None
+    idempotency_key: Optional[str] = None
+    counted_at_client: Optional[datetime] = None
+    lease_token: Optional[str] = None
+    force: bool = False
+
+def _validar_captura_offline(db, count_data, counting_list, cycle_number, item_uuid, current_user):
+    """
+    Fase 0 — validações que protegem a contagem capturada fora de linha.
+    Ver docs/PLANO_INVENTARIO_MOBILE_OFFLINE_FASE0.md
+
+    Todos os campos são opcionais: ausência preserva o comportamento anterior
+    (a web de hoje não envia nada disso). Presença = validação estrita.
+
+    Levanta HTTPException com `detail.erro` preenchido — o código é o que a
+    fila do app usa para decidir entre reenviar, descartar ou pôr em quarentena.
+    """
+    from app.models.models import Counting
+
+    # ---- 0.1: a captura vale para a LISTA e o CICLO em que foi feita ----
+    #
+    # Sem isto o servidor resolve o ciclo no momento em que a contagem CHEGA
+    # (`counting_list.current_cycle`) e o upsert por (item, ciclo) sobrescreve
+    # em silêncio o trabalho de outro contador. É a regressão mais grave da
+    # fase: uma contagem do 1º ciclo, sincronizada depois do avanço, viraria
+    # contagem do 2º.
+    if count_data.counting_list_id:
+        if not counting_list or str(counting_list.id) != str(count_data.counting_list_id):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "erro": "LISTA_DIVERGENTE",
+                    "mensagem": "Este item não pertence mais à lista em que foi contado.",
+                    "counting_list_id_enviado": str(count_data.counting_list_id),
+                    "counting_list_id_atual": str(counting_list.id) if counting_list else None,
+                    "item_id": str(item_uuid),
+                },
+            )
+
+    if count_data.expected_cycle is not None:
+        if int(count_data.expected_cycle) != int(cycle_number):
+            logger.warning(
+                f"🚫 [CICLO_DIVERGENTE] contagem do ciclo {count_data.expected_cycle} chegou com a "
+                f"lista no ciclo {cycle_number} — item {item_uuid}, usuário {current_user.id}. Recusada."
+            )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "erro": "CICLO_DIVERGENTE",
+                    "mensagem": (
+                        f"Esta contagem foi feita no {count_data.expected_cycle}º ciclo, "
+                        f"mas a lista já está no {cycle_number}º. Ela não foi gravada."
+                    ),
+                    "expected_cycle": int(count_data.expected_cycle),
+                    "current_cycle": int(cycle_number),
+                    "counting_list_id": str(counting_list.id) if counting_list else None,
+                    "item_id": str(item_uuid),
+                },
+            )
+    elif count_data.counting_list_id:
+        # Mandou a lista mas não o ciclo — combinação estranha, vale registrar.
+        logger.warning(
+            "⚠️ [FASE0] counting_list_id enviado sem expected_cycle — validação de ciclo não aplicada."
+        )
+    else:
+        # Cliente legado (web de hoje). Quando ela migrar, estes campos viram
+        # obrigatórios e este ramo sai.
+        logger.warning(
+            f"⚠️ [FASE0] contagem sem counting_list_id/expected_cycle (cliente legado) — "
+            f"item {item_uuid}, ciclo resolvido no servidor = {cycle_number}."
+        )
+
+    # ---- 0.4: ordenação — não deixar captura velha sobrescrever a nova ----
+    #
+    # O operador conta 10, corrige para 12, e as duas entradas sobem fora de
+    # ordem. `counted_at_client` é a hora NO APARELHO: serve para ordenar
+    # capturas do MESMO aparelho. Não é hora confiável em termos absolutos e
+    # não é comparável entre aparelhos distintos — isso é papel do lease (0.5).
+    if count_data.counted_at_client is not None:
+        anterior = db.query(Counting).filter(
+            Counting.inventory_item_id == item_uuid,
+            Counting.count_number == cycle_number,
+        ).first()
+        if anterior is not None and anterior.counted_at_client is not None:
+            if count_data.counted_at_client < anterior.counted_at_client:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "erro": "CONTAGEM_DESATUALIZADA",
+                        "mensagem": "Já existe uma contagem mais recente para este item.",
+                        "counted_at_client_recebido": count_data.counted_at_client.isoformat(),
+                        "counted_at_client_gravado": anterior.counted_at_client.isoformat(),
+                    },
+                )
+
+    # ---- 0.5: lease da lista por dispositivo ----
+    #
+    # NÃO é lock distribuído: o app conta offline sem falar com o servidor. O
+    # lease reduz a janela e, principalmente, torna a colisão DETECTÁVEL em vez
+    # de last-write-wins silencioso.
+    if counting_list is not None and getattr(counting_list, 'lease_token', None):
+        enviado = str(count_data.lease_token) if count_data.lease_token else None
+        atual = str(counting_list.lease_token)
+
+        if enviado is None:
+            if not count_data.force:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "erro": "LISTA_EM_USO_OUTRO_DISPOSITIVO",
+                        "mensagem": (
+                            "Esta lista está baixada em um aplicativo. Contar aqui pode descartar "
+                            "contagens que ainda não foram sincronizadas."
+                        ),
+                        "lease_device_id": counting_list.lease_device_id,
+                        "lease_user_id": str(counting_list.lease_user_id) if counting_list.lease_user_id else None,
+                        "lease_at": counting_list.lease_at.isoformat() if counting_list.lease_at else None,
+                        "counting_list_id": str(counting_list.id),
+                    },
+                )
+            # force=True: decisão humana explícita e informada. Invalida o
+            # lease para que o app descubra na sincronização (LEASE_INVALIDO)
+            # em vez de sobrescrever calado.
+            logger.warning(
+                f"⚠️ [LEASE] invalidado por force=true — lista {counting_list.id}, "
+                f"aparelho {counting_list.lease_device_id}, por usuário {current_user.id}."
+            )
+            counting_list.lease_token = None
+            counting_list.lease_device_id = None
+            counting_list.lease_user_id = None
+            counting_list.lease_at = None
+            db.flush()
+        elif enviado != atual:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "erro": "LEASE_INVALIDO",
+                    "mensagem": (
+                        "Esta lista passou a ser contada em outro lugar enquanto o aparelho estava "
+                        "offline. A contagem não foi gravada."
+                    ),
+                    "counting_list_id": str(counting_list.id),
+                },
+            )
+
+
 @app.post("/api/v1/inventory/items/{item_id}/count", tags=["Counting"])
 async def register_count_simple(
     item_id: str,
@@ -6358,6 +6521,14 @@ async def register_count_simple(
             observation=count_data.observation,
             location=count_data.location,
             lot_counts=count_data.lot_counts,
+            # Fase 0 — repassar os campos novos; sem isto a validação de ciclo
+            # nunca rodaria pelo caminho que a tela realmente usa.
+            counting_list_id=count_data.counting_list_id,
+            expected_cycle=count_data.expected_cycle,
+            idempotency_key=count_data.idempotency_key,
+            counted_at_client=count_data.counted_at_client,
+            lease_token=count_data.lease_token,
+            force=count_data.force,
         )
         return await register_count(
             inventory_id=str(item.inventory_list_id),
@@ -6420,6 +6591,47 @@ async def register_count(
             cycle_number = getattr(inventory, 'current_cycle', 1)
             logger.warning(f"⚠️ Counting_list não encontrada, usando status do inventário: {list_status}, Ciclo: {cycle_number}")
 
+        # ---- 0.4: idempotência — reenvio da fila do app não reprocessa ----
+        #
+        # O upsert por (item, ciclo) já evitaria duplicar o VALOR. A chave
+        # existe para não reprocessar EFEITO COLATERAL (recálculo de
+        # divergência, auditoria, fecho automático da lista) e para dizer qual
+        # captura offline gerou qual gravação. Espelha o padrão que a Logística
+        # já usa em despesa.service.ts.
+        if count_data.idempotency_key:
+            from app.models.models import Counting as _Counting
+            ja = db.query(_Counting).filter(
+                _Counting.idempotency_key == count_data.idempotency_key
+            ).first()
+            if ja is not None:
+                logger.info(
+                    f"♻️ [IDEMPOTENTE] contagem {count_data.idempotency_key} já processada — "
+                    f"devolvendo o resultado anterior sem reprocessar."
+                )
+                return {
+                    "success": True,
+                    "idempotent_replay": True,
+                    "message": "Contagem já registrada anteriormente.",
+                    "counting_id": str(ja.id),
+                    "quantity": float(ja.quantity),
+                    "count_number": ja.count_number,
+                }
+
+        # ================================================================
+        # FASE 0 — validações da contagem offline (0.1 / 0.4 / 0.5).
+        # Rodam ANTES de qualquer escrita e antes das validações antigas:
+        # se a captura veio de um contexto que não vale mais, nem faz sentido
+        # avaliar o resto.
+        # ================================================================
+        _validar_captura_offline(
+            db=db,
+            count_data=count_data,
+            counting_list=counting_list,
+            cycle_number=cycle_number,
+            item_uuid=item_uuid,
+            current_user=current_user,
+        )
+
         # VALIDAÇÃO 1: Status inteligente - aceita tanto sistema novo quanto antigo
         valid_statuses = ['EM_CONTAGEM', 'RELEASED', 'IN_PROGRESS']
 
@@ -6428,9 +6640,22 @@ async def register_count(
             # Sistema novo (multi-listas) - aceita EM_CONTAGEM
             if list_status not in valid_statuses:
                 logger.warning(f"⚠️ Lista multi-lista não liberada: {inventory_id}, Status: {list_status}")
+                # Item 0.3 — erro IDENTIFICÁVEL. Antes era um 400 com texto
+                # solto: a fila offline do app não tinha como distinguir "lista
+                # entregue ao supervisor" (não adianta reenviar, avisar o
+                # operador) de erro transitório. O código no campo `erro` é o
+                # que a fila usa para decidir.
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Lista de contagem não foi liberada (Status: {list_status}). Solicite ao supervisor para liberar a lista."
+                    detail={
+                        "erro": "LISTA_NAO_ESTA_EM_CONTAGEM",
+                        "mensagem": (
+                            f"A lista não está em contagem (status: {list_status}). "
+                            f"Se ela foi entregue ao supervisor, peça a devolução para continuar."
+                        ),
+                        "list_status": list_status,
+                        "counting_list_id": str(counting_list.id),
+                    },
                 )
         else:
             # Sistema antigo (lista única) - aceita também ABERTA se for única
@@ -6465,9 +6690,16 @@ async def register_count(
             assigned_counter = getattr(counting_list, counter_field, None)
             if assigned_counter and str(assigned_counter) != str(current_user.id):
                 logger.warning(f"🚫 Usuario {current_user.id} tentou contar mas o contador do ciclo {cycle_number} e {assigned_counter}")
+                # Item 0.3 — idem: a fila do app precisa saber que perdeu a
+                # atribuição (reenviar nunca vai funcionar) em vez de tratar
+                # como falha genérica.
                 raise HTTPException(
                     status_code=403,
-                    detail=f"Voce nao e o contador atribuido ao {cycle_number}o ciclo desta lista."
+                    detail={
+                        "erro": "CONTADOR_NAO_ATRIBUIDO",
+                        "mensagem": f"Você não é o contador atribuído ao {cycle_number}º ciclo desta lista.",
+                        "cycle": cycle_number,
+                    },
                 )
         
         # Verificar se produto tem controle de lote e se foram fornecidos dados de lotes
@@ -6488,6 +6720,11 @@ async def register_count(
                 existing_count.quantity = count_data.quantity
                 existing_count.observation = count_data.observation or f"Contagem atualizada em {datetime.now().strftime('%d/%m/%Y %H:%M')}"
                 existing_count.updated_at = datetime.now()
+                # Fase 0 — rastreabilidade da captura (só sobrescreve se veio).
+                if count_data.idempotency_key:
+                    existing_count.idempotency_key = count_data.idempotency_key
+                if count_data.counted_at_client:
+                    existing_count.counted_at_client = count_data.counted_at_client
                 
                 # ✅ CORREÇÃO CRÍTICA: Atualizar campos count_cycle_X na tabela inventory_items
                 if cycle_number == 1:
@@ -6516,6 +6753,11 @@ async def register_count(
                     if cli_upd.revisar_no_ciclo:
                         cli_upd.revisar_no_ciclo = False
                         cli_upd.motivo_revisao = None
+                    # Migration 015: contagem real sobre item que tinha sido
+                    # ZERADO no fecho do handoff limpa a marca — o valor agora
+                    # veio de contagem ativa, não de preenchimento.
+                    if getattr(cli_upd, 'zerado_no_fecho', False):
+                        cli_upd.zerado_no_fecho = False
 
                 db.commit()
                 
@@ -6550,14 +6792,20 @@ async def register_count(
             # PRODUTO COM CONTROLE DE LOTE: Criar múltiplas contagens (uma por lote)
             logger.info(f"🏷️ Produto com controle de lote. Criando {len(count_data.lot_counts)} contagens")
             
-            for lot_data in count_data.lot_counts:
+            for _idx, lot_data in enumerate(count_data.lot_counts):
                 new_counting = Counting(
                     inventory_item_id=item_uuid,
                     quantity=lot_data.quantity,
                     lot_number=lot_data.lot_number,
                     observation=count_data.observation,
                     counted_by=current_user.id,
-                    count_number=cycle_number  # ✅ Usar cycle_number
+                    count_number=cycle_number,  # ✅ Usar cycle_number
+                    # Fase 0: produto com lote gera N linhas para UMA captura.
+                    # `idempotency_key` é UNIQUE, então só a primeira linha a
+                    # carrega — é ela que o dedupe encontra. As demais ficam
+                    # NULL de propósito; marcá-las quebraria o índice único.
+                    idempotency_key=count_data.idempotency_key if _idx == 0 else None,
+                    counted_at_client=count_data.counted_at_client,
                 )
                 
                 db.add(new_counting)
@@ -6576,7 +6824,10 @@ async def register_count(
                 lot_number=count_data.lot_number,  # Pode ser None
                 observation=count_data.observation,
                 counted_by=current_user.id,
-                count_number=cycle_number  # ✅ Usar cycle_number
+                count_number=cycle_number,  # ✅ Usar cycle_number
+                # Fase 0 — rastreabilidade da captura offline.
+                idempotency_key=count_data.idempotency_key,
+                counted_at_client=count_data.counted_at_client,
             )
             
             db.add(new_counting)
@@ -6690,6 +6941,9 @@ async def register_count(
             if cli.revisar_no_ciclo:
                 cli.revisar_no_ciclo = False
                 cli.motivo_revisao = None
+            # Migration 015: idem para a marca de preenchimento do handoff.
+            if getattr(cli, 'zerado_no_fecho', False):
+                cli.zerado_no_fecho = False
 
         db.commit()
         
