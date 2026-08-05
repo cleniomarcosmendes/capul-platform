@@ -22,12 +22,21 @@ de backend que precisam existir **antes** de qualquer linha do app.
 
 ## 2. Por que a Fase 0 é bloqueante
 
-Os três problemas abaixo não aparecem em teste de mesa. Aparecem no cenário **normal**
-de uso offline — contar sem sinal enquanto o supervisor toca a lista pelo desktop. Se o
-app for construído antes, ele funciona na demonstração e corrompe contagem no galpão.
+Os cinco problemas abaixo não aparecem em teste de mesa. Aparecem no cenário **normal**
+de uso offline — contar sem sinal enquanto o supervisor toca a lista pelo desktop, ou o
+mesmo operador abrindo a web porque o celular travou. Se o app for construído antes, ele
+funciona na demonstração e corrompe contagem no galpão.
 
-Dois dos quatro itens (0.2 e 0.4) têm valor **independente do mobile**: corrigem furos
-que existem hoje na web.
+| Item | O que resolve | Vale sem o app? |
+|---|---|---|
+| **0.1** | Ciclo carimbado pelo cliente | Parcial — endurece o endpoint |
+| **0.2** | Saldo fora do payload do OPERATOR | **Sim** — furo de contagem cega que existe hoje |
+| **0.3** | Handoff com trabalho preso no aparelho | Parcial — o rastro `zerado_no_fecho` vale sempre |
+| **0.4** | Idempotência e ordenação | **Sim** — endurece o endpoint |
+| **0.5** | Mesma lista contada em dois lugares | **Sim** — hoje já não há controle algum entre as duas telas web |
+
+Ou seja: três dos cinco itens corrigem problemas que **já existem na web**. Se o projeto
+mobile for cancelado depois, esse trabalho não se perde.
 
 ---
 
@@ -252,7 +261,7 @@ reenvia, com histórico em `/handoff-history` (`counting_lists.py:1086`) e decis
 explícita. **Não criar exceção que aceite contagem em `AGUARDANDO_REVISAO`** — seria abrir
 buraco na regra que dá confiabilidade à revisão do supervisor.
 
-### Decisão em aberto: rastro por item (opcional, recomendado)
+### Rastro por item — ✅ APROVADO (Clenio, 05/08)
 
 Depois do preenchimento o item fica `count_cycle_N = 0`, `status = COUNTED` e
 `last_counted_by = <operador>` — **idêntico a uma contagem ativa**. O único rastro é
@@ -262,12 +271,13 @@ Hoje isso é aceitável: o operador está presente e sabe o que fez. No offline,
 preenchimento passar por cima de contagem real presa no celular, **não há como descobrir
 depois quais itens foram** — só o total.
 
-Proposta: coluna booleana (ex.: `zerado_no_fecho`) marcada no laço que já existe, exposta
-na revisão do supervisor. **Não muda regra nenhuma** e não transforma o handoff em operação
-de risco — é rastreabilidade. Custo: uma coluna e um `setattr`.
+Coluna booleana `zerado_no_fecho` em `counting_list_items`, marcada no laço que já existe
+(`counting_lists.py:920`), junto do `setattr(it, field, 0)`, e exposta na revisão do
+supervisor. **Não muda regra nenhuma** e não transforma o handoff em operação de risco — é
+rastreabilidade. Custo: uma coluna e uma linha no laço.
 
-**Status: aguardando decisão do Clenio.** Se ficar de fora, o 0.3 fecha com os três itens
-acima.
+Uma nova contagem sobre o item **limpa a marca** (`zerado_no_fecho = False`) — o mesmo
+padrão que `revisar_no_ciclo` já usa em `app/main.py:6500`.
 
 ### Reatribuição de contador
 
@@ -326,7 +336,113 @@ auditoria legal; para isso vale o `created_at`/`updated_at` do servidor.
 
 ---
 
-## 7. Migration 015
+## 7. Item 0.5 — Mesma lista contada em dois lugares
+
+*Levantado pelo Clenio em 05/08. É o furo que o `counted_at_client` do 0.4 **não** cobre:
+aquele mecanismo ordena capturas do **mesmo** aparelho; relógios de aparelhos diferentes
+não são comparáveis.*
+
+### O estado hoje
+
+**Não existe controle de concorrência algum.** Os únicos guards nas telas de contagem
+(`ContagemDesktopPage.tsx:47`, `ContagemMobilePage.tsx:24`) são de **autorização** —
+`noAssignedList`, `listNotReleased`, `notCounterOfRequested`. Nada impede a mesma lista de
+ser contada em dois lugares ao mesmo tempo.
+
+E já existem **duas** superfícies web hoje — `ContagemDesktopPage` e `ContagemMobilePage`.
+O app nativo seria a terceira.
+
+O modelo de domínio **já quer dono único**: `counter_cycle_1/2/3` amarra um contador por
+ciclo (`models.py:1058`). O que ninguém amarra é **em quantos dispositivos** esse contador
+pode estar. O caso realista não é fraude, é banal: o operador começa no celular, o
+aparelho dá problema, ele abre o desktop e continua.
+
+**Por que hoje é tolerável e com offline deixa de ser:** as duas telas web estão online, a
+gravação é imediata e o operador vê o resultado na hora — a janela de divergência é de
+segundos. Com o app offline, a janela vira **horas**, e o perdedor do *last-write-wins* é
+descartado em silêncio.
+
+### Comportamento alvo — lease por dispositivo, sem trava dura
+
+A identidade necessária **já existe**: `logistica/app/src/auth/deviceId.ts` gera um
+`deviceId` estável por instalação, guardado no SecureStore, e o backend já amarra sessão de
+dispositivo a ele.
+
+**Novos endpoints:**
+
+```
+POST   /api/v1/counting-lists/{list_id}/checkout   { device_id }  → { lease_token }
+DELETE /api/v1/counting-lists/{list_id}/checkout   { lease_token }
+```
+
+- O app faz `checkout` **ao baixar** a lista e recebe um `lease_token` (uuid).
+- Toda contagem vinda do app carrega o `lease_token`.
+- O `release` acontece ao sincronizar tudo, ou no handoff (automático).
+
+**Validação no `register_count`:**
+
+| Situação | Resposta |
+|---|---|
+| Contagem **com** `lease_token` que bate | grava normalmente |
+| Contagem **com** `lease_token` que **não** bate (lease foi invalidado) | `409 LEASE_INVALIDO` |
+| Contagem **sem** token, lista **com** lease ativo | `409 LISTA_EM_USO_OUTRO_DISPOSITIVO` + dados do lease |
+| Contagem **sem** token, lista **sem** lease | grava normalmente (web de hoje, inalterada) |
+
+**Deliberadamente não é trava dura.** Se o celular do operador morre, ele não pode ficar
+refém de um lease. Então: ao tomar `LISTA_EM_USO_OUTRO_DISPOSITIVO`, a web mostra o aviso
+com os dados reais e pede confirmação —
+
+> *"Esta lista está baixada no aplicativo (dispositivo …a3f, desde 14:22). Contar aqui pode
+> descartar contagens que ainda não sincronizaram. Continuar assim mesmo?"*
+
+— e, confirmado, reenvia com `force: true`, o que **invalida o lease**. A partir daí o app,
+ao sincronizar, recebe `LEASE_INVALIDO` em vez de sobrescrever em silêncio, e o que estava
+preso vai para quarentena (Fase 4) com aviso ao operador.
+
+O ganho é esse: **a decisão passa a ser humana e informada**, e o lado perdedor descobre em
+vez de sumir.
+
+### Visibilidade — o aviso não pode chegar só na hora de salvar
+
+*Reforço do Clenio (05/08): "o desktop/mobile tem que ter conhecimento que existe um
+aparelho APP-MOBILE realizando contagem offline, senão vai que o usuário faz merda."*
+
+Avisar só no `409` da primeira gravação é **tarde**: a pessoa já abriu a lista, já se
+posicionou para trabalhar, e descobre no meio. O estado do lease tem que ser **visível
+antes de começar**.
+
+Como os campos do lease ficam na própria linha de `counting_lists`, sai de graça nos
+endpoints de leitura que já existem — é acrescentar ao payload e renderizar:
+
+| Onde | O que mostrar |
+|---|---|
+| `GET /counting-lists/me` (`counting_lists.py`) → tela "Minhas Listas" e `ContagemSelectorPage` | Selo na lista: **"Em contagem no aplicativo desde 14:22"** |
+| `GET /counting-lists/{list_id}` → `ContagemDesktopPage` / `ContagemMobilePage` | Faixa fixa no topo, antes do primeiro item, não um toast que some |
+| Visão do supervisor (`TabListas` / `ListaDetalheModal`) | Mesma indicação — o supervisor precisa saber antes de liberar, devolver ou cobrar a lista |
+
+Campos a expor: `lease_ativo`, `lease_device_id` (abreviado na UI), `lease_user_id`,
+`lease_at`. Como o lease é por **dispositivo** e não por pessoa, mostrar também de **quem**
+é o aparelho — senão o supervisor vê "dispositivo …a3f" e não sabe a quem cobrar.
+
+Com isso o `409` deixa de ser a primeira notícia e vira a última barreira: quem chegar até
+ele já foi avisado duas vezes.
+
+### Escape hatch obrigatório
+
+`SUPERVISOR`/`ADMIN` podem liberar o lease de qualquer lista (celular perdido, operador
+desligado). Sem isso, um aparelho perdido congela a lista para sempre. Registrar o evento
+no `handoff-history`, que já existe.
+
+### Ressalva
+
+Um lease **não** garante exclusão mútua de verdade — o app pode contar offline sem falar
+com o servidor. Ele reduz a janela e, principalmente, **torna a colisão detectável**. A
+garantia real continua sendo `counter_cycle_N` (um contador por ciclo) mais a disciplina de
+uma lista por vez. Não vender o lease como lock distribuído.
+
+---
+
+## 8. Migration 015
 
 Convenção do módulo: `inventario/database/migrations/NNN_descricao.sql`. Próximo número
 livre: **015**.
@@ -342,17 +458,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS countings_idempotency_key_uidx
   WHERE idempotency_key IS NOT NULL;   -- parcial: linhas antigas ficam NULL
 ```
 
-**Se a decisão em aberto do 0.3 (rastro por item) for aprovada**, entra também — em
-`counting_list_items`, não em `countings`, porque o preenchimento do handoff escreve ali:
+**Item 0.3 — rastro por item** (aprovado). Vai em `counting_list_items`, não em
+`countings`, porque é ali que o preenchimento do handoff escreve:
 
 ```sql
 ALTER TABLE inventario.counting_list_items
   ADD COLUMN zerado_no_fecho BOOLEAN NOT NULL DEFAULT FALSE;
 ```
 
-Marcado no laço que já existe (`counting_lists.py:920`), junto do `setattr(it, field, 0)`.
-Linhas históricas ficam `FALSE` — o que é honesto: não sabemos, para o passado, quais
-zeros vieram de preenchimento.
+Marcado no laço que já existe (`counting_lists.py:920`), junto do `setattr(it, field, 0)`,
+e limpo quando chega contagem nova para o item. Linhas históricas ficam `FALSE` — o que é
+honesto: para o passado não sabemos quais zeros vieram de preenchimento.
+
+**Item 0.5 — lease por dispositivo.** Vai em `counting_lists` (é estado da lista):
+
+```sql
+ALTER TABLE inventario.counting_lists
+  ADD COLUMN lease_token     UUID,
+  ADD COLUMN lease_device_id TEXT,
+  ADD COLUMN lease_user_id   UUID REFERENCES inventario.users(id),
+  ADD COLUMN lease_at        TIMESTAMPTZ;
+```
+
+Todas nuláveis: lista sem lease é o estado normal de hoje, e a web continua funcionando
+sem nenhuma mudança de contrato.
 
 Nenhuma outra mudança de schema é necessária na Fase 0. A tabela de quarentena, se vier,
 é da Fase 4 — e provavelmente nem existe: a quarentena natural é **a própria fila do
@@ -363,7 +492,7 @@ app**, que retém o que o servidor recusou.
 
 ---
 
-## 8. Gates — o que precisa passar
+## 9. Gates — o que precisa passar
 
 Os testes entram em `inventario/backend/tests/`, executados por
 `inventario/backend/run-tests.sh` (a suíte tem 31 cenários; `tests/` fica fora da imagem
@@ -380,15 +509,22 @@ por `.dockerignore`, então **não** use `pytest` dentro do container para confe
 | 0.3 | Após `/return`, a mesma contagem é aceita |
 | 0.3 | Handoff **preserva** item já contado como `0` (não é o mesmo que não contado) e só preenche `NULL` — proteção da regra, para ninguém "consertar" o preenchimento por engano |
 | 0.3 | Handoff no 2º ciclo **não** preenche item com `needs_count_cycle_2 = false` |
+| 0.3 | Item preenchido no handoff fica com `zerado_no_fecho = true`; item contado ativamente como `0` fica `false` |
+| 0.3 | Contagem nova sobre item preenchido **limpa** `zerado_no_fecho` |
 | 0.4 | Mesma `idempotency_key` duas vezes → uma gravação, sem efeito colateral duplicado |
 | 0.4 | `counted_at_client` mais antigo que o gravado → `CONTAGEM_DESATUALIZADA` |
+| 0.5 | Contagem sem token, com lease ativo → `409 LISTA_EM_USO_OUTRO_DISPOSITIVO` |
+| 0.5 | Mesma contagem com `force: true` → grava **e** invalida o lease |
+| 0.5 | Contagem do app com `lease_token` já invalidado → `409 LEASE_INVALIDO` (e **não** sobrescreve) |
+| 0.5 | Lista **sem** lease → web grava exatamente como hoje (retrocompat) |
+| 0.5 | `GET /counting-lists/me` expõe `lease_ativo` para lista em contagem no app |
 
 **O teste 0.1 é o que não pode voltar nunca** — é a regressão que corrompe inventário em
 silêncio.
 
 ---
 
-## 9. O que NÃO entra na Fase 0
+## 10. O que NÃO entra na Fase 0
 
 - Qualquer código do app.
 - Tela de quarentena / resolução de conflito (Fase 4).
@@ -400,14 +536,14 @@ silêncio.
 
 ---
 
-## 10. Resumo das demais fases
+## 11. Resumo das demais fases
 
 | Fase | O quê | Depende de |
 |---|---|---|
 | **0** | Este documento — backend | — |
 | **1** | App multi-módulo: `jwt.ts:76` lê papel por módulo, tile no `HomeScreen`, `name` → "CAPUL Platform" | — (paralelo à 0) |
 | **1.5** | Teto de 3.000 no `AtribuirProdutosModal` + configuração; gerador por localidade (opcional) | — |
-| **2** | Working set offline: endpoint de pacote, AsyncStorage, "uma lista por vez" | 0.2, 1.5 |
-| **3** | `filaContagem.ts` (estado, não append) + bloqueio de handoff com fila pendente | 0.1, 0.4, 2 |
-| **4** | Conflito: tratamento de `CICLO_DIVERGENTE`, tela do supervisor | 0.1, 0.3, 3 |
+| **2** | Working set offline: endpoint de pacote, AsyncStorage, "uma lista por vez", `checkout` do lease ao baixar | 0.2, 0.5, 1.5 |
+| **3** | `filaContagem.ts` (estado, não append) + bloqueio de handoff com fila pendente + `release` do lease | 0.1, 0.4, 0.5, 2 |
+| **4** | Conflito: tratamento de `CICLO_DIVERGENTE` e `LEASE_INVALIDO`, tela do supervisor | 0.1, 0.3, 0.5, 3 |
 | **5** | Piloto: uma filial, uma lista real, web como saída | todas |
