@@ -178,41 +178,64 @@ projeto mobile for cancelado, ele continua valendo.
 
 ---
 
-## 5. Item 0.3 — Handoff, atribuição, e o zero silencioso
+## 5. Item 0.3 — Handoff com trabalho preso no aparelho
 
-Este é o item com o cenário mais destrutivo, e o que exige uma decisão sua.
+> **Correção (05/08, após revisão do Clenio).** A primeira versão deste item chamava os
+> zeros do handoff de "zeros falsos" e tratava a regra como problema. **Estava errado.**
+> Zero é contagem legítima — há produtos que realmente estão zerados — e o preenchimento
+> é a semântica correta de encerrar a varredura. A regra **não muda**. O que segue é o
+> problema real, que é mais estreito.
 
-### O que o handoff faz hoje
+### O que o handoff faz, e por que está certo
 
-`POST /counting-lists/{list_id}/handoff` — `counting_lists.py:880`:
+`POST /counting-lists/{list_id}/handoff` — `counting_lists.py:880`.
 
-```
-- Lista deve estar EM_CONTAGEM
-- Usuário deve ser o contador do ciclo atual (ou ADMIN/SUPERVISOR)
-- Itens não contados no ciclo atual são gravados como ZERO   ← aqui
-- list_status → AGUARDANDO_REVISAO
-```
+O modelo **já distingue** os dois casos:
 
-### O cenário que quebra
+| Valor | Significado |
+|---|---|
+| `count_cycle_N = NULL` | não contado |
+| `count_cycle_N = 0` | contado, saldo zero |
 
-1. Operador baixa a lista (3.000 itens) e conta **500** offline, sem sinal.
-2. Fim do expediente. O celular não sincronizou.
-3. Alguém faz o handoff pelo desktop — o operador, o supervisor, não importa.
-4. **Os 2.500 itens não contados viram ZERO** no ciclo atual.
-5. No dia seguinte o celular sincroniza. A lista está `AGUARDANDO_REVISAO`, que **não**
-   está em `valid_statuses` (`app/main.py:6424`) → as 500 contagens tomam `400`.
+E o preenchimento (`counting_lists.py:920`) só age sobre `if getattr(it, field) is None`,
+ainda filtrando por `needs_count_cycle_N` — no 2º/3º ciclo nem olha item que não precisava
+ser recontado. É o contador declarando *"varri a lista inteira; o que sobrou eu não
+achei"*. Zero é o resultado correto disso.
 
-Resultado: **500 contagens reais perdidas e 2.500 zeros falsos gravados.** Como zero é
-uma contagem válida (produto que acabou), nada nisso parece anômalo depois.
+**Só o handoff preenche.** Os outros dois caminhos de fecho não mexem em item não contado:
 
-### Decisão necessária
+| Caminho | Onde | Preenche? |
+|---|---|---|
+| `/handoff` — contador entrega ao supervisor | `counting_lists.py:880` | **Sim** — declaração de varredura completa |
+| `finalize-cycle` — divergência + avanço 1→2→3 | `main.py:11078` | Não — usa `isnot(None)` na lógica |
+| `/finalizar` — ADMIN/SUPERVISOR encerra direto | `counting_lists.py:1115` | Não — só marca `ENCERRADA` |
 
-Há dois caminhos. **Recomendo o A.**
+### O problema real (que é do offline, não da regra)
 
-**A — Recusar a contagem tardia e usar o fluxo de devolução que já existe (recomendado)**
+O preenchimento assume que **o servidor conhece todo o trabalho do operador**. Offline
+quebra essa premissa:
 
-- O servidor recusa contagem para lista fora de `EM_CONTAGEM`, mas com erro **específico**
-  (hoje é um 400 genérico com texto):
+1. Operador baixa a lista e conta 500 itens offline, sem sinal.
+2. O celular não sincronizou.
+3. Alguém faz o handoff pelo desktop.
+4. O preenchimento grava zero — inclusive sobre itens que o operador **contou de verdade**,
+   com valor real, que está preso no aparelho.
+5. O celular sincroniza depois. A lista está `AGUARDANDO_REVISAO`, que não consta de
+   `valid_statuses` (`app/main.py:6424`) → as contagens tomam `400`.
+
+Não é a regra que falha — é a informação que faltava ao servidor no momento em que ela foi
+aplicada.
+
+### O que fazer
+
+**1. Guarda no app (a correção de verdade — Fase 3).** O app **bloqueia o handoff enquanto
+houver fila pendente**, com mensagem explícita ("faltam N contagens para sincronizar"). O
+servidor não tem como saber que existe trabalho num celular; essa guarda só pode ser do
+cliente. Com ela, o cenário praticamente desaparece.
+
+**2. Erro identificável (Fase 0).** Contagem para lista fora de `EM_CONTAGEM` hoje devolve
+`400` com texto solto. Passa a devolver código próprio, para o app explicar em vez de só
+falhar:
 
 ```jsonc
 {
@@ -223,31 +246,33 @@ Há dois caminhos. **Recomendo o A.**
 }
 ```
 
-- O supervisor usa `POST /counting-lists/{list_id}/return` (`counting_lists.py:957`),
-  que **já existe** para devolver a lista ao contador. A lista volta a `EM_CONTAGEM` e a
-  fila do app reenvia normalmente.
-- **Vantagem:** não inventa exceção nova. Reusa um fluxo existente, com histórico
-  (`/handoff-history`, `counting_lists.py:1086`) e decisão humana explícita.
+**3. Recuperação pelo fluxo existente.** `POST /counting-lists/{list_id}/return`
+(`counting_lists.py:957`) já devolve a lista ao contador. Volta a `EM_CONTAGEM`, a fila
+reenvia, com histórico em `/handoff-history` (`counting_lists.py:1086`) e decisão humana
+explícita. **Não criar exceção que aceite contagem em `AGUARDANDO_REVISAO`** — seria abrir
+buraco na regra que dá confiabilidade à revisão do supervisor.
 
-**B — Aceitar contagem tardia em `AGUARDANDO_REVISAO`** se vier do contador atribuído
-daquele ciclo e o valor atual for um zero posto pelo handoff.
+### Decisão em aberto: rastro por item (opcional, recomendado)
 
-- **Vantagem:** menos atrito.
-- **Desvantagem séria:** cria uma exceção à regra "lista entregue não recebe contagem",
-  que é justamente o que dá confiabilidade à revisão do supervisor. E o supervisor pode
-  já ter analisado a lista com os zeros.
+Depois do preenchimento o item fica `count_cycle_N = 0`, `status = COUNTED` e
+`last_counted_by = <operador>` — **idêntico a uma contagem ativa**. O único rastro é
+agregado, no histórico: *"N item(ns) não contado(s) gravado(s) como zero"*.
 
-### Proteção no app (não é backend, mas pertence a esta decisão)
+Hoje isso é aceitável: o operador está presente e sabe o que fez. No offline, se um
+preenchimento passar por cima de contagem real presa no celular, **não há como descobrir
+depois quais itens foram** — só o total.
 
-Independente do caminho escolhido, o app **deve bloquear o handoff enquanto houver fila
-pendente**, com mensagem explícita ("faltam N contagens para sincronizar"). O servidor
-não tem como saber que existe trabalho preso num celular — essa guarda só pode ser do
-cliente. Registrar como requisito da Fase 3.
+Proposta: coluna booleana (ex.: `zerado_no_fecho`) marcada no laço que já existe, exposta
+na revisão do supervisor. **Não muda regra nenhuma** e não transforma o handoff em operação
+de risco — é rastreabilidade. Custo: uma coluna e um `setattr`.
+
+**Status: aguardando decisão do Clenio.** Se ficar de fora, o 0.3 fecha com os três itens
+acima.
 
 ### Reatribuição de contador
 
-`app/main.py:6462` recusa com `403` quem não é o `counter_cycle_N` da lista. Vale a mesma
-correção de forma: erro identificável em vez de texto solto.
+`app/main.py:6462` recusa com `403` quem não é o `counter_cycle_N` da lista. Mesma correção
+de forma: erro identificável em vez de texto solto.
 
 ```jsonc
 {
@@ -317,6 +342,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS countings_idempotency_key_uidx
   WHERE idempotency_key IS NOT NULL;   -- parcial: linhas antigas ficam NULL
 ```
 
+**Se a decisão em aberto do 0.3 (rastro por item) for aprovada**, entra também — em
+`counting_list_items`, não em `countings`, porque o preenchimento do handoff escreve ali:
+
+```sql
+ALTER TABLE inventario.counting_list_items
+  ADD COLUMN zerado_no_fecho BOOLEAN NOT NULL DEFAULT FALSE;
+```
+
+Marcado no laço que já existe (`counting_lists.py:920`), junto do `setattr(it, field, 0)`.
+Linhas históricas ficam `FALSE` — o que é honesto: não sabemos, para o passado, quais
+zeros vieram de preenchimento.
+
 Nenhuma outra mudança de schema é necessária na Fase 0. A tabela de quarentena, se vier,
 é da Fase 4 — e provavelmente nem existe: a quarentena natural é **a própria fila do
 app**, que retém o que o servidor recusou.
@@ -341,6 +378,8 @@ por `.dockerignore`, então **não** use `pytest` dentro do container para confe
 | 0.2 | `finalQuantity` continua correto para OPERATOR (regressão do `.pop()`) |
 | 0.3 | Contagem para lista em `AGUARDANDO_REVISAO` → erro `LISTA_NAO_ESTA_EM_CONTAGEM` |
 | 0.3 | Após `/return`, a mesma contagem é aceita |
+| 0.3 | Handoff **preserva** item já contado como `0` (não é o mesmo que não contado) e só preenche `NULL` — proteção da regra, para ninguém "consertar" o preenchimento por engano |
+| 0.3 | Handoff no 2º ciclo **não** preenche item com `needs_count_cycle_2 = false` |
 | 0.4 | Mesma `idempotency_key` duas vezes → uma gravação, sem efeito colateral duplicado |
 | 0.4 | `counted_at_client` mais antigo que o gravado → `CONTAGEM_DESATUALIZADA` |
 
