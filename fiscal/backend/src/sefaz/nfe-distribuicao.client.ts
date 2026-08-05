@@ -216,7 +216,21 @@ export class NfeDistribuicaoClient {
       `distDFe raw: ${docZipCount} docZip(s), schemas=[${schemaMatches.join(',')}]`,
     );
 
-    return this.parseResponse(rawResponse, chave);
+    try {
+      return this.parseResponse(rawResponse, chave);
+    } catch (err) {
+      // Ponto único onde o cStat da distribuição é lido — aciona o freio
+      // global antes de propagar. Sem isso o 656 derrubava só ESTA consulta e
+      // o próximo usuário (ou a próxima filial do carrossel) recomeçava do
+      // zero contra um CNPJ já marcado.
+      if (err instanceof SefazConsultaError && err.cStat === '656') {
+        await this.limiteDiario.bloquearPorConsumoIndevido(
+          'NFeDistribuicaoDFe/consChNFe',
+          err.xMotivo,
+        );
+      }
+      throw err;
+    }
   }
 
   private parseResponse(

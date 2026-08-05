@@ -136,6 +136,15 @@ export class NfeConsultaProtocoloClient {
 
     const cStat = String(retConsSitNFe.cStat ?? '');
     const xMotivo = String(retConsSitNFe.xMotivo ?? '');
+
+    // 656 = consumo indevido. Este cliente não lança exceção por cStat (o
+    // chamador interpreta o status da NF-e), mas o freio global tem que ser
+    // acionado do mesmo jeito — senão o "Atualizar status" continuaria
+    // batendo na SEFAZ com o certificado já marcado.
+    if (cStat === '656') {
+      await this.limiteDiario.bloquearPorConsumoIndevido('NfeConsultaProtocolo', xMotivo);
+    }
+
     const protNFe = retConsSitNFe.protNFe?.infProt;
     const protocolo = protNFe ? String(protNFe.nProt ?? '') : null;
     const dataRecebimento = protNFe ? String(protNFe.dhRecbto ?? '') : null;

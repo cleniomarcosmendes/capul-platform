@@ -104,6 +104,22 @@ export class NfeService {
   private static readonly ATUALIZACAO_COOLDOWN_MS = 30_000;
   private static readonly ultimaAtualizacao = new Map<string, number>();
 
+  /**
+   * Cooldown da CONSULTA por chave quando ela cai no SEFAZ. Mais longo que o
+   * do "Atualizar status" porque custa muito mais: um clique no modo padrão
+   * dispara até 1 + MAX_FALLBACKS_PADRAO chamadas (carrossel de consulentes),
+   * e no modo "tentar todas" dispara uma por filial ativa.
+   *
+   * Repetir a mesma consulta dentro da janela não pode trazer resposta
+   * diferente — a SEFAZ não muda de ideia em segundos. É chamada perdida
+   * contra a cota do CNPJ, e foi assim que se chegou ao cStat=656.
+   */
+  private static readonly CONSULTA_SEFAZ_COOLDOWN_MS = 60_000;
+  private static readonly CONSULTA_SEFAZ_TODAS_COOLDOWN_MS = 5 * 60_000;
+  private static readonly ultimaConsultaSefaz = new Map<string, number>();
+  /** Acima disso, varre o mapa e descarta entradas vencidas (processo longo). */
+  private static readonly COOLDOWN_MAP_MAX = 5_000;
+
   constructor(
     private readonly protheusXml: ProtheusXmlService,
     private readonly protheusEventos: ProtheusEventosService,
@@ -315,6 +331,11 @@ export class NfeService {
       this.logger.log(
         `xmlNfe MISS — baixando do SEFAZ — chave ${chave.slice(0, 6)}… filial=${filial}`,
       );
+      // Anti-loop: cooldown por chave, aplicado SÓ aqui — depois do Protheus.
+      // Cache hit continua instantâneo por mais que o usuário clique; o freio
+      // existe para proteger a cota SEFAZ, não para atrapalhar a operação.
+      this.checarCooldownSefaz(chave, filial, tentarTodasFiliais);
+
       xmlString = await this.baixarDoSefaz(chave, filial, { tentarTodasFiliais });
       origem = 'SEFAZ_DOWNLOAD';
 
@@ -1331,8 +1352,11 @@ export class NfeService {
               erro: 'SEFAZ_CONSUMO_INDEVIDO',
               mensagem:
                 `SEFAZ detectou padrão de uso abusivo do CNPJ CAPUL (cStat=656). ` +
-                `Parar consultas SEFAZ imediatamente e acionar ADMIN_TI — ` +
-                `tentar de novo agora aumenta o risco de bloqueio do CNPJ pela SEFAZ.`,
+                `A plataforma JÁ PAROU automaticamente todas as consultas SEFAZ e avisou ` +
+                `o ADMIN_TI — não é preciso fazer nada para conter. ` +
+                `Tentar por outra filial não contorna: o certificado digital é o mesmo para ` +
+                `todas, então a SEFAZ vê o mesmo consulente. ` +
+                `Para o que for urgente: Protheus (SZR010) ou solicitar o XML ao emitente.`,
             },
             HttpStatus.SERVICE_UNAVAILABLE,
           );
@@ -1446,6 +1470,62 @@ export class NfeService {
    * destinatário — outra filial pode ter o XML completo na fila dela).
    * Retorna [] em caso de erro — não lança.
    */
+  /**
+   * Cooldown anti-loop da consulta por chave no caminho SEFAZ.
+   *
+   * A chave do mapa inclui o MODO (padrão × "tentar todas as filiais") de
+   * propósito: a escalada de uma consulta normal para o botão "tentar todas"
+   * é um fluxo legítimo — é assim que se acha a filial destinatária de uma
+   * transferência interna — e não pode ser barrada pela consulta que acabou
+   * de rodar. O que trava é repetir o MESMO esforço na mesma chave.
+   *
+   * Cooldown é por processo (mapa em memória, igual ao do "Atualizar
+   * status"). Com mais de uma réplica do backend, cada uma teria o seu — o
+   * que ainda corta a maior parte do loop, porque o loop é um usuário
+   * clicando na mesma sessão. O freio que vale para todo mundo é o do 656,
+   * esse sim no banco.
+   */
+  private checarCooldownSefaz(chave: string, filial: string, tentarTodasFiliais: boolean): void {
+    const janelaMs = tentarTodasFiliais
+      ? NfeService.CONSULTA_SEFAZ_TODAS_COOLDOWN_MS
+      : NfeService.CONSULTA_SEFAZ_COOLDOWN_MS;
+    const modo = tentarTodasFiliais ? 'todas' : 'padrao';
+    const cooldownKey = `${chave}:${filial}:${modo}`;
+    const agora = Date.now();
+
+    const ultima = NfeService.ultimaConsultaSefaz.get(cooldownKey) ?? 0;
+    const restanteMs = ultima + janelaMs - agora;
+    if (restanteMs > 0) {
+      const segundos = Math.ceil(restanteMs / 1000);
+      this.logger.warn(
+        `[COOLDOWN_SEFAZ] Consulta repetida bloqueada — chave=${chave.slice(0, 6)}… ` +
+          `filial=${filial} modo=${modo} restante=${segundos}s. ` +
+          `Chamada SEFAZ economizada.`,
+      );
+      throw new HttpException(
+        {
+          erro: 'CONSULTA_SEFAZ_EM_COOLDOWN',
+          mensagem:
+            `Esta chave acabou de ser consultada na SEFAZ${tentarTodasFiliais ? ' em todas as filiais' : ''}. ` +
+            `Aguarde ${segundos}s antes de tentar de novo — a resposta da SEFAZ não muda nesse intervalo, ` +
+            `e cada consulta repetida consome a cota do CNPJ da CAPUL.`,
+          cooldownSegundos: segundos,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // Poda preguiçosa: sem isso o mapa cresceria indefinidamente num processo
+    // que fica meses no ar. Só varre quando passa do teto.
+    if (NfeService.ultimaConsultaSefaz.size > NfeService.COOLDOWN_MAP_MAX) {
+      const limite = agora - NfeService.CONSULTA_SEFAZ_TODAS_COOLDOWN_MS;
+      for (const [k, ts] of NfeService.ultimaConsultaSefaz) {
+        if (ts < limite) NfeService.ultimaConsultaSefaz.delete(k);
+      }
+    }
+    NfeService.ultimaConsultaSefaz.set(cooldownKey, agora);
+  }
+
   private async listarFiliaisFallback(
     filialOriginal: string,
   ): Promise<Array<{ codigo: string; cnpj: string }>> {

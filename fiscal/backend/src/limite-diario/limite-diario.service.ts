@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { MailTransportService } from '../alertas/mail-transport.service.js';
 import { DestinatariosResolver } from '../alertas/destinatarios.resolver.js';
 import { LimiteDiarioAtingidoException } from './limite-diario.exception.js';
+import { ConsumoIndevidoBloqueadoException } from './consumo-indevido.exception.js';
 
 interface AlertasEnviadosHoje {
   amarelo?: boolean;
@@ -28,6 +29,14 @@ type NivelAlerta = 'amarelo' | 'vermelho' | 'critico';
 export class LimiteDiarioService {
   private readonly logger = new Logger(LimiteDiarioService.name);
 
+  /**
+   * Duração do freio após um cStat=656. Mesma janela que o fluxo de
+   * distribuição CT-e já usa (`NsuControleService.bloquearPor656`) — a
+   * marcação de consumo indevido da SEFAZ costuma normalizar em cerca de
+   * uma hora. ADMIN_TI pode liberar antes por `liberarManual()`.
+   */
+  private static readonly BLOQUEIO_656_MS = 60 * 60 * 1000;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailTransportService,
@@ -48,6 +57,14 @@ export class LimiteDiarioService {
    */
   async checkAndIncrement(): Promise<number> {
     const cfg = await this.getOrCreate();
+
+    // Freio de consumo indevido vem ANTES do corte diário: é a condição mais
+    // grave e a mensagem é outra. Se caísse no LimiteDiarioAtingido, o
+    // operador leria "limite diário" e esperaria a virada do dia — quando na
+    // verdade a SEFAZ marcou o certificado e o risco é de bloqueio do CNPJ.
+    if (cfg.bloqueio656Ate && cfg.bloqueio656Ate.getTime() > Date.now()) {
+      throw new ConsumoIndevidoBloqueadoException(cfg.bloqueio656Ate, cfg.bloqueio656Motivo);
+    }
 
     if (cfg.pausadoAutomatico) {
       throw new LimiteDiarioAtingidoException(cfg.contadorHoje, cfg.limiteDiario);
@@ -94,6 +111,52 @@ export class LimiteDiarioService {
     return atualizado.contadorHoje;
   }
 
+  /**
+   * Aciona o freio global após a SEFAZ devolver cStat=656 (consumo indevido).
+   * Chamado pelos clientes SEFAZ no ponto em que o cStat é lido.
+   *
+   * Global de propósito: a SEFAZ marca o CERTIFICADO consulente, e o mTLS usa
+   * um único certificado para todas as filiais (`SefazAgentService.getAgent`
+   * carrega `certReader.loadActive()`, sem parâmetro de filial). Trocar a
+   * filial muda só o campo `<CNPJ>` do XML — a identidade vista pela SEFAZ é
+   * a mesma. Por isso não existe "tentar por outra filial" que escape do 656:
+   * só multiplicaria as chamadas sob a marcação.
+   *
+   * Não-bloqueante em caso de falha: se a gravação do freio falhar, logamos e
+   * deixamos a exceção original do 656 subir — nunca mascarar o erro real.
+   *
+   * Idempotente por janela: se já existe bloqueio ativo, ESTENDE para a nova
+   * janela (um segundo 656 significa que a SEFAZ ainda está incomodada).
+   */
+  async bloquearPorConsumoIndevido(origem: string, xMotivo: string): Promise<void> {
+    try {
+      const ate = new Date(Date.now() + LimiteDiarioService.BLOQUEIO_656_MS);
+      const motivo = `${origem} — ${xMotivo}`.slice(0, 500);
+      await this.getOrCreate();
+      await this.prisma.limiteDiario.update({
+        where: { id: 1 },
+        data: {
+          bloqueio656Ate: ate,
+          bloqueio656Em: new Date(),
+          bloqueio656Motivo: motivo,
+          atualizadoPor: 'sistema:cstat-656',
+        },
+      });
+      this.logger.error(
+        `[FREIO_656] Consultas SEFAZ BLOQUEADAS até ${ate.toISOString()} — ${motivo}. ` +
+          `Trocar de filial NÃO contorna (certificado único). Acionar ADMIN_TI.`,
+      );
+      this.enviarAlerta656(ate, motivo).catch((err) => {
+        this.logger.error(`Falha ao enviar alerta de consumo indevido: ${(err as Error).message}`);
+      });
+    } catch (err) {
+      this.logger.error(
+        `Falha ao gravar o freio de consumo indevido: ${(err as Error).message}. ` +
+          `O 656 original segue sendo propagado ao chamador.`,
+      );
+    }
+  }
+
   async getStatus() {
     const cfg = await this.getOrCreate();
     // Staleness: se o `dataContador` não é hoje (BRT), o contador é de um dia
@@ -105,6 +168,8 @@ export class LimiteDiarioService {
     const ehHoje = this.toYmd(cfg.dataContador) === this.hoje();
     const contadorHoje = ehHoje ? cfg.contadorHoje : 0;
     const pausadoAutomatico = ehHoje ? cfg.pausadoAutomatico : false;
+    // Freio 656 é independente do dia: expira por tempo, não pelo reset.
+    const bloqueio656Ativo = !!cfg.bloqueio656Ate && cfg.bloqueio656Ate.getTime() > Date.now();
     return {
       contadorHoje,
       limiteDiario: cfg.limiteDiario,
@@ -114,6 +179,13 @@ export class LimiteDiarioService {
       pausadoAutomatico,
       pausadoEm: ehHoje ? cfg.pausadoEm : null,
       percentualConsumido: cfg.limiteDiario > 0 ? (contadorHoje / cfg.limiteDiario) : 0,
+      bloqueio656Ativo,
+      bloqueio656Ate: bloqueio656Ativo ? cfg.bloqueio656Ate : null,
+      bloqueio656Em: bloqueio656Ativo ? cfg.bloqueio656Em : null,
+      bloqueio656Motivo: bloqueio656Ativo ? cfg.bloqueio656Motivo : null,
+      bloqueio656MinutosRestantes: bloqueio656Ativo
+        ? Math.max(1, Math.ceil((cfg.bloqueio656Ate!.getTime() - Date.now()) / 60_000))
+        : 0,
     };
   }
 
@@ -147,6 +219,10 @@ export class LimiteDiarioService {
 
   async reset(origem: string): Promise<void> {
     await this.getOrCreate();
+    // NÃO limpa `bloqueio656*` de propósito: o freio de consumo indevido
+    // expira por tempo, não pela virada do dia. Um 656 às 23:50 tem que
+    // continuar valendo depois das 00:05 — a SEFAZ não zera a marcação dela
+    // porque o nosso contador diário zerou.
     await this.prisma.limiteDiario.update({
       where: { id: 1 },
       data: {
@@ -163,14 +239,35 @@ export class LimiteDiarioService {
 
   /**
    * Liberação manual pelo ADMIN_TI em caso de urgência. Remove o corte
-   * automático sem resetar contador.
+   * automático sem resetar contador, e também o freio de consumo indevido.
+   *
+   * O 656 entra aqui porque não existe outra saída manual: se a SEFAZ
+   * normalizar antes da janela de 1h e o setor fiscal estiver travado, o
+   * ADMIN_TI precisa poder destravar. Log em nível WARN separado para o caso
+   * ficar rastreável — liberar um 656 na mão é decisão de risco, diferente
+   * de liberar cota estourada.
    */
   async liberarManual(usuario: string): Promise<void> {
+    const antes = await this.getOrCreate();
+    const tinha656 = !!antes.bloqueio656Ate && antes.bloqueio656Ate.getTime() > Date.now();
     await this.prisma.limiteDiario.update({
       where: { id: 1 },
-      data: { pausadoAutomatico: false, pausadoEm: null, atualizadoPor: usuario },
+      data: {
+        pausadoAutomatico: false,
+        pausadoEm: null,
+        bloqueio656Ate: null,
+        bloqueio656Em: null,
+        bloqueio656Motivo: null,
+        atualizadoPor: usuario,
+      },
     });
     this.logger.warn(`Corte automático liberado manualmente por ${usuario}.`);
+    if (tinha656) {
+      this.logger.warn(
+        `[FREIO_656] Freio de consumo indevido liberado MANUALMENTE por ${usuario} ` +
+          `antes de ${antes.bloqueio656Ate!.toISOString()}. Consultas SEFAZ voltam a sair.`,
+      );
+    }
   }
 
   // ----- internos -----
@@ -263,6 +360,64 @@ export class LimiteDiarioService {
       );
     } else {
       this.logger.error(`Alerta ${nivel} não enviado: ${result.error}`);
+    }
+  }
+
+  /**
+   * Alerta de consumo indevido (cStat=656). Vai para GESTOR_FISCAL + ADMIN_TI
+   * como o alerta crítico de cota, mas com texto próprio: aqui o problema não
+   * é volume, é a SEFAZ ter marcado o certificado — e a ação certa é NÃO
+   * insistir, o oposto do reflexo de "tentar de novo".
+   */
+  private async enviarAlerta656(ate: Date, motivo: string): Promise<void> {
+    const { destinatarios, fallback } = await this.destinatarios.resolveByRoles([
+      'GESTOR_FISCAL',
+      'ADMIN_TI',
+    ]);
+    if (destinatarios.length === 0) {
+      this.logger.warn(
+        `Alerta de consumo indevido (656) nao enviado — sem destinatarios validos e ` +
+          `FISCAL_FALLBACK_EMAIL nao configurado.`,
+      );
+      return;
+    }
+    const prefix = fallback ? '[FALLBACK — sem destinatários configurados] ' : '';
+    const hora = ate.toLocaleTimeString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const subject = `${prefix}🚨 [FISCAL] SEFAZ acusou consumo indevido (656) — consultas PARADAS`;
+
+    const html = `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;color:#1e293b;max-width:600px;margin:0 auto;padding:20px;">
+<div style="background:#fecaca;border-left:4px solid #dc2626;padding:16px;border-radius:4px;">
+  <h2 style="margin:0 0 8px 0;color:#dc2626;font-size:16px;">SEFAZ retornou cStat=656 — consumo indevido</h2>
+  <p style="margin:0;font-size:14px;">A plataforma <strong>parou todas as consultas SEFAZ</strong> automaticamente. Liberação prevista para <strong>${hora}</strong>.</p>
+</div>
+<p><strong>Não tentar de novo agora.</strong> Cada nova consulta agrava o risco de bloqueio do CNPJ da CAPUL — o que pararia NF-e, CT-e e cadastro.</p>
+<p>Tentar por outra filial <strong>não contorna</strong>: o certificado digital é único para todas as filiais, então a SEFAZ vê o mesmo consulente.</p>
+<p>Para o que for urgente nas próximas horas: buscar o XML no <strong>Protheus (SZR010)</strong> — se já foi baixado antes, está em cache — ou solicitar ao <strong>emitente</strong>.</p>
+<p style="color:#64748b;font-size:12px;margin-top:24px;">
+Origem: <code>${motivo}</code><br>
+ADMIN_TI pode liberar antes da hora em <code>Operação → Limites e Política de Consultas</code>, ciente do risco.<br>
+<em>Plataforma Capul — Módulo Fiscal</em>
+</p>
+</body></html>`;
+
+    const text =
+      `SEFAZ retornou cStat=656 (consumo indevido).\n\n` +
+      `A plataforma parou todas as consultas SEFAZ. Liberação prevista para ${hora}.\n\n` +
+      `NÃO tentar de novo agora — cada consulta agrava o risco de bloqueio do CNPJ da CAPUL.\n` +
+      `Tentar por outra filial não contorna: o certificado é único.\n\n` +
+      `Urgências: Protheus (SZR010) ou solicitar o XML ao emitente.\n\n` +
+      `Origem: ${motivo}\n` +
+      `Plataforma Capul — Módulo Fiscal`;
+
+    const result = await this.mail.send({ to: destinatarios.map((d) => d.email), subject, html, text });
+    if (result.sent) {
+      this.logger.log(`Alerta 656 enviado: destinatarios=${destinatarios.length} fallback=${fallback}`);
+    } else {
+      this.logger.error(`Alerta 656 não enviado: ${result.error}`);
     }
   }
 

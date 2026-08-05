@@ -557,6 +557,14 @@ model LimiteDiario {
   pausadoAutomatico   Boolean   @default(false) @map("pausado_automatico")
   pausadoEm           DateTime? @map("pausado_em")
   alertasEnviadosHoje Json?     @map("alertas_enviados_hoje") // { amarelo: bool, vermelho: bool }
+  // Freio de consumo indevido (cStat=656). Independente do contador diário:
+  // a SEFAZ marcou o CERTIFICADO consulente como abusivo, então nenhuma
+  // consulta pode sair até a marcação expirar — nem de outra filial, porque
+  // o mTLS usa o mesmo certificado em todas (ver SefazAgentService).
+  // Expira por TEMPO (bloqueio656Ate), NÃO pelo reset diário das 00:05.
+  bloqueio656Ate      DateTime? @map("bloqueio_656_ate")
+  bloqueio656Em       DateTime? @map("bloqueio_656_em")
+  bloqueio656Motivo   String?   @map("bloqueio_656_motivo")
   atualizadoEm        DateTime  @updatedAt @map("atualizado_em")
   atualizadoPor       String?   @map("atualizado_por")
 

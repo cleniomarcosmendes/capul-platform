@@ -16,6 +16,12 @@ interface LimiteDiarioStatus {
   pausadoAutomatico: boolean;
   pausadoEm: string | null;
   percentualConsumido: number;
+  /** Freio de consumo indevido (cStat=656) — independente do limite diário. */
+  bloqueio656Ativo: boolean;
+  bloqueio656Ate: string | null;
+  bloqueio656Em: string | null;
+  bloqueio656Motivo: string | null;
+  bloqueio656MinutosRestantes: number;
 }
 
 export function LimitesTab() {
@@ -65,10 +71,16 @@ export function LimitesTab() {
   }
 
   async function handleLiberar() {
+    // Liberar um freio de 656 é decisão bem mais grave que liberar cota
+    // estourada: a SEFAZ marcou o certificado e ainda pode estar contando.
     const ok = await confirm({
-      title: 'Liberar corte automático?',
-      description:
-        'O limite diário continuará contando, mas as consultas voltarão a passar. Use apenas em caso de urgência — o motivo do corte foi justamente evitar bloqueio do CNPJ pela SEFAZ.',
+      title: status?.bloqueio656Ativo ? 'Liberar o freio de consumo indevido?' : 'Liberar corte automático?',
+      description: status?.bloqueio656Ativo
+        ? 'A SEFAZ acusou consumo indevido (cStat=656) e a plataforma parou as consultas por conta disso. ' +
+          'Liberar agora volta a mandar consultas com o mesmo certificado que a SEFAZ marcou — o risco é ' +
+          'bloqueio do CNPJ da CAPUL, que pararia NF-e, CT-e e cadastro. ' +
+          'Só faça isso se souber que a SEFAZ já normalizou.'
+        : 'O limite diário continuará contando, mas as consultas voltarão a passar. Use apenas em caso de urgência — o motivo do corte foi justamente evitar bloqueio do CNPJ pela SEFAZ.',
       variant: 'warning',
       confirmLabel: 'Liberar',
     });
@@ -115,8 +127,65 @@ export function LimitesTab() {
           : 'emerald'
     : 'slate';
 
+  const bloqueio656Ate = status?.bloqueio656Ate
+    ? new Date(status.bloqueio656Ate).toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
   return (
     <>
+      {/* Freio de consumo indevido: vem ANTES do card de cota porque é a
+          condição mais grave e a ação certa é oposta ao reflexo do operador
+          (aqui NÃO se tenta de novo, nem por outra filial). */}
+      {status?.bloqueio656Ativo && (
+        <div className="mb-6 rounded-lg border-2 border-red-500 bg-red-50 p-5">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-red-900">
+                Consultas SEFAZ PARADAS — consumo indevido (cStat=656)
+              </h3>
+              <p className="mt-1 text-sm text-red-800">
+                A SEFAZ marcou o certificado consulente da CAPUL como abusivo. A plataforma parou
+                todas as consultas automaticamente
+                {bloqueio656Ate && (
+                  <>
+                    {' '}
+                    e libera por volta das <strong>{bloqueio656Ate}</strong> (~
+                    {status.bloqueio656MinutosRestantes} min)
+                  </>
+                )}
+                .
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-800">
+                <li>
+                  <strong>Tentar por outra filial não contorna</strong> — o certificado digital é o
+                  mesmo para todas, então a SEFAZ enxerga o mesmo consulente.
+                </li>
+                <li>
+                  Para o que for urgente: buscar o XML no <strong>Protheus (SZR010)</strong> ou
+                  solicitar ao <strong>emitente</strong>.
+                </li>
+              </ul>
+              {status.bloqueio656Motivo && (
+                <p className="mt-2 break-words font-mono text-xs text-red-700">
+                  {status.bloqueio656Motivo}
+                </p>
+              )}
+              {isAdmin && (
+                <div className="mt-3">
+                  <Button variant="danger" size="sm" onClick={handleLiberar} loading={acting}>
+                    Liberar freio manualmente
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-5 text-slate-500">
           Carregando status…
