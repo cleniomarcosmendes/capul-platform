@@ -1363,22 +1363,48 @@ usado em algum cálculo** ou se é resíduo — se for resíduo, sai do modelo.
 **Como apareceu:** a suíte do Inventário quebrava na coleta do pytest. Ao corrigir
 (`96b1ec2`), descobriu-se que os dois arquivos `test_*.py` do módulo eram **scripts de
 diagnóstico** — nenhum `assert`, `print()` e chamada à API de **produção** do Protheus.
-O módulo nunca teve teste automatizado.
 
 **Tratar quando houver trabalho no Inventário** — não vale abrir frente só para isto.
 
-### 1. Sem cobertura de regra de negócio
-Hoje há só `test_smoke.py` (o app importa e `/health` responde). Isso pega import
-quebrado, e nada mais. **Descoberto, sem teste:**
+### 1. ~~Sem cobertura de regra de negócio~~ — ⚠️ CORRIGIDO EM 05/08/2026
 
-- **contagem multi-ciclo** — avanço de ciclo, encerrar × avançar (são coisas
-  diferentes: ver `feedback_inventario_encerrar_vs_avancar_ciclo`), contagem cega;
-- **handoff de supervisor** — a regra de preservar contagens já foi bug uma vez;
+**O item 1 original estava ERRADO e foi retirado.** Ele afirmava que "o módulo nunca teve
+teste automatizado" e que "hoje há só `test_smoke.py`". Não é o caso:
+`inventario/backend/tests/` tem **31 cenários desde 09/05/2026** (`8dfb3e1`), cobrindo
+justamente o que o item pedia — `test_handoff_supervisor.py`, `test_avanco_ciclos.py`,
+`test_cycle_critical_scenarios.py`, `test_estados_e_edge.py`, `test_ciclos_stress.py`.
+
+**Como o engano aconteceu:** `tests/` está no **`.dockerignore`** de propósito (não vai
+para a imagem de produção). Rodar `pytest` dentro do container coleta só o
+`test_smoke.py` da raiz e devolve "2 tests" — foi essa leitura que virou o item. O
+runner correto é **`inventario/backend/run-tests.sh`**, que copia `tests/` para o
+container antes de rodar:
+
+```bash
+cd inventario/backend
+./run-tests.sh                              # suíte completa
+./run-tests.sh -k handoff                   # filtro
+```
+
+Os testes usam o banco real com `search_path=inventario`, mas **cada teste roda em
+transação revertida no fim** (`tests/conftest.py`) — não deixa resíduo.
+
+**Estado em 05/08/2026: 31 passando.** Havia 1 falha
+(`test_cycle_critical_scenarios.py::test_audit_logs_are_created`), que era **teste
+desatualizado, não bug de produto**: usava `log.metadata[...]`, mas `metadata` é
+reservado pelo SQLAlchemy (é o `MetaData` do `Base`) e a coluna JSONB do modelo chama
+`extra_metadata`; além disso lia a chave `new_divergencies`, enquanto o serviço grava
+`new_divergences`. Corrigido.
+
+**O que segue realmente sem cobertura** (este é o item que vale manter):
+
 - **sincronização Protheus** — parser da resposta e o `sync` da migration 014;
-- **RBAC** — `OPERATOR` não vê saldo.
+- **RBAC** — `OPERATOR` não vê saldo (`feedback_inventario_rbac_operator`);
+- **contagem cega** (`feedback_inventario_contagem_cega`).
 
-Ordem sugerida: começar por **handoff** e **encerrar × avançar ciclo**, que são as que
-já produziram bug e envolvem estado.
+**Lição que fica:** medir cobertura de um módulo rodando o test runner *dentro do
+container* dá resposta errada quando o `.dockerignore` exclui os testes. Conferir o
+`git ls-files` antes de concluir que não existe teste.
 
 ### 2. Credencial de produção do Protheus no código — 2 ocorrências restantes
 `96b1ec2` tirou a do script (`diag_api_protheus.py`, agora via
@@ -1392,6 +1418,18 @@ inventario/backend/app/core/protheus_config.py:118 ← default do os.getenv
 Não foram tocadas de propósito: mexer no default sem alinhamento pode derrubar a
 integração se a env não estiver definida nos ambientes.
 
+**Verificado em 05/08/2026:** as três linhas continuam lá. No DEV a env
+`PROTHEUS_INVENTARIO_AUTH` **está definida**, então o default embutido não chega a ser
+usado — ele é rede de segurança silenciosa, não o valor efetivo. Conferir o mesmo em
+HLG/PROD antes de exigir a env, senão a troca derruba a integração.
+
+**A mesma credencial aparece fora do Inventário** (levantado em 05/08, não estava no
+registro original): `docker-compose.yml:338,:341` (como default de `${VAR:-...}`) e
+`auth-gateway/prisma/seed.ts:377`. A rotação no Protheus resolve todas de uma vez —
+mais um motivo para o caminho ser rotacionar, não caçar ocorrência por ocorrência.
+Menor gravidade, mesma família: `inventario/backend/tests/conftest.py:52` traz a senha
+do Postgres de **desenvolvimento** como default.
+
 ⚠️ **A credencial está no histórico do git.** Removê-la do código **não** a invalida —
 o caminho é **rotacionar no Protheus** e então deixar o código exigir a env. Faz parte
 do Anexo B de `docs/PENDENCIAS_PROTHEUS_10052026_SEGURANCA.md` (achado de 10/05, ainda
@@ -1402,3 +1440,9 @@ aberto), e depende do Marco/Protheus, não só de nós.
 e os dois `diag_*` convivem com o código da aplicação. Avaliar mover para `scripts/`
 — some o risco de coleta acidental pelo pytest e fica claro o que é aplicação e o que
 é ferramenta de operação.
+
+**Verificado em 05/08/2026:** os 7 arquivos continuam na raiz (incluindo o
+`test_smoke.py`, que é o único `test_*` que a imagem enxerga). Ao mover, atenção: o
+`test_smoke.py` na raiz é justamente o que faz `pytest` dentro do container não sair
+vazio — se ele for para `scripts/`, decidir conscientemente se a imagem passa a não ter
+teste nenhum ou se `tests/` sai do `.dockerignore`.

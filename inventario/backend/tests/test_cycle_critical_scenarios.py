@@ -411,8 +411,11 @@ def test_audit_logs_are_created(
     assert log.user_id == test_supervisor_user.id
 
     # Verificar metadados
-    assert log.metadata["products_recalculated"] == 5
-    assert log.metadata["new_divergencies"] == 3
+    # `metadata` é reservado pelo SQLAlchemy (é o MetaData do Base) — a coluna
+    # JSONB do modelo chama `extra_metadata`. E a chave gravada pelo serviço é
+    # `new_divergences`, não `new_divergencies`.
+    assert log.extra_metadata["products_recalculated"] == 5
+    assert log.extra_metadata["new_divergences"] == 3
 
     # Verificar total de logs aumentou
     final_logs = db_session.query(CycleAuditLog).filter(
