@@ -231,6 +231,19 @@ describe('SupervisorService escopo do coordenador (Fechamento/RDV)', () => {
       .rejects.toThrow(/lançado por quem aprova/);
     expect(prisma.adiantamento.create).not.toHaveBeenCalled();
   });
+  // ⭐ 06/08 — a MESMA regra pela porta dos fundos. `editarViagem`
+  // (PATCH /supervisor/viagens/:id) existia só para gravar `viagem.adiantamento`,
+  // campo obsoleto desde o redesenho 6b mas ainda LIDO como fallback no acerto
+  // (`advs.reduce` só substitui quando há adiantamento APROVADO no mês). Como
+  // `assertEscopoSupervisor` tem ramo de auto-serviço (`ehProprioSupervisor`), o
+  // COORDENADOR alcançava o PRÓPRIO planejamento e gravava o próprio
+  // adiantamento — exatamente o que 01/08 encerrou. Padrão conhecido da onda:
+  // `lançar` valida, `editar` herdou menos. O método foi REMOVIDO; corrigir
+  // legado se faz lançando o Adiantamento aprovado, que substitui o campo.
+  it('editarViagem não existe mais — não há caminho para gravar viagem.adiantamento', () => {
+    expect((svc as unknown as Record<string, unknown>).editarViagem).toBeUndefined();
+  });
+
   it('lancarAdiantamento COORDENADOR → já nasce APROVADO (com decididoPor)', async () => {
     prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', coordenadorId: 'u1' });
     prisma.adiantamento.create.mockResolvedValue({ id: 'a1' });

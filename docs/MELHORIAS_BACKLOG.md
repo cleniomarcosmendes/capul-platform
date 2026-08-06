@@ -1350,11 +1350,40 @@ planejamento, e o formulário abre pré-preenchido com ela para o representante
 roteiro" (escrita por quem monta) de "relato de campo" (escrito por quem executa)
 — seriam +1 migration e uma coluna a mais no relatório de visitas.
 
-### 3. `editarViagem` — o que esse campo ainda faz?
-`PATCH /supervisor/viagens/:id` edita `viagem.adiantamento`, um campo que parece
-**anterior** à tabela `adiantamento` (que hoje é a fonte do saldo). O coordenador
-ganhou acesso em 01/08 por consistência, mas **vale conferir se o campo ainda é
-usado em algum cálculo** ou se é resíduo — se for resíduo, sai do modelo.
+### 3. ✅ RESOLVIDO em 06/08 — `editarViagem` removido (era porta dos fundos da regra 4)
+
+A conferência pedida aqui virou achado. O que se apurou:
+
+- **Não havia dupla contagem.** No acerto (`supervisor.service.ts`), o
+  `advs.reduce` **substitui** o valor pelos adiantamentos APROVADOS do mês; o
+  campo legado só entra como *fallback* quando não existe nenhum.
+- **Mas o campo continuava gravável, e por um caminho que contornava a regra
+  "ninguém lança o próprio adiantamento, nem o coordenador"** (01/08).
+  `PATCH /supervisor/viagens/:id` era `@Roles('COORDENADOR','SUPERVISOR_FROTA')`, e
+  `assertEscopoSupervisor` tem um ramo de auto-serviço (`ehProprioSupervisor`) —
+  então o COORDENADOR alcançava o **próprio** planejamento. Sem linha aprovada no
+  mês, o valor gravado virava o adiantamento efetivo do acerto.
+- É o padrão que a onda de 31/07–01/08 expôs cinco vezes: **`lançar` valida,
+  `editar` herdou menos**.
+
+**Correção:** o endpoint, o método e o `EditarViagemSupervisorDto` foram
+**removidos**. `viagem.adiantamento` segue sendo **lido** como fallback, mas
+ninguém mais o escreve no RDV. Corrigir um legado se faz pelo caminho certo —
+lançar o Adiantamento APROVADO do mês, que substitui o campo no cálculo.
+
+Alcance real, para não superdimensionar: era **só por API** (nenhuma tela
+chamava; o `adiantamento` que o frontend edita vai para `/frota/viagens/:id`,
+que é outro módulo), exigia token de coordenador e só mordia sem adiantamento
+aprovado no mês. No DEV, **0 de 19** viagens de supervisor tinham valor legado.
+
+⚠️ **Conferir em PROD** antes do deploy — se houver viagem de supervisor com
+`adiantamento` legado, o valor continua valendo como fallback (não se perde),
+mas vale saber que existe:
+
+```sql
+SELECT count(*) FROM logistica.viagem
+ WHERE tipo='SUPERVISOR' AND adiantamento IS NOT NULL AND adiantamento <> 0;
+```
 
 ---
 

@@ -4,7 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
-import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DefinirSupervisorDepartamentoDto, DefinirVeiculoPlanejamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DefinirSupervisorDepartamentoDto, DefinirVeiculoPlanejamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /** Converte o arquivo do multer no binário do comprovante (ou undefined). */
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
@@ -229,14 +229,24 @@ export class SupervisorController {
   }
 
   // ---- Administração (Fase 5): correções do Supervisor de Departamento / ADMIN ----
-  // COORDENADOR entrou em 01/08 (varredura): ele decide, cancela, devolve e reabre o
-  // planejamento do time, mas não editava este campo — mesma lacuna que o `reabrir`
-  // tinha, no método vizinho. O escopo segue no serviço (`assertEscopoSupervisor`).
-  @Patch('viagens/:id')
-  @Roles('COORDENADOR', 'SUPERVISOR_FROTA')
-  editarViagem(@Param('id') id: string, @Body() dto: EditarViagemSupervisorDto, @CurrentUser() user: JwtPayload) {
-    return this.svc.editarViagem(id, dto, user);
-  }
+  //
+  // REMOVIDO em 06/08: `PATCH viagens/:id` existia só para gravar
+  // `viagem.adiantamento` — campo OBSOLETO desde o redesenho 6b, quando o
+  // adiantamento virou a tabela `Adiantamento` (mensal, por supervisor). Ele
+  // sobrevivia como *fallback* de leitura no acerto, e continua assim.
+  //
+  // Por que saiu e não ganhou só mais uma trava: `assertEscopoSupervisor` tem
+  // um ramo de auto-serviço (`ehProprioSupervisor`), então o COORDENADOR
+  // alcançava o PRÓPRIO planejamento e gravava o próprio adiantamento — que é
+  // exatamente o auto-serviço encerrado em 01/08 ("ninguém lança o próprio,
+  // nem o coordenador"). Era o padrão conhecido: `lançar` valida, `editar`
+  // herdou menos.
+  //
+  // Corrigir um adiantamento legado hoje se faz pelo caminho certo: lançar o
+  // Adiantamento APROVADO do mês, que SUBSTITUI o campo legado no cálculo
+  // (`supervisor.service.ts` — `advs.reduce` sobrescreve, não soma). Ninguém
+  // fica sem saída.
+  //
   // Reabrir UM planejamento concluído (para corrigir/lançar o que faltou). O
   // COORDENADOR entrou em 01/08: ele já reabria o MÊS INTEIRO do time
   // (`rdv-mensal/reabrir`), que é o poder maior, mas tomava "Perfil insuficiente" num

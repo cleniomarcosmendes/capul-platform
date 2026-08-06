@@ -8,7 +8,7 @@ import { filialDoUsuario } from '../common/filial-scope.js';
 import { CofreStorageService } from '../cofre/cofre-storage.service.js';
 import { LocalClienteService } from '../local/local-cliente.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
-import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, EditarViagemSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, EditarDespesaSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /** Normaliza matrícula → chapa E-prefixada (E+5díg), colapsando `E01047`/`01047`/
  *  `1047` no mesmo valor. Mesma regra do `frota.service` (match de condutor) — usar
@@ -1407,20 +1407,12 @@ export class SupervisorService {
   }
 
   // ---- Administração (Fase 5): correções do gestor ----
-  async editarViagem(id: string, dto: EditarViagemSupervisorDto, user: JwtPayload) {
-    const filialId = filialDoUsuario(user);
-    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, departamentoId: true } } } });
-    if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
-    if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
-    await this.assertEscopoSupervisor(v.supervisorRegistro, user);
-    if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
-    return this.prisma.viagem.update({
-      where: { id },
-      data: {
-        adiantamento: dto.adiantamento !== undefined ? new Prisma.Decimal(dto.adiantamento) : undefined,
-      },
-    });
-  }
+  //
+  // `editarViagem` REMOVIDO em 06/08 — ver o comentário no controller. Só
+  // gravava `viagem.adiantamento`, campo obsoleto, e o ramo de auto-serviço do
+  // `assertEscopoSupervisor` deixava o COORDENADOR lançar o próprio
+  // adiantamento por ali. `viagem.adiantamento` segue sendo LIDO como fallback
+  // no acerto (ver `advs.reduce` abaixo), mas ninguém mais o escreve no RDV.
 
   async reabrirViagem(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);

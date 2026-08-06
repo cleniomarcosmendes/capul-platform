@@ -146,9 +146,6 @@ export class LancarDespesaSupervisorDto {
 }
 
 // ---- Administração (Fase 5): correções do gestor ----
-export class EditarViagemSupervisorDto {
-  @IsOptional() @IsNumber() @Min(0) adiantamento?: number;
-}
 export class EditarDespesaSupervisorDto {
   @IsOptional() @IsString() @MaxLength(40) tipoDespesaId?: string;
   // Corrige o carro de UMA despesa (o combustível foi no outro veículo).
