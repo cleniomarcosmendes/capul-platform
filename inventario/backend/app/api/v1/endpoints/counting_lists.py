@@ -451,6 +451,9 @@ async def get_inventory_counting_lists(
         CountingList.inventory_id == inventory_id
     ).order_by(CountingList.list_name).all()
 
+    # Uma leitura só do teto para a listagem inteira (é config, não muda no loop).
+    teto_itens = obter_teto_itens(db)
+
     result = []
     for cl in lists:
         total_products = db.query(CountingListItem).filter(
@@ -486,6 +489,13 @@ async def get_inventory_counting_lists(
             "created_by": str(cl.created_by) if cl.created_by else None,
             "updated_at": cl.updated_at.isoformat() if cl.updated_at else None,
             "show_previous_counts": bool(cl.show_previous_counts),
+            # Fase 1.5 — quem responde se a lista cabe no app é o SERVIDOR, não a
+            # tela: o teto é configurável e a comparação tem que morar num lugar
+            # só. Sem isto o aviso só existiria no momento de montar a lista e
+            # sumiria depois — e o supervisor descobriria o problema quando o
+            # contador já estivesse com o aparelho na mão.
+            "acima_do_teto_app": total_products > teto_itens,
+            "teto_itens_app": teto_itens,
             # Item 0.5 — o supervisor precisa ver que existe aparelho com a
             # lista baixada ANTES de liberar, devolver ou cobrar.
             **_lease_payload(cl),

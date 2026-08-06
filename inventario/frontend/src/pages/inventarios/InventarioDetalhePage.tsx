@@ -1191,6 +1191,20 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                       {lista.description && (
                         <p className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">{lista.description}</p>
                       )}
+                      {/* Fase 1.5 — marca PERSISTENTE de lista que não cabe no
+                          app. O aviso no momento de montar a lista é transitório;
+                          sem isto o supervisor só descobriria o problema quando o
+                          contador já estivesse com o aparelho na mão. */}
+                      {lista.acima_do_teto_app && (
+                        <div className="mt-1">
+                          <span
+                            title={`Acima do máximo de ${(lista.teto_itens_app ?? 3000).toLocaleString('pt-BR')} itens: esta lista só pode ser contada no computador.`}
+                            className="inline-flex items-center gap-1 rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
+                          >
+                            Só no computador
+                          </span>
+                        </div>
+                      )}
                       {/* Item 0.5 — o supervisor precisa saber que existe aparelho
                           com a lista baixada ANTES de liberar, devolver ou cobrar.
                           Mostra o nome de quem retirou; o id do aparelho sozinho

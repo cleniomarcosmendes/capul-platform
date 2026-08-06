@@ -639,3 +639,28 @@ def test_15_desktop_nao_e_bloqueado_pelo_teto(
         current_user=test_supervisor_user,
     ))
     assert len(resultado) == 1, "acima do teto o desktop AVISA, não bloqueia"
+
+
+def test_15_listagem_marca_lista_que_nao_cabe_no_app(
+    db_session, test_counting_list, test_counting_list_items, test_supervisor_user
+):
+    """O aviso de montar a lista é TRANSITÓRIO. Sem esta marca na listagem, o
+    supervisor só descobriria que a lista não cabe no app quando o contador já
+    estivesse com o aparelho na mão.
+
+    Quem compara é o SERVIDOR — o teto é configurável, então a regra não pode
+    estar escrita na tela.
+    """
+    from app.api.v1.endpoints.counting_lists import get_inventory_counting_lists
+
+    db_session.add(SystemConfig(id=uuid4(), key=CHAVE_TETO_ITENS, value='1', is_active=True))
+    db_session.flush()
+
+    listas = asyncio.run(get_inventory_counting_lists(
+        inventory_id=test_counting_list.inventory_id,
+        db=db_session,
+        current_user=test_supervisor_user,
+    ))
+    alvo = next(l for l in listas if l["id"] == str(test_counting_list.id))
+    assert alvo["acima_do_teto_app"] is True
+    assert alvo["teto_itens_app"] == 1

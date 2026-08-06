@@ -147,6 +147,10 @@ export interface CountingList {
   show_previous_counts?: boolean;
   // Sort order definido no Liberar (migration 013) — define ordem dos produtos para o contador
   sort_order?: 'ORIGINAL' | 'PRODUCT_CODE' | 'PRODUCT_DESCRIPTION' | 'LOCAL1' | 'LOCAL2' | 'LOCAL3';
+  // Fase 1.5 — quem decide se a lista cabe no app é o SERVIDOR (o teto é
+  // configurável; a comparação mora num lugar só).
+  acima_do_teto_app?: boolean;
+  teto_itens_app?: number;
   // Lease do app (migration 015 / Fase 0 item 0.5). O backend NUNCA devolve o
   // `lease_token` cru — ele é a credencial de quem retirou a lista; só o estado.
   lease_ativo?: boolean;
