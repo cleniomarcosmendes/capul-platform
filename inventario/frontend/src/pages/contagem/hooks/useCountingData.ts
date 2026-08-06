@@ -64,6 +64,11 @@ export function useCountingData(inventoryId: string, listIdHint?: string) {
   const [currentListName, setCurrentListName] = useState<string>('');
   const [currentCycle, setCurrentCycle] = useState(1);
   const [showPreviousCounts, setShowPreviousCounts] = useState(false);
+  // Lease do app (Fase 0 / item 0.5) — a lista pode estar baixada num aparelho.
+  // Vem da listagem de listas, que o backend já devolve com o estado do lease.
+  const [lease, setLease] = useState<{
+    ativo: boolean; deviceId: string | null; usuarioId: string | null; desde: string | null;
+  }>({ ativo: false, deviceId: null, usuarioId: null, desde: null });
   const [noAssignedList, setNoAssignedList] = useState(false);
   const [listNotReleased, setListNotReleased] = useState(false);
   // Quando listIdHint aponta para uma lista da qual o usuário NÃO é contador no ciclo atual.
@@ -179,10 +184,17 @@ export function useCountingData(inventoryId: string, listIdHint?: string) {
           setCurrentListName(res.data.list_name);
         }
         setShowPreviousCounts(Boolean(res.data?.show_previous_counts));
+        setLease({
+          ativo: Boolean(activeList.lease_ativo),
+          deviceId: activeList.lease_device_id ?? null,
+          usuarioId: activeList.lease_user_id ?? null,
+          desde: activeList.lease_at ?? null,
+        });
       } else {
         setProducts([]);
         setCurrentListName('');
         setShowPreviousCounts(false);
+        setLease({ ativo: false, deviceId: null, usuarioId: null, desde: null });
       }
     } catch {
       setProducts([]);
@@ -299,5 +311,6 @@ export function useCountingData(inventoryId: string, listIdHint?: string) {
     assignedLists,
     counterNames,
     showPreviousCounts,
+    lease,
   };
 }

@@ -1,14 +1,17 @@
 import { useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
-import { inventoryService } from '../../services/inventory.service';
 import { countingListService } from '../../services/counting-list.service';
 import { ScannerInput } from './components/ScannerInput';
 import { CountingProgress } from './components/CountingProgress';
+import { SeloLease } from './components/SeloLease';
 import { LoteContagemModal } from './components/LoteContagemModal';
 import { ListasResponsaveis } from './components/ListasResponsaveis';
 import { useCountingData } from './hooks/useCountingData';
+import { useRegistrarContagem } from './hooks/useRegistrarContagem';
 import type { CountingFilter } from './hooks/useCountingData';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { extractApiError } from '../../utils/errors';
 import { ArrowLeft, RefreshCw, Package, Search, Layers, History, Send } from 'lucide-react';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { useToast } from '../../contexts/ToastContext';
@@ -45,9 +48,14 @@ export function ContagemDesktopPage() {
     inventario, products, allProducts, loading, filter, setFilter, stats,
     currentListId, currentCycle, currentListName, getCountedQty, countCycleKey, updateProduct, reload,
     noAssignedList, listNotReleased, notCounterOfRequested, partialReviewMode,
-    allLists, assignedLists, counterNames, showPreviousCounts,
+    allLists, assignedLists, counterNames, showPreviousCounts, lease,
   } = useCountingData(inventoryId!, listIdHint);
   const toast = useToast();
+  // Carimba lista+ciclo na contagem e trata o conflito de dispositivo (Fase 0).
+  const { registrar, dialogo: dialogoConflito } = useRegistrarContagem({
+    countingListId: currentListId,
+    currentCycle,
+  });
   const showEntregasPost = hasAnyEntregasPosterior(allProducts);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -93,7 +101,15 @@ export function ContagemDesktopPage() {
   const handleSaveCount = useCallback(async (product: CountingListProduct, quantity: number) => {
     setSavingId(product.id);
     try {
-      await inventoryService.registrarContagem(product.id, { quantity });
+      const r = await registrar(product.id, { quantity });
+      if (!r.ok) {
+        // Cancelado no diálogo de conflito não é erro — o usuário decidiu.
+        if (!r.cancelado) toast.error(r.mensagem || 'Erro ao salvar contagem.');
+        // Ciclo/lease mudaram debaixo da tela: recarregar evita seguir contando
+        // contra um contexto que não vale mais.
+        if (r.codigo === 'CICLO_DIVERGENTE' || r.codigo === 'LEASE_INVALIDO') reload();
+        return;
+      }
       updateProduct(product.id, {
         [countCycleKey]: quantity,
         status: 'COUNTED',
@@ -101,8 +117,8 @@ export function ContagemDesktopPage() {
       setEditingId(null);
       setEditValue('');
       toast.success(`Contagem salva (${currentCycle}o ciclo).`);
-    } catch {
-      toast.error('Erro ao salvar contagem.');
+    } catch (err) {
+      toast.error(extractApiError(err, 'Erro ao salvar contagem.'));
     } finally {
       setSavingId(null);
     }
@@ -123,8 +139,7 @@ export function ContagemDesktopPage() {
       setShowHandoffConfirm(false);
       navigate('/inventario/contagem');
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || 'Erro ao liberar lista para supervisor.');
+      toast.error(extractApiError(err, 'Erro ao liberar lista para supervisor.'));
     } finally {
       setHandoffLoading(false);
     }
@@ -133,10 +148,15 @@ export function ContagemDesktopPage() {
   // Save lot-based count
   const handleSaveLotCount = useCallback(async (totalQty: number, lotCounts: LotCount[]) => {
     if (!lotProduct) return;
-    await inventoryService.registrarContagem(lotProduct.id, {
+    const r = await registrar(lotProduct.id, {
       quantity: totalQty,
       lot_counts: lotCounts,
     });
+    if (!r.ok) {
+      if (!r.cancelado) toast.error(r.mensagem || 'Erro ao salvar contagem por lote.');
+      if (r.codigo === 'CICLO_DIVERGENTE' || r.codigo === 'LEASE_INVALIDO') reload();
+      return;
+    }
     updateProduct(lotProduct.id, {
       [countCycleKey]: totalQty,
       status: 'COUNTED',
@@ -370,6 +390,7 @@ export function ContagemDesktopPage() {
             )}
           </div>
           <div className="w-32">
+            <SeloLease ativo={lease.ativo} deviceId={lease.deviceId} desde={lease.desde} variante="faixa" />
             <CountingProgress total={stats.total} counted={stats.counted} compact />
           </div>
           {currentListId && (
@@ -709,6 +730,10 @@ export function ContagemDesktopPage() {
           </div>
         </div>
       )}
+
+      {/* Conflito de dispositivo (Fase 0 / item 0.5) — a lista está baixada em
+          um aplicativo. Só reenvia com `force` se o usuário confirmar. */}
+      <ConfirmDialog {...dialogoConflito} />
     </>
   );
 }

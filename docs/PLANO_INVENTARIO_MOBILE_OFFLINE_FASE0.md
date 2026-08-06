@@ -150,6 +150,18 @@ Três endpoints devolvem `expected_quantity` / `system_qty` (o **saldo do sistem
 | `GET /inventories/{inventory_id}/lists/{list_id}/products` | `counting_lists.py:38` | linhas **181-182** |
 | `GET /counting-lists/{list_id}/items` | `counting_lists.py:1166` | linhas **1215-1216** |
 | `GET /counting-lists/{list_id}/my-items` | `counting_lists.py:1266` | linha **1312** |
+| `GET /counting-lists/{list_id}/products` | **`app/main.py:10145`** | `system_qty` / `expected_quantity` |
+
+> ⚠️ **O quarto endpoint foi descoberto só em 06/08**, ao implementar a Fase 1.
+> Ele está em `main.py` (não em `counting_lists.py`, onde os outros três estão) e
+> é **justamente o que a tela de contagem usa** (`listarItens` →
+> `countingListService`). A implementação de 05/08 cobriu só os três primeiros —
+> ou seja, o caminho principal do operador continuou devolvendo o saldo por um
+> dia. Corrigido em 06/08, com teste próprio no formato de payload dele
+> (`system_qty`/`counted_qty`, montado por SQL cru).
+>
+> **Lição:** grep por nome de endpoint num arquivo só não fecha a varredura —
+> este módulo tem rotas espalhadas entre `main.py` e `api/v1/endpoints/`.
 
 Hoje quem esconde o saldo é o **frontend**, com base em `show_previous_counts`. Ou seja:
 a contagem cega é uma decisão de renderização. Qualquer `curl` com o JWT do OPERATOR lê

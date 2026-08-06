@@ -309,6 +309,16 @@ export function ListaDetalheModal({ lista, onClose }: Props) {
                         <td className="py-1.5 px-3 font-mono text-slate-700 text-xs">{p.product_code}</td>
                         <td className="py-1.5 px-3 text-slate-800 truncate max-w-[220px]" title={p.product_description || p.product_name}>
                           {p.product_description || p.product_name}
+                          {/* Migration 015 — este zero veio do fecho, não de contagem
+                              ativa. O supervisor precisa distinguir na revisão. */}
+                          {p.zerado_no_fecho && (
+                            <span
+                              title="Não foi contado: virou zero no encerramento da lista (handoff)."
+                              className="ml-1.5 inline-flex items-center rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 align-middle"
+                            >
+                              zero do fecho
+                            </span>
+                          )}
                         </td>
                         <td className="py-1.5 px-3 text-slate-500 font-mono text-xs">{p.location || '—'}</td>
                         {showEntregasPost ? (

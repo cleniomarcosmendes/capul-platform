@@ -147,6 +147,13 @@ export interface CountingList {
   show_previous_counts?: boolean;
   // Sort order definido no Liberar (migration 013) — define ordem dos produtos para o contador
   sort_order?: 'ORIGINAL' | 'PRODUCT_CODE' | 'PRODUCT_DESCRIPTION' | 'LOCAL1' | 'LOCAL2' | 'LOCAL3';
+  // Lease do app (migration 015 / Fase 0 item 0.5). O backend NUNCA devolve o
+  // `lease_token` cru — ele é a credencial de quem retirou a lista; só o estado.
+  lease_ativo?: boolean;
+  /** Sufixo do id do aparelho (o backend abrevia). */
+  lease_device_id?: string | null;
+  lease_user_id?: string | null;
+  lease_at?: string | null;
   // Handoff (migration 011)
   entregue_em?: string | null;
   entregue_por_id?: string | null;
@@ -323,6 +330,10 @@ export interface CountingListProduct {
   // Migration 012: marcação do supervisor para revisão (após handoff DEVOLVIDA)
   revisar_no_ciclo?: boolean;
   motivo_revisao?: string | null;
+  // Migration 015: o zero deste item veio do PREENCHIMENTO do fecho (handoff),
+  // não de contagem ativa. Distinguir importa na revisão: um zero contado e um
+  // zero de encerramento têm confianças bem diferentes.
+  zerado_no_fecho?: boolean;
   status: string;
   last_counted_at: string | null;
   last_counted_by: string | null;

@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { PageSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
+import { SeloLease } from '../contagem/components/SeloLease';
 import { useToast } from '../../contexts/ToastContext';
 import type {
   InventoryList,
@@ -1189,6 +1190,20 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                       </button>
                       {lista.description && (
                         <p className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">{lista.description}</p>
+                      )}
+                      {/* Item 0.5 — o supervisor precisa saber que existe aparelho
+                          com a lista baixada ANTES de liberar, devolver ou cobrar.
+                          Mostra o nome de quem retirou; o id do aparelho sozinho
+                          não diz a quem cobrar. */}
+                      {lista.lease_ativo && (
+                        <div className="mt-1">
+                          <SeloLease
+                            ativo
+                            deviceId={lista.lease_device_id}
+                            usuarioNome={lista.lease_user_id ? counterNames[lista.lease_user_id] : null}
+                            desde={lista.lease_at}
+                          />
+                        </div>
                       )}
                     </td>
                     <td className="py-3 px-3 text-center">

@@ -89,6 +89,12 @@ export const countingListService = {
       counted_items: number;
       pending_items: number;
       progress_percentage: number;
+      // Lease do app (Fase 0 / item 0.5) — o contador vê que a lista está num
+      // aparelho ANTES de abrir e começar a contar.
+      lease_ativo?: boolean;
+      lease_device_id?: string | null;
+      lease_user_id?: string | null;
+      lease_at?: string | null;
     }>;
     total: number;
   }> {

@@ -138,11 +138,26 @@ export const inventoryService = {
 
   // === Contagem ===
 
+  /**
+   * Registra a contagem de um item.
+   *
+   * `counting_list_id` e `expected_cycle` carimbam CONTRA O QUE se contou. Sem
+   * eles o servidor resolve o ciclo no momento em que a contagem chega — e uma
+   * contagem feita no 1º ciclo que chegue depois do avanço vira contagem do 2º,
+   * sobrescrevendo em silêncio o trabalho do outro contador. São opcionais no
+   * backend só por retrocompatibilidade; a tela SEMPRE deve enviá-los.
+   *
+   * `force` é a confirmação humana de contar mesmo com a lista baixada em um
+   * aplicativo (invalida o lease). Nunca enviar sem o usuário ter confirmado.
+   */
   async registrarContagem(itemId: string, payload: {
     quantity: number;
     lot_number?: string;
     observation?: string;
     lot_counts?: { lot_number: string; quantity: number }[];
+    counting_list_id?: string | null;
+    expected_cycle?: number | null;
+    force?: boolean;
   }): Promise<unknown> {
     const { data } = await inventarioApi.post(`/inventory/items/${itemId}/count`, payload);
     return data;

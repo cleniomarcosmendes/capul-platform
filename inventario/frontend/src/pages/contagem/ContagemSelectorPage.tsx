@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ClipboardList, ScanLine, Monitor, Smartphone, Package } from 'lucide-react';
 import { TableSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
+import { SeloLease } from './components/SeloLease';
 
 type MyList = {
   id: string;
@@ -23,6 +24,10 @@ type MyList = {
   counted_items: number;
   pending_items: number;
   progress_percentage: number;
+  // Lease do app (Fase 0 / item 0.5).
+  lease_ativo?: boolean;
+  lease_device_id?: string | null;
+  lease_at?: string | null;
 };
 
 export function ContagemSelectorPage() {
@@ -141,6 +146,13 @@ export function ContagemSelectorPage() {
                       >
                         {l.list_name}
                       </button>
+                      {/* Item 0.5 — o contador vê que a lista está num aparelho
+                          ANTES de abrir e começar a contar. */}
+                      {l.lease_ativo && (
+                        <div className="mt-1">
+                          <SeloLease ativo deviceId={l.lease_device_id} desde={l.lease_at} />
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-slate-600 text-xs">{l.inventory_name}</td>
                     <td className="py-3 px-4 font-mono text-slate-600">{l.warehouse}</td>

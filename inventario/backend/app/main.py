@@ -10248,6 +10248,7 @@ async def get_list_products(
                 COALESCE(cli.needs_count_cycle_3, ii.needs_recount_cycle_3) as needs_count_cycle_3,
                 COALESCE(cli.revisar_no_ciclo, false) as revisar_no_ciclo,
                 cli.motivo_revisao,
+                COALESCE(cli.zerado_no_fecho, false) as zerado_no_fecho,
                 ii.warehouse,
                 ii.sequence,
                 COALESCE(p.unit, 'UN') as unit,
@@ -10482,6 +10483,10 @@ async def get_list_products(
                 # Migration 012: marcação de revisão pelo supervisor
                 "revisar_no_ciclo": bool(row.revisar_no_ciclo) if hasattr(row, 'revisar_no_ciclo') else False,
                 "motivo_revisao": row.motivo_revisao if hasattr(row, 'motivo_revisao') else None,
+                # Migration 015: este zero veio do PREENCHIMENTO do handoff, não de
+                # contagem ativa. A regra do preenchimento não muda — isto é o rastro
+                # por item, que antes só existia agregado no histórico.
+                "zerado_no_fecho": bool(row.zerado_no_fecho) if hasattr(row, 'zerado_no_fecho') else False,
                 "counted_at": None,  # Por simplicidade, removido por enquanto
                 "warehouse": row.warehouse or "01",
                 "unit": row.unit or "UN",
@@ -10519,6 +10524,23 @@ async def get_list_products(
                 "created_at": None,
                 "finalQuantity": None,
             })
+
+        # ---- Item 0.2: contagem cega também AQUI ----
+        # Este é o endpoint que a TELA DE CONTAGEM usa (via `listarItens`), e ele
+        # ficou de fora da primeira implementação do 0.2 — que cobriu os três
+        # endpoints de counting_lists.py. Sem isto, o caminho principal do
+        # operador continuava devolvendo o saldo, e no app offline ele passaria
+        # a ficar PERSISTIDO no aparelho.
+        #
+        # Projeção, não bloqueio: o OPERATOR precisa deste endpoint para contar.
+        # O `counted_qty`/`count_cycle` do ciclo CORRENTE permanece — é dele que
+        # a tela deriva o que já foi contado.
+        # `_list_info` é a Row com list_name/current_cycle/show_previous_counts —
+        # o helper só lê esses dois por getattr, então serve. Se vier None (lista
+        # não encontrada), os defaults do getattr são os MAIS restritivos.
+        from app.api.v1.endpoints.counting_lists import aplicar_contagem_cega
+        for _item in items:
+            aplicar_contagem_cega(_item, current_user, _list_info)
 
         return {
             "success": True,

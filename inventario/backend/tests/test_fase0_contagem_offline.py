@@ -502,3 +502,41 @@ def test_05_operator_nao_libera_lease_de_outro(
             current_user=test_operator_user,
         ))
     assert exc.value.status_code == 403
+
+
+# ==========================================================================
+# 0.2 — a lacuna descoberta em 06/08: o endpoint que a TELA usa
+# ==========================================================================
+
+def test_02_endpoint_da_tela_de_contagem_tambem_projeta(
+    db_session, test_counting_list, test_operator_user, test_supervisor_user
+):
+    """`GET /counting-lists/{id}/products` (app/main.py) é o endpoint que a tela
+    de contagem usa via `listarItens` — e ficou de fora da primeira
+    implementação do 0.2, que só cobriu os três de counting_lists.py.
+
+    Este teste trava a regra no formato do payload daquele endpoint, que tem
+    nomes próprios (`system_qty`, `counted_qty`) e é montado por SQL cru.
+    """
+    payload_do_endpoint = {
+        "id": str(uuid4()),
+        "product_code": "000001",
+        "system_qty": 999.0,
+        "expected_quantity": 999.0,
+        "counted_qty": 5.0,          # ciclo corrente — NÃO pode sair
+        "count_cycle_1": 5.0,
+        "zerado_no_fecho": False,
+    }
+    test_counting_list.current_cycle = 1
+    test_counting_list.show_previous_counts = False
+    db_session.flush()
+
+    out = aplicar_contagem_cega(dict(payload_do_endpoint), test_operator_user, test_counting_list)
+    assert "system_qty" not in out
+    assert "expected_quantity" not in out
+    assert out["counted_qty"] == 5.0, "o que o operador contou tem que continuar visível"
+    assert out["count_cycle_1"] == 5.0
+
+    # Supervisor segue vendo tudo.
+    out_sup = aplicar_contagem_cega(dict(payload_do_endpoint), test_supervisor_user, test_counting_list)
+    assert out_sup["system_qty"] == 999.0
