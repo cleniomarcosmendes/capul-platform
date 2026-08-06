@@ -9,7 +9,7 @@ Plano completo: `docs/PLANO_INVENTARIO_MOBILE_OFFLINE_FASE0.md`
 ## Estado em uma linha
 
 **Fases 0, 1 e 1.5 IMPLEMENTADAS e verdes no DEV.** Suíte do Inventário passou de
-**31 → 62 testes**, todas passando. Backend e web prontos para o app começar.
+**31 → 63 testes**, todas passando. Backend e web prontos para o app começar.
 Nada foi pushado.
 
 ---
@@ -92,10 +92,19 @@ Tudo abaixo está FEITO (commit `8a8a963`):
 > varredura foi feita só em `counting_lists.py`. **Lição:** neste módulo as rotas
 > estão espalhadas entre `main.py` e `api/v1/endpoints/`.
 
-### ✅ Fase 1.5 — teto de itens por lista (commit `6b517b3`)
+### ✅ Fase 1.5 — teto de itens por lista (commits `6b517b3`, `354dc79`)
 Configurável em `inventario.system_config` (`max_itens_por_lista_contagem`,
 padrão 3.000), **aviso** no `AtribuirProdutosModal` e **bloqueio rígido** no
 `checkout`. A assimetria é proposital e tem teste nos dois lados.
+
+Mais o selo **"Só no computador"** na listagem de listas: o aviso de montar a
+lista é transitório, e sem a marca persistente o supervisor só descobriria o
+problema com o contador já de aparelho na mão. **Quem compara é o servidor**
+(`acima_do_teto_app` no payload) — o teto é configurável, então a regra mora num
+lugar só.
+
+**Confirmado com o Clenio (06/08):** o desktop **segue podendo** ter lista acima
+de 3.000. A marca informa, não impede; quem recusa é só o checkout do app.
 
 ### 2. ✅ Números de produção — ENCERRADO em 06/08 (não virão, e não precisam)
 
@@ -151,7 +160,7 @@ WHERE table_schema='inventario' AND (
 # esperado: 7 linhas
 
 # 2. Suíte
-cd inventario/backend && ./run-tests.sh     # esperado: 62 passed
+cd inventario/backend && ./run-tests.sh     # esperado: 63 passed
 ```
 
 ---
