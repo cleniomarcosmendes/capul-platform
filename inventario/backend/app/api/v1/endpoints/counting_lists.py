@@ -35,6 +35,51 @@ def _check_not_closed(inventory):
         )
 
 
+# ---------------------------------------------------------------------------
+# Teto de itens por lista de contagem (Fase 1.5)
+# ---------------------------------------------------------------------------
+# O teto existe por DOIS motivos que se reforçam, e é importante não confundi-los:
+#
+#  1. **Operacional** — uma lista é a atribuição de UMA pessoa. Ninguém conta
+#     10.000 itens numa atribuição só; dividir é o que o modelo multi-lista já
+#     faz (cada lista tem contador e ciclo próprios, então dividir também
+#     PARALELIZA a contagem).
+#  2. **Técnico** — a lista precisa caber no aparelho para a contagem offline
+#     (3.000 itens ≈ 1,9 MB, dentro do limite do AsyncStorage).
+#
+# Se fosse só o motivo 2, seria limitação técnica disfarçada de regra. Como o
+# motivo 1 vale sozinho, o teto é regra de negócio — e por isso ele é **aviso**
+# no desktop e **bloqueio** só na porta do mobile (o checkout). Assim o desktop
+# nunca fica travado por uma regra que existe por causa do celular.
+CHAVE_TETO_ITENS = 'max_itens_por_lista_contagem'
+TETO_ITENS_PADRAO = 3000
+
+
+def obter_teto_itens(db: Session) -> int:
+    """Teto configurado em `inventario.system_config`, ou o padrão.
+
+    Hoje só se altera pelo banco — não há tela. Se virar algo que o usuário
+    precise ajustar, ver a regra de "funcionalidade oculta precisa de tela".
+    """
+    try:
+        from app.models.models import SystemConfig
+        cfg = db.query(SystemConfig).filter(
+            SystemConfig.key == CHAVE_TETO_ITENS,
+            SystemConfig.is_active == True,  # noqa: E712 — SQLAlchemy
+        ).first()
+        if cfg and cfg.value:
+            valor = int(str(cfg.value).strip())
+            if valor > 0:
+                return valor
+    except Exception as err:  # config inválida não pode derrubar a contagem
+        logger.warning(f"Teto de itens por lista inválido em system_config: {err}. Usando o padrão.")
+    return TETO_ITENS_PADRAO
+
+
+def _contar_itens_da_lista(db: Session, list_id) -> int:
+    return db.query(CountingListItem).filter(CountingListItem.counting_list_id == list_id).count()
+
+
 def _is_staff(user) -> bool:
     """ADMIN/SUPERVISOR. Aceita Enum ou string — o campo role aparece das duas
     formas dependendo de como o usuário foi carregado (UNIFIED_AUTH x tabela)."""
@@ -764,6 +809,17 @@ async def add_items_to_counting_list(
 
     db.commit()
 
+    # Fase 1.5 — o teto é AVISO no desktop, não bloqueio (o bloqueio fica na
+    # porta do mobile, no checkout). Aqui só registramos, para dar rastro de
+    # quando uma lista passou do tamanho recomendado e por quanto.
+    total = _contar_itens_da_lista(db, list_id)
+    teto = obter_teto_itens(db)
+    if total > teto:
+        logger.warning(
+            f"[TETO_LISTA] Lista {list_id} ficou com {total} itens (teto {teto}). "
+            f"Permitido no desktop; a retirada pelo aplicativo será recusada."
+        )
+
     logger.info(f"{len(added_items)} itens adicionados à lista {list_id}")
     return added_items
 
@@ -1187,6 +1243,14 @@ def _lease_payload(counting_list) -> dict:
     }
 
 
+@router.get("/counting-lists/config/teto-itens")
+async def teto_itens_por_lista(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Teto de itens por lista, para a tela mostrar o número real em vez de um
+    3.000 escrito no código do frontend (que sairia de sincronia no dia em que
+    o valor mudasse no banco)."""
+    return {"teto": obter_teto_itens(db), "padrao": TETO_ITENS_PADRAO}
+
+
 @router.post("/counting-lists/{list_id}/checkout")
 async def checkout_counting_list(
     list_id: UUID,
@@ -1235,6 +1299,30 @@ async def checkout_counting_list(
                 "erro": "CONTADOR_NAO_ATRIBUIDO",
                 "mensagem": "Você não é o contador atribuído ao ciclo atual desta lista.",
                 "cycle": counting_list.current_cycle,
+            },
+        )
+
+    # Fase 1.5 — AQUI o teto é rígido. Esta é a porta do mobile: passar de
+    # 3.000 itens não cabe no aparelho (o pacote fica grande demais para o
+    # armazenamento local) e, antes disso, não é uma atribuição que uma pessoa
+    # dê conta. No desktop o mesmo teto é só aviso, de propósito — a operação
+    # não pode ficar travada por uma regra que existe por causa do celular.
+    total_itens = _contar_itens_da_lista(db, list_id)
+    teto = obter_teto_itens(db)
+    if total_itens > teto:
+        logger.warning(
+            f"[TETO_LISTA] Checkout recusado — lista {list_id} tem {total_itens} itens (teto {teto})."
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "erro": "LISTA_ACIMA_DO_TETO",
+                "mensagem": (
+                    f"Esta lista tem {total_itens} itens e o máximo para contagem pelo aplicativo "
+                    f"é {teto}. Peça ao supervisor para dividir a lista."
+                ),
+                "total_itens": total_itens,
+                "teto": teto,
             },
         )
 

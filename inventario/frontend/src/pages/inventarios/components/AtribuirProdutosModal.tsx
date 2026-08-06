@@ -10,6 +10,8 @@ interface Props {
   inventoryId: string;
   listId: string;
   listName: string;
+  /** Quantos itens a lista JÁ tem — para avisar antes de passar do teto. */
+  itensNaLista?: number;
   onClose: () => void;
   onAdded: () => void;
 }
@@ -76,7 +78,7 @@ const statusConfig: Record<string, { label: string; rowClass: string; badgeClass
 const PAGE_SIZE = 50;
 const COL_COUNT = 17; // checkbox + 16 data columns
 
-export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, onAdded }: Props) {
+export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, onAdded, itensNaLista = 0 }: Props) {
   const toast = useToast();
   const [visible, setVisible] = useState(false);
 
@@ -97,6 +99,9 @@ export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, 
 
   // Data
   const [items, setItems] = useState<AssignableItem[]>([]);
+  // Teto de itens por lista (Fase 1.5). Vem do backend em vez de ficar escrito
+  // aqui: se o valor mudar no banco, a tela não fica mentindo.
+  const [teto, setTeto] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -116,6 +121,9 @@ export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, 
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
+    countingListService.tetoItensPorLista()
+      .then((r) => setTeto(r.teto))
+      .catch(() => setTeto(null)); // sem teto conhecido, não avisa nada
   }, []);
 
   // Load filter options lazily when panel first opens
@@ -334,6 +342,15 @@ export function AtribuirProdutosModal({ inventoryId, listId, listName, onClose, 
                 ? <><span className="font-medium text-capul-600">{selected.size}</span> produto{selected.size !== 1 ? 's' : ''} selecionado{selected.size !== 1 ? 's' : ''} para <span className="font-medium">"{listName}"</span></>
                 : <>Selecione os produtos do inventario para adicionar a <span className="font-medium">"{listName}"</span></>}
             </p>
+            {/* Fase 1.5 — AVISO, não bloqueio. Passar do teto é permitido no
+                desktop; quem recusa é a retirada pelo aplicativo. */}
+            {teto !== null && itensNaLista + selected.size > teto && (
+              <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                <strong>{(itensNaLista + selected.size).toLocaleString('pt-BR')}</strong> itens ({itensNaLista.toLocaleString('pt-BR')} na lista + {selected.size.toLocaleString('pt-BR')} selecionados) —
+                acima do máximo de <strong>{teto.toLocaleString('pt-BR')}</strong> por lista.
+                Pode adicionar, mas a lista <strong>não poderá ser contada pelo aplicativo</strong>; considere dividir em mais de uma lista.
+              </p>
+            )}
           </div>
           <button onClick={handleClose} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
             <X className="w-5 h-5" />

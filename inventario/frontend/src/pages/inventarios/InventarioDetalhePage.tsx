@@ -1409,6 +1409,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
           inventoryId={inventoryId}
           listId={atribuirLista.id}
           listName={atribuirLista.list_name}
+          itensNaLista={atribuirLista.total_items ?? 0}
           onClose={() => setAtribuirLista(null)}
           onAdded={() => onReload()}
         />

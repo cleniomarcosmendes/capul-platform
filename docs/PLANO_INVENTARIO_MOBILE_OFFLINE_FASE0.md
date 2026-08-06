@@ -567,7 +567,7 @@ silêncio.
 |---|---|---|
 | **0** | Este documento — backend | — |
 | **1** | App multi-módulo: `jwt.ts:76` lê papel por módulo, tile no `HomeScreen`, `name` → "CAPUL Platform" | — (paralelo à 0) |
-| **1.5** | Teto de 3.000 no `AtribuirProdutosModal` + configuração; gerador por localidade (opcional) | — |
+| **1.5** | ✅ **FEITO 06/08** — teto configurável (`system_config.max_itens_por_lista_contagem`, padrão 3.000): **aviso** no `AtribuirProdutosModal`, **bloqueio rígido** no `checkout`. Gerador por localidade segue opcional, não feito | — |
 | **2** | Working set offline: endpoint de pacote, AsyncStorage, "uma lista por vez", `checkout` do lease ao baixar | 0.2, 0.5, 1.5 |
 | **3** | `filaContagem.ts` (estado, não append) + bloqueio de handoff com fila pendente + `release` do lease | 0.1, 0.4, 0.5, 2 |
 | **4** | Conflito: tratamento de `CICLO_DIVERGENTE` e `LEASE_INVALIDO`, tela do supervisor | 0.1, 0.3, 0.5, 3 |

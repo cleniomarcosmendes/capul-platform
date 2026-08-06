@@ -540,3 +540,102 @@ def test_02_endpoint_da_tela_de_contagem_tambem_projeta(
     # Supervisor segue vendo tudo.
     out_sup = aplicar_contagem_cega(dict(payload_do_endpoint), test_supervisor_user, test_counting_list)
     assert out_sup["system_qty"] == 999.0
+
+
+# ==========================================================================
+# Fase 1.5 — teto de itens por lista
+# ==========================================================================
+# A regra é deliberadamente ASSIMÉTRICA: aviso no desktop, bloqueio no mobile.
+# Se alguém "uniformizar" isso um dia, um dos dois testes abaixo cai — e é
+# proposital, porque travar o desktop por causa do celular seria transformar
+# uma regra de negócio em limitação técnica disfarçada.
+
+from app.api.v1.endpoints.counting_lists import (  # noqa: E402
+    obter_teto_itens,
+    TETO_ITENS_PADRAO,
+    CHAVE_TETO_ITENS,
+)
+from app.models.models import SystemConfig  # noqa: E402
+
+
+def test_15_teto_usa_o_padrao_sem_configuracao(db_session):
+    assert obter_teto_itens(db_session) == TETO_ITENS_PADRAO
+
+
+def test_15_teto_le_a_configuracao_do_banco(db_session):
+    db_session.add(SystemConfig(id=uuid4(), key=CHAVE_TETO_ITENS, value='500', is_active=True))
+    db_session.flush()
+    assert obter_teto_itens(db_session) == 500
+
+
+def test_15_configuracao_invalida_cai_no_padrao(db_session):
+    """Config quebrada não pode derrubar a contagem — cai no padrão e loga."""
+    db_session.add(SystemConfig(id=uuid4(), key=CHAVE_TETO_ITENS, value='abc', is_active=True))
+    db_session.flush()
+    assert obter_teto_itens(db_session) == TETO_ITENS_PADRAO
+
+
+def test_15_checkout_recusa_lista_acima_do_teto(
+    db_session, test_counting_list, test_counting_list_items, test_supervisor_user
+):
+    """Bloqueio RÍGIDO na porta do mobile."""
+    test_counting_list.list_status = 'EM_CONTAGEM'
+    # Teto abaixo do que a lista tem (as fixtures criam poucos itens).
+    db_session.add(SystemConfig(id=uuid4(), key=CHAVE_TETO_ITENS, value='1', is_active=True))
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(checkout_counting_list(
+            list_id=test_counting_list.id,
+            payload={"device_id": "dev-aaa"},
+            db=db_session,
+            current_user=test_supervisor_user,
+        ))
+    assert _erro(exc) == "LISTA_ACIMA_DO_TETO"
+    assert exc.value.detail["teto"] == 1
+
+
+def test_15_checkout_passa_dentro_do_teto(
+    db_session, test_counting_list, test_counting_list_items, test_supervisor_user
+):
+    test_counting_list.list_status = 'EM_CONTAGEM'
+    db_session.flush()
+    resp = asyncio.run(checkout_counting_list(
+        list_id=test_counting_list.id,
+        payload={"device_id": "dev-aaa"},
+        db=db_session,
+        current_user=test_supervisor_user,
+    ))
+    assert resp["lease_token"]
+
+
+def test_15_desktop_nao_e_bloqueado_pelo_teto(
+    db_session, test_counting_list, test_counting_list_items, test_supervisor_user
+):
+    """⭐ A assimetria. Adicionar itens acima do teto CONTINUA permitido — o
+    desktop não pode ficar travado por uma regra que existe por causa do
+    celular. Quem recusa é o checkout (teste acima)."""
+    from app.api.v1.endpoints.counting_lists import add_items_to_counting_list
+    from app.models.models import InventoryItem
+
+    db_session.add(SystemConfig(id=uuid4(), key=CHAVE_TETO_ITENS, value='1', is_active=True))
+    test_counting_list.list_status = 'PREPARACAO'
+    # Item do inventário ainda fora de qualquer lista.
+    novo = InventoryItem(
+        id=uuid4(),
+        inventory_list_id=test_counting_list.inventory_id,
+        product_code='NOVO-001',
+        expected_quantity=10,
+        warehouse='01',
+        sequence=99,
+    )
+    db_session.add(novo)
+    db_session.flush()
+
+    resultado = asyncio.run(add_items_to_counting_list(
+        list_id=test_counting_list.id,
+        items=[novo.id],
+        db=db_session,
+        current_user=test_supervisor_user,
+    ))
+    assert len(resultado) == 1, "acima do teto o desktop AVISA, não bloqueia"

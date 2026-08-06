@@ -45,6 +45,12 @@ export const countingListService = {
     return data;
   },
 
+  /** Teto de itens por lista (Fase 1.5) — configurável em system_config. */
+  async tetoItensPorLista(): Promise<{ teto: number; padrao: number }> {
+    const { data } = await inventarioApi.get('/counting-lists/config/teto-itens');
+    return data;
+  },
+
   async adicionarItens(listId: string, itemIds: string[]): Promise<unknown> {
     const { data } = await inventarioApi.post(`/counting-lists/${listId}/items`, itemIds);
     return data;
