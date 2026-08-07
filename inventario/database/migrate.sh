@@ -44,8 +44,17 @@ for file in $(ls "$MIGRATIONS_DIR"/*.sql 2>/dev/null | sort); do
       echo "[inventario] ERRO ao aplicar $fname"
       exit 1
     }
+    # ON CONFLICT porque algumas migrations se AUTO-REGISTRAM (a 014 tem o
+    # proprio INSERT no fim do .sql). Sem isto o INSERT daqui colide, o `set -e`
+    # mata o runner e as migrations SEGUINTES nao sao aplicadas — foi o que
+    # aconteceu em 07/08: a 014 auto-registrou, o runner morreu e a 015 ficou
+    # para tras sem ninguem perceber.
+    # DO UPDATE (e nao DO NOTHING) para preencher o checksum que o auto-registro
+    # deixa nulo — sem ele, nao da para detectar migration editada depois de
+    # aplicada, que e a razao de existir a coluna.
     psql "$DB_URL" -q -c \
-      "INSERT INTO inventario.schema_migrations (filename, checksum) VALUES ('$fname', '$checksum')"
+      "INSERT INTO inventario.schema_migrations (filename, checksum) VALUES ('$fname', '$checksum')
+       ON CONFLICT (filename) DO UPDATE SET checksum = EXCLUDED.checksum"
     APPLIED=$((APPLIED + 1))
   else
     SKIPPED=$((SKIPPED + 1))

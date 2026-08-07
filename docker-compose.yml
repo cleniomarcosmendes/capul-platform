@@ -321,6 +321,33 @@ services:
   # =======================================
   # MODULO — Inventario
   # =======================================
+  # Migrations do Inventario. Este era o UNICO backend da plataforma sem job
+  # *-migrate: o modulo tem um runner proprio (database/migrate.sh, com
+  # controle em inventario.schema_migrations e checksum), mas ele nao estava
+  # ligado a nada — dependia de alguem lembrar de rodar a mao no deploy.
+  #
+  # O resultado disso apareceu em 07/08: a 014 (que alarga os codigos
+  # mercadologicos e sem a qual o sync do Protheus de PRODUCAO quebra com
+  # StringDataRightTruncation) estava ha ~6 semanas sem ser aplicada, e a 015
+  # tinha sido aplicada a mao sem registro.
+  #
+  # Usa a imagem do Postgres porque o runner e SQL puro + psql (o backend e
+  # Python/SQLAlchemy, sem psql). O diretorio ja estava montado no servico
+  # `postgres` — aqui e a mesma montagem, para o job ser autonomo.
+  inventario-migrate:
+    image: postgres:16-alpine
+    container_name: capul-inventario-migrate
+    command: ["bash", "/migrations-inv/migrate.sh"]
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform
+    volumes:
+      - ./inventario/database:/migrations-inv:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
   inventario-backend:
     build: ./inventario/backend
     container_name: capul-inventario-api
@@ -347,6 +374,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      inventario-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     logging: *default-logging
     # Limites de recursos — auditoria 25/04/2026 #5 (FastAPI + sync Protheus)

@@ -1387,6 +1387,51 @@ SELECT count(*) FROM logistica.viagem
 
 ---
 
+## [Inventário] Migrations fora de controle — RESOLVIDO em 07/08/2026
+
+**Achado ao começar a "finalizar o módulo".** O Inventário tem um runner próprio
+(`inventario/database/migrate.sh`, com `schema_migrations` + checksum), mas ele
+**não estava ligado a nada** — era o único backend da plataforma sem job
+`*-migrate`. Dependia de alguém lembrar de rodar à mão.
+
+O que se encontrou:
+
+| Migration | Estado real |
+|---|---|
+| até 013 | aplicada e registrada (última em 05/05) |
+| **014** — alarga códigos mercadológicos | **NÃO aplicada** havia ~6 semanas |
+| **015** — Fase 0 offline | aplicada à mão, **sem registro** |
+
+A 014 é a que corrige o `StringDataRightTruncation` do sync com o Protheus de
+**produção** (código de 6 dígitos em coluna `varchar(4)`). Ou seja: **o sync
+estava quebrado** e ninguém tinha percebido, porque nada avisa.
+
+**Causa de fundo (o que realmente estava errado):** a 014 **se auto-registrava**
+no próprio `.sql`. Como o runner também registra, o INSERT dele colidia na chave
+única, o `set -e` matava o script — e **as migrations seguintes não eram
+aplicadas**. Foi exatamente assim que a 015 ficou para trás. Um erro numa
+migration silenciava todas as posteriores.
+
+**Correções:**
+1. `migrate.sh` — `INSERT ... ON CONFLICT (filename) DO UPDATE SET checksum`.
+   Defesa em profundidade: auto-registro não derruba mais o runner, e o checksum
+   que o auto-registro deixava nulo é preenchido.
+2. `014_*.sql` — removido o auto-registro. Escrituração é do runner; migration
+   nova **não** deve registrar a si mesma.
+3. **Job `inventario-migrate` no compose**, espelhando os outros 4 backends
+   (`service_completed_successfully` antes do backend subir). Usa a imagem do
+   Postgres, porque o runner é SQL + `psql` e o backend é Python sem `psql`.
+
+**Verificado ponta a ponta:** removido o registro da 015, o job detectou,
+aplicou e re-registrou com checksum; o backend só sobe depois do job terminar.
+
+⚠️ **Para o deploy:** a linha manual da 015 no roteiro **deixa de ser
+necessária** — o job aplica. Mas conferir que a **014** entra, porque em PROD ela
+provavelmente também está pendente (mesmo sintoma: sync do mercadológico
+truncando).
+
+---
+
 ## [Inventário] Pendências levantadas em 02/08/2026
 
 **Como apareceu:** a suíte do Inventário quebrava na coleta do pytest. Ao corrigir

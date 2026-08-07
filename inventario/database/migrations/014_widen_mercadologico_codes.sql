@@ -23,8 +23,10 @@ ALTER TABLE inventario.sze010 ALTER COLUMN ze_xdesc TYPE varchar(100);
 ALTER TABLE inventario.szf010 ALTER COLUMN zf_xcod  TYPE varchar(20);
 ALTER TABLE inventario.szf010 ALTER COLUMN zf_xdesc TYPE varchar(100);
 
-INSERT INTO inventario.schema_migrations (filename, applied_at)
-SELECT '014_widen_mercadologico_codes.sql', NOW()
-WHERE NOT EXISTS (
-  SELECT 1 FROM inventario.schema_migrations WHERE filename = '014_widen_mercadologico_codes.sql'
-);
+-- NOTA (07/08/2026): esta migration se AUTO-REGISTRAVA em schema_migrations.
+-- Removido. A escrituracao e responsabilidade do runner (database/migrate.sh),
+-- e ter os dois registrando causava colisao de chave unica: o INSERT do runner
+-- estourava, o `set -e` matava o script e as migrations SEGUINTES ficavam sem
+-- aplicar. Foi assim que a 015 ficou para tras sem ninguem perceber.
+-- O runner agora usa ON CONFLICT (defesa em profundidade), mas migration nova
+-- NAO deve registrar a si mesma.
