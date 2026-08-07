@@ -14,6 +14,8 @@ import { SaidaFrotaScreen } from '../screens/SaidaFrotaScreen';
 import { ViagemFrotaScreen } from '../screens/ViagemFrotaScreen';
 import { SupervisorHomeScreen } from '../screens/SupervisorHomeScreen';
 import { SupervisorViagemScreen } from '../screens/SupervisorViagemScreen';
+import { ContagemHomeScreen } from '../screens/ContagemHomeScreen';
+import { ContagemListaScreen } from '../screens/ContagemListaScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -27,6 +29,9 @@ export type RootStackParamList = {
   ViagemFrota: { viagemId: string; numero: number };
   SupervisorHome: undefined;
   SupervisorViagem: { viagemId: string; numero: number };
+  // Inventário — contagem (o app deixou de ser só da Logística).
+  ContagemHome: undefined;
+  ContagemLista: { listId: string; listName: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -107,6 +112,16 @@ export function RootNavigator() {
               name="SupervisorViagem"
               component={SupervisorViagemScreen}
               options={({ route }) => ({ title: `Viagem #${route.params.numero}` })}
+            />
+            <Stack.Screen
+              name="ContagemHome"
+              component={ContagemHomeScreen}
+              options={{ title: 'Contagem' }}
+            />
+            <Stack.Screen
+              name="ContagemLista"
+              component={ContagemListaScreen}
+              options={({ route }) => ({ title: route.params.listName })}
             />
           </>
         ) : (

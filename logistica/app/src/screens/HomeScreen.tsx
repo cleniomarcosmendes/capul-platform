@@ -30,17 +30,26 @@ const ROLES_ENTREGA = ['ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'ADMI
 // com 0 registros.
 const ROLES_SUPERVISOR = ['SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA', 'ADMIN'];
 
+// INVENTÁRIO: papéis do MÓDULO INVENTARIO (ADMIN/SUPERVISOR/OPERATOR) — não os
+// da Logística. A mesma pessoa pode ser OPERADOR_ENTREGA lá e OPERATOR aqui, e
+// quem não tem o módulo no token nem vê o card.
+// Contar em campo é do OPERATOR; SUPERVISOR/ADMIN entram porque cobrem contagem
+// e precisam conferir pelo aparelho.
+const ROLES_INVENTARIO = ['OPERATOR', 'SUPERVISOR', 'ADMIN'];
+
 /**
  * Tela-lançador: o usuário escolhe entre Entregas e Frota. Cada card só fica
  * ativo se a role na Logística permite (mesma regra do backend), então quem
  * tem só uma permissão vê só o seu app; ADMIN vê os dois e alterna sem logout.
  */
 export function HomeScreen({ navigation }: Props) {
-  const { logout, role } = useAuth();
+  const { logout, role, roleInventario } = useAuth();
   const insets = useSafeAreaInsets();
   const podeEntrega = !!role && ROLES_ENTREGA.includes(role);
   const podeFrota = !!role && ROLES_FROTA.includes(role);
   const podeSupervisor = !!role && ROLES_SUPERVISOR.includes(role);
+  // Sem o módulo no token, `roleInventario` é null e o card não habilita.
+  const podeContagem = !!roleInventario && ROLES_INVENTARIO.includes(roleInventario);
 
   return (
     // O bloco de baixo (Sair + versão) é empurrado pro fim da tela; sem o inset
@@ -68,6 +77,14 @@ export function HomeScreen({ navigation }: Props) {
         descricao="Visitas e despesas da viagem mensal (RDV)"
         habilitado={podeSupervisor}
         onPress={() => navigation.navigate('SupervisorHome')}
+      />
+
+      <Card
+        emoji="🔢"
+        nome="Contagem"
+        descricao="Inventário: contar lista, inclusive sem sinal"
+        habilitado={podeContagem}
+        onPress={() => navigation.navigate('ContagemHome')}
       />
 
       <Text style={styles.rodape}>Você pode voltar aqui a qualquer momento para trocar.</Text>

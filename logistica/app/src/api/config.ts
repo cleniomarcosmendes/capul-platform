@@ -26,3 +26,6 @@ export const API_URL = (
 
 export const AUTH_BASE = `${API_URL}/api/v1/auth`;
 export const LOGISTICA_BASE = `${API_URL}/api/v1/logistica`;
+// O Inventário serve direto sob /api/v1 (não tem prefixo de módulo como a
+// Logística) — é o mesmo caminho que o frontend web usa em `inventarioApi`.
+export const INVENTARIO_BASE = `${API_URL}/api/v1`;

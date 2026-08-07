@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { doRefresh, loginRequest, setAccessToken, setOnAuthFailure } from '../api/client';
 import { getDeviceId } from './deviceId';
 import { clearTokens, getRefresh, saveTokens } from './storage';
-import { papelLogistica, tipoUsuario, departamentoUsuario, filialUsuario, usuarioIdDoToken } from '../lib/jwt';
+import { papelLogistica, papelInventario, tipoUsuario, departamentoUsuario, filialUsuario, usuarioIdDoToken } from '../lib/jwt';
 
 type Status = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -10,7 +10,12 @@ interface AuthState {
   status: Status;
   // Papel na Logística (do JWT) — decide a tela inicial: ENTREGADOR vê entregas;
   // os demais (operador/gestor/frota PADRÃO) veem a Frota.
+  // Mantém o nome `role` (sem módulo) porque é o que a app inteira já usa; o
+  // papel de OUTRO módulo vem em campo próprio.
   role: string | null;
+  /** Papel no Inventário (ADMIN | SUPERVISOR | OPERATOR). null = sem acesso ao
+   *  módulo — e aí a Contagem nem aparece na Home. */
+  roleInventario: string | null;
   /** id do usuário logado — quem lança a despesa não aprova o próprio lançamento. */
   usuarioId: string | null;
   // Tipo do usuário: 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico). Decide se
@@ -29,6 +34,7 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [role, setRole] = useState<string | null>(null);
+  const [roleInventario, setRoleInventario] = useState<string | null>(null);
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [tipo, setTipo] = useState<string | null>(null);
   const [departamentoId, setDepartamentoId] = useState<string | null>(null);
@@ -37,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Deriva role/tipo/departamento/filial de um access token (ou limpa, se null).
   const aplicarToken = useCallback((access: string | null) => {
     setRole(papelLogistica(access));
+    setRoleInventario(papelInventario(access));
     setUsuarioId(usuarioIdDoToken(access));
     setTipo(tipoUsuario(access));
     setDepartamentoId(departamentoUsuario(access));
@@ -99,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [aplicarToken]);
 
   return (
-    <AuthContext.Provider value={{ status, role, usuarioId, tipo, departamentoId, filialId, login, logout }}>
+    <AuthContext.Provider value={{ status, role, roleInventario, usuarioId, tipo, departamentoId, filialId, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

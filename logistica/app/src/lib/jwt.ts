@@ -1,6 +1,11 @@
-// Decodifica o papel da Logística direto do access token (sem lib). O JWT da
-// plataforma carrega `modulos: [{ codigo, role }]` — pegamos o role de LOGISTICA
-// pra decidir o que o usuário pode operar (lançador FROTA/ENTREGA).
+// Decodifica papéis direto do access token (sem lib). O JWT da plataforma
+// carrega `modulos: [{ codigo, role }]` — um por módulo que o usuário acessa.
+//
+// O app nasceu só da Logística e lia LOGISTICA fixo. Com o Inventário entrando
+// (contagem offline), o papel passa a ser lido POR MÓDULO: a mesma pessoa pode
+// ser OPERADOR_ENTREGA na Logística e OPERATOR no Inventário, e cada tela
+// precisa do papel do SEU módulo. Nenhuma mudança no Auth Gateway foi
+// necessária — o token já vinha com os dois.
 
 interface JwtPayload {
   sub?: string;
@@ -72,8 +77,24 @@ function decodePayload(accessToken: string | null): JwtPayload | null {
   }
 }
 
+/** Códigos de módulo da plataforma que este app consome. */
+export type CodigoModulo = 'LOGISTICA' | 'INVENTARIO';
+
+/** Papel do usuário NO MÓDULO pedido, ou null se ele não tem acesso a ele. */
+export function papelNoModulo(accessToken: string | null, codigo: CodigoModulo): string | null {
+  return decodePayload(accessToken)?.modulos?.find((m) => m.codigo === codigo)?.role ?? null;
+}
+
+/** Papel na Logística. Mantido porque é o que quase toda a app já chama —
+ *  trocar por `papelNoModulo(t,'LOGISTICA')` em ~30 lugares seria ruído sem
+ *  ganho. */
 export function papelLogistica(accessToken: string | null): string | null {
-  return decodePayload(accessToken)?.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role ?? null;
+  return papelNoModulo(accessToken, 'LOGISTICA');
+}
+
+/** Papel no Inventário (ADMIN | SUPERVISOR | OPERATOR). null = sem acesso. */
+export function papelInventario(accessToken: string | null): string | null {
+  return papelNoModulo(accessToken, 'INVENTARIO');
 }
 
 /** id do usuário logado. Usado para saber QUEM lançou a despesa: quem lança não
