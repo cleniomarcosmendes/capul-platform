@@ -247,3 +247,53 @@ def test_armazens_caem_para_szb010_quando_tabela_propria_esta_vazia(db_session):
 
     assert [a['code'] for a in out] == ['A1', 'A2'], 'deve trazer só a filial do usuário'
     assert out[0]['name'] == 'ARMAZEM UM'
+
+
+# ==========================================================================
+# Espelhos do Protheus — todo ON CONFLICT precisa de UNIQUE (07/08/2026)
+# ==========================================================================
+
+def test_espelhos_tem_a_unique_que_o_importador_exige(db_session):
+    """⭐ Três vezes no mesmo dia (migrations 016, 017, 018) o código assumiu um
+    objeto de schema que nenhuma migration criava. Aqui foi o pior formato:
+    `ON CONFLICT (...)` sem UNIQUE correspondente derruba a importação com 500
+    NO MEIO do processo, depois de já ter gravado parte.
+
+    Este teste varre as chaves que `import_produtos.py` usa contra as
+    restrições reais. Se uma tabela for recriada sem a chave natural — foi
+    exatamente o que aconteceu com sb8010, que perdeu a PK composta para um
+    `id` substituto — ele acusa antes de a importação quebrar em produção.
+    """
+    esperado = {
+        'sb1010': ['b1_filial', 'b1_cod'],
+        'sb2010': ['b2_filial', 'b2_cod', 'b2_local'],
+        'sb8010': ['b8_filial', 'b8_produto', 'b8_local', 'b8_lotectl'],
+        'sbz010': ['bz_filial', 'bz_cod'],
+        'slk010': ['slk_filial', 'slk_codbar', 'slk_produto'],
+    }
+
+    reais = db_session.execute(text("""
+        SELECT c.relname, string_agg(a.attname, ',' ORDER BY k.ord)
+        FROM pg_index i
+        JOIN pg_class c ON c.oid = i.indrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord) ON true
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum
+        WHERE n.nspname = 'inventario' AND (i.indisunique OR i.indisprimary)
+        GROUP BY c.relname, i.indexrelid
+    """)).fetchall()
+
+    por_tabela: dict[str, set[str]] = {}
+    for tabela, cols in reais:
+        por_tabela.setdefault(tabela, set()).add(cols)
+
+    faltando = [
+        f"{tabela} ({','.join(cols)})"
+        for tabela, cols in esperado.items()
+        if ','.join(cols) not in por_tabela.get(tabela, set())
+    ]
+    assert not faltando, (
+        'Tabela(s) sem a UNIQUE que o ON CONFLICT do importador exige: '
+        + '; '.join(faltando)
+        + '. A importação de produtos vai falhar com InvalidColumnReference.'
+    )
