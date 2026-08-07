@@ -134,6 +134,19 @@ export const countingListService = {
     await inventarioApi.delete(`/counting-lists/${listId}`);
   },
 
+  /**
+   * Libera À FORÇA o lease de uma lista baixada num aplicativo (Fase 0 / 0.5).
+   *
+   * Escape hatch do supervisor: sem ele, um aparelho perdido ou um operador
+   * desligado congelariam a lista para sempre. O evento fica no histórico de
+   * handoff. Chamado sem `lease_token` — é justamente o caso em que o token
+   * está no aparelho que sumiu.
+   */
+  async liberarLeaseDaLista(listId: string): Promise<{ message: string; forcado: boolean }> {
+    const { data } = await inventarioApi.delete(`/counting-lists/${listId}/checkout`);
+    return data;
+  },
+
   async liberarParaSupervisor(listId: string): Promise<{ status: string; zerados: number }> {
     const { data } = await inventarioApi.post(`/counting-lists/${listId}/handoff`);
     return data;

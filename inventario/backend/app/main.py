@@ -6451,9 +6451,32 @@ def _validar_captura_offline(db, count_data, counting_list, cycle_number, item_u
     # NÃO é lock distribuído: o app conta offline sem falar com o servidor. O
     # lease reduz a janela e, principalmente, torna a colisão DETECTÁVEL em vez
     # de last-write-wins silencioso.
-    if counting_list is not None and getattr(counting_list, 'lease_token', None):
+    if counting_list is not None:
         enviado = str(count_data.lease_token) if count_data.lease_token else None
-        atual = str(counting_list.lease_token)
+        atual = str(counting_list.lease_token) if getattr(counting_list, 'lease_token', None) else None
+
+        # App chega com token de um lease que NAO EXISTE MAIS. Acontece quando o
+        # supervisor liberou a lista a força (aparelho dado como perdido) e o
+        # aparelho reaparece depois. Recusar e deliberado: liberar foi um ato
+        # humano de tomar a lista de volta, possivelmente para recontar no
+        # desktop ou trocar de contador — aceitar a contagem velha em silencio
+        # desfaria essa decisao. O operador e avisado e pede a devolucao.
+        if enviado is not None and atual is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "erro": "LEASE_INVALIDO",
+                    "mensagem": (
+                        "A reserva desta lista para o seu aparelho foi liberada pelo supervisor. "
+                        "A contagem nao foi gravada — peca a ele para devolver a lista."
+                    ),
+                    "counting_list_id": str(counting_list.id),
+                },
+            )
+
+        # Sem lease ativo e sem token: e a web de sempre, segue o fluxo normal.
+        if atual is None:
+            return
 
         if enviado is None:
             if not count_data.force:

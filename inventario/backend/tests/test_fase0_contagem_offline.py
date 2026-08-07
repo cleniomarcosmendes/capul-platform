@@ -664,3 +664,38 @@ def test_15_listagem_marca_lista_que_nao_cabe_no_app(
     alvo = next(l for l in listas if l["id"] == str(test_counting_list.id))
     assert alvo["acima_do_teto_app"] is True
     assert alvo["teto_itens_app"] == 1
+
+
+def test_05_supervisor_libera_lease_de_lista_com_contagem_pendente(
+    db_session, test_counting_list, test_supervisor_user
+):
+    """O escape hatch nao pergunta se o aparelho ainda esta contando — nao tem
+    como saber. Ele libera, e a consequencia (contagem do aparelho recusada na
+    sincronizacao) e assumida pelo supervisor na confirmacao da tela.
+
+    Este teste trava o comportamento: liberar SEMPRE funciona para staff, sem
+    depender de estado do aparelho.
+    """
+    _com_lease(test_counting_list, db_session, device="dev-perdido")
+
+    resp = asyncio.run(release_counting_list(
+        list_id=test_counting_list.id,
+        lease_token=None,
+        db=db_session,
+        current_user=test_supervisor_user,
+    ))
+    assert resp["forcado"] is True
+    assert test_counting_list.lease_token is None
+
+    # E a contagem que chegar depois com o token velho e recusada — nao
+    # sobrescreve calado.
+    with pytest.raises(HTTPException) as exc:
+        _validar_captura_offline(
+            db=db_session,
+            count_data=_captura(lease_token=str(uuid4())),
+            counting_list=test_counting_list,
+            cycle_number=1,
+            item_uuid=uuid4(),
+            current_user=test_supervisor_user,
+        )
+    assert _erro(exc) == "LEASE_INVALIDO"

@@ -44,6 +44,7 @@ import {
 import { PageSkeleton } from '../../components/LoadingSkeleton';
 import { ErrorState } from '../../components/ErrorState';
 import { SeloLease } from '../contagem/components/SeloLease';
+import { extractApiError } from '../../utils/errors';
 import { useToast } from '../../contexts/ToastContext';
 import type {
   InventoryList,
@@ -887,6 +888,10 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [atribuirLista, setAtribuirLista] = useState<CountingList | null>(null);
   const [changeCounterList, setChangeCounterList] = useState<CountingList | null>(null);
+  // Lease preso (Fase 0.5): o aparelho sumiu/o operador saiu e a lista fica
+  // reservada para sempre. O endpoint de liberação existia desde a Fase 0, mas
+  // sem tela — ou seja, o escape hatch existia só para quem sabia dar um DELETE.
+  const [liberarLeaseLista, setLiberarLeaseLista] = useState<CountingList | null>(null);
   const [newCounterId, setNewCounterId] = useState('');
   const [availableCounters, setAvailableCounters] = useState<{ user_id: string; full_name: string; username: string }[]>([]);
 
@@ -1210,13 +1215,20 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                           Mostra o nome de quem retirou; o id do aparelho sozinho
                           não diz a quem cobrar. */}
                       {lista.lease_ativo && (
-                        <div className="mt-1">
+                        <div className="mt-1 flex items-center gap-2">
                           <SeloLease
                             ativo
                             deviceId={lista.lease_device_id}
                             usuarioNome={lista.lease_user_id ? counterNames[lista.lease_user_id] : null}
                             desde={lista.lease_at}
                           />
+                          <button
+                            onClick={() => setLiberarLeaseLista(lista)}
+                            className="text-xs text-slate-500 hover:text-red-600 hover:underline"
+                            title="Liberar a lista se o aparelho foi perdido ou está sem sinal"
+                          >
+                            liberar
+                          </button>
                         </div>
                       )}
                     </td>
@@ -1399,6 +1411,39 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
           <span>Encerradas: {listas.filter((l) => l.list_status === 'ENCERRADA').length}</span>
         </div>
       )}
+
+      {/* Liberação FORÇADA do lease (Fase 0.5). Só o supervisor/admin faz, e o
+          evento fica no histórico de handoff. O aviso é direto porque a
+          consequência é real: as contagens que ainda estão no aparelho vão ser
+          RECUSADAS quando ele tentar sincronizar. */}
+      <ConfirmDialog
+        open={!!liberarLeaseLista}
+        title="Liberar a lista do aplicativo?"
+        description={
+          `A lista "${liberarLeaseLista?.list_name ?? ''}" está baixada em um aparelho. ` +
+          `Liberar aqui invalida a reserva dele.`
+        }
+        details={[
+          'Use quando o aparelho foi perdido, quebrou ou está sem sinal há muito tempo.',
+          'As contagens que ainda estiverem SÓ no aparelho serão recusadas na sincronização — o operador é avisado, mas o trabalho não entra.',
+          'Se ele ainda estiver contando, o certo é aguardar a sincronização.',
+        ]}
+        variant="danger"
+        confirmLabel="Liberar mesmo assim"
+        onConfirm={async () => {
+          const alvo = liberarLeaseLista;
+          setLiberarLeaseLista(null);
+          if (!alvo) return;
+          try {
+            await countingListService.liberarLeaseDaLista(alvo.id);
+            toast.success('Lista liberada — o aparelho será avisado ao tentar sincronizar.');
+            onReload();
+          } catch (err) {
+            toast.error(extractApiError(err, 'Não foi possível liberar a lista.'));
+          }
+        }}
+        onCancel={() => setLiberarLeaseLista(null)}
+      />
 
       {/* Modal criar lista */}
       {showCreateModal && (
