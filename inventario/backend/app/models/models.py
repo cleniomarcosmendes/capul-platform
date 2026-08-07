@@ -881,6 +881,11 @@ class SZB010(Base):
 
     # Campos da SZB010
     zb_xdesc = Column(String(30), nullable=False)     # Descrição do Armazém (30 chars)
+    # Migration 016: qual campo de localização exibir para este armazém
+    # (1=bz_xlocal1 default, 2=bz_xlocal2, 3=bz_xlocal3). O código já usava esta
+    # coluna em 7 lugares desde a v2.19.8, mas ela não existia no modelo nem em
+    # migration nenhuma — só na mão, em quem tivesse rodado o ALTER.
+    zb_xsbzlcz = Column(String(1), nullable=False, default='1', server_default='1')
 
     # Campos de controle
     created_at = Column(DateTime(timezone=True), server_default=func.now())

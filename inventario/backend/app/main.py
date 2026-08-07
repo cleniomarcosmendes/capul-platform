@@ -9763,201 +9763,25 @@ async def update_inventory_status(
         db.rollback()
         raise HTTPException(status_code=500, detail=safe_error_response(e, ""))
 
-@app.get("/api/v1/inventories/{inventory_id}/lists/{list_id}/products", tags=["Counting Lists"])
-async def get_counting_list_products(
-    inventory_id: str,
-    list_id: str,
-    context: str = Query("management", description="Context for the request"),
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Buscar produtos específicos de uma lista de contagem
-
-    Args:
-        inventory_id: ID do inventário
-        list_id: ID da lista de contagem
-        context: Contexto da requisição (management, counting, etc.)
-
-    Returns:
-        Lista de produtos com informações de contagem da lista específica
-    """
-    try:
-        from app.models.models import InventoryList as InventoryListModel, InventoryItem as InventoryItemModel, CountingList, CountingListItem
-
-        # Verificar se inventário existe
-        inventory = db.query(InventoryListModel).filter(InventoryListModel.id == inventory_id).first()
-        if not inventory:
-            return {"error": "Inventário não encontrado", "status": 404}
-
-        # Verificar se lista de contagem existe
-        counting_list = db.query(CountingList).filter(
-            and_(
-                CountingList.id == list_id,
-                CountingList.inventory_id == inventory_id
-            )
-        ).first()
-
-        if not counting_list:
-            return {"error": "Lista de contagem não encontrada", "status": 404}
-
-        # Buscar produtos da lista específica com joins necessários
-        query = db.query(InventoryItemModel).join(
-            CountingListItem,
-            CountingListItem.inventory_item_id == InventoryItemModel.id
-        ).filter(
-            and_(
-                CountingListItem.counting_list_id == list_id,
-                InventoryItemModel.inventory_list_id == inventory_id
-            )
-        )
-
-        products = query.all()
-
-        # Construir response similar ao endpoint original
-        result_data = {
-            "data": {
-                "current_cycle": counting_list.current_cycle,
-                "list_id": list_id,
-                "list_name": counting_list.list_name,
-                "products": []
-            }
-        }
-
-        for item in products:
-            # Buscar informações de contagem da lista específica
-            list_item = db.query(CountingListItem).filter(
-                and_(
-                    CountingListItem.counting_list_id == list_id,
-                    CountingListItem.inventory_item_id == item.id
-                )
-            ).first()
-
-            # Buscar descrição do produto da tabela sb1010
-            product_description = ""
-            if item.product_code:
-                from sqlalchemy import text
-                desc_query = text("""
-                    SELECT b1_desc FROM inventario.sb1010
-                    WHERE b1_cod = :code
-                """)
-                desc_result = db.execute(desc_query, {"code": item.product_code}).fetchone()
-                if desc_result:
-                    product_description = desc_result[0] or ""
-
-            # Se não encontrou na sb1010, tentar no produto relacionado
-            if not product_description and item.product_id:
-                from app.models.models import Product
-                product = db.query(Product).filter(Product.id == item.product_id).first()
-                if product:
-                    product_description = product.description or ""
-
-            # ✅ v2.18.2: Buscar códigos de barras alternativos da SLK010
-            alternative_barcodes = []
-            barcode_principal = None
-            if item.product_code:
-                barcodes_query = text("""
-                    SELECT slk_codbar FROM inventario.slk010
-                    WHERE slk_produto = :code
-                    ORDER BY slk_codbar
-                """)
-                barcodes_result = db.execute(barcodes_query, {"code": item.product_code}).fetchall()
-                if barcodes_result:
-                    for row in barcodes_result:
-                        barcode = row[0]
-                        if barcode:
-                            # Primeiro código é o principal (geralmente o código do produto)
-                            if not barcode_principal and barcode == item.product_code:
-                                barcode_principal = barcode
-                            else:
-                                # Demais são alternativos
-                                alternative_barcodes.append(barcode)
-
-            product_data = {
-                "id": str(item.id),
-                "product_code": item.product_code or "",
-                "product_name": product_description,
-                "product_description": product_description,
-                "warehouse": item.warehouse or "01",
-                "expected_quantity": float(item.expected_quantity) if item.expected_quantity else 0.0,
-                "system_qty": float(item.b2_qatu) if item.b2_qatu else 0.0,
-                "b2_xentpos": float(item.b2_xentpos) if item.b2_xentpos else 0.0,
-
-                # ✅ v2.18.2: Códigos de barras
-                "barcode": barcode_principal or item.product_code,  # Código principal
-                "alternative_barcodes": alternative_barcodes,  # Códigos alternativos da SLK010
-
-                # Informações de contagem da lista
-                "count_cycle_1": float(list_item.count_cycle_1) if list_item and list_item.count_cycle_1 else None,
-                "count_cycle_2": float(list_item.count_cycle_2) if list_item and list_item.count_cycle_2 else None,
-                "count_cycle_3": float(list_item.count_cycle_3) if list_item and list_item.count_cycle_3 else None,
-
-                "needs_count_cycle_1": list_item.needs_count_cycle_1 if list_item else True,
-                "needs_count_cycle_2": list_item.needs_count_cycle_2 if list_item else False,
-                "needs_count_cycle_3": list_item.needs_count_cycle_3 if list_item else False,
-
-                "status": list_item.status.value if list_item and list_item.status else "PENDING",
-                "last_counted_at": list_item.last_counted_at.isoformat() if list_item and list_item.last_counted_at else None,
-                "last_counted_by": str(list_item.last_counted_by) if list_item and list_item.last_counted_by else None,
-
-                # Informações do produto
-                "sequence": item.sequence or 1,
-                "created_at": item.created_at.isoformat() if item.created_at else None
-            }
-
-            # ✅ CORREÇÃO v2.19.41: Calcular finalQuantity tratando NULL como 0 quando ciclo encerrado
-            cycle = counting_list.current_cycle
-            count1 = product_data["count_cycle_1"]
-            count2 = product_data["count_cycle_2"]
-            count3 = product_data["count_cycle_3"]
-            expected = product_data["expected_quantity"]
-
-            # Calcular valores efetivos (NULL = 0 quando ciclo encerrado e havia divergência)
-            effective_count2 = count2
-            if cycle >= 2 and count2 is None and count1 is not None and abs(count1 - expected) >= 0.01:
-                effective_count2 = 0.0
-                logger.debug(f"🔧 Produto {product_data['product_code']}: count2 NULL → 0 (ciclo {cycle}, count1={count1} diverge de expected={expected})")
-
-            effective_count3 = count3
-            if cycle >= 3 and count3 is None:
-                effective_count3 = 0.0
-                logger.debug(f"🔧 Produto {product_data['product_code']}: count3 NULL → 0 (ciclo {cycle})")
-
-            # Determinar finalQuantity usando valores efetivos
-            if cycle == 1:
-                product_data["finalQuantity"] = count1
-            elif cycle == 2:
-                # Se count2 efetivo bate com expected, usar count2 efetivo
-                if effective_count2 is not None and abs(effective_count2 - expected) < 0.01:
-                    product_data["finalQuantity"] = effective_count2
-                elif effective_count2 is not None:
-                    product_data["finalQuantity"] = effective_count2
-                else:
-                    product_data["finalQuantity"] = count1
-            elif cycle == 3:
-                # Prioridade: count3 efetivo > count2 efetivo > count1
-                if effective_count3 is not None:
-                    product_data["finalQuantity"] = effective_count3
-                elif effective_count2 is not None:
-                    product_data["finalQuantity"] = effective_count2
-                else:
-                    product_data["finalQuantity"] = count1
-            else:
-                product_data["finalQuantity"] = None
-
-            result_data["data"]["products"].append(product_data)
-
-        logger.info(f"✅ Produtos da lista {list_id}: {len(result_data['data']['products'])} produtos encontrados")
-        return result_data
-
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar produtos da lista {list_id}: {e}")
-        return {"error": f"Erro interno: {str(e)}", "status": 500}
-
-
-# =================================
-# NOVO ENDPOINT PARA CONCEITO CORRETO DE CICLOS
-# =================================
+# ---------------------------------------------------------------------------
+# REMOVIDO em 07/08/2026 — GET /api/v1/inventories/{inventory_id}/lists/{list_id}/products
+#
+# A rota existia DUAS vezes (aqui e em api/v1/endpoints/counting_lists.py) e as
+# DUAS implementacoes estavam quebradas, cada uma num atributo diferente que
+# `InventoryItem` nao tem:
+#   - counting_lists.py lia `item.system_qty`  (o campo do modelo e `b2_qatu`)
+#   - main.py lia        `item.b2_xentpos`     (esse vive em InventoryItemSnapshot)
+#
+# Ou seja: a rota devolvia 500 para qualquer lista COM itens, nas duas versoes.
+# Nunca funcionou. Ninguem reclamou porque nenhum cliente a chama — o frontend
+# usa `/api/v1/counting-lists/{list_id}/products`, que e outro handler, esse sim
+# funcionando e com a projecao da contagem cega.
+#
+# Removida em vez de consertada: eram ~470 linhas duplicadas de um endpoint sem
+# consumidor e com equivalente funcionando. Manter as duas copias foi
+# exatamente o que induziu ao erro de "proteger" a versao quebrada em 05/08.
+# Se algum consumidor externo aparecer, o codigo esta no historico do git.
+# ---------------------------------------------------------------------------
 
 @app.get("/api/v1/inventory/{inventory_id}/cycle-assignments", tags=["Inventory"])
 async def get_cycle_assignments(
@@ -10315,7 +10139,7 @@ async def get_list_products(
                 ii.id, ii.product_code, ii.expected_quantity, ii.warehouse, ii.sequence,
                 cli.count_cycle_1, cli.count_cycle_2, cli.count_cycle_3,
                 cli.needs_count_cycle_1, cli.needs_count_cycle_2, cli.needs_count_cycle_3,
-                cli.revisar_no_ciclo, cli.motivo_revisao,
+                cli.revisar_no_ciclo, cli.motivo_revisao, cli.zerado_no_fecho,
                 ii.needs_recount_cycle_1, ii.needs_recount_cycle_2, ii.needs_recount_cycle_3,
                 p.description, p.unit, cl.current_cycle,
                 iis.b1_desc, iis.b2_qatu, iis.b2_xentpos, iis.b2_cm1, iis.b1_rastro,
