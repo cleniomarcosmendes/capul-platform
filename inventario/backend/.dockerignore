@@ -16,3 +16,16 @@ venv
 docs
 tests
 *.md
+
+# --- 07/08/2026: parar de empacotar ferramenta de operacao na imagem ---
+# A imagem de PRODUCAO levava 5 scripts operacionais (diag_*/update_*) e 3 CSVs
+# com extracao de dados. Nada disso e executado pela aplicacao — sao ferramentas
+# de diagnostico e correcoes pontuais que alguem rodou uma vez. Um deles batia na
+# API de PRODUCAO do Protheus.
+#
+# `test_smoke.py` FICA de proposito: e o unico teste que a imagem enxerga (a
+# suite real, em tests/, e excluida logo acima para nao ir ao registry). Se um
+# dia ele sair daqui, decidir conscientemente se a imagem passa a nao ter teste
+# nenhum ou se tests/ deixa de ser ignorado.
+scripts
+*.csv

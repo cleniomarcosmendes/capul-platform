@@ -54,10 +54,15 @@ class Settings:
         "PROTHEUS_API_URL",
         "https://apiportal.capul.com.br:8104/rest/api/INFOCLIENTES/hierarquiaMercadologica"
     )
-    PROTHEUS_API_AUTH: str = os.getenv(
-        "PROTHEUS_API_AUTH",
-        "Basic QVBJQ0FQVUw6QXAxQzRwdTFQUkQ="
-    )
+    # SEM default embutido (07/08/2026). A credencial de PRODUCAO do Protheus
+    # estava aqui e no docker-compose.yml — versionada no git e, na pratica, a
+    # que rodava, porque o .env nao definia a variavel. String vazia faz a
+    # integracao falhar com mensagem clara em vez de autenticar com credencial
+    # que ninguem sabia que estava em uso.
+    # ⚠️ Removida do codigo, a credencial NAO fica invalidada: ela esta no
+    # HISTORICO DO GIT. O caminho e ROTACIONAR no Protheus (depende do Marco) —
+    # ver Anexo B de docs/PENDENCIAS_PROTHEUS_10052026_SEGURANCA.md.
+    PROTHEUS_API_AUTH: str = os.getenv("PROTHEUS_API_AUTH", "")
     PROTHEUS_API_TIMEOUT: int = int(os.getenv("PROTHEUS_API_TIMEOUT", 30))
 
     # CORS
@@ -132,10 +137,15 @@ def validate_settings():
     if not settings.DATABASE_URL:
         errors.append("DATABASE_URL é obrigatória")
 
-    # Validar PROTHEUS_API_AUTH
-    default_auth = "Basic QVBJQ0FQVUw6QXAxQzRwdTFQUkQ="
-    if settings.ENVIRONMENT == "production" and settings.PROTHEUS_API_AUTH == default_auth:
-        warnings.append("PROTHEUS_API_AUTH pode estar usando credencial padrão")
+    # Validar PROTHEUS_API_AUTH — agora a ausencia e ERRO, nao aviso.
+    # Antes se comparava com a credencial embutida ("pode estar usando a
+    # padrao"), o que exigia manter a propria credencial no codigo para poder
+    # detecta-la. Sem default, basta verificar se veio.
+    if not settings.PROTHEUS_API_AUTH:
+        errors.append(
+            "PROTHEUS_API_AUTH nao definida — a integracao com o Protheus "
+            "(hierarquia mercadologica) nao vai autenticar. Defina no .env."
+        )
 
     # Exibir warnings
     for warning in warnings:

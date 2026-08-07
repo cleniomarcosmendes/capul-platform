@@ -1480,7 +1480,28 @@ reservado pelo SQLAlchemy (é o `MetaData` do `Base`) e a coluna JSONB do modelo
 container* dá resposta errada quando o `.dockerignore` exclui os testes. Conferir o
 `git ls-files` antes de concluir que não existe teste.
 
-### 2. Credencial de produção do Protheus no código — 2 ocorrências restantes
+### 2. ✅ Credencial fora do código em 07/08/2026 — falta ROTACIONAR (Marco)
+
+**O que se descobriu ao mexer:** a credencial não estava só no código Python — o
+valor que de fato ROVA vinha do `docker-compose.yml`, como default embutido
+(`${PROTHEUS_INVENTARIO_AUTH:-Basic ...}`), porque o `.env` **não definia** a
+variável. Ou seja: a credencial de produção estava versionada no git e era a
+usada. O Fiscal já usava `${VAR:?}` (obrigatória) desde antes; o Inventário
+ficou para trás.
+
+**Feito:** valor movido para o `.env` (gitignored); compose passou a `${VAR:?}`
+— sem a variável a stack **não sobe**, em vez de autenticar com credencial que
+ninguém sabia estar em uso; defaults removidos de `config.py` e
+`protheus_config.py`; `.env.example` documenta as duas variáveis.
+
+⚠️ **Para o deploy:** HLG/PROD precisam ter `PROTHEUS_API_AUTH` e
+`PROTHEUS_INVENTARIO_AUTH` no `.env` **antes** de subir, senão o compose aborta.
+
+⚠️ **Isto NÃO invalida a credencial** — ela está no histórico do git. O caminho
+segue sendo **rotacionar no Protheus**, o que depende do Marco.
+
+#### (registro original)
+
 `96b1ec2` tirou a do script (`diag_api_protheus.py`, agora via
 `PROTHEUS_INVENTARIO_AUTH`). **Continuam:**
 
@@ -1509,7 +1530,22 @@ o caminho é **rotacionar no Protheus** e então deixar o código exigir a env. 
 do Anexo B de `docs/PENDENCIAS_PROTHEUS_10052026_SEGURANCA.md` (achado de 10/05, ainda
 aberto), e depende do Marco/Protheus, não só de nós.
 
-### 3. Scripts soltos na raiz do backend
+### 3. ✅ RESOLVIDO em 07/08/2026 — e era pior do que "desorganização"
+
+Os scripts não estavam só bagunçados: **iam para a imagem de produção**. O
+`COPY . .` do Dockerfile empacotava 5 scripts operacionais (`diag_*`,
+`update_*`) e **3 CSVs com extração de dados** — um dos scripts bate na API de
+**produção** do Protheus. Três dos `update_*` nem estavam versionados: existiam
+só na máquina e mesmo assim entravam na imagem.
+
+**Feito:** `diag_*`/`update_*` movidos para `scripts/`; `run_migration.py`
+**apagado** (código morto — SQL hardcoded de uma migration antiga, superado pelo
+`database/migrate.sh`); `scripts` e `*.csv` no `.dockerignore`. A imagem agora
+leva só o `test_smoke.py`, que fica **de propósito** (é o único teste que ela
+enxerga, já que `tests/` é excluído para não ir ao registry).
+
+#### (registro original)
+
 `run_migration.py`, `update_b2_xentpos.py`, `update_sb2_cm1.py`, `update_sb2_cm1_v2.py`
 e os dois `diag_*` convivem com o código da aplicação. Avaliar mover para `scripts/`
 — some o risco de coleta acidental pelo pytest e fica claro o que é aplicação e o que

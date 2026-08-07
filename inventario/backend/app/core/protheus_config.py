@@ -115,7 +115,15 @@ def _fallback_config() -> Dict[str, Any]:
         "PROTHEUS_INVENTARIO_URL",
         "https://apiportal.capul.com.br:443/rest"
     )
-    auth = os.getenv("PROTHEUS_INVENTARIO_AUTH", "QVBJQ0FQVUw6QXAxQzRwdTFQUkQ=")
+    # SEM default embutido (07/08/2026) — ver a nota em core/config.py.
+    # Vazio faz a chamada falhar com 401 e mensagem clara, em vez de autenticar
+    # com uma credencial de PRODUCAO versionada no git.
+    auth = os.getenv("PROTHEUS_INVENTARIO_AUTH", "")
+    if not auth:
+        logger.error(
+            "PROTHEUS_INVENTARIO_AUTH nao definida — as chamadas ao Protheus do "
+            "Inventario vao falhar. Defina no .env."
+        )
     # Limpar prefixo "Basic " se presente
     if auth.startswith("Basic "):
         auth = auth[6:]
