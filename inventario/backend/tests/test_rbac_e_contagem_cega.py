@@ -198,3 +198,52 @@ def test_colunas_do_mercadologico_estao_alargadas(db_session):
     assert larguras["sbm010.bm_desc"] >= 100
     assert larguras["szd010.zd_xcod"] >= 20
     assert larguras["szf010.zf_xdesc"] >= 100
+
+
+# ==========================================================================
+# /warehouses/simple — as duas fontes (07/08/2026)
+# ==========================================================================
+
+def test_armazens_preferem_a_tabela_propria(db_session, test_store):
+    """Onde `warehouses` tem dados, o comportamento NÃO muda — é o caso de
+    produção, e o fallback não pode atropelá-lo."""
+    from app.api.v1.endpoints.warehouses import list_warehouses_simple
+    from app.models.models import Warehouse
+
+    db_session.add(Warehouse(
+        id=uuid4(), code='99', name='ARMAZEM DA TABELA PROPRIA',
+        store_id=test_store.id, is_active=True,
+    ))
+    db_session.flush()
+
+    user = SimpleNamespace(store_id=test_store.id, store_code='01', role='ADMIN')
+    out = list_warehouses_simple(store_id=None, db=db_session, current_user=user)
+
+    assert [a['code'] for a in out] == ['99']
+
+
+def test_armazens_caem_para_szb010_quando_tabela_propria_esta_vazia(db_session):
+    """⭐ O caso que o Clenio reportou: a tela mandava "sincronize a hierarquia
+    primeiro", ele sincronizava (a szb010 enchia) e a lista seguia vazia, porque
+    nada liga a szb010 na `warehouses`.
+
+    Casa por CÓDIGO da filial: com UNIFIED_AUTH o `store_id` do usuário vem de
+    `core.filiais`, enquanto `Warehouse.store_id` aponta para
+    `inventario.stores` — comparar UUID não acharia nada.
+    """
+    from app.api.v1.endpoints.warehouses import list_warehouses_simple
+
+    db_session.execute(text("""
+        INSERT INTO inventario.szb010 (zb_filial, zb_xlocal, zb_xdesc)
+        VALUES ('77', 'A1', 'ARMAZEM UM'), ('77', 'A2', 'ARMAZEM DOIS'),
+               ('88', 'B1', 'DE OUTRA FILIAL')
+        ON CONFLICT (zb_filial, zb_xlocal) DO NOTHING
+    """))
+    db_session.flush()
+
+    # Sem linha em `warehouses` para este usuário → cai no espelho do Protheus.
+    user = SimpleNamespace(store_id=uuid4(), store_code='77', role='OPERATOR')
+    out = list_warehouses_simple(store_id=None, db=db_session, current_user=user)
+
+    assert [a['code'] for a in out] == ['A1', 'A2'], 'deve trazer só a filial do usuário'
+    assert out[0]['name'] == 'ARMAZEM UM'

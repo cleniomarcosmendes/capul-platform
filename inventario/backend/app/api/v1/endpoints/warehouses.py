@@ -17,6 +17,9 @@ from app.schemas.warehouse import (
 )
 from app.api.auth import get_current_user
 
+import logging
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/warehouses", tags=["warehouses"])
 
 @router.get("/", response_model=List[WarehouseResponse])
@@ -46,7 +49,32 @@ def list_warehouses_simple(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Lista simplificada de armazéns (código e nome)"""
+    """
+    Lista simplificada de armazéns (código e nome). Alimenta o seletor de
+    armazém em Importar Produtos, Criar Inventário e a listagem.
+
+    ⚠️ DUAS FONTES, por ordem de preferência (07/08/2026):
+
+      1. `inventario.warehouses` — a tabela própria do módulo, com loja e
+         `is_active`. É o comportamento histórico e continua sendo o primeiro.
+      2. `inventario.szb010` — o espelho do Protheus, quando (1) está vazia.
+
+    **Por que o fallback existe:** a tela de Importar Produtos diz, quando a
+    lista vem vazia, *"Sincronize a hierarquia primeiro"*. Só que sincronizar a
+    hierarquia popula a **szb010**, e nada liga a szb010 na `warehouses` — quem
+    faz isso é outro endpoint (`POST /import/szb010`), que ainda depende de
+    `inventario.stores` estar preenchida. Resultado: o usuário seguia a
+    instrução da tela e a lista continuava vazia.
+
+    Há ainda uma costura do UNIFIED_AUTH por baixo: `Warehouse.store_id` aponta
+    para `inventario.stores`, mas o `store_id` do usuário logado vem de
+    `core.filiais`. Por isso o fallback casa por **CÓDIGO da filial**
+    (`store_code`, ex. "01"), que é o que a szb010 guarda em `zb_filial` — e não
+    por UUID.
+
+    Preferir (1) mantém intacto quem já tem a tabela populada; o fallback só
+    entra onde hoje não apareceria nada.
+    """
     query = db.query(Warehouse.code, Warehouse.name)
 
     # Se store_id fornecido, filtrar por ele
@@ -55,11 +83,31 @@ def list_warehouses_simple(
     # Senão, usar store do usuário atual
     elif current_user.store_id:
         query = query.filter(Warehouse.store_id == current_user.store_id)
-    
+
     query = query.filter(Warehouse.is_active == True)
     warehouses = query.order_by(Warehouse.code).all()
-    
-    return [{"code": w.code, "name": w.name} for w in warehouses]
+
+    if warehouses:
+        return [{"code": w.code, "name": w.name} for w in warehouses]
+
+    # --- Fallback: espelho do Protheus (szb010) ---
+    from sqlalchemy import text
+
+    filial = getattr(current_user, "store_code", None)
+    sql = """
+        SELECT zb_xlocal AS code, zb_xdesc AS name
+        FROM inventario.szb010
+        {filtro}
+        ORDER BY zb_xlocal
+    """.format(filtro="WHERE zb_filial = :filial" if filial else "")
+
+    linhas = db.execute(text(sql), {"filial": filial} if filial else {}).fetchall()
+    if linhas:
+        logger.info(
+            f"/warehouses/simple: `warehouses` vazia — usando szb010 "
+            f"(filial={filial or 'todas'}, {len(linhas)} armazéns)."
+        )
+    return [{"code": (r[0] or "").strip(), "name": (r[1] or "").strip()} for r in linhas]
 
 @router.post("/", response_model=WarehouseResponse)
 def create_warehouse(
