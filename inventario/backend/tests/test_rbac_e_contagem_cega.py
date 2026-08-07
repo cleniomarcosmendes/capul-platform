@@ -297,3 +297,48 @@ def test_espelhos_tem_a_unique_que_o_importador_exige(db_session):
         + '; '.join(faltando)
         + '. A importação de produtos vai falhar com InvalidColumnReference.'
     )
+
+
+def test_importador_preenche_toda_coluna_obrigatoria_dos_espelhos(db_session):
+    """⭐ A outra metade do drift dos espelhos.
+
+    A 016/017/018 cobriram "objeto de schema que falta". Este cobre o inverso:
+    coluna NOT NULL **sem default** que o importador nunca preenche — o INSERT
+    estoura com NotNullViolation NO MEIO da importação, com tudo já processado
+    até ali. Foi o caso de `slk010.product_id`/`store_id`, FKs de um modelo
+    nativo anterior numa tabela que hoje é espelho do Protheus.
+
+    A lista abaixo é a das colunas que `import_produtos.py` realmente informa
+    em cada INSERT. Se alguém tornar uma coluna obrigatória sem ensinar o
+    importador a preenchê-la, isto acusa antes de a importação quebrar.
+    """
+    fornecidas = {
+        'sb1010': ['b1_cod', 'b1_filial', 'b1_codbar', 'b1_desc', 'b1_tipo', 'b1_um',
+                   'b1_locpad', 'b1_grupo', 'b1_xcatgor', 'b1_xsubcat', 'b1_xsegmen',
+                   'b1_xgrinve', 'b1_rastro', 'created_at', 'updated_at'],
+        'sb2010': ['b2_cod', 'b2_filial', 'b2_local', 'b2_qatu', 'b2_qemp', 'b2_reserva',
+                   'b2_cm1', 'b2_vatu1', 'b2_xentpos', 'created_at', 'updated_at'],
+        'sb8010': ['id', 'b8_produto', 'b8_filial', 'b8_local', 'b8_lotectl', 'b8_lotefor',
+                   'b8_numlote', 'b8_dtvalid', 'b8_saldo', 'created_at', 'updated_at'],
+        'sbz010': ['bz_cod', 'bz_filial', 'bz_local', 'bz_xlocal1', 'bz_xlocal2',
+                   'bz_xlocal3', 'is_active', 'created_at', 'updated_at'],
+        'slk010': ['id', 'slk_filial', 'slk_codbar', 'slk_produto', 'is_active',
+                   'created_at', 'updated_at'],
+    }
+
+    faltando: list[str] = []
+    for tabela, cols in fornecidas.items():
+        obrigatorias = db_session.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'inventario' AND table_name = :t
+              AND is_nullable = 'NO' AND column_default IS NULL
+        """), {'t': tabela}).fetchall()
+        for (coluna,) in obrigatorias:
+            if coluna not in cols:
+                faltando.append(f'{tabela}.{coluna}')
+
+    assert not faltando, (
+        'Coluna(s) NOT NULL sem default que o importador não preenche: '
+        + ', '.join(faltando)
+        + '. A importação de produtos vai falhar com NotNullViolation no meio.'
+    )
