@@ -1387,6 +1387,50 @@ SELECT count(*) FROM logistica.viagem
 
 ---
 
+## [Inventário] ⭐ O schema tinha evoluído FORA das migrations — 6 correções em 07/08/2026
+
+**Contexto:** ao "finalizar o módulo", a importação de produtos (que é o fluxo
+que atravessa mais tabelas de uma vez) revelou que boa parte do schema estava
+sendo mantida à mão. Cada achado virou migration versionada e teste.
+
+| # | O que faltava | Sintoma |
+|---|---|---|
+| **014** | já existia; **não estava aplicada** há ~6 semanas | sync do mercadológico truncando (`varchar(4)` vs 6 dígitos) |
+| **015** | Fase 0 offline; aplicada à mão, **sem registro** | escrituração errada |
+| **016** | coluna `szb010.zb_xsbzlcz`, usada em **7 lugares** do código | tela de contagem: `UndefinedColumn` |
+| **017** | UNIQUE natural da `sb8010` (a PK composta virou `id` sem migration) | importação: **500 no meio**, `InvalidColumnReference` |
+| **018** | UNIQUE natural da `slk010` | idem, na tabela seguinte |
+| **019** | FKs `slk010.product_id`/`store_id` obrigatórias e insatisfazíveis | importação: `NotNullViolation` |
+
+**A causa de fundo do 014/015** (e o que permitia tudo isso passar): o
+`migrate.sh` existia mas **não estava ligado a nada** — era o único backend sem
+job `*-migrate`. E a 014 **se auto-registrava** no próprio `.sql`, colidindo com
+o INSERT do runner: o `set -e` matava o script e **as migrations seguintes não
+eram aplicadas**. Um erro numa migration silenciava todas as posteriores.
+
+**Correções estruturais:** `ON CONFLICT` no runner, auto-registro removido da
+014, e **job `inventario-migrate` no compose** (`service_completed_successfully`
+antes do backend). Verificado ponta a ponta.
+
+**Duas varreduras proativas**, para não descobrir um erro por vez:
+- todo `ON CONFLICT` do importador × UNIQUE real → achou a `slk010` antes de estourar;
+- colunas `NOT NULL` sem default × o que cada `INSERT` informa → confirmou que só a `slk010` faltava.
+
+Ambas viraram **teste de suíte**, cobrindo a *classe* do problema.
+
+**Resultado:** importação roda até o fim — 32.820 produtos, 38.872 saldos,
+23.940 lotes, 30.357 localizações, 44.078 códigos de barras.
+
+⚠️ **Para o deploy:** HLG/PROD provavelmente têm as MESMAS lacunas. O job aplica
+tudo automaticamente ao subir — mas vale conferir o log dele no deploy.
+
+⚠️ **Pendência de fundo (não corrigida):** `inventario.stores`/`warehouses` são
+do modelo pré-UNIFIED_AUTH e convivem mal com `core.filiais`. Apareceu duas vezes
+hoje (seletor de armazém vazio e as FKs da `slk010`). Unificar isso é decisão
+maior, não coube aqui.
+
+---
+
 ## [Inventário] Migrations fora de controle — RESOLVIDO em 07/08/2026
 
 **Achado ao começar a "finalizar o módulo".** O Inventário tem um runner próprio
