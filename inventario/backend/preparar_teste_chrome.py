@@ -12,6 +12,12 @@ contagem, que é a maior parte do roteiro. Este script deixa um inventário
 Cria `TESTE_CHROME` no armazém 06:
   - "Lista jordana"    → contagem CEGA     (show_previous_counts=False)
   - "Lista juliocesar" → contagem ABERTA   (show_previous_counts=True)
+  - "Lista clenio"     → o SUPERVISOR como contador
+
+⚠️ A "Lista clenio" existe por um motivo específico: ninguém conta pela lista de
+outro — nem ADMIN (regra de auditoria, confirmada em tela em 08/08). Então a
+única forma de ver o modal de lote COM saldo é o supervisor ser o contador de uma
+lista dele. Sem ela, o teste da visão de supervisor é impossível de executar.
 
 Ambas liberadas e SEM nenhuma contagem — é você quem conta, pela tela.
 Reexecutar apaga e refaz.
@@ -110,20 +116,28 @@ st, l1 = req("clenio", "POST", f"/inventories/{INV}/counting-lists",
              json={"list_name": "Lista jordana", "counter_cycle_1": ids["jordana"]})
 st, l2 = req("clenio", "POST", f"/inventories/{INV}/counting-lists",
              json={"list_name": "Lista juliocesar", "counter_cycle_1": ids["juliocesar"]})
-req("clenio", "POST", f"/counting-lists/{l1['id']}/items", json=com_lote + sem_lote[:2])
+st, l3 = req("clenio", "POST", f"/inventories/{INV}/counting-lists",
+             json={"list_name": "Lista clenio", "counter_cycle_1": ids["clenio"]})
+# O produto com lote vai para as DUAS listas que precisam dele: a da jordana
+# (visão do operador) e a do clenio (visão do supervisor, com saldo).
+req("clenio", "POST", f"/counting-lists/{l1['id']}/items", json=com_lote[:3] + sem_lote[:2])
+req("clenio", "POST", f"/counting-lists/{l3['id']}/items", json=com_lote[3:])
 req("clenio", "POST", f"/counting-lists/{l2['id']}/items", json=sem_lote[2:])
 req("clenio", "POST", f"/counting-lists/{l1['id']}/release",
     json={"show_previous_counts": False, "sort_order": "ORIGINAL"})
 req("clenio", "POST", f"/counting-lists/{l2['id']}/release",
     json={"show_previous_counts": True, "sort_order": "PRODUCT_CODE"})
+req("clenio", "POST", f"/counting-lists/{l3['id']}/release",
+    json={"show_previous_counts": True, "sort_order": "ORIGINAL"})
 
 print(f"""
 ✅ TESTE_CHROME pronto — https://localhost/inventario/
 
    inventário : {INV}
    armazém    : 06
-   Lista jordana     — {len(com_lote)} produto(s) COM LOTE + 2 sem  ·  contagem CEGA
-   Lista juliocesar  — {len(sem_lote) - 2} produto(s) sem lote      ·  contagem ABERTA
+   Lista jordana     — {len(com_lote[:3])} produto(s) COM LOTE + 2 sem  ·  contagem CEGA
+   Lista juliocesar  — {len(sem_lote) - 2} produto(s) sem lote          ·  contagem ABERTA
+   Lista clenio      — {len(com_lote[3:])} produto(s) COM LOTE          ·  o SUPERVISOR conta
 
    Nenhuma contagem lançada: é você quem conta, pela tela.
 

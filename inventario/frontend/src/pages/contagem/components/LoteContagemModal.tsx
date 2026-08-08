@@ -87,6 +87,8 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
               return {
                 lot_number: l.lot_number,
                 b8_lotefor: l.b8_lotefor || '',
+                // Validade do recorte (021). Nao e saldo: chega tambem pro OPERATOR.
+                expiry_date: l.expiry_date ?? null,
                 system_qty: l.system_qty,
                 counted_qty: String(qty),
                 prefilled: false,
@@ -99,6 +101,8 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
               return {
                 lot_number: l.lot_number,
                 b8_lotefor: l.b8_lotefor || '',
+                // Validade do recorte (021). Nao e saldo: chega tambem pro OPERATOR.
+                expiry_date: l.expiry_date ?? null,
                 system_qty: l.system_qty,
                 counted_qty: String(savedQty),
                 prefilled: false,
@@ -116,6 +120,8 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
                 return {
                   lot_number: l.lot_number,
                   b8_lotefor: l.b8_lotefor || '',
+                // Validade do recorte (021). Nao e saldo: chega tambem pro OPERATOR.
+                expiry_date: l.expiry_date ?? null,
                   system_qty: l.system_qty,
                   counted_qty: String(prevQty),
                   prefilled: true,
@@ -125,6 +131,8 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
               return {
                 lot_number: l.lot_number,
                 b8_lotefor: l.b8_lotefor || '',
+                // Validade do recorte (021). Nao e saldo: chega tambem pro OPERATOR.
+                expiry_date: l.expiry_date ?? null,
                 system_qty: l.system_qty,
                 counted_qty: '',
                 prefilled: false,
@@ -135,6 +143,8 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
             return {
               lot_number: l.lot_number,
               b8_lotefor: l.b8_lotefor || '',
+                // Validade do recorte (021). Nao e saldo: chega tambem pro OPERATOR.
+                expiry_date: l.expiry_date ?? null,
               system_qty: l.system_qty,
               counted_qty: '',
               prefilled: false,

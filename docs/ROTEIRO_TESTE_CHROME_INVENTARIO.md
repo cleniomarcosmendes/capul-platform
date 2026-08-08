@@ -68,7 +68,13 @@ igual para os dois, algo está errado.
 No **`TESTE_CHROME`**, lista da **jordana**, abra um produto com controle de lote
 (badge roxo `LOTE`) — `00010037`, `00010038` ou `00010070`.
 
-Como **clenio** (supervisor):
+Como **clenio** (supervisor) — ⚠️ **na "Lista clenio"**, não na da jordana:
+
+> Ninguém conta pela lista de outro, **nem ADMIN** ("Você não é o contador desta
+> lista"). É regra de auditoria, correta. Portanto a única forma de ver o modal
+> com saldo é o supervisor ser o contador de uma lista dele — por isso o cenário
+> cria a "Lista clenio".
+
 - [ ] Modal abre com a lista de lotes.
 - [ ] Mostra **Saldo Sistema** por lote, **Sistema** no total e as **diferenças**.
 - [ ] Mostra **Val.** (validade) ao lado do lote do fornecedor.
@@ -76,7 +82,8 @@ Como **clenio** (supervisor):
 Como **jordana** (operador):
 - [ ] Modal abre **sem quebrar** (era aqui que dava tela branca).
 - [ ] **Não** mostra Saldo Sistema, nem Sistema, nem diferença.
-- [ ] **Mostra** o número do lote, o lote do fornecedor e a validade.
+- [ ] **Mostra** o número do lote, o lote do fornecedor e a **validade**
+      (`Val. 30/01/2029`). Validade não é saldo — o operador vê.
 
 Regras, nos dois:
 - [ ] **Salvar fica desabilitado** enquanto algum lote estiver vazio.
