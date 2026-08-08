@@ -83,9 +83,39 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
   const invalido = informados.some((l) => !Number.isFinite(l.quantidade) || l.quantidade < 0);
   const total = invalido ? 0 : informados.reduce((s, l) => s + l.quantidade, 0);
 
+  /**
+   * ⚠️ TODO lote da lista precisa de um valor — inclusive 0.
+   *
+   * Vazio não vira zero sozinho: zero é uma AFIRMAÇÃO do contador ("procurei e
+   * não achei"), e inventar zeros seria pôr palavra na boca dele. Mas salvar
+   * PARCIAL é pior: o total do item viraria a soma de alguns lotes, comparado na
+   * análise contra o saldo cheio do produto — divergência falsa.
+   *
+   * Então a saída é exigir a decisão, lote a lote. Mesma regra do desktop
+   * (`allFilled`), que é o que o Clenio pediu: as duas aplicações iguais.
+   *
+   * Linha de lote à mão sem número também barra — viraria contagem sem
+   * identificação, que o servidor recusa (CONTAGEM_EXIGE_LOTE).
+   */
+  const faltaDecidir = item.lotes.some((l) => (valores[l.numero] ?? '').trim() === '');
+  const extraSemNumero = extras.some((e) => e.texto.trim() !== '' && e.numero.trim() === '');
+  const podeSalvar = !invalido && !faltaDecidir && !extraSemNumero && informados.length > 0;
+
   function salvar() {
     if (invalido) {
       Alert.alert('Quantidade inválida', 'Informe números maiores ou iguais a zero.');
+      return;
+    }
+    if (extraSemNumero) {
+      Alert.alert('Falta o número do lote', 'Informe o número do lote que você encontrou.');
+      return;
+    }
+    if (faltaDecidir) {
+      Alert.alert(
+        'Falta contar algum lote',
+        'Informe a quantidade de TODOS os lotes da lista. Se não encontrou o produto ' +
+          'daquele lote, digite 0 — é assim que se registra "procurei e não achei".',
+      );
       return;
     }
     onSalvar(informados);
@@ -177,8 +207,9 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
         <View style={s.rodape}>
           <View style={s.totalBox}>
             <Text style={s.totalRotulo}>
-              Total ({informados.length} lote{informados.length === 1 ? '' : 's'} informado
-              {informados.length === 1 ? '' : 's'})
+              {faltaDecidir
+                ? `Falta contar ${item.lotes.filter((l) => (valores[l.numero] ?? '').trim() === '').length} lote(s)`
+                : `Total (${informados.length} lote${informados.length === 1 ? '' : 's'})`}
             </Text>
             <Text style={s.totalValor}>{invalido ? '—' : total.toFixed(2)}</Text>
           </View>
@@ -186,7 +217,11 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
             <TouchableOpacity style={s.btnSec} onPress={onFechar}>
               <Text style={s.btnSecTxt}>Cancelar</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.btnPri, invalido && s.btnOff]} onPress={salvar} disabled={invalido}>
+            <TouchableOpacity
+              style={[s.btnPri, !podeSalvar && s.btnOff]}
+              onPress={salvar}
+              disabled={!podeSalvar}
+            >
               <Text style={s.btnPriTxt}>Salvar contagem</Text>
             </TouchableOpacity>
           </View>

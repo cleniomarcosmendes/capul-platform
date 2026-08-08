@@ -165,7 +165,8 @@ export const inventoryService = {
 
   async buscarLotesSnapshot(itemId: string): Promise<{
     has_lots: boolean;
-    lots: { lot_number: string; b8_lotectl: string; b8_lotefor?: string; system_qty: number; counted_qty: number | null; barcode?: string }[];
+    // `system_qty` NÃO vem para OPERATOR — a contagem cega remove o saldo por lote.
+    lots: { lot_number: string; b8_lotectl: string; b8_lotefor?: string; expiry_date?: string | null; system_qty?: number | null; counted_qty: number | null; barcode?: string }[];
     product_code?: string;
     product_description?: string;
   }> {

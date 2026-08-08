@@ -4,10 +4,24 @@ import { inventoryService } from '../../../services/inventory.service';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import type { CountingListProduct, LotCount } from '../../../types';
 
+/** `b8_dtvalid` vem do Protheus como YYYYMMDD. */
+function fmtValidade(v: string): string {
+  if (v.length !== 8) return v;
+  return `${v.slice(6, 8)}/${v.slice(4, 6)}/${v.slice(0, 4)}`;
+}
+
 interface LotRow {
   lot_number: string;
   b8_lotefor: string;
-  system_qty: number;
+  /** Validade YYYYMMDD congelada no recorte (migration 021). */
+  expiry_date?: string | null;
+  /**
+   * ⚠️ Ausente para OPERATOR — a contagem cega remove o saldo por lote desde
+   * 08/08. Antes o `.toFixed()` daqui quebraria a tela dele.
+   */
+  system_qty?: number | null;
+  /** Lote que o contador informou à mão, fora da lista do recorte. */
+  informadoAMao?: boolean;
   counted_qty: string;
   prefilled: boolean;
   prefilledValue: number;
@@ -92,7 +106,9 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
 
             if (currentCycle > 1 && previousCycleCounts.has(l.lot_number)) {
               const prevQty = previousCycleCounts.get(l.lot_number)!;
-              const matched = Math.abs(prevQty - l.system_qty) <= 0.01;
+              // Sem saldo (contagem cega) não há com o que casar — o pré-preenchimento
+              // é uma conveniência do supervisor, não uma regra.
+              const matched = l.system_qty != null && Math.abs(prevQty - l.system_qty) <= 0.01;
 
               if (matched) {
                 return {
@@ -172,24 +188,64 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
     setConfirmEdit(null);
   }
 
+  /**
+   * Acrescenta uma linha para o contador digitar um lote que não está no
+   * recorte. O backend aceita `lot_number` arbitrário — não precisou de
+   * contrato novo.
+   */
+  function adicionarLoteAMao() {
+    setLots((prev) => [
+      ...prev,
+      {
+        lot_number: '',
+        b8_lotefor: '',
+        expiry_date: null,
+        system_qty: null,   // não existe saldo para um lote fora do recorte
+        counted_qty: '',
+        prefilled: false,
+        prefilledValue: 0,
+        informadoAMao: true,
+      },
+    ]);
+  }
+
+  function atualizarNumeroDoLote(index: number, valor: string) {
+    setLots((prev) => prev.map((l, i) => (i === index ? { ...l, lot_number: valor } : l)));
+  }
+
   const totalContado = lots.reduce((sum, l) => {
     const v = parseFloat(l.counted_qty);
     return sum + (isNaN(v) ? 0 : v);
   }, 0);
 
-  const totalSistema = lots.reduce((sum, l) => sum + l.system_qty, 0);
-  const diff = totalContado - totalSistema;
-  const allFilled = lots.every((l) => l.counted_qty.trim() !== '' && !isNaN(parseFloat(l.counted_qty)));
+  // Contagem cega: sem saldo não há diferença a mostrar. `null` faz o
+  // `formatDiff`/`diffColor` exibirem o traço, que já era o caminho previsto.
+  const cego = lots.some((l) => l.system_qty === undefined || l.system_qty === null);
+  const totalSistema = cego ? null : lots.reduce((sum, l) => sum + (l.system_qty ?? 0), 0);
+  const diff = totalSistema === null ? null : totalContado - totalSistema;
+
+  // ⚠️ TODOS os lotes precisam de um valor — inclusive 0. Vazio não vira zero
+  // sozinho: zero é uma AFIRMAÇÃO do contador ("procurei e não achei"). E salvar
+  // parcial faria o total do item ser a soma de alguns lotes, comparado contra o
+  // saldo cheio na análise — divergência falsa. Mesma regra no app.
+  const allFilled =
+    lots.every((l) => l.counted_qty.trim() !== '' && !isNaN(parseFloat(l.counted_qty)))
+    // Linha de lote à mão sem número não pode ser salva: viraria contagem sem
+    // identificação de lote, que é o dado errado que a guarda do servidor
+    // (CONTAGEM_EXIGE_LOTE) existe para impedir.
+    && lots.every((l) => l.lot_number.trim() !== '');
   const prefilledCount = lots.filter((l) => l.prefilled).length;
 
   async function handleSave() {
     if (!allFilled) return;
     setSaving(true);
     try {
-      const lotCounts: LotCount[] = lots.map((l) => ({
-        lot_number: l.lot_number,
-        quantity: parseFloat(l.counted_qty),
-      }));
+      const lotCounts: LotCount[] = lots
+        .filter((l) => l.lot_number.trim() !== '')
+        .map((l) => ({
+          lot_number: l.lot_number.trim(),
+          quantity: parseFloat(l.counted_qty),
+        }));
       await onSave(totalContado, lotCounts);
     } catch {
       setError('Erro ao salvar contagem.');
@@ -266,10 +322,11 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
               <div className="space-y-3">
                 {lots.map((lot, idx) => {
                   const counted = parseFloat(lot.counted_qty);
-                  const lotDiff = !isNaN(counted) ? counted - lot.system_qty : null;
+                  const temSaldo = lot.system_qty !== undefined && lot.system_qty !== null;
+                  const lotDiff = !isNaN(counted) && temSaldo ? counted - (lot.system_qty as number) : null;
                   return (
                     <div
-                      key={lot.lot_number}
+                      key={lot.informadoAMao ? `mao-${idx}` : lot.lot_number}
                       className={`border rounded-lg p-3 ${
                         lot.prefilled ? 'border-green-300 bg-green-50/50' : 'border-slate-200'
                       }`}
@@ -278,7 +335,22 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
                       <div className="flex items-center justify-between mb-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-mono text-slate-700 truncate">{lot.lot_number}</span>
+                            {lot.informadoAMao ? (
+                              <input
+                                type="text"
+                                value={lot.lot_number}
+                                onChange={(e) => atualizarNumeroDoLote(idx, e.target.value.toUpperCase())}
+                                placeholder="Numero do lote"
+                                className="text-xs font-mono border border-slate-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-capul-500"
+                              />
+                            ) : (
+                              <span className="text-xs font-mono text-slate-700 truncate">{lot.lot_number}</span>
+                            )}
+                            {lot.informadoAMao && (
+                              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full shrink-0">
+                                fora da lista
+                              </span>
+                            )}
                             {lot.prefilled && (
                               <span className="inline-flex items-center gap-0.5 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full shrink-0">
                                 <CheckCircle2 className="w-2.5 h-2.5" />
@@ -286,9 +358,11 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
                               </span>
                             )}
                           </div>
-                          {lot.b8_lotefor && (
-                            <span className="text-[11px] text-slate-400">Forn: {lot.b8_lotefor}</span>
-                          )}
+                          <span className="text-[11px] text-slate-400">
+                            {lot.b8_lotefor ? `Forn: ${lot.b8_lotefor}` : ''}
+                            {lot.b8_lotefor && lot.expiry_date ? '  ·  ' : ''}
+                            {lot.expiry_date ? `Val. ${fmtValidade(lot.expiry_date)}` : ''}
+                          </span>
                         </div>
                         <span className={`text-sm font-semibold tabular-nums ${diffColor(lotDiff)}`}>
                           {formatDiff(lotDiff)}
@@ -297,10 +371,14 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
 
                       {/* Saldo + Input */}
                       <div className="flex items-center gap-3">
-                        <div className="flex-1">
-                          <span className="text-[11px] text-slate-500">Saldo Sistema</span>
-                          <p className="text-sm font-medium tabular-nums text-slate-700">{lot.system_qty.toFixed(2)}</p>
-                        </div>
+                        {temSaldo && (
+                          <div className="flex-1">
+                            <span className="text-[11px] text-slate-500">Saldo Sistema</span>
+                            <p className="text-sm font-medium tabular-nums text-slate-700">
+                              {(lot.system_qty as number).toFixed(2)}
+                            </p>
+                          </div>
+                        )}
                         <div className="flex-1">
                           <span className="text-[11px] text-capul-700 font-medium">Qtd Contada</span>
                           <input
@@ -327,6 +405,23 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
                 })}
               </div>
 
+              {/* Lote fora da lista — o inventário existe para achar o que o
+                  sistema não sabe. A lista traz o que ELE espera: lotes com
+                  saldo e não vencidos. 86% dos lotes têm saldo zero e podem
+                  estar fisicamente na prateleira; trazer todos daria 7,2 por
+                  item e até 108 num só. Mesma solução no app. */}
+              <button
+                type="button"
+                onClick={adicionarLoteAMao}
+                className="mt-3 w-full border border-dashed border-capul-500 text-capul-700 rounded-lg py-2.5 text-xs font-semibold hover:bg-capul-50"
+              >
+                + Informar outro lote
+              </button>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Achou na prateleira um lote que nao aparece acima? Informe aqui — e
+                assim que a divergencia chega ao supervisor.
+              </p>
+
               {/* Total */}
               <div className="mt-3 border-t-2 border-slate-300 pt-3">
                 <div className="flex items-center justify-between">
@@ -338,10 +433,12 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
                   </span>
                 </div>
                 <div className="flex items-center justify-between mt-1">
-                  <div>
-                    <span className="text-[11px] text-slate-500">Sistema</span>
-                    <p className="text-sm tabular-nums text-slate-600">{totalSistema.toFixed(2)}</p>
-                  </div>
+                  {totalSistema !== null && (
+                    <div>
+                      <span className="text-[11px] text-slate-500">Sistema</span>
+                      <p className="text-sm tabular-nums text-slate-600">{totalSistema.toFixed(2)}</p>
+                    </div>
+                  )}
                   <div className="text-right">
                     <span className="text-[11px] text-capul-700">Contado</span>
                     <p className="text-lg font-bold tabular-nums text-capul-700">{totalContado.toFixed(2)}</p>
