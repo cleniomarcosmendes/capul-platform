@@ -266,3 +266,61 @@ describe('contagem por lote', () => {
     expect(p!.itens[0].warehouse).toBeNull();
   });
 });
+
+/**
+ * Liberar para supervisor — a trava que o SERVIDOR não consegue fazer.
+ *
+ * O handoff zera os itens não contados e tira a lista de EM_CONTAGEM. Se sobrar
+ * contagem presa no aparelho, ela é perdida DUAS vezes: zerada no servidor e
+ * depois recusada no envio (LISTA_NAO_ESTA_EM_CONTAGEM). E o servidor não tem
+ * como saber que existe trabalho neste aparelho — a guarda é obrigatoriamente
+ * do cliente.
+ *
+ * A tela cobre isso sincronizando antes e abortando se sobrar algo; estes testes
+ * seguram a peça de que ela depende.
+ */
+describe('pendências antes de liberar', () => {
+  const LISTA_H = 'lista-handoff';
+  const pacoteH = {
+    listId: LISTA_H,
+    listName: 'Lista H',
+    cicloEsperado: 1,
+    baixadoEm: new Date().toISOString(),
+    itens: [
+      {
+        id: 'h1', product_code: '1', product_description: 'A', location: null,
+        warehouse: '02', contadoNoServidor: null, exigeLote: false, lotes: [],
+      },
+    ],
+  };
+
+  beforeEach(async () => { await descartarPacote(LISTA_H); });
+
+  it('sem sinal, a contagem CONTINUA pendente — não pode liberar', async () => {
+    const { api } = jest.requireMock('../../api/client') as { api: { post: jest.Mock } };
+    api.post.mockClear();
+    api.post.mockRejectedValue({ isAxiosError: true, response: undefined }); // offline
+
+    await salvarPacote(pacoteH);
+    await registrarContagemLocal(LISTA_H, 'h1', 3);
+
+    const r = await sincronizarContagens(LISTA_H);
+    expect(r.enviadas).toBe(0);
+    expect(r.restantes).toBe(1);
+    expect(await contarPendentes(LISTA_H)).toBe(1);
+  });
+
+  it('sincronizado, não sobra pendência e o item fica marcado', async () => {
+    const { api } = jest.requireMock('../../api/client') as { api: { post: jest.Mock } };
+    api.post.mockClear();
+    api.post.mockResolvedValue({ data: {} });
+
+    await salvarPacote(pacoteH);
+    await registrarContagemLocal(LISTA_H, 'h1', 3);
+
+    const r = await sincronizarContagens(LISTA_H);
+    expect(r.restantes).toBe(0);
+    expect(await contarPendentes(LISTA_H)).toBe(0);
+    expect((await lerPacote(LISTA_H))!.itens[0].contadoNoServidor).toBe(3);
+  });
+});

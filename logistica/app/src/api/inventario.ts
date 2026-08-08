@@ -61,6 +61,33 @@ export async function devolverLista(listId: string, leaseToken: string): Promise
   });
 }
 
+/**
+ * Contador ENTREGA a lista para revisão do supervisor —
+ * `EM_CONTAGEM → AGUARDANDO_REVISAO`.
+ *
+ * É o ato que fecha o trabalho do contador e é o que faltava no app: o
+ * `Encerrar` daqui só devolvia o lease, então a lista ficava EM_CONTAGEM para
+ * sempre e o supervisor nunca era avisado. Desktop e mobile-web já faziam isto.
+ *
+ * ⚠️ **Itens não contados no ciclo viram ZERO** no servidor. É a forma de dizer
+ * "varri a lista, o que sobrou eu não achei" — e por isso a tela confirma antes.
+ *
+ * ⚠️ O servidor NÃO verifica o lease aqui, e não tem como saber que existe
+ * contagem presa neste aparelho. Se sobrar pendência, ela é perdida: os itens
+ * são zerados e a lista sai de EM_CONTAGEM, então o envio posterior seria
+ * recusado. Sincronizar antes é responsabilidade do cliente.
+ *
+ * Devolve quantos itens foram preenchidos com zero.
+ */
+export async function liberarParaSupervisor(
+  listId: string,
+): Promise<{ status: string; zerados: number }> {
+  const { data } = await api.post<{ status: string; zerados: number }>(
+    `${INVENTARIO_BASE}/counting-lists/${listId}/handoff`,
+  );
+  return data;
+}
+
 interface LoteDoServidor {
   lot_number?: string | null;
   b8_lotefor?: string | null;

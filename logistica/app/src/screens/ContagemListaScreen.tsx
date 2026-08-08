@@ -5,7 +5,9 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { getDeviceId } from '../auth/deviceId';
-import { baixarItensDaLista, retirarLista, devolverLista } from '../api/inventario';
+import {
+  baixarItensDaLista, retirarLista, devolverLista, liberarParaSupervisor,
+} from '../api/inventario';
 import {
   salvarPacote, lerPacote, descartarPacote, salvarLease, lerLease,
   registrarContagemLocal, registrarContagemPorLote, contagensPendentes, sincronizarContagens,
@@ -34,6 +36,7 @@ export function ContagemListaScreen({ route, navigation }: Props) {
   const [busca, setBusca] = useState('');
   /** Produto rastreado aberto para contagem lote a lote. */
   const [itemEmLote, setItemEmLote] = useState<ItemContagem | null>(null);
+  const [liberando, setLiberando] = useState(false);
 
   const recarregarLocal = useCallback(async () => {
     const p = await lerPacote(listId);
@@ -100,18 +103,37 @@ export function ContagemListaScreen({ route, navigation }: Props) {
     }
   }
 
-  async function encerrar() {
+  /**
+   * Sai da lista NESTE aparelho, sem entregá-la.
+   *
+   * A lista continua EM_CONTAGEM e volta a ficar disponível — para este ou para
+   * outro aparelho. Antes se chamava "Encerrar", o que se lia como "terminei a
+   * contagem"; quem termina de verdade é o `liberar()`.
+   */
+  async function sairDaLista() {
     const pend = await contagensPendentes(listId);
     if (pend.length > 0) {
       // Guarda que só o cliente pode fazer: o servidor não tem como saber que
       // existe trabalho preso neste aparelho.
       Alert.alert(
         'Ainda há contagens não sincronizadas',
-        `${pend.length} contagem(ns) só existem neste aparelho. Sincronize antes de encerrar, ` +
+        `${pend.length} contagem(ns) só existem neste aparelho. Sincronize antes de sair, ` +
           `senão elas se perdem.`,
       );
       return;
     }
+    Alert.alert(
+      'Sair da lista?',
+      'A lista continua em contagem e volta a ficar disponível. Isto NÃO avisa o supervisor — ' +
+        'para entregar, use "Liberar para supervisor".',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Sair', style: 'destructive', onPress: () => void devolverESair() },
+      ],
+    );
+  }
+
+  async function devolverESair() {
     const token = await lerLease(listId);
     try {
       if (token) await devolverLista(listId, token);
@@ -120,6 +142,85 @@ export function ContagemListaScreen({ route, navigation }: Props) {
     }
     await descartarPacote(listId);
     navigation.goBack();
+  }
+
+  /**
+   * Entrega a lista ao supervisor (`EM_CONTAGEM → AGUARDANDO_REVISAO`).
+   *
+   * O botão fica SEMPRE disponível, por decisão do módulo (03/05): o contador
+   * bipa o que tem em mãos e libera quando termina — não precisa percorrer a
+   * lista inteira. O que sobrou vira zero, que é como se diz "não achei".
+   */
+  async function liberar() {
+    // 1) Nada pode estar preso no aparelho. O handoff zera os não contados e
+    //    tira a lista de EM_CONTAGEM — uma pendência aqui seria perdida DUAS
+    //    vezes: zerada no servidor e recusada no envio seguinte.
+    let pend = await contagensPendentes(listId);
+    if (pend.length > 0) {
+      const r = await sincronizarContagens(listId);
+      await recarregarLocal();
+      pend = await contagensPendentes(listId);
+      if (pend.length > 0 || r.recusadas.length > 0) {
+        Alert.alert(
+          'Sincronize antes de liberar',
+          `${pend.length} contagem(ns) ainda não subiram` +
+            (r.recusadas.length ? ` e ${r.recusadas.length} foram recusadas` : '') +
+            '. Liberar agora perderia esse trabalho.',
+        );
+        return;
+      }
+    }
+
+    const naoContados = (pacote?.itens ?? []).filter(
+      (i) => valores[i.id] === undefined && i.contadoNoServidor === null,
+    ).length;
+
+    Alert.alert(
+      'Liberar para o supervisor?',
+      (naoContados > 0
+        ? `${naoContados} item(ns) sem contagem serão gravados como ZERO — é assim que se marca ` +
+          '"não encontrei o produto".\n\n'
+        : '') +
+        'Depois de liberar você não altera mais as contagens. O supervisor revisa e pode devolver ' +
+        'a lista para revisão.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Liberar', onPress: () => void confirmarLiberacao() },
+      ],
+    );
+  }
+
+  async function confirmarLiberacao() {
+    setLiberando(true);
+    try {
+      const r = await liberarParaSupervisor(listId);
+
+      // A lista saiu de EM_CONTAGEM: o lease não tem mais função e o pacote
+      // local não pode continuar contável no aparelho.
+      const token = await lerLease(listId);
+      try {
+        if (token) await devolverLista(listId, token);
+      } catch {
+        /* best-effort: o supervisor libera do desktop */
+      }
+      await descartarPacote(listId);
+
+      Alert.alert(
+        'Lista entregue',
+        r.zerados > 0
+          ? `Entregue ao supervisor. ${r.zerados} item(ns) sem contagem foram gravados como zero.`
+          : 'Entregue ao supervisor.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
+    } catch (err) {
+      const d = (err as { response?: { data?: { detail?: { mensagem?: string } | string } } })
+        ?.response?.data?.detail;
+      const msg = d && typeof d === 'object' ? d.mensagem ?? 'Não foi possível liberar a lista.'
+        : typeof d === 'string' ? d : 'Sem conexão para liberar a lista.';
+      Alert.alert('Não deu para liberar', String(msg));
+    } finally {
+      setLiberando(false);
+    }
   }
 
   if (carregando) {
@@ -275,17 +376,32 @@ export function ContagemListaScreen({ route, navigation }: Props) {
       ) : null}
 
       <View style={styles.rodape}>
+        <View style={styles.rodapeLinha}>
+          <TouchableOpacity
+            style={[styles.btnPrimario, { flex: 1 }]}
+            onPress={() => void sincronizar()}
+            disabled={sincronizando || pendentesEnvio === 0}
+          >
+            <Text style={styles.btnPrimarioTxt}>
+              {sincronizando ? 'Sincronizando…' : `Sincronizar${pendentesEnvio ? ` (${pendentesEnvio})` : ''}`}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.btnSec} onPress={() => void sairDaLista()}>
+            <Text style={styles.btnSecTxt}>Sair</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* SEMPRE visível, e nunca desabilitado (decisão do módulo, 03/05): o
+            contador bipa o que tem em mãos e libera quando termina — não
+            precisa percorrer a lista inteira. */}
         <TouchableOpacity
-          style={[styles.btnPrimario, { flex: 1 }]}
-          onPress={() => void sincronizar()}
-          disabled={sincronizando || pendentesEnvio === 0}
+          style={[styles.btnEntregar, liberando && styles.btnOff]}
+          onPress={() => void liberar()}
+          disabled={liberando}
         >
-          <Text style={styles.btnPrimarioTxt}>
-            {sincronizando ? 'Sincronizando…' : `Sincronizar${pendentesEnvio ? ` (${pendentesEnvio})` : ''}`}
+          <Text style={styles.btnEntregarTxt}>
+            {liberando ? 'Liberando…' : 'Liberar para supervisor'}
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btnSec} onPress={() => void encerrar()}>
-          <Text style={styles.btnSecTxt}>Encerrar</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -348,9 +464,16 @@ const styles = StyleSheet.create({
   /** Confirmado pelo servidor. */
   qtdOk: { borderColor: '#16a34a', backgroundColor: '#f0fdf4' },
   rodape: {
-    flexDirection: 'row', gap: 10, padding: 12,
+    gap: 8, padding: 12,
     borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#fff',
   },
+  rodapeLinha: { flexDirection: 'row', gap: 10 },
+  btnEntregar: {
+    borderRadius: 10, paddingVertical: 13, alignItems: 'center',
+    borderWidth: 1.5, borderColor: CAPUL, backgroundColor: '#f0fdf4',
+  },
+  btnEntregarTxt: { color: CAPUL, fontWeight: '800', fontSize: 15 },
+  btnOff: { opacity: 0.5 },
   btnPrimario: {
     backgroundColor: CAPUL, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 22, alignItems: 'center',
   },
