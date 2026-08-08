@@ -6357,6 +6357,66 @@ class SimpleCountRequest(BaseModel):
     lease_token: Optional[str] = None
     force: bool = False
 
+def _validar_contagem_por_lote(db, item_uuid, product_code, lot_counts):
+    """
+    Guarda 08/08/2026 — quem decide se a contagem é POR LOTE é o CADASTRO, não
+    o cliente.
+
+    Até aqui o `has_lot_control` do endpoint saía de `count_data.lot_counts`.
+    Ou seja: um cliente que não implementa lote (o app, até hoje) mandava
+    `{quantity}` e o produto rastreado era gravado como UMA contagem com
+    `lot_number = None` — sem erro, sem aviso. Num processo que fecha valor de
+    estoque, isso é dado errado em silêncio.
+
+    Vale para QUALQUER cliente, inclusive um APK antigo já instalado em campo —
+    que é justamente o que uma validação só no app não protegeria.
+
+    A verificação usa o SNAPSHOT, não o `sb1010` de hoje: se o cadastro passou a
+    controlar lote DEPOIS que o produto entrou no inventário, o recorte é que
+    manda — mesma regra que já vale para o saldo.
+
+    Levanta HTTPException com `detail.erro = CONTAGEM_EXIGE_LOTE`; a fila do app
+    usa esse código para decidir o que fazer com a captura.
+    """
+    linha = db.execute(text("""
+        SELECT COALESCE(
+                 (SELECT iis.b1_rastro FROM inventario.inventory_items_snapshot iis
+                   WHERE iis.inventory_item_id = :item_id),
+                 -- item incluído antes do snapshot (pré-v2.10.0)
+                 (SELECT sb1.b1_rastro FROM inventario.sb1010 sb1
+                   WHERE TRIM(sb1.b1_cod) = TRIM(:product_code) LIMIT 1)
+               ) AS rastro,
+               (SELECT COUNT(*) FROM inventario.inventory_lots_snapshot ils
+                 WHERE ils.inventory_item_id = :item_id) AS qtd_lotes
+    """), {"item_id": str(item_uuid), "product_code": product_code or ""}).first()
+
+    exige_lote = bool(linha and (linha.rastro or "").strip() in ("L", "S"))
+    if not exige_lote or lot_counts:
+        return
+
+    if linha and (linha.qtd_lotes or 0) > 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "erro": "CONTAGEM_EXIGE_LOTE",
+                "mensagem": (
+                    "Este produto tem controle de lote. Informe a quantidade por "
+                    "lote — uma contagem única não pode ser registrada."
+                ),
+                "product_code": (product_code or "").strip(),
+            },
+        )
+
+    # Rastreado, mas sem NENHUM lote no recorte (todos vencidos na data de
+    # referência, ou o SB8010 não trouxe nada). Recusar aqui deixaria o item
+    # impossível de contar, então passa — mas fica o rastro: se isto aparecer no
+    # log, o problema está no snapshot, não na contagem.
+    logger.warning(
+        f"⚠️ [LOTE] Produto {product_code} exige lote mas não há lote no snapshot "
+        f"do item {item_uuid}; gravando contagem única."
+    )
+
+
 def _validar_captura_offline(db, count_data, counting_list, cycle_number, item_uuid, current_user):
     """
     Fase 0 — validações que protegem a contagem capturada fora de linha.
@@ -6725,9 +6785,15 @@ async def register_count(
                     },
                 )
         
+        # Guarda: quem decide se a contagem é POR LOTE é o CADASTRO, não o
+        # cliente. Ver `_validar_contagem_por_lote`.
+        _validar_contagem_por_lote(
+            db, item_uuid, inventory_item.product_code, count_data.lot_counts
+        )
+
         # Verificar se produto tem controle de lote e se foram fornecidos dados de lotes
         has_lot_control = count_data.lot_counts and len(count_data.lot_counts) > 0
-        
+
         # Para produtos COM lote, permitir múltiplas contagens (uma por lote)
         # Para produtos SEM lote, verificar se já existe contagem
         if not has_lot_control:

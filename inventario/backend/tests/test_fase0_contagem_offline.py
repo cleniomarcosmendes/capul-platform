@@ -21,6 +21,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.models import (
@@ -35,7 +36,7 @@ from app.api.v1.endpoints.counting_lists import (
     checkout_counting_list,
     release_counting_list,
 )
-from app.main import _validar_captura_offline
+from app.main import _validar_captura_offline, _validar_contagem_por_lote
 
 
 # --------------------------------------------------------------------------
@@ -844,3 +845,105 @@ def test_05_supervisor_libera_lease_de_lista_com_contagem_pendente(
             current_user=test_supervisor_user,
         )
     assert _erro(exc) == "LEASE_INVALIDO"
+
+
+# ==========================================================================
+# Guarda de LOTE (08/08/2026) — o cadastro decide, não o cliente
+# ==========================================================================
+#
+# `has_lot_control` saía de `count_data.lot_counts`. Um cliente que não
+# implementa lote (o app, até hoje) mandava `{quantity}` e o produto rastreado
+# virava UMA contagem com `lot_number = None`, em silêncio. Estes testes seguram
+# a regra no servidor — que é o único lugar que protege um APK antigo já
+# instalado em campo.
+
+
+def _snapshot_do_item(db_session, item, rastro, lotes=()):
+    """Cria o snapshot do item com o rastro pedido e, opcionalmente, lotes."""
+    db_session.execute(text("""
+        INSERT INTO inventario.inventory_items_snapshot (id, inventory_item_id, b1_rastro, created_at)
+        VALUES (gen_random_uuid(), :item_id, :rastro, NOW())
+    """), {"item_id": str(item.id), "rastro": rastro})
+    for numero in lotes:
+        db_session.execute(text("""
+            INSERT INTO inventario.inventory_lots_snapshot
+                (id, inventory_item_id, b8_lotectl, b8_lotefor, b8_saldo, created_at)
+            VALUES (gen_random_uuid(), :item_id, :lote, :lote, 10, NOW())
+        """), {"item_id": str(item.id), "lote": numero})
+    db_session.flush()
+
+
+def test_lote_produto_rastreado_recusa_contagem_unica(db_session, test_inventory_items):
+    """⭐ O buraco: `{quantity}` num produto com lote gravava lot_number=None."""
+    item = test_inventory_items[0]
+    _snapshot_do_item(db_session, item, "L", lotes=["L001", "L002"])
+
+    with pytest.raises(HTTPException) as exc:
+        _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail["erro"] == "CONTAGEM_EXIGE_LOTE"
+
+
+def test_lote_produto_rastreado_aceita_quando_vem_com_lote(db_session, test_inventory_items):
+    item = test_inventory_items[0]
+    _snapshot_do_item(db_session, item, "L", lotes=["L001"])
+
+    # Não deve levantar.
+    _validar_contagem_por_lote(
+        db_session, item.id, item.product_code,
+        [SimpleNamespace(lot_number="L001", quantity=5)],
+    )
+
+
+def test_lote_produto_sem_rastro_segue_livre(db_session, test_inventory_items):
+    """Produto normal não pode passar a exigir lote — seria quebrar a contagem."""
+    item = test_inventory_items[0]
+    _snapshot_do_item(db_session, item, "N")
+
+    _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
+
+
+def test_lote_rastreado_sem_lote_no_snapshot_nao_bloqueia(db_session, test_inventory_items):
+    """Rastreado, mas o recorte não trouxe lote nenhum (todos vencidos na data
+    de referência, ou SB8010 vazio).
+
+    Recusar aqui deixaria o item IMPOSSÍVEL de contar. Passa — o rastro fica no
+    log, e o problema nesse caso é do snapshot, não da contagem.
+    """
+    item = test_inventory_items[0]
+    _snapshot_do_item(db_session, item, "L")  # sem lotes
+
+    _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
+
+
+def test_lote_rastro_S_tambem_exige(db_session, test_inventory_items):
+    """`b1_rastro` do Protheus é L (lote) ou S (sub-lote) — os dois rastreiam."""
+    item = test_inventory_items[0]
+    _snapshot_do_item(db_session, item, "S", lotes=["L001"])
+
+    with pytest.raises(HTTPException) as exc:
+        _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
+    assert exc.value.detail["erro"] == "CONTAGEM_EXIGE_LOTE"
+
+
+def test_lote_usa_o_SNAPSHOT_e_nao_o_cadastro_de_hoje(db_session, test_inventory_items):
+    """⭐ O recorte manda.
+
+    Se o produto passou a controlar lote no Protheus DEPOIS de entrar no
+    inventário, a contagem em curso não pode mudar de regra no meio — mesma
+    lógica que já vale para o saldo congelado.
+    """
+    item = test_inventory_items[0]
+    _snapshot_do_item(db_session, item, "N")  # no recorte, NÃO tinha lote
+
+    # ...mas o cadastro de hoje diz que tem.
+    db_session.execute(text("""
+        INSERT INTO inventario.sb1010 (b1_cod, b1_filial, b1_rastro, created_at, updated_at)
+        VALUES (:cod, 'ZZ', 'L', NOW(), NOW())
+        ON CONFLICT (b1_filial, b1_cod) DO UPDATE SET b1_rastro = 'L'
+    """), {"cod": item.product_code})
+    db_session.flush()
+
+    # Não deve levantar: vale o que estava congelado.
+    _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
