@@ -9379,18 +9379,23 @@ except ImportError as ie:
 except Exception as e:
     logger.error(f"❌ Erro ao registrar router de inventário: {e}")
 
-# 📸 v2.10.0: Incluir router TEMPORÁRIO de lotes (snapshot) - SOLUÇÃO C
-# PROBLEMA: inventory_router não registra devido a incompatibilidade Pydantic/SQLAlchemy
-# SOLUÇÃO: Router isolado apenas com endpoint crítico /items/{item_id}/lots-snapshot
-# DOCUMENTAÇÃO: Ver SESSAO_16_10_2025_BLOQUEADOR_PYDANTIC.md
-try:
-    from app.api.v1.endpoints.inventory_lots import router as lots_router
-    app.include_router(lots_router, prefix="/api/v1/inventory", tags=["Inventory Lots (Snapshot v2.10.0)"])
-    logger.info("✅ Router de lotes (snapshot) registrado com sucesso")
-except ImportError as ie:
-    logger.error(f"❌ Erro ao importar router de lotes: {ie}")
-except Exception as e:
-    logger.error(f"❌ Erro ao registrar router de lotes: {e}")
+# REMOVIDO em 08/08/2026 — router `inventory_lots` (`GET /inventory/items/{id}/lots-snapshot`)
+#
+# Era um router TEMPORÁRIO de v2.10.0 ("SOLUÇÃO C"): o `inventory_router` não
+# registrava por uma incompatibilidade Pydantic/SQLAlchemy, então o endpoint
+# crítico de lotes foi isolado num arquivo próprio.
+#
+# O `inventory_router` volta a registrar há tempos (e é incluído ACIMA deste
+# bloco), então a rota daqui estava SOMBREADA — quem respondia era a de
+# `inventory.py:853`. O arquivo virou cópia morta.
+#
+# Por que remover em vez de deixar: as duas cópias devolviam o saldo por lote
+# sem projeção de contagem cega. Ao fechar o vazamento em 08/08, só a viva foi
+# corrigida — e uma cópia morta que ainda "parece" ativa é exatamente como a
+# próxima correção passa batida. Mesmo motivo da remoção de 07/08 em
+# `counting_lists.py`.
+#
+# A rota continua existindo, em `app/api/v1/endpoints/inventory.py`.
 
 # 🔄 v2.15.0: Incluir router de comparação de inventários
 # FUNCIONALIDADE: Comparar 2 inventários de armazéns diferentes

@@ -106,6 +106,34 @@ _LISTAS_DE_LOTE = (
 )
 
 
+def mascarar_saldo_dos_lotes(lots: list, user, campo: str = "system_qty") -> list:
+    """
+    Mesma projeção da contagem cega, para endpoints que devolvem SÓ lotes.
+
+    `aplicar_contagem_cega` trabalha sobre o dict de um PRODUTO. O
+    `/inventory/items/{id}/lots-snapshot` devolve uma lista solta de lotes, com o
+    saldo congelado de cada um — e não passava por projeção nenhuma. Somar os
+    lotes dali reconstruía o saldo do item, exatamente como pelo outro caminho.
+
+    ⚠️ 08/08/2026 — este é o SEGUNDO endpoint da mesma classe. O primeiro
+    (`/counting-lists/{id}/products`) foi fechado horas antes, e este passou
+    porque a rota vive em outro arquivo. É o risco que o módulo já conhece:
+    rotas espalhadas entre `main.py` e `api/v1/endpoints/`. Endpoint novo que
+    devolva saldo por lote precisa passar por aqui.
+
+    Não recebe `counting_list`: `system_qty` é saldo do sistema e some para
+    OPERATOR sempre, independente de `show_previous_counts` — aquilo governa
+    ciclos anteriores, não o esperado.
+    """
+    if _is_staff(user):
+        return lots
+
+    for lote in lots or []:
+        if isinstance(lote, dict):
+            lote.pop(campo, None)
+    return lots
+
+
 def aplicar_contagem_cega(product_data: dict, user, counting_list) -> dict:
     """
     Fase 0 / item 0.2 — projeção server-side da CONTAGEM CEGA.

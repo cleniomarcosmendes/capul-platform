@@ -969,13 +969,25 @@ async def get_item_lots_snapshot(
             "b8_lotectl": lot_snapshot.b8_lotectl,  # ✅ v2.17.1: Lote cliente (explícito)
             "b8_lotefor": lot_snapshot.b8_lotefor if hasattr(lot_snapshot, 'b8_lotefor') and lot_snapshot.b8_lotefor else "",  # ✅ v2.17.1: Lote fornecedor
             "warehouse": item_snapshot.b2_local,  # Armazém do snapshot
-            "system_qty": float(lot_snapshot.b8_saldo),  # Saldo congelado
+            "system_qty": float(lot_snapshot.b8_saldo),  # Saldo congelado — removido p/ OPERATOR abaixo
             "counted_qty": None,  # Será preenchido na contagem
             "barcode": f"{item_snapshot.b2_cod}{lot_snapshot.b8_lotectl}",  # Código + Lote
-            "expiry_date": None,  # SB8 não tem data de validade (está em SB8010.b8_dtvalid)
+            # Migration 021 — a validade agora É congelada no snapshot. Antes
+            # ficava None com a nota "SB8 não tem data de validade".
+            "expiry_date": getattr(lot_snapshot, 'b8_dtvalid', None),
             "snapshot_created_at": lot_snapshot.created_at.isoformat() if lot_snapshot.created_at else None
         }
         lots_data.append(lot_info)
+
+    # ⚠️ 08/08/2026 — contagem cega TAMBÉM aqui.
+    #
+    # Este endpoint devolve o saldo congelado de cada lote e não passava por
+    # projeção nenhuma: somar os lotes daqui reconstruía o saldo do item que a
+    # máscara do `/counting-lists/{id}/products` tinha acabado de remover. É o
+    # segundo endpoint da mesma classe — o primeiro foi fechado horas antes, e
+    # este passou porque a rota vive em outro arquivo.
+    from app.api.v1.endpoints.counting_lists import mascarar_saldo_dos_lotes
+    mascarar_saldo_dos_lotes(lots_data, current_user)
 
     logger.info(f"✅ {len(lots_data)} lote(s) encontrado(s) no snapshot para item {item_id}")
 

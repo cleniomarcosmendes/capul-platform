@@ -32,6 +32,7 @@ from app.models.models import (
 )
 from app.api.v1.endpoints.counting_lists import (
     aplicar_contagem_cega,
+    mascarar_saldo_dos_lotes,
     handoff_counting_list,
     checkout_counting_list,
     release_counting_list,
@@ -340,6 +341,39 @@ def test_02b_payload_sem_lote_nao_quebra(test_counting_list, test_operator_user)
     explodir por causa disso."""
     out = aplicar_contagem_cega(_payload_produto(), test_operator_user, test_counting_list)
     assert "system_qty" not in out
+
+
+def test_02c_lots_snapshot_tambem_esconde_o_saldo(test_operator_user):
+    """⭐ O SEGUNDO endpoint da mesma classe.
+
+    `/inventory/items/{id}/lots-snapshot` devolve uma lista SOLTA de lotes, fora
+    do dict de produto, e não passava por projeção nenhuma. Somar os lotes dali
+    reconstruía o saldo do item que a máscara do outro endpoint tinha acabado de
+    remover — o buraco passou porque a rota vive em outro arquivo.
+    """
+    lotes = [
+        {"lot_number": "L001", "system_qty": 100.0, "b8_lotefor": "F1", "expiry_date": "20271231"},
+        {"lot_number": "L002", "system_qty": 200.0, "b8_lotefor": "F2", "expiry_date": None},
+    ]
+    out = mascarar_saldo_dos_lotes(lotes, test_operator_user)
+
+    assert all("system_qty" not in l for l in out), "saldo por lote vazou pelo lots-snapshot"
+    # A contagem tem que continuar POSSÍVEL.
+    assert [l["lot_number"] for l in out] == ["L001", "L002"]
+    assert out[0]["b8_lotefor"] == "F1"
+    # Validade não é saldo — o contador precisa ver o que está contando.
+    assert out[0]["expiry_date"] == "20271231"
+
+
+def test_02c_lots_snapshot_supervisor_ve_o_saldo(test_supervisor_user):
+    lotes = [{"lot_number": "L001", "system_qty": 100.0}]
+    out = mascarar_saldo_dos_lotes(lotes, test_supervisor_user)
+    assert out[0]["system_qty"] == 100.0
+
+
+def test_02c_mascara_de_lote_aceita_lista_vazia_ou_nula(test_operator_user):
+    assert mascarar_saldo_dos_lotes([], test_operator_user) == []
+    assert mascarar_saldo_dos_lotes(None, test_operator_user) is None
 
 
 def test_02b_lista_de_lote_nula_nao_quebra(test_counting_list, test_operator_user):
