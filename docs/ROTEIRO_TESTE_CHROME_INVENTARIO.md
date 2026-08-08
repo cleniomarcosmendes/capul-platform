@@ -65,8 +65,8 @@ igual para os dois, algo está errado.
 > Foi introduzido em 08/08 e a máscara de saldo respingou nele: até `a9b410cb` a
 > tela do operador quebrava (`.toFixed()` em campo ausente).
 
-Abra um produto **com controle de lote** (badge roxo `LOTE`; no `SMOKE_09AGO` são
-os códigos que começam com `000100`).
+No **`TESTE_CHROME`**, lista da **jordana**, abra um produto com controle de lote
+(badge roxo `LOTE`) — `00010037`, `00010038` ou `00010070`.
 
 Como **clenio** (supervisor):
 - [ ] Modal abre com a lista de lotes.
@@ -86,11 +86,22 @@ Regras, nos dois:
 - [ ] Linha nova **sem número** mantém o Salvar bloqueado.
 - [ ] O **total** é a soma dos lotes e muda sozinho — não é digitável.
 
+### ⭐ E agora o `00010093`, que não tem lote nenhum
+
+- [ ] Abre com **aviso âmbar** dizendo que nenhum lote entrou no recorte — e que
+      a causa é **saldo zero OU vencimento** (não pode afirmar só vencimento: os
+      5 lotes deste produto estão com saldo zero, nenhum vencido).
+- [ ] ⭐ O botão **"+ Informar outro lote" continua visível**. Era aqui o beco sem
+      saída: até `5bab54b5` o modal caía em tela de erro e o produto ficava
+      impossível de contar.
+- [ ] Informar um lote à mão + quantidade → **salva**.
+- [ ] Sem informar nada, **Salvar fica bloqueado** (não há contagem a registrar).
+
 ---
 
 ## 3. Fluxo do supervisor
 
-Como **clenio**, num inventário novo (ou reabrindo o `SMOKE_09AGO`):
+Como **clenio**, no **`TESTE_CHROME`** (ou criando um novo):
 
 - [ ] **Criar inventário** — o seletor de armazém traz opções (já esteve vazio).
 - [ ] **Adicionar produtos** — os 7 filtros de faixa funcionam; passar de 3.000
@@ -109,7 +120,8 @@ Como **clenio**, num inventário novo (ou reabrindo o `SMOKE_09AGO`):
       do erro**; se não deixar, é melhoria de UX a anotar.
 - [ ] 2º ciclo traz **só os divergentes**, não a lista toda.
 - [ ] **Encerrar lista** ≠ **Encerrar inventário** — são dois atos.
-- [ ] `/divergencias` — as 4 abas, com o esperado × contado.
+- [ ] `/divergencias` — as 4 abas, com o esperado × contado. Use o
+      **`SMOKE_09AGO`**, que já está encerrado e tem 5 divergências reais.
 - [ ] **Marcar analisado** só habilita com o inventário encerrado.
 
 ---
