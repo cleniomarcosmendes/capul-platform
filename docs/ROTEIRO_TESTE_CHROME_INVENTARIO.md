@@ -5,12 +5,30 @@ inteiro por API (**67 verificações**). Aqui está só o que a API **não alcan
 o que aparece na tela, o que o papel do usuário esconde, e o que só quebra no
 navegador.
 
-**Rode o smoke antes.** Ele deixa o inventário `SMOKE_09AGO` pronto no DEV, já
-encerrado e analisado — vários casos abaixo usam ele.
+## Preparação
+
+São **dois** cenários, porque um inventário não pode estar encerrado e contável
+ao mesmo tempo:
 
 ```bash
+# 1) TESTE_CHROME — parado EM CONTAGEM, com produto COM LOTE. É o das seções 1-4.
+python3 inventario/backend/preparar_teste_chrome.py
+
+# 2) SMOKE_09AGO — ciclo inteiro até encerrar/analisar. Para a seção 5 (análise).
 python3 inventario/backend/smoke_ciclo_completo.py
 ```
+
+Os dois podem coexistir. Reexecutar qualquer um refaz só o dele.
+
+### ⭐ O produto que vale mais que os outros
+
+No `TESTE_CHROME`, o **`00010093`** exige lote e **não tem lote nenhum** no
+recorte — os 5 lotes dele estão com saldo zero no Protheus. É o caso real que
+justifica o "informar outro lote": sem ele, o produto seria **impossível de
+contar**. Até 09/08 o desktop dava beco sem saída aqui.
+
+Os outros com lote (`00010037`, `00010038`, `00010070`) têm 2, 3 e 1 lote — use
+esses para o fluxo normal.
 
 **Usuários** (https://localhost/inventario/):
 

@@ -138,8 +138,8 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
           contentContainerStyle={{ padding: 12, gap: 8, paddingBottom: 24 }}
           ListEmptyComponent={
             <Text style={s.vazio}>
-              Nenhum lote válido na data deste inventário — os lotes deste produto
-              venceram antes dela.{'\n\n'}
+              Nenhum lote deste produto entrou no recorte do inventário — ou
+              estavam sem saldo, ou vencidos na data de referência.{'\n\n'}
               Se você encontrou o produto na prateleira, informe o lote abaixo.
               Senão, avise o supervisor.
             </Text>

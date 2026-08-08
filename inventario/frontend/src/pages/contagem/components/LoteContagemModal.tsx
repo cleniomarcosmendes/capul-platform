@@ -42,6 +42,8 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
   const [error, setError] = useState('');
   const [observation, setObservation] = useState('');
   const [confirmEdit, setConfirmEdit] = useState<{ lotIndex: number; newValue: string } | null>(null);
+  /** Recorte não trouxe nenhum lote — estado legítimo, não erro. Ver o setter. */
+  const [semLote, setSemLote] = useState(false);
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   const previousCycleCounts = useMemo(() => {
@@ -140,7 +142,12 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
             };
           }));
         } else {
-          setError('Produto sem lote valido na data do inventario. Todos os lotes possuem data de vencimento anterior a data de referencia.');
+          // ⚠️ NÃO é erro: é um estado legítimo, e o contador precisa continuar
+          // podendo informar um lote à mão. Tratar como erro esconderia o botão
+          // "Informar outro lote" e deixaria o produto SEM SAÍDA — foi o que
+          // acontecia até 09/08. Acontece de verdade: produto cujos lotes estão
+          // todos com saldo zero (86% dos lotes) ou vencidos.
+          setSemLote(true);
         }
       })
       .catch(() => setError('Erro ao carregar lotes do produto.'))
@@ -233,7 +240,10 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
     // Linha de lote à mão sem número não pode ser salva: viraria contagem sem
     // identificação de lote, que é o dado errado que a guarda do servidor
     // (CONTAGEM_EXIGE_LOTE) existe para impedir.
-    && lots.every((l) => l.lot_number.trim() !== '');
+    && lots.every((l) => l.lot_number.trim() !== '')
+    // Sem nenhuma linha não há contagem a registrar (caso do produto que ficou
+    // sem lote no recorte e o contador não informou nada à mão).
+    && lots.length > 0;
   const prefilledCount = lots.filter((l) => l.prefilled).length;
 
   async function handleSave() {
@@ -318,6 +328,17 @@ export function LoteContagemModal({ product, currentCycle, showPreviousCounts = 
             </div>
           ) : (
             <>
+              {semLote && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    Nenhum lote deste produto entrou no recorte do inventario — ou
+                    estavam sem saldo, ou vencidos na data de referencia.{' '}
+                    <strong>Se encontrou o produto na prateleira, use "Informar outro lote".</strong>
+                  </p>
+                </div>
+              )}
+
               {/* Cards mobile */}
               <div className="space-y-3">
                 {lots.map((lot, idx) => {
