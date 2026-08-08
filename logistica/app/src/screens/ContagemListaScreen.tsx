@@ -8,9 +8,10 @@ import { getDeviceId } from '../auth/deviceId';
 import { baixarItensDaLista, retirarLista, devolverLista } from '../api/inventario';
 import {
   salvarPacote, lerPacote, descartarPacote, salvarLease, lerLease,
-  registrarContagemLocal, contagensPendentes, sincronizarContagens,
-  type PacoteContagem, type ContagemLocal,
+  registrarContagemLocal, registrarContagemPorLote, contagensPendentes, sincronizarContagens,
+  type PacoteContagem, type ContagemLocal, type ItemContagem,
 } from '../offline/contagemOffline';
+import { ContagemLoteModal } from '../components/ContagemLoteModal';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ContagemLista'>;
@@ -31,6 +32,8 @@ export function ContagemListaScreen({ route, navigation }: Props) {
   const [baixando, setBaixando] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const [busca, setBusca] = useState('');
+  /** Produto rastreado aberto para contagem lote a lote. */
+  const [itemEmLote, setItemEmLote] = useState<ItemContagem | null>(null);
 
   const recarregarLocal = useCallback(async () => {
     const p = await lerPacote(listId);
@@ -56,6 +59,9 @@ export function ContagemListaScreen({ route, navigation }: Props) {
       const { ciclo, itens } = await baixarItensDaLista(listId);
       await salvarPacote({
         listId, listName, cicloEsperado: ciclo,
+        // Armazém do primeiro item: a lista é sempre de um armazém só (o
+        // inventário é criado por armazém), então serve de rótulo.
+        warehouse: itens.find((i) => i.warehouse)?.warehouse ?? undefined,
         baixadoEm: new Date().toISOString(), itens,
       });
       await recarregarLocal();
@@ -151,6 +157,18 @@ export function ContagemListaScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.container}>
+      {/* Cabeçalho: o contador precisa saber ONDE está contando e em que
+          CICLO — o mobile-web já mostrava isso, o app não. */}
+      <View style={styles.cabecalho}>
+        <Text style={styles.cabLista} numberOfLines={1}>{pacote.listName}</Text>
+        <View style={styles.cabLinha}>
+          {pacote.warehouse ? (
+            <Text style={styles.cabChip}>Armazém {pacote.warehouse}</Text>
+          ) : null}
+          <Text style={styles.cabChip}>{pacote.cicloEsperado}º ciclo</Text>
+        </View>
+      </View>
+
       <View style={styles.barraTopo}>
         <Text style={styles.progresso}>
           {contados} de {pacote.itens.length} contados
@@ -179,35 +197,82 @@ export function ContagemListaScreen({ route, navigation }: Props) {
         removeClippedSubviews
         renderItem={({ item }) => {
           const local = valores[item.id];
-          const valor = local ? String(local.quantidade)
+          // Três estados, e é isto que o operador precisa enxergar de relance:
+          //   local          → contado NESTE aparelho, ainda não subiu (âmbar)
+          //   contadoNoServidor → confirmado pelo servidor (verde, com ✓)
+          //   nenhum dos dois   → não contado
+          const pendente = local !== undefined;
+          const sincronizado = !pendente && item.contadoNoServidor !== null;
+          const valor = pendente ? String(local.quantidade)
             : item.contadoNoServidor !== null ? String(item.contadoNoServidor) : '';
+
           return (
             <View style={styles.item}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.codigo}>{item.product_code}</Text>
+                {/* Código e localização juntos: são os dois campos de navegação
+                    física na prateleira. A descrição é conferência — mesmo
+                    agrupamento que o desktop faz em colunas. */}
+                <View style={styles.linhaCodigo}>
+                  <Text style={styles.codigo}>{item.product_code}</Text>
+                  {item.location ? <Text style={styles.local}>📍 {item.location}</Text> : null}
+                  {item.exigeLote ? <Text style={styles.chipLote}>LOTE</Text> : null}
+                </View>
                 <Text style={styles.desc} numberOfLines={2}>{item.product_description}</Text>
-                {item.location ? <Text style={styles.local}>📍 {item.location}</Text> : null}
+                {item.exigeLote && (pendente || sincronizado) ? (
+                  <Text style={styles.subLote}>
+                    {(local?.lotes?.length ?? 0) > 0
+                      ? `${local!.lotes!.length} lote(s) contado(s)`
+                      : 'contagem por lote'}
+                  </Text>
+                ) : null}
               </View>
-              <TextInput
-                style={[styles.qtd, local && styles.qtdPendente]}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                defaultValue={valor}
-                onEndEditing={(e) => {
-                  const txt = e.nativeEvent.text.replace(',', '.').trim();
-                  if (!txt) return;
-                  const n = Number(txt);
-                  if (Number.isNaN(n) || n < 0) {
-                    Alert.alert('Quantidade inválida', 'Informe um número maior ou igual a zero.');
-                    return;
-                  }
-                  void registrarContagemLocal(listId, item.id, n).then(recarregarLocal);
-                }}
-              />
+
+              {item.exigeLote ? (
+                // Produto rastreado não aceita quantidade única — o servidor
+                // recusa (CONTAGEM_EXIGE_LOTE). Abre a tela de lotes.
+                <TouchableOpacity
+                  style={[styles.qtdBotao, pendente && styles.qtdPendente, sincronizado && styles.qtdOk]}
+                  onPress={() => setItemEmLote(item)}
+                >
+                  <Text style={styles.qtdBotaoTxt}>
+                    {valor === '' ? 'Lotes' : `${valor}${sincronizado ? ' ✓' : ''}`}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TextInput
+                  style={[styles.qtd, pendente && styles.qtdPendente, sincronizado && styles.qtdOk]}
+                  keyboardType="decimal-pad"
+                  placeholder="—"
+                  // Controlado: com `defaultValue` o valor só entrava na
+                  // montagem, e o item reciclado pelo FlatList às vezes ficava
+                  // com o número velho na tela, às vezes limpava.
+                  value={valor}
+                  onChangeText={(t) => {
+                    const txt = t.replace(',', '.').trim();
+                    if (!txt) return;
+                    const n = Number(txt);
+                    if (Number.isNaN(n) || n < 0) return;
+                    void registrarContagemLocal(listId, item.id, n).then(recarregarLocal);
+                  }}
+                />
+              )}
             </View>
           );
         }}
       />
+
+      {itemEmLote ? (
+        <ContagemLoteModal
+          item={itemEmLote}
+          contagemAtual={valores[itemEmLote.id]?.lotes}
+          onFechar={() => setItemEmLote(null)}
+          onSalvar={(lotes) => {
+            void registrarContagemPorLote(listId, itemEmLote.id, lotes)
+              .then(recarregarLocal)
+              .then(() => setItemEmLote(null));
+          }}
+        />
+      ) : null}
 
       <View style={styles.rodape}>
         <TouchableOpacity
@@ -248,15 +313,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff',
     borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e2e8f0',
   },
-  codigo: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
-  desc: { fontSize: 13, color: '#475569', marginTop: 1 },
-  local: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  cabecalho: {
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, backgroundColor: CAPUL, gap: 6,
+  },
+  cabLista: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  cabLinha: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  cabChip: {
+    fontSize: 11, fontWeight: '700', color: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, overflow: 'hidden',
+  },
+  linhaCodigo: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  codigo: { fontSize: 13, fontWeight: '700', color: '#0f172a', fontVariant: ['tabular-nums'] },
+  desc: { fontSize: 13, color: '#475569', marginTop: 2 },
+  local: { fontSize: 12, fontWeight: '600', color: '#334155', fontVariant: ['tabular-nums'] },
+  chipLote: {
+    fontSize: 9, fontWeight: '800', color: '#6d28d9', backgroundColor: '#ede9fe',
+    paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden',
+  },
+  subLote: { fontSize: 11, color: '#7c3aed', marginTop: 3 },
   qtd: {
     width: 92, textAlign: 'right', fontSize: 18, fontWeight: '700', color: '#0f172a',
     borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8,
     backgroundColor: '#fff',
   },
+  qtdBotao: {
+    width: 92, minHeight: 42, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 6,
+    backgroundColor: '#fff',
+  },
+  qtdBotaoTxt: { fontSize: 16, fontWeight: '700', color: '#0f172a', fontVariant: ['tabular-nums'] },
+  /** Contado neste aparelho, ainda não sincronizado. */
   qtdPendente: { borderColor: '#f59e0b', backgroundColor: '#fffbeb' },
+  /** Confirmado pelo servidor. */
+  qtdOk: { borderColor: '#16a34a', backgroundColor: '#f0fdf4' },
   rodape: {
     flexDirection: 'row', gap: 10, padding: 12,
     borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#fff',

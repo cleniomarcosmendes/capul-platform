@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   registrarContagemLocal,
+  registrarContagemPorLote,
+  sincronizarContagens,
   contagensPendentes,
   contarPendentes,
   salvarPacote,
@@ -92,7 +94,10 @@ describe('pacote da lista', () => {
     cicloEsperado: 2,
     baixadoEm: new Date().toISOString(),
     itens: [
-      { id: 'item-A', product_code: '001', product_description: 'X', location: null, contadoNoServidor: null },
+      {
+        id: 'item-A', product_code: '001', product_description: 'X', location: null,
+        warehouse: '02', contadoNoServidor: null, exigeLote: false, lotes: [],
+      },
     ],
   };
 
@@ -111,5 +116,153 @@ describe('pacote da lista', () => {
 
     expect(await lerPacote(LISTA)).toBeNull();
     expect(await contarPendentes(LISTA)).toBe(0);
+  });
+});
+
+/**
+ * Contagem POR LOTE e a marca de SINCRONIZADO (08/08/2026).
+ *
+ * Dois problemas nasceram juntos e se resolvem no mesmo lugar:
+ *
+ *  1. produto rastreado era enviado como quantidade única, e o servidor gravava
+ *     `lot_number = NULL` sem reclamar (a guarda `CONTAGEM_EXIGE_LOTE` fechou
+ *     isso do lado de lá);
+ *  2. ao sincronizar, o valor saía da fila e a tela caía no `contadoNoServidor`
+ *     do download — o número digitado sumia e o progresso andava PARA TRÁS.
+ */
+describe('contagem por lote', () => {
+  const LISTA_L = 'lista-lote';
+
+  const pacoteComLote = {
+    listId: LISTA_L,
+    listName: 'Lista Lote',
+    warehouse: '06',
+    cicloEsperado: 1,
+    baixadoEm: new Date().toISOString(),
+    itens: [
+      {
+        id: 'item-L', product_code: '900', product_description: 'RACAO', location: 'A-01',
+        warehouse: '06', contadoNoServidor: null, exigeLote: true,
+        lotes: [{ numero: 'L001', lotefor: 'F1' }, { numero: 'L002', lotefor: 'F2' }],
+      },
+      {
+        id: 'item-S', product_code: '901', product_description: 'SAL', location: null,
+        warehouse: '06', contadoNoServidor: null, exigeLote: false, lotes: [],
+      },
+    ],
+  };
+
+  beforeEach(async () => { await descartarPacote(LISTA_L); });
+
+  it('o total é a SOMA dos lotes, nunca digitado', async () => {
+    await salvarPacote(pacoteComLote);
+    await registrarContagemPorLote(LISTA_L, 'item-L', [
+      { numero: 'L001', quantidade: 7 },
+      { numero: 'L002', quantidade: 3.5 },
+    ]);
+
+    const [c] = await contagensPendentes(LISTA_L);
+    expect(c.quantidade).toBe(10.5);
+    expect(c.lotes).toHaveLength(2);
+  });
+
+  it('lote SEM valor não entra — vazio não é zero', async () => {
+    // Zero é afirmação ("procurei e não achei"); ausência é "ainda não contei".
+    // Quem transforma o que sobrou em zero é o fecho, com rastro.
+    await salvarPacote(pacoteComLote);
+    await registrarContagemPorLote(LISTA_L, 'item-L', [{ numero: 'L001', quantidade: 0 }]);
+
+    const [c] = await contagensPendentes(LISTA_L);
+    expect(c.lotes).toEqual([{ numero: 'L001', quantidade: 0 }]);
+    expect(c.quantidade).toBe(0);
+  });
+
+  it('apagar todos os lotes remove a pendência (não vira zero)', async () => {
+    await salvarPacote(pacoteComLote);
+    await registrarContagemPorLote(LISTA_L, 'item-L', [{ numero: 'L001', quantidade: 5 }]);
+    expect(await contarPendentes(LISTA_L)).toBe(1);
+
+    await registrarContagemPorLote(LISTA_L, 'item-L', []);
+    expect(await contarPendentes(LISTA_L)).toBe(0);
+  });
+
+  it('corrigir um lote NÃO gera segunda pendência', async () => {
+    await salvarPacote(pacoteComLote);
+    await registrarContagemPorLote(LISTA_L, 'item-L', [{ numero: 'L001', quantidade: 5 }]);
+    await registrarContagemPorLote(LISTA_L, 'item-L', [{ numero: 'L001', quantidade: 8 }]);
+
+    const pend = await contagensPendentes(LISTA_L);
+    expect(pend).toHaveLength(1);
+    expect(pend[0].quantidade).toBe(8);
+  });
+
+  it('envia lot_counts para produto rastreado e NÃO para os demais', async () => {
+    const { api } = jest.requireMock('../../api/client') as { api: { post: jest.Mock } };
+    api.post.mockClear();
+    api.post.mockResolvedValue({ data: {} });
+
+    await salvarPacote(pacoteComLote);
+    await registrarContagemPorLote(LISTA_L, 'item-L', [{ numero: 'L001', quantidade: 4 }]);
+    await registrarContagemLocal(LISTA_L, 'item-S', 9);
+
+    await sincronizarContagens(LISTA_L);
+
+    const corpos = api.post.mock.calls.map((c) => c[1]);
+    const comLote = corpos.find((b) => b.lot_counts);
+    expect(comLote.quantity).toBe(4);
+    expect(comLote.lot_counts).toEqual([{ lot_number: 'L001', quantity: 4 }]);
+
+    const semLote = corpos.find((b) => !b.lot_counts);
+    expect(semLote.quantity).toBe(9);
+  });
+
+  it('⭐ sincronizar MARCA o item — o valor não pode sumir da tela', async () => {
+    const { api } = jest.requireMock('../../api/client') as { api: { post: jest.Mock } };
+    api.post.mockClear();
+    api.post.mockResolvedValue({ data: {} });
+
+    await salvarPacote(pacoteComLote);
+    await registrarContagemLocal(LISTA_L, 'item-S', 9);
+    await sincronizarContagens(LISTA_L);
+
+    const p = await lerPacote(LISTA_L);
+    const item = p!.itens.find((i) => i.id === 'item-S')!;
+    expect(item.contadoNoServidor).toBe(9);   // antes ficava null → item "sumia"
+    expect(await contarPendentes(LISTA_L)).toBe(0);
+  });
+
+  it('envio RECUSADO não marca o item como sincronizado', async () => {
+    const { api } = jest.requireMock('../../api/client') as { api: { post: jest.Mock } };
+    api.post.mockClear();
+    api.post.mockRejectedValue({
+      isAxiosError: true,
+      response: { data: { detail: { erro: 'CONTAGEM_EXIGE_LOTE', mensagem: 'exige lote' } } },
+    });
+
+    await salvarPacote(pacoteComLote);
+    await registrarContagemLocal(LISTA_L, 'item-L', 12);  // errado de propósito
+    const r = await sincronizarContagens(LISTA_L);
+
+    expect(r.recusadas.map((x) => x.codigo)).toContain('CONTAGEM_EXIGE_LOTE');
+    const p = await lerPacote(LISTA_L);
+    expect(p!.itens.find((i) => i.id === 'item-L')!.contadoNoServidor).toBeNull();
+  });
+
+  it('pacote ANTIGO (sem os campos de lote) não quebra a leitura', async () => {
+    // Operador no meio da contagem quando o JS atualiza. O padrão é o
+    // conservador: sem lote — e aí a guarda do servidor recusa e reporta, em vez
+    // de gravar errado calado.
+    await AsyncStorage.setItem(
+      `capul_contagem_pacote:${LISTA_L}`,
+      JSON.stringify({
+        listId: LISTA_L, listName: 'Antiga', cicloEsperado: 1, baixadoEm: '2026-08-01',
+        itens: [{ id: 'x', product_code: '1', product_description: 'Y', location: null, contadoNoServidor: null }],
+      }),
+    );
+
+    const p = await lerPacote(LISTA_L);
+    expect(p!.itens[0].lotes).toEqual([]);
+    expect(p!.itens[0].exigeLote).toBe(false);
+    expect(p!.itens[0].warehouse).toBeNull();
   });
 });

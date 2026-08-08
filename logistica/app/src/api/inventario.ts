@@ -61,16 +61,29 @@ export async function devolverLista(listId: string, leaseToken: string): Promise
   });
 }
 
+interface LoteDoServidor {
+  lot_number?: string | null;
+  b8_lotefor?: string | null;
+  /** Saldo do sistema. NÃO vem para OPERATOR — a contagem cega o remove. */
+  quantity?: number | null;
+}
+
 interface ProdutoDaLista {
   id: string;
   product_code: string;
   product_description?: string;
   product_name?: string;
   location?: string | null;
+  warehouse?: string | null;
   count_cycle_1?: number | null;
   count_cycle_2?: number | null;
   count_cycle_3?: number | null;
   current_cycle?: number;
+  /** `b1_rastro` L/S do recorte — a contagem tem que ser POR LOTE. */
+  requires_lot?: boolean;
+  has_lot?: boolean;
+  /** Lotes congelados na inclusão (só os com saldo > 0). */
+  snapshot_lots?: LoteDoServidor[];
 }
 
 /**
@@ -80,10 +93,39 @@ interface ProdutoDaLista {
  * cega (para OPERATOR não vem saldo do sistema nem ciclo anterior), que é
  * exatamente o que não pode ficar gravado no aparelho. O app guarda só os
  * campos enxutos: ~168 B/item em vez dos ~640 B que trafegam.
+ *
+ * Os LOTES entram nesse mesmo pacote, e não em chave separada, porque o volume
+ * real é pequeno: medido em 08/08/2026 sobre os armazéns 02 e 06, os lotes com
+ * saldo > 0 (os únicos que o snapshot congela) dão **1,6 por item em média, com
+ * máximo de 10** — a base inteira dos dois armazéns cabe em ~140 KB. Não existem
+ * 3.000 itens rastreados com saldo para estourar o registro do AsyncStorage.
+ * ⚠️ Se o teto de itens por lista subir muito, refazer essa conta.
+ *
+ * O saldo POR LOTE não é gravado: para OPERATOR ele nem vem (a projeção da
+ * contagem cega o remove desde 08/08), e guardá-lo no aparelho é exatamente o
+ * que a contagem cega existe para impedir.
  */
+export interface LoteDoItem {
+  /** `b8_lotectl` — o lote de controle. */
+  numero: string;
+  /** `b8_lotefor` — lote do fornecedor, o que costuma estar impresso na caixa. */
+  lotefor: string;
+}
+
+export interface ItemBaixado {
+  id: string;
+  product_code: string;
+  product_description: string;
+  location: string | null;
+  warehouse: string | null;
+  contadoNoServidor: number | null;
+  exigeLote: boolean;
+  lotes: LoteDoItem[];
+}
+
 export async function baixarItensDaLista(
   listId: string,
-): Promise<{ ciclo: number; itens: Array<{ id: string; product_code: string; product_description: string; location: string | null; contadoNoServidor: number | null }> }> {
+): Promise<{ ciclo: number; itens: ItemBaixado[] }> {
   const { data } = await api.get<{ data: { products: ProdutoDaLista[]; current_cycle: number } }>(
     `${INVENTARIO_BASE}/counting-lists/${listId}/products`,
     { params: { show_all: true } },
@@ -98,9 +140,17 @@ export async function baixarItensDaLista(
       product_code: p.product_code,
       product_description: p.product_description || p.product_name || '',
       location: p.location ?? null,
+      warehouse: p.warehouse ?? null,
       // Só o ciclo CORRENTE. Ciclos anteriores nem vêm para o OPERATOR (contagem
       // cega) e não teriam uso aqui.
       contadoNoServidor: p[campo] ?? null,
+      exigeLote: Boolean(p.requires_lot ?? p.has_lot),
+      lotes: (p.snapshot_lots ?? [])
+        .map((l) => ({
+          numero: (l.lot_number ?? '').trim(),
+          lotefor: (l.b8_lotefor ?? '').trim(),
+        }))
+        .filter((l) => l.numero !== ''),
     })),
   };
 }
