@@ -207,6 +207,151 @@ def test_02_final_quantity_sobrevive_para_operator(db_session, test_counting_lis
 
 
 # ==========================================================================
+# 0.2b — Saldo POR LOTE fora do payload do OPERATOR (08/08/2026)
+# ==========================================================================
+#
+# A projeção acima só alcança chaves de PRIMEIRO NÍVEL. O payload real leva o
+# mesmo saldo repetido dentro de listas — `snapshot_lots`, `saved_lots` e
+# `countings`. Somar os lotes reconstrói o `system_qty` recém-removido.
+#
+# Ficou latente enquanto nenhum cliente lia esses campos. A contagem por lote no
+# app passa a lê-los e a PERSISTIR o resultado no aparelho do operador, que é o
+# cenário que o item 0.2 existe para evitar. Estes testes seguram a porta.
+
+
+def _payload_com_lotes():
+    """Espelha o payload real de `/counting-lists/{id}/products`."""
+    return {
+        "id": str(uuid4()),
+        "product_code": "000001",
+        "expected_quantity": 300.0,
+        "system_qty": 300.0,
+        "requires_lot": True,
+        # inventory_lots_snapshot: b8_lotectl / b8_saldo / b8_lotefor
+        "snapshot_lots": [
+            {"lot_number": "L001", "quantity": 100.0, "b8_lotefor": "FORN-A"},
+            {"lot_number": "L002", "quantity": 200.0, "b8_lotefor": "FORN-B"},
+        ],
+        # rascunho salvo durante a contagem: system_qty + o que já foi contado
+        "saved_lots": [
+            {"lot_number": "L001", "quantity": 100.0, "counted_qty": 97.0, "b8_lotefor": "FORN-A"},
+        ],
+        # histórico por ciclo E por lote
+        "countings": [
+            {"count_number": 1, "quantity": 90.0, "lot_number": "L001"},
+            {"count_number": 2, "quantity": 97.0, "lot_number": "L001"},
+        ],
+        "count_cycle_1": 90.0,
+        "count_cycle_2": 97.0,
+    }
+
+
+def test_02b_operator_nao_recebe_saldo_por_lote(test_counting_list, test_operator_user):
+    """⭐ O buraco: somar os lotes devolvia o saldo que a máscara removeu."""
+    out = aplicar_contagem_cega(_payload_com_lotes(), test_operator_user, test_counting_list)
+
+    assert "system_qty" not in out, "o saldo de primeiro nível deveria ter saído"
+    for lote in out["snapshot_lots"]:
+        assert "quantity" not in lote, (
+            f"lote {lote.get('lot_number')} ainda entrega o saldo do sistema — "
+            "somando os lotes o operador reconstrói o system_qty"
+        )
+    for lote in out["saved_lots"]:
+        assert "quantity" not in lote
+
+
+def test_02b_operator_ainda_sabe_QUAL_lote_contar(test_counting_list, test_operator_user):
+    """Esconder o saldo não pode inviabilizar a contagem.
+
+    O contador precisa da IDENTIDADE do lote (número + lote do fornecedor, que
+    é o que está impresso na embalagem). O que ele não pode saber é QUANTO
+    deveria ter.
+    """
+    out = aplicar_contagem_cega(_payload_com_lotes(), test_operator_user, test_counting_list)
+
+    numeros = [l["lot_number"] for l in out["snapshot_lots"]]
+    assert numeros == ["L001", "L002"], "a lista de lotes não pode sumir"
+    assert all(l.get("b8_lotefor") for l in out["snapshot_lots"])
+
+
+def test_02b_operator_ve_o_que_ELE_contou_no_lote(test_counting_list, test_operator_user):
+    """`counted_qty` é o trabalho do próprio operador no ciclo corrente — fica.
+
+    Sem isso ele reabre o produto e não vê o que já digitou lote a lote.
+    """
+    out = aplicar_contagem_cega(_payload_com_lotes(), test_operator_user, test_counting_list)
+    assert out["saved_lots"][0]["counted_qty"] == 97.0
+
+
+def test_02b_countings_de_ciclos_anteriores_saem_quando_cega(
+    db_session, test_counting_list, test_operator_user
+):
+    """O `countings[]` burlava a regra de ciclos anteriores.
+
+    `count_cycle_1` era removido, mas o array trazia a mesma contagem
+    detalhada por lote — inclusive de quem contou antes.
+    """
+    test_counting_list.current_cycle = 2
+    test_counting_list.show_previous_counts = False
+    db_session.flush()
+
+    out = aplicar_contagem_cega(_payload_com_lotes(), test_operator_user, test_counting_list)
+
+    ciclos = sorted({c["count_number"] for c in out["countings"]})
+    assert ciclos == [2], f"ciclo anterior vazou pelo countings[]: {ciclos}"
+
+
+def test_02b_countings_do_ciclo_corrente_permanecem(
+    db_session, test_counting_list, test_operator_user
+):
+    """Mesma razão do `count_cycle` corrente: é dele que a tela deriva o que já
+    foi contado — por lote, aqui."""
+    test_counting_list.current_cycle = 2
+    test_counting_list.show_previous_counts = False
+    db_session.flush()
+
+    out = aplicar_contagem_cega(_payload_com_lotes(), test_operator_user, test_counting_list)
+    atual = [c for c in out["countings"] if c["count_number"] == 2]
+    assert atual and atual[0]["lot_number"] == "L001"
+
+
+def test_02b_show_previous_counts_true_devolve_countings_anteriores(
+    db_session, test_counting_list, test_operator_user
+):
+    """A decisão segue sendo do supervisor no ato de liberar."""
+    test_counting_list.current_cycle = 2
+    test_counting_list.show_previous_counts = True
+    db_session.flush()
+
+    out = aplicar_contagem_cega(_payload_com_lotes(), test_operator_user, test_counting_list)
+    assert sorted({c["count_number"] for c in out["countings"]}) == [1, 2]
+
+
+def test_02b_supervisor_continua_vendo_tudo(test_counting_list, test_supervisor_user):
+    out = aplicar_contagem_cega(_payload_com_lotes(), test_supervisor_user, test_counting_list)
+    assert out["snapshot_lots"][0]["quantity"] == 100.0
+    assert out["saved_lots"][0]["quantity"] == 100.0
+    assert len(out["countings"]) == 2
+
+
+def test_02b_payload_sem_lote_nao_quebra(test_counting_list, test_operator_user):
+    """Produto sem controle de lote não tem as listas — a projeção não pode
+    explodir por causa disso."""
+    out = aplicar_contagem_cega(_payload_produto(), test_operator_user, test_counting_list)
+    assert "system_qty" not in out
+
+
+def test_02b_lista_de_lote_nula_nao_quebra(test_counting_list, test_operator_user):
+    """`snapshot_lots` chega como `[]` do json_agg, mas defensivo contra None."""
+    payload = _payload_com_lotes()
+    payload["snapshot_lots"] = None
+    payload["saved_lots"] = []
+    payload["countings"] = None
+    out = aplicar_contagem_cega(payload, test_operator_user, test_counting_list)
+    assert out["snapshot_lots"] is None
+
+
+# ==========================================================================
 # 0.3 — Rastro do preenchimento do handoff
 # ==========================================================================
 

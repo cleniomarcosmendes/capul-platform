@@ -93,6 +93,18 @@ def _is_staff(user) -> bool:
 # passar.
 _CAMPOS_SALDO = ("expected_quantity", "system_qty", "expected", "saldo", "variacao", "difference")
 
+# Listas de LOTES no payload, e o campo de cada uma que carrega o SALDO DO
+# SISTEMA por lote. Some os lotes e você reconstrói o `system_qty` que a máscara
+# de primeiro nível acabou de remover — por isso isto existe.
+#
+# O que fica: `lot_number` e `b8_lotefor` (o contador precisa saber QUAL lote
+# está contando) e, em `saved_lots`, o `counted_qty` — que é o trabalho DELE no
+# ciclo corrente, não o saldo.
+_LISTAS_DE_LOTE = (
+    ("snapshot_lots", "quantity"),   # lotes congelados (inventory_lots_snapshot.b8_saldo)
+    ("saved_lots", "quantity"),      # rascunho de contagem por lote (system_qty)
+)
+
 
 def aplicar_contagem_cega(product_data: dict, user, counting_list) -> dict:
     """
@@ -119,6 +131,18 @@ def aplicar_contagem_cega(product_data: dict, user, counting_list) -> dict:
     contado (`useCountingData.ts` monta contados/pendentes a partir da
     count_cycle real, não do status). Removê-lo faria todo item voltar a
     aparecer como pendente para o operador.
+
+    ⚠️ 08/08/2026 — POR LOTE. A máscara acima só alcança chaves de PRIMEIRO
+    NÍVEL, e o payload leva o saldo repetido dentro de listas:
+
+      snapshot_lots[].quantity  ·  saved_lots[].quantity  ·  countings[]
+
+    Somar os lotes reconstrói o `system_qty` recém-removido, e o `countings[]`
+    devolve as contagens de ciclos anteriores que o `count_cycle_N` já tinha
+    escondido. Estava latente porque nenhum cliente lia esses campos — mas a
+    contagem por lote NO APP passaria a lê-los e a PERSISTIR o saldo no aparelho
+    do operador, que é exatamente o cenário que esta função foi criada para
+    evitar. Fechado antes de implementar o lote no app.
     """
     if _is_staff(user):
         return product_data
@@ -126,10 +150,30 @@ def aplicar_contagem_cega(product_data: dict, user, counting_list) -> dict:
     for campo in _CAMPOS_SALDO:
         product_data.pop(campo, None)
 
+    # Saldo do sistema repetido POR LOTE — vale para qualquer ciclo, inclusive o
+    # corrente: o que o operador pode ver é o que ELE contou, nunca o esperado.
+    for chave, campo_saldo in _LISTAS_DE_LOTE:
+        for lote in product_data.get(chave) or []:
+            if isinstance(lote, dict):
+                lote.pop(campo_saldo, None)
+
     if not bool(getattr(counting_list, "show_previous_counts", False)):
         ciclo_atual = getattr(counting_list, "current_cycle", 1) or 1
         for anterior in range(1, ciclo_atual):
             product_data.pop(f"count_cycle_{anterior}", None)
+
+        # Mesmo motivo, no detalhe por lote: `countings[]` traz
+        # {count_number, quantity, lot_number} de TODOS os ciclos. O ciclo
+        # corrente FICA (é o trabalho do próprio operador, e a tela deriva dele
+        # o que já foi contado); os anteriores saem.
+        historico = product_data.get("countings")
+        if isinstance(historico, list):
+            product_data["countings"] = [
+                c for c in historico
+                if not (isinstance(c, dict)
+                        and isinstance(c.get("count_number"), int)
+                        and c["count_number"] < ciclo_atual)
+            ]
 
     return product_data
 
