@@ -154,6 +154,111 @@ def get_db_dependency() -> Generator:
     yield from get_db()
 
 
+def _espelhar_identidade(db: Session, user_id: str, username: str, full_name: str,
+                         email: str, role: str, filial_id: str) -> None:
+    """
+    Mantem `inventario.users` como ANCORA DE IDENTIDADE do usuario do core.
+
+    Por que existe: 48 FKs do modulo apontam para `inventario.users` /
+    `inventario.stores` (12 delas NOT NULL — `countings.counted_by`,
+    `inventory_lists.created_by`, `cycle_audit_log.user_id`...). Com o
+    UNIFIED_AUTH o `id` do usuario passou a vir de `core.usuarios` e o
+    `store_id` de `core.filiais`, e essas tabelas ficaram vazias — todo o
+    caminho de escrita da contagem quebrava. A migration 020 fez a carga
+    inicial; esta funcao mantem em dia o que muda depois dela: usuario novo no
+    Configurador, troca de papel, mudanca de filial.
+
+    NAO e cadastro — o cadastro e do Configurador. Aqui grava-se so o que as
+    FKs precisam para apontar, com o MESMO UUID do core.
+
+    Falha aqui NAO derruba a requisicao: quem so le nao deve ser barrado por um
+    problema de espelho. Quem escreve vai falhar na FK logo em seguida, com o
+    erro real do banco.
+
+    ⚠️ Os dois lados tem TIPOS diferentes: o core e do Prisma e guarda id como
+    TEXT; `inventario.users` usa UUID nativo. Dai o CAST explicito em todo
+    parametro de id — sem ele o Postgres reclama de `uuid = text`.
+    """
+    from sqlalchemy import text
+    import uuid as _uuid
+
+    def _uuid_ou_none(v):
+        """O Prisma pode gerar `cuid`, que nao cabe num UUID nativo."""
+        try:
+            return str(_uuid.UUID(str(v))) if v else None
+        except (ValueError, AttributeError, TypeError):
+            return None
+
+    user_uuid = _uuid_ou_none(user_id)
+    if not user_uuid:
+        logger.warning(
+            f"Identidade nao espelhavel: id '{user_id}' nao e UUID. "
+            f"O modulo nao conseguira gravar contagem para este usuario."
+        )
+        return
+    filial_uuid = _uuid_ou_none(filial_id)
+
+    try:
+        atual = db.execute(
+            text("""SELECT username, full_name, email, role::text, store_id
+                      FROM inventario.users WHERE id = CAST(:id AS uuid)"""),
+            {"id": user_uuid},
+        ).first()
+
+        # `role` do JWT e do modulo INVENTARIO (ADMIN/SUPERVISOR/OPERATOR), que
+        # e exatamente o enum `userrole`. Valor fora disso vira OPERATOR — o
+        # menos privilegiado — em vez de estourar o INSERT.
+        if role not in ("ADMIN", "SUPERVISOR", "OPERATOR"):
+            role = "OPERATOR"
+
+        alvo = ((username or "")[:50], (full_name or username or "")[:100],
+                (email or None), role, filial_uuid)
+
+        if atual is not None:
+            # Caminho comum: nada mudou, nenhuma escrita.
+            atual_norm = (atual[0], atual[1], atual[2], atual[3],
+                          str(atual[4]) if atual[4] else None)
+            if atual_norm == alvo:
+                return
+
+            db.execute(
+                text("""UPDATE inventario.users
+                           SET username = :username, full_name = :full_name, email = :email,
+                               role = CAST(:role AS public.userrole),
+                               store_id = CAST(:store_id AS uuid),
+                               is_active = TRUE, updated_at = NOW()
+                         WHERE id = CAST(:id AS uuid)"""),
+                {"id": user_uuid, "username": alvo[0], "full_name": alvo[1],
+                 "email": alvo[2], "role": alvo[3], "store_id": alvo[4]},
+            )
+            db.commit()
+            return
+
+        # Linha nova. `password_hash` e NOT NULL e aqui nao ha senha: grava-se
+        # um valor com FORMATO de bcrypt (para o passlib nao levantar excecao se
+        # o modo standalone for religado) e CONTEUDO aleatorio, que nenhuma
+        # senha produz — a linha espelhada nao autentica pelo caminho legado.
+        db.execute(
+            text("""INSERT INTO inventario.users
+                        (id, username, password_hash, full_name, email, role, store_id,
+                         is_active, created_at, updated_at)
+                    VALUES
+                        (CAST(:id AS uuid), :username,
+                         '$2b$12$' || SUBSTR(MD5(RANDOM()::text) || MD5(RANDOM()::text), 1, 53),
+                         :full_name, :email, CAST(:role AS public.userrole),
+                         CAST(:store_id AS uuid),
+                         TRUE, NOW(), NOW())
+                    ON CONFLICT (id) DO NOTHING"""),
+            {"id": user_uuid, "username": alvo[0], "full_name": alvo[1],
+             "email": alvo[2], "role": alvo[3], "store_id": alvo[4]},
+        )
+        db.commit()
+
+    except Exception as e:  # noqa: BLE001 — ver docstring: espelho nao barra leitura
+        db.rollback()
+        logger.warning(f"Falha ao espelhar identidade do usuario {user_id} em inventario.users: {e}")
+
+
 def _get_current_user_unified(payload: Dict[str, Any], db: Session) -> UserSession:
     """
     Constroi UserSession a partir do JWT do Auth Gateway.
@@ -201,7 +306,7 @@ def _get_current_user_unified(payload: Dict[str, Any], db: Session) -> UserSessi
             detail="User inactive"
         )
 
-    return UserSession(
+    sessao = UserSession(
         id=user_id,
         username=payload.get("username", usuario.username),
         full_name=usuario.nome or "",
@@ -211,6 +316,14 @@ def _get_current_user_unified(payload: Dict[str, Any], db: Session) -> UserSessi
         store_code=filial_codigo,
         is_active=True,
     )
+
+    # As FKs de contagem apontam para `inventario.users`; sem a linha espelhada
+    # toda escrita do modulo quebra. Ver docstring de `_espelhar_identidade`.
+    _espelhar_identidade(
+        db, user_id, sessao.username, sessao.full_name, sessao.email, role, filial_id
+    )
+
+    return sessao
 
 
 def _get_current_user_legacy(payload: Dict[str, Any], db: Session):
