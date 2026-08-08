@@ -417,3 +417,25 @@ describe('rastro da sincronização e revisão', () => {
     expect(p!.itens[0].zeradoNoFecho).toBe(false);
   });
 });
+
+/**
+ * Modo revisão parcial — mesma regra do desktop (`useCountingData`).
+ * A lógica vive na tela; estes testes guardam o CRITÉRIO, que é o que erra.
+ */
+describe('critério do modo revisão parcial', () => {
+  const parcial = (marcados: number, total: number) => marcados > 0 && marcados < total;
+
+  it('ALGUNS marcados = revisão parcial (mostra só eles)', () => {
+    expect(parcial(3, 10)).toBe(true);
+  });
+
+  it('⭐ TODOS marcados = devolução TOTAL, a lista inteira é para revisar', () => {
+    // Sem esta distinção a devolução total esconderia tudo — o contador
+    // abriria uma lista vazia sem entender por quê.
+    expect(parcial(10, 10)).toBe(false);
+  });
+
+  it('nenhum marcado = contagem normal', () => {
+    expect(parcial(0, 10)).toBe(false);
+  });
+});

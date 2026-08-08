@@ -244,12 +244,29 @@ export function ContagemListaScreen({ route, navigation }: Props) {
   }
 
   const termo = busca.trim().toLowerCase();
+  /**
+   * ⭐ MODO REVISÃO PARCIAL — mesma regra do desktop (`useCountingData`).
+   *
+   * O supervisor devolveu a lista marcando ALGUNS itens. Nesse caso o contador
+   * vê **só os marcados**: os outros ele já contou e o supervisor já aprovou, e
+   * deixá-los editáveis convida a mexer por engano no que estava fechado.
+   *
+   * "Alguns, mas não todos" é o que distingue devolução PARCIAL da TOTAL — na
+   * total todos vêm marcados, e aí a lista inteira é para revisar mesmo.
+   */
+  const marcados = pacote.itens.filter((i) => i.revisarNoCiclo).length;
+  const modoRevisaoParcial = marcados > 0 && marcados < pacote.itens.length;
+
+  const visiveis = modoRevisaoParcial
+    ? pacote.itens.filter((i) => i.revisarNoCiclo)
+    : pacote.itens;
+
   const itens = termo
-    ? pacote.itens.filter(
+    ? visiveis.filter(
         (i) => i.product_code.toLowerCase().includes(termo) ||
                i.product_description.toLowerCase().includes(termo),
       )
-    : pacote.itens;
+    : visiveis;
 
   const contados = pacote.itens.filter(
     (i) => valores[i.id] !== undefined || i.contadoNoServidor !== null,
@@ -280,7 +297,9 @@ export function ContagemListaScreen({ route, navigation }: Props) {
 
       <View style={styles.barraTopo}>
         <Text style={styles.progresso}>
-          {contados} de {pacote.itens.length} contados
+          {modoRevisaoParcial
+            ? `${revisar} item(ns) a revisar`
+            : `${contados} de ${pacote.itens.length} contados`}
         </Text>
         <View style={styles.selos}>
           {sincronizados > 0 && (
@@ -298,7 +317,10 @@ export function ContagemListaScreen({ route, navigation }: Props) {
 
       {revisar > 0 ? (
         <Text style={styles.avisoRevisar}>
-          O supervisor devolveu {revisar} item(ns) para revisão — procure a marca “Revisar”.
+          {modoRevisaoParcial
+            ? `Modo revisão: mostrando só os ${revisar} item(ns) que o supervisor marcou. ` +
+              'Os demais já foram aprovados e não aparecem.'
+            : `O supervisor devolveu ${revisar} item(ns) para revisão.`}
         </Text>
       ) : null}
 
