@@ -553,6 +553,11 @@ class InventoryLotSnapshot(Base):
     b8_lotectl = Column(String(50), nullable=False)    # Número do lote (ex: 000000000019208)
     b8_lotefor = Column(String(18), default="", nullable=False)  # ✅ v2.17.1: Lote fornecedor (snapshot)
     b8_saldo = Column(Numeric(15, 4), nullable=False)  # Saldo do lote (congelado)
+    # Migration 021 — validade YYYYMMDD congelada. Lote vencido na data de
+    # REFERÊNCIA do inventário não entra aqui: produto vencido não fica na
+    # gôndola, e oferecê-lo para contagem seria o sistema aceitando que fica.
+    # NULL nos lotes congelados antes da 021 — seguem contáveis de propósito.
+    b8_dtvalid = Column(String(8), nullable=True)
 
     # =================================
     # METADATA

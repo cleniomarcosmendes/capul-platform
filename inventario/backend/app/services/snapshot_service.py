@@ -4,6 +4,7 @@ Congela dados de produtos (SB1, SB2, SB8, SBZ) no momento da inclusão no invent
 Garante imutabilidade e consistência dos dados ao longo do processo de contagem
 """
 
+from datetime import date
 from typing import Optional, Dict, List
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -151,7 +152,8 @@ class SnapshotService:
         db: Session,
         product_code: str,
         filial: str,
-        warehouse: str
+        warehouse: str,
+        reference_date: Optional[date] = None,
     ) -> List[Dict]:
         """
         Busca lotes congelados de um produto da tabela SB8
@@ -170,29 +172,61 @@ class SnapshotService:
             {
                 'b8_lotectl': str,     # Número do lote
                 'b8_saldo': Decimal,   # Saldo do lote
-                'b8_lotefor': str      # Lote do fornecedor
+                'b8_lotefor': str,     # Lote do fornecedor
+                'b8_dtvalid': str      # Validade YYYYMMDD (migration 021)
             }
+
+        ⚠️ DOIS FILTROS, e eles têm naturezas diferentes:
+
+        `b8_saldo > 0` — o que o sistema ESPERA encontrar. Não é a lista do que
+        pode ser contado: lote com saldo zero pode ter físico na prateleira,
+        exatamente como produto com saldo zero, que o módulo já oferece para
+        contagem. Quem cobre esse caso é o "informar outro lote" na tela, e não
+        trazer os zerados aqui — são 86% dos lotes (20.509 de 23.940 nos
+        armazéns 02 e 06, medido em 08/08) e afogariam o contador: 7,2 lotes por
+        item em média e até 108, contra 1,0 e 10 filtrando.
+
+        `b8_dtvalid >= data de referência` — REGRA DE NEGÓCIO (Clenio, 08/08):
+        produto vencido não pode estar na gôndola, e oferecê-lo para contagem é
+        o sistema aceitando que pode. Validade é gerenciada pelo Protheus, em
+        relatório próprio. Custa pouco: 21 lotes vencidos em 23.940.
+
+        A comparação é contra a DATA DE REFERÊNCIA do inventário, não contra
+        hoje: é o recorte que manda, e um inventário longo não pode ir perdendo
+        lote conforme os dias passam.
         """
 
-        logger.info(f"📦 Buscando lotes para produto {product_code} (filial={filial}, armazém={warehouse})")
+        logger.info(
+            f"📦 Buscando lotes para produto {product_code} "
+            f"(filial={filial}, armazém={warehouse}, referência={reference_date or 'hoje'})"
+        )
+
+        # `b8_dtvalid` é varchar YYYYMMDD (formato do Protheus) — comparação
+        # lexicográfica ordena igual à cronológica, sem conversão.
+        corte = (reference_date or date.today()).strftime('%Y%m%d')
 
         query = text("""
             SELECT
                 b8.b8_lotectl,
                 COALESCE(b8.b8_saldo, 0) as b8_saldo,
-                COALESCE(b8.b8_lotefor, '') as b8_lotefor
+                COALESCE(b8.b8_lotefor, '') as b8_lotefor,
+                COALESCE(TRIM(b8.b8_dtvalid), '') as b8_dtvalid
             FROM inventario.sb8010 b8
             WHERE b8.b8_produto = :product_code
               AND b8.b8_filial = :filial
               AND b8.b8_local = :warehouse
               AND b8.b8_saldo > 0
+              -- Lote sem data cadastrada NÃO é tratado como vencido: a ausência
+              -- é falha de cadastro, e sumir com o lote esconderia estoque real.
+              AND (COALESCE(TRIM(b8.b8_dtvalid), '') = '' OR TRIM(b8.b8_dtvalid) >= :corte)
             ORDER BY b8.b8_lotectl
         """)
 
         results = db.execute(query, {
             'product_code': product_code,
             'filial': filial,
-            'warehouse': warehouse
+            'warehouse': warehouse,
+            'corte': corte,
         }).fetchall()
 
         lots = []
@@ -200,10 +234,11 @@ class SnapshotService:
             lots.append({
                 'b8_lotectl': row.b8_lotectl,
                 'b8_saldo': float(row.b8_saldo),
-                'b8_lotefor': row.b8_lotefor
+                'b8_lotefor': row.b8_lotefor,
+                'b8_dtvalid': row.b8_dtvalid or None,
             })
 
-        logger.info(f"✅ {len(lots)} lote(s) encontrado(s) para produto {product_code}")
+        logger.info(f"✅ {len(lots)} lote(s) válido(s) para produto {product_code}")
 
         return lots
 
@@ -281,7 +316,8 @@ class SnapshotService:
         product_code: str,
         filial: str,
         warehouse: str,
-        created_by: UUID
+        created_by: UUID,
+        reference_date: Optional[date] = None,
     ) -> List[InventoryLotSnapshot]:
         """
         Cria snapshots de múltiplos lotes (SB8) para produtos rastreados
@@ -303,7 +339,8 @@ class SnapshotService:
             db=db,
             product_code=product_code,
             filial=filial,
-            warehouse=warehouse
+            warehouse=warehouse,
+            reference_date=reference_date,
         )
 
         if not lots_data:
@@ -318,7 +355,10 @@ class SnapshotService:
                 created_by=created_by,
                 b8_lotectl=lot_data['b8_lotectl'],
                 b8_saldo=lot_data['b8_saldo'],
-                b8_lotefor=lot_data.get('b8_lotefor', '')
+                b8_lotefor=lot_data.get('b8_lotefor', ''),
+                # Migration 021 — congelada junto: é o recorte que decide o que
+                # estava válido, não a data de hoje.
+                b8_dtvalid=lot_data.get('b8_dtvalid')
             )
             db.add(lot_snapshot)
             lot_snapshots.append(lot_snapshot)

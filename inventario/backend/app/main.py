@@ -1977,15 +1977,24 @@ async def add_products_to_inventory(
                         if item_snapshot:
                             logger.info(f"✅ Snapshot de item criado: {inventory_item.id}")
 
-                            # Se produto tem rastreamento de lote (b1_rastro='L'), criar snapshots de lotes
-                            if item_snapshot.b1_rastro == 'L':
+                            # Produto rastreado (L=lote, S=sub-lote) ganha snapshot de lotes.
+                            # ⚠️ 'S' entra aqui porque o payload marca `requires_lot`
+                            # para L **e** S — se so 'L' congelasse, um produto 'S'
+                            # apareceria exigindo lote e sem lote nenhum, e agora
+                            # (guarda de 08/08) ficaria impossivel de contar.
+                            if (item_snapshot.b1_rastro or '').strip() in ('L', 'S'):
                                 lot_snapshots = SnapshotService.create_lots_snapshots(
                                     db=db,
                                     inventory_item_id=inventory_item.id,
                                     product_code=product_code,
                                     filial=filial,
                                     warehouse=warehouse_location,
-                                    created_by=current_user.id
+                                    created_by=current_user.id,
+                                    # O recorte decide o que estava valido.
+                                    reference_date=(
+                                        inventory.reference_date.date()
+                                        if getattr(inventory, 'reference_date', None) else None
+                                    ),
                                 )
                                 logger.info(f"✅ {len(lot_snapshots)} snapshot(s) de lotes criados para {product_code}")
                         else:
@@ -6407,13 +6416,30 @@ def _validar_contagem_por_lote(db, item_uuid, product_code, lot_counts):
             },
         )
 
-    # Rastreado, mas sem NENHUM lote no recorte (todos vencidos na data de
-    # referência, ou o SB8010 não trouxe nada). Recusar aqui deixaria o item
-    # impossível de contar, então passa — mas fica o rastro: se isto aparecer no
-    # log, o problema está no snapshot, não na contagem.
-    logger.warning(
-        f"⚠️ [LOTE] Produto {product_code} exige lote mas não há lote no snapshot "
-        f"do item {item_uuid}; gravando contagem única."
+    # Rastreado e SEM nenhum lote ofertável no recorte — em geral porque todos
+    # venceram antes da data de referência (regra de 08/08: vencido não é
+    # oferecido para contagem).
+    #
+    # ⚠️ Aqui havia uma exceção que DEIXAVA PASSAR como contagem única, para não
+    # tornar o item impossível de contar. Ela caiu junto com o "informar outro
+    # lote": agora sempre existe um caminho para informar o lote na mão, então
+    # aceitar contagem sem lote só produziria `lot_number = NULL` — o dado errado
+    # que esta função existe para impedir.
+    #
+    # O código é OUTRO de propósito: para o operador não é "faltou preencher", é
+    # "este produto não deveria estar aqui" — e quem resolve é o supervisor.
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "erro": "PRODUTO_SEM_LOTE_VALIDO",
+            "mensagem": (
+                "Este produto tem controle de lote, mas nenhum lote está válido na "
+                "data de referência do inventário. Se você encontrou o produto na "
+                "prateleira, informe o lote pela opção de outro lote; caso "
+                "contrário, avise o supervisor."
+            ),
+            "product_code": (product_code or "").strip(),
+        },
     )
 
 
@@ -10185,7 +10211,11 @@ async def get_list_products(
                         json_build_object(
                             'lot_number', ils.b8_lotectl,
                             'quantity', ils.b8_saldo,
-                            'b8_lotefor', ils.b8_lotefor
+                            'b8_lotefor', ils.b8_lotefor,
+                            -- Migration 021. Nao e saldo: a contagem cega nao
+                            -- remove. Serve pro contador ver o vencimento do
+                            -- lote que esta contando.
+                            'b8_dtvalid', ils.b8_dtvalid
                         )
                     ) FILTER (WHERE ils.id IS NOT NULL),
                     '[]'::json

@@ -31,6 +31,8 @@ const PREFIXO_LEASE = 'capul_contagem_lease:';
 export interface LoteDoItem {
   numero: string;
   lotefor: string;
+  /** Validade YYYYMMDD congelada no recorte (migration 021). */
+  validade: string | null;
 }
 
 export interface ItemContagem {

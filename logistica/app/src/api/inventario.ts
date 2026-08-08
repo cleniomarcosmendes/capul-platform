@@ -91,6 +91,8 @@ export async function liberarParaSupervisor(
 interface LoteDoServidor {
   lot_number?: string | null;
   b8_lotefor?: string | null;
+  /** Validade YYYYMMDD congelada (migration 021). */
+  b8_dtvalid?: string | null;
   /** Saldo do sistema. NÃO vem para OPERATOR — a contagem cega o remove. */
   quantity?: number | null;
 }
@@ -122,11 +124,14 @@ interface ProdutoDaLista {
  * campos enxutos: ~168 B/item em vez dos ~640 B que trafegam.
  *
  * Os LOTES entram nesse mesmo pacote, e não em chave separada, porque o volume
- * real é pequeno: medido em 08/08/2026 sobre os armazéns 02 e 06, os lotes com
- * saldo > 0 (os únicos que o snapshot congela) dão **1,6 por item em média, com
- * máximo de 10** — a base inteira dos dois armazéns cabe em ~140 KB. Não existem
- * 3.000 itens rastreados com saldo para estourar o registro do AsyncStorage.
- * ⚠️ Se o teto de itens por lista subir muito, refazer essa conta.
+ * real é pequeno: medido em 08/08/2026 sobre os armazéns 02 e 06, os lotes que o
+ * snapshot congela (saldo > 0 e não vencidos na data de referência) dão **1,0 por
+ * item em média, máximo 10** — a base inteira dos dois armazéns cabe em ~140 KB.
+ *
+ * ⚠️ É o FILTRO que torna isso viável. Sem ele seriam 7,2 por item e até 108 num
+ * produto só — 86% dos lotes têm saldo zero. Quem cobre o lote fora da lista é o
+ * "informar outro lote" na tela, não um pacote gigante. Se o teto de 3.000 itens
+ * por lista subir muito, refazer a conta.
  *
  * O saldo POR LOTE não é gravado: para OPERATOR ele nem vem (a projeção da
  * contagem cega o remove desde 08/08), e guardá-lo no aparelho é exatamente o
@@ -137,6 +142,8 @@ export interface LoteDoItem {
   numero: string;
   /** `b8_lotefor` — lote do fornecedor, o que costuma estar impresso na caixa. */
   lotefor: string;
+  /** `b8_dtvalid` YYYYMMDD congelado. Nao e saldo — o contador pode ver. */
+  validade: string | null;
 }
 
 export interface ItemBaixado {
@@ -176,6 +183,7 @@ export async function baixarItensDaLista(
         .map((l) => ({
           numero: (l.lot_number ?? '').trim(),
           lotefor: (l.b8_lotefor ?? '').trim(),
+          validade: (l.b8_dtvalid ?? '').trim() || null,
         }))
         .filter((l) => l.numero !== ''),
     })),

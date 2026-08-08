@@ -143,7 +143,10 @@ describe('contagem por lote', () => {
       {
         id: 'item-L', product_code: '900', product_description: 'RACAO', location: 'A-01',
         warehouse: '06', contadoNoServidor: null, exigeLote: true,
-        lotes: [{ numero: 'L001', lotefor: 'F1' }, { numero: 'L002', lotefor: 'F2' }],
+        lotes: [
+          { numero: 'L001', lotefor: 'F1', validade: '20271231' },
+          { numero: 'L002', lotefor: 'F2', validade: null },
+        ],
       },
       {
         id: 'item-S', product_code: '901', product_description: 'SAL', location: null,
@@ -184,6 +187,36 @@ describe('contagem por lote', () => {
 
     await registrarContagemPorLote(LISTA_L, 'item-L', []);
     expect(await contarPendentes(LISTA_L)).toBe(0);
+  });
+
+  it('⭐ lote FORA da lista é registrável — é o que o inventário existe pra achar', async () => {
+    // 86% dos lotes têm saldo zero e não entram no recorte; um deles pode estar
+    // fisicamente na prateleira. Sem este caminho não haveria onde registrá-lo —
+    // e trazer todos na lista daria 7,2 lotes por item, até 108 num só.
+    await salvarPacote(pacoteComLote);
+    await registrarContagemPorLote(LISTA_L, 'item-L', [
+      { numero: 'L001', quantidade: 2 },
+      { numero: 'LOTE-NAO-LISTADO', quantidade: 5 },
+    ]);
+
+    const [c] = await contagensPendentes(LISTA_L);
+    expect(c.quantidade).toBe(7);
+    expect(c.lotes!.map((l) => l.numero)).toContain('LOTE-NAO-LISTADO');
+  });
+
+  it('produto sem lote no recorte ainda pode ser contado à mão', async () => {
+    // Todos os lotes vencidos: a lista vem vazia e o servidor BLOQUEIA contagem
+    // única (PRODUTO_SEM_LOTE_VALIDO). O informar-outro-lote é a saída.
+    await salvarPacote({
+      ...pacoteComLote,
+      itens: [{ ...pacoteComLote.itens[0], lotes: [] }],
+    });
+    await registrarContagemPorLote(LISTA_L, 'item-L', [
+      { numero: 'ACHADO-NA-PRATELEIRA', quantidade: 3 },
+    ]);
+
+    const [c] = await contagensPendentes(LISTA_L);
+    expect(c.lotes).toEqual([{ numero: 'ACHADO-NA-PRATELEIRA', quantidade: 3 }]);
   });
 
   it('corrigir um lote NÃO gera segunda pendência', async () => {

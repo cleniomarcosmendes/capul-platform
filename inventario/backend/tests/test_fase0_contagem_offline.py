@@ -904,17 +904,38 @@ def test_lote_produto_sem_rastro_segue_livre(db_session, test_inventory_items):
     _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
 
 
-def test_lote_rastreado_sem_lote_no_snapshot_nao_bloqueia(db_session, test_inventory_items):
-    """Rastreado, mas o recorte não trouxe lote nenhum (todos vencidos na data
-    de referência, ou SB8010 vazio).
+def test_lote_rastreado_sem_lote_valido_BLOQUEIA(db_session, test_inventory_items):
+    """Rastreado e sem nenhum lote ofertável — em geral todos vencidos.
 
-    Recusar aqui deixaria o item IMPOSSÍVEL de contar. Passa — o rastro fica no
-    log, e o problema nesse caso é do snapshot, não da contagem.
+    ⚠️ Isto MUDOU em 08/08. Antes passava como contagem única, para não tornar o
+    item impossível de contar. Com o "informar outro lote" sempre disponível na
+    tela, aceitar contagem sem lote só produziria `lot_number = NULL` — o dado
+    errado que a guarda existe para impedir.
+
+    O código é OUTRO de propósito: não é "faltou preencher", é "este produto não
+    deveria estar aqui", e quem resolve é o supervisor.
     """
     item = test_inventory_items[0]
     _snapshot_do_item(db_session, item, "L")  # sem lotes
 
-    _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
+    with pytest.raises(HTTPException) as exc:
+        _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
+
+    assert exc.value.detail["erro"] == "PRODUTO_SEM_LOTE_VALIDO"
+
+
+def test_lote_informado_na_mao_passa_mesmo_sem_lote_no_snapshot(db_session, test_inventory_items):
+    """O caminho de saída: o contador achou o produto e digitou o lote.
+
+    É o que sustenta o bloqueio acima — sem ele, o item ficaria sem saída.
+    """
+    item = test_inventory_items[0]
+    _snapshot_do_item(db_session, item, "L")
+
+    _validar_contagem_por_lote(
+        db_session, item.id, item.product_code,
+        [SimpleNamespace(lot_number="LOTE-ACHADO-NA-PRATELEIRA", quantity=2)],
+    )
 
 
 def test_lote_rastro_S_tambem_exige(db_session, test_inventory_items):

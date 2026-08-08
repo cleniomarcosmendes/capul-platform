@@ -794,15 +794,19 @@ async def add_inventory_item(
         if item_snapshot:
             logger.info(f"✅ Snapshot de item criado: {item.id}")
 
-            # Se produto tem rastreamento de lote (b1_rastro='L'), criar snapshots de lotes
-            if item_snapshot.b1_rastro == 'L':
+            # Produto rastreado (L=lote, S=sub-lote) — ver nota em main.py.
+            if (item_snapshot.b1_rastro or '').strip() in ('L', 'S'):
                 lot_snapshots = SnapshotService.create_lots_snapshots(
                     db=db,
                     inventory_item_id=item.id,
                     product_code=product.code,
                     filial=filial,
                     warehouse=inventory.warehouse,
-                    created_by=current_user.id
+                    created_by=current_user.id,
+                    reference_date=(
+                        inventory.reference_date.date()
+                        if getattr(inventory, 'reference_date', None) else None
+                    ),
                 )
                 logger.info(f"✅ {len(lot_snapshots)} snapshot(s) de lotes criados para item {item.id}")
 

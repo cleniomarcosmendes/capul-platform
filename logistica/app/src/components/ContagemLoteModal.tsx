@@ -7,6 +7,12 @@ import type { ItemContagem, ContagemDeLote } from '../offline/contagemOffline';
 
 const CAPUL = '#047942';
 
+/** `b8_dtvalid` vem do Protheus como YYYYMMDD. */
+function fmtValidade(v: string): string {
+  if (v.length !== 8) return v;
+  return `${v.slice(6, 8)}/${v.slice(4, 6)}/${v.slice(0, 4)}`;
+}
+
 interface Props {
   item: ItemContagem;
   /** O que já foi contado neste aparelho, se houver. */
@@ -42,14 +48,37 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
 
   const [valores, setValores] = useState<Record<string, string>>(iniciais);
 
-  const informados = useMemo(
-    () =>
-      item.lotes
-        .map((l) => ({ numero: l.numero, texto: (valores[l.numero] ?? '').replace(',', '.').trim() }))
-        .filter((l) => l.texto !== '')
-        .map((l) => ({ numero: l.numero, quantidade: Number(l.texto) })),
-    [item, valores],
-  );
+  /**
+   * Lotes informados à mão pelo contador.
+   *
+   * A lista congelada traz o que o sistema ESPERA: lotes com saldo e não
+   * vencidos. Mas o inventário existe para achar o que o sistema não sabe — um
+   * lote com saldo zero (86% dos lotes) ou fora da lista pode estar
+   * fisicamente na prateleira, e sem isto não haveria onde registrá-lo.
+   *
+   * Trazer todos os lotes na lista resolveria pelo lado errado: seriam 7,2 por
+   * item em média, e até 108 num único produto.
+   */
+  const [extras, setExtras] = useState<Array<{ numero: string; texto: string }>>(() => {
+    const doRecorte = new Set(item.lotes.map((l) => l.numero));
+    return (contagemAtual ?? [])
+      .filter((c) => !doRecorte.has(c.numero))
+      .map((c) => ({ numero: c.numero, texto: String(c.quantidade) }));
+  });
+
+  const informados = useMemo(() => {
+    const doRecorte = item.lotes
+      .map((l) => ({ numero: l.numero, texto: (valores[l.numero] ?? '').replace(',', '.').trim() }))
+      .filter((l) => l.texto !== '')
+      .map((l) => ({ numero: l.numero, quantidade: Number(l.texto) }));
+
+    const informadosAMao = extras
+      .map((e) => ({ numero: e.numero.trim(), texto: e.texto.replace(',', '.').trim() }))
+      .filter((e) => e.numero !== '' && e.texto !== '')
+      .map((e) => ({ numero: e.numero, quantidade: Number(e.texto) }));
+
+    return [...doRecorte, ...informadosAMao];
+  }, [item, valores, extras]);
 
   const invalido = informados.some((l) => !Number.isFinite(l.quantidade) || l.quantidade < 0);
   const total = invalido ? 0 : informados.reduce((s, l) => s + l.quantidade, 0);
@@ -79,15 +108,21 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
           contentContainerStyle={{ padding: 12, gap: 8, paddingBottom: 24 }}
           ListEmptyComponent={
             <Text style={s.vazio}>
-              Nenhum lote no recorte deste inventário. Fale com o supervisor —
-              este produto precisa ser conferido no desktop.
+              Nenhum lote válido na data deste inventário — os lotes deste produto
+              venceram antes dela.{'\n\n'}
+              Se você encontrou o produto na prateleira, informe o lote abaixo.
+              Senão, avise o supervisor.
             </Text>
           }
           renderItem={({ item: lote }) => (
             <View style={s.linha}>
               <View style={{ flex: 1 }}>
                 <Text style={s.lote}>{lote.numero}</Text>
-                {lote.lotefor ? <Text style={s.lotefor}>Fornecedor: {lote.lotefor}</Text> : null}
+                <Text style={s.lotefor}>
+                  {lote.lotefor ? `Fornecedor: ${lote.lotefor}` : ''}
+                  {lote.lotefor && lote.validade ? '  ·  ' : ''}
+                  {lote.validade ? `Val. ${fmtValidade(lote.validade)}` : ''}
+                </Text>
               </View>
               <TextInput
                 style={s.qtd}
@@ -98,11 +133,53 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
               />
             </View>
           )}
+          ListFooterComponent={
+            <View style={s.extrasBox}>
+              <Text style={s.extrasTitulo}>Lote fora da lista</Text>
+              <Text style={s.extrasAjuda}>
+                Achou na prateleira um lote que não aparece acima? Informe aqui —
+                é assim que a divergência chega ao supervisor.
+              </Text>
+
+              {extras.map((e, i) => (
+                <View key={`extra-${i}`} style={s.linha}>
+                  <TextInput
+                    style={s.loteInput}
+                    placeholder="Número do lote"
+                    autoCapitalize="characters"
+                    value={e.numero}
+                    onChangeText={(t) =>
+                      setExtras((v) => v.map((x, j) => (j === i ? { ...x, numero: t } : x)))
+                    }
+                  />
+                  <TextInput
+                    style={s.qtd}
+                    keyboardType="decimal-pad"
+                    placeholder="—"
+                    value={e.texto}
+                    onChangeText={(t) =>
+                      setExtras((v) => v.map((x, j) => (j === i ? { ...x, texto: t } : x)))
+                    }
+                  />
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={s.btnAdd}
+                onPress={() => setExtras((v) => [...v, { numero: '', texto: '' }])}
+              >
+                <Text style={s.btnAddTxt}>+ Informar outro lote</Text>
+              </TouchableOpacity>
+            </View>
+          }
         />
 
         <View style={s.rodape}>
           <View style={s.totalBox}>
-            <Text style={s.totalRotulo}>Total ({informados.length} de {item.lotes.length} lotes)</Text>
+            <Text style={s.totalRotulo}>
+              Total ({informados.length} lote{informados.length === 1 ? '' : 's'} informado
+              {informados.length === 1 ? '' : 's'})
+            </Text>
             <Text style={s.totalValor}>{invalido ? '—' : total.toFixed(2)}</Text>
           </View>
           <View style={s.botoes}>
@@ -136,6 +213,21 @@ const s = StyleSheet.create({
     width: 96, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 10,
     paddingVertical: 8, fontSize: 16, textAlign: 'right', backgroundColor: '#fff', color: '#0f172a',
   },
+  extrasBox: {
+    marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e2e8f0', gap: 8,
+  },
+  extrasTitulo: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  extrasAjuda: { fontSize: 12, color: '#64748b', lineHeight: 17 },
+  loteInput: {
+    flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, backgroundColor: '#fff',
+    color: '#0f172a',
+  },
+  btnAdd: {
+    borderWidth: 1, borderColor: CAPUL, borderStyle: 'dashed', borderRadius: 8,
+    paddingVertical: 11, alignItems: 'center',
+  },
+  btnAddTxt: { color: CAPUL, fontWeight: '700', fontSize: 13 },
   rodape: { borderTopWidth: 1, borderTopColor: '#e2e8f0', backgroundColor: '#fff', padding: 12, gap: 10 },
   totalBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   totalRotulo: { fontSize: 13, color: '#475569' },
