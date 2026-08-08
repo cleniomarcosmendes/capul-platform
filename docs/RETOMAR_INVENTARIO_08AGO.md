@@ -130,3 +130,51 @@ Segue pendente e agora carrega **duas migrations novas** (020 e 021) além das d
 
 ⚠️ HLG/PROD precisam de `PROTHEUS_API_AUTH` e `PROTHEUS_INVENTARIO_AUTH` no
 `.env` **antes** de subir — o compose aborta sem elas, de propósito.
+
+---
+
+## Achados do teste de Chrome (08/08, Clenio)
+
+Seções 1 a 3 executadas. Duas correções já feitas (`fb7883e8`) e **dois itens em
+aberto**, mais um esclarecimento de regra.
+
+### ✅ Corrigido durante o teste
+- **Validade do lote não aparecia** — os 5 ramos de mapeamento da resposta para
+  `LotRow` descartavam `expiry_date`. O campo existia no tipo e o render lia;
+  faltava o meio. Diagnosticado comparando tela × API.
+- **Roteiro pedia o impossível**: supervisor abrindo o modal de lote na lista de
+  outro. Ninguém conta pela lista alheia, nem ADMIN — regra de auditoria
+  correta. O cenário passou a criar a "Lista clenio".
+
+### 🟡 EM ABERTO 1 — "Erro inesperado" que na verdade deu certo
+Adicionar ~6.200 produtos de uma vez: ~10s, tela mostrou **"Erro inesperado ao
+adicionar produtos"**, mas os itens **foram adicionados**. Mensagem mente sobre o
+resultado, e o supervisor pode repetir a operação achando que falhou.
+
+Não reproduzido depois, porque no estado atual um guard anterior responde antes
+(409 "existe lista de contagem já liberada"). **Para reproduzir**: inventário
+novo, nenhuma lista liberada, e adicionar alguns milhares de produtos.
+Suspeita: o payload de resposta (arrays `duplicates`/`errors` por item) fica
+grande e algo estoura no meio — o `add-products` monta a resposta item a item.
+
+### 🟡 EM ABERTO 2 — toast não aparece ao liberar ciclo sem contador
+Backend recusa certo (400, `detail` como **string**: "Lista não tem contador
+atribuído para o ciclo 2"). A tela não mostra nada.
+
+⚠️ Investigado e **não explicado**: `handleLiberarConfirmed`
+(`InventarioDetalhePage.tsx:959`) tem `catch` com `toast.error(detail || ...)`,
+o interceptor do axios só intercepta 401, e o ToastContext mostra erro por 4s.
+É o **único** ponto do código que chama `liberar()`. Falta um dado: ver no
+DevTools se o 400 realmente chega ao `catch` (breakpoint) ou se o clique nem
+alcança essa função naquele estado de lista.
+
+### ℹ️ Não é defeito — teto de 3.000
+O teto é **por LISTA DE CONTAGEM**, não por inventário, e existe por causa do
+aplicativo. Bloqueia o **checkout no app** (`LISTA_ACIMA_DO_TETO`); no desktop é
+**só aviso, de propósito** — está no código: *"a operação não pode ficar travada
+por uma regra que existe por causa do celular"*.
+
+O aviso existe e está no lugar certo: `AtribuirProdutosModal` (ao montar a lista)
+e o selo "acima do teto" em `InventarioDetalhePage`. Adicionar produtos ao
+INVENTÁRIO não tem teto — o roteiro é que apontava para o lugar errado, já
+corrigido.

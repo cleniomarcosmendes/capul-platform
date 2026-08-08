@@ -111,8 +111,10 @@ Regras, nos dois:
 Como **clenio**, no **`TESTE_CHROME`** (ou criando um novo):
 
 - [ ] **Criar inventário** — o seletor de armazém traz opções (já esteve vazio).
-- [ ] **Adicionar produtos** — os 7 filtros de faixa funcionam; passar de 3.000
-      itens mostra o aviso do teto.
+- [ ] **Adicionar produtos** — os 7 filtros de faixa funcionam.
+      ⚠️ Aqui **não** há teto: o de 3.000 é **por lista de contagem** e existe por
+      causa do app. O aviso aparece ao **montar a lista** (`Atribuir produtos`) e
+      como selo "acima do teto" na lista — é lá que se testa.
 - [ ] **Criar lista** e atribuir contador — `jordana` e `juliocesar` aparecem.
 - [ ] **Liberar** com "mostrar contagens anteriores" **desmarcado** (cega) e,
       noutra lista, **marcado**.
