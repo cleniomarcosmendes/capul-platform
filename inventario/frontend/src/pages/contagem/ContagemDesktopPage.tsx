@@ -7,6 +7,7 @@ import { CountingProgress } from './components/CountingProgress';
 import { SeloLease } from './components/SeloLease';
 import { LoteContagemModal } from './components/LoteContagemModal';
 import { ListasResponsaveis } from './components/ListasResponsaveis';
+import { useAuth } from '../../contexts/AuthContext';
 import { useCountingData } from './hooks/useCountingData';
 import { useRegistrarContagem } from './hooks/useRegistrarContagem';
 import type { CountingFilter } from './hooks/useCountingData';
@@ -39,7 +40,19 @@ const itemStatusConfig: Record<string, { label: string; color: string }> = {
 
 const cycleColors = ['', 'text-green-700 bg-green-50', 'text-amber-700 bg-amber-50', 'text-red-700 bg-red-50'];
 
+/**
+ * O saldo do sistema NÃO vem para OPERATOR (contagem cega, 08/08). Sem esta
+ * guarda o `.toFixed()` quebrava a tela inteira — e quebrava justamente para
+ * quem a máscara protege. Acontece quando o supervisor libera a lista com
+ * "mostrar contagens anteriores" marcado: a flag governa CICLOS ANTERIORES, mas
+ * a coluna de saldo estava amarrada a ela.
+ */
+function temSaldo(p: { system_qty?: number | null }): boolean {
+  return p.system_qty !== undefined && p.system_qty !== null;
+}
+
 export function ContagemDesktopPage() {
+  const { usuario } = useAuth();
   const { inventoryId } = useParams<{ inventoryId: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -202,17 +215,34 @@ export function ContagemDesktopPage() {
     const ownerName = notCounterOfRequested.counterId
       ? counterNames[notCounterOfRequested.counterId] || 'outro contador'
       : 'ninguém';
+    // O próprio contador batendo na porta da lista que ELE já entregou.
+    const ehODono = !!usuario?.id && notCounterOfRequested.counterId === usuario.id;
     return (
       <>
         <Header title="Contagem" />
         <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
           <div className="bg-amber-50 border border-amber-300 rounded-xl p-5">
-            <h2 className="text-lg font-bold text-amber-900 mb-2">Você não é o contador desta lista</h2>
+            {/* Dois motivos MUITO diferentes caem aqui, e dizer só "você não é o
+                contador" para quem É o contador (mas já entregou) e contraditório —
+                foi reportado no teste de 08/08. */}
+            <h2 className="text-lg font-bold text-amber-900 mb-2">
+              {ehODono ? 'Esta lista já foi entregue' : 'Você não é o contador desta lista'}
+            </h2>
             <p className="text-sm text-amber-800">
-              A lista <strong>{notCounterOfRequested.listName}</strong> está atribuída a{' '}
-              <strong>{ownerName}</strong> no {notCounterOfRequested.counterCycle}º ciclo.
-              Apenas o contador atribuído pode realizar a contagem (mesmo administradores
-              não devem contar pelo outro — mantém a auditoria limpa).
+              {ehODono ? (
+                <>
+                  A lista <strong>{notCounterOfRequested.listName}</strong> é sua, mas já foi
+                  liberada para o supervisor — por isso não aceita mais alteração. Se precisar
+                  corrigir alguma contagem, peça ao supervisor para devolvê-la.
+                </>
+              ) : (
+                <>
+                  A lista <strong>{notCounterOfRequested.listName}</strong> está atribuída a{' '}
+                  <strong>{ownerName}</strong> no {notCounterOfRequested.counterCycle}º ciclo.
+                  Apenas o contador atribuído pode realizar a contagem (mesmo administradores
+                  não devem contar pelo outro — mantém a auditoria limpa).
+                </>
+              )}
             </p>
           </div>
           {assignedLists.length > 0 && (
@@ -566,14 +596,14 @@ export function ContagemDesktopPage() {
                         {showPreviousCounts && (
                           showEntregasPost ? (
                             <>
-                              <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                              <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{temSaldo(p) ? p.system_qty.toFixed(2) : "—"}</td>
                               <td className="py-1.5 px-2 text-right text-sky-600 tabular-nums">
                                 {(p.b2_xentpos || 0) > 0.001 ? `+${(p.b2_xentpos || 0).toFixed(2)}` : '0.00'}
                               </td>
                               <td className="py-1.5 px-2 text-right font-semibold text-slate-800 tabular-nums">{expectedQty.toFixed(2)}</td>
                             </>
                           ) : (
-                            <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{p.system_qty.toFixed(2)}</td>
+                            <td className="py-1.5 px-2 text-right text-slate-600 tabular-nums">{temSaldo(p) ? p.system_qty.toFixed(2) : "—"}</td>
                           )
                         )}
 

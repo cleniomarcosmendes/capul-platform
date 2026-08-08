@@ -533,7 +533,9 @@ export function ContagemMobilePage() {
               {showPreviousCounts && (
                 <div>
                   <p className="text-xs text-slate-400">Saldo sistema</p>
-                  <p className="text-sm font-medium tabular-nums text-slate-700">{currentProduct.system_qty.toFixed(2)}</p>
+                  <p className="text-sm font-medium tabular-nums text-slate-700">
+                    {currentProduct.system_qty != null ? currentProduct.system_qty.toFixed(2) : "—"}
+                  </p>
                 </div>
               )}
             </div>

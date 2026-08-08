@@ -323,6 +323,12 @@ export interface CountingListProduct {
   product_description: string;
   warehouse: string;
   expected_quantity: number;
+  /**
+   * ⚠️ AUSENTE no payload do OPERATOR — a contagem cega remove o saldo desde
+   * 08/08. Tipado como obrigatório porque as telas de SUPERVISOR (TabAnalise,
+   * ListaDetalheModal) sempre o recebem; nas telas de CONTAGEM, que o operador
+   * alcança, guardar antes de usar. Ver `temSaldo` em ContagemDesktopPage.
+   */
   system_qty: number;
   b2_xentpos: number;
   count_cycle_1: number | null;
@@ -363,6 +369,12 @@ export interface SnapshotLot {
   lot_number: string;
   b8_lotectl: string;
   b8_lotefor?: string;
+  /**
+   * ⚠️ AUSENTE no payload do OPERATOR — a contagem cega remove o saldo desde
+   * 08/08. Tipado como obrigatório porque as telas de SUPERVISOR (TabAnalise,
+   * ListaDetalheModal) sempre o recebem; nas telas de CONTAGEM, que o operador
+   * alcança, guardar antes de usar. Ver `temSaldo` em ContagemDesktopPage.
+   */
   system_qty: number;
   counted_qty: number | null;
   barcode?: string;
