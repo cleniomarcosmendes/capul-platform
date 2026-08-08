@@ -178,3 +178,40 @@ O aviso existe e está no lugar certo: `AtribuirProdutosModal` (ao montar a list
 e o selo "acima do teto" em `InventarioDetalhePage`. Adicionar produtos ao
 INVENTÁRIO não tem teto — o roteiro é que apontava para o lugar errado, já
 corrigido.
+
+---
+
+## Estado ao fim de 08/08 (tarde) — depois dos testes de tela
+
+Seções 1 a 4 do roteiro de Chrome executadas pelo Clenio. **5 correções** saíram
+do teste; 3 itens seguem em aberto.
+
+### ✅ Corrigido a partir do que o teste achou
+| Achado | Commit |
+|---|---|
+| Validade do lote não chegava na tela (5 ramos de mapeamento descartavam) | `fb7883e8` |
+| Produto sem lote no recorte ficava **sem saída** no desktop | `5bab54b5` |
+| **Crash** `toFixed` de undefined na tela de contagem do OPERATOR | `3d3aa2c9` |
+| "Acesso negado" contraditório para quem já entregou a própria lista | `3d3aa2c9` |
+| App: sincronizou e não dava para saber + devolução parcial invisível | `4dbc0929` |
+
+### ✅ Confirmado em tela pelo Clenio
+RBAC do operador (menu, abas, URL direta) · modal de lote nas duas visões ·
+"informar outro lote" no **desktop** · fluxo do supervisor inteiro (devolver
+parcial, avançar ciclo, encerrar) · 5 divergências no `SMOKE_09AGO` ·
+produto com lote no **app** (identificação e digitação) · situação do
+sincronismo no app.
+
+### 🟡 EM ABERTO
+1. **"Erro inesperado" que na verdade deu certo** (add-products em massa) — o
+   mais sério: a mensagem mente sobre o resultado. Repro: inventário novo, sem
+   lista liberada, alguns milhares de produtos.
+2. **Toast ausente** ao liberar ciclo sem contador — código correto de ponta a
+   ponta; falta breakpoint no `catch` (`InventarioDetalhePage.tsx:959`).
+3. **`system_qty` deveria ser opcional no tipo** — a correção durável do crash.
+   O TS aponta 20+ pontos, quase todos em telas só-de-supervisor. Onda própria.
+
+### ⏳ Não testado no APP
+"Informar outro lote" (use o **`00010093`**) · ciclo com **modo avião** ·
+badge **REVISAR** da devolução parcial (feito hoje, nunca visto em tela) ·
+"Liberar para supervisor" abortando com pendência.
