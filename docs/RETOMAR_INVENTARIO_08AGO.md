@@ -1,103 +1,132 @@
-# Onde paramos — Inventário
+# Retomar o Inventário — 08/08/2026
 
-*Fechado em 07/08/2026 (fim da tarde). Substitui o `RETOMAR_INVENTARIO_OFFLINE_06AGO.md`,
-que continua válido para o histórico das Fases 0/1/1.5.*
+*Substitui a versão anterior deste arquivo, de 07/08.*
 
----
+Ponto de parada de 08/08. **10 commits locais nesta onda, 32 não pushados no
+total.** Árvore limpa, suítes verdes: **inventário 109 · app 46**.
 
-## Estado em uma linha
-
-**O módulo está funcional de ponta a ponta no DEV, com dados reais importados.**
-Suíte do Inventário **81** · app **34** · 21 commits locais · **nada pushado**.
+O que falta é **teste**: nada de hoje rodou em navegador nem em aparelho.
 
 ---
 
-## O que está no DEV agora (dá para testar direto)
+## 1. Subir e conferir
 
-Hierarquia mercadológica e produtos importados do Protheus:
-
-| | |
-|---|---|
-| Produtos (`sb1010`) | 32.820 |
-| Saldos (`sb2010`) | 38.872 — armazéns **02** (32.637) e **06** (6.235) da filial 01 |
-| Lotes (`sb8010`) | 23.940 |
-| Localizações (`sbz010`) | 30.357 |
-| Códigos de barras (`slk010`) | 44.078 |
-| Armazéns (`szb010`) | 377 |
-
-⚠️ **O que ainda NÃO existe:** nenhum inventário criado, nenhuma lista de
-contagem. É esse o próximo passo natural de teste.
-
----
-
-## Retomar por aqui
-
-### 1. Subir
 ```bash
 docker compose up -d
-docker compose --profile osrm up -d osrm     # OSRM é profile; sem ele a rota vira linha reta CALADA
-```
-O job `inventario-migrate` roda sozinho antes do backend (criado hoje).
+# migrations do inventário sobem sozinhas (job inventario-migrate)
+# esperado: 43 aplicadas, terminando na 021
 
-### 2. Conferir que está de pé
-```bash
-# migrations: esperado 40 aplicadas, terminando na 019
-docker compose exec -T postgres psql -U capul_user -d capul_platform \
-  -c "SELECT count(*) FROM inventario.schema_migrations;"
-
-# suíte: esperado 81 passed
-cd inventario/backend && ./run-tests.sh
+cd inventario/backend && ./run-tests.sh     # 109 passed
+cd logistica/app && npx jest                # 46 passed
 ```
 
-### 3. O teste que falta — contagem ponta a ponta
-Com os dados já importados:
-1. criar um inventário (armazém 02 ou 06 da filial 01);
-2. adicionar produtos — os **7 filtros de faixa** estão lá; repare no aviso do
-   **teto de 3.000** se passar;
-3. criar lista de contagem e atribuir contador;
-4. liberar e contar **pelo desktop** — isso exercita tudo que foi feito nas
-   Fases 0/1 (ciclo carimbado, contagem cega, idempotência);
-5. só então o app.
-
-### 4. O app — nunca rodou em aparelho
-**É a única parte não validada.** Precisa do Expo Go (fast refresh; **não** OTA,
-**não** APK). O ciclo que importa:
-
-> baixar a lista → **modo avião** → contar alguns itens → voltar o sinal →
-> sincronizar → conferir no desktop
-
-E os casos de conflito, que são o coração do desenho:
-- baixar no app e tentar contar a MESMA lista no desktop → deve avisar e pedir confirmação;
-- supervisor clicar em **"liberar"** no selo da lista → o app deve recusar a
-  sincronização com mensagem pedindo devolução;
-- tentar **encerrar** no app com contagem pendente → deve bloquear.
+⚠️ O **OSRM não sobe** com `up -d` (é profile) — só importa se for mexer em rota
+da Logística.
 
 ---
 
-## O que ficou aberto
+## 2. Antes de tudo: o Expo Go
 
-### Do módulo
-- **`inventario.stores`/`warehouses` são pré-UNIFIED_AUTH** e convivem mal com
-  `core.filiais`. Bateu 2× em 07/08 (seletor de armazém vazio; FKs da `slk010`).
-  Os sintomas estão resolvidos; **unificar é decisão maior**.
-- **Teto de 3.000 só se altera pelo banco** (`system_config`) — não há tela.
-- **Rotação da credencial do Protheus** — depende do Marco. Tirá-la do código
-  (feito hoje) **não a invalida**: está no histórico do git.
+O projeto é **SDK 56** e a Play Store já serve **57** — um 57 recusa o projeto
+com *"Project is incompatible with this version of Expo Go"*.
 
-### Fora do módulo
-- **🥇 O deploy** segue sendo o item parado. As 4 rotas de `/api/v1/import/`
-  continuam **sem auth em produção**.
-  ⚠️ Duas coisas novas para o roteiro:
-  1. **HLG/PROD precisam de `PROTHEUS_API_AUTH` e `PROTHEUS_INVENTARIO_AUTH` no
-     `.env` ANTES de subir** — o compose agora aborta sem elas (proposital).
-  2. As **6 migrations** (014–019) aplicam sozinhas pelo job; conferir o log
-     dele. Lá provavelmente existem as mesmas lacunas que achamos aqui.
-- **RDV no Chrome**: faltam os casos 3.7, 1.4 e 1.6.
+1. Desinstalar o Expo Go atual (não convivem dois).
+2. Instalar o APK **56.0.4**: `https://expo.dev/go?sdkVersion=56&platform=android&device=true`
+3. Play Store → ficha do Expo Go → ⋮ → **desmarcar "atualização automática"**,
+   senão ele volta pro 57 sozinho.
+
+Metro pelo **PowerShell do Windows** (não WSL):
+
+```
+cd C:\meus_projetos\capul-platform\logistica\app
+npx expo start
+```
+
+Não precisa de `EXPO_PUBLIC_API_URL`: em DEV o app pega o host do Metro e aponta
+pro `:8085`, que agora proxia o inventário.
 
 ---
 
-## Contexto de hoje, se precisar
+## 3. O roteiro de teste
 
-`docs/MELHORIAS_BACKLOG.md` tem o mapa das 6 correções de schema e a causa de
-fundo (o runner de migrations não estava ligado a nada, e uma migration que se
-auto-registrava matava as seguintes).
+### 3.1 Desktop — montar o cenário
+Ainda **não existe nenhum inventário** (`inventory_lists = 0`). Criar:
+
+1. **Novo inventário** no armazém **06** (ou 02).
+2. **Adicionar produtos** — inclua de propósito **pelo menos um com controle de
+   lote** (`b1_rastro = 'L'`; são 2.495 dos 32.820). Sem isso metade do que foi
+   feito hoje não é exercitada.
+3. **Criar lista de contagem** e atribuir a **jordana** ou **juliocesar**
+   (OPERATOR, filial 01). Os dois já aparecem em "usuários disponíveis".
+4. **Liberar** a lista.
+
+### 3.2 Desktop — o que mudou hoje
+- Abrir o **modal de lote** como **admin** (staff): deve mostrar "Saldo Sistema",
+  "Sistema" e as diferenças.
+- Abrir o **mesmo modal como OPERATOR**: **não pode** mostrar saldo nem diferença
+  — e **não pode quebrar**. Era o que aconteceria antes de `a9b410cb`.
+- **"+ Informar outro lote"**: acrescenta linha com número na mão, marcada
+  "fora da lista". Salvar sem número deve ficar bloqueado.
+- **Salvar** só habilita com **todos** os lotes preenchidos (0 vale).
+- A **validade** aparece ao lado do lote do fornecedor.
+
+### 3.3 App — o ciclo que importa
+> baixar a lista → **modo avião** → contar → voltar o sinal → sincronizar
+
+- **Três estados por item**: não contado (—) · pendente (âmbar) · sincronizado
+  (verde ✓). ⭐ Depois de sincronizar o número **tem que continuar na tela** e o
+  progresso **não pode voltar** — era o defeito original.
+- **Produto com lote** abre a tela de lotes (não aceita quantidade única).
+  Conferir: total é a soma, campo vazio bloqueia, "informar outro lote" funciona.
+- **Cabeçalho**: armazém e ciclo.
+- **Localização** ao lado do código.
+- **Liberar para supervisor**: confirmar que diz quantos itens virarão zero, e
+  que depois a lista aparece como **AGUARDANDO_REVISAO** no desktop.
+- **Sair** (antes "Encerrar"): a lista **continua** em contagem.
+
+### 3.4 Os casos de conflito
+- Baixar no app e tentar contar a MESMA lista no desktop → deve avisar.
+- Supervisor clica "liberar" no selo da lista → o app recusa a sincronização.
+- Tentar liberar com contagem pendente no aparelho → **deve abortar** (o handoff
+  zeraria os itens e o trabalho se perderia).
+
+---
+
+## 4. O que NÃO foi testado e pode falhar
+
+- Tudo do item 3 — nenhuma linha rodou fora dos testes automatizados.
+- O **snapshot com validade** (migration 021) só vale para inventário criado a
+  partir de agora. Como não há nenhum, não há o que remediar.
+- **Produto rastreado cujos lotes estão todos vencidos** agora **bloqueia** a
+  contagem (`PRODUTO_SEM_LOTE_VALIDO`) — a saída é o "informar outro lote".
+  Difícil de reproduzir com os dados atuais (só 21 lotes vencidos).
+
+---
+
+## 5. Backlog do módulo (não tocado hoje, e importante)
+
+1. **`POST /inventory/process-discrepancies`** relê o saldo **ao vivo** do
+   SB2010/SB8010 e **sobrescreve** o `expected_quantity` congelado — destrói o
+   snapshot. A tela não chama, mas o endpoint responde a qualquer token ADMIN. E
+   consulta o SB2010 **sem filtro de filial/armazém** (`.first()`), podendo pegar
+   o saldo do armazém errado.
+2. **`InventoryService.update_inventory_items_quantities`** — `UPDATE ... SET
+   expected_quantity = sb2.b2_qatu` para o inventário inteiro. Código morto e
+   hoje inerte (junta com `inventario.products`, vazia), mas pronto para ser
+   ligado por engano.
+3. Credencial do Protheus no histórico do git — rotação depende do Marco.
+
+O Clenio já sinalizou que (1) e (2) precisam ser resolvidos antes de o módulo
+valer dinheiro de verdade.
+
+---
+
+## 6. Deploy
+
+Segue pendente e agora carrega **duas migrations novas** (020 e 021) além das de
+07/08. HLG/PROD provavelmente têm as três tabelas de identidade vazias
+(`stores`/`users`/`user_stores`) — a **020** resolve, aplicada pelo job
+`inventario-migrate` no startup.
+
+⚠️ HLG/PROD precisam de `PROTHEUS_API_AUTH` e `PROTHEUS_INVENTARIO_AUTH` no
+`.env` **antes** de subir — o compose aborta sem elas, de propósito.

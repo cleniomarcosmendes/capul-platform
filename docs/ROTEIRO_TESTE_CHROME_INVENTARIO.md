@@ -114,10 +114,11 @@ Como **clenio**, no **`TESTE_CHROME`** (ou criando um novo):
 - [ ] **Devolver ao contador** — testar **total** e **parcial** (com busca e
       checkbox item a item).
 - [ ] ⭐ Depois de devolver, as contagens **continuam lá** — devolução não zera.
-- [ ] **Avançar ciclo**: ao liberar o 2º ciclo **sem atribuir contador do ciclo 2**,
-      deve avisar *"Lista não tem contador atribuído para o ciclo 2"*. É regra —
-      cada ciclo tem seu contador. **Confirme que a tela deixa isso óbvio antes
-      do erro**; se não deixar, é melhoria de UX a anotar.
+- [ ] **Avançar ciclo**: cada ciclo tem **contador próprio**. Liberar o 2º sem
+      atribuir avisa *"Lista não tem contador atribuído para o ciclo 2"* —
+      **comportamento correto e confirmado pelo Clenio (08/08)**: a lista precisa
+      de contador atribuído. Conferir só que o aviso aparece e que atribuir o
+      contador do ciclo 2 destrava.
 - [ ] 2º ciclo traz **só os divergentes**, não a lista toda.
 - [ ] **Encerrar lista** ≠ **Encerrar inventário** — são dois atos.
 - [ ] `/divergencias` — as 4 abas, com o esperado × contado. Use o
@@ -141,7 +142,7 @@ Como **jordana**, na lista dela:
 ## 5. App (Expo Go)
 
 > **Pré-requisito**: Expo Go **56.0.4** (a Play Store serve 57 e recusa o
-> projeto). Ver `docs/RETOMAR_INVENTARIO_09AGO.md`.
+> projeto). Ver `docs/RETOMAR_INVENTARIO_08AGO.md`.
 
 - [ ] **Cabeçalho** mostra a lista, o **armazém** e o **ciclo**.
 - [ ] **Localização** ao lado do código do produto.
