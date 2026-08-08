@@ -50,6 +50,17 @@ export interface ItemContagem {
    * o número que o contador digitou sumia e o progresso andava para trás.
    */
   contadoNoServidor: number | null;
+  /**
+   * Supervisor marcou este item ao DEVOLVER a lista (devolução parcial).
+   *
+   * Sem isto o contador recebe a lista de volta sem saber o que revisar — o
+   * desktop mostra badge "Revisar" desde sempre, e o app descartava o campo,
+   * que já vinha no payload.
+   */
+  revisarNoCiclo: boolean;
+  motivoRevisao: string | null;
+  /** Zero do PREENCHIMENTO do fecho, não de contagem ativa. */
+  zeradoNoFecho: boolean;
   /** Produto rastreado: a contagem tem que ser POR LOTE. */
   exigeLote: boolean;
   /** Lotes do recorte (só os que tinham saldo na inclusão). */
@@ -64,6 +75,8 @@ export interface PacoteContagem {
   warehouse?: string;
   cicloEsperado: number;
   baixadoEm: string;
+  /** Última sincronização com sucesso — sobrevive a fechar o app. */
+  sincronizadoEm?: string;
   itens: ItemContagem[];
 }
 
@@ -125,6 +138,9 @@ export async function lerPacote(listId: string): Promise<PacoteContagem | null> 
         ...i,
         warehouse: i.warehouse ?? null,
         exigeLote: Boolean(i.exigeLote),
+        revisarNoCiclo: Boolean(i.revisarNoCiclo),
+        motivoRevisao: i.motivoRevisao ?? null,
+        zeradoNoFecho: Boolean(i.zeradoNoFecho),
         lotes: i.lotes ?? [],
       })),
     };
@@ -339,6 +355,12 @@ export async function sincronizarContagens(listId: string): Promise<ResultadoSyn
     // Ordem importa: o pacote primeiro. Se o app morrer entre os dois, o pior
     // caso é uma contagem que já subiu continuar na fila — e o reenvio é
     // idempotente. O inverso perderia o valor da tela.
+    // Carimba a sincronização: depois que a fila zera, sem isto não sobra
+    // nenhum vestígio de que algo subiu.
+    if (enviadas > 0) {
+      pacote.sincronizadoEm = new Date().toISOString();
+      pacoteMudou = true;
+    }
     if (pacoteMudou) await salvarPacote(pacote);
     await gravarContagens(listId, mapa);
     return { enviadas, recusadas, restantes: Object.keys(mapa).length };

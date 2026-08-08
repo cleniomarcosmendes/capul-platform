@@ -113,6 +113,11 @@ interface ProdutoDaLista {
   has_lot?: boolean;
   /** Lotes congelados na inclusão (só os com saldo > 0). */
   snapshot_lots?: LoteDoServidor[];
+  /** Supervisor marcou este item para revisão ao devolver a lista (migration 012). */
+  revisar_no_ciclo?: boolean;
+  motivo_revisao?: string | null;
+  /** Este zero veio do PREENCHIMENTO do handoff, não de contagem ativa (015). */
+  zerado_no_fecho?: boolean;
 }
 
 /**
@@ -148,6 +153,11 @@ export interface LoteDoItem {
 
 export interface ItemBaixado {
   id: string;
+  /** Marcado pelo supervisor na devolução — o contador precisa saber O QUE revisar. */
+  revisarNoCiclo: boolean;
+  motivoRevisao: string | null;
+  /** Zero que veio do fecho, não de contagem — distinguir evita recontagem à toa. */
+  zeradoNoFecho: boolean;
   product_code: string;
   product_description: string;
   location: string | null;
@@ -178,6 +188,9 @@ export async function baixarItensDaLista(
       // Só o ciclo CORRENTE. Ciclos anteriores nem vêm para o OPERATOR (contagem
       // cega) e não teriam uso aqui.
       contadoNoServidor: p[campo] ?? null,
+      revisarNoCiclo: Boolean(p.revisar_no_ciclo),
+      motivoRevisao: (p.motivo_revisao ?? '').trim() || null,
+      zeradoNoFecho: Boolean(p.zerado_no_fecho),
       exigeLote: Boolean(p.requires_lot ?? p.has_lot),
       lotes: (p.snapshot_lots ?? [])
         .map((l) => ({

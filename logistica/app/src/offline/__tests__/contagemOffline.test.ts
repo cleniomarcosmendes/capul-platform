@@ -96,7 +96,7 @@ describe('pacote da lista', () => {
     itens: [
       {
         id: 'item-A', product_code: '001', product_description: 'X', location: null,
-        warehouse: '02', contadoNoServidor: null, exigeLote: false, lotes: [],
+        warehouse: '02', contadoNoServidor: null, revisarNoCiclo: false, motivoRevisao: null, zeradoNoFecho: false, exigeLote: false, lotes: [],
       },
     ],
   };
@@ -142,7 +142,7 @@ describe('contagem por lote', () => {
     itens: [
       {
         id: 'item-L', product_code: '900', product_description: 'RACAO', location: 'A-01',
-        warehouse: '06', contadoNoServidor: null, exigeLote: true,
+        warehouse: '06', contadoNoServidor: null, revisarNoCiclo: false, motivoRevisao: null, zeradoNoFecho: false, exigeLote: true,
         lotes: [
           { numero: 'L001', lotefor: 'F1', validade: '20271231' },
           { numero: 'L002', lotefor: 'F2', validade: null },
@@ -150,7 +150,7 @@ describe('contagem por lote', () => {
       },
       {
         id: 'item-S', product_code: '901', product_description: 'SAL', location: null,
-        warehouse: '06', contadoNoServidor: null, exigeLote: false, lotes: [],
+        warehouse: '06', contadoNoServidor: null, revisarNoCiclo: false, motivoRevisao: null, zeradoNoFecho: false, exigeLote: false, lotes: [],
       },
     ],
   };
@@ -322,7 +322,7 @@ describe('pendências antes de liberar', () => {
     itens: [
       {
         id: 'h1', product_code: '1', product_description: 'A', location: null,
-        warehouse: '02', contadoNoServidor: null, exigeLote: false, lotes: [],
+        warehouse: '02', contadoNoServidor: null, revisarNoCiclo: false, motivoRevisao: null, zeradoNoFecho: false, exigeLote: false, lotes: [],
       },
     ],
   };
@@ -355,5 +355,65 @@ describe('pendências antes de liberar', () => {
     expect(r.restantes).toBe(0);
     expect(await contarPendentes(LISTA_H)).toBe(0);
     expect((await lerPacote(LISTA_H))!.itens[0].contadoNoServidor).toBe(3);
+  });
+});
+
+/**
+ * Retorno de sincronização e devolução parcial (08/08, reportado pelo Clenio:
+ * "estou sincronizando e não tenho informação que foi sincronizado").
+ */
+describe('rastro da sincronização e revisão', () => {
+  const L = 'lista-rastro';
+  const base = {
+    listId: L, listName: 'R', cicloEsperado: 1, baixadoEm: new Date().toISOString(),
+    itens: [{
+      id: 'r1', product_code: '1', product_description: 'A', location: null, warehouse: '06',
+      contadoNoServidor: null, exigeLote: false, lotes: [],
+      revisarNoCiclo: false, motivoRevisao: null, zeradoNoFecho: false,
+    }],
+  };
+  beforeEach(async () => { await descartarPacote(L); });
+
+  it('⭐ carimba a hora da sincronização — sem isso nada prova que subiu', async () => {
+    const { api } = jest.requireMock('../../api/client') as { api: { post: jest.Mock } };
+    api.post.mockClear();
+    api.post.mockResolvedValue({ data: {} });
+
+    await salvarPacote(base);
+    expect((await lerPacote(L))!.sincronizadoEm).toBeUndefined();
+
+    await registrarContagemLocal(L, 'r1', 5);
+    await sincronizarContagens(L);
+
+    expect((await lerPacote(L))!.sincronizadoEm).toBeDefined();
+  });
+
+  it('sincronização SEM nada a enviar não carimba', async () => {
+    await salvarPacote(base);
+    await sincronizarContagens(L);
+    expect((await lerPacote(L))!.sincronizadoEm).toBeUndefined();
+  });
+
+  it('marca de REVISAR sobrevive à leitura do pacote', async () => {
+    // É o que diz ao contador O QUE revisar depois da devolução parcial — o
+    // desktop sempre mostrou, e o app descartava o campo que já vinha.
+    await salvarPacote({
+      ...base,
+      itens: [{ ...base.itens[0], revisarNoCiclo: true, motivoRevisao: 'conferir a validade' }],
+    });
+    const p = await lerPacote(L);
+    expect(p!.itens[0].revisarNoCiclo).toBe(true);
+    expect(p!.itens[0].motivoRevisao).toBe('conferir a validade');
+  });
+
+  it('pacote ANTIGO sem os campos novos não quebra', async () => {
+    await AsyncStorage.setItem(`capul_contagem_pacote:${L}`, JSON.stringify({
+      listId: L, listName: 'Antiga', cicloEsperado: 1, baixadoEm: '2026-08-01',
+      itens: [{ id: 'x', product_code: '1', product_description: 'Y', location: null,
+                contadoNoServidor: null }],
+    }));
+    const p = await lerPacote(L);
+    expect(p!.itens[0].revisarNoCiclo).toBe(false);
+    expect(p!.itens[0].zeradoNoFecho).toBe(false);
   });
 });

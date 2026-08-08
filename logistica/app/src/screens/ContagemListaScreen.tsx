@@ -255,6 +255,14 @@ export function ContagemListaScreen({ route, navigation }: Props) {
     (i) => valores[i.id] !== undefined || i.contadoNoServidor !== null,
   ).length;
   const pendentesEnvio = Object.keys(valores).length;
+  // ⭐ O que o Clenio não via: depois que a fila zera, nada dizia que subiu.
+  const sincronizados = pacote.itens.filter(
+    (i) => valores[i.id] === undefined && i.contadoNoServidor !== null,
+  ).length;
+  const revisar = pacote.itens.filter((i) => i.revisarNoCiclo).length;
+  const horaSync = pacote.sincronizadoEm
+    ? new Date(pacote.sincronizadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   return (
     <View style={styles.container}>
@@ -274,10 +282,25 @@ export function ContagemListaScreen({ route, navigation }: Props) {
         <Text style={styles.progresso}>
           {contados} de {pacote.itens.length} contados
         </Text>
-        {pendentesEnvio > 0 && (
-          <Text style={styles.pend}>{pendentesEnvio} a sincronizar</Text>
-        )}
+        <View style={styles.selos}>
+          {sincronizados > 0 && (
+            <Text style={styles.selOk}>{sincronizados} sincronizado{sincronizados === 1 ? '' : 's'}</Text>
+          )}
+          {pendentesEnvio > 0 && (
+            <Text style={styles.pend}>{pendentesEnvio} a sincronizar</Text>
+          )}
+        </View>
       </View>
+
+      {horaSync && pendentesEnvio === 0 ? (
+        <Text style={styles.rodapeSync}>Última sincronização às {horaSync}</Text>
+      ) : null}
+
+      {revisar > 0 ? (
+        <Text style={styles.avisoRevisar}>
+          O supervisor devolveu {revisar} item(ns) para revisão — procure a marca “Revisar”.
+        </Text>
+      ) : null}
 
       <TextInput
         style={styles.busca}
@@ -317,8 +340,18 @@ export function ContagemListaScreen({ route, navigation }: Props) {
                   <Text style={styles.codigo}>{item.product_code}</Text>
                   {item.location ? <Text style={styles.local}>📍 {item.location}</Text> : null}
                   {item.exigeLote ? <Text style={styles.chipLote}>LOTE</Text> : null}
+                  {item.revisarNoCiclo ? <Text style={styles.chipRevisar}>REVISAR</Text> : null}
                 </View>
                 <Text style={styles.desc} numberOfLines={2}>{item.product_description}</Text>
+                {item.revisarNoCiclo && item.motivoRevisao ? (
+                  <Text style={styles.motivo}>Motivo: {item.motivoRevisao}</Text>
+                ) : null}
+                {sincronizado ? (
+                  <Text style={styles.subOk}>
+                    contado no C{pacote.cicloEsperado}
+                    {item.zeradoNoFecho ? ' · zero do fecho' : ''}
+                  </Text>
+                ) : null}
                 {item.exigeLote && (pendente || sincronizado) ? (
                   <Text style={styles.subLote}>
                     {(local?.lotes?.length ?? 0) > 0
@@ -340,6 +373,8 @@ export function ContagemListaScreen({ route, navigation }: Props) {
                   </Text>
                 </TouchableOpacity>
               ) : (
+                <View style={styles.caixaQtd}>
+                  {sincronizado ? <Text style={styles.tick}>✓</Text> : null}
                 <TextInput
                   style={[styles.qtd, pendente && styles.qtdPendente, sincronizado && styles.qtdOk]}
                   keyboardType="decimal-pad"
@@ -356,6 +391,7 @@ export function ContagemListaScreen({ route, navigation }: Props) {
                     void registrarContagemLocal(listId, item.id, n).then(recarregarLocal);
                   }}
                 />
+                </View>
               )}
             </View>
           );
@@ -443,6 +479,30 @@ const styles = StyleSheet.create({
   codigo: { fontSize: 13, fontWeight: '700', color: '#0f172a', fontVariant: ['tabular-nums'] },
   desc: { fontSize: 13, color: '#475569', marginTop: 2 },
   local: { fontSize: 12, fontWeight: '600', color: '#334155', fontVariant: ['tabular-nums'] },
+  selos: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  selOk: {
+    fontSize: 12, fontWeight: '700', color: '#166534',
+    backgroundColor: '#dcfce7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+    overflow: 'hidden',
+  },
+  rodapeSync: {
+    fontSize: 11, color: '#166534', backgroundColor: '#f0fdf4',
+    paddingHorizontal: 14, paddingVertical: 5,
+    borderBottomWidth: 1, borderBottomColor: '#dcfce7',
+  },
+  avisoRevisar: {
+    fontSize: 12, color: '#9a3412', backgroundColor: '#fff7ed',
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderBottomWidth: 1, borderBottomColor: '#fed7aa',
+  },
+  chipRevisar: {
+    fontSize: 9, fontWeight: '800', color: '#9a3412', backgroundColor: '#ffedd5',
+    paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden',
+  },
+  motivo: { fontSize: 11, color: '#9a3412', marginTop: 3, fontStyle: 'italic' },
+  subOk: { fontSize: 11, color: '#16a34a', marginTop: 3, fontWeight: '600' },
+  caixaQtd: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tick: { fontSize: 16, fontWeight: '900', color: '#16a34a' },
   chipLote: {
     fontSize: 9, fontWeight: '800', color: '#6d28d9', backgroundColor: '#ede9fe',
     paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden',
