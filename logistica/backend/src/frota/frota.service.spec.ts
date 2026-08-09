@@ -192,3 +192,64 @@ describe('FrotaService.previaAprovacao — cascata do departamento aprovador', (
     expect(r.aprovadores).toEqual([]);
   });
 });
+
+/**
+ * ⭐ Ponto 3 (09/08) — "Registro de Viagem": viagem SEM veículo da empresa.
+ *
+ * Há viagens feitas em outro meio de transporte, em que o registro é só prestação de
+ * contas (adiantamento + despesas). Sem veículo não há hodômetro nem situação a mudar,
+ * e as despesas entram como INDIVÍDUO — fora do rateio por veículo (precedente do RDV).
+ */
+describe('FrotaService.registrarSaidaIndividual — veículo opcional (ponto 3)', () => {
+  let prisma: any;
+  let svc: FrotaService;
+  let core: any;
+  const user = { sub: 'u1', filialId: 'f1', tipo: 'INDIVIDUAL', departamentoId: 'd1', modulos: [{ codigo: 'LOGISTICA', role: 'OPERADOR_ENTREGA' }] } as any;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    core = {
+      colaboradorDoUsuario: jest.fn().mockResolvedValue({ matricula: 'E01047', nome: 'Fulano' }),
+      deptoDoColaboradorPorMatricula: jest.fn().mockResolvedValue('dPessoa'),
+    };
+    svc = new FrotaService(prisma, dep(), core, dep(), locaisMock());
+    prisma.viagem.findMany.mockResolvedValue([]);
+    prisma.contadorSequencial.upsert.mockResolvedValue({ ultimoNumero: 7 });
+    prisma.viagem.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'vg1', ...data }));
+    prisma.$transaction.mockImplementation((fn: any) => fn(prisma));
+  });
+
+  it('SEM veículo → cria a viagem, não toca em nenhum veículo e não grava KM', async () => {
+    const r: any = await svc.registrarSaidaIndividual({ adiantamento: 250 } as any, user);
+    expect(r.veiculoId).toBeNull();
+    expect(r.kmInicial).toBeNull();
+    expect(prisma.veiculo.update).not.toHaveBeenCalled();
+    expect(r.placa).toBeNull();
+  });
+
+  it('SEM veículo → o departamento aprovador continua sendo resolvido (é o acerto)', async () => {
+    const r: any = await svc.registrarSaidaIndividual({} as any, user);
+    expect(r.departamentoAprovadorId).toBe('dPessoa');
+  });
+
+  // A frouxidão do DTO existe só para o caso sem veículo — com veículo o hodômetro
+  // alimenta custo por km e manutenção preventiva, e segue obrigatório.
+  it('COM veículo e SEM KM → recusa', async () => {
+    prisma.veiculo.findFirst.mockResolvedValue({ id: 'v1', situacao: 'DISPONIVEL', kmAtual: 100, placa: 'ABC', modelo: 'X' });
+    await expect(svc.registrarSaidaIndividual({ veiculoId: 'v1' } as any, user))
+      .rejects.toThrow(/KM de saída/i);
+  });
+
+  it('COM veículo e KM → caminho normal: veículo vai para EM_USO', async () => {
+    prisma.veiculo.findFirst.mockResolvedValue({ id: 'v1', situacao: 'DISPONIVEL', kmAtual: 100, placa: 'ABC', modelo: 'X' });
+    const r: any = await svc.registrarSaidaIndividual({ veiculoId: 'v1', kmInicial: 120 } as any, user);
+    expect(r.kmInicial).toBe(120);
+    expect(prisma.veiculo.update).toHaveBeenCalledWith({ where: { id: 'v1' }, data: { situacao: 'EM_USO' } });
+  });
+
+  it('veículo informado que não existe → 404 (não vira viagem sem veículo por engano)', async () => {
+    prisma.veiculo.findFirst.mockResolvedValue(null);
+    await expect(svc.registrarSaidaIndividual({ veiculoId: 'sumiu', kmInicial: 1 } as any, user))
+      .rejects.toThrow(NotFoundException);
+  });
+});

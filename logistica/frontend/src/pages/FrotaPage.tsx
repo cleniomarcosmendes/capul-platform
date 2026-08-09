@@ -159,7 +159,7 @@ export function FrotaPage() {
     try {
       const [v, frota] = await Promise.all([
         logisticaApi.get<ViagemFrota[]>('/frota/viagens', { params: filtro ? { situacao: filtro } : {} }),
-        // Saída de Veículos = frota COMPARTILHÁVEL: veículo de passeio de qualquer
+        // Registro de Viagem = frota COMPARTILHÁVEL: veículo de passeio de qualquer
         // filial/depto pode ser usado (comum, sem transferência). todasFiliais ignora
         // o escopo de filial do usuário (diferente das Entregas, que são por filial).
         logisticaApi.get<VeiculoDisp[]>('/veiculos', { params: { todasFiliais: 'true' } }),
@@ -182,7 +182,7 @@ export function FrotaPage() {
       <div className="flex items-center gap-3">
         <Fuel className="h-6 w-6 text-capul-600" />
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Saída de Veículos</h2>
+          <h2 className="text-lg font-semibold text-slate-800">Registro de Viagem</h2>
           <p className="text-sm text-slate-500">Saída e retorno de veículos — o condutor se identifica com matrícula e senha.</p>
         </div>
       </div>
@@ -456,15 +456,20 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       toast('warning', modo === 'PORTARIA' ? 'Busque e selecione o condutor.' : 'Valide a matrícula e a senha do condutor.');
       return;
     }
-    if (!veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
-    if (kmInicial === '') { toast('warning', 'Informe o KM de saída.'); return; }
+    // Ponto 3: viagem SEM veículo da empresa (outro meio de transporte) é registro de
+    // prestação de contas. A PORTARIA é a exceção — ela registra veículo passando pelo
+    // portão, então lá o veículo continua obrigatório.
+    if (modo === 'PORTARIA' && !veiculoId) { toast('warning', 'Selecione o veículo.'); return; }
+    if (veiculoId && kmInicial === '') { toast('warning', 'Informe o KM de saída.'); return; }
     const paradasPlanejadas = planejadas.filter((p) => p.local.trim());
     setSalvando(true);
     try {
       if (modo === 'PORTARIA') {
         await logisticaApi.post('/frota/viagens/portaria', {
-          condutorMatricula: condutorSel!.matricula, condutorNome: condutorSel!.nome, veiculoId,
+          condutorMatricula: condutorSel!.matricula, condutorNome: condutorSel!.nome,
           porteiroMatricula: porteiroMatricula.trim(), porteiroSenha,
+          // Portaria: veículo e KM são obrigatórios (é o portão do veículo).
+          veiculoId,
           kmInicial: Number(kmInicial),
           adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
           finalidade: finalidade.trim() || undefined,
@@ -479,8 +484,8 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
         // Login pessoal — o condutor é o próprio usuário (backend resolve matrícula
         // pelo cadastro; sem senha).
         await logisticaApi.post('/frota/viagens/individual', {
-          veiculoId,
-          kmInicial: Number(kmInicial),
+          veiculoId: veiculoId || undefined,
+          kmInicial: veiculoId ? Number(kmInicial) : undefined,
           dataHoraSaida: isoRetro(saiAntes, dataHoraSaida),
           matricula: matriculaInformada.trim() || undefined, // só quando a tela pediu
           adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
@@ -495,8 +500,9 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       } else {
         // Login COLETIVO (PADRÃO) — identifica o condutor por matrícula+senha.
         await logisticaApi.post('/frota/viagens', {
-          matricula: matricula.trim(), senha, veiculoId,
-          kmInicial: Number(kmInicial),
+          matricula: matricula.trim(), senha,
+          veiculoId: veiculoId || undefined,
+          kmInicial: veiculoId ? Number(kmInicial) : undefined,
           dataHoraSaida: isoRetro(saiAntes, dataHoraSaida),
           adiantamento: adiantamento !== '' ? Number(adiantamento) : undefined,
           finalidade: finalidade.trim() || undefined,
@@ -723,7 +729,9 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           <PassoHeader n={2} titulo="Veículo e saída" hint={podeAvancar ? undefined : 'Valide o condutor primeiro'} ativo={podeAvancar} />
           <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-12">
             <div className="sm:col-span-5">
-              <label className="mb-1 block text-sm font-medium text-slate-600">Veículo (disponível)</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">
+                Veículo {modo === 'PORTARIA' ? '(disponível)' : <span className="font-normal normal-case text-slate-400">(opcional)</span>}
+              </label>
               <select
                 ref={veiculoRef}
                 value={veiculoId}
@@ -736,11 +744,21 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                 disabled={!podeAvancar}
                 className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
               >
-                <option value="">Selecione…</option>
+                <option value="">{modo === 'PORTARIA' ? 'Selecione…' : '— Sem veículo da empresa (outro transporte) —'}</option>
                 {veiculos.map((x) => (
                   <option key={x.id} value={x.id}>{x.placa}{x.modelo ? ` — ${x.modelo}` : ''}{(x.departamentoNome || x.filialNome) ? ` · ${[x.departamentoNome, x.filialNome].filter(Boolean).join(' / ')}` : ''} (KM {x.kmAtual})</option>
                 ))}
               </select>
+              {/* Ponto 3: o efeito de registrar SEM veículo precisa estar na cara de quem
+                  registra — despesa sem veículo é de INDIVÍDUO e fica fora do rateio
+                  por veículo, então não aparece em Custos da Frota (mesma semântica do
+                  RDV). Sem este aviso, "some do custo" viraria surpresa no fechamento. */}
+              {podeAvancar && !veiculoId && modo !== 'PORTARIA' && (
+                <p className="mt-1 text-xs text-slate-500">
+                  Sem veículo da empresa: o registro serve só à <b>prestação de contas</b> (adiantamento e despesas).
+                  Não há hodômetro, e as despesas entram como <b>indivíduo</b> — fora do custo por veículo.
+                </p>
+              )}
               {podeAvancar && veiculos.length === 0 && (
                 <p className="mt-1 text-xs font-medium text-amber-600">Nenhum veículo disponível na filial.</p>
               )}
@@ -881,7 +899,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       <div className="mt-6 flex justify-end">
         <button
           onClick={() => void registrar()}
-          disabled={salvando || !podeAvancar || !veiculoId || kmInicial === ''}
+          disabled={salvando || !podeAvancar || (modo === 'PORTARIA' && !veiculoId) || (!!veiculoId && kmInicial === '')}
           className="inline-flex items-center gap-2 rounded-lg bg-capul-600 px-6 py-3 text-base font-semibold text-white hover:bg-capul-700 disabled:opacity-50"
         >
           {salvando ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />} Registrar saída

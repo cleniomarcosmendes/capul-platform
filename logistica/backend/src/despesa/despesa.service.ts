@@ -114,7 +114,7 @@ export class DespesaService {
     if (!a || a.despesaId !== despesaId) throw new NotFoundException('Anexo não encontrado.');
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId } });
     if (!d || (!ehGestor(roles) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles);
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles, d);
     const buffer = await this.storage.get(a.objectKey);
     return { buffer, mimeType: a.mime ?? 'application/octet-stream' };
   }
@@ -125,7 +125,7 @@ export class DespesaService {
     if (!a || a.despesaId !== despesaId) throw new NotFoundException('Anexo não encontrado.');
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id: despesaId } });
     if (!d || (!ehGestor(roles) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles);
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles, d);
     await this.storage.remove(a.objectKey).catch(() => undefined);
     await this.prisma.anexoDespesa.delete({ where: { id: anexoId } });
     return { ok: true };
@@ -289,13 +289,25 @@ export class DespesaService {
   }
 
   /** Pode gerir (lançar direto/aprovar/contestar) a despesa? Despesa de INDIVÍDUO
-   *  (sem veículo) só o gestor/admin gere; despesa de veículo, gestor OU supervisor. */
-  private async assertPodeGerirVeiculo(veiculoId: string | null, user: JwtPayload, roles?: string[]) {
+   *  (sem veículo) — gestor/admin OU o supervisor do departamento que responde por ela;
+   *  despesa de veículo, gestor OU supervisor. */
+  private async assertPodeGerirVeiculo(
+    veiculoId: string | null,
+    user: JwtPayload,
+    roles?: string[],
+    despesa?: { criadoPorId: string | null; viagemId?: string | null },
+  ) {
     if (!veiculoId) {
-      if (!ehGestor(roles)) {
-        throw new ForbiddenException('Apenas o gestor de frota pode gerir despesa de indivíduo.');
+      if (ehGestor(roles)) return null;
+      // Ponto 3: a viagem SEM veículo (outro meio de transporte) é só prestação de
+      // contas, e TODA despesa dela é de INDIVÍDUO. Se só o gestor de frota pudesse
+      // gerir, o registro nasceria inútil — o supervisor do departamento não
+      // conseguiria nem conferir a conta de quem se reporta a ele. A autoridade aqui é
+      // a mesma do 5b: o departamento que responde pela despesa.
+      if (despesa && (await this.ehSupervisorDoDepto({ ...despesa, veiculoId: null }, user, roles))) {
+        return null;
       }
-      return null;
+      throw new ForbiddenException('Apenas o gestor de frota ou o supervisor do departamento pode gerir despesa de indivíduo.');
     }
     // GESTOR_FROTA/ADMIN administram a frota da empresa toda → alcançam o veículo
     // em QUALQUER filial (frota compartilhável); a despesa mora na filial do veículo.
@@ -704,7 +716,7 @@ export class DespesaService {
       },
     });
     if (!d || (!ehGestor(roles) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles);
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles, d);
     return {
       id: d.id, situacao: d.situacao,
       veiculoId: d.veiculoId, placa: d.veiculo?.placa ?? '—', modelo: d.veiculo?.modelo ?? null,
@@ -742,7 +754,7 @@ export class DespesaService {
    * gestor/supervisor, para a mensagem de erro ser a do caminho que a pessoa usou.
    */
   private async assertPodeMexerNoAcerto(
-    d: { veiculoId: string | null; viagemId?: string | null },
+    d: { criadoPorId: string | null; veiculoId: string | null; viagemId?: string | null },
     user: JwtPayload,
     roles?: string[],
     condutorToken?: string,
@@ -756,7 +768,7 @@ export class DespesaService {
       if (v?.acertoEncerradoEm) throw new BadRequestException('Acerto encerrado — reabra o acerto para alterar.');
       return;
     }
-    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles);
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles, d);
   }
 
   async atualizar(id: string, dto: AtualizarDespesaDto, user: JwtPayload, roles?: string[], condutorToken?: string) {
@@ -819,7 +831,7 @@ export class DespesaService {
   async obterRecibo(id: string, user: JwtPayload, roles?: string[]): Promise<{ buffer: Buffer; mimeType: string }> {
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
     if (!d || (!ehGestor(roles) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles);
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles, d);
     if (!d.comprovanteObjectKey) throw new NotFoundException('Esta despesa não tem recibo anexado.');
     const buffer = await this.storage.get(d.comprovanteObjectKey);
     return { buffer, mimeType: d.comprovanteMime ?? 'application/octet-stream' };

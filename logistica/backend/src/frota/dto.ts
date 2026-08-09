@@ -54,11 +54,19 @@ export class SaidaFrotaDto {
   @IsString() @IsNotEmpty()
   senha!: string;
 
-  @IsString() @IsNotEmpty()
-  veiculoId!: string;
+  /**
+   * Ponto 3: o veículo é OPCIONAL. Há viagens feitas SEM veículo da empresa (outro
+   * meio de transporte) em que o registro é só prestação de contas — adiantamento e
+   * despesas. Sem veículo: nada de situação EM_USO e nada de hodômetro; as despesas
+   * entram como INDIVÍDUO, fora do rateio por veículo (mesmo precedente do RDV).
+   * COM veículo o KM continua obrigatório — validado no serviço, que é onde os dois
+   * campos se conhecem.
+   */
+  @IsOptional() @IsString() @IsNotEmpty()
+  veiculoId?: string;
 
-  @IsInt() @Min(0)
-  kmInicial!: number;
+  @IsOptional() @IsInt() @Min(0)
+  kmInicial?: number;
 
   // Finalidade/destino da viagem (texto livre — vai em observacoesSaida).
   @IsOptional() @IsString() @MaxLength(255)
@@ -113,11 +121,19 @@ export class SaidaIndividualDto {
   @IsOptional() @IsNumber() @Min(0)
   adiantamento?: number;
 
-  @IsString() @IsNotEmpty()
-  veiculoId!: string;
+  /**
+   * Ponto 3: o veículo é OPCIONAL. Há viagens feitas SEM veículo da empresa (outro
+   * meio de transporte) em que o registro é só prestação de contas — adiantamento e
+   * despesas. Sem veículo: nada de situação EM_USO e nada de hodômetro; as despesas
+   * entram como INDIVÍDUO, fora do rateio por veículo (mesmo precedente do RDV).
+   * COM veículo o KM continua obrigatório — validado no serviço, que é onde os dois
+   * campos se conhecem.
+   */
+  @IsOptional() @IsString() @IsNotEmpty()
+  veiculoId?: string;
 
-  @IsInt() @Min(0)
-  kmInicial!: number;
+  @IsOptional() @IsInt() @Min(0)
+  kmInicial?: number;
 
   @IsOptional() @IsString() @MaxLength(255)
   finalidade?: string;
@@ -169,6 +185,11 @@ export class SaidaPortariaDto {
   @IsString() @IsNotEmpty()
   porteiroSenha!: string;
 
+  /**
+   * A PORTARIA registra veículo passando pelo PORTÃO — viagem sem veículo da empresa
+   * não tem evento de portaria, então aqui veículo e hodômetro seguem obrigatórios.
+   * O registro sem veículo (ponto 3) entra pelos fluxos PADRÃO/INDIVIDUAL.
+   */
   @IsString() @IsNotEmpty()
   veiculoId!: string;
 

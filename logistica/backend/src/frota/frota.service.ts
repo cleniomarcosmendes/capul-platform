@@ -263,7 +263,7 @@ export class FrotaService {
     user: JwtPayload,
     condutorMatricula: string,
     condutorNome: string,
-    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; departamentoAprovadorId?: string; paradasPlanejadas?: ParadaPlanejadaDto[]; rdvViagemId?: string; adiantamento?: number; dataHoraSaida?: string },
+    dados: { veiculoId?: string; kmInicial?: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; departamentoAprovadorId?: string; paradasPlanejadas?: ParadaPlanejadaDto[]; rdvViagemId?: string; adiantamento?: number; dataHoraSaida?: string },
   ) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
@@ -274,15 +274,24 @@ export class FrotaService {
     // Frota é recurso COMPARTILHADO: o condutor pode usar veículo de qualquer
     // filial/departamento. A viagem é registrada na filial do login (contexto
     // operacional); o veículo é só emprestado e volta DISPONÍVEL no retorno.
-    const veiculo = await this.prisma.veiculo.findFirst({
-      where: { id: dados.veiculoId, ativo: true },
-    });
-    if (!veiculo) throw new NotFoundException('Veículo não encontrado.');
-    if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
-      throw new BadRequestException(`Veículo indisponível (situação: ${veiculo.situacao}).`);
-    }
-    if (dados.kmInicial < veiculo.kmAtual) {
-      throw new BadRequestException(`KM inicial (${dados.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
+    // Ponto 3: viagem SEM veículo da empresa (outro meio de transporte) — o registro é
+    // só prestação de contas (adiantamento + despesas). Sem veículo não há hodômetro
+    // nem situação a mudar; as despesas entram como INDIVÍDUO, fora do rateio por
+    // veículo (mesmo precedente do RDV, onde `veiculoId = null` significa indivíduo).
+    const veiculo = dados.veiculoId
+      ? await this.prisma.veiculo.findFirst({ where: { id: dados.veiculoId, ativo: true } })
+      : null;
+    if (dados.veiculoId && !veiculo) throw new NotFoundException('Veículo não encontrado.');
+    if (veiculo) {
+      if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
+        throw new BadRequestException(`Veículo indisponível (situação: ${veiculo.situacao}).`);
+      }
+      // COM veículo o hodômetro é obrigatório — é ele que alimenta custo por km e a
+      // manutenção preventiva. A frouxidão do DTO existe só para o caso SEM veículo.
+      if (dados.kmInicial == null) throw new BadRequestException('Informe o KM de saída do veículo.');
+      if (dados.kmInicial < veiculo.kmAtual) {
+        throw new BadRequestException(`KM inicial (${dados.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
+      }
     }
 
     const viagem = await this.prisma.$transaction(async (tx) => {
@@ -297,13 +306,13 @@ export class FrotaService {
           filialId,
           tipo: TipoViagem.FROTA,
           situacao: StatusViagem.EM_CURSO,
-          veiculoId: veiculo.id,
+          veiculoId: veiculo?.id ?? null,
           condutorMatricula,
           condutorNome,
           rdvViagemId,
           departamentoSolicitanteId: dados.departamentoSolicitanteId ?? null,
           departamentoAprovadorId,
-          kmInicial: dados.kmInicial,
+          kmInicial: veiculo ? dados.kmInicial : null,
           localSaida: dados.localSaida ?? null,
           observacoesSaida: dados.finalidade ?? null,
           ...(dados.adiantamento != null ? { adiantamento: new Prisma.Decimal(dados.adiantamento) } : {}),
@@ -311,12 +320,15 @@ export class FrotaService {
           criadoPorId: user.sub,
         },
       });
-      await tx.veiculo.update({ where: { id: veiculo.id }, data: { situacao: SituacaoVeiculo.EM_USO } });
+      if (veiculo) {
+        await tx.veiculo.update({ where: { id: veiculo.id }, data: { situacao: SituacaoVeiculo.EM_USO } });
+      }
       return v;
     });
     await this.seedParadasPlanejadas(viagem.id, dados.paradasPlanejadas);
-    // Anexa a placa/modelo p/ a confirmação do app ("PLACA · viagem #N").
-    return { ...viagem, placa: veiculo.placa, modelo: veiculo.modelo };
+    // Anexa a placa/modelo p/ a confirmação do app ("PLACA · viagem #N"). Sem veículo
+    // o app mostra só o número da viagem.
+    return { ...viagem, placa: veiculo?.placa ?? null, modelo: veiculo?.modelo ?? null };
   }
 
   /** Cria as paradas PLANEJADAS da rota informada na saída (opcional). */
