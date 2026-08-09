@@ -143,8 +143,13 @@ export class FrotaController {
   /** Ajuste/fechamento por gestor de frota, supervisor do veículo ou Supervisor de Departamento. */
   @Patch('viagens/:id')
   @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR_FROTA')
-  ajustar(@Param('id') id: string, @Body() dto: AjusteGestorDto, @CurrentUser() user: JwtPayload) {
-    return this.frota.ajustarPorGestor(id, dto, user, rolesLogistica(user));
+  ajustar(
+    @Param('id') id: string,
+    @Body() dto: AjusteGestorDto,
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-condutor-token') condutorToken?: string,
+  ) {
+    return this.frota.ajustarPorGestor(id, dto, user, rolesLogistica(user), condutorToken);
   }
 
   /** Encerrar / reabrir o ACERTO da viagem — trava despesa+adiantamento, INDEPENDENTE

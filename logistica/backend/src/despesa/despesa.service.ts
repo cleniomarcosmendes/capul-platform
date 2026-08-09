@@ -730,10 +730,39 @@ export class DespesaService {
    * veículo). Não troca o veículo (manteria o escopo) nem mexe na situação —
    * é correção de valor/tipo/data/fornecedor/observação.
    */
-  async atualizar(id: string, dto: AtualizarDespesaDto, user: JwtPayload, roles?: string[]) {
+  /**
+   * Quem pode INCLUIR/EDITAR/EXCLUIR a despesa deste acerto (5a).
+   *
+   * Login PADRÃO é compartilhado (caixa/portaria): a autoridade não pode vir da conta,
+   * tem de vir da PESSOA. Quem digitou matrícula+senha recebe o token de condutor
+   * daquela viagem — e é ele, junto do supervisor do departamento (e da gestão), quem
+   * mexe no acerto. A conta de caixa por si só não basta.
+   *
+   * Ordem importa: tenta o token primeiro (o caminho do PADRÃO) e só depois a regra de
+   * gestor/supervisor, para a mensagem de erro ser a do caminho que a pessoa usou.
+   */
+  private async assertPodeMexerNoAcerto(
+    d: { veiculoId: string | null; viagemId?: string | null },
+    user: JwtPayload,
+    roles?: string[],
+    condutorToken?: string,
+  ) {
+    if (condutorToken && d.viagemId) {
+      // Token preso a {viagem, condutor}: vale só para a viagem da despesa.
+      this.condutorToken.verificar(condutorToken, d.viagemId);
+      const v = await this.prisma.viagem.findUnique({
+        where: { id: d.viagemId }, select: { acertoEncerradoEm: true },
+      });
+      if (v?.acertoEncerradoEm) throw new BadRequestException('Acerto encerrado — reabra o acerto para alterar.');
+      return;
+    }
+    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles);
+  }
+
+  async atualizar(id: string, dto: AtualizarDespesaDto, user: JwtPayload, roles?: string[], condutorToken?: string) {
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
     if (!d || (!ehGestor(roles) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles);
+    await this.assertPodeMexerNoAcerto(d, user, roles, condutorToken);
 
     if (dto.tipoDespesaId) {
       const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
@@ -769,10 +798,10 @@ export class DespesaService {
   }
 
   /** Exclui uma despesa (e o recibo, best-effort). Mesmo escopo de gestão. */
-  async excluir(id: string, user: JwtPayload, roles?: string[]) {
+  async excluir(id: string, user: JwtPayload, roles?: string[], condutorToken?: string) {
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
     if (!d || (!ehGestor(roles) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeGerirVeiculo(d.veiculoId, user, roles);
+    await this.assertPodeMexerNoAcerto(d, user, roles, condutorToken);
     // Anexos: o cascade apaga as LINHAS; os binários no cofre saem aqui (antes do delete).
     const anexos = await this.prisma.anexoDespesa.findMany({ where: { despesaId: id }, select: { objectKey: true } });
     await this.prisma.despesaVeiculo.delete({ where: { id } });

@@ -1307,7 +1307,7 @@ export function RetornoForm({ v, onClose, onDone }: { v: ViagemFrota; onClose: (
 
 // Lançamento de despesa NA viagem em curso → PENDENTE. A viagem já foi aberta
 // pelo condutor autenticado na saída — herda o condutor, NÃO pede senha de novo.
-export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFrota; tipos: TipoDespesa[]; onClose: () => void; onDone: () => void }) {
+export function DespesaCondutorForm({ v, tipos, onClose, onDone, condutorToken }: { v: ViagemFrota; tipos: TipoDespesa[]; onClose: () => void; onDone: () => void; condutorToken?: string }) {
   const { toast } = useToast();
   const [tipoDespesaId, setTipoDespesaId] = useState('');
   const [valor, setValor] = useState('');
@@ -1322,6 +1322,10 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
     logisticaApi.get<FornecedorDespesa[]>('/despesas/fornecedores', { params: { ativos: 'true' } })
       .then((r) => setFornecedores(r.data)).catch(() => {});
   }, []);
+
+  // Login PADRÃO: identifica a PESSOA que responde pelo lançamento (a conta é
+  // compartilhada). Ausente = INDIVIDUAL, e o backend usa a regra de sempre.
+  const cfgCondutor = condutorToken ? { headers: { 'x-condutor-token': condutorToken } } : undefined;
 
   const lancar = async () => {
     if (!tipoDespesaId) { toast('warning', 'Selecione o tipo de despesa.'); return; }
@@ -1338,13 +1342,13 @@ export function DespesaCondutorForm({ v, tipos, onClose, onDone }: { v: ViagemFr
         if (fornecedor.trim()) fd.append('fornecedor', fornecedor.trim());
         if (obs.trim()) fd.append('observacao', obs.trim());
         fd.append('comprovante', recibo);
-        await logisticaApi.post('/despesas/viagem', fd);
+        await logisticaApi.post('/despesas/viagem', fd, cfgCondutor);
       } else {
         await logisticaApi.post('/despesas/viagem', {
           viagemId: v.id, tipoDespesaId, valor: parseMoeda(valor),
           fornecedorId: fornecedorId || undefined,
           fornecedor: fornecedor.trim() || undefined, observacao: obs.trim() || undefined,
-        });
+        }, cfgCondutor);
       }
       toast('success', 'Despesa lançada — pode lançar outra.');
       // Limpa pra lançar a PRÓXIMA despesa da mesma viagem sem recarregar a tela.

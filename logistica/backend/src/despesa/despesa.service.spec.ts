@@ -123,3 +123,57 @@ describe('DespesaService.aprovar — autoridade por DEPARTAMENTO (5b)', () => {
     await expect(svc.aprovar('dsp1', gestor, ['GESTOR_FROTA'])).rejects.toThrow(/gestor de frota/i);
   });
 });
+
+/**
+ * ⭐ 5a (09/08) — acerto pelo desktop com login PADRÃO.
+ *
+ * A conta PADRÃO é compartilhada (caixa/portaria): a autoridade sobre o acerto não
+ * pode vir da CONTA, tem de vir da PESSOA que digitou matrícula+senha. Antes só o
+ * gestor/supervisor mexia em despesa lançada — quem usa login de caixa não conseguia
+ * prestar contas pelo desktop, e o acerto virava privilégio de quem tem INDIVIDUAL.
+ */
+describe('DespesaService — acerto pelo condutor identificado (5a)', () => {
+  let prisma: any;
+  let svc: DespesaService;
+  let token: any;
+  const caixa = { sub: 'caixa1', filialId: 'f1', tipo: 'PADRAO', modulos: [{ codigo: 'LOGISTICA', role: 'REGISTRADOR_FROTA' }] } as any;
+  const despesa = { id: 'dsp1', filialId: 'f1', veiculoId: 'v1', viagemId: 'vg1', comprovanteObjectKey: null };
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    token = { verificar: jest.fn(), emitir: jest.fn(), assertOpera: jest.fn() };
+    svc = new DespesaService(prisma, { remove: jest.fn() } as any, dep(), token);
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa);
+    prisma.despesaVeiculo.update.mockResolvedValue(despesa);
+    prisma.despesaVeiculo.delete.mockResolvedValue(despesa);
+    prisma.anexoDespesa.findMany.mockResolvedValue([]);
+    prisma.viagem.findUnique.mockResolvedValue({ acertoEncerradoEm: null });
+  });
+
+  it('com token do condutor → edita a despesa da viagem dele', async () => {
+    await expect(svc.atualizar('dsp1', {} as any, caixa, ['REGISTRADOR_FROTA'], 'tk')).resolves.toBeDefined();
+    expect(token.verificar).toHaveBeenCalledWith('tk', 'vg1');
+  });
+
+  it('com token do condutor → exclui a despesa', async () => {
+    await expect(svc.excluir('dsp1', caixa, ['REGISTRADOR_FROTA'], 'tk')).resolves.toEqual({ ok: true });
+  });
+
+  // O token é preso a {viagem, condutor}: não serve para mexer no acerto de outra.
+  it('token de OUTRA viagem → recusado pelo verificador', async () => {
+    token.verificar.mockImplementation(() => { throw new Error('403'); });
+    await expect(svc.atualizar('dsp1', {} as any, caixa, ['REGISTRADOR_FROTA'], 'tk-outra')).rejects.toThrow();
+  });
+
+  // A conta de caixa por si só não basta — a autoridade é da PESSOA.
+  it('SEM token → cai na regra de gestor/supervisor e recusa a conta de caixa', async () => {
+    prisma.veiculo.findFirst.mockResolvedValue({ id: 'v1', filialId: 'f1', supervisorId: 'OUTRO', departamentoLotacaoId: 'd9' });
+    await expect(svc.atualizar('dsp1', {} as any, caixa, ['REGISTRADOR_FROTA'])).rejects.toThrow(/gestor de frota|supervisor/i);
+  });
+
+  // Encerrar o acerto é o que fecha o financeiro — vale inclusive para o condutor.
+  it('acerto ENCERRADO → nem o condutor identificado altera', async () => {
+    prisma.viagem.findUnique.mockResolvedValue({ acertoEncerradoEm: new Date() });
+    await expect(svc.atualizar('dsp1', {} as any, caixa, ['REGISTRADOR_FROTA'], 'tk')).rejects.toThrow(/Acerto encerrado/);
+  });
+});

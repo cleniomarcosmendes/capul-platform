@@ -183,16 +183,28 @@ export class DespesaController {
     return this.despesas.removerAnexo(id, anexoId, user, rolesLogistica(user));
   }
 
-  /** Editar despesa (gestor de frota / supervisor do veículo). */
+  /** Editar despesa: gestor de frota / supervisor do veículo / supervisor do
+   *  departamento — ou o CONDUTOR que se identificou nesta viagem (login PADRÃO). */
   @Patch(':id')
-  atualizar(@Param('id') id: string, @Body() dto: AtualizarDespesaDto, @CurrentUser() user: JwtPayload) {
-    return this.despesas.atualizar(id, dto, user, rolesLogistica(user));
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  atualizar(
+    @Param('id') id: string,
+    @Body() dto: AtualizarDespesaDto,
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-condutor-token') condutorToken?: string,
+  ) {
+    return this.despesas.atualizar(id, dto, user, rolesLogistica(user), condutorToken);
   }
 
-  /** Excluir despesa (gestor de frota / supervisor do veículo). */
+  /** Excluir despesa — mesma regra do editar. */
   @Delete(':id')
-  excluir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.despesas.excluir(id, user, rolesLogistica(user));
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  excluir(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-condutor-token') condutorToken?: string,
+  ) {
+    return this.despesas.excluir(id, user, rolesLogistica(user), condutorToken);
   }
 
   @Patch(':id/aprovar')

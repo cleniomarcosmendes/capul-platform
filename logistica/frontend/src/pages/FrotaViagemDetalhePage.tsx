@@ -25,7 +25,7 @@ export function FrotaViagemDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { temRole } = useAuth();
+  const { usuario, temRole } = useAuth();
   const ehGestor = temRole('GESTOR_FROTA', 'ADMIN');
   const ehPortaria = temRole('PORTARIA');
   // Cancelar saída (registrada errada) — gestor de frota (cross-filial) ou de entrega (própria filial).
@@ -47,6 +47,44 @@ export function FrotaViagemDetalhePage() {
   const [mostrarCancelar, setMostrarCancelar] = useState(false);
   const [motivoCancel, setMotivoCancel] = useState('');
   const [cancelando, setCancelando] = useState(false);
+  // 5a — ACERTO com login PADRÃO. A conta de caixa é compartilhada, então quem
+  // responde pelo acerto é a PESSOA: ela se identifica com matrícula+senha e recebe um
+  // token preso a {viagem, condutor}. Sem isso, prestar contas pelo desktop era
+  // privilégio de quem tem login INDIVIDUAL.
+  const ehPadrao = usuario?.tipo === 'PADRAO';
+  const [condutorToken, setCondutorToken] = useState('');
+  const [condutorIdent, setCondutorIdent] = useState<string | null>(null);
+  const [matCond, setMatCond] = useState('');
+  const [senhaCond, setSenhaCond] = useState('');
+  const [identificando, setIdentificando] = useState(false);
+
+  /** Cabeçalho do condutor identificado — vai nas ações do acerto. */
+  const hdrCondutor = condutorToken ? { headers: { 'x-condutor-token': condutorToken } } : undefined;
+
+  const identificarCondutor = async () => {
+    if (!matCond.trim() || !senhaCond) { toast('warning', 'Informe matrícula e senha.'); return; }
+    setIdentificando(true);
+    try {
+      // SEMPRE 200 {valida, motivo} — senha errada não pode virar 401 (o interceptor
+      // desloga em 401; ver a regra do módulo).
+      const r = await logisticaApi.post<{ valida: boolean; motivo?: string; token?: string; condutorNome?: string }>(
+        `/frota/viagens/${id}/autenticar-condutor`, { matricula: matCond.trim(), senha: senhaCond });
+      if (!r.data.valida || !r.data.token) {
+        const msg = r.data.motivo === 'NAO_E_O_CONDUTOR'
+          ? 'Esta matrícula não é a do condutor desta viagem.'
+          : r.data.motivo === 'INDISPONIVEL'
+            ? 'Portal do RH indisponível. Tente novamente em instantes.'
+            : 'Matrícula ou senha inválidas.';
+        toast('warning', msg);
+        return;
+      }
+      setCondutorToken(r.data.token);
+      setCondutorIdent(r.data.condutorNome ?? matCond.trim());
+      setSenhaCond('');
+      toast('success', 'Condutor identificado — pode lançar o acerto.');
+    } catch (e) { toast('error', errMsg(e, 'Falha ao identificar o condutor.')); }
+    finally { setIdentificando(false); }
+  };
 
   const carregar = useCallback(async () => {
     if (!id) return;
@@ -72,7 +110,7 @@ export function FrotaViagemDetalhePage() {
   const salvarAdiantamento = async () => {
     setSalvandoAdiant(true);
     try {
-      await logisticaApi.patch(`/frota/viagens/${id}`, { adiantamento: Number(adiantVal) || 0 });
+      await logisticaApi.patch(`/frota/viagens/${id}`, { adiantamento: Number(adiantVal) || 0 }, hdrCondutor);
       setEditAdiant(false); await carregar();
       toast('success', 'Adiantamento salvo.');
     } catch (e) { toast('error', errMsg(e, 'Falha ao salvar o adiantamento.')); } finally { setSalvandoAdiant(false); }
@@ -103,7 +141,9 @@ export function FrotaViagemDetalhePage() {
   const sit = SIT_META[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
   const emCurso = v.situacao === 'EM_CURSO';
   // Gestor opera qualquer viagem; demais só a própria (registrante/supervisor). Senão, só leitura.
-  const podeOperar = ehGestor || !!v.ehMinha;
+  // Condutor identificado (login PADRÃO) opera o acerto DESTA viagem — a autoridade é
+  // da PESSOA que digitou matrícula+senha, não da conta de caixa compartilhada.
+  const podeOperar = ehGestor || !!v.ehMinha || !!condutorToken;
   // Acerto encerrado (independente da conclusão) trava despesa/adiantamento. Enquanto
   // aberto, dá pra lançar durante a viagem E no acerto (após a entrega do veículo).
   const acertoEncerrado = !!v.acertoEncerradoEm;
@@ -145,6 +185,39 @@ export function FrotaViagemDetalhePage() {
           <Info rotulo="KM" valor={v.kmRodado != null ? `${v.kmRodado} km` : v.kmInicial != null ? `saída ${v.kmInicial}` : '—'} />
           <Info rotulo="Finalidade / destino" valor={v.finalidade ?? '—'} />
         </div>
+        {/* 5a — ACERTO com login PADRÃO (caixa/portaria). A conta é compartilhada, então
+            quem responde pelo acerto é a PESSOA: identifica-se com matrícula+senha e
+            recebe um token preso a ESTA viagem. Antes o desktop não tinha esse caminho, e
+            prestar contas acabava sendo privilégio de quem tem login INDIVIDUAL. */}
+        {ehPadrao && !acertoEncerrado && v.situacao !== 'CANCELADA' && (
+          condutorToken ? (
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+              ✓ Identificado como <b>{condutorIdent}</b> — lançamentos deste acerto ficam no nome dele.
+            </div>
+          ) : (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+              <p className="mb-2 text-sm text-amber-800">
+                Login compartilhado: para lançar o acerto, o <b>condutor</b> desta viagem precisa se identificar.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={matCond} onChange={(e) => setMatCond(e.target.value)} placeholder="Matrícula"
+                  className="w-36 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                />
+                <input
+                  type="password" value={senhaCond} onChange={(e) => setSenhaCond(e.target.value)} placeholder="Senha"
+                  onKeyDown={(e) => { if (e.key === 'Enter') void identificarCondutor(); }}
+                  className="w-40 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm"
+                />
+                <button
+                  onClick={() => void identificarCondutor()} disabled={identificando}
+                  className="rounded-lg bg-capul-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-capul-700 disabled:opacity-50"
+                >{identificando ? 'Validando…' : 'Identificar'}</button>
+              </div>
+            </div>
+          )
+        )}
+
         {/* Adiantamento (único) — base do acerto; editável por quem opera, em qualquer status. */}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <Wallet className="h-4 w-4 text-slate-400" />
@@ -226,7 +299,7 @@ export function FrotaViagemDetalhePage() {
               </div>
             </div>
           )}
-          {podeLancar && <DespesaCondutorForm v={v} tipos={tipos} onClose={voltar} onDone={() => void carregar()} />}
+          {podeLancar && <DespesaCondutorForm v={v} tipos={tipos} onClose={voltar} onDone={() => void carregar()} condutorToken={condutorToken || undefined} />}
         </Secao>
       )}
       <Secao cor="border-l-slate-300">

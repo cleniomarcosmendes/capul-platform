@@ -73,7 +73,16 @@ export class FrotaService {
     const v = await this.prisma.viagem.findUnique({ where: { id: viagemId } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
     if (v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
-    if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A viagem não está em curso.');
+    // O condutor se identifica enquanto a viagem roda E enquanto o ACERTO está aberto.
+    // Antes exigia EM_CURSO — e o acerto acontece DEPOIS de entregar o veículo (viagem
+    // CONCLUIDA), então quem usa login PADRÃO não conseguia sequer se identificar para
+    // prestar contas: o acerto acabava sendo privilégio de quem tem login INDIVIDUAL.
+    // A trava certa é o ACERTO ENCERRADO (que é o que fecha o financeiro), não a
+    // conclusão da viagem — mesma regra que `lancarNaViagem` já usava para a despesa.
+    if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada.');
+    if (v.situacao !== StatusViagem.EM_CURSO && v.acertoEncerradoEm) {
+      throw new BadRequestException('Acerto encerrado — reabra o acerto para lançar.');
+    }
 
     const r = await this.condutor.validar(matricula, senha);
     if (r.status === 'INDISPONIVEL') return { valida: false as const, motivo: 'INDISPONIVEL' as const };
@@ -483,7 +492,7 @@ export class FrotaService {
   }
 
   /** Ajuste/fechamento por GESTOR_FROTA ou supervisor do veículo. */
-  async ajustarPorGestor(id: string, dto: AjusteGestorDto, user: JwtPayload, roles?: string[]) {
+  async ajustarPorGestor(id: string, dto: AjusteGestorDto, user: JwtPayload, roles?: string[], condutorToken?: string) {
     const v = await this.prisma.viagem.findUnique({ where: { id }, include: { veiculo: { select: { supervisorId: true, departamentoLotacaoId: true } } } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
 
@@ -492,9 +501,18 @@ export class FrotaService {
     // (registrante/supervisor) só a sua — que está na própria filial de qualquer forma.
     if (!ehGestor && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
     // Dono da operação (registrante OU supervisor do veículo) também ajusta a SUA.
-    const ehDono = await this.donoOuEscopo(v, user);
+    // E o CONDUTOR que se identificou nesta viagem (login PADRÃO): a conta de caixa é
+    // compartilhada, então quem responde pelo adiantamento é a PESSOA que digitou
+    // matrícula+senha, não a conta. Sem isto, prestar contas pelo desktop era
+    // privilégio de quem tem login INDIVIDUAL.
+    const ehCondutorIdentificado = (() => {
+      if (!condutorToken) return false;
+      this.condutorToken.verificar(condutorToken, v.id); // 403 se divergente/expirado
+      return true;
+    })();
+    const ehDono = ehCondutorIdentificado || (await this.donoOuEscopo(v, user));
     if (!ehGestor && !ehDono) {
-      throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem ajustar.');
+      throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo, quem registrou a saída ou o condutor identificado podem ajustar.');
     }
     // Acerto encerrado trava o adiantamento (financeiro); KM/obs (correção) seguem.
     if (dto.adiantamento !== undefined && v.acertoEncerradoEm) {
