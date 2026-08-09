@@ -27,6 +27,10 @@
 - [ ] Escolher veículo + KM e **registrar**. A viagem nasce com esse departamento
       gravado.
 
+> ⚠️ **Só há 1 veículo DISPONÍVEL na filial 01.** Ao registrar, ele vai para EM_USO e
+> some da lista até o retorno. **Registre o retorno ao terminar** — senão o roteiro 4,
+> que precisa de uma viagem com veículo, fica sem carro para usar.
+
 ## 3.2 ⭐ Quando o departamento vem do LOGIN, a tela avisa
 
 Este é o elo frágil: o login PADRÃO é do **posto** (caixa/portaria), não da pessoa.
@@ -42,6 +46,12 @@ Este é o elo frágil: o login PADRÃO é do **posto** (caixa/portaria), não da
       ficariam pendentes sem quem aprovasse."*
 - [ ] **Corrigir na tela**: escolher **Tecnologia da Informacao** no seletor. O aviso
       some e passa a mostrar o nome do aprovador.
+
+> ⚠️ **O seletor fica desabilitado até o condutor ser validado** — e `agrounai` é login
+> PADRÃO, que exige **matrícula + senha reais** do portal RH. Sem credencial real dá
+> para **ver** o aviso (é o que importa aqui), mas não para **corrigir**. Para exercitar
+> a correção sem senha, use um login INDIVIDUAL (`condutor_ind`) e troque o
+> departamento no seletor.
 
 > É a diferença entre o desenho antigo e o novo: antes, a despesa simplesmente ia
 > para o supervisor do veículo e ninguém ficava sabendo. Agora quem registra vê e
@@ -63,6 +73,16 @@ Ela **não tem matrícula** em `core.usuarios`, então o departamento também ve
 > departamento da pessoa e o fallback nem seria exercitado.
 
 ## 3.3 A aprovação respeita o departamento gravado
+
+> ### 🔴 BLOQUEADO — defeito encontrado na revisão de 09/08 (não é do roteiro)
+> A autoridade sobre a despesa ficou com **duas fontes que discordam**: `aprovar` usa a
+> **permissão** (papel + departamento, do 5b), mas a **listagem** ainda usa os
+> departamentos dos **veículos que a pessoa supervisiona** (regra antiga). Para o
+> `supdept01` os dois conjuntos são disjuntos — permissão em **T.I.**, veículo em
+> **Administrativo** —, então a despesa **não aparece na lista dele** e o botão de
+> aprovar é inalcançável pela tela.
+>
+> **Pule este item** até a correção. Os demais itens do roteiro rodam normalmente.
 
 Com uma despesa lançada na viagem do cenário 3.1 (departamento **T.I.**):
 

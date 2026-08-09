@@ -42,6 +42,16 @@
 
 ## 5.4 O supervisor do departamento consegue conferir a conta
 
+> ### 🔴 BLOQUEADO — defeito encontrado na revisão de 09/08 (não é do roteiro)
+> A autoridade sobre a despesa ficou com **duas fontes que discordam**: `aprovar` usa a
+> **permissão** (papel + departamento, do 5b), mas a **listagem** ainda usa os
+> departamentos dos **veículos que a pessoa supervisiona** (regra antiga). Para o
+> `supdept01` os dois conjuntos são disjuntos — permissão em **T.I.**, veículo em
+> **Administrativo** —, então a despesa **não aparece na lista dele** e o botão de
+> aprovar é inalcançável pela tela.
+>
+> **Pule este item** até a correção. Os demais itens do roteiro rodam normalmente.
+
 Este é o encaixe com o 5b — sem ele, o registro nasceria inútil.
 
 - [ ] Entrar como o **Supervisor de Departamento** do departamento que ficou gravado

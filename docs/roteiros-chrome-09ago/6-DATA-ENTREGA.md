@@ -4,6 +4,10 @@
 **Telas:** `https://localhost/entregas/` → **Entregas → Nova** e **Rotas → Montar rota**.
 **Tempo:** ~10 min. **Filial:** 02 (Supermercado) — é onde há entregas e entregador.
 
+> ⚠️ **A filial 02 não tem veículo DISPONÍVEL.** Este roteiro só **monta** a rota (fila,
+> ordem e alerta) e não precisa despachar — mas não tente concluir o despacho, que
+> exige veículo e motorista.
+
 > **O caso.** Há locais atendidos em **dias específicos** — a rota daquela região só
 > passa em certos dias. A entrega só tinha `horario` (texto livre), que diz a *hora*
 > preferida e nunca o *dia*.

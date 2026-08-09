@@ -33,6 +33,11 @@ dela** — e por mais ninguém.
 
 - [ ] Entrar como `supunai` (**PADRAO**, filial 02, senha `123456`) → **Registro de
       Viagem**.
+
+> 🔴 **Login PADRÃO exige matrícula + senha reais** para o formulário liberar o
+> registro. Sem credencial real, faça este passo com `raydeborges` (INDIVIDUAL,
+> `Temp@123`) — o departamento também cai no fallback do login (Supermercado), então a
+> cadeia do 5b continua a mesma.
 - [ ] Escolher **"— Sem veículo da empresa (outro transporte) —"**.
 - [ ] Conferir o campo **"Departamento que responde pelas despesas"**: resolve para
       **Supermercado** (departamento do login) e mostra **"Aprovado por *Renata
@@ -52,6 +57,16 @@ dela** — e por mais ninguém.
 - [ ] Lançar uma despesa de categoria **INDIVÍDUO** → nasce **PENDENTE**.
 
 ### Passo 4 — Só quem responde pelo departamento aprova (5b)
+
+> ### 🔴 BLOQUEADO — defeito encontrado na revisão de 09/08 (não é do roteiro)
+> A autoridade sobre a despesa ficou com **duas fontes que discordam**: `aprovar` usa a
+> **permissão** (papel + departamento, do 5b), mas a **listagem** ainda usa os
+> departamentos dos **veículos que a pessoa supervisiona** (regra antiga). Para o
+> `supdept01` os dois conjuntos são disjuntos — permissão em **T.I.**, veículo em
+> **Administrativo** —, então a despesa **não aparece na lista dele** e o botão de
+> aprovar é inalcançável pela tela.
+>
+> **Pule este item** até a correção. Os demais itens do roteiro rodam normalmente.
 
 - [ ] `renataborges` (SUPERVISOR_FROTA do **Supermercado**) → vê a despesa e
       **aprova**.
