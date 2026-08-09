@@ -51,21 +51,28 @@ Ainda em `supdeptb` (hoje **GESTOR_ENTREGA** no T.I.):
 > Entregas sem nenhum aviso. Verificado ao vivo: a mesma rota dava **403 antes** e
 > **200 depois** da correção.
 
-## 1.4 O papel novo só vale no PRÓXIMO token
+## 1.4 ⭐ Menu e permissão têm fontes diferentes — e discordam por um tempo
 
-> **Correção de 09/08:** este item pedia antes "uma aba logada antes do deploy, para
-> exercitar o token sem `departamentos[]`". **Não é reproduzível**: o auth-gateway
-> emite `departamentos[]` desde a Sub-fase 1.4 — o que faltava era a Logística *ler*.
-> Nenhum token em circulação exercita aquele fallback, que está coberto por teste
-> unitário (`roles-logistica.spec.ts`). No lugar, vale este, que é real e operacional:
+> **Reescrito duas vezes.** A 1ª versão pedia um token anterior ao deploy (irreproduzível).
+> A 2ª dizia "o papel novo só aparece depois de relogar" — **também errado**. Medido por
+> API em 09/08: o **menu** lê `/me`, que é calculado **do banco** e já traz o papel novo;
+> o **guard** lê o **JWT**, que continua o de antes. Então, logo depois de conceder um
+> papel, a pessoa **vê** o item de menu e a tela vem **vazia**.
 
-- [ ] Com `supdeptb` **já logado** noutra aba, conceder (pelo `admin`) o 2º papel.
-- [ ] Na aba dele, **sem relogar**: navegar normalmente — nada quebra, mas o papel
-      novo **ainda não aparece** (o token em uso é o de antes).
-- [ ] **Logout + login** → os dois papéis aparecem.
+Com `supdeptb` **já logado** noutra aba, conceder (pelo `admin`) o 2º papel
+(SUPERVISOR_FROTA / Supermercado). Na aba dele, **sem relogar**, dar F5:
 
-> Vale saber na operação: "dei o papel e não apareceu" se resolve com logout/login,
-> não é defeito.
+- [ ] O rótulo do perfil e o menu **já mostram os dois papéis** — vêm do `/me`.
+- [ ] Mas abrir **Custos da Frota / Despesas** traz **lista vazia**: o guard ainda usa o
+      token antigo, que só tem GESTOR_ENTREGA.
+- [ ] **Logout + login** → a mesma tela passa a trazer as despesas do Supermercado.
+
+**Medido por API** (mesmo usuário, mesma tela): **0 itens** com o token antigo,
+**8 itens** depois de relogar — com o menu mostrando os dois papéis o tempo todo.
+
+> **Isto não é falha do multi-role**; é o intervalo entre conceder e o token novo. Vale
+> registrar como comportamento conhecido: **quem receber papel novo precisa sair e
+> entrar**. "Apareceu no menu e não funciona" tem essa causa — não é bug de permissão.
 
 ---
 
