@@ -170,4 +170,64 @@ export class CoreLookupService {
       WHERE u.id = ${motoristaId} AND u.status = 'ATIVO' AND u.filial_principal_id = ${filialId}`);
     if (!r[0]?.n) throw new BadRequestException('Motorista inválido: precisa ter o papel Entregador ativo nesta filial.');
   }
+
+  /**
+   * Usuários ELEGÍVEIS a Supervisor Responsável do veículo — alimenta o seletor do
+   * cadastro. Mesmos papéis que `assertSupervisorDeVeiculo` aceita, para o campo não
+   * oferecer quem o backend vai recusar (o formulário listava a filial INTEIRA, e foi
+   * assim que um GESTOR_ENTREGA acabou no campo).
+   *
+   * SUPERVISOR_FROTA entra pela filial do veículo; GESTOR_FROTA/ADMIN entram sempre
+   * (administram a frota da empresa toda).
+   */
+  async supervisoresDeVeiculo(filialId: string): Promise<{ id: string; nome: string; papel: string }[]> {
+    if (!filialId) return [];
+    return this.prisma.$queryRaw<{ id: string; nome: string; papel: string }[]>(Prisma.sql`
+      SELECT DISTINCT ON (u.id) u.id, TRIM(u.nome) AS nome, rm.codigo AS papel
+      FROM "core"."usuarios" u
+      JOIN "core"."permissoes_modulo" pm ON pm.usuario_id = u.id AND pm.status = 'ATIVO'
+      JOIN "core"."modulos_sistema" m ON m.id = pm.modulo_id AND m.codigo = 'LOGISTICA'
+      JOIN "core"."roles_modulo" rm ON rm.id = pm.role_modulo_id
+      WHERE u.status = 'ATIVO'
+        AND (
+          (rm.codigo = 'SUPERVISOR_FROTA' AND u.filial_principal_id = ${filialId})
+          OR rm.codigo IN ('GESTOR_FROTA', 'ADMIN')
+        )
+      -- DISTINCT ON: multi-role pode trazer a mesma pessoa por 2 departamentos.
+      ORDER BY u.id, CASE rm.codigo WHEN 'SUPERVISOR_FROTA' THEN 1 WHEN 'GESTOR_FROTA' THEN 2 ELSE 3 END`);
+  }
+
+  /**
+   * Garante que o SUPERVISOR RESPONSÁVEL do veículo tem papel para exercer a função.
+   *
+   * Ser `veiculo.supervisorId` É a concessão: quem está nesse campo gere o veículo
+   * (manutenção, ajuste de viagem, despesa). Mas o cadastro só validava que o usuário
+   * EXISTE (`validarUsuario`) — então aceitava alguém sem papel nenhum de frota e não
+   * avisava. O usuário pôs um GESTOR_ENTREGA no campo, não conseguiu acompanhar nada,
+   * e a saída foi criar um segundo usuário. Mesma lição do `assertEntregador`.
+   *
+   * Papéis aceitos: SUPERVISOR_FROTA (Supervisor de Departamento — o caso normal),
+   * GESTOR_FROTA e ADMIN. Multi-role: basta ter UM deles em QUALQUER departamento.
+   * Filial: SUPERVISOR_FROTA é papel de filial (tem de ser a do veículo); GESTOR_FROTA
+   * e ADMIN administram a frota da empresa toda, então valem em qualquer filial.
+   */
+  async assertSupervisorDeVeiculo(usuarioId: string, filialId: string): Promise<void> {
+    const rows = await this.prisma.$queryRaw<{ role: string; mesmaFilial: boolean }[]>(Prisma.sql`
+      SELECT rm.codigo AS role, (u.filial_principal_id = ${filialId}) AS "mesmaFilial"
+      FROM "core"."usuarios" u
+      JOIN "core"."permissoes_modulo" pm ON pm.usuario_id = u.id AND pm.status = 'ATIVO'
+      JOIN "core"."modulos_sistema" m ON m.id = pm.modulo_id AND m.codigo = 'LOGISTICA'
+      JOIN "core"."roles_modulo" rm ON rm.id = pm.role_modulo_id
+      WHERE u.id = ${usuarioId} AND u.status = 'ATIVO'
+        AND rm.codigo IN ('SUPERVISOR_FROTA', 'GESTOR_FROTA', 'ADMIN')`);
+    const ok = rows.some((r) => r.role === 'GESTOR_FROTA' || r.role === 'ADMIN' || r.mesmaFilial);
+    if (ok) return;
+    // Mensagem separa os dois motivos — "não tem papel" e "tem, mas noutra filial"
+    // pedem providências diferentes de quem cadastra.
+    throw new BadRequestException(
+      rows.length
+        ? 'Supervisor inválido: tem o papel de Supervisor de Departamento, mas em outra filial. Escolha alguém da filial do veículo (ou um Gestor de Frota).'
+        : 'Supervisor inválido: precisa ter o papel Supervisor de Departamento (ou Gestor de Frota) ativo na Logística. Ajuste em Configurador → Usuários → Permissões.',
+    );
+  }
 }

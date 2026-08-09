@@ -3,6 +3,7 @@ import { SituacaoVeiculo } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { temRoleLogistica } from '../common/roles-logistica.js';
+import { CoreLookupService } from '../core/core-lookup.service.js';
 import { assertMesmaFilial, resolverFilialLeitura, podeVerOutrasFiliais } from '../common/filial-scope.js';
 import { VeiculoService } from './veiculo.service.js';
 import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
@@ -16,7 +17,10 @@ import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 // custo, e o cadastro é decisão estratégica do gestor de frota.
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
 export class VeiculoController {
-  constructor(private readonly veiculos: VeiculoService) {}
+  constructor(
+    private readonly veiculos: VeiculoService,
+    private readonly core: CoreLookupService,
+  ) {}
 
   /**
    * Equipe do RDV (supervisores de área + coordenadores) da filial, para o cadastro
@@ -27,6 +31,14 @@ export class VeiculoController {
    * Aqui é o inverso — quem cadastra veículo é gestor de frota e precisa da lista, sem
    * ganhar acesso ao RDV. Devolve só matrícula/nome/papel, nada de prestação de contas.
    */
+  /** Quem pode ser Supervisor Responsável do veículo (papel de frota ativo). O
+   *  seletor do cadastro usa esta lista — antes oferecia a filial inteira. */
+  @Get('supervisores-elegiveis')
+  @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
+  supervisoresElegiveis(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.core.supervisoresDeVeiculo(resolverFilialLeitura(user, filialId) ?? '');
+  }
+
   @Get('representantes')
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   representantes(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {

@@ -14,6 +14,8 @@ import { MoedaInput } from '../components/MoedaInput';
 // /veiculos/:id/editar no MESMO componente.
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
+/** Elegível a Supervisor Responsável do veículo — vem com o papel para a tela mostrar. */
+interface SupervisorElegivel { id: string; nome: string; papel: string }
 /** Equipe do RDV da filial — quem pode ser o representante responsável pelo veículo. */
 interface Representante { matricula: string; nome: string; papel?: string | null }
 /** Mesma normalização do backend (E+5 dígitos): `003448`, `3448` e `E03448` são a
@@ -38,7 +40,7 @@ export function VeiculoFormPage() {
 
   const [filiais, setFiliais] = useState<CoreItem[]>([]);
   const [departamentos, setDepartamentos] = useState<CoreItem[]>([]);
-  const [usuarios, setUsuarios] = useState<CoreItem[]>([]);
+  const [usuarios, setUsuarios] = useState<SupervisorElegivel[]>([]);
 
   const [placa, setPlaca] = useState('');
   const [modelo, setModelo] = useState('');
@@ -112,7 +114,10 @@ export function VeiculoFormPage() {
     void (async () => {
       const [d, u, r] = await Promise.all([
         coreApi.get<CoreItem[]>('/departamentos', { params: { filialId } }).catch(() => ({ data: [] })),
-        coreApi.get<CoreItem[]>('/usuarios', { params: { filialId } }).catch(() => ({ data: [] })),
+        // Só quem PODE ser Supervisor Responsável (papel de frota ativo). Antes vinha
+        // a filial inteira — foi assim que um GESTOR_ENTREGA acabou no campo, sem que
+        // a tela avisasse que ele não conseguiria acompanhar nem aprovar nada.
+        logisticaApi.get<SupervisorElegivel[]>('/veiculos/supervisores-elegiveis', { params: { filialId } }).catch(() => ({ data: [] })),
         // Equipe do RDV desta filial: quem pode ser o responsável pelo veículo.
         logisticaApi.get<Representante[]>('/veiculos/representantes', { params: { filialId } }).catch(() => ({ data: [] })),
       ]);
@@ -333,7 +338,22 @@ export function VeiculoFormPage() {
           <div><label className={lbl}>Departamento de lotação *</label>
             <select value={departamentoLotacaoId} onChange={(e) => setDepartamentoId(e.target.value)} className={inp}><option value="">—</option>{departamentos.map((d) => <option key={d.id} value={d.id}>{labelCore(d)}</option>)}</select></div>
           <div><label className={lbl}>Supervisor responsável * <span className="font-normal normal-case text-slate-400">(encarregado)</span></label>
-            <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={inp}><option value="">—</option>{usuarios.map((u) => <option key={u.id} value={u.id}>{labelCore(u)}</option>)}</select></div>
+            <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={inp}>
+              <option value="">—</option>
+              {/* O supervisor gravado pode não estar mais na lista (perdeu o papel ou
+                  mudou de filial). Sem esta opção o campo apareceria VAZIO num veículo
+                  que TEM supervisor, e salvar por cima o apagaria sem ninguém notar. */}
+              {supervisorId && !usuarios.some((u) => u.id === supervisorId) && (
+                <option value={supervisorId}>⚠ supervisor atual — sem papel de frota nesta filial</option>
+              )}
+              {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nome} · {papelLabel(u.papel)}</option>)}
+            </select>
+            {filialId && usuarios.length === 0 && (
+              <p className="mt-1 text-xs text-amber-600">
+                Nenhum usuário desta filial tem papel de frota. Cadastre um Supervisor de Departamento
+                em Configurador → Usuários → Permissões (módulo Logística).
+              </p>
+            )}</div>
         </div>
 
         <div>

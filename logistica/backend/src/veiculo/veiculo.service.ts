@@ -93,7 +93,8 @@ export class VeiculoService {
     const [, , , responsavel] = await Promise.all([
       this.core.validarFilial(dto.filialId),
       this.core.validarDepartamento(dto.departamentoLotacaoId),
-      this.core.validarUsuario(dto.supervisorId, 'Supervisor'),
+      // Papel, não só existência: ser supervisorId É a concessão de gerir o veículo.
+      this.core.assertSupervisorDeVeiculo(dto.supervisorId, dto.filialId),
       this.resolverResponsavelArea(dto.supervisorAreaMatricula ?? null, dto.filialId),
     ]);
     try {
@@ -270,7 +271,11 @@ export class VeiculoService {
     // Valida FKs do core que vierem no update.
     await Promise.all([
       dto.departamentoLotacaoId ? this.core.validarDepartamento(dto.departamentoLotacaoId) : Promise.resolve(),
-      dto.supervisorId ? this.core.validarUsuario(dto.supervisorId, 'Supervisor') : Promise.resolve(),
+      // Papel na filial de DESTINO: trocar a filial e manter um supervisor que não
+      // responde por lá deixaria o veículo sem quem o gerisse, em silêncio.
+      dto.supervisorId
+        ? this.core.assertSupervisorDeVeiculo(dto.supervisorId, trocaFilial ? dto.filialId! : atual.filialId)
+        : Promise.resolve(),
     ]);
 
     const trocaSupervisor = dto.supervisorId && dto.supervisorId !== atual.supervisorId;

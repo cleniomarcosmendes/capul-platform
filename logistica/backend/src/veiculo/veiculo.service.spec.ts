@@ -10,6 +10,7 @@ const coreMock = () => ({
   validarFilial: async () => undefined,
   validarDepartamento: async () => undefined,
   validarUsuario: async () => undefined,
+  assertSupervisorDeVeiculo: async () => undefined,
   papeisLogisticaPorChapa: async () => new Map(),
 }) as any;
 const sup = (sub = 'u1') => ({ sub, filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR_FROTA' }] }) as any;
