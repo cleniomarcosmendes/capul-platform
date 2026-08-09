@@ -4,6 +4,21 @@ import { carimbarProvaEntrega, fmtGeo } from './watermark.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { CofreService } from '../cofre/cofre.service.js';
+
+/**
+ * Dia da ENTREGA. Aceita ISO completo ou data-só 'AAAA-MM-DD'; para data-só, ancora ao
+ * MEIO-DIA -03:00 — guardar meia-noite faz a entrega "pular" para o dia anterior
+ * conforme o fuso (mesma regra de `dataDespesa`). Sem valor → HOJE, que é o caso normal
+ * do balcão: quem lança quer a entrega de hoje e não deveria ter de digitar isso.
+ */
+const diaDaEntrega = (s?: string): Date => {
+  if (!s) {
+    const agora = new Date();
+    const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(agora);
+    return new Date(`${iso}T12:00:00-03:00`);
+  }
+  return s.includes('T') ? new Date(s) : new Date(`${s}T12:00:00-03:00`);
+};
 import { GeocodeService } from '../rota/geocode.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
@@ -97,6 +112,7 @@ export class EntregaService {
           enderecoEntregaId: dto.enderecoEntregaId || null,
           ...snap,
           horario: dto.horario?.trim() || null,
+          dataEntrega: diaDaEntrega(dto.dataEntrega),
           observacoes: dto.observacoes?.trim() || null,
           quantidadeVolumes: dto.quantidadeVolumes,
           origemVenda: dto.origemVenda,
@@ -254,7 +270,13 @@ export class EntregaService {
         ...(status === StatusEntrega.PENDENTE ? { parada: { is: null } } : {}),
       },
       include: { cupons: true },
-      orderBy: { criadoEm: 'asc' }, // quem comprou primeiro tende a sair primeiro
+      // Ponto 2: o DIA manda na fila de montagem — há locais atendidos só em certos
+      // dias, e o operador precisa ver primeiro o que é para hoje. Dentro do mesmo
+      // dia vale a ordem antiga (quem comprou primeiro tende a sair primeiro).
+      // `nulls: 'last'`: entrega anterior à mudança não tem dia e não pode encabeçar
+      // a fila — no Postgres, ASC põe NULL por último, mas explicitar evita que uma
+      // troca de ordenação futura vire mudança silenciosa de comportamento.
+      orderBy: [{ dataEntrega: { sort: 'asc', nulls: 'last' } }, { criadoEm: 'asc' }],
       take: 200,
     });
     // Badge "entra na rota automática?" — consulta SÓ o cache de geocodificação
@@ -428,6 +450,7 @@ export class EntregaService {
         ...(dto.endCep !== undefined ? { endCep: onlyDigits(dto.endCep) || null } : {}),
         ...(dto.endReferencia !== undefined ? { endReferencia: dto.endReferencia.trim() || null } : {}),
         ...(dto.horario !== undefined ? { horario: dto.horario.trim() || null } : {}),
+        ...(dto.dataEntrega !== undefined ? { dataEntrega: diaDaEntrega(dto.dataEntrega) } : {}),
         ...(dto.observacoes !== undefined ? { observacoes: dto.observacoes.trim() || null } : {}),
         ...(dto.quantidadeVolumes !== undefined ? { quantidadeVolumes: dto.quantidadeVolumes } : {}),
         ...(dto.origemVenda !== undefined ? { origemVenda: dto.origemVenda } : {}),

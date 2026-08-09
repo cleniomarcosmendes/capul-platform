@@ -539,6 +539,15 @@ model Entrega {
   endCep            String?            @map("end_cep")
   endReferencia     String?            @map("end_referencia")
   horario           String?
+  /// DIA em que a entrega deve ser feita (ponto 2 da pauta de 09/08). Há locais
+  /// atendidos em dias específicos — a rota daquela região só passa em certos dias —,
+  /// então a montagem ordena por este campo e AVISA (não bloqueia) quando o operador
+  /// escolhe uma entrega fora do dia.
+  ///
+  /// Data-só ancorada ao MEIO-DIA -03:00 (mesma regra de `dataDespesa`): guardar
+  /// meia-noite faz a entrega "pular" para o dia anterior conforme o fuso.
+  /// Nulo nas entregas anteriores à mudança — a montagem trata como sem data.
+  dataEntrega       DateTime?          @map("data_entrega")
   observacoes       String?
   quantidadeVolumes Int                @default(1) @map("quantidade_volumes")
   origemVenda       OrigemVenda?       @map("origem_venda")
@@ -578,6 +587,7 @@ model Entrega {
   @@index([filialId, status])
   @@index([matricula])
   @@index([criadoEm])
+  @@index([filialId, dataEntrega])
   @@map("entrega")
   @@schema("logistica")
 }

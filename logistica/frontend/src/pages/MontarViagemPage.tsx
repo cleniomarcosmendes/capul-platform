@@ -18,7 +18,7 @@ interface Veiculo { id: string; placa: string; modelo?: string | null }
 interface Entrega {
   id: string; numero: number; destinatarioNome: string;
   endLogradouro: string; endNumero?: string | null; endBairro?: string | null;
-  quantidadeVolumes: number; criadoEm: string; horario?: string | null;
+  quantidadeVolumes: number; criadoEm: string; horario?: string | null; dataEntrega?: string | null;
   tentativas?: number; geocodificavel?: boolean | null;
 }
 
@@ -163,8 +163,29 @@ export function MontarViagemPage() {
     [rota, porId],
   );
 
-  function adicionar(id: string) { setRota((p) => (p.includes(id) ? p : [...p, id])); }
-  function adicionarTodasVisiveis() { setRota((p) => [...p, ...fila.map((e) => e.id)]); }
+  // Ponto 2: o DIA da entrega. Há locais atendidos só em certos dias — quem monta a
+  // rota precisa perceber quando puxa uma entrega de outro dia. AVISA e deixa seguir:
+  // o operador é quem sabe se a exceção se justifica (foi o pedido, alerta e não trava).
+  const hojeISO = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  const diaDe = (e?: Entrega) => e?.dataEntrega?.slice(0, 10) ?? null;
+
+  function adicionar(id: string) {
+    const e = pendentes.find((x) => x.id === id);
+    const dia = diaDe(e);
+    if (dia && dia !== hojeISO) {
+      const [a, m, d] = dia.split('-');
+      toast('warning', `Entrega #${e?.numero} é para ${d}/${m}/${a}, não para hoje — incluída assim mesmo.`);
+    }
+    setRota((p) => (p.includes(id) ? p : [...p, id]));
+  }
+
+  function adicionarTodasVisiveis() {
+    const foraDoDia = fila.filter((e) => { const d = diaDe(e); return d && d !== hojeISO; }).length;
+    if (foraDoDia) {
+      toast('warning', `${foraDoDia} entrega${foraDoDia === 1 ? '' : 's'} de outro dia ${foraDoDia === 1 ? 'entrou' : 'entraram'} na rota.`);
+    }
+    setRota((p) => [...p, ...fila.map((e) => e.id)]);
+  }
   function remover(id: string) { setRota((p) => p.filter((x) => x !== id)); }
   function mover(id: string, dir: -1 | 1) {
     setRota((p) => {
@@ -381,6 +402,10 @@ export function MontarViagemPage() {
                     <div className="truncate text-xs text-slate-500">
                       {e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''} — {(e.endBairro ?? '').trim() || 'sem bairro'} · {e.quantidadeVolumes} vol
                       {e.horario ? ` · prefere ${e.horario}` : ''}
+                      {diaDe(e) && diaDe(e) !== hojeISO && (
+                        <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                          title="Esta entrega é para outro dia">📅 {diaDe(e)!.split('-').reverse().slice(0, 2).join('/')}</span>
+                      )}
                     </div>
                   </div>
                 </li>

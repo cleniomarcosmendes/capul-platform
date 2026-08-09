@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsDateString,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -77,6 +78,13 @@ export class CreateEntregaDto {
 
   @IsOptional() @IsString() @MaxLength(60)
   horario?: string;
+
+  /**
+   * DIA da entrega ('AAAA-MM-DD' ou ISO). Ponto 2: há locais atendidos em dias
+   * específicos. Omitido no lançamento → HOJE (é o caso normal do balcão).
+   */
+  @IsOptional() @IsDateString()
+  dataEntrega?: string;
 
   @IsOptional() @IsString() @MaxLength(500)
   observacoes?: string;
@@ -156,6 +164,13 @@ export class UpdateEntregaDto {
 
   @IsOptional() @IsString() @MaxLength(60)
   horario?: string;
+
+  /**
+   * DIA da entrega ('AAAA-MM-DD' ou ISO). Ponto 2: há locais atendidos em dias
+   * específicos. Omitido no lançamento → HOJE (é o caso normal do balcão).
+   */
+  @IsOptional() @IsDateString()
+  dataEntrega?: string;
 
   @IsOptional() @IsString() @MaxLength(500)
   observacoes?: string;

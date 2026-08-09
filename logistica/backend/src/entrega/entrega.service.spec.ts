@@ -170,3 +170,52 @@ describe('EntregaService', () => {
     });
   });
 });
+
+/**
+ * ⭐ Ponto 2 (09/08) — DIA da entrega.
+ *
+ * Há locais atendidos em dias específicos: a rota daquela região só passa em certos
+ * dias. O lançamento nasce com HOJE (caso normal do balcão) e a fila de montagem é
+ * ordenada pelo dia.
+ */
+describe('EntregaService — data da entrega (ponto 2)', () => {
+  let prisma: any;
+  let svc: EntregaService;
+  const criada = () => prisma.entrega.create.mock.calls[0][0].data;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new EntregaService(prisma, coreMock(), cofreMock(), geocodeMock(), condutorMock());
+    prisma.contadorSequencial.upsert.mockResolvedValue({ ultimoNumero: 1 });
+    prisma.entrega.create.mockResolvedValue({ id: 'e1', numero: 1, cupons: [] });
+  });
+
+  const dto = (extra: any = {}) =>
+    ({ filialId: 'f1', tipoCliente: 'EVENTUAL', destinatarioNome: 'X', endLogradouro: 'Rua A', quantidadeVolumes: 1, ...extra }) as any;
+
+  it('sem data informada → grava HOJE (não deixa nulo)', async () => {
+    await svc.create(dto(), userF1);
+    expect(criada().dataEntrega).toBeInstanceOf(Date);
+    const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const gravado = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(criada().dataEntrega);
+    expect(gravado).toBe(hoje);
+  });
+
+  // ⭐ Data-só ancorada ao MEIO-DIA: gravar meia-noite faria a entrega "pular" para o
+  // dia anterior conforme o fuso — o mesmo cuidado que `dataDespesa` já tomava.
+  it('data-só → meio-dia -03:00, e o DIA em São Paulo é o digitado', async () => {
+    await svc.create(dto({ dataEntrega: '2026-08-15' }), userF1);
+    const d: Date = criada().dataEntrega;
+    expect(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d)).toBe('2026-08-15');
+    expect(d.toISOString()).toBe('2026-08-15T15:00:00.000Z'); // 12:00 -03:00
+  });
+
+  it('a fila de montagem ordena por DIA e, no mesmo dia, por chegada', async () => {
+    prisma.entrega.findMany.mockResolvedValue([]);
+    await svc.list({ filialId: 'f1' });
+    expect(prisma.entrega.findMany.mock.calls[0][0].orderBy).toEqual([
+      { dataEntrega: { sort: 'asc', nulls: 'last' } },
+      { criadoEm: 'asc' },
+    ]);
+  });
+});

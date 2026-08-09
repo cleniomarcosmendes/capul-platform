@@ -154,6 +154,11 @@ export function EntregaNovaPage() {
   const [referencia, setReferencia] = useState('');
   const [volumes, setVolumes] = useState(1);
   const [observacoes, setObservacoes] = useState('');
+  // Ponto 2: DIA da entrega. Nasce HOJE (o caso normal do balcão) e o operador troca
+  // quando o local é atendido em dia específico. `en-CA` dá 'AAAA-MM-DD', e o timeZone
+  // explícito evita virar o dia em máquina com fuso diferente.
+  const hojeISO = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+  const [dataEntrega, setDataEntrega] = useState(hojeISO);
   // Origem da venda (indicador de canal). Default PRESENCIAL (decisão do
   // Clenio 12/06: balcão é o caso dominante; tele-venda/outro o operador troca).
   const [origemVenda, setOrigemVenda] = useState<'' | 'PRESENCIAL' | 'TELE_VENDA' | 'OUTRO'>('PRESENCIAL');
@@ -221,6 +226,7 @@ export function EntregaNovaPage() {
           endLogradouro: string; endNumero?: string | null; endComplemento?: string | null; endBairro?: string | null;
           endCidade?: string | null; endUf?: string | null; endCep?: string | null; endReferencia?: string | null;
           observacoes?: string | null; quantidadeVolumes: number; origemVenda?: 'PRESENCIAL' | 'TELE_VENDA' | 'OUTRO' | null;
+          dataEntrega?: string | null;
           cupons: { numeroCupom?: string | null; valor?: string | number | null }[];
         }>(`/entregas/${edicaoId}`);
         if (e.status !== 'PENDENTE' || e.viagemNumero != null) {
@@ -236,6 +242,7 @@ export function EntregaNovaPage() {
         setBairro(e.endBairro ?? ''); setCidade(e.endCidade ?? 'Unaí'); setUf(e.endUf ?? 'MG');
         setCep(e.endCep ? maskCep(e.endCep) : ''); setReferencia(e.endReferencia ?? '');
         setVolumes(e.quantidadeVolumes); setObservacoes(e.observacoes ?? '');
+        if (e.dataEntrega) setDataEntrega(e.dataEntrega.slice(0, 10));
         setOrigemVenda(e.origemVenda ?? '');
         setCupons(e.cupons.length
           ? e.cupons.map((c) => ({ numeroCupom: c.numeroCupom ?? '', valor: moedaParaInput(c.valor) }))
@@ -527,7 +534,7 @@ export function EntregaNovaPage() {
     setMatricula(''); setDestinatarioNome(''); setTelefone('');
     setLogradouro(''); setNumero(''); setComplemento(''); setBairro('');
     setCidade('Unaí'); setUf('MG'); setCep(''); setReferencia('');
-    setVolumes(1); setObservacoes(''); setCupons([{ numeroCupom: '', valor: '' }]);
+    setVolumes(1); setObservacoes(''); setDataEntrega(hojeISO); setCupons([{ numeroCupom: '', valor: '' }]);
     setOrigemVenda('PRESENCIAL'); // default do balcão (decisão 12/06)
     setEnderecoEntregaId(''); setClienteLocalId(''); setSugestoes(null); setMostrarSug(false);
     setEnderecosSugeridos([]); setEnderecoSelIdx(-1); setMsgMat(null);
@@ -605,6 +612,7 @@ export function EntregaNovaPage() {
           endReferencia: referencia,
           quantidadeVolumes: volumes,
           origemVenda,
+          dataEntrega: dataEntrega || undefined,
           observacoes,
           cupons: cupons
             .filter((c) => c.numeroCupom || c.valor)
@@ -642,6 +650,7 @@ export function EntregaNovaPage() {
         endReferencia: referencia || undefined,
         quantidadeVolumes: volumes,
         origemVenda,
+        dataEntrega: dataEntrega || undefined,
         observacoes: observacoes || undefined,
         cupons: cupons
           .filter((c) => c.numeroCupom || c.valor)
@@ -962,6 +971,16 @@ export function EntregaNovaPage() {
           <div className="w-24">
             <label className={lbl}>Volumes</label>
             <input type="number" min={1} value={volumes} onChange={(e) => setVolumes(Math.max(1, parseInt(e.target.value) || 1))} className={inp} />
+          </div>
+          {/* Ponto 2: há locais atendidos em dias específicos — a rota daquela região só
+              passa em certos dias. Nasce HOJE (caso normal do balcão); a montagem ordena
+              por este dia e avisa quando o operador escolhe uma entrega fora dele. */}
+          <div className="w-44">
+            <label className={lbl}>Data da entrega</label>
+            <input type="date" value={dataEntrega} onChange={(e) => setDataEntrega(e.target.value)} className={inp} />
+            {dataEntrega && dataEntrega !== hojeISO && (
+              <p className="mt-1 text-xs text-amber-600">Agendada para outro dia.</p>
+            )}
           </div>
           <div className="flex-1">
             <label className={lbl}>Observações</label>
