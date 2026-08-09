@@ -46,3 +46,80 @@ describe('DespesaService — escopo da listagem (SUPERVISOR_FROTA)', () => {
     ]);
   });
 });
+
+/**
+ * ⭐ 5b (09/08) — quem aprova a despesa de frota.
+ *
+ * Antes a autoridade era derivada do CADASTRO DO VEÍCULO: pegar um carro de outro
+ * departamento mandava a aprovação para um gerente sem nenhuma relação com quem
+ * gastou. Agora ela vem da PERMISSÃO (papel por departamento) e o departamento é o
+ * RETRATO gravado na viagem no ato da saída.
+ */
+describe('DespesaService.aprovar — autoridade por DEPARTAMENTO (5b)', () => {
+  let prisma: any;
+  let svc: DespesaService;
+
+  /** Usuário com SUPERVISOR_FROTA nos departamentos informados (multi-role no JWT). */
+  const supDe = (...deptos: string[]) =>
+    ({
+      sub: 'u1',
+      filialId: 'f1',
+      modulos: [{
+        codigo: 'LOGISTICA',
+        role: 'SUPERVISOR_FROTA',
+        departamentos: deptos.map((id) => ({ id, nome: id, role: 'SUPERVISOR_FROTA' })),
+      }],
+    }) as any;
+
+  const despesaPendente = (viagemId: string | null) => ({
+    id: 'dsp1', filialId: 'f1', situacao: 'PENDENTE', criadoPorId: 'quem-gastou',
+    veiculoId: 'v1', viagemId,
+  });
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new DespesaService(prisma, dep(), dep(), dep());
+    prisma.despesaVeiculo.update.mockResolvedValue({ id: 'dsp1' });
+  });
+
+  it('supervisor do departamento GRAVADO na viagem → aprova', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesaPendente('vg1'));
+    prisma.viagem.findUnique.mockResolvedValue({ departamentoAprovadorId: 'dA' });
+    await expect(svc.aprovar('dsp1', supDe('dA'), ['SUPERVISOR_FROTA'])).resolves.toBeDefined();
+  });
+
+  // ⭐ O caso relatado: o carro é de outro depto, mas quem gastou não é de lá.
+  it('supervisor de OUTRO departamento → recusa, mesmo sendo o do veículo', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesaPendente('vg1'));
+    prisma.viagem.findUnique.mockResolvedValue({ departamentoAprovadorId: 'dA' });
+    await expect(svc.aprovar('dsp1', supDe('dB'), ['SUPERVISOR_FROTA'])).rejects.toThrow(/supervisor de departamento/i);
+  });
+
+  it('multi-role: responde por 2 deptos e a viagem é de um deles → aprova', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesaPendente('vg1'));
+    prisma.viagem.findUnique.mockResolvedValue({ departamentoAprovadorId: 'dB' });
+    await expect(svc.aprovar('dsp1', supDe('dA', 'dB'), ['SUPERVISOR_FROTA'])).resolves.toBeDefined();
+  });
+
+  it('ADMIN aprova sem depender de departamento', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesaPendente('vg1'));
+    const admin = { sub: 'a1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'ADMIN' }] } as any;
+    await expect(svc.aprovar('dsp1', admin, ['ADMIN'])).resolves.toBeDefined();
+  });
+
+  // Viagem antiga (anterior à mudança) não tem o retrato: cai na regra de antes,
+  // seguindo o departamento de quem lançou. Sem isso, despesa velha ficaria órfã.
+  it('viagem SEM retrato → volta ao departamento de quem lançou', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesaPendente('vg-antiga'));
+    prisma.viagem.findUnique.mockResolvedValue({ departamentoAprovadorId: null });
+    prisma.$queryRaw.mockResolvedValue([{ departamento_id: 'dLegado' }]);
+    await expect(svc.aprovar('dsp1', supDe('dLegado'), ['SUPERVISOR_FROTA'])).resolves.toBeDefined();
+  });
+
+  it('GESTOR_FROTA não aprova acerto (só contesta) — regra preservada', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesaPendente('vg1'));
+    prisma.viagem.findUnique.mockResolvedValue({ departamentoAprovadorId: 'dA' });
+    const gestor = { sub: 'g1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'GESTOR_FROTA' }] } as any;
+    await expect(svc.aprovar('dsp1', gestor, ['GESTOR_FROTA'])).rejects.toThrow(/gestor de frota/i);
+  });
+});

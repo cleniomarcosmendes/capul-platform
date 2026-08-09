@@ -24,6 +24,18 @@ export class FrotaController {
   /** RDVs (planejamentos) candidatos p/ vincular à saída: do supervisor com essa
    *  matrícula, no mês, não concluídos. Alimenta o seletor do form de Saída (o 1º
    *  é o auto-match). */
+  /** Prévia do acerto: departamento que responde pelas despesas + quem aprova.
+   *  Alimenta o aviso da tela de Saída (inclusive "ninguém aprova este depto"). */
+  @Get('previa-aprovacao')
+  @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
+  previaAprovacao(
+    @CurrentUser() user: JwtPayload,
+    @Query('matricula') matricula?: string,
+    @Query('departamentoId') departamentoId?: string,
+  ) {
+    return this.frota.previaAprovacao(user, matricula, departamentoId);
+  }
+
   @Get('rdv-candidatos')
   @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   rdvCandidatos(@CurrentUser() user: JwtPayload, @Query('matricula') matricula?: string) {

@@ -7,6 +7,7 @@ import { CofreStorageService } from '../cofre/cofre-storage.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { CondutorTokenService } from '../common/condutor-token.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { deptosComRoleLogistica } from '../common/roles-logistica.js';
 import {
   CriarTipoDespesaDto, AtualizarTipoDespesaDto, LancarDespesaDto,
   LancarDespesaViagemDto, ContestarDespesaDto, ListarDespesasQuery,
@@ -216,11 +217,27 @@ export class DespesaService {
     return rows[0]?.departamento_id ?? null;
   }
 
-  /** Departamentos que o supervisor de departamento GERE: o próprio departamento dele
-   *  (lotação) + os departamentos dos veículos que ele supervisiona. */
+  /**
+   * Departamentos pelos quais o Supervisor de Departamento RESPONDE — para efeito de
+   * APROVAR/CONTESTAR despesa.
+   *
+   * Fonte: a PERMISSÃO (`core.permissoes_modulo` é usuário × módulo × DEPARTAMENTO ×
+   * role), que o JWT já traz em `modulos[].departamentos[]`. Antes vinha também dos
+   * VEÍCULOS que a pessoa supervisiona — e era esse o problema levantado nos testes:
+   * a despesa é da PESSOA, não do carro, então pegar um veículo de outro departamento
+   * mandava a aprovação para um gerente sem nenhuma relação com quem gastou. O
+   * `veiculo.supervisorId` continua valendo para o CONTROLE DO VEÍCULO (manutenção,
+   * ajuste de viagem); só deixou de conferir autoridade sobre o acerto.
+   *
+   * Token antigo (sem `departamentos[]`) cai na lotação do próprio usuário — que é o
+   * que o Configurador grava por padrão, então o comportamento não muda para quem já
+   * estava logado.
+   */
   private async deptosGeridos(user: JwtPayload): Promise<string[]> {
-    const [viaVeiculos, proprio] = await Promise.all([this.deptosDoSupervisor(user), this.deptoDoUsuario(user.sub)]);
-    return [...new Set([...viaVeiculos, ...(proprio ? [proprio] : [])])].filter(Boolean) as string[];
+    const daPermissao = deptosComRoleLogistica(user, 'SUPERVISOR_FROTA');
+    if (daPermissao.length) return daPermissao;
+    const proprio = await this.deptoDoUsuario(user.sub);
+    return proprio ? [proprio] : [];
   }
 
   /** Departamento do ACERTO da despesa. Despesa de VEÍCULO segue o CONDUTOR (quem
@@ -228,6 +245,15 @@ export class DespesaService {
    *  numa viagem de FROTA segue o depto do VEÍCULO da viagem — MESMA chave usada na
    *  listagem, para que "listar" e "aprovar" fiquem coerentes p/ o Sup. de Departamento. */
   private async deptoDaDespesa(d: { criadoPorId: string | null; veiculoId: string | null; viagemId?: string | null }): Promise<string | null> {
+    // O RETRATO da viagem manda sobre tudo: foi resolvido na saída pela matrícula do
+    // CONDUTOR e conferido na tela por quem registrou. As derivações abaixo são o
+    // fallback das viagens anteriores à mudança (e das despesas sem viagem).
+    if (d.viagemId) {
+      const vg = await this.prisma.viagem.findUnique({
+        where: { id: d.viagemId }, select: { departamentoAprovadorId: true },
+      });
+      if (vg?.departamentoAprovadorId) return vg.departamentoAprovadorId;
+    }
     if (d.veiculoId) {
       const doCondutor = await this.deptoDoUsuario(d.criadoPorId);
       if (doCondutor) return doCondutor;

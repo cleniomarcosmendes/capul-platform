@@ -70,6 +70,15 @@ export class SaidaFrotaDto {
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
 
+  /**
+   * Departamento que RESPONDE pelas despesas desta viagem (quem aprova). Opcional:
+   * quando não vem, o backend resolve pela MATRÍCULA do condutor e cai no
+   * departamento do login como último recurso. A tela mostra o resolvido e manda
+   * este campo quando o operador corrige — o login PADRÃO é do POSTO, não da pessoa.
+   */
+  @IsOptional() @IsString() @MaxLength(40)
+  departamentoAprovadorId?: string;
+
   // Vincula a saída a um planejamento RDV (viagem SUPERVISOR). Opcional; se vazio,
   // o backend tenta auto-vincular pelo RDV do mês do condutor (pela matrícula).
   @IsOptional() @IsString() @MaxLength(40)
@@ -119,6 +128,15 @@ export class SaidaIndividualDto {
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
 
+  /**
+   * Departamento que RESPONDE pelas despesas desta viagem (quem aprova). Opcional:
+   * quando não vem, o backend resolve pela MATRÍCULA do condutor e cai no
+   * departamento do login como último recurso. A tela mostra o resolvido e manda
+   * este campo quando o operador corrige — o login PADRÃO é do POSTO, não da pessoa.
+   */
+  @IsOptional() @IsString() @MaxLength(40)
+  departamentoAprovadorId?: string;
+
   // Vincula a saída a um planejamento RDV (viagem SUPERVISOR). Opcional; se vazio,
   // o backend tenta auto-vincular pelo RDV do mês do condutor (pela matrícula).
   @IsOptional() @IsString() @MaxLength(40)
@@ -165,6 +183,15 @@ export class SaidaPortariaDto {
 
   @IsOptional() @IsString() @MaxLength(40)
   departamentoSolicitanteId?: string;
+
+  /**
+   * Departamento que RESPONDE pelas despesas desta viagem (quem aprova). Opcional:
+   * quando não vem, o backend resolve pela MATRÍCULA do condutor e cai no
+   * departamento do login como último recurso. A tela mostra o resolvido e manda
+   * este campo quando o operador corrige — o login PADRÃO é do POSTO, não da pessoa.
+   */
+  @IsOptional() @IsString() @MaxLength(40)
+  departamentoAprovadorId?: string;
 
   // Vincula a saída a um planejamento RDV (viagem SUPERVISOR). Opcional; se vazio,
   // o backend tenta auto-vincular pelo RDV do mês do condutor (pela matrícula).

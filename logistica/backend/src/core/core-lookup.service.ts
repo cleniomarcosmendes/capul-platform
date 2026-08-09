@@ -172,6 +172,51 @@ export class CoreLookupService {
   }
 
   /**
+   * Departamento do colaborador pela MATRÍCULA (chapa normalizada E+5 dígitos).
+   *
+   * É o passo 1 da resolução do departamento aprovador: a viagem grava a matrícula do
+   * condutor (validada no Protheus), e é ela — não o login — que diz de quem é a
+   * despesa. O login PADRÃO é do POSTO (caixa/portaria): derivar dele mandaria a
+   * despesa de um colaborador da Agroveterinária para o supervisor da portaria, que é
+   * o mesmo defeito de derivar do veículo, só deslocado.
+   *
+   * null quando o colaborador não é usuário da plataforma — aí quem chama cai no
+   * departamento do login, que a tela mostra e deixa corrigir.
+   */
+  async deptoDoColaboradorPorMatricula(matricula: string | null | undefined): Promise<string | null> {
+    const m = (matricula ?? '').replace(/\D/g, '').slice(-5).padStart(5, '0');
+    if (!m || m === '00000') return null;
+    const rows = await this.prisma.$queryRaw<{ departamento_id: string | null }[]>(Prisma.sql`
+      SELECT departamento_id FROM "core"."usuarios"
+      WHERE matricula IS NOT NULL
+        AND LPAD(RIGHT(REGEXP_REPLACE(matricula, '\\D', '', 'g'), 5), 5, '0') = ${m}
+        AND status = 'ATIVO'
+      ORDER BY departamento_id NULLS LAST
+      LIMIT 1`);
+    return rows[0]?.departamento_id ?? null;
+  }
+
+  /**
+   * Quem APROVA as despesas de um departamento: usuários ATIVOS com SUPERVISOR_FROTA
+   * na permissão de Logística DAQUELE departamento.
+   *
+   * Lista vazia = departamento sem aprovador — a despesa ficaria PENDENTE para sempre,
+   * sem erro e sem aviso. Por isso a saída avisa no ato (é o tratamento acordado para
+   * o 1º dos "três silêncios" da derivação).
+   */
+  async aprovadoresDoDepartamento(departamentoId: string | null | undefined): Promise<{ id: string; nome: string }[]> {
+    if (!departamentoId) return [];
+    return this.prisma.$queryRaw<{ id: string; nome: string }[]>(Prisma.sql`
+      SELECT DISTINCT u.id, TRIM(u.nome) AS nome
+      FROM "core"."usuarios" u
+      JOIN "core"."permissoes_modulo" pm ON pm.usuario_id = u.id AND pm.status = 'ATIVO'
+      JOIN "core"."modulos_sistema" m ON m.id = pm.modulo_id AND m.codigo = 'LOGISTICA'
+      JOIN "core"."roles_modulo" rm ON rm.id = pm.role_modulo_id AND rm.codigo = 'SUPERVISOR_FROTA'
+      WHERE u.status = 'ATIVO' AND pm.departamento_id = ${departamentoId}
+      ORDER BY nome`);
+  }
+
+  /**
    * Usuários ELEGÍVEIS a Supervisor Responsável do veículo — alimenta o seletor do
    * cadastro. Mesmos papéis que `assertSupervisorDeVeiculo` aceita, para o campo não
    * oferecer quem o backend vai recusar (o formulário listava a filial INTEIRA, e foi

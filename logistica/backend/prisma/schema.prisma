@@ -610,6 +610,19 @@ model Viagem {
   veiculo                   Veiculo?     @relation(fields: [veiculoId], references: [id], onDelete: Restrict)
   motoristaId               String?      @map("motorista_id")
   departamentoSolicitanteId String?      @map("departamento_solicitante_id")
+  /// Departamento que RESPONDE pelas despesas desta viagem — congelado na saída.
+  ///
+  /// Antes o aprovador era derivado do CADASTRO DO VEÍCULO (`veiculo.supervisorId`),
+  /// mas a despesa é da PESSOA, não do carro: pegar um veículo de outro departamento
+  /// mandava a aprovação para um gerente sem nenhuma relação com quem gastou.
+  /// Resolvido na saída pela MATRÍCULA do condutor (→ `core.usuarios.departamento_id`),
+  /// com o departamento do login como último recurso, e CORRIGÍVEL na tela — o
+  /// departamento do login é o do POSTO (caixa/portaria), não o da pessoa.
+  ///
+  /// É um RETRATO: trocar o departamento do usuário depois não mexe em viagem já
+  /// aberta (mesma regra 3 do RDV — a decisão vale para o valor decidido). Nulo nas
+  /// viagens anteriores à mudança; nesse caso a aprovação cai na regra antiga.
+  departamentoAprovadorId   String?      @map("departamento_aprovador_id")
   kmInicial                 Int?         @map("km_inicial")
   kmFinal                   Int?         @map("km_final")
   localSaida                String?      @map("local_saida")
@@ -688,6 +701,7 @@ model Viagem {
   // Criado pela migration 20260708140000_viagem_rdv_link (escrita à mão) e nunca
   // declarado aqui — o schema ficou devendo o índice que o banco já tem.
   @@index([rdvViagemId])
+  @@index([departamentoAprovadorId])
   @@map("viagem")
   @@schema("logistica")
 }

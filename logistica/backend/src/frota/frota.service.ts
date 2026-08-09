@@ -188,17 +188,79 @@ export class FrotaService {
     return this.criarSaida(user, cond.matricula, cond.nome, dto);
   }
 
+  /**
+   * Prévia do ACERTO da saída: qual departamento vai responder pelas despesas e QUEM
+   * aprova. A tela de saída mostra isso antes de registrar.
+   *
+   * Serve a dois propósitos que a derivação silenciosa não atendia:
+   *  - dizer o NOME de quem vai aprovar, para o operador conferir se faz sentido;
+   *  - AVISAR quando o departamento não tem ninguém com o papel — senão a despesa
+   *    nasceria PENDENTE para sempre, sem erro e sem aviso.
+   */
+  async previaAprovacao(user: JwtPayload, matricula?: string, departamentoId?: string) {
+    const deptoId = await this.resolverDeptoAprovador(user, matricula ?? null, departamentoId);
+    if (!deptoId) {
+      return { departamentoId: null, departamentoNome: null, origem: 'NENHUMA' as const, aprovadores: [] };
+    }
+    const [nomes, aprovadores] = await Promise.all([
+      this.core.nomesDepartamentos([deptoId]),
+      this.core.aprovadoresDoDepartamento(deptoId),
+    ]);
+    // A origem explica de ONDE veio o departamento — é o que deixa o operador decidir
+    // se precisa corrigir. LOGIN é o caso frágil (login de posto, não da pessoa).
+    const origem = departamentoId
+      ? ('ESCOLHIDO' as const)
+      : (await this.core.deptoDoColaboradorPorMatricula(matricula ?? null)) === deptoId
+        ? ('COLABORADOR' as const)
+        : ('LOGIN' as const);
+    return {
+      departamentoId: deptoId,
+      departamentoNome: nomes.get(deptoId) ?? null,
+      origem,
+      aprovadores,
+    };
+  }
+
+  /**
+   * Departamento que responde pelas despesas da viagem — CONGELADO na saída.
+   *
+   * Cascata (decisão de 09/08):
+   *   1. o que o operador escolheu na tela (corrige os casos abaixo);
+   *   2. o departamento do COLABORADOR, pela matrícula do condutor;
+   *   3. o departamento do LOGIN, como último recurso.
+   *
+   * O passo 3 é o elo fraco e por isso a tela mostra o resultado: o login PADRÃO é do
+   * POSTO (`portaria01` está em T.I.), então um colaborador da Agroveterinária que sai
+   * pela portaria cairia no supervisor da portaria — o mesmo defeito de derivar do
+   * veículo, só deslocado do carro para o caixa. Quem registra tem a informação na mão
+   * naquele instante e corrige ali.
+   *
+   * Congelar (em vez de resolver na hora de aprovar) é a regra 3 do RDV: a decisão vale
+   * para o valor decidido. Trocar o departamento do usuário depois não move a
+   * autoridade sobre despesa que já está em curso.
+   */
+  private async resolverDeptoAprovador(
+    user: JwtPayload,
+    condutorMatricula: string | null,
+    escolhido?: string,
+  ): Promise<string | null> {
+    if (escolhido) return escolhido;
+    const doColaborador = await this.core.deptoDoColaboradorPorMatricula(condutorMatricula);
+    return doColaborador ?? user.departamentoId ?? null;
+  }
+
   /** Núcleo da saída de frota — compartilhado pelos fluxos PADRAO e INDIVIDUAL. */
   private async criarSaida(
     user: JwtPayload,
     condutorMatricula: string,
     condutorNome: string,
-    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; paradasPlanejadas?: ParadaPlanejadaDto[]; rdvViagemId?: string; adiantamento?: number; dataHoraSaida?: string },
+    dados: { veiculoId: string; kmInicial: number; finalidade?: string; localSaida?: string; departamentoSolicitanteId?: string; departamentoAprovadorId?: string; paradasPlanejadas?: ParadaPlanejadaDto[]; rdvViagemId?: string; adiantamento?: number; dataHoraSaida?: string },
   ) {
     const filialId = user.filialId;
     if (!filialId) throw new BadRequestException('Usuário sem filial definida.');
     const dataSaida = resolverDataEvento(dados.dataHoraSaida, 'saída');
     const rdvViagemId = await this.resolverRdvDaSaida(filialId, condutorMatricula, dados.rdvViagemId);
+    const departamentoAprovadorId = await this.resolverDeptoAprovador(user, condutorMatricula, dados.departamentoAprovadorId);
 
     // Frota é recurso COMPARTILHADO: o condutor pode usar veículo de qualquer
     // filial/departamento. A viagem é registrada na filial do login (contexto
@@ -231,6 +293,7 @@ export class FrotaService {
           condutorNome,
           rdvViagemId,
           departamentoSolicitanteId: dados.departamentoSolicitanteId ?? null,
+          departamentoAprovadorId,
           kmInicial: dados.kmInicial,
           localSaida: dados.localSaida ?? null,
           observacoesSaida: dados.finalidade ?? null,

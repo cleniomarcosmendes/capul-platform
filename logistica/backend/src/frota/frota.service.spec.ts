@@ -129,3 +129,66 @@ describe('FrotaService — manutenção com custo gera despesa', () => {
     expect(prisma.despesaVeiculo.create).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * ⭐ 5b (09/08) — de quem é a despesa da viagem.
+ *
+ * O departamento aprovador é resolvido na SAÍDA e congelado. A cascata existe porque
+ * nem todo condutor é usuário da plataforma, e porque o login PADRÃO é do POSTO
+ * (`portaria01` está em T.I.), não da pessoa.
+ */
+describe('FrotaService.previaAprovacao — cascata do departamento aprovador', () => {
+  let prisma: any;
+  let svc: FrotaService;
+  let core: any;
+  const user = (departamentoId?: string) =>
+    ({ sub: 'u1', filialId: 'f1', departamentoId, modulos: [{ codigo: 'LOGISTICA', role: 'PORTARIA' }] }) as any;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    core = {
+      deptoDoColaboradorPorMatricula: jest.fn().mockResolvedValue(null),
+      aprovadoresDoDepartamento: jest.fn().mockResolvedValue([{ id: 's1', nome: 'Supervisor' }]),
+      nomesDepartamentos: jest.fn().mockResolvedValue(new Map([['dPessoa', 'Agroveterinaria'], ['dLogin', 'Portaria']])),
+    };
+    svc = new FrotaService(prisma, dep(), core, dep(), locaisMock());
+  });
+
+  it('1º: a matrícula do condutor manda — mesmo com o login noutro depto', async () => {
+    core.deptoDoColaboradorPorMatricula.mockResolvedValue('dPessoa');
+    const r = await svc.previaAprovacao(user('dLogin'), 'E01047');
+    expect(r.departamentoId).toBe('dPessoa');
+    expect(r.origem).toBe('COLABORADOR');
+  });
+
+  // O elo fraco, e por isso a tela mostra: a despesa de um colaborador da
+  // Agroveterinária que sai pela portaria cairia no supervisor da PORTARIA.
+  it('2º: colaborador sem usuário → cai no depto do LOGIN, marcado como tal', async () => {
+    const r = await svc.previaAprovacao(user('dLogin'), 'E09999');
+    expect(r.departamentoId).toBe('dLogin');
+    expect(r.origem).toBe('LOGIN');
+  });
+
+  it('escolha do operador vence a cascata inteira', async () => {
+    core.deptoDoColaboradorPorMatricula.mockResolvedValue('dPessoa');
+    const r = await svc.previaAprovacao(user('dLogin'), 'E01047', 'dEscolhido');
+    expect(r.departamentoId).toBe('dEscolhido');
+    expect(r.origem).toBe('ESCOLHIDO');
+  });
+
+  // ⭐ 1º dos "três silêncios": sem ninguém com o papel, a despesa nasceria PENDENTE
+  // para sempre — sem erro e sem aviso. A saída avisa no ato.
+  it('departamento SEM aprovador → devolve lista vazia para a tela avisar', async () => {
+    core.deptoDoColaboradorPorMatricula.mockResolvedValue('dPessoa');
+    core.aprovadoresDoDepartamento.mockResolvedValue([]);
+    const r = await svc.previaAprovacao(user('dLogin'), 'E01047');
+    expect(r.aprovadores).toEqual([]);
+  });
+
+  it('sem matrícula e sem depto no login → nada a resolver (não inventa)', async () => {
+    const r = await svc.previaAprovacao(user(undefined), '');
+    expect(r.departamentoId).toBeNull();
+    expect(r.origem).toBe('NENHUMA');
+    expect(r.aprovadores).toEqual([]);
+  });
+});
