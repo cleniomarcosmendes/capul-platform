@@ -940,7 +940,7 @@ export function EntregaNovaPage() {
           </div>
           <div className="mt-2 flex items-center justify-between">
             <button type="button" onClick={addCupom}
-              className="flex items-center gap-1 text-xs font-medium text-capul-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom</button>
+              className="flex items-center gap-1 text-xs font-medium text-capul-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom / Nota Fiscal</button>
             <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
           </div>
           <p className="mt-1 text-[11px] text-slate-400">Enter no nº vai para o valor; Enter no valor adiciona outro cupom (precisa nº + valor). O cadastro só é gravado no botão “Salvar entrega”.</p>

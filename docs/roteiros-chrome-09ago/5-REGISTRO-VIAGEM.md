@@ -73,4 +73,6 @@ Este é o encaixe com o 5b — sem ele, o registro nasceria inútil.
 
 ## Desfazer
 
-- [ ] Cancelar a viagem de teste (Registro de Viagem → viagem → **Cancelar**).
+- [ ] **Nesta ordem:** excluir a despesa lançada **primeiro**, e só então cancelar a
+      viagem — o cancelamento é bloqueado enquanto houver despesa ("Há N despesa(s)
+      nesta saída — remova-as antes de cancelar").

@@ -141,6 +141,6 @@ Preencher ao rodar cada roteiro:
 | 2 Supervisor do veículo | 09/08 | skill do Chrome | **4/4 PASS** | Lista traz só elegíveis com o papel ao lado; filial 05 mostra só os cross-filial; as duas mensagens de recusa distintas; o supervisor órfão aparece marcado. |
 | 3 Aprovador da despesa | 09/08 | skill do Chrome | **PASS** (negativo opcional pulado) | Achou 2 defeitos reais: a prévia avisava o contrário do que a saída gravava (`0d781b28`) e a **colisão de chapa** fazia o aprovador sair da ficha de outra pessoa (`47b1eee5`). Retorno da #36 registrado — vira a preparação do roteiro 4. |
 | 4 Acerto PADRÃO | | | | |
-| 5 Registro de Viagem | | | | |
-| 6 Data de entrega | | | | |
+| 5 Registro de Viagem | 09/08 | skill do Chrome | **6/6 PASS** | Despesa de categoria VEÍCULO recusada sem veículo (400) e despesa de indivíduo fora da quebra "Por veículo" — os dois riscos do ponto 3. Desfazer exige apagar a despesa ANTES de cancelar a viagem. |
+| 6 Data de entrega | 09/08 | skill do Chrome | **6/6 PASS** | Sem defeitos. Fila: hoje → futura (selo 📅) → as 2 antigas sem data no fim. Fuso conferido: `T15:00:00Z` = meio-dia de Brasília. |
 | 7 Travessia | | | | |
