@@ -64,8 +64,22 @@ Com uma despesa lançada na viagem do cenário 3.1 (departamento **T.I.**):
 
 - [ ] Entrar como **`supdept01`** (SUPERVISOR_FROTA do **T.I.**) → **Custos da
       Frota / Despesas** → a despesa PENDENTE aparece e **é possível aprovar**.
-- [ ] Entrar como **`lidyanerocha`** (SUPERVISOR_FROTA de **Vendas/FBR**, filial 18)
-      → a mesma despesa **não** deve ser aprovável por ela.
+- [ ] **O negativo que vale** — um SUPERVISOR_FROTA da **mesma filial** e de **outro
+      departamento**. Não existe um na base, então crie: `admin` → Configurador →
+      `condutor_ind` → adicionar perfil **Logística / Supervisor de Departamento /
+      Administrativo**. Entrar como `condutor_ind` (`123456`):
+      - a despesa da viagem deste roteiro (departamento **T.I.**) **não aparece** na
+        lista dele;
+      - ele **vê** as despesas do veículo `TST0A01`, que é lotado no **Administrativo** —
+        é o departamento dele, então está certo;
+      - tentando aprovar a despesa de T.I. por URL/API, recebe *"Apenas o supervisor de
+        departamento do condutor aprova o acerto."*
+      - **remover o perfil** ao terminar.
+
+> ⚠️ **Não use `lidyanerocha` para este negativo** (era o que este roteiro pedia antes).
+> Ela é da **filial 18** e a despesa é da **01**: a recusa viria do filtro de FILIAL
+> (`despesa.service.ts:654`), que dispara **antes** de qualquer regra de departamento.
+> O teste passaria mesmo com o 5b quebrado — prova a coisa errada.
 - [ ] Entrar como **`gfrota01`** (GESTOR_FROTA) → consegue **contestar** (controle de
       frota), mas **não aprovar** o acerto: a mensagem explica que aprovar é do
       supervisor do departamento do condutor.
