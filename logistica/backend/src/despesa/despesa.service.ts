@@ -200,15 +200,6 @@ export class DespesaService {
     return vs.map((v) => v.id);
   }
 
-  /** Departamentos que o usuário supervisiona (encarregado de ≥1 veículo na filial). */
-  private async deptosDoSupervisor(user: JwtPayload): Promise<string[]> {
-    const rows = await this.prisma.veiculo.findMany({
-      where: { filialId: user.filialId ?? undefined, supervisorId: user.sub },
-      select: { departamentoLotacaoId: true }, distinct: ['departamentoLotacaoId'],
-    });
-    return rows.map((r) => r.departamentoLotacaoId);
-  }
-
   /** Departamento (lotação) de um usuário do core (schema read-only via raw). */
   private async deptoDoUsuario(userId: string | null): Promise<string | null> {
     if (!userId) return null;
@@ -279,7 +270,9 @@ export class DespesaService {
    *  Demais não-gestores: só os que ele supervisiona diretamente. */
   private async veiculosNoEscopo(user: JwtPayload, roles?: string[]): Promise<string[]> {
     if (tem(roles, 'SUPERVISOR_FROTA')) {
-      const deps = await this.deptosDoSupervisor(user);
+      // Custo também segue a PERMISSÃO — senão o supervisor aprova despesa de um
+      // departamento e o custo dela aparece para outra pessoa.
+      const deps = await this.deptosGeridos(user);
       const vs = await this.prisma.veiculo.findMany({
         where: { filialId: user.filialId ?? undefined, departamentoLotacaoId: { in: deps } }, select: { id: true },
       });
@@ -317,7 +310,7 @@ export class DespesaService {
       : await this.prisma.veiculo.findFirst({ where: { id: veiculoId, filialId: user.filialId } });
     if (!veiculo) throw new NotFoundException(ehGestor(roles) ? 'Veículo não encontrado.' : 'Veículo não encontrado nesta filial.');
     // Supervisor de Departamento gere as despesas dos veículos do(s) seu(s) departamento(s).
-    const podeDepto = tem(roles, 'SUPERVISOR_FROTA') && (await this.deptosDoSupervisor(user)).includes(veiculo.departamentoLotacaoId);
+    const podeDepto = tem(roles, 'SUPERVISOR_FROTA') && (await this.deptosGeridos(user)).includes(veiculo.departamentoLotacaoId);
     if (!ehGestor(roles) && veiculo.supervisorId !== user.sub && !podeDepto) {
       throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou o supervisor do departamento pode gerir esta despesa.');
     }
@@ -333,24 +326,30 @@ export class DespesaService {
     if (!ehGestor(roles)) {
       // Supervisor: só o seu escopo. Quem não é gestor nem supervisor não vê nada.
       if (tem(roles, 'SUPERVISOR_FROTA')) {
-        // Sup. de Departamento: veículos do(s) seu(s) depto(s). deps computado UMA vez
-        // (reusa no OR de INDIVÍDUO) — evita a dupla chamada de deptosDoSupervisor.
-        const deps = await this.deptosDoSupervisor(user);
-        const vs = await this.prisma.veiculo.findMany({
-          where: { filialId: user.filialId ?? undefined, departamentoLotacaoId: { in: deps } }, select: { id: true },
-        });
-        const ids = vs.map((v) => v.id);
+        /**
+         * Sup. de Departamento vê as despesas dos departamentos por que RESPONDE —
+         * a MESMA fonte que decide se ele pode aprovar (`deptosGeridos`, vinda da
+         * permissão). Antes esta listagem derivava dos VEÍCULOS que ele supervisiona,
+         * enquanto `aprovar` já usava a permissão: as duas discordavam, e ele acabava
+         * podendo aprovar o que não conseguia VER (botão inalcançável na tela) e vendo
+         * o que não podia aprovar. Achado na revisão dos roteiros em 09/08.
+         */
+        const deps = await this.deptosGeridos(user);
+        if (deps.length === 0) return [];
+        // O RETRATO da viagem manda (foi ele que decidiu o aprovador). As duas outras
+        // pernas cobrem o legado: viagem anterior à mudança (sem retrato) e despesa
+        // avulsa, que seguem o departamento de LOTAÇÃO do veículo.
+        const doEscopo: Prisma.DespesaVeiculoWhereInput[] = [
+          { viagem: { departamentoAprovadorId: { in: deps } } },
+          { viagem: { departamentoAprovadorId: null, veiculo: { departamentoLotacaoId: { in: deps } } } },
+          { viagemId: null, veiculo: { departamentoLotacaoId: { in: deps } } },
+        ];
         if (q.veiculoId) {
-          if (!ids.includes(q.veiculoId)) return []; // ?veiculoId de fora não vaza
+          // ?veiculoId não pode furar o escopo: intersecta em vez de sobrepor.
           where.veiculoId = q.veiculoId;
+          where.OR = doEscopo;
         } else {
-          if (ids.length === 0) return [];
-          // Veículos do escopo OU despesa de INDIVÍDUO (sem veículo) de viagem de FROTA
-          // cujo veículo é de um depto dela — p/ aprovar o acerto de indivíduo do depto.
-          where.OR = [
-            { veiculoId: { in: ids } },
-            { veiculoId: null, viagem: { tipo: TipoViagem.FROTA, veiculo: { departamentoLotacaoId: { in: deps } } } },
-          ];
+          where.OR = doEscopo;
         }
       } else {
         const ids = await this.veiculosNoEscopo(user, roles);

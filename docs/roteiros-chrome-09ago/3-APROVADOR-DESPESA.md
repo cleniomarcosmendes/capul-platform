@@ -74,15 +74,8 @@ Ela **não tem matrícula** em `core.usuarios`, então o departamento também ve
 
 ## 3.3 A aprovação respeita o departamento gravado
 
-> ### 🔴 BLOQUEADO — defeito encontrado na revisão de 09/08 (não é do roteiro)
-> A autoridade sobre a despesa ficou com **duas fontes que discordam**: `aprovar` usa a
-> **permissão** (papel + departamento, do 5b), mas a **listagem** ainda usa os
-> departamentos dos **veículos que a pessoa supervisiona** (regra antiga). Para o
-> `supdept01` os dois conjuntos são disjuntos — permissão em **T.I.**, veículo em
-> **Administrativo** —, então a despesa **não aparece na lista dele** e o botão de
-> aprovar é inalcançável pela tela.
->
-> **Pule este item** até a correção. Os demais itens do roteiro rodam normalmente.
+> ✅ **Desbloqueado em 09/08** (`b8a9f0c`): a listagem passou a usar a mesma
+> fonte da aprovação. Antes o supervisor aprovava o que não conseguia ver.
 
 Com uma despesa lançada na viagem do cenário 3.1 (departamento **T.I.**):
 

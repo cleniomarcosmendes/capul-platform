@@ -7,43 +7,63 @@ const sup = (sub = 'u1') => ({ sub, filialId: 'f1', modulos: [{ codigo: 'LOGISTI
 
 // ⭐ Vazamento pego no teste E2E por API (12/07): GET /despesas?veiculoId=<fora do
 // escopo> sobrepunha o filtro de escopo e retornava despesa de outro departamento.
+//
+// 09/08: o ESCOPO mudou de fonte. Antes vinha dos VEÍCULOS que a pessoa supervisiona;
+// agora vem da PERMISSÃO (papel + departamento) — a MESMA que decide se ela pode
+// aprovar. As duas discordavam, e o supervisor podia aprovar o que não conseguia ver.
+// A proteção contra o vazamento continua: `?veiculoId` INTERSECTA o escopo (é outra
+// chave do mesmo `where`, então o Prisma faz AND), nunca o substitui.
 describe('DespesaService — escopo da listagem (SUPERVISOR_FROTA)', () => {
   let prisma: any;
   let svc: DespesaService;
+  /** Supervisor com SUPERVISOR_FROTA no departamento `d1` (via permissão no JWT). */
+  const supDe = (...deptos: string[]) =>
+    ({
+      sub: 'u1', filialId: 'f1',
+      modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR_FROTA',
+        departamentos: deptos.map((id) => ({ id, nome: id, role: 'SUPERVISOR_FROTA' })) }],
+    }) as any;
+
   beforeEach(() => {
     prisma = createPrismaMock();
     svc = new DespesaService(prisma, dep(), dep(), dep());
+    prisma.despesaVeiculo.findMany.mockResolvedValue([]);
   });
 
-  it('?veiculoId FORA do escopo → não vaza (retorna [] e nem consulta despesas)', async () => {
-    prisma.veiculo.findMany
-      .mockResolvedValueOnce([{ departamentoLotacaoId: 'd1' }]) // deptos supervisionados
-      .mockResolvedValueOnce([{ id: 'v-in' }]); // veículos do depto (escopo)
-    const r = await svc.listar(sup(), ['SUPERVISOR_FROTA'], { veiculoId: 'v-out' } as any);
+  const whereDaChamada = () => prisma.despesaVeiculo.findMany.mock.calls[0][0].where;
+
+  it('escopo sai da PERMISSÃO — o RETRATO da viagem manda, com o legado por baixo', async () => {
+    await svc.listar(supDe('d1'), ['SUPERVISOR_FROTA'], {} as any);
+    expect(whereDaChamada().OR).toEqual([
+      { viagem: { departamentoAprovadorId: { in: ['d1'] } } },
+      { viagem: { departamentoAprovadorId: null, veiculo: { departamentoLotacaoId: { in: ['d1'] } } } },
+      { viagemId: null, veiculo: { departamentoLotacaoId: { in: ['d1'] } } },
+    ]);
+    // Não consulta mais os veículos supervisionados — aquela fonte saiu de cena.
+    expect(prisma.veiculo.findMany).not.toHaveBeenCalled();
+  });
+
+  it('multi-role: responde por 2 departamentos → os dois entram no escopo', async () => {
+    await svc.listar(supDe('d1', 'd2'), ['SUPERVISOR_FROTA'], {} as any);
+    expect(whereDaChamada().OR[0]).toEqual({ viagem: { departamentoAprovadorId: { in: ['d1', 'd2'] } } });
+  });
+
+  // ⭐ A proteção do /security-review, na regra nova: o filtro por veículo entra JUNTO
+  // do escopo (AND), não no lugar dele.
+  it('?veiculoId INTERSECTA o escopo — não o substitui', async () => {
+    await svc.listar(supDe('d1'), ['SUPERVISOR_FROTA'], { veiculoId: 'v-out' } as any);
+    const where = whereDaChamada();
+    expect(where.veiculoId).toBe('v-out');
+    expect(where.OR).toBeDefined();       // o escopo continua no where
+    expect(where.filialId).toBe('f1');    // e a filial também
+  });
+
+  it('sem departamento na permissão → não vê nada (não cai em "tudo")', async () => {
+    const semDepto = { sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR_FROTA', departamentos: [] }] } as any;
+    prisma.$queryRaw.mockResolvedValue([{ departamento_id: null }]); // nem lotação tem
+    const r = await svc.listar(semDepto, ['SUPERVISOR_FROTA'], {} as any);
     expect(r).toEqual([]);
     expect(prisma.despesaVeiculo.findMany).not.toHaveBeenCalled();
-  });
-
-  it('?veiculoId DENTRO do escopo → filtra por ele', async () => {
-    prisma.veiculo.findMany
-      .mockResolvedValueOnce([{ departamentoLotacaoId: 'd1' }])
-      .mockResolvedValueOnce([{ id: 'v-in' }]);
-    prisma.despesaVeiculo.findMany.mockResolvedValue([]);
-    await svc.listar(sup(), ['SUPERVISOR_FROTA'], { veiculoId: 'v-in' } as any);
-    expect(prisma.despesaVeiculo.findMany.mock.calls[0][0].where.veiculoId).toBe('v-in');
-  });
-
-  it('sem filtro → veículos do escopo OU despesa de INDIVÍDUO (sem veículo) de viagem de frota do depto', async () => {
-    prisma.veiculo.findMany
-      .mockResolvedValueOnce([{ departamentoLotacaoId: 'd1' }]) // deptos supervisionados
-      .mockResolvedValueOnce([{ id: 'v-in' }]); // veículos do depto (escopo)
-    prisma.despesaVeiculo.findMany.mockResolvedValue([]);
-    await svc.listar(sup(), ['SUPERVISOR_FROTA'], {} as any);
-    const where = prisma.despesaVeiculo.findMany.mock.calls[0][0].where;
-    expect(where.OR).toEqual([
-      { veiculoId: { in: ['v-in'] } },
-      { veiculoId: null, viagem: { tipo: 'FROTA', veiculo: { departamentoLotacaoId: { in: ['d1'] } } } },
-    ]);
   });
 });
 
