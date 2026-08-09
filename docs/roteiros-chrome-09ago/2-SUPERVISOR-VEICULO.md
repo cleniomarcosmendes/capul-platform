@@ -32,12 +32,20 @@
 > e ele ficou com SUPERVISOR_FROTA na filial 02 — nesse caso a tela está **certa** e o
 > que está errado é o estado do cadastro. Confira no Configurador antes de reprovar.
 
-## 2.2 Quando não há ninguém, a tela diz o que fazer
+## 2.2 Filial sem supervisor próprio → sobram só os cross-filial
 
-- [ ] Trocar a filial do veículo para uma **sem** Supervisor de Departamento
-      cadastrado. Em vez de um seletor vazio e mudo, aparece:
-      *"Nenhum usuário desta filial tem papel de frota. Cadastre um Supervisor de
-      Departamento em Configurador → Usuários → Permissões (módulo Logística)."*
+> **Correção de 09/08:** este item pedia antes para provocar o aviso *"Nenhum usuário
+> desta filial tem papel de frota"*. **Não é reproduzível neste cadastro**: `ADMIN` e
+> `GESTOR_FROTA` valem em **qualquer** filial (a frota é da empresa toda), então a
+> lista nunca fica vazia enquanto existir um deles. O aviso é defesa para um estado
+> que a plataforma não tem. No lugar, vale conferir a regra que **é** observável:
+
+- [ ] Trocar a filial do veículo para a **05**, que não tem Supervisor de
+      Departamento próprio.
+- [ ] A lista mostra **só** `ADMIN` e `GESTOR_FROTA` (Administrador, Clenio Mendes,
+      Gestor de Frota 01, Marcelo) — **nenhum** Supervisor de Departamento.
+- [ ] Voltar para a filial **01**: `supdept01` **reaparece**. Confirma que o filtro do
+      Supervisor de Departamento é **por filial**, e o dos gestores não é.
 
 ## 2.3 O backend recusa, mesmo se o campo for burlado
 
