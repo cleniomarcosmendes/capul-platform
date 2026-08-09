@@ -244,6 +244,19 @@ export async function registrarContagemPorLote(
   await gravarContagens(listId, mapa);
 }
 
+/**
+ * Apaga a contagem local de um item — o operador limpou o campo.
+ *
+ * Campo VAZIO é "ainda não contei", diferente de 0 ("procurei e não achei").
+ * Por isso limpar REMOVE a pendência em vez de gravar zero.
+ */
+export async function removerContagemLocal(listId: string, itemId: string): Promise<void> {
+  const mapa = await lerContagens(listId);
+  if (mapa[itemId] === undefined) return;
+  delete mapa[itemId];
+  await gravarContagens(listId, mapa);
+}
+
 export async function contagensPendentes(listId: string): Promise<ContagemLocal[]> {
   return Object.values(await lerContagens(listId));
 }

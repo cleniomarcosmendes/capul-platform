@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   registrarContagemLocal,
   registrarContagemPorLote,
+  removerContagemLocal,
   sincronizarContagens,
   contagensPendentes,
   contarPendentes,
@@ -437,5 +438,51 @@ describe('critério do modo revisão parcial', () => {
 
   it('nenhum marcado = contagem normal', () => {
     expect(parcial(0, 10)).toBe(false);
+  });
+});
+
+/**
+ * Apagar a contagem — reportado pelo Clenio contando no aparelho: "consigo
+ * apagar o '2' de 12, mas o '1' não".
+ *
+ * O campo é controlado (senão o valor some ao sincronizar) e o handler ignorava
+ * texto vazio, então o re-render devolvia o número antigo. A tela agora guarda o
+ * rascunho do que se digita; aqui fica a peça de armazenamento que ela usa.
+ */
+describe('limpar a contagem de um item', () => {
+  const L = 'lista-apagar';
+  const pac = {
+    listId: L, listName: 'A', cicloEsperado: 1, baixadoEm: new Date().toISOString(),
+    itens: [{
+      id: 'a1', product_code: '1', product_description: 'X', location: null, warehouse: '06',
+      contadoNoServidor: null, exigeLote: false, lotes: [],
+      revisarNoCiclo: false, motivoRevisao: null, zeradoNoFecho: false,
+    }],
+  };
+  beforeEach(async () => { await descartarPacote(L); });
+
+  it('⭐ limpar o campo REMOVE a pendência — vazio não é zero', async () => {
+    await salvarPacote(pac);
+    await registrarContagemLocal(L, 'a1', 12);
+    expect(await contarPendentes(L)).toBe(1);
+
+    await removerContagemLocal(L, 'a1');
+    expect(await contarPendentes(L)).toBe(0);
+  });
+
+  it('remover item que não tem contagem não quebra nem notifica à toa', async () => {
+    await salvarPacote(pac);
+    await removerContagemLocal(L, 'a1');
+    expect(await contarPendentes(L)).toBe(0);
+  });
+
+  it('apagar e digitar de novo grava o valor NOVO, não o antigo', async () => {
+    await salvarPacote(pac);
+    await registrarContagemLocal(L, 'a1', 12);
+    await removerContagemLocal(L, 'a1');
+    await registrarContagemLocal(L, 'a1', 9);
+
+    const [c] = await contagensPendentes(L);
+    expect(c.quantidade).toBe(9);
   });
 });

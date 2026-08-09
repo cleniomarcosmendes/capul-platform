@@ -11,7 +11,8 @@ import {
 } from '../api/inventario';
 import {
   salvarPacote, lerPacote, descartarPacote, salvarLease, lerLease,
-  registrarContagemLocal, registrarContagemPorLote, contagensPendentes, sincronizarContagens,
+  registrarContagemLocal, registrarContagemPorLote, removerContagemLocal,
+  contagensPendentes, sincronizarContagens,
   type PacoteContagem, type ContagemLocal, type ItemContagem,
 } from '../offline/contagemOffline';
 import { ContagemLoteModal } from '../components/ContagemLoteModal';
@@ -38,6 +39,18 @@ export function ContagemListaScreen({ route, navigation }: Props) {
   /** Produto rastreado aberto para contagem lote a lote. */
   const [itemEmLote, setItemEmLote] = useState<ItemContagem | null>(null);
   const [liberando, setLiberando] = useState(false);
+  /**
+   * ⌨️ Texto CRU do campo enquanto se digita, por item.
+   *
+   * O campo é controlado (senão o valor some ao sincronizar). Só que ligá-lo
+   * direto ao valor PERSISTIDO impedia apagar: limpar o campo mandava texto
+   * vazio, o handler ignorava, e o re-render devolvia o número antigo — dava
+   * para apagar o "2" de "12" mas nunca o "1".
+   *
+   * O rascunho segura o que está sendo digitado, inclusive vazio e estados
+   * intermediários ("1." antes de "1.5"). Sai ao terminar a edição.
+   */
+  const [rascunho, setRascunho] = useState<Record<string, string>>({});
   /**
    * ⌨️ Com o teclado aberto sobrava UMA LINHA de lista: o item sendo digitado
    * ficava espremido entre a busca e o rodapé, e não dava para rolar até ele.
@@ -425,14 +438,28 @@ export function ContagemListaScreen({ route, navigation }: Props) {
                   // Controlado: com `defaultValue` o valor só entrava na
                   // montagem, e o item reciclado pelo FlatList às vezes ficava
                   // com o número velho na tela, às vezes limpava.
-                  value={valor}
+                  value={rascunho[item.id] ?? valor}
                   onChangeText={(t) => {
+                    // O que o operador digitou vale na tela SEMPRE — inclusive
+                    // vazio. Sem isto não dá para apagar o último dígito.
+                    setRascunho((r) => ({ ...r, [item.id]: t }));
+
                     const txt = t.replace(',', '.').trim();
-                    if (!txt) return;
+                    if (txt === '') {
+                      // Vazio = "ainda não contei", não zero.
+                      void removerContagemLocal(listId, item.id).then(recarregarLocal);
+                      return;
+                    }
                     const n = Number(txt);
-                    if (Number.isNaN(n) || n < 0) return;
+                    if (Number.isNaN(n) || n < 0) return;  // "1." a caminho de "1.5"
                     void registrarContagemLocal(listId, item.id, n).then(recarregarLocal);
                   }}
+                  onEndEditing={() =>
+                    setRascunho((r) => {
+                      const { [item.id]: _fora, ...resto } = r;
+                      return resto;
+                    })
+                  }
                 />
                 </View>
               )}
