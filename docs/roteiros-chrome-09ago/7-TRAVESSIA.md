@@ -58,7 +58,7 @@ dela** — e por mais ninguém.
 
 ### Passo 4 — Só quem responde pelo departamento aprova (5b)
 
-> ✅ **Desbloqueado em 09/08** (`b8a9f0c`): a listagem passou a usar a mesma
+> ✅ **Desbloqueado em 09/08** (`c774210e`): a listagem passou a usar a mesma
 > fonte da aprovação. Antes o supervisor aprovava o que não conseguia ver.
 
 - [ ] `renataborges` (SUPERVISOR_FROTA do **Supermercado**) → vê a despesa e

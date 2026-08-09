@@ -42,7 +42,7 @@
 
 ## 5.4 O supervisor do departamento consegue conferir a conta
 
-> ✅ **Desbloqueado em 09/08** (`b8a9f0c`): a listagem passou a usar a mesma
+> ✅ **Desbloqueado em 09/08** (`c774210e`): a listagem passou a usar a mesma
 > fonte da aprovação. Antes o supervisor aprovava o que não conseguia ver.
 
 Este é o encaixe com o 5b — sem ele, o registro nasceria inútil.

@@ -74,7 +74,7 @@ Ela **não tem matrícula** em `core.usuarios`, então o departamento também ve
 
 ## 3.3 A aprovação respeita o departamento gravado
 
-> ✅ **Desbloqueado em 09/08** (`b8a9f0c`): a listagem passou a usar a mesma
+> ✅ **Desbloqueado em 09/08** (`c774210e`): a listagem passou a usar a mesma
 > fonte da aprovação. Antes o supervisor aprovava o que não conseguia ver.
 
 Com uma despesa lançada na viagem do cenário 3.1 (departamento **T.I.**):
