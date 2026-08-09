@@ -215,3 +215,48 @@ sincronismo no app.
 "Informar outro lote" (use o **`00010093`**) · ciclo com **modo avião** ·
 badge **REVISAR** da devolução parcial (feito hoje, nunca visto em tela) ·
 "Liberar para supervisor" abortando com pendência.
+
+---
+
+## Sessão de 08/08 — encerramento (fim da tarde)
+
+Mais **6 correções** depois do bloco anterior, quase todas vindas do Clenio
+testando no aparelho e na tela.
+
+| Achado (quem viu) | Commit |
+|---|---|
+| Devolução parcial mostrava a lista TODA e deixava editar o aprovado | `9caa22fb` |
+| Teclado aberto deixava **uma linha** de lista — digitar no escuro | `db8f1a2f` |
+| Tela do inventário levava **19s** (N+1 no `/items`) → 2s | `3b40ffc6` |
+| Não dava para apagar o último dígito da contagem | `b32e6ada` |
+| **Marca de REVISÃO do ciclo 1 atravessava para o ciclo 2** | `9f80f7da` |
+| Usuário logado na Home + teclado na tela de lote | `fc5de0de` |
+
+⚠️ **`9f80f7da` vale para o DESKTOP também** — é correção de backend, e o
+desktop usa a mesma lógica de `partialReviewMode`. Ele mostrava o mesmo erro.
+
+⚠️ Os resíduos de flag nas listas que **já** tinham avançado foram limpos à mão
+(2 itens em 5 listas). A correção não retroage.
+
+### O padrão que apareceu DUAS vezes hoje
+**A correção existia, mas o caminho usado não passava por ela.** O handler de
+lote duplicado (`inventory_lots.py` sombreado) e o `sync_cycle_between_tables`
+(corrigido em 09/05, nunca alcançado pelo `finalize-cycle`). Nos dois, o sintoma
+reapareceu meses depois. É o argumento mais forte a favor do smoke de ciclo —
+que percorre o caminho real.
+➡️ **Pendência**: o smoke passa pelo `finalize-cycle` 2× e **não pegou** a flag.
+Acrescentar essa verificação (o teste unitário cobre o SQL, não prova que o
+endpoint o executa).
+
+### ⏳ Não testado no APP
+- **"Informar outro lote"** — usar o `00010093`. ⚠️ A linha vive no
+  `ListFooterComponent` e re-renderiza a cada tecla: **se o foco pular fora a
+  cada dígito, é ali**.
+- **Modo avião** (o ciclo que dá sentido a tudo) · **liberar abortando com
+  pendência** · **devolução total** (a parcial já foi) · **teclado** (`db8f1a2f`
+  e `fc5de0de`, nenhum validado em tela).
+
+### 🟡 Seguem em aberto (web)
+1. "Erro inesperado" que na verdade deu certo (add-products em massa).
+2. Toast ausente ao liberar ciclo sem contador.
+3. `system_qty` opcional no tipo — a correção durável do crash (20+ pontos).
