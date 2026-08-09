@@ -50,3 +50,40 @@ describe('CoreLookupService.assertSupervisorDeVeiculo', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+/**
+ * `deptoDoColaboradorPorMatricula` — a chapa normaliza pelos 5 ÚLTIMOS dígitos, então
+ * duas contas colidem (`E01047` e `001047` → `01047`). Achado ao rodar o roteiro 3 em
+ * 09/08: a consulta pegava uma das duas ARBITRARIAMENTE, e o departamento que decide
+ * quem aprova a despesa vinha do registro de OUTRA pessoa.
+ */
+describe('CoreLookupService.deptoDoColaboradorPorMatricula', () => {
+  const svc = (linhas: { departamento_id: string }[]) =>
+    new CoreLookupService({ $queryRaw: jest.fn().mockResolvedValue(linhas) } as any);
+
+  it('uma candidata → devolve o departamento dela', async () => {
+    await expect(svc([{ departamento_id: 'dA' }]).deptoDoColaboradorPorMatricula('E01047'))
+      .resolves.toBe('dA');
+  });
+
+  // ⭐ Não adivinha: cair no depto do login (que a tela marca "confira") é melhor do
+  // que atribuir a autoridade sobre a despesa ao chefe de outra pessoa.
+  it('DUAS candidatas com departamentos diferentes → null (não escolhe uma)', async () => {
+    await expect(svc([{ departamento_id: 'dA' }, { departamento_id: 'dB' }]).deptoDoColaboradorPorMatricula('E01047'))
+      .resolves.toBeNull();
+  });
+
+  it('duas contas no MESMO departamento → não é ambíguo, devolve', async () => {
+    // O SELECT é DISTINCT: mesmo departamento chega como uma linha só.
+    await expect(svc([{ departamento_id: 'dA' }]).deptoDoColaboradorPorMatricula('001047'))
+      .resolves.toBe('dA');
+  });
+
+  it('ninguém com a matrícula → null', async () => {
+    await expect(svc([]).deptoDoColaboradorPorMatricula('E09999')).resolves.toBeNull();
+  });
+
+  it('matrícula vazia → null sem ir ao banco', async () => {
+    await expect(svc([]).deptoDoColaboradorPorMatricula('')).resolves.toBeNull();
+  });
+});

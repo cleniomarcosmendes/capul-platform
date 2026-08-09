@@ -186,14 +186,20 @@ export class CoreLookupService {
   async deptoDoColaboradorPorMatricula(matricula: string | null | undefined): Promise<string | null> {
     const m = (matricula ?? '').replace(/\D/g, '').slice(-5).padStart(5, '0');
     if (!m || m === '00000') return null;
-    const rows = await this.prisma.$queryRaw<{ departamento_id: string | null }[]>(Prisma.sql`
-      SELECT departamento_id FROM "core"."usuarios"
+    // A chapa normaliza pelos 5 ÚLTIMOS dígitos, então DUAS contas podem colidir
+    // (`E01047` e `001047` viram a mesma `01047` — acontece no DEV, e em produção
+    // qualquer matrícula com mais de 5 dígitos pode colidir). Se as candidatas
+    // discordam do departamento, NÃO adivinhamos: devolver "não sei" faz a resolução
+    // cair no departamento do login, que a tela marca como "confira" — em vez de
+    // atribuir, calado, a autoridade sobre a despesa de alguém ao chefe de OUTRA
+    // pessoa. Mesma colisão que `papeisLogisticaPorChapa` já tratava.
+    const rows = await this.prisma.$queryRaw<{ departamento_id: string }[]>(Prisma.sql`
+      SELECT DISTINCT departamento_id FROM "core"."usuarios"
       WHERE matricula IS NOT NULL
         AND LPAD(RIGHT(REGEXP_REPLACE(matricula, '\\D', '', 'g'), 5), 5, '0') = ${m}
         AND status = 'ATIVO'
-      ORDER BY departamento_id NULLS LAST
-      LIMIT 1`);
-    return rows[0]?.departamento_id ?? null;
+        AND departamento_id IS NOT NULL`);
+    return rows.length === 1 ? rows[0].departamento_id : null;
   }
 
   /**
