@@ -86,10 +86,22 @@ Com uma despesa lançada na viagem do cenário 3.1 (departamento **T.I.**):
 
 ## 3.4 O retrato não se move depois
 
-- [ ] No Configurador, **trocar o departamento** de `condutor_ind` para outro.
+- [ ] No Configurador (aba **Acesso** → Departamento), trocar o departamento de
+      `condutor_ind` para **Compras**.
 - [ ] Voltar à viagem já registrada em 3.1: o departamento aprovador **continua o
-      mesmo**, e quem aprova continua sendo o de antes.
-- [ ] Uma viagem **nova** já nasce com o departamento novo.
+      mesmo** (T.I.), e quem aprova continua sendo o de antes.
+- [ ] Abrir uma saída **nova** como `condutor_ind`: o campo mostra **Compras** e, como
+      Compras não tem Supervisor de Departamento, aparece o alerta de "ninguém aprova".
+
+> ⚠️ **No DEV a origem vem como LOGIN, não COLABORADOR** — e está certo. `condutor_ind`
+> (`E01047`) e `supdept01` (`001047`) colapsam na **mesma chapa** `01047`: a matrícula
+> normaliza pelos 5 últimos dígitos. Com duas pessoas de departamentos diferentes na
+> mesma chapa, o sistema **não escolhe uma** — devolve "não sei" e cai no departamento
+> do login, que a tela marca como "confira".
+>
+> **Isto era um bug, achado neste item em 09/08** (`47b1eee5`): a consulta pegava uma
+> das duas **arbitrariamente**, e trocar o departamento de `condutor_ind` não mudava
+> nada — a resposta vinha da ficha do `supdept01`.
 
 > É a regra 3 do RDV aplicada aqui: *a decisão vale para o valor decidido*. Sem o
 > congelamento, mexer no cadastro de alguém moveria, calado, a autoridade sobre
