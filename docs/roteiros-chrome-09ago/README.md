@@ -26,9 +26,9 @@ ordem. **O 7 é o que a divisão por fase não cobre** — a interação entre e
 
 ---
 
-## ⚠️ Antes de começar — duas restrições que travam o roteiro no passo 1
+## ⚠️ Antes de começar — três coisas que travam o roteiro no passo 1
 
-*(A nº 2 já derrubou uma execução. Não pule.)*
+*(As nº 2 e 3 já derrubaram uma execução cada. Não pule.)*
 
 ### 1. Matrícula + senha vai ao Protheus de PRODUÇÃO
 Todo ponto que pede **senha do portal RH** (saída PADRÃO, identificação do
@@ -72,6 +72,13 @@ etc.) — o Vite minifica identificadores; procure **textos** que aparecem na te
 
 > **Se um item reprovar, cheque isto primeiro.** "A tela não tem o campo" é o
 > sintoma tanto de bug quanto de build velho, e os dois se parecem no navegador.
+
+### 3. Hard refresh no navegador (Ctrl+Shift+R) depois de rebuildar
+
+Container novo não basta: o navegador guarda o `index.html` antigo, que aponta para o
+bundle antigo. Na 1ª execução de 09/08 a tela **continuou errada mesmo com o container
+já correto** — só passou depois do hard refresh. Faça um a cada rebuild, e outro
+sempre que algo "não mudou".
 
 ---
 
@@ -124,7 +131,7 @@ Preencher ao rodar cada roteiro:
 
 | Roteiro | Data | Quem rodou | Resultado | Observações |
 |---|---|---|---|---|
-| 1 Multi-role | | | | |
+| 1 Multi-role | 09/08 | skill do Chrome | **1.1–1.3 PASS** · 1.4 reescrito | 1ª execução reprovou 1.1 por container velho + cache do navegador — não era defeito. Seletor de depto da Logística traz os deptos REAIS da filial (02: Centro de Distribuição, Supermercado); trocando p/ Workspace, volta a lista global. 2ª permissão salvou sem erro de UNIQUE; cabeçalho mostrou `SUPERVISOR_FROTA · GESTOR_ENTREGA` e o menu, as duas seções. |
 | 2 Supervisor do veículo | | | | |
 | 3 Aprovador da despesa | | | | |
 | 4 Acerto PADRÃO | | | | |

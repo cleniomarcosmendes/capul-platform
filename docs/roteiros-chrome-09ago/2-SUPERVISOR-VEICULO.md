@@ -28,6 +28,10 @@
       `gfrota01` e `admin`. Gestor de Frota e Admin aparecem em **qualquer** filial
       (a frota é da empresa toda); Supervisor de Departamento só na filial dele.
 
+> ⚠️ **Se `supdeptb` aparecer**, provavelmente o "Desfazer" do roteiro 1 não foi feito
+> e ele ficou com SUPERVISOR_FROTA na filial 02 — nesse caso a tela está **certa** e o
+> que está errado é o estado do cadastro. Confira no Configurador antes de reprovar.
+
 ## 2.2 Quando não há ninguém, a tela diz o que fazer
 
 - [ ] Trocar a filial do veículo para uma **sem** Supervisor de Departamento

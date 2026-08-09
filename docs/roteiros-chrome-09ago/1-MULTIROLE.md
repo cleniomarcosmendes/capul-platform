@@ -51,17 +51,31 @@ Ainda em `supdeptb` (hoje **GESTOR_ENTREGA** no T.I.):
 > Entregas sem nenhum aviso. Verificado ao vivo: a mesma rota dava **403 antes** e
 > **200 depois** da correção.
 
-## 1.4 Sessão antiga não quebra
+## 1.4 O papel novo só vale no PRÓXIMO token
 
-- [ ] Com a aba já aberta e logada **antes** de qualquer mudança, navegar pelo
-      sistema: nada de erro nem de logout inesperado. Token sem a lista de
-      departamentos cai no campo antigo e se comporta como antes.
+> **Correção de 09/08:** este item pedia antes "uma aba logada antes do deploy, para
+> exercitar o token sem `departamentos[]`". **Não é reproduzível**: o auth-gateway
+> emite `departamentos[]` desde a Sub-fase 1.4 — o que faltava era a Logística *ler*.
+> Nenhum token em circulação exercita aquele fallback, que está coberto por teste
+> unitário (`roles-logistica.spec.ts`). No lugar, vale este, que é real e operacional:
+
+- [ ] Com `supdeptb` **já logado** noutra aba, conceder (pelo `admin`) o 2º papel.
+- [ ] Na aba dele, **sem relogar**: navegar normalmente — nada quebra, mas o papel
+      novo **ainda não aparece** (o token em uso é o de antes).
+- [ ] **Logout + login** → os dois papéis aparecem.
+
+> Vale saber na operação: "dei o papel e não apareceu" se resolve com logout/login,
+> não é defeito.
 
 ---
 
-## Desfazer (deixar o DEV como estava)
+## Desfazer (obrigatório — não é só higiene)
 
 - [ ] Configurador → `supdeptb` → **remover** a permissão de Supermercado, mantendo
-      só GESTOR_ENTREGA no T.I.
+      só GESTOR_ENTREGA.
 
-*(Se preferir manter, o roteiro 7 — Travessia — reaproveita este acúmulo de papéis.)*
+⚠️ **Não deixe para depois.** Com o 2º papel ativo, `supdeptb` passa a ser
+SUPERVISOR_FROTA na filial 02 — e o **roteiro 2 (item 2.1)** espera que ele **não**
+apareça na lista de supervisores elegíveis do veículo. Ele apareceria, corretamente,
+e o roteiro reprovaria um comportamento certo. O roteiro 7 não depende deste acúmulo:
+ele monta o próprio, na `renataborges`.
