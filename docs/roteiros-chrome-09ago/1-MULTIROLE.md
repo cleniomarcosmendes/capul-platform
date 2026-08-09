@@ -84,5 +84,5 @@ Com `supdeptb` **já logado** noutra aba, conceder (pelo `admin`) o 2º papel
 ⚠️ **Não deixe para depois.** Com o 2º papel ativo, `supdeptb` passa a ser
 SUPERVISOR_FROTA na filial 02 — e o **roteiro 2 (item 2.1)** espera que ele **não**
 apareça na lista de supervisores elegíveis do veículo. Ele apareceria, corretamente,
-e o roteiro reprovaria um comportamento certo. O roteiro 7 não depende deste acúmulo:
-ele monta o próprio, na `renataborges`.
+e o roteiro reprovaria um comportamento certo. O roteiro 7 **recria** este acúmulo no
+próprio `supdeptb` quando precisar dele — e desfaz de novo no fim.

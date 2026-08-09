@@ -1,94 +1,90 @@
 # 7 · Travessia — as fases juntas, num caminho só
 
-**Valida:** a **interação** entre multi-role, 5b, 5a e ponto 3 — que é justamente o
-que a divisão por fase não cobre. Cada uma passa isolada e ainda assim a cadeia pode
-quebrar na junção.
-**Tempo:** ~20 min. **Pré-requisito:** rodar antes os roteiros 1 e 3 pelo menos uma vez.
+**Valida:** a **interação** entre multi-role, 5b e ponto 3 — o que a divisão por fase
+não cobre. Cada fase passa isolada e a cadeia ainda pode quebrar na junção.
+**Tempo:** ~20 min. **Pré-requisito:** ter rodado os roteiros 1 e 3 pelo menos uma vez.
+**Usuários:** `supdeptb`/`123456` · `condutor_ind`/`123456` · `supdept01`/`123456` ·
+`gfrota01`/`123456` · `lidyanerocha`/`Temp@123` · `admin`/`admin123`.
 
-> **Por que existe.** As quatro fases mexem na mesma cadeia: *quem responde pela
-> despesa*. O multi-role decide quais papéis a pessoa tem; o 5b decide de qual
-> departamento é a despesa; o 5a decide quem pode mexer nela; o ponto 3 decide se há
-> veículo. Um roteiro por fase não exercita as quatro decisões no mesmo registro.
+> **Por que existe.** As fases mexem na mesma cadeia: *quem responde pela despesa*. O
+> multi-role decide quais papéis a pessoa tem; o 5b, de qual departamento é a despesa;
+> o ponto 3, se há veículo. Um roteiro por fase não exercita as três decisões no mesmo
+> registro.
+
+> **Adaptado em 09/08:** a versão anterior usava `supunai` (caixa) e `renataborges` —
+> as duas contas devolvem 401 com as senhas que temos. O caminho abaixo usa só
+> credenciais que funcionam. O trecho de **login PADRÃO (5a)** fica de fora: ele exige
+> uma conta compartilhada **e** senha real do portal RH — está coberto pelo roteiro 4.
 
 ---
 
 ## O caminho
 
-Uma viagem **sem veículo**, registrada por **conta compartilhada**, com despesa
-lançada pela **pessoa identificada**, aprovada por quem **responde pelo departamento
-dela** — e por mais ninguém.
+Uma viagem **sem veículo**, de alguém que **acumula papéis**, com despesa aprovada por
+quem **responde pelo departamento dela** — e por mais ninguém.
 
-### Passo 1 — Preparar o acúmulo de papéis (multi-role)
+### Passo 1 — Acúmulo de papéis (multi-role)
 
-- [ ] `admin` → Configurador → `renataborges` já é **SUPERVISOR_FROTA @ Supermercado**.
-      Adicionar a ela um **segundo** perfil de Logística: **GESTOR_ENTREGA** noutro
-      departamento da filial 02.
-- [ ] Entrar como `renataborges` (`Temp@123`): o rótulo do perfil mostra **os dois
-      papéis**, e o menu tem tanto Entregas quanto a frota.
+- [ ] `admin` → Configurador → `supdeptb` → adicionar 2º perfil de Logística:
+      **Supervisor de Departamento** no departamento **Supermercado**.
+- [ ] Entrar como `supdeptb`: o rótulo mostra **os dois papéis** e o menu traz Entregas
+      **e** frota.
 
-> Se aqui ela **perder** o acesso que tinha antes, o multi-role regrediu — pare e
-> registre.
+> Se ele **perder** o acesso que já tinha, o multi-role regrediu — pare e registre.
 
-### Passo 2 — Registrar viagem SEM veículo, por conta compartilhada (ponto 3 + 5b)
+### Passo 2 — Viagem SEM veículo (ponto 3 + 5b)
 
-- [ ] Entrar como `supunai` (**PADRAO**, filial 02, senha `123456`) → **Registro de
-      Viagem**.
-
-> 🔴 **Login PADRÃO exige matrícula + senha reais** para o formulário liberar o
-> registro. Sem credencial real, faça este passo com `raydeborges` (INDIVIDUAL,
-> `Temp@123`) — o departamento também cai no fallback do login (Supermercado), então a
-> cadeia do 5b continua a mesma.
+- [ ] Entrar como `condutor_ind` → **Registro de Viagem**.
 - [ ] Escolher **"— Sem veículo da empresa (outro transporte) —"**.
-- [ ] Conferir o campo **"Departamento que responde pelas despesas"**: resolve para
-      **Supermercado** (departamento do login) e mostra **"Aprovado por *Renata
-      Borges*"**.
+- [ ] O campo **"Departamento que responde pelas despesas"** mostra **Tecnologia da
+      Informacao** e **"Aprovado por Supervisor de Depto 01 (TESTE)"**, **sem** o aviso
+      de "veio do login" (ele tem matrícula).
 - [ ] Informar **adiantamento** e registrar.
 
-> Duas fases se cruzam aqui: a viagem não tem veículo (ponto 3) e mesmo assim tem
-> departamento aprovador (5b). Antes, sem veículo não havia como saber de quem era a
-> conta.
+> Duas fases se cruzam: a viagem não tem veículo (ponto 3) e mesmo assim tem
+> departamento aprovador (5b). Antes, sem veículo não havia como saber de quem era a conta.
 
-### Passo 3 — A pessoa se identifica e lança a despesa (5a)
+### Passo 3 — Despesa de INDIVÍDUO
 
-- [ ] Ainda como `supunai`, abrir a viagem. Aparece o **gate de identificação**.
-- [ ] 🔴 Identificar com **matrícula + senha reais** do colaborador que conduziu.
-      *(Sem credencial real, pule para o passo 4 usando um login INDIVIDUAL para
-      lançar a despesa — a cadeia do 5b continua verificável.)*
-- [ ] Lançar uma despesa de categoria **INDIVÍDUO** → nasce **PENDENTE**.
+- [ ] Ainda como `condutor_ind`, lançar na viagem uma despesa de categoria
+      **INDIVÍDUO** (a única cadastrada é **Alimentação**) → nasce **PENDENTE**.
+- [ ] Uma despesa de categoria **VEÍCULO** deve ser **recusada** — não há veículo.
 
 ### Passo 4 — Só quem responde pelo departamento aprova (5b)
 
-> ✅ **Desbloqueado em 09/08** (`c774210e`): a listagem passou a usar a mesma
-> fonte da aprovação. Antes o supervisor aprovava o que não conseguia ver.
-
-- [ ] `renataborges` (SUPERVISOR_FROTA do **Supermercado**) → vê a despesa e
-      **aprova**.
-- [ ] `supdept01` (SUPERVISOR_FROTA do **T.I.**) → **não** consegue aprovar a mesma
+- [ ] `supdept01` (SUPERVISOR_FROTA do **T.I.**) → **Custos da Frota / Despesas**,
+      filtro PENDENTE → **vê** a despesa e **aprova**.
+- [ ] `lidyanerocha` (SUPERVISOR_FROTA de **Vendas/FBR**, filial 18) → **não** vê a
       despesa.
-- [ ] `gfrota01` (GESTOR_FROTA) → consegue **contestar**, **não** aprovar.
+- [ ] `gfrota01` (GESTOR_FROTA) → numa despesa ainda pendente, **contesta**; ao tentar
+      **aprovar**, recebe a recusa explicando que aprovar o acerto é do supervisor do
+      departamento do condutor.
+
+> ⭐ Este passo só é alcançável desde `c774210e`: antes, a listagem usava uma fonte
+> diferente da aprovação e o `supdept01` **aprovava o que não conseguia ver**.
 
 ### Passo 5 — O retrato não se move (5b)
 
-- [ ] No Configurador, mudar o departamento de quem lançou.
-- [ ] A despesa **já aprovada** continua atribuída ao mesmo departamento, e uma
-      viagem nova nasce com o departamento novo.
+- [ ] `admin` → Configurador → trocar o **departamento** de `condutor_ind`.
+- [ ] A despesa/viagem do passo 2 **mantém** o departamento aprovador anterior.
+- [ ] Uma viagem **nova** de `condutor_ind` já nasce com o departamento novo.
 
 ---
 
-## O que este roteiro procura, e os roteiros por fase não
+## O que este roteiro procura, e os por fase não
 
 | Risco de junção | Onde apareceria |
 |---|---|
-| Viagem sem veículo ficar **sem departamento** aprovador | Passo 2 — o campo viria vazio |
-| Despesa de indivíduo **só o gestor** poder gerir | Passo 4 — `renataborges` não veria a despesa |
+| Viagem sem veículo ficar **sem departamento** aprovador | Passo 2 — campo viria vazio |
+| Despesa de indivíduo **só o gestor** poder gerir | Passo 4 — `supdept01` não a veria |
+| Listagem e aprovação usarem **fontes diferentes** | Passo 4 — vê mas não aprova, ou o contrário |
 | O 2º papel **apagar** o 1º | Passo 1 — o menu perderia itens |
-| O token do condutor **não valer** em viagem sem veículo | Passo 3 — recusaria o lançamento |
 | A autoridade **migrar** ao mudar o cadastro | Passo 5 — a despesa trocaria de dono |
 
 ---
 
 ## Desfazer
 
-- [ ] Remover o 2º perfil de `renataborges`.
-- [ ] Devolver o departamento alterado no passo 5.
-- [ ] Cancelar a viagem e as despesas de teste.
+- [ ] Remover o 2º perfil de `supdeptb` (**obrigatório** — senão contamina o roteiro 2).
+- [ ] Devolver o departamento de `condutor_ind`.
+- [ ] Cancelar a viagem e excluir as despesas de teste.
