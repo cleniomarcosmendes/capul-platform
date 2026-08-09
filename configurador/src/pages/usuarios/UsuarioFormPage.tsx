@@ -40,7 +40,18 @@ const MODULO_FISCAL_CODIGO = 'FISCAL';
 // é via WORKSPACE). Só p/ WORKSPACE a matriz mostra a coluna Departamento; nos
 // demais ela é escondida e o depto do PRÓPRIO usuário é atribuído no save
 // (departamento_id é NOT NULL no banco).
-const MODULOS_COM_DEPARTAMENTO = ['WORKSPACE'];
+const MODULOS_COM_DEPARTAMENTO = ['WORKSPACE', 'LOGISTICA'];
+
+/**
+ * De onde sai a lista de departamentos do seletor, por módulo.
+ *
+ * WORKSPACE: lista GLOBAL de deptos-workspace — ali o departamento diz "qual T.I. eu
+ * posso acionar", e não depende da filial do usuário.
+ * LOGISTICA: departamentos REAIS da filial do usuário — ali o departamento diz por
+ * QUEM a pessoa responde (o supervisor de departamento responde pelas despesas de
+ * quem está lotado no mesmo depto). Um depto de outra filial não significaria nada.
+ */
+const USA_DEPTO_WORKSPACE = ['WORKSPACE'];
 
 export function UsuarioFormPage() {
   const navigate = useNavigate();
@@ -306,11 +317,14 @@ export function UsuarioFormPage() {
         if (campo === 'moduloId') {
           const mod = modulos.find((m) => m.id === valor);
           atualizada.roleModuloId = mod?.rolesDisponiveis[0]?.id || '';
-          // Só WORKSPACE usa departamento → limpa pra o operador escolher o
-          // workspace. Demais módulos: auto-atribui o depto do próprio usuário
-          // (a coluna fica escondida).
-          const usaDepto = !!mod && MODULOS_COM_DEPARTAMENTO.includes(mod.codigo);
-          atualizada.departamentoId = usaDepto ? '' : departamentoId;
+          // WORKSPACE: limpa pra o operador escolher QUAL workspace (lista global).
+          // LOGISTICA: pré-seleciona o departamento do próprio usuário — é o caso
+          // normal (a pessoa responde pelo depto dela) e mantém o comportamento que
+          // existia quando a coluna era escondida; o operador troca, ou adiciona uma
+          // 2ª linha noutro depto quando ela acumula papéis.
+          // Demais módulos: auto-atribui o depto do usuário (coluna escondida).
+          const escolheWorkspace = !!mod && USA_DEPTO_WORKSPACE.includes(mod.codigo);
+          atualizada.departamentoId = escolheWorkspace ? '' : departamentoId;
         }
         return atualizada;
       }),
@@ -833,6 +847,19 @@ export function UsuarioFormPage() {
                     // (depto auto-atribuído ao do usuário). Sem módulo escolhido,
                     // mostra o seletor (neutro).
                     const usaDepartamento = !moduloAtual || MODULOS_COM_DEPARTAMENTO.includes(moduloAtual.codigo);
+                    // WORKSPACE usa a lista global de deptos-workspace; os demais
+                    // (LOGISTICA) usam os departamentos REAIS da filial do usuário.
+                    const opcoesDepto = moduloAtual && !USA_DEPTO_WORKSPACE.includes(moduloAtual.codigo)
+                      ? departamentos
+                      : departamentosWorkspace;
+                    // O depto gravado pode não estar na lista atual (ex.: trocaram a
+                    // filial principal do usuário e a permissão ficou apontando pra um
+                    // depto da filial antiga). Sem isto o <select> apareceria VAZIO,
+                    // como se ninguém tivesse escolhido — e o operador salvaria por cima
+                    // sem saber. Mostra o valor órfão, marcado.
+                    const deptoForaDaLista = !!perm.departamentoId
+                      && opcoesDepto.length > 0
+                      && !opcoesDepto.some((d) => d.id === perm.departamentoId);
                     return (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-3 py-2">
@@ -892,8 +919,15 @@ export function UsuarioFormPage() {
                                   independe da filial principal do user). NÃO é o depto do
                                   cadastro: é o WORKSPACE que o usuário pode acessar (ex.:
                                   atribuir "Tecnologia da Informação" deixa o user abrir
-                                  chamado pro T.I.). Por isso a lista é global, não por filial. */}
-                              {departamentosWorkspace.map((d) => (
+                                  chamado pro T.I.). Por isso a lista é global, não por filial.
+                                  LOGISTICA usa outra lista (`opcoesDepto`): os departamentos
+                                  REAIS da filial — lá o depto diz por QUEM a pessoa responde. */}
+                              {deptoForaDaLista && (
+                                <option value={perm.departamentoId}>
+                                  ⚠ departamento de outra filial — reescolha
+                                </option>
+                              )}
+                              {opcoesDepto.map((d) => (
                                 <option key={d.id} value={d.id}>{d.nome}</option>
                               ))}
                             </select>
