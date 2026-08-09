@@ -28,6 +28,8 @@ ordem. **O 7 é o que a divisão por fase não cobre** — a interação entre e
 
 ## ⚠️ Antes de começar — duas restrições que travam o roteiro no passo 1
 
+*(A nº 2 já derrubou uma execução. Não pule.)*
+
 ### 1. Matrícula + senha vai ao Protheus de PRODUÇÃO
 Todo ponto que pede **senha do portal RH** (saída PADRÃO, identificação do
 condutor no acerto, porteiro) é validado contra o Protheus **real**. Senha
@@ -37,15 +39,39 @@ Onde isso pesa: **roteiro 4** depende de uma credencial real de colaborador. Os
 demais têm caminho alternativo por login **INDIVIDUAL**, que dispensa a senha do
 RH — está indicado em cada um.
 
-### 2. O serviço precisa estar com o código desta jornada
-Os roteiros 3, 4, 5 e 6 exigem backend rebuildado (a migration e as regras novas):
+### 2. 🔴 O ambiente precisa estar com o código desta jornada — os TRÊS containers
+
+Este é o erro que já aconteceu: em 09/08 a skill reprovou o item 1.1 porque o
+**Configurador servia um bundle de 43 horas atrás**. O achado estava tecnicamente
+correto (não havia seletor de departamento na tela) e a causa era container velho,
+não defeito. Frontend em container é **imagem buildada** — editar o fonte não muda
+o que o navegador recebe.
 
 ```bash
-docker compose build logistica-backend && docker compose up -d logistica-backend
+cd /mnt/c/meus_projetos/capul-platform
+docker compose build logistica-backend logistica-frontend configurador
+docker compose up -d logistica-backend logistica-frontend configurador
 docker compose exec nginx nginx -s reload      # IP novo do container → senão 502
 ```
 
-O frontend roda em Vite; se algo "não mudou", é cache do `index.html`.
+**Conferir antes de abrir o Chrome** (não confie no "buildou"):
+
+```bash
+# Configurador: a Logística tem de estar na lista de módulos com departamento
+docker compose exec configurador sh -c 'grep -o "WORKSPACE\",\"LOGISTICA" /usr/share/nginx/html/assets/*.js | head -1'
+# esperado: WORKSPACE","LOGISTICA
+
+# Logística: a tela renomeada
+docker compose exec logistica-frontend sh -c 'grep -c "Registro de Viagem" /usr/share/nginx/html/assets/*.js'
+# esperado: 1 ou mais
+```
+
+Se qualquer um vier vazio/0, **pare**: o roteiro vai reprovar itens que estão
+corretos no código. Não adianta grepar o **nome** de constantes (`USA_DEPTO_WORKSPACE`
+etc.) — o Vite minifica identificadores; procure **textos** que aparecem na tela.
+
+> **Se um item reprovar, cheque isto primeiro.** "A tela não tem o campo" é o
+> sintoma tanto de bug quanto de build velho, e os dois se parecem no navegador.
 
 ---
 
