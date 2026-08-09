@@ -63,10 +63,14 @@ num caminho e o outro passa ao largo**. Ver
 3. **Uma rota por vez**, por veículo **e** por motorista: barrar novo despacho se
    houver viagem em `DESPACHADA`/`EM_CURSO`, dizendo **qual** rota está aberta.
 
-### ⚠️ Decisão pendente do Clenio
-**O que fazer com as viagens que já existem sem KM.** Tornar obrigatório pode
-travar viagem em curso hoje. O caminho seguro é exigir só nas NOVAS e listar as
-antigas para acerto — mas é chamada dele.
+### ✅ Decidido (09/08) — viagens antigas sem KM
+**Não há tratamento a fazer.** Decisão do Clenio: *"aqui é uma base de testes, não
+está em produção ainda, não precisa se preocupar"*. Ou seja: **KM obrigatório para
+todas**, sem exigir só nas novas, sem tela de acerto das antigas e sem migration de
+dado. Se alguma viagem de teste travar, é aceitável.
+
+⚠️ A janela para isso é o deploy: **quando a Logística entrar em produção com dados
+reais, essa liberdade acaba** — a regra passa a valer sobre viagem de gente.
 
 ### Onde mexer
 - `logistica/backend/src/viagem/viagem.service.ts` — `despachar`, `iniciar`, `concluir`
