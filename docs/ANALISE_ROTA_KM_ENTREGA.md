@@ -34,6 +34,64 @@ Não há nenhuma verificação de outra viagem ativa para o mesmo **veículo** o
 
 ---
 
+## Verificado em 09/08 — o APP já resolve parte disso (e isso muda o plano)
+
+### 5. O app trava a baixa sem KM — mas só no cliente, e só a baixa
+`logistica/app/src/screens/ViagemDetalheScreen.tsx:340,416` — com `kmInicial == null`
+o botão de baixa vira `🔒 Registre o KM de saída` e o toque não chama `onBaixar`. A
+tela ainda avisa: *"Registre o KM de saída para liberar as baixas desta rota"*. O app
+também valida KM de retorno < KM de saída (`:108`) e enfileira o KM offline (`:151`).
+
+**O app está à FRENTE do backend, não atrás.** Duas consequências para o plano:
+
+- **A regra é client-side.** O servidor não exige nada; qualquer caminho que não passe
+  por essa tela (desktop, versão antiga do app, chamada direta) atravessa. É a família
+  de defeito nº 3 do inventário — *a correção existe, mas o caminho usado não passa por
+  ela*. O trabalho não é "criar a regra no app": é **mover a regra para o servidor**.
+- **A trava é só na BAIXA, não no INÍCIO da rota.** É exatamente isto que o usuário
+  relatou: o despacho põe a viagem EM_CURSO sem KM, o entregador vê as paradas, abre o
+  mapa e navega — e só encontra o cadeado na hora de dar baixa. O relato dele está
+  correto, e o app também: a regra só não existe onde precisava estar.
+
+### 6. 🕳️ Encerrar a rota marca entrega pendente como ENTREGUE **sem comprovante**
+`ViagemDetalheScreen.tsx:291-296`, na própria tela:
+
+> *"Encerrar agora marca N entregas pendentes como ENTREGUE, sem comprovante."*
+
+A tela **avisa**, mas **deixa**. Isso não é validação faltando — é código ativo fazendo
+o **oposto** da definição de "finalizar" do Clenio (*"entregar ou recusar as
+entregas"*), e anula a prova de entrega da Fase 1b (o cofre) justamente nas paradas que
+ficaram sem baixa. Precisa ser **removido**, não só protegido por uma validação nova.
+
+---
+
+## A amarração com o controle de frota (o item NOVO da pauta)
+
+Este ponto não estava no levantamento original. Verificado agora — e o buraco é real.
+
+A rota de ENTREGA **mexe no odômetro do veículo**: ao concluir,
+`src/viagem/viagem.service.ts:327` grava `kmAtual: kmFinal` e devolve o veículo para
+DISPONIVEL — igual à viagem de frota.
+
+Mas o **Monitor da Frota não a enxerga**: o KM rodado do mês
+(`src/frota/frota.service.ts:818`) e o ranking por departamento (`:830`) filtram
+`tipo: TipoViagem.FROTA`. As viagens de ENTREGA ficam de fora.
+
+O resultado são duas distorções em direções opostas:
+
+1. **O odômetro anda sem viagem que o explique.** `kmAtual` avança pela entrega, mas o
+   "KM rodado" do mês não conta aquele trecho → custo por km fica **superestimado**
+   (mesmo custo dividido por menos km), e a Linha do KM tem um degrau sem origem.
+2. **Se a rota concluir SEM `kmFinal`** (hoje é opcional — confirmado acima), o
+   odômetro **nem avança**: o KM rodado na entrega simplesmente **desaparece** do
+   veículo. A manutenção preventiva, que é disparada por `kmAtual`
+   (`frota.service.ts:812`), atrasa em silêncio.
+
+⚠️ A distorção nº 2 é a mais grave: ela some com quilometragem real de um veículo que
+roda **todo dia** fazendo entrega.
+
+---
+
 ## Por que ficou assim
 
 O `kmInicial` "de verdade" nasceu no módulo **FROTA** (saída de veículo), onde é
@@ -72,10 +130,25 @@ dado. Se alguma viagem de teste travar, é aceitável.
 ⚠️ A janela para isso é o deploy: **quando a Logística entrar em produção com dados
 reais, essa liberdade acaba** — a regra passa a valer sobre viagem de gente.
 
+### Proposta — itens acrescentados em 09/08
+
+4. **A regra vive no SERVIDOR.** O app mantém a trava (é boa UX: avisa antes do toque),
+   mas quem recusa é o backend. Sem isso, só o app obedece.
+5. **Encerrar NÃO entrega sozinho.** Remover a conversão automática de parada pendente
+   em ENTREGUE; encerrar exige cada parada baixada ou recusada — que é a definição de
+   "finalizar" do Clenio, e preserva o comprovante.
+6. **A entrega entra no controle de frota.** O KM rodado, a Linha do KM e o custo por km
+   passam a considerar `tipo = ENTREGA` junto com `FROTA` — as duas movem o mesmo
+   odômetro. Com KM obrigatório nas duas pontas (item 1), o trecho deixa de sumir.
+
 ### Onde mexer
 - `logistica/backend/src/viagem/viagem.service.ts` — `despachar`, `iniciar`, `concluir`
+  (a regra de KM; e `concluir` para de auto-entregar as pendentes)
 - `logistica/backend/src/viagem/dto.ts` — tornar `kmInicial`/`kmFinal` obrigatórios
-- App: `logistica/app/src/screens/ViagemDetalheScreen.tsx` (fluxo do entregador)
+- `logistica/backend/src/frota/frota.service.ts:818,830` — Monitor/KM rodado passam a
+  incluir as viagens de ENTREGA (hoje filtram só `FROTA`)
+- App: `logistica/app/src/screens/ViagemDetalheScreen.tsx` — a trava da baixa já existe
+  (`:340,416`); ajustar é o **encerramento** (`:291-296`), que hoje entrega sozinho
 - Suíte da logística: **264 testes** (`cd logistica/backend && npx jest`)
 
 ⚠️ Mexe com KM de veículo, que alimenta **custo de frota** — mudança aqui tem
