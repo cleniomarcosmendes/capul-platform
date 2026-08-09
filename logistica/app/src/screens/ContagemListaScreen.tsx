@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator, Alert, FlatList, Keyboard, StyleSheet, Text, TextInput,
+  TouchableOpacity, View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
@@ -37,6 +38,21 @@ export function ContagemListaScreen({ route, navigation }: Props) {
   /** Produto rastreado aberto para contagem lote a lote. */
   const [itemEmLote, setItemEmLote] = useState<ItemContagem | null>(null);
   const [liberando, setLiberando] = useState(false);
+  /**
+   * ⌨️ Com o teclado aberto sobrava UMA LINHA de lista: o item sendo digitado
+   * ficava espremido entre a busca e o rodapé, e não dava para rolar até ele.
+   *
+   * O padrão de casa (`useScrollToFocusedInput`) não serve — é para formulário
+   * com ScrollView, e aqui é FlatList com milhares de itens. A saída é devolver
+   * o espaço: enquanto se digita, o rodapé e os avisos não têm função.
+   */
+  const [tecladoAberto, setTecladoAberto] = useState(false);
+
+  useEffect(() => {
+    const abriu = Keyboard.addListener('keyboardDidShow', () => setTecladoAberto(true));
+    const fechou = Keyboard.addListener('keyboardDidHide', () => setTecladoAberto(false));
+    return () => { abriu.remove(); fechou.remove(); };
+  }, []);
 
   const recarregarLocal = useCallback(async () => {
     const p = await lerPacote(listId);
@@ -311,11 +327,11 @@ export function ContagemListaScreen({ route, navigation }: Props) {
         </View>
       </View>
 
-      {horaSync && pendentesEnvio === 0 ? (
+      {!tecladoAberto && horaSync && pendentesEnvio === 0 ? (
         <Text style={styles.rodapeSync}>Última sincronização às {horaSync}</Text>
       ) : null}
 
-      {revisar > 0 ? (
+      {!tecladoAberto && revisar > 0 ? (
         <Text style={styles.avisoRevisar}>
           {modoRevisaoParcial
             ? `Modo revisão: mostrando só os ${revisar} item(ns) que o supervisor marcou. ` +
@@ -341,6 +357,11 @@ export function ContagemListaScreen({ route, navigation }: Props) {
         maxToRenderPerBatch={20}
         windowSize={10}
         removeClippedSubviews
+        // Tocar noutro item enquanto o teclado está aberto TROCA de campo, em
+        // vez de só fechar o teclado e exigir um segundo toque.
+        keyboardShouldPersistTaps="handled"
+        // Rolar a lista fecha o teclado — é o gesto natural de "terminei aqui".
+        keyboardDismissMode="on-drag"
         renderItem={({ item }) => {
           const local = valores[item.id];
           // Três estados, e é isto que o operador precisa enxergar de relance:
@@ -433,6 +454,7 @@ export function ContagemListaScreen({ route, navigation }: Props) {
         />
       ) : null}
 
+      {tecladoAberto ? null : (
       <View style={styles.rodape}>
         <View style={styles.rodapeLinha}>
           <TouchableOpacity
@@ -462,6 +484,7 @@ export function ContagemListaScreen({ route, navigation }: Props) {
           </Text>
         </TouchableOpacity>
       </View>
+      )}
     </View>
   );
 }
