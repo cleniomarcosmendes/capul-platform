@@ -10143,7 +10143,7 @@ async def get_list_products(
             # 📍 v2.19.8: Verificar se é ID de counting_lists ou inventory_lists
             # Primeiro, tentar como counting_lists
             check_query = text("SELECT id FROM inventario.counting_lists WHERE id = :list_id LIMIT 1")
-            check_result = db.execute(check_query, {"list_id": str(list_uuid)}).fetchone()
+            check_result = db.execute(check_query, {"list_id": str(list_id)}).fetchone()
 
             if not check_result:
                 # Não encontrou em counting_lists, tentar como inventory_lists
@@ -10304,7 +10304,7 @@ async def get_list_products(
         # 🔍 DEBUG: Logar query e parâmetros
         logger.info(f"🔍 [GET PRODUCTS] Executando query com list_id: {str(list_uuid)}")
 
-        result = db.execute(query, {"list_id": str(list_uuid)}).fetchall()
+        result = db.execute(query, {"list_id": str(list_id)}).fetchall()
 
         # 🔍 DEBUG: Logar resultado
         logger.info(f"🔍 [GET PRODUCTS] Query retornou {len(result)} produtos")
@@ -11394,6 +11394,25 @@ async def finalize_counting_cycle(
             counting_list.list_status = "ABERTA"  # Pronto para trocar contador e liberar
             counting_list.updated_at = datetime.utcnow()
             message = f"Ciclo {old_cycle}o finalizado. Avancado para {new_cycle}o ciclo com {products_needing_recount} produtos para recontagem."
+
+            # ⚠️ 08/08/2026 — LIMPAR as flags de revisão ao virar o ciclo.
+            #
+            # `revisar_no_ciclo` é marca do supervisor sobre o ciclo QUE ACABOU.
+            # Levá-la para o próximo faz o cliente (desktop e app) entrar em
+            # "modo revisão parcial" no ciclo novo e listar só a interseção, em
+            # vez dos itens que divergiram — que é a regra do ciclo.
+            #
+            # ⚠️ Isto JÁ estava resolvido em `sync_cycle_between_tables`
+            # (fix 09/05, INV_04), mas aquela função só é chamada pelos
+            # endpoints `release-cycle-2/3`. O `finalize-cycle` — que é o que a
+            # tela E o app usam — nunca passava por lá. A correção existia numa
+            # estrada e o trânsito ia por outra.
+            db.execute(text("""
+                UPDATE inventario.counting_list_items
+                   SET revisar_no_ciclo = false, motivo_revisao = NULL
+                 WHERE counting_list_id = :list_id
+                   AND (revisar_no_ciclo = true OR motivo_revisao IS NOT NULL)
+            """), {"list_id": str(list_id)})
 
         # Sincronizar current_cycle no inventário pai (para exibição correta na tela de contagem)
         from app.models.models import InventoryList as InventoryListModel

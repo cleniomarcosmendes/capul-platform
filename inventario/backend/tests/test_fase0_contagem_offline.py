@@ -1002,3 +1002,74 @@ def test_lote_usa_o_SNAPSHOT_e_nao_o_cadastro_de_hoje(db_session, test_inventory
 
     # Não deve levantar: vale o que estava congelado.
     _validar_contagem_por_lote(db_session, item.id, item.product_code, None)
+
+
+# ==========================================================================
+# Flags de revisão NÃO atravessam o ciclo (08/08/2026)
+# ==========================================================================
+#
+# `revisar_no_ciclo` é marca do supervisor sobre o ciclo QUE ACABOU. Levada para
+# o ciclo seguinte, o cliente entra em "modo revisão parcial" e lista só a
+# interseção, em vez dos itens que divergiram — que é a regra do ciclo.
+#
+# ⚠️ Isto já tinha sido corrigido em 09/05 (INV_04) dentro de
+# `sync_cycle_between_tables`, mas aquela função só é chamada pelos endpoints
+# `release-cycle-2/3`. O `finalize-cycle` — o que a tela e o app usam de fato —
+# nunca passava por lá. Reportado pelo Clenio avançando o ciclo no app.
+
+
+def test_ciclo_novo_nao_herda_flag_de_revisao(db_session, test_counting_list, test_counting_list_items):
+    """O SQL que o finalize-cycle passou a executar ao avançar o ciclo."""
+    item = test_counting_list_items[0]
+    item.revisar_no_ciclo = True
+    item.motivo_revisao = "conferir a validade"
+    db_session.flush()
+
+    db_session.execute(text("""
+        UPDATE inventario.counting_list_items
+           SET revisar_no_ciclo = false, motivo_revisao = NULL
+         WHERE counting_list_id = :list_id
+           AND (revisar_no_ciclo = true OR motivo_revisao IS NOT NULL)
+    """), {"list_id": str(test_counting_list.id)})
+    db_session.flush()
+    db_session.refresh(item)
+
+    assert item.revisar_no_ciclo is False, "a marca do ciclo anterior atravessou"
+    assert item.motivo_revisao is None
+
+
+def test_limpeza_de_revisao_nao_toca_outras_listas(
+    db_session, test_counting_list, test_counting_list_items, test_inventory, test_supervisor_user
+):
+    """⚠️ A limpeza é POR LISTA, não pelo inventário.
+
+    Listas do mesmo inventário podem estar em ciclos diferentes — limpar tudo
+    apagaria a marcação de uma lista que ainda está no ciclo em que foi feita.
+    """
+    outra = CountingList(
+        id=uuid4(), list_name="CL_OUTRA", inventory_id=test_inventory.id,
+        current_cycle=1, list_status="EM_CONTAGEM",
+        counter_cycle_1=test_supervisor_user.id, created_by=test_supervisor_user.id,
+    )
+    db_session.add(outra)
+    db_session.flush()
+
+    intocado = CountingListItem(
+        id=uuid4(), counting_list_id=outra.id,
+        inventory_item_id=test_counting_list_items[0].inventory_item_id,
+        needs_count_cycle_1=True, revisar_no_ciclo=True, motivo_revisao="da outra lista",
+    )
+    db_session.add(intocado)
+    db_session.flush()
+
+    db_session.execute(text("""
+        UPDATE inventario.counting_list_items
+           SET revisar_no_ciclo = false, motivo_revisao = NULL
+         WHERE counting_list_id = :list_id
+           AND (revisar_no_ciclo = true OR motivo_revisao IS NOT NULL)
+    """), {"list_id": str(test_counting_list.id)})
+    db_session.flush()
+    db_session.refresh(intocado)
+
+    assert intocado.revisar_no_ciclo is True, "limpou a marcação de OUTRA lista"
+    assert intocado.motivo_revisao == "da outra lista"
