@@ -805,20 +805,40 @@ async def get_inventory_items(
         for szb in szb_rows:
             szb_lookup[szb.zb_xlocal.strip()] = szb
 
-        items_with_assignments = []
-        for item in unique_items:
-            # Buscar atribuição do usuário para este item
-            assignment = db.query(CountingAssignment).filter(
-                CountingAssignment.inventory_item_id == item.id,
-                CountingAssignment.assigned_to == current_user.id
-            ).first()
+        # ⚡ 08/08/2026 — ERA N+1: duas queries POR ITEM dentro do laço.
+        #
+        # Com 6.235 itens davam ~12.500 idas ao banco e a tela levava 19s para
+        # abrir. As tabelas SB2010/SBZ010/SZB010 logo acima já eram pré-carregadas
+        # em lote — a otimização existia e parou no meio, deixando justamente as
+        # duas que custam por item.
+        #
+        # Mesmo padrão das de cima: uma query, um dicionário.
+        item_ids = [item.id for item in unique_items]
+        assignment_lookup = {}
+        if item_ids:
+            for a in db.query(CountingAssignment).filter(
+                CountingAssignment.inventory_item_id.in_(item_ids),
+                CountingAssignment.assigned_to == current_user.id,
+            ).all():
+                # `.first()` guardava a PRIMEIRA por item; `setdefault` preserva
+                # esse comportamento se houver mais de uma.
+                assignment_lookup.setdefault(a.inventory_item_id, a)
 
-            # Buscar dados do produto
-            product = db.query(SB1010).filter(
-                func.trim(SB1010.b1_cod) == func.trim(item.product_code)
-            ).first()
+        product_lookup = {}
+        if product_codes_stripped:
+            for prod in db.query(SB1010).filter(
+                func.trim(SB1010.b1_cod).in_(product_codes_stripped)
+            ).all():
+                product_lookup.setdefault((prod.b1_cod or "").strip(), prod)
 
-            items_with_assignments.append((item, assignment, product))
+        items_with_assignments = [
+            (
+                item,
+                assignment_lookup.get(item.id),
+                product_lookup.get((item.product_code or "").strip()),
+            )
+            for item in unique_items
+        ]
         
         # 🎯 SISTEMA DE 3 CICLOS - Aplicar filtro de status se especificado
         if status_filter:
