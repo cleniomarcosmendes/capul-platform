@@ -103,7 +103,11 @@ sempre que algo "não mudou".
 **Senhas** (memória local, não versionadas): `admin` = `admin123`;
 `lidyanerocha`, `fabricioneiva`, `kelvereduardo`, **`renataborges`, `raydeborges` e
 `wandersonnascimento`** = `Temp@123`; **demais = `123456`**.
-*(Clenio confirmou as três da filial 02 em 09/08 — a memória antiga dizia `Temp2026`.)*
+> 🔴 **Testado em 09/08: `renataborges`, `raydeborges` e `wandersonnascimento` NÃO
+> aceitam `Temp@123`, e `agrounai` não aceita `123456`** — as quatro devolvem 401.
+> `Temp@123` funciona na `lidyanerocha`, então a senha existe; é o par que está errado.
+> **Enquanto não houver as senhas corretas, use `admin`/`admin123`**, que alcança todas
+> as telas. Os roteiros 3 e 7 já foram reescritos para não depender das quatro.
 
 ### A filial 02 (Supermercado) fecha um cenário inteiro sozinha
 

@@ -31,46 +31,29 @@
 > some da lista até o retorno. **Registre o retorno ao terminar** — senão o roteiro 4,
 > que precisa de uma viagem com veículo, fica sem carro para usar.
 
-## 3.2 ⭐ Quando o departamento vem do LOGIN, a tela avisa
+## 3.2 As três origens do departamento — medidas por API antes de te entregar
 
-Este é o elo frágil: o login PADRÃO é do **posto** (caixa/portaria), não da pessoa.
+O campo diz de ONDE veio o departamento. É isso que permite ao operador desconfiar.
 
-**Usuário:** `agrounai` (PADRAO, REGISTRADOR_FROTA, departamento **Agroveterinaria**).
+**a) Sem matrícula no cadastro → cai no LOGIN.** Usuário: `admin` (não tem matrícula).
+- [ ] Abrir **Registro de Viagem**. O campo resolve para **Tecnologia da Informacao**,
+      mostra **"Aprovado por Supervisor de Depto 01 (TESTE)"** e o aviso
+      **"veio do departamento do login, não do colaborador — confira"**.
 
-- [ ] Abrir **Registro de Viagem** sem informar matrícula ainda.
-- [ ] O campo resolve para **Agroveterinaria** (o departamento do login) e aparece o
-      aviso **"veio do departamento do login, não do colaborador — confira"**.
-- [ ] Como **Agroveterinaria não tem ninguém** com Supervisor de Departamento,
-      aparece também:
-      *"⚠ … não tem ninguém com o papel de Supervisor de Departamento — as despesas
-      ficariam pendentes sem quem aprovasse."*
-- [ ] **Corrigir na tela**: escolher **Tecnologia da Informacao** no seletor. O aviso
-      some e passa a mostrar o nome do aprovador.
+**b) Departamento sem ninguém com o papel → alerta.** Ainda como `admin`:
+- [ ] No seletor, escolher **Agroveterinaria**. Aparece:
+      *"⚠ Agroveterinaria não tem ninguém com o papel de Supervisor de Departamento —
+      as despesas ficariam pendentes sem quem aprovasse."*
+- [ ] Voltar para **Tecnologia da Informacao** → o alerta some e o aprovador reaparece.
 
-> ⚠️ **O seletor fica desabilitado até o condutor ser validado** — e `agrounai` é login
-> PADRÃO, que exige **matrícula + senha reais** do portal RH. Sem credencial real dá
-> para **ver** o aviso (é o que importa aqui), mas não para **corrigir**. Para exercitar
-> a correção sem senha, use um login INDIVIDUAL (`condutor_ind`) e troque o
-> departamento no seletor.
+**c) Com matrícula → resolve pela PESSOA.** Usuário: `condutor_ind` (matrícula E01047):
+- [ ] O campo mostra **Tecnologia da Informacao** **sem** o aviso de "veio do login" —
+      porque veio do colaborador.
 
-> É a diferença entre o desenho antigo e o novo: antes, a despesa simplesmente ia
-> para o supervisor do veículo e ninguém ficava sabendo. Agora quem registra vê e
-> corrige **no instante em que tem a informação na mão**.
-
-### O contraste que fecha o caso: mesmo fallback, com aprovador
-
-**Usuário:** `raydeborges` (INDIVIDUAL, Supermercado, filial 02, senha `Temp@123`).
-Ela **não tem matrícula** em `core.usuarios`, então o departamento também vem do
-**login** — mas o Supermercado **tem** aprovadora.
-
-- [ ] O campo resolve para **Supermercado** e mostra **"Aprovado por *Renata
-      Borges*"**, sem o alerta vermelho.
-- [ ] Compare com o `agrounai` acima: mesma origem (LOGIN), desfechos opostos. O que
-      muda não é o caminho, é o **cadastro** — e a tela deixa isso visível.
-
-> Isto também é o argumento a favor de **exigir matrícula no cadastro do usuário**
-> (item de integridade ainda pendente): com matrícula, `raydeborges` cairia no
-> departamento da pessoa e o fallback nem seria exercitado.
+> **Corrigido em 09/08, medindo:** a prévia usava só a matrícula **digitada**, e login
+> INDIVIDUAL não digita nenhuma — então ela dizia "veio do login" enquanto a saída
+> gravava o departamento do colaborador. A tela avisava o **contrário** do que ia
+> acontecer. Agora a prévia resolve a matrícula do cadastro, como a saída faz.
 
 ## 3.3 A aprovação respeita o departamento gravado
 

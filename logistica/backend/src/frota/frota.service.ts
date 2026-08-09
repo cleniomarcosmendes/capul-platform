@@ -207,7 +207,12 @@ export class FrotaService {
    *    nasceria PENDENTE para sempre, sem erro e sem aviso.
    */
   async previaAprovacao(user: JwtPayload, matricula?: string, departamentoId?: string) {
-    const deptoId = await this.resolverDeptoAprovador(user, matricula ?? null, departamentoId);
+    // Login INDIVIDUAL não digita matrícula — a tela nem tem o campo. Resolve a do
+    // CADASTRO, exatamente como `registrarSaidaIndividual` faz ao gravar. Sem isto a
+    // prévia dizia "veio do departamento do login" e a viagem gravava o departamento
+    // do colaborador: a tela avisava o contrário do que ia acontecer.
+    const mat = matricula?.trim() || (await this.core.colaboradorDoUsuario(user.sub))?.matricula || null;
+    const deptoId = await this.resolverDeptoAprovador(user, mat, departamentoId);
     if (!deptoId) {
       return { departamentoId: null, departamentoNome: null, origem: 'NENHUMA' as const, aprovadores: [] };
     }
@@ -219,7 +224,7 @@ export class FrotaService {
     // se precisa corrigir. LOGIN é o caso frágil (login de posto, não da pessoa).
     const origem = departamentoId
       ? ('ESCOLHIDO' as const)
-      : (await this.core.deptoDoColaboradorPorMatricula(matricula ?? null)) === deptoId
+      : (await this.core.deptoDoColaboradorPorMatricula(mat)) === deptoId
         ? ('COLABORADOR' as const)
         : ('LOGIN' as const);
     return {

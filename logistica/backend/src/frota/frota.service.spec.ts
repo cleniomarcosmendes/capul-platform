@@ -147,6 +147,7 @@ describe('FrotaService.previaAprovacao — cascata do departamento aprovador', (
   beforeEach(() => {
     prisma = createPrismaMock();
     core = {
+      colaboradorDoUsuario: jest.fn().mockResolvedValue(null),
       deptoDoColaboradorPorMatricula: jest.fn().mockResolvedValue(null),
       aprovadoresDoDepartamento: jest.fn().mockResolvedValue([{ id: 's1', nome: 'Supervisor' }]),
       nomesDepartamentos: jest.fn().mockResolvedValue(new Map([['dPessoa', 'Agroveterinaria'], ['dLogin', 'Portaria']])),
@@ -183,6 +184,16 @@ describe('FrotaService.previaAprovacao — cascata do departamento aprovador', (
     core.aprovadoresDoDepartamento.mockResolvedValue([]);
     const r = await svc.previaAprovacao(user('dLogin'), 'E01047');
     expect(r.aprovadores).toEqual([]);
+  });
+
+  // ⭐ Login INDIVIDUAL não digita matrícula: a prévia tem de usar a do CADASTRO, senão
+  // avisa "veio do login" enquanto a saída grava o departamento do colaborador.
+  it('INDIVIDUAL sem matrícula digitada → usa a do cadastro, não o depto do login', async () => {
+    core.colaboradorDoUsuario.mockResolvedValue({ matricula: 'E01047', nome: 'Fulano' });
+    core.deptoDoColaboradorPorMatricula.mockImplementation(async (m: string | null) => (m === 'E01047' ? 'dPessoa' : null));
+    const r = await svc.previaAprovacao(user('dLogin'));
+    expect(r.departamentoId).toBe('dPessoa');
+    expect(r.origem).toBe('COLABORADOR');
   });
 
   it('sem matrícula e sem depto no login → nada a resolver (não inventa)', async () => {
