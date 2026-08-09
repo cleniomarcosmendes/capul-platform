@@ -266,6 +266,14 @@ function isoRetro(ligado: boolean, valor: string): string | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
+interface PreviaAprovacao {
+  departamentoId: string | null;
+  departamentoNome: string | null;
+  /** De onde veio o departamento — LOGIN é o caso que costuma precisar de correção. */
+  origem: 'ESCOLHIDO' | 'COLABORADOR' | 'LOGIN' | 'NENHUMA';
+  aprovadores: { id: string; nome: string }[];
+}
+
 function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () => void }) {
   const { toast } = useToast();
   const { temRole, usuario } = useAuth();
@@ -329,6 +337,10 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
   };
   // Vínculo com o RDV (planejamento do supervisor): candidatos do mês p/ o condutor.
   const [rdvCandidatos, setRdvCandidatos] = useState<{ id: string; numero: number; supervisorNome: string | null }[]>([]);
+  // 5b — quem vai responder pelas despesas desta viagem. O operador confere e corrige
+  // no ato: é a única hora em que alguém sabe de quem é a despesa.
+  const [deptoAprovadorId, setDeptoAprovadorId] = useState('');
+  const [previaAprov, setPreviaAprov] = useState<PreviaAprovacao | null>(null);
   const [rdvSel, setRdvSel] = useState('');
   const senhaRef = useRef<HTMLInputElement>(null);
   const porteiroSenhaRef = useRef<HTMLInputElement>(null);
@@ -375,9 +387,21 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
       .catch(() => { setRdvCandidatos([]); setRdvSel(''); });
   }, [modo, nome, matricula, condutorSel]);
 
+  // Prévia do acerto: qual departamento responde pelas despesas e QUEM aprova.
+  // Reage à matrícula (a pessoa) e à correção do operador.
+  useEffect(() => {
+    if (!aberto) { setPreviaAprov(null); return; }
+    const mat = modo === 'PORTARIA' ? condutorSel?.matricula : (nome ? matricula.trim() : '');
+    logisticaApi.get<PreviaAprovacao>('/frota/previa-aprovacao', {
+      params: { matricula: mat || undefined, departamentoId: deptoAprovadorId || undefined },
+    })
+      .then((r) => setPreviaAprov(r.data))
+      .catch(() => setPreviaAprov(null));
+  }, [aberto, modo, nome, matricula, condutorSel, deptoAprovadorId]);
+
   const reset = () => {
     setMatricula(''); setNome(null); setSenha(''); setVeiculoId('');
-    setRdvCandidatos([]); setRdvSel('');
+    setRdvCandidatos([]); setRdvSel(''); setDeptoAprovadorId(''); setPreviaAprov(null);
     setKmInicial(''); setAdiantamento(''); setFinalidade(''); setLocalSaida(''); setErroSenha(null); setCredOk(false);
     setDepartamentoSolicitanteId(''); setPlanejadas([]);
     setNomeBusca(''); setResultados([]); setBuscou(false); setCondutorSel(null);
@@ -446,6 +470,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
           departamentoSolicitanteId: departamentoSolicitanteId || undefined,
+          departamentoAprovadorId: deptoAprovadorId || undefined,
           rdvViagemId: rdvSel || undefined,
           paradasPlanejadas: paradasPlanejadas.length ? paradasPlanejadas : undefined,
         });
@@ -462,6 +487,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
           departamentoSolicitanteId: departamentoSolicitanteId || undefined,
+          departamentoAprovadorId: deptoAprovadorId || undefined,
           rdvViagemId: rdvSel || undefined,
           paradasPlanejadas: paradasPlanejadas.length ? paradasPlanejadas : undefined,
         });
@@ -476,6 +502,7 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
           finalidade: finalidade.trim() || undefined,
           localSaida: localSaida.trim() || undefined,
           departamentoSolicitanteId: departamentoSolicitanteId || undefined,
+          departamentoAprovadorId: deptoAprovadorId || undefined,
           rdvViagemId: rdvSel || undefined,
           paradasPlanejadas: paradasPlanejadas.length ? paradasPlanejadas : undefined,
         });
@@ -779,6 +806,40 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
                 {deptos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
               </select>
               <p className="mt-1 text-xs text-slate-400">Quem pediu o veículo — alimenta o "Uso por departamento" no Monitor.</p>
+            </div>
+
+            {/* 5b — quem responde pelas despesas. A despesa é da PESSOA, não do carro:
+                antes o aprovador saía do cadastro do veículo e podia cair num gerente
+                sem relação com quem gastou. Aqui o operador CONFERE e corrige no ato —
+                é a única hora em que alguém sabe de quem é a despesa. */}
+            <div className="sm:col-span-12">
+              <label className="mb-1 block text-sm font-medium text-slate-600">Departamento que responde pelas despesas</label>
+              <select
+                value={deptoAprovadorId || previaAprov?.departamentoId || ''}
+                onChange={(e) => setDeptoAprovadorId(e.target.value)}
+                disabled={!podeAvancar}
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-base disabled:bg-slate-100"
+              >
+                <option value="">— Não informado —</option>
+                {deptos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
+              </select>
+              {previaAprov?.aprovadores.length ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Aprovado por <span className="font-medium text-slate-700">{previaAprov.aprovadores.map((a) => a.nome).join(', ')}</span>
+                  {previaAprov.departamentoNome ? ` — ${previaAprov.departamentoNome}` : ''}
+                  {previaAprov.origem === 'LOGIN' && (
+                    <span className="text-amber-600"> · veio do departamento do login, não do colaborador — confira</span>
+                  )}
+                </p>
+              ) : previaAprov?.departamentoId ? (
+                <p className="mt-1 text-xs text-amber-600">
+                  ⚠ {previaAprov.departamentoNome ?? 'Este departamento'} não tem ninguém com o papel de Supervisor de
+                  Departamento — as despesas ficariam pendentes sem quem aprovasse. Escolha outro departamento ou
+                  cadastre o responsável no Configurador.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-400">Resolvido pela matrícula do condutor; informe a matrícula ou escolha o departamento.</p>
+              )}
             </div>
 
             {/* col-start-8: alinha "Local" sob "Finalidade" (mesma coluna da linha de cima). */}
