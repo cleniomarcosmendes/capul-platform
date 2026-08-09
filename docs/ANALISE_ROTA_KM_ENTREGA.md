@@ -114,8 +114,33 @@ num caminho e o outro passa ao largo**. Ver
 
 ## Proposta (a validar com ele)
 
-1. **KM obrigatório nas duas pontas** — sem KM inicial não despacha; sem KM final
-   não conclui.
+> ## ⭐ Princípio (Clenio, 09/08): KM é leitura do PAINEL do veículo
+>
+> **O KM inicial e final da entrega se aponta no APP-MOBILE, por quem está diante do
+> veículo.** O despacho acontece no desktop, no escritório, às vezes com antecedência —
+> ali ninguém enxerga o hodômetro. Pedir KM no despacho só produz número inventado, e
+> número inventado em KM contamina custo de frota e manutenção preventiva.
+>
+> ⚠️ **A proposta 1 abaixo, como estava escrita ("sem KM inicial não despacha"),
+> violava isso** — ela obrigaria o operador do desktop a digitar o hodômetro. Corrigida.
+>
+> Verificado: hoje o desktop de entrega **não tem campo de KM nenhum** (todos os campos
+> de KM do frontend estão em `FrotaPage.tsx`, que é o fluxo de FROTA, e na Linha do KM).
+> O apontamento da entrega já é exclusivo do app — é assim que deve continuar.
+>
+> 🕳️ **Porta aberta a fechar:** `src/viagem/dto.ts:25` aceita `kmInicial?` **opcional**
+> no despacho. Ninguém envia hoje, mas o campo permite um KM entrar por um caminho que
+> não tem hodômetro na frente. **Remover do DTO de despacho.**
+>
+> Distinção que NÃO muda: na **FROTA**, o KM é pedido no desktop
+> (`FrotaPage.tsx:725,1114`) e continua assim — lá quem registra a saída/retorno está
+> no veículo naquele instante (portaria/caixa). O que não vale é pedir KM **em
+> antecipação**, que é o caso do despacho da entrega.
+
+1. **KM obrigatório nas duas pontas, apontado no APP** — a rota é despachada sem KM
+   (desktop), e o **servidor** recusa qualquer ato operacional da rota (baixa e
+   encerramento) enquanto o KM de saída não for registrado no app; encerrar exige o KM
+   final. O app já tem as duas telas — falta o servidor cobrar.
 2. **Concluir exige as paradas RESOLVIDAS** (entregue ou recusada) — é a
    definição dele de "finalizar".
 3. **Uma rota por vez**, por veículo **e** por motorista: barrar novo despacho se
@@ -144,7 +169,8 @@ reais, essa liberdade acaba** — a regra passa a valer sobre viagem de gente.
 ### Onde mexer
 - `logistica/backend/src/viagem/viagem.service.ts` — `despachar`, `iniciar`, `concluir`
   (a regra de KM; e `concluir` para de auto-entregar as pendentes)
-- `logistica/backend/src/viagem/dto.ts` — tornar `kmInicial`/`kmFinal` obrigatórios
+- `logistica/backend/src/viagem/dto.ts` — **remover** `kmInicial?` do DTO de despacho
+  (`:25`); tornar obrigatórios nos DTOs de `iniciar`/`concluir`, que são os do app
 - `logistica/backend/src/frota/frota.service.ts:818,830` — Monitor/KM rodado passam a
   incluir as viagens de ENTREGA (hoje filtram só `FROTA`)
 - App: `logistica/app/src/screens/ViagemDetalheScreen.tsx` — a trava da baixa já existe
