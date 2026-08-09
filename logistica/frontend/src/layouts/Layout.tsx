@@ -78,10 +78,10 @@ const navItems: NavEntry[] = [
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { usuario, logisticaRole, logout } = useAuth();
+  const { usuario, logisticaRoles, temRole, logout } = useAuth();
 
-  const isAdmin = logisticaRole === 'ADMIN';
-  const can = (roles?: string[]) => isAdmin || !roles || (logisticaRole != null && roles.includes(logisticaRole));
+  const isAdmin = temRole('ADMIN');
+  const can = (roles?: string[]) => isAdmin || !roles || temRole(...roles);
 
   // Filtra por role e remove cabeçalhos de seção que ficaram órfãos (sem item logo abaixo).
   const visible = navItems.filter((item) => can(item.roles)).filter((item, idx, arr) => {
@@ -141,9 +141,9 @@ export function Layout({ children }: { children: ReactNode }) {
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
           <h1 className="text-base font-semibold text-slate-700">Módulo Logística</h1>
           <div className="flex items-center gap-3 text-sm">
-            {logisticaRole && (
+            {logisticaRoles.length > 0 && (
               <span className="rounded-full bg-capul-100 px-2 py-0.5 text-xs font-medium text-capul-700">
-                {logisticaRole}
+                {logisticaRoles.join(' · ')}
               </span>
             )}
             <span className="text-slate-600">{usuario?.nome}</span>

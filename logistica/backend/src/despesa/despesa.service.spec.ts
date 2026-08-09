@@ -19,7 +19,7 @@ describe('DespesaService — escopo da listagem (SUPERVISOR_FROTA)', () => {
     prisma.veiculo.findMany
       .mockResolvedValueOnce([{ departamentoLotacaoId: 'd1' }]) // deptos supervisionados
       .mockResolvedValueOnce([{ id: 'v-in' }]); // veículos do depto (escopo)
-    const r = await svc.listar(sup(), 'SUPERVISOR_FROTA', { veiculoId: 'v-out' } as any);
+    const r = await svc.listar(sup(), ['SUPERVISOR_FROTA'], { veiculoId: 'v-out' } as any);
     expect(r).toEqual([]);
     expect(prisma.despesaVeiculo.findMany).not.toHaveBeenCalled();
   });
@@ -29,7 +29,7 @@ describe('DespesaService — escopo da listagem (SUPERVISOR_FROTA)', () => {
       .mockResolvedValueOnce([{ departamentoLotacaoId: 'd1' }])
       .mockResolvedValueOnce([{ id: 'v-in' }]);
     prisma.despesaVeiculo.findMany.mockResolvedValue([]);
-    await svc.listar(sup(), 'SUPERVISOR_FROTA', { veiculoId: 'v-in' } as any);
+    await svc.listar(sup(), ['SUPERVISOR_FROTA'], { veiculoId: 'v-in' } as any);
     expect(prisma.despesaVeiculo.findMany.mock.calls[0][0].where.veiculoId).toBe('v-in');
   });
 
@@ -38,7 +38,7 @@ describe('DespesaService — escopo da listagem (SUPERVISOR_FROTA)', () => {
       .mockResolvedValueOnce([{ departamentoLotacaoId: 'd1' }]) // deptos supervisionados
       .mockResolvedValueOnce([{ id: 'v-in' }]); // veículos do depto (escopo)
     prisma.despesaVeiculo.findMany.mockResolvedValue([]);
-    await svc.listar(sup(), 'SUPERVISOR_FROTA', {} as any);
+    await svc.listar(sup(), ['SUPERVISOR_FROTA'], {} as any);
     const where = prisma.despesaVeiculo.findMany.mock.calls[0][0].where;
     expect(where.OR).toEqual([
       { veiculoId: { in: ['v-in'] } },

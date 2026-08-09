@@ -8,12 +8,17 @@ import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.j
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { CondutorTokenService } from '../common/condutor-token.service.js';
+import { temRoleLogistica } from '../common/roles-logistica.js';
 import { LocalClienteService } from '../local/local-cliente.service.js';
 import { resolverDataEvento } from './data-evento.js';
 import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, type ParadaPlanejadaDto } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
+
+/** Tem QUALQUER um destes papéis? Multi-role: a permissão é por DEPARTAMENTO, então a
+ *  mesma pessoa pode ter papéis diferentes em deptos diferentes (ver roles-logistica.ts). */
+const tem = (roles: string[] | undefined, ...alvos: string[]) => !!roles?.some((r) => alvos.includes(r));
 
 // Quantos km antes da próxima revisão o Monitor começa a avisar.
 const LIMIAR_AVISO_MANUTENCAO_KM = 500;
@@ -415,11 +420,11 @@ export class FrotaService {
   }
 
   /** Ajuste/fechamento por GESTOR_FROTA ou supervisor do veículo. */
-  async ajustarPorGestor(id: string, dto: AjusteGestorDto, user: JwtPayload, role?: string) {
+  async ajustarPorGestor(id: string, dto: AjusteGestorDto, user: JwtPayload, roles?: string[]) {
     const v = await this.prisma.viagem.findUnique({ where: { id }, include: { veiculo: { select: { supervisorId: true, departamentoLotacaoId: true } } } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
 
-    const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    const ehGestor = tem(roles, 'GESTOR_FROTA', 'ADMIN');
     // Gestor ajusta/fecha viagem de qualquer filial (frota da empresa toda). O dono
     // (registrante/supervisor) só a sua — que está na própria filial de qualquer forma.
     if (!ehGestor && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
@@ -458,19 +463,19 @@ export class FrotaService {
   /** Encerra o ACERTO da viagem (independente da conclusão): trava despesa e
    *  adiantamento até reabrir. O veículo já foi liberado ao entregar. Gestor de
    *  frota, supervisor do veículo ou quem registrou a saída. */
-  async encerrarAcerto(id: string, user: JwtPayload, role?: string) {
-    const v = await this.acertoScope(id, user, role);
+  async encerrarAcerto(id: string, user: JwtPayload, roles?: string[]) {
+    const v = await this.acertoScope(id, user, roles);
     if (v.situacao === StatusViagem.CANCELADA) throw new BadRequestException('Viagem cancelada — não há acerto a encerrar.');
     return this.prisma.viagem.update({ where: { id }, data: { acertoEncerradoEm: new Date(), acertoEncerradoPorId: user.sub } });
   }
-  async reabrirAcerto(id: string, user: JwtPayload, role?: string) {
-    await this.acertoScope(id, user, role);
+  async reabrirAcerto(id: string, user: JwtPayload, roles?: string[]) {
+    await this.acertoScope(id, user, roles);
     return this.prisma.viagem.update({ where: { id }, data: { acertoEncerradoEm: null, acertoEncerradoPorId: null } });
   }
-  private async acertoScope(id: string, user: JwtPayload, role?: string) {
+  private async acertoScope(id: string, user: JwtPayload, roles?: string[]) {
     const v = await this.prisma.viagem.findUnique({ where: { id }, include: { veiculo: { select: { supervisorId: true, departamentoLotacaoId: true } } } });
     if (!v || v.tipo !== TipoViagem.FROTA) throw new NotFoundException('Viagem de frota não encontrada.');
-    const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    const ehGestor = tem(roles, 'GESTOR_FROTA', 'ADMIN');
     if (!ehGestor && v.filialId !== user.filialId) throw new ForbiddenException('Viagem de outra filial.');
     const ehDono = await this.donoOuEscopo(v, user);
     if (!ehGestor && !ehDono) throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo ou quem registrou a saída podem alterar o acerto.');
@@ -499,10 +504,10 @@ export class FrotaService {
    *
    * Com `custo`, emite também a DESPESA correspondente (ver dentro da transação).
    */
-  async registrarManutencao(veiculoId: string, dto: RegistrarManutencaoDto, user: JwtPayload, role?: string) {
+  async registrarManutencao(veiculoId: string, dto: RegistrarManutencaoDto, user: JwtPayload, roles?: string[]) {
     const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
     if (!veiculo) throw new NotFoundException('Veículo não encontrado.');
-    const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+    const ehGestor = tem(roles, 'GESTOR_FROTA', 'ADMIN');
     // Gestor administra a frota da empresa toda (mantém veículo de qualquer filial,
     // igual ao editar-veículo, que já é cross-filial). Supervisor: só o da sua filial.
     if (!ehGestor && veiculo.filialId !== user.filialId) throw new ForbiddenException('Veículo de outra filial.');
@@ -750,18 +755,18 @@ export class FrotaService {
   }
 
   // ---- Painel tempo real da frota (monitoramento com recorte interno) ----
-  async painelFrota(user: JwtPayload, role: string | undefined, mes: number, ano: number) {
-    const ehGestor = role === 'GESTOR_FROTA' || role === 'ADMIN';
+  async painelFrota(user: JwtPayload, roles: string[] | undefined, mes: number, ano: number) {
+    const ehGestor = tem(roles, 'GESTOR_FROTA', 'ADMIN');
     // Quem enxerga a frota da FILIAL INTEIRA no Monitor (sem recorte por veículo
     // supervisionado): gestor de frota/ADMIN + os papéis de ENTREGA, que usam o
     // Monitor para atender o cliente ("cadê a minha entrega?") e precisam ver as
     // rotas na rua, não só os veículos de que são supervisores nominais. Só o
     // Supervisor de Departamento continua recortado ao seu escopo.
-    const veFrotaDaFilial = ehGestor || role === 'GESTOR_ENTREGA' || role === 'OPERADOR_ENTREGA';
+    const veFrotaDaFilial = ehGestor || tem(roles, 'GESTOR_ENTREGA', 'OPERADOR_ENTREGA');
     // Valor de custo é domínio do Gestor de Frota/ADMIN + Supervisor de Departamento
     // (escopado). Espelha o gate da tela; aqui o payload também omite, senão o custo
     // da filial vazava pela API mesmo com a UI escondendo.
-    const veCusto = ehGestor || role === 'SUPERVISOR_FROTA';
+    const veCusto = ehGestor || tem(roles, 'SUPERVISOR_FROTA');
     if (!ehGestor && !user.filialId) throw new BadRequestException('Usuário sem filial definida.');
     // Gestor de frota/ADMIN monitoram a frota da empresa toda (cross-filial):
     // filialId undefined = sem filtro de filial nas queries abaixo. Demais: a sua.
@@ -1118,16 +1123,12 @@ export class FrotaService {
 
   /** Lista as viagens de FROTA da filial (com nome do veículo). */
   /** Gestor de Frota / ADMIN veem TODA a frota da filial (mesma governança do ajuste). */
-  private roleDe(user: JwtPayload): string | undefined {
-    return user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
-  }
   private ehGestorFrota(user: JwtPayload): boolean {
-    const role = this.roleDe(user);
-    return role === 'GESTOR_FROTA' || role === 'ADMIN';
+    return temRoleLogistica(user, 'GESTOR_FROTA', 'ADMIN');
   }
   /** Supervisor de Departamento: age nos veículos do(s) seu(s) departamento(s). */
   private ehSupervisorFrota(user: JwtPayload): boolean {
-    return this.roleDe(user) === 'SUPERVISOR_FROTA';
+    return temRoleLogistica(user, 'SUPERVISOR_FROTA');
   }
   /** Departamentos (de lotação) que o usuário supervisiona = onde é encarregado
    *  (veiculo.supervisorId) de ≥ 1 veículo na sua filial. Base do escopo "por
@@ -1190,8 +1191,7 @@ export class FrotaService {
     // Gestor de frota vê tudo; PORTARIA vê qualquer viagem da sua filial (é o portão
     // — precisa abrir/encerrar a rota de qualquer veículo). O escopo de filial já é
     // aplicado antes (viagemDaFilial/obterViagem). Demais perfis: só as próprias.
-    const role = this.roleDe(user);
-    if (this.ehGestorFrota(user) || role === 'PORTARIA') return;
+    if (this.ehGestorFrota(user) || temRoleLogistica(user, 'PORTARIA')) return;
     if (this.ehSupervisorFrota(user)) {
       const deps = await this.deptosSupervisionados(user);
       const dep = v.veiculo?.departamentoLotacaoId;

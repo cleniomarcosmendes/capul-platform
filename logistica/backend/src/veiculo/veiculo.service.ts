@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { temRoleLogistica } from '../common/roles-logistica.js';
 import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
 
 /** Normaliza matrícula → chapa E-prefixada (E+5 díg.), colapsando `E01047`/`01047`/
@@ -226,8 +227,7 @@ export class VeiculoService {
       // Supervisor de Departamento: o detalhe respeita o MESMO escopo da lista (só
       // veículos do[s] seu[s] departamento[s]) — senão vazaria o cadastro por URL,
       // já que a filial é a mesma dos veículos de outros departamentos.
-      const role = user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
-      if (role === 'SUPERVISOR_FROTA') {
+      if (temRoleLogistica(user, 'SUPERVISOR_FROTA')) {
         const deps = await this.deptosSupervisionados(user);
         if (!deps.includes(v.departamentoLotacaoId)) throw new NotFoundException('Veículo não encontrado.');
       }

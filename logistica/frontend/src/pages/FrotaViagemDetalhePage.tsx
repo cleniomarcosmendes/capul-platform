@@ -25,11 +25,11 @@ export function FrotaViagemDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { logisticaRole } = useAuth();
-  const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
-  const ehPortaria = logisticaRole === 'PORTARIA';
+  const { temRole } = useAuth();
+  const ehGestor = temRole('GESTOR_FROTA', 'ADMIN');
+  const ehPortaria = temRole('PORTARIA');
   // Cancelar saída (registrada errada) — gestor de frota (cross-filial) ou de entrega (própria filial).
-  const podeCancelar = ehGestor || logisticaRole === 'GESTOR_ENTREGA';
+  const podeCancelar = ehGestor || temRole('GESTOR_ENTREGA');
 
   const [viagem, setViagem] = useState<ViagemFrota | null>(null);
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);

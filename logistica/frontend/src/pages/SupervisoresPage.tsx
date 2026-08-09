@@ -89,16 +89,18 @@ type TabKey = 'viagens' | 'coordenacao' | 'fechamento' | 'atividades' | 'equipe'
 // ACOMPANHA os adiantamentos e a própria RDV — sem seletor, sem encerrar mês e, desde
 // 01/08, sem LANÇAR adiantamento: quem lança é quem aprova).
 // Gestores de entrega/frota saíram do RDV (backend os barra) — não recebem abas de admin.
-function abasDoPerfil(role: string | null): TabKey[] {
-  if (role === 'ADMIN' || role === 'SUPERVISOR_FROTA') return ['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'];
-  if (role === 'COORDENADOR') return ['viagens', 'coordenacao', 'fechamento'];
-  if (role === 'SUPERVISOR') return ['viagens', 'fechamento'];
+/** Abas do RDV pelo perfil. Multi-role: vale o papel MAIS abrangente que a pessoa
+ *  tiver — quem é SUPERVISOR num depto e COORDENADOR noutro vê as abas do coordenador. */
+function abasDoPerfil(tem: (...alvos: string[]) => boolean): TabKey[] {
+  if (tem('ADMIN', 'SUPERVISOR_FROTA')) return ['viagens', 'coordenacao', 'fechamento', 'atividades', 'equipe'];
+  if (tem('COORDENADOR')) return ['viagens', 'coordenacao', 'fechamento'];
+  if (tem('SUPERVISOR')) return ['viagens', 'fechamento'];
   return ['viagens'];
 }
 
 export function SupervisoresPage() {
-  const { logisticaRole } = useAuth();
-  const abas = abasDoPerfil(logisticaRole);
+  const { temRole } = useAuth();
+  const abas = abasDoPerfil(temRole);
   const [tab, setTab] = useState<TabKey>('viagens');
   // Garante que a aba ativa é permitida (ex.: se o perfil muda, cai p/ a 1ª).
   const tabAtiva = abas.includes(tab) ? tab : abas[0];
@@ -122,13 +124,13 @@ export function SupervisoresPage() {
 // ---------------- Viagens mensais ----------------
 function ViagensTab() {
   const { toast } = useToast();
-  const { usuario, logisticaRole } = useAuth();
+  const { usuario, temRole } = useAuth();
   // Auto-serviço: o próprio supervisor logado cria seu planejamento (identificado
   // pelo login), sem matrícula+senha. Gestor segue informando matrícula+senha.
   // Cria o PRÓPRIO RDV em auto-serviço (login): supervisor de área e coordenador (o RDV
   // do coordenador é aprovado pelo supervisor de departamento). O supervisor de departamento
   // usa a via "por representante" (matrícula+senha) — cria para o time.
-  const ehSupervisorLogado = logisticaRole === 'SUPERVISOR' || logisticaRole === 'COORDENADOR';
+  const ehSupervisorLogado = temRole('SUPERVISOR', 'COORDENADOR');
   const navigate = useNavigate();
   const [viagens, setViagens] = useState<ViagemSup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,7 +152,7 @@ function ViagensTab() {
    */
   const [filialAlvo, setFilialAlvo] = useState('');
   const filialSessao = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
-  const ehAdminRdv = logisticaRole === 'ADMIN';
+  const ehAdminRdv = temRole('ADMIN');
   const filialId = ehAdminRdv ? (filialAlvo || filialSessao) : filialSessao;
   const filiaisDoUsuario = (usuario?.filiais ?? []).slice().sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'));
   // Veículo do planejamento: sugerido a partir de quem é o responsável no cadastro do
@@ -437,8 +439,8 @@ const ehRepresentante = (u: CoreUser) => ehSupervisorArea(u) || ehCoordenador(u)
 
 function EquipeTab() {
   const { toast } = useToast();
-  const { usuario, logisticaRole } = useAuth();
-  const ehAdmin = logisticaRole === 'ADMIN';
+  const { usuario, temRole } = useAuth();
+  const ehAdmin = temRole('ADMIN');
   const filialSessao = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
   // ADMIN é global por política e a Equipe é tela de CONFIGURAÇÃO: ele escolhe a filial
   // aqui, sem trocar a filial da SESSÃO no Hub (seriam 35 idas e voltas). Os demais
@@ -839,10 +841,10 @@ const adiantBadge = (s?: string | null) => ADIANT_BADGE[s ?? 'APROVADO'] ?? { la
 
 function FechamentoTab() {
   const { toast } = useToast();
-  const { logisticaRole } = useAuth();
+  const { temRole } = useAuth();
   const navigate = useNavigate();
   // Supervisor de área: auto-serviço — fixa o SEU cadastro (sem seletor, sem encerrar mês).
-  const ehSupervisorArea = logisticaRole === 'SUPERVISOR';
+  const ehSupervisorArea = temRole('SUPERVISOR');
   const [sups, setSups] = useState<SupItem[]>([]);
   // undefined = carregando o próprio cadastro · null = ainda não montado no time.
   const [meuCadastro, setMeuCadastro] = useState<SupItem | null | undefined>(ehSupervisorArea ? undefined : null);

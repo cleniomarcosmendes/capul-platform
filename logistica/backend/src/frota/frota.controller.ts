@@ -2,10 +2,10 @@ import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } fro
 import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { rolesLogistica } from '../common/roles-logistica.js';
 import { FrotaService } from './frota.service.js';
 import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, CancelarSaidaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
 
-const roleLogistica = (user: JwtPayload) => user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
 
 @Controller('frota')
 // REGISTRADOR_FROTA (login PADRÃO compartilhado) herda só os endpoints operacionais
@@ -132,7 +132,7 @@ export class FrotaController {
   @Patch('viagens/:id')
   @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'SUPERVISOR_FROTA')
   ajustar(@Param('id') id: string, @Body() dto: AjusteGestorDto, @CurrentUser() user: JwtPayload) {
-    return this.frota.ajustarPorGestor(id, dto, user, roleLogistica(user));
+    return this.frota.ajustarPorGestor(id, dto, user, rolesLogistica(user));
   }
 
   /** Encerrar / reabrir o ACERTO da viagem — trava despesa+adiantamento, INDEPENDENTE
@@ -140,19 +140,19 @@ export class FrotaController {
   @Post('viagens/:id/encerrar-acerto')
   @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   encerrarAcerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.frota.encerrarAcerto(id, user, roleLogistica(user));
+    return this.frota.encerrarAcerto(id, user, rolesLogistica(user));
   }
   @Post('viagens/:id/reabrir-acerto')
   @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
   reabrirAcerto(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.frota.reabrirAcerto(id, user, roleLogistica(user));
+    return this.frota.reabrirAcerto(id, user, rolesLogistica(user));
   }
 
   /** Registrar manutenção (preventiva do ciclo ou corretiva/excepcional). */
   @Post('veiculos/:id/manutencao')
   @Roles('GESTOR_ENTREGA', 'GESTOR_FROTA')
   registrarManutencao(@Param('id') id: string, @Body() dto: RegistrarManutencaoDto, @CurrentUser() user: JwtPayload) {
-    return this.frota.registrarManutencao(id, dto, user, roleLogistica(user));
+    return this.frota.registrarManutencao(id, dto, user, rolesLogistica(user));
   }
 
   /** Histórico de manutenções do veículo. */
@@ -178,7 +178,7 @@ export class FrotaController {
   painel(@CurrentUser() user: JwtPayload, @Query('mes') mes?: string, @Query('ano') ano?: string) {
     const agora = new Date();
     return this.frota.painelFrota(
-      user, roleLogistica(user),
+      user, rolesLogistica(user),
       mes ? parseInt(mes, 10) : agora.getUTCMonth() + 1,
       ano ? parseInt(ano, 10) : agora.getUTCFullYear(),
     );

@@ -50,12 +50,12 @@ const desde = (s?: string | null) => {
 
 export function PainelFrotaPage() {
   const { toast } = useToast();
-  const { logisticaRole } = useAuth();
+  const { temRole } = useAuth();
   // Custo de frota é do Gestor de Frota/ADMIN (mesma decisão de Custos/Análise da
   // Frota). Demais perfis veem só o operacional (KM, rankings), não o custo.
   // Custo da frota: Gestor de Frota/ADMIN (frota toda) + Supervisor de Departamento
   // (custo escopado ao seu departamento pelo backend).
-  const ehGestorFrota = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN' || logisticaRole === 'SUPERVISOR_FROTA';
+  const ehGestorFrota = temRole('GESTOR_FROTA', 'ADMIN', 'SUPERVISOR_FROTA');
   const navigate = useNavigate();
   const [data, setData] = useState<PainelFrota | null>(null);
   const [loading, setLoading] = useState(true);

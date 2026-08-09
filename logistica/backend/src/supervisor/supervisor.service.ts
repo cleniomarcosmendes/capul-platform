@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { CoreLookupService } from '../core/core-lookup.service.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { temRoleLogistica } from '../common/roles-logistica.js';
 import { filialDoUsuario } from '../common/filial-scope.js';
 import { CofreStorageService } from '../cofre/cofre-storage.service.js';
 import { LocalClienteService } from '../local/local-cliente.service.js';
@@ -291,7 +292,7 @@ export class SupervisorService {
       if (r.status !== 'VALIDO') throw new BadRequestException('Matrícula ou senha do supervisor inválidas.');
       supMatricula = r.matricula ?? dto.supervisorMatricula.trim().toUpperCase();
       supNome = r.nome ?? null;
-    } else if (['SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA'].includes(this.roleLog(user) ?? '')) {
+    } else if (temRoleLogistica(user, 'SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')) {
       // Auto-serviço (híbrido): o próprio usuário logado É o dono do RDV — o JWT já
       // autenticou, então dispensa matrícula+senha. Identifica pela matrícula do login
       // (liga ao cadastro adiante). Vale para supervisor de área, COORDENADOR (RDV próprio,
@@ -361,10 +362,6 @@ export class SupervisorService {
     });
   }
 
-  /** Role da Logística no token (p/ checar gestor/admin). */
-  private roleLog(user: JwtPayload): string | undefined {
-    return user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
-  }
   /** RDV do mês encerrado? (TEMA 2) — bloqueia despesa/adiantamento/visita. Sem
    *  supervisor cadastrado ou mês → não trava (nada a fechar). */
   private async assertRdvAberto(supervisorId: string | null | undefined, mes: number | null | undefined) {
@@ -379,8 +376,8 @@ export class SupervisorService {
       Prisma.sql`SELECT matricula, TRIM(nome) AS nome FROM "core"."usuarios" WHERE id = ${userId} LIMIT 1`);
     return rows[0] ?? null;
   }
-  private ehAdmin(user: JwtPayload): boolean { return this.roleLog(user) === 'ADMIN'; }
-  private ehSupervisorDepto(user: JwtPayload): boolean { return this.roleLog(user) === 'SUPERVISOR_FROTA'; }
+  private ehAdmin(user: JwtPayload): boolean { return temRoleLogistica(user, 'ADMIN'); }
+  private ehSupervisorDepto(user: JwtPayload): boolean { return temRoleLogistica(user, 'SUPERVISOR_FROTA'); }
 
   /** Departamentos que o Supervisor de Departamento (SUPERVISOR_FROTA) cobre NO RDV.
    *  Fonte: a amarração EXPLÍCITA `supervisor_departamento`, mantida na aba Equipe.

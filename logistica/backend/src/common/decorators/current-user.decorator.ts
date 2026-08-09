@@ -10,7 +10,34 @@ export interface JwtPayload {
   departamentoId?: string;
   // Tipo do usuário: INDIVIDUAL (pessoa) ou PADRAO (login genérico/compartilhado).
   tipo?: 'INDIVIDUAL' | 'PADRAO';
-  modulos?: { codigo: string; role: string }[];
+  modulos?: ModuloPayload[];
+}
+
+/** Um departamento onde o usuário tem permissão no módulo, com a role de LÁ. */
+export interface ModuloDepartamentoPayload {
+  id: string;
+  nome: string;
+  role: string;
+  funcionalidades?: string[];
+  isTI?: boolean;
+}
+
+/**
+ * Módulo no JWT. A permissão é (usuário × módulo × DEPARTAMENTO × role) —
+ * `core.permissoes_modulo` tem UNIQUE nessa tripla, então a mesma pessoa pode ter
+ * papéis diferentes em departamentos diferentes do MESMO módulo.
+ *
+ * ⚠️ `role` é DENORMALIZADA: é a role do PRIMEIRO item de `departamentos[]`, mantida
+ * pelo Auth Gateway só por retrocompatibilidade (`build-modulos-payload.ts`). Ler
+ * `role` faz o módulo enxergar UM papel e ignorar os demais, calado. Use sempre
+ * `rolesLogistica(user)` (../roles-logistica.js) — nunca este campo direto.
+ */
+export interface ModuloPayload {
+  codigo: string;
+  /** @deprecated Legado — role do 1º depto. Use `rolesLogistica(user)`. */
+  role: string;
+  /** Ausente em tokens antigos → os helpers caem em `role`. */
+  departamentos?: ModuloDepartamentoPayload[];
 }
 
 /**

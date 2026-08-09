@@ -34,8 +34,8 @@ const diaCurto = (iso: string) => {
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function PainelPage() {
-  const { logisticaRole } = useAuth();
-  const podeVerOutrasFiliais = logisticaRole === 'ADMIN' || logisticaRole === 'GESTOR_FROTA';
+  const { temRole } = useAuth();
+  const podeVerOutrasFiliais = temRole('ADMIN', 'GESTOR_FROTA');
   const [data, setData] = useState<Painel | null>(null);
   const [filiais, setFiliais] = useState<CoreItem[]>([]);
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);

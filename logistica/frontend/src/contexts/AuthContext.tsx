@@ -1,9 +1,22 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { authApi } from '../services/api';
 
+export interface ModuloDepartamentoUsuario {
+  id: string;
+  nome: string;
+  role: string;
+}
 export interface ModuloUsuario {
   codigo: string;
+  /**
+   * ⚠️ DENORMALIZADA: role do PRIMEIRO item de `departamentos[]`, mantida pelo Auth
+   * Gateway só por retrocompatibilidade. A permissão real é (usuário × módulo ×
+   * DEPARTAMENTO × role), então a mesma pessoa pode ter papéis diferentes em
+   * departamentos diferentes. Use `logisticaRoles` do contexto, não este campo.
+   */
   role: string;
+  /** Ausente em respostas antigas → o contexto cai em `role`. */
+  departamentos?: ModuloDepartamentoUsuario[];
 }
 export interface FilialResumo {
   id: string;
@@ -27,8 +40,14 @@ export interface UsuarioLogado {
 interface AuthContextType {
   usuario: UsuarioLogado | null;
   loading: boolean;
-  /** Role do usuário no módulo LOGISTICA (ou null se não tem acesso). */
-  logisticaRole: string | null;
+  /**
+   * TODOS os papéis do usuário no módulo LOGISTICA (vazio = sem acesso).
+   * São vários porque a permissão é por DEPARTAMENTO: a mesma pessoa pode ser
+   * SUPERVISOR_FROTA no departamento dela e GESTOR_ENTREGA em outro.
+   */
+  logisticaRoles: string[];
+  /** Tem QUALQUER um destes papéis? É o substituto de `logisticaRole === 'X'`. */
+  temRole: (...alvos: string[]) => boolean;
   logout: () => void;
 }
 
@@ -75,7 +94,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const logisticaRole = usuario?.modulos.find((m) => m.codigo === 'LOGISTICA')?.role ?? null;
+  // Multi-role: junta os papéis de TODOS os departamentos onde a pessoa tem
+  // permissão na Logística. Resposta antiga (sem `departamentos[]`) → cai no campo
+  // denormalizado, que é o que existia antes. Espelha `rolesLogistica()` do backend.
+  const mod = usuario?.modulos.find((m) => m.codigo === 'LOGISTICA');
+  const deDeptos = (mod?.departamentos ?? []).map((d) => d.role).filter(Boolean);
+  const logisticaRoles = mod ? [...new Set(deDeptos.length ? deDeptos : (mod.role ? [mod.role] : []))] : [];
+  const temRole = (...alvos: string[]) => alvos.some((a) => logisticaRoles.includes(a));
 
   const logout = () => {
     localStorage.removeItem('accessToken');
@@ -84,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ usuario, loading, logisticaRole, logout }}>
+    <AuthContext.Provider value={{ usuario, loading, logisticaRoles, temRole, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -81,11 +81,11 @@ export function VeiculoFormPage() {
   const [dirty, setDirty] = useState(false);
   const { ConfirmDialog: DirtyDialog } = useUnsavedChanges(dirty);
   const { toast, confirm } = useToast();
-  const { usuario, logisticaRole } = useAuth();
+  const { usuario, temRole } = useAuth();
   // Gestor de frota/entrega e admin gerem a frota da empresa toda → escolhem a
   // filial (inclusive TROCAR na edição; o backend bloqueia se houver viagem em
   // curso). Operador fica travado na própria (o backend recusa escrita fora dela).
-  const podeEscolherFilial = ['ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA'].includes(logisticaRole ?? '');
+  const podeEscolherFilial = temRole('ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA');
   // Quem edita/gerencia o veículo (situação, manutenção, salvar, inativar). O
   // Supervisor de Departamento abre o cadastro dos veículos do seu depto em MODO
   // LEITURA — o backend bloqueia as mutações (403); aqui escondemos os controles.

@@ -24,9 +24,9 @@ const TILES = [
 ];
 
 export function HomePage() {
-  const { logisticaRole } = useAuth();
-  const isAdmin = logisticaRole === 'ADMIN';
-  const can = (roles?: string[]) => isAdmin || !roles || (logisticaRole != null && roles.includes(logisticaRole));
+  const { temRole } = useAuth();
+  const isAdmin = temRole('ADMIN');
+  const can = (roles?: string[]) => isAdmin || !roles || temRole(...roles);
   const visiveis = TILES.filter((t) => can(t.roles));
 
   return (

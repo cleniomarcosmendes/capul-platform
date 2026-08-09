@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { JwtPayload } from './decorators/current-user.decorator.js';
+import { temRoleLogistica } from './roles-logistica.js';
 
 /**
  * Escopo por filial (decisão do projeto: entregas/veículos/viagens/indicadores
@@ -18,14 +19,13 @@ export function filialDoUsuario(user: JwtPayload): string {
 }
 
 export function podeVerOutrasFiliais(user: JwtPayload): boolean {
-  const role = user?.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
   // ADMIN = visão global da empresa. GESTOR_FROTA administra a frota da empresa
   // toda (cadastra/edita veículos de qualquer filial) — só alcança o veículo;
   // entrega/viagem barram esse papel no guard.
   // GESTOR_ENTREGA é papel de FILIAL (decisão 05/07): vê só a própria filial,
   // como o operador — cada filial isola suas entregas. A frota compartilhável de
   // veículos usa o toggle `todasFiliais`, não este helper.
-  return role === 'ADMIN' || role === 'GESTOR_FROTA';
+  return temRoleLogistica(user, 'ADMIN', 'GESTOR_FROTA');
 }
 
 /** Escrita: a filial-alvo informada precisa ser a do usuário. */

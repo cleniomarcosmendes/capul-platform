@@ -268,10 +268,10 @@ function isoRetro(ligado: boolean, valor: string): string | undefined {
 
 function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () => void }) {
   const { toast } = useToast();
-  const { logisticaRole, usuario } = useAuth();
+  const { temRole, usuario } = useAuth();
   // Fluxo da PORTARIA (apontar por nome; o porteiro se identifica por matrícula+senha).
   // Role PORTARIA (pessoal do portão) + gestores autorizados.
-  const ehGestorPortaria = ['PORTARIA', 'GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN'].includes(logisticaRole ?? '');
+  const ehGestorPortaria = temRole('PORTARIA', 'GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN');
   // Login INDIVIDUAL = pessoal → o próprio usuário é o condutor (dispensa matrícula+
   // senha). PADRÃO = login COLETIVO (vários colaboradores) → precisa identificar o
   // condutor por matrícula+senha. (tipo vem do JWT via AuthContext.)

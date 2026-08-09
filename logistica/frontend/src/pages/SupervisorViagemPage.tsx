@@ -167,7 +167,7 @@ export function SupervisorViagemPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { usuario, logisticaRole } = useAuth();
+  const { usuario, temRole } = useAuth();
   const [v, setV] = useState<ViagemDetalhe | null>(null);
   const [rejDesp, setRejDesp] = useState<string | null>(null); // id da despesa em rejeição
   const [motivoRej, setMotivoRej] = useState('');
@@ -264,11 +264,11 @@ export function SupervisorViagemPage() {
   // Antes o rótulo caía em "Registrar visita" já no APROVADO, sem a execução ter começado.
   const emPlanejamento = v?.statusPlanejamento !== 'EM_EXECUCAO' && v?.statusPlanejamento !== 'CONCLUIDO';
   // Quem aprova/rejeita despesa: gestor/admin OU o coordenador deste supervisor.
-  const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'ADMIN';
+  const ehGestor = temRole('GESTOR_FROTA', 'GESTOR_ENTREGA', 'ADMIN');
   // Aprova planejamento/despesa: coordenador deste supervisor, ADMIN/gestor OU o Supervisor
   // de Departamento (SUPERVISOR_FROTA) — o backend valida o escopo por departamento. Sem o
   // SUPERVISOR_FROTA aqui, o supervisor de departamento não via o painel de aprovação.
-  const podeAprovarDespesa = ehGestor || logisticaRole === 'SUPERVISOR_FROTA' || (!!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id);
+  const podeAprovarDespesa = ehGestor || temRole('SUPERVISOR_FROTA') || (!!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id);
   /**
    * Quem confere a despesa é quem NÃO lançou.
    *
@@ -299,7 +299,7 @@ export function SupervisorViagemPage() {
   // têm; alimentação/hospedagem não).
   const tipoSelEhVeiculo = tipos.find((t) => t.id === dTipo)?.categoria === 'VEICULO';
   const ehCoordDesteSup = !!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id;
-  const podeDecidirAdiantamento = logisticaRole === 'ADMIN' || logisticaRole === 'SUPERVISOR_FROTA' || (logisticaRole === 'COORDENADOR' && ehCoordDesteSup);
+  const podeDecidirAdiantamento = temRole('ADMIN', 'SUPERVISOR_FROTA') || (temRole('COORDENADOR') && ehCoordDesteSup);
 
   const limparForm = () => { setCliMat(''); setCliNome(''); setMunicipio(''); setAtividadeId(''); setPropriedade(''); setObs(''); setDataVisita(''); setLocalClienteId(''); setEditVisitaId(null); };
   const abrirEdicaoVisita = (p: Visita) => {

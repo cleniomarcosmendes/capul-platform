@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { SituacaoVeiculo } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { temRoleLogistica } from '../common/roles-logistica.js';
 import { assertMesmaFilial, resolverFilialLeitura, podeVerOutrasFiliais } from '../common/filial-scope.js';
 import { VeiculoService } from './veiculo.service.js';
 import { CreateVeiculoDto, UpdateVeiculoDto } from './dto.js';
@@ -58,7 +59,7 @@ export class VeiculoController {
     @Query('busca') busca?: string,
     @Query('todasFiliais') todasFiliais?: string,
   ) {
-    const ehSupFrota = user.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role === 'SUPERVISOR_FROTA';
+    const ehSupFrota = temRoleLogistica(user, 'SUPERVISOR_FROTA');
     return this.veiculos.list({
       // Frota é recurso COMPARTILHADO: a saída precisa enxergar veículos livres de
       // qualquer filial/departamento → `todasFiliais=true` ignora o escopo de filial.

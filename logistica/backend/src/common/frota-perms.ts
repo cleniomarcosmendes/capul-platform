@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import type { JwtPayload } from './decorators/current-user.decorator.js';
+import { temRoleLogistica } from './roles-logistica.js';
 
 /**
  * Quem pode OPERAR uma viagem de frota (lançar despesa, paradas): autorizado pela
@@ -13,8 +14,7 @@ export function assertPodeOperarViagem(
   user: JwtPayload,
   viagem: { criadoPorId: string; veiculo?: { supervisorId: string | null } | null },
 ): void {
-  const role = user?.modulos?.find((m) => m.codigo === 'LOGISTICA')?.role;
-  if (role === 'GESTOR_FROTA' || role === 'ADMIN') return;
+  if (temRoleLogistica(user, 'GESTOR_FROTA', 'ADMIN')) return;
   if (viagem.criadoPorId === user.sub) return;
   if (viagem.veiculo?.supervisorId && viagem.veiculo.supervisorId === user.sub) return;
   throw new ForbiddenException(

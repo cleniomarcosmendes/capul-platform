@@ -92,7 +92,7 @@ describe('FrotaService — manutenção com custo gera despesa', () => {
   });
 
   it('com custo → cria 1 despesa APROVADA no veículo e vincula à manutenção', async () => {
-    await svc.registrarManutencao('v1', { custo: 450.5, km: 1200, observacao: 'Troca de óleo' } as any, gestor, 'GESTOR_FROTA');
+    await svc.registrarManutencao('v1', { custo: 450.5, km: 1200, observacao: 'Troca de óleo' } as any, gestor, ['GESTOR_FROTA']);
 
     expect(prisma.despesaVeiculo.create).toHaveBeenCalledTimes(1);
     const despesa = prisma.despesaVeiculo.create.mock.calls[0][0].data;
@@ -111,20 +111,20 @@ describe('FrotaService — manutenção com custo gera despesa', () => {
   });
 
   it('sem custo → NÃO cria despesa (manutenção segue sendo só histórico de KM)', async () => {
-    await svc.registrarManutencao('v1', { km: 1200 } as any, gestor, 'GESTOR_FROTA');
+    await svc.registrarManutencao('v1', { km: 1200 } as any, gestor, ['GESTOR_FROTA']);
     expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
     expect(prisma.manutencaoVeiculo.create.mock.calls[0][0].data.despesaId).toBeNull();
   });
 
   it('custo zero → NÃO cria despesa (lançamento de R$ 0 só polui a Análise)', async () => {
-    await svc.registrarManutencao('v1', { custo: 0, km: 1200 } as any, gestor, 'GESTOR_FROTA');
+    await svc.registrarManutencao('v1', { custo: 0, km: 1200 } as any, gestor, ['GESTOR_FROTA']);
     expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
   });
 
   it('tipo "Manutenção" desativado → reativa em vez de estourar no meio do registro', async () => {
     prisma.tipoDespesa.findFirst.mockResolvedValue({ id: 'tp-manut', nome: 'Manutenção', ativo: false });
     prisma.tipoDespesa.update.mockResolvedValue({ id: 'tp-manut', ativo: true });
-    await svc.registrarManutencao('v1', { custo: 100 } as any, gestor, 'GESTOR_FROTA');
+    await svc.registrarManutencao('v1', { custo: 100 } as any, gestor, ['GESTOR_FROTA']);
     expect(prisma.tipoDespesa.update).toHaveBeenCalledWith({ where: { id: 'tp-manut' }, data: { ativo: true } });
     expect(prisma.despesaVeiculo.create).toHaveBeenCalledTimes(1);
   });

@@ -57,9 +57,9 @@ export function ViagemDetalhePage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const { toast, confirm } = useToast();
-  const { logisticaRole } = useAuth();
+  const { temRole } = useAuth();
   // Encerramento FORÇADO da rota é ação de GESTÃO — só o gestor de entrega (e ADMIN).
-  const podeForcar = logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'ADMIN';
+  const podeForcar = temRole('GESTOR_ENTREGA', 'ADMIN');
   const location = useLocation();
   // Volta para o LOCAL DE ORIGEM (Monitor da Frota, lista de Rotas de Entrega…)
   // via histórico; se abriu direto por link (sem histórico no app), fallback /viagens.

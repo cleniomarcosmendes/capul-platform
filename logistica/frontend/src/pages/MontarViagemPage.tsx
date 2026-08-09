@@ -42,7 +42,7 @@ const SEM_BAIRRO = '__SEM__';
 const keyBairro = (b?: string | null) => (b ?? '').trim().toUpperCase() || SEM_BAIRRO;
 
 export function MontarViagemPage() {
-  const { usuario, logisticaRole } = useAuth();
+  const { usuario, temRole } = useAuth();
   const navigate = useNavigate();
   const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
 
@@ -78,7 +78,7 @@ export function MontarViagemPage() {
   const { toast, confirm } = useToast();
   const [regeo, setRegeo] = useState(false);
   // Recalcular localização é manutenção de gestor (não do operador que só monta).
-  const ehGestor = logisticaRole === 'GESTOR_ENTREGA' || logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+  const ehGestor = temRole('GESTOR_ENTREGA', 'GESTOR_FROTA', 'ADMIN');
 
   const recalcularLocalizacoes = async () => {
     const ok = await confirm(

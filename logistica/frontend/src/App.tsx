@@ -33,11 +33,11 @@ import { LinhaKmPage } from './pages/LinhaKmPage';
 import { EntregaAnalisePage } from './pages/EntregaAnalisePage';
 
 function Protected() {
-  const { loading, logisticaRole } = useAuth();
+  const { loading, logisticaRoles } = useAuth();
   if (loading) {
     return <div className="flex min-h-screen items-center justify-center text-slate-500">Carregando…</div>;
   }
-  if (!logisticaRole) {
+  if (logisticaRoles.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center p-8 text-center text-slate-600">
         Você não tem acesso ao módulo Logística. Solicite a um administrador no Configurador.

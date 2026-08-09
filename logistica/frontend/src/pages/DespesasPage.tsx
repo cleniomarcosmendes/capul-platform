@@ -37,8 +37,8 @@ const errMsg = (e: unknown, fb: string) => {
 const hoje = new Date();
 
 export function DespesasPage() {
-  const { logisticaRole } = useAuth();
-  const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+  const { temRole } = useAuth();
+  const ehGestor = temRole('GESTOR_FROTA', 'ADMIN');
   const [tab, setTab] = useState<'despesas' | 'tipos' | 'fornecedores' | 'locais'>('despesas');
 
   return (
@@ -296,12 +296,12 @@ function abrirRelatorioDespesas(despesas: Despesa[], filtros: string[], total: n
 
 function LinhaDespesa({ d, onChanged }: { d: Despesa; onChanged: () => void }) {
   const { toast, confirm } = useToast();
-  const { logisticaRole } = useAuth();
+  const { temRole } = useAuth();
   const navigate = useNavigate();
   const sit = SIT_META[d.situacao] ?? { label: d.situacao, cls: 'bg-slate-100 text-slate-600' };
   // Gestor de frota controla a frota (contesta despesa de veículo), mas NÃO aprova o
   // acerto do departamento — a aprovação é do supervisor de departamento.
-  const soContesta = logisticaRole === 'GESTOR_FROTA';
+  const soContesta = temRole('GESTOR_FROTA');
   const [contestando, setContestando] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [busy, setBusy] = useState(false);

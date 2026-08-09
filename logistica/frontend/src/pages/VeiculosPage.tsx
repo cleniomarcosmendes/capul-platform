@@ -27,9 +27,9 @@ type SortKey = 'placa' | 'modelo' | 'tipo' | 'situacao' | 'supervisor' | 'kmAtua
 type SortDir = 'asc' | 'desc';
 
 export function VeiculosPage() {
-  const { logisticaRole } = useAuth();
+  const { temRole } = useAuth();
   // Mesma lista do backend (POST/PATCH /veiculos) — ADMIN passa pelo guard.
-  const podeGerirVeiculo = ['ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA'].includes(logisticaRole ?? '');
+  const podeGerirVeiculo = temRole('ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA');
   const navigate = useNavigate();
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);

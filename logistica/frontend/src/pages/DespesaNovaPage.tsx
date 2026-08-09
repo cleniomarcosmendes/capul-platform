@@ -65,8 +65,8 @@ export function DespesaNovaPage() {
   const [salvando, setSalvando] = useState(false);
   const [info, setInfo] = useState<DespesaInfo | null>(null); // contexto read-only (edição)
   // Anormalidade (mau uso) — só gestor; salva à parte (endpoint próprio).
-  const { logisticaRole } = useAuth();
-  const ehGestor = logisticaRole === 'GESTOR_FROTA' || logisticaRole === 'ADMIN';
+  const { temRole } = useAuth();
+  const ehGestor = temRole('GESTOR_FROTA', 'ADMIN');
   const [anormal, setAnormal] = useState(false);
   const [motivoAnormal, setMotivoAnormal] = useState('');
   const [salvandoAnormal, setSalvandoAnormal] = useState(false);
