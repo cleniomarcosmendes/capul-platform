@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert,
+  Keyboard,
 } from 'react-native';
 
 import type { ItemContagem, ContagemDeLote } from '../offline/contagemOffline';
@@ -47,6 +48,21 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
   }, [item, contagemAtual]);
 
   const [valores, setValores] = useState<Record<string, string>>(iniciais);
+
+  /**
+   * ⌨️ Mesmo aperto da tela de contagem: com o teclado aberto, o rodapé (total +
+   * Cancelar/Salvar) comia o espaço e sobrava quase nada de lista — e aqui é
+   * pior, porque digitar lote a lote é o trabalho inteiro desta tela.
+   *
+   * O TOTAL fica (é a conferência de quem digita); os BOTÕES saem, porque só
+   * servem quando se termina.
+   */
+  const [tecladoAberto, setTecladoAberto] = useState(false);
+  useEffect(() => {
+    const abriu = Keyboard.addListener('keyboardDidShow', () => setTecladoAberto(true));
+    const fechou = Keyboard.addListener('keyboardDidHide', () => setTecladoAberto(false));
+    return () => { abriu.remove(); fechou.remove(); };
+  }, []);
 
   /**
    * Lotes informados à mão pelo contador.
@@ -127,15 +143,19 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
         <View style={s.topo}>
           <Text style={s.codigo}>{item.product_code}</Text>
           <Text style={s.desc} numberOfLines={2}>{item.product_description}</Text>
-          <Text style={s.aviso}>
-            Produto com controle de lote — informe a quantidade de cada lote.
-          </Text>
+          {tecladoAberto ? null : (
+            <Text style={s.aviso}>
+              Produto com controle de lote — informe a quantidade de cada lote.
+            </Text>
+          )}
         </View>
 
         <FlatList
           data={item.lotes}
           keyExtractor={(l) => l.numero}
           contentContainerStyle={{ padding: 12, gap: 8, paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           ListEmptyComponent={
             <Text style={s.vazio}>
               Nenhum lote deste produto entrou no recorte do inventário — ou
@@ -213,6 +233,7 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
             </Text>
             <Text style={s.totalValor}>{invalido ? '—' : total.toFixed(2)}</Text>
           </View>
+          {tecladoAberto ? null : (
           <View style={s.botoes}>
             <TouchableOpacity style={s.btnSec} onPress={onFechar}>
               <Text style={s.btnSecTxt}>Cancelar</Text>
@@ -225,6 +246,7 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
               <Text style={s.btnPriTxt}>Salvar contagem</Text>
             </TouchableOpacity>
           </View>
+          )}
         </View>
       </View>
     </Modal>

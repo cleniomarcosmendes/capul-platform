@@ -43,7 +43,7 @@ const ROLES_INVENTARIO = ['OPERATOR', 'SUPERVISOR', 'ADMIN'];
  * tem só uma permissão vê só o seu app; ADMIN vê os dois e alterna sem logout.
  */
 export function HomeScreen({ navigation }: Props) {
-  const { logout, role, roleInventario } = useAuth();
+  const { logout, role, roleInventario, nome } = useAuth();
   const insets = useSafeAreaInsets();
   const podeEntrega = !!role && ROLES_ENTREGA.includes(role);
   const podeFrota = !!role && ROLES_FROTA.includes(role);
@@ -55,6 +55,11 @@ export function HomeScreen({ navigation }: Props) {
     // O bloco de baixo (Sair + versão) é empurrado pro fim da tela; sem o inset
     // a versão cai atrás da barra de navegação do Android e some.
     <View style={[styles.container, { paddingBottom: 16 + insets.bottom }]}>
+      {/* Quem está logado. Fica na HOME — porta de entrada de TODOS os fluxos
+          (entregas, frota, supervisor, contagem) —, e não só no inventário: o
+          aparelho é compartilhado e saber com que conta se está vale para o app
+          inteiro. Acima do título para não empurrar os cards. */}
+      {nome ? <Text style={styles.usuario}>Conectado como {nome}</Text> : null}
       <Text style={styles.titulo}>O que você vai operar?</Text>
 
       <Card
@@ -122,6 +127,7 @@ function Card({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc', padding: 16, gap: 14 },
   titulo: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginTop: 8, marginBottom: 2 },
+  usuario: { fontSize: 13, color: '#64748b', fontWeight: '600', marginBottom: 2 },
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#fff',
     borderRadius: 14, padding: 18, borderWidth: 1, borderColor: '#e2e8f0',

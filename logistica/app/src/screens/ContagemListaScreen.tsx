@@ -16,6 +16,7 @@ import {
   type PacoteContagem, type ContagemLocal, type ItemContagem,
 } from '../offline/contagemOffline';
 import { ContagemLoteModal } from '../components/ContagemLoteModal';
+import { useAuth } from '../auth/AuthContext';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ContagemLista'>;
@@ -30,6 +31,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ContagemLista'>;
  */
 export function ContagemListaScreen({ route, navigation }: Props) {
   const { listId, listName } = route.params;
+  const { nome } = useAuth();
   const [pacote, setPacote] = useState<PacoteContagem | null>(null);
   const [valores, setValores] = useState<Record<string, ContagemLocal>>({});
   const [carregando, setCarregando] = useState(true);
@@ -321,6 +323,14 @@ export function ContagemListaScreen({ route, navigation }: Props) {
             <Text style={styles.cabChip}>Armazém {pacote.warehouse}</Text>
           ) : null}
           <Text style={styles.cabChip}>{pacote.cicloEsperado}º ciclo</Text>
+          {/* Quem está contando. Vai no fim da MESMA linha de chips para não
+              empurrar nada — o contador precisa saber com que conta está,
+              sobretudo em aparelho compartilhado. */}
+          {nome ? (
+            <Text style={[styles.cabChip, styles.cabChipUser]} numberOfLines={1}>
+              {nome}
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -541,7 +551,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, backgroundColor: CAPUL, gap: 6,
   },
   cabLista: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  cabLinha: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  cabLinha: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' },
+  cabChipUser: { backgroundColor: 'rgba(0,0,0,0.18)', maxWidth: 170 },
   cabChip: {
     fontSize: 11, fontWeight: '700', color: '#fff',
     backgroundColor: 'rgba(255,255,255,0.22)',

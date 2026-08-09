@@ -9,6 +9,8 @@
 
 interface JwtPayload {
   sub?: string;
+  nome?: string;
+  username?: string;
   modulos?: { codigo: string; role: string }[];
   tipo?: string;
   departamentoId?: string;
@@ -101,6 +103,21 @@ export function papelInventario(accessToken: string | null): string | null {
  *  aprova o próprio lançamento, então o app precisa comparar com `criadoPorId`. */
 export function usuarioIdDoToken(accessToken: string | null): string | null {
   return decodePayload(accessToken)?.sub ?? null;
+}
+
+/**
+ * Nome de exibição do usuário logado.
+ *
+ * Cai para o `username` quando o `nome` não vem — conta de login genérico
+ * (`tipo=PADRAO`) às vezes não tem nome preenchido, e mostrar vazio no
+ * cabeçalho seria pior que mostrar o login.
+ */
+export function nomeUsuario(accessToken: string | null): string | null {
+  const p = decodePayload(accessToken);
+  if (!p) return null;
+  const nome = typeof p.nome === 'string' ? p.nome.trim() : '';
+  const login = typeof p.username === 'string' ? p.username.trim() : '';
+  return nome || login || null;
 }
 
 /** Tipo do usuário: 'INDIVIDUAL' (pessoa) | 'PADRAO' (login genérico). */
