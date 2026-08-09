@@ -100,12 +100,14 @@ sempre que algo "não mudou".
 | `portaria01` | **PADRAO** | PORTARIA | T.I. | 01 | — |
 | `supunai` | **PADRAO** | REGISTRADOR_ENTREGA | Supermercado | 02 | — |
 
-**Senhas** (memória local, não versionadas): `admin` = `admin123`;
+**Senhas** (memória local, não versionadas): **`admin` = `admin123`** ⚠️ *(não é `123456` — já custou uma parada no roteiro 3)*;
 `lidyanerocha`, `fabricioneiva`, `kelvereduardo`, **`renataborges`, `raydeborges` e
 `wandersonnascimento`** = `Temp@123`; **demais = `123456`**.
 > 🔴 **Testado em 09/08: `renataborges`, `raydeborges` e `wandersonnascimento` NÃO
 > aceitam `Temp@123`, e `agrounai` não aceita `123456`** — as quatro devolvem 401.
 > `Temp@123` funciona na `lidyanerocha`, então a senha existe; é o par que está errado.
+> **Não há bloqueio de conta** por tentativas — só 10 logins/minuto (429, que libera sozinho).
+> Errar a senha não trava ninguém.
 > **Enquanto não houver as senhas corretas, use `admin`/`admin123`**, que alcança todas
 > as telas. Os roteiros 3 e 7 já foram reescritos para não depender das quatro.
 
@@ -136,8 +138,8 @@ Preencher ao rodar cada roteiro:
 | Roteiro | Data | Quem rodou | Resultado | Observações |
 |---|---|---|---|---|
 | 1 Multi-role | 09/08 | skill do Chrome | **1.1–1.3 PASS** · 1.4 reescrito | 1ª execução reprovou 1.1 por container velho + cache do navegador — não era defeito. Seletor de depto da Logística traz os deptos REAIS da filial (02: Centro de Distribuição, Supermercado); trocando p/ Workspace, volta a lista global. 2ª permissão salvou sem erro de UNIQUE; cabeçalho mostrou `SUPERVISOR_FROTA · GESTOR_ENTREGA` e o menu, as duas seções. |
-| 2 Supervisor do veículo | | | | |
-| 3 Aprovador da despesa | | | | |
+| 2 Supervisor do veículo | 09/08 | skill do Chrome | **4/4 PASS** | Lista traz só elegíveis com o papel ao lado; filial 05 mostra só os cross-filial; as duas mensagens de recusa distintas; o supervisor órfão aparece marcado. |
+| 3 Aprovador da despesa | 09/08 | skill do Chrome | **PASS** (negativo opcional pulado) | Achou 2 defeitos reais: a prévia avisava o contrário do que a saída gravava (`0d781b28`) e a **colisão de chapa** fazia o aprovador sair da ficha de outra pessoa (`47b1eee5`). Retorno da #36 registrado — vira a preparação do roteiro 4. |
 | 4 Acerto PADRÃO | | | | |
 | 5 Registro de Viagem | | | | |
 | 6 Data de entrega | | | | |
