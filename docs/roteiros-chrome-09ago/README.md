@@ -1,6 +1,6 @@
 # Roteiros de teste no Chrome — jornada de 09/08/2026 (Logística)
 
-Sete roteiros curtos, um por fase entregue. Cada um se sustenta sozinho: tem a
+Nove roteiros curtos, um por fase entregue. **Todos executados e aprovados em 09/08.** Cada um se sustenta sozinho: tem a
 persona, o setup e o "esperado" próprios, e roda em 10–20 minutos.
 
 **Nada disto foi pushado.** Tudo está em commits locais sobre a `main`.
@@ -142,7 +142,7 @@ Preencher ao rodar cada roteiro:
 | 1 Multi-role | 09/08 | skill do Chrome | **1.1–1.3 PASS** · 1.4 reescrito | 1ª execução reprovou 1.1 por container velho + cache do navegador — não era defeito. Seletor de depto da Logística traz os deptos REAIS da filial (02: Centro de Distribuição, Supermercado); trocando p/ Workspace, volta a lista global. 2ª permissão salvou sem erro de UNIQUE; cabeçalho mostrou `SUPERVISOR_FROTA · GESTOR_ENTREGA` e o menu, as duas seções. |
 | 2 Supervisor do veículo | 09/08 | skill do Chrome | **4/4 PASS** | Lista traz só elegíveis com o papel ao lado; filial 05 mostra só os cross-filial; as duas mensagens de recusa distintas; o supervisor órfão aparece marcado. |
 | 3 Aprovador da despesa | 09/08 | skill do Chrome | **PASS** (negativo opcional pulado) | Achou 2 defeitos reais: a prévia avisava o contrário do que a saída gravava (`0d781b28`) e a **colisão de chapa** fazia o aprovador sair da ficha de outra pessoa (`47b1eee5`). Retorno da #36 registrado — vira a preparação do roteiro 4. |
-| 4 Acerto PADRÃO | 09/08 | skill do Chrome | **PARCIAL** (4.2/4.3 exigem senha real) + 1 defeito | 4.1, 4.4 e 4.5 PASS. Achou o gap do **adiantamento**: a conta de caixa contava como "dono" e alterava sem identificação, enquanto a despesa era recusada. Corrigido. |
+| 4 Acerto PADRÃO | 09/08 | skill do Chrome | **5/5 PASS** + 2 defeitos | Fechado com senha real do portal RH. Achou o gap do **adiantamento** (a conta de caixa contava como "dono") e a **falta de porta** para editar/excluir despesa — o backend aceitava, a tela não oferecia. Ambos corrigidos. |
 | 5 Registro de Viagem | 09/08 | skill do Chrome | **6/6 PASS** | Despesa de categoria VEÍCULO recusada sem veículo (400) e despesa de indivíduo fora da quebra "Por veículo" — os dois riscos do ponto 3. Desfazer exige apagar a despesa ANTES de cancelar a viagem. |
 | 6 Data de entrega | 09/08 | skill do Chrome | **6/6 PASS** | Sem defeitos. Fila: hoje → futura (selo 📅) → as 2 antigas sem data no fim. Fuso conferido: `T15:00:00Z` = meio-dia de Brasília. |
 | 9 Matrícula obrigatória | 09/08 | skill do Chrome | **6/6 PASS** | Busca do Protheus preencheu a chapa em 2 cliques; colisão `1047`↔`E01047` barrada citando o nome; regra confirmada também por API. Editar usuário antigo passa a exigir a matrícula — os **120 sem matrícula** se corrigem à medida que forem editados. |
