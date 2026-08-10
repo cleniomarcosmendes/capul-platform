@@ -24,7 +24,7 @@ const SIT_DESPESA: Record<string, string> = {
 export function FrotaViagemDetalhePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const { usuario, temRole } = useAuth();
   const ehGestor = temRole('GESTOR_FROTA', 'ADMIN');
   const ehPortaria = temRole('PORTARIA');
@@ -47,6 +47,10 @@ export function FrotaViagemDetalhePage() {
   const [mostrarCancelar, setMostrarCancelar] = useState(false);
   const [motivoCancel, setMotivoCancel] = useState('');
   const [cancelando, setCancelando] = useState(false);
+  // Correção da despesa no próprio acerto (o condutor identificado também pode).
+  const [editandoDespesa, setEditandoDespesa] = useState<string | null>(null);
+  const [valorEdit, setValorEdit] = useState('');
+  const [salvandoDespesa, setSalvandoDespesa] = useState(false);
   // 5a — ACERTO com login PADRÃO. A conta de caixa é compartilhada, então quem
   // responde pelo acerto é a PESSOA: ela se identifica com matrícula+senha e recebe um
   // token preso a {viagem, condutor}. Sem isso, prestar contas pelo desktop era
@@ -84,6 +88,29 @@ export function FrotaViagemDetalhePage() {
       toast('success', 'Condutor identificado — pode lançar o acerto.');
     } catch (e) { toast('error', errMsg(e, 'Falha ao identificar o condutor.')); }
     finally { setIdentificando(false); }
+  };
+
+  const salvarDespesa = async (id: string) => {
+    const valor = Number(valorEdit);
+    if (!Number.isFinite(valor) || valor <= 0) { toast('warning', 'Informe um valor válido.'); return; }
+    setSalvandoDespesa(true);
+    try {
+      await logisticaApi.patch(`/despesas/${id}`, { valor }, hdrCondutor);
+      toast('success', 'Despesa atualizada.');
+      setEditandoDespesa(null);
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao atualizar a despesa.')); }
+    finally { setSalvandoDespesa(false); }
+  };
+
+  const excluirDespesa = async (id: string, valor: number) => {
+    const ok = await confirm('Excluir despesa', `Remover a despesa de R$ ${valor.toFixed(2)} deste acerto? Esta ação não pode ser desfeita.`, { confirmLabel: 'Excluir', variant: 'danger' });
+    if (!ok) return;
+    try {
+      await logisticaApi.delete(`/despesas/${id}`, hdrCondutor);
+      toast('success', 'Despesa excluída.');
+      await carregar();
+    } catch (e) { toast('error', errMsg(e, 'Falha ao excluir a despesa.')); }
   };
 
   const carregar = useCallback(async () => {
@@ -283,7 +310,7 @@ export function FrotaViagemDetalhePage() {
               <div className="overflow-hidden rounded-lg border border-slate-200">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                    <tr><th className="px-3 py-2">Tipo</th><th className="px-3 py-2">Fornecedor</th><th className="px-3 py-2 text-right">Valor</th><th className="px-3 py-2">Situação</th></tr>
+                    <tr><th className="px-3 py-2">Tipo</th><th className="px-3 py-2">Fornecedor</th><th className="px-3 py-2 text-right">Valor</th><th className="px-3 py-2">Situação</th><th className="px-3 py-2" /></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {despesas.map((d) => (
@@ -292,6 +319,24 @@ export function FrotaViagemDetalhePage() {
                         <td className="px-3 py-2 text-slate-500">{d.fornecedor ?? '—'}</td>
                         <td className="px-3 py-2 text-right tabular-nums">R$ {d.valor.toFixed(2)}</td>
                         <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SIT_DESPESA[d.situacao] ?? 'bg-slate-100 text-slate-600'}`}>{d.situacao}</span></td>
+                        {/* Corrigir o próprio acerto: quem lançou erra o valor e precisa
+                            arrumar ali mesmo. Sem isto o condutor identificado só
+                            INCLUÍA — editar/excluir exigia a tela de Custos da Frota,
+                            que é de gestor. Era metade do 5a. */}
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          {podeLancar && (editandoDespesa === d.id ? (
+                            <span className="inline-flex items-center gap-1">
+                              <MoedaInput value={valorEdit} onChange={setValorEdit} className="w-24 rounded border border-slate-300 px-2 py-1 text-xs" />
+                              <button onClick={() => void salvarDespesa(d.id)} disabled={salvandoDespesa} className="rounded bg-capul-600 px-2 py-1 text-xs font-medium text-white hover:bg-capul-700 disabled:opacity-50">Salvar</button>
+                              <button onClick={() => setEditandoDespesa(null)} className="text-xs text-slate-500 hover:text-slate-700">Cancelar</button>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-2">
+                              <button onClick={() => { setEditandoDespesa(d.id); setValorEdit(String(d.valor)); }} className="text-xs text-capul-600 hover:underline">editar</button>
+                              <button onClick={() => void excluirDespesa(d.id, d.valor)} className="text-xs text-rose-600 hover:underline">excluir</button>
+                            </span>
+                          ))}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

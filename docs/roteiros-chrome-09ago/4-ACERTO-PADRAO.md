@@ -47,15 +47,21 @@
 
 ## 4.3 O que a identificação libera
 
-Ainda como `condutor_col`, já identificado:
+Ainda como `condutor_col`, já identificado — **tudo na própria tela da viagem**:
 
 - [ ] **Lançar** uma despesa na viagem → grava (nasce PENDENTE).
-- [ ] **Editar** o valor dessa despesa → grava.
-- [ ] **Excluir** a despesa → some.
+- [ ] Na lista **"Despesas lançadas"**, usar **editar** para corrigir o valor → grava.
+- [ ] Usar **excluir** na mesma linha → confirma e some.
 - [ ] **Editar o adiantamento** da viagem → grava.
 
 > Antes, nada disso era possível pelo desktop com conta de caixa: a autoridade vinha
 > da **conta**, e a conta é compartilhada. Agora vem da **pessoa** que digitou a senha.
+>
+> ⚠️ **Editar e excluir só ganharam tela em 09/08** (`d0...`), depois que esta execução
+> mostrou o buraco: o backend já aceitava, mas a lista de despesas da viagem **não tinha
+> ação nenhuma** — a única edição existia em *Custos da Frota*, que é de gestor. O
+> condutor identificado só conseguia **incluir**, e era metade do que o 5a pedia
+> ("incluir/editar/excluir despesa e adiantamento").
 
 ## 4.4 A conta de caixa, sozinha, não basta
 
