@@ -527,9 +527,24 @@ export class FrotaService {
       this.condutorToken.verificar(condutorToken, v.id); // 403 se divergente/expirado
       return true;
     })();
-    const ehDono = ehCondutorIdentificado || (await this.donoOuEscopo(v, user));
+    /**
+     * ⭐ No login PADRÃO, ser `criadoPorId` NÃO basta.
+     *
+     * Aquela conta é de um POSTO (caixa/portaria) e é compartilhada: qualquer pessoa
+     * loga com ela. Como a saída foi registrada por ela, `donoOuEscopo` dava verdadeiro
+     * e o adiantamento podia ser alterado sem ninguém se identificar — a autoridade
+     * vinha da CONTA, que é justamente o que o 5a existe para impedir. Achado ao rodar
+     * o item 4.3 do roteiro em 09/08: a despesa era recusada (usa `assertOpera`), mas o
+     * adiantamento passava. Mesma regra do `CondutorTokenService.assertOpera`.
+     */
+    const ehPadrao = user.tipo === 'PADRAO';
+    const ehDono = ehCondutorIdentificado || (!ehPadrao && (await this.donoOuEscopo(v, user)));
     if (!ehGestor && !ehDono) {
-      throw new ForbiddenException('Apenas o gestor de frota, o supervisor do veículo, quem registrou a saída ou o condutor identificado podem ajustar.');
+      throw new ForbiddenException(
+        ehPadrao
+          ? 'Identifique o condutor desta viagem (matrícula + senha) para alterar o acerto.'
+          : 'Apenas o gestor de frota, o supervisor do veículo, quem registrou a saída ou o condutor identificado podem ajustar.',
+      );
     }
     // Acerto encerrado trava o adiantamento (financeiro); KM/obs (correção) seguem.
     if (dto.adiantamento !== undefined && v.acertoEncerradoEm) {

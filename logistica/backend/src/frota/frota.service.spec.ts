@@ -294,3 +294,45 @@ describe('FrotaService.painelFrota — KM rodado exige as duas pontas', () => {
     expect(doKm.tipo).toEqual({ in: ['FROTA', 'ENTREGA'] });
   });
 });
+
+/**
+ * ⭐ 5a — no login PADRÃO, ser `criadoPorId` não basta (achado no roteiro 4, item 4.3).
+ *
+ * A conta de caixa é compartilhada. Como a saída foi registrada por ela, o "dono" dava
+ * verdadeiro e o ADIANTAMENTO podia ser alterado sem identificação — enquanto a DESPESA
+ * era recusada (ela usa `assertOpera`). Autoridade vinha da CONTA, não da PESSOA.
+ */
+describe('FrotaService.ajustarPorGestor — PADRÃO precisa se identificar', () => {
+  let prisma: any;
+  let svc: FrotaService;
+  let token: any;
+  const viagem = { id: 'v1', filialId: 'f1', tipo: 'FROTA', situacao: 'EM_CURSO', criadoPorId: 'caixa1', veiculo: { supervisorId: 'x', departamentoLotacaoId: 'd1' }, acertoEncerradoEm: null, kmInicial: 10 };
+  const caixa = { sub: 'caixa1', filialId: 'f1', tipo: 'PADRAO', modulos: [{ codigo: 'LOGISTICA', role: 'REGISTRADOR_FROTA' }] } as any;
+  const pessoal = { sub: 'caixa1', filialId: 'f1', tipo: 'INDIVIDUAL', modulos: [{ codigo: 'LOGISTICA', role: 'OPERADOR_ENTREGA' }] } as any;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    token = { verificar: jest.fn() };
+    svc = new FrotaService(prisma, dep(), dep(), token, locaisMock());
+    prisma.viagem.findUnique.mockResolvedValue(viagem);
+    prisma.viagem.update.mockResolvedValue({ id: 'v1' });
+  });
+
+  it('PADRÃO SEM identificação → recusa, mesmo tendo registrado a saída', async () => {
+    await expect(svc.ajustarPorGestor('v1', { adiantamento: 50 } as any, caixa, ['REGISTRADOR_FROTA']))
+      .rejects.toThrow(/Identifique o condutor/i);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('PADRÃO COM o token do condutor → ajusta', async () => {
+    await expect(svc.ajustarPorGestor('v1', { adiantamento: 50 } as any, caixa, ['REGISTRADOR_FROTA'], 'tk'))
+      .resolves.toBeDefined();
+    expect(token.verificar).toHaveBeenCalledWith('tk', 'v1');
+  });
+
+  // INDIVIDUAL é a pessoa: quem registrou a saída segue ajustando a própria viagem.
+  it('INDIVIDUAL que registrou a saída continua ajustando sem token', async () => {
+    await expect(svc.ajustarPorGestor('v1', { adiantamento: 50 } as any, pessoal, ['OPERADOR_ENTREGA']))
+      .resolves.toBeDefined();
+  });
+});

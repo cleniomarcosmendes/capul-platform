@@ -59,9 +59,20 @@ Ainda como `condutor_col`, já identificado:
 
 ## 4.4 A conta de caixa, sozinha, não basta
 
-- [ ] Recarregar a página (o token do condutor se perde) e tentar editar a despesa
-      **sem** se identificar → deve **recusar**, com a mensagem de gestor/supervisor.
-- [ ] Confirma a regra: identificar-se é o que dá autoridade, não estar logado.
+- [ ] Recarregar a página (o token do condutor se perde) e tentar **lançar despesa**
+      sem se identificar → recusa com *"Identifique o condutor desta viagem
+      (matrícula + senha) para continuar."*
+- [ ] ⭐ Tentar **editar o adiantamento** sem se identificar → recusa com
+      *"Identifique o condutor desta viagem (matrícula + senha) para alterar o acerto."*
+
+> **Este segundo item nasceu de um gap achado aqui em 09/08** (`9f...`): a despesa era
+> recusada, mas o **adiantamento passava**. Como a saída foi registrada pela conta de
+> caixa, ela contava como "dono" da viagem — a autoridade vinha da CONTA, não da PESSOA,
+> que é exatamente o que o 5a existe para impedir. Corrigido: no login PADRÃO, ser quem
+> registrou a saída **não basta**.
+>
+> No login **INDIVIDUAL** nada muda: quem registrou a saída continua ajustando a própria
+> viagem sem token — ali a conta **é** a pessoa.
 
 ## 4.5 Encerrar o acerto fecha para todos
 
