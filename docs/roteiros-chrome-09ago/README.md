@@ -17,6 +17,7 @@ persona, o setup e o "esperado" próprios, e roda em 10–20 minutos.
 | 6 | [Data de entrega](6-DATA-ENTREGA.md) | ponto 2 — o dia manda na fila de montagem | `42521540` |
 | 7 | [Travessia](7-TRAVESSIA.md) | os quatro primeiros **juntos**, num caminho só | — |
 | 8 | [KM e encerramento](8-KM-E-ENCERRAMENTO.md) | ponto 1 — KM obrigatório, encerrar não entrega sozinho, 1 rota por vez | `d52d34c4` |
+| 9 | [Matrícula obrigatória](9-MATRICULA-INDIVIDUAL.md) | integridade — matrícula no INDIVIDUAL + chapa sem colisão | `29ef71ef` |
 
 O **1 é pré-requisito real** dos demais: sem ele, um usuário não acumula papéis e
 vários cenários ficam impossíveis de montar. Os outros podem ser rodados fora de
@@ -144,5 +145,6 @@ Preencher ao rodar cada roteiro:
 | 4 Acerto PADRÃO | — | — | **BLOQUEADO** | Único que exige credencial REAL do portal RH (é o que ele valida). Insumo pronto: viagem **#36** CONCLUÍDA, acerto aberto, 2 despesas aprovadas. |
 | 5 Registro de Viagem | 09/08 | skill do Chrome | **6/6 PASS** | Despesa de categoria VEÍCULO recusada sem veículo (400) e despesa de indivíduo fora da quebra "Por veículo" — os dois riscos do ponto 3. Desfazer exige apagar a despesa ANTES de cancelar a viagem. |
 | 6 Data de entrega | 09/08 | skill do Chrome | **6/6 PASS** | Sem defeitos. Fila: hoje → futura (selo 📅) → as 2 antigas sem data no fim. Fuso conferido: `T15:00:00Z` = meio-dia de Brasília. |
+| 9 Matrícula obrigatória | | | | |
 | 8 KM e encerramento | 09/08 | skill do Chrome | **7/7 PASS** + 1 defeito | Achou o perfil duplicado que apagava papel em silêncio (`3f6cfaa9`). E o 8.7 leu o indicador errado: `kmRodadoMes` estava **65.621** — rota encerrada à força sem KM de saída somava a leitura inteira do odômetro (`9e...`). Corrigido: exige as duas pontas. |
 | 7 Travessia | 09/08 | skill do Chrome | **5/5 PASS** | Os 5 riscos de junção cobertos. Passo 4 completo: `supdept01` viu e aprovou · `lidyanerocha` não viu · `gfrota01` recebeu 403 ao aprovar. Passo 5: retrato preso em T.I. e saída nova já com Financeiro. |
