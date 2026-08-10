@@ -191,7 +191,19 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
           await enfileirarKmEntrega({ tipo: 'iniciar', viagemId: viagem.id, kmInicial: km });
           setViagem((v) => (v ? { ...v, kmInicial: km } : v)); // otimista: reflete o KM de saída na UI
           setAcaoKm(null);
-          Alert.alert('Salvo offline', 'Sem sinal — o KM de saída vai sincronizar quando a conexão voltar.');
+          // Tenta subir NA HORA, em vez de esperar o próximo foco de tela. Se a
+          // falha foi um piscar de rede, o KM entra já e a rota nasce válida no
+          // servidor — o que evita a baixa seguinte ser recusada por falta dele.
+          // Só então o aviso, que assim diz o que de fato aconteceu.
+          const r = await processarFilaKmEntrega({ apenas: 'iniciar' });
+          if (r.enviadas > 0) {
+            await carregar();
+          } else if (r.descartadas.length) {
+            Alert.alert('KM de saída recusado', r.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
+            await carregar();
+          } else {
+            Alert.alert('Salvo offline', 'Sem sinal — o KM de saída vai sincronizar quando a conexão voltar.');
+          }
         } else {
           await enfileirarKmEntrega({ tipo: 'encerrar', viagemId: viagem.id, kmFinal: km });
           Alert.alert('Salvo offline', 'Sem sinal — a entrega vai ENCERRAR quando a conexão voltar.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
@@ -255,6 +267,35 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     pendentes: entregasPendentes.length,
     kmInicial: viagem.kmInicial ?? null,
   });
+
+  // A baixa exige o KM de saída NO SERVIDOR, e ele pode estar só na fila (o
+  // entregador registrou sem sinal, a tela destravou otimista). Se o sinal voltou
+  // nesse meio-tempo, subir o KM aqui evita que ele digite a baixa inteira para
+  // receber "Registre o KM de saída da rota #N" logo depois de já tê-lo informado.
+  // Best-effort: continuando sem sinal, a baixa segue e vai para a fila dela.
+  async function irParaBaixa(e: NonNullable<Parada['entrega']>) {
+    if ((await contarPendentesKmEntrega()) > 0) {
+      const r = await processarFilaKmEntrega({ apenas: 'iniciar' });
+      if (r.descartadas.length) {
+        // O servidor recusou o KM em definitivo: a rota segue sem KM lá, e a baixa
+        // seria recusada também. Melhor parar aqui, com o motivo, do que deixar ele
+        // fotografar e assinar para levar erro no fim.
+        Alert.alert(
+          'KM de saída recusado',
+          `${r.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n')}\n\n` +
+            'Corrija o KM de saída no topo da tela antes de dar baixa.',
+        );
+        await carregar();
+        return;
+      }
+      if (r.enviadas > 0) await carregar();
+    }
+    navigation.navigate('Baixa', {
+      entregaId: e.id,
+      entregaNumero: e.numero,
+      destinatario: e.destinatarioNome,
+    });
+  }
 
   function avisarSemKm() {
     Alert.alert(
@@ -402,13 +443,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
           // hodômetro é justamente como o KM de saída se perdia.
           bloqueadoSemKm={semKmSaida}
           onBloqueado={avisarSemKm}
-          onBaixar={(e) =>
-            navigation.navigate('Baixa', {
-              entregaId: e.id,
-              entregaNumero: e.numero,
-              destinatario: e.destinatarioNome,
-            })
-          }
+          onBaixar={(e) => void irParaBaixa(e)}
         />
       )}
     />
