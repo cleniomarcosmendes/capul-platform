@@ -367,6 +367,20 @@ export function UsuarioFormPage() {
       abas.add('dados');
       mensagem = 'Login pelo portal RH exige a matrícula.';
     }
+    /**
+     * Matrícula é obrigatória no usuário INDIVIDUAL (decisão do Clenio, 09/08).
+     *
+     * É ela que liga o login à PESSOA no Protheus — e é dela que a Logística tira o
+     * departamento que responde pelas despesas. Sem matrícula o sistema cai no
+     * departamento do LOGIN, que é o do POSTO (caixa/portaria), não o de quem gastou.
+     * O login PADRAO é justamente de um posto, então ali ela não se aplica.
+     *
+     * A busca "pelo nome (Protheus)", logo acima do campo, preenche em dois cliques.
+     */
+    if (tipo === 'INDIVIDUAL' && !matricula.trim()) {
+      abas.add('dados');
+      mensagem = 'Usuário individual exige a matrícula do colaborador — use a busca por nome (Protheus) para preencher.';
+    }
 
     const fiscalCheck = exigeEmailFiscal();
     if (fiscalCheck.exige && !email.trim()) {
@@ -606,9 +620,15 @@ export function UsuarioFormPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Matrícula {autenticaPortal && '*'}
+                  Matrícula {(autenticaPortal || tipo === 'INDIVIDUAL') && '*'}
                 </label>
                 <input type="text" value={matricula} onChange={(e) => setMatricula(e.target.value)} className={inputClass} placeholder="Ex.: 001047" />
+                {tipo === 'INDIVIDUAL' && !matricula.trim() && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    É a matrícula que liga este login à pessoa no Protheus. Sem ela, a Logística
+                    não sabe de quem é a despesa e cai no departamento do login.
+                  </p>
+                )}
                 {/* Buscar a chapa pelo nome no Protheus (quem cadastra sabe o nome, não a matrícula). */}
                 <div className="mt-2 flex gap-2">
                   <input

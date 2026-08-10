@@ -156,6 +156,56 @@ export class UsuarioService {
     return merged;
   }
 
+
+  /** Chapa normalizada (E+5 dígitos) — MESMA regra da Logística. `E01047`, `001047` e
+   *  `1047` são a mesma pessoa para o Protheus. */
+  private static chapa(m?: string | null): string | null {
+    const d = (m ?? '').replace(/\D/g, '');
+    if (!d) return null;
+    return 'E' + d.slice(-5).padStart(5, '0');
+  }
+
+  /**
+   * Matrícula do usuário INDIVIDUAL: obrigatória e sem colisão de CHAPA.
+   *
+   * **Obrigatória** porque a matrícula é o que liga o login à pessoa no Protheus — é
+   * dela que sai o departamento que responde pelas despesas (Logística), e sem ela o
+   * sistema cai em heurísticas (o departamento do LOGIN, que é o do posto). Não vale
+   * para PADRAO: aquele login é de um POSTO (caixa/portaria), não de alguém.
+   *
+   * **Sem colisão** porque a chapa normaliza pelos 5 ÚLTIMOS dígitos: `E01047` e
+   * `001047` colidem. Em 09/08 isso fez o departamento aprovador de uma pessoa ser
+   * lido da ficha de OUTRA. Barrar no cadastro é onde o problema tem conserto barato.
+   */
+  private async assertMatriculaDeIndividual(
+    tipo: string | null | undefined,
+    matricula: string | null | undefined,
+    idAtual?: string,
+  ) {
+    if (tipo !== 'INDIVIDUAL') return;
+    const valor = (matricula ?? '').trim();
+    if (!valor) {
+      throw new BadRequestException(
+        'Usuário individual exige a matrícula do colaborador — é ela que liga o login à pessoa no Protheus. Use a busca por nome na aba Dados para preencher.',
+      );
+    }
+    const chapa = UsuarioService.chapa(valor);
+    if (!chapa) {
+      throw new BadRequestException('Matrícula inválida: informe os dígitos da chapa do colaborador.');
+    }
+    const candidatos = await this.prisma.usuario.findMany({
+      where: { status: 'ATIVO', matricula: { not: null }, ...(idAtual ? { id: { not: idAtual } } : {}) },
+      select: { id: true, username: true, nome: true, matricula: true },
+    });
+    const colide = candidatos.find((u) => UsuarioService.chapa(u.matricula) === chapa);
+    if (colide) {
+      throw new BadRequestException(
+        `A matrícula ${valor} resulta na mesma chapa (${chapa}) de ${colide.nome} (${colide.username}). ` +
+          'A chapa usa os 5 últimos dígitos, então matrículas diferentes podem colidir — e a plataforma passaria a confundir as duas pessoas.',
+      );
+    }
+  }
+
   async create(dto: CreateUsuarioDto) {
     const existing = await this.prisma.usuario.findFirst({
       where: {
@@ -168,6 +218,8 @@ export class UsuarioService {
     if (existing) {
       throw new ConflictException('Username ou email ja existe');
     }
+
+    await this.assertMatriculaDeIndividual(dto.tipo, dto.matricula);
 
     if (dto.permissoes?.length) {
       for (const p of dto.permissoes) {
@@ -242,6 +294,13 @@ export class UsuarioService {
 
   async update(id: string, dto: UpdateUsuarioDto) {
     const usuarioAtual = await this.findOne(id);
+
+    // Vale o que ESTÁ sendo salvo: o tipo/matrícula do DTO quando vierem, senão o atual.
+    await this.assertMatriculaDeIndividual(
+      dto.tipo !== undefined ? dto.tipo : usuarioAtual.tipo,
+      dto.matricula !== undefined ? dto.matricula : usuarioAtual.matricula,
+      id,
+    );
 
     // Se o e-mail está sendo limpado/omitido, garantir que o usuário não tem
     // permissão fiscal ativa que dependa de e-mail (caso contrário ele
