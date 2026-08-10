@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +30,8 @@ export function MinhasViagensScreen({ navigation }: Props) {
   const [pendentesDespesa, setPendentesDespesa] = useState(0);
   const [pendentesKm, setPendentesKm] = useState(0);
   const [reenviando, setReenviando] = useState(false);
+  // Quando foi a última tentativa AUTOMÁTICA de reenvio (folga entre focos).
+  const ultimoReenvioRef = useRef(0);
 
   const carregar = useCallback(async () => {
     setErro('');
@@ -48,8 +50,14 @@ export function MinhasViagensScreen({ navigation }: Props) {
   // trata 4xx como rejeição definitiva — **descartava a baixa e apagava a foto**,
   // perdendo a prova de entrega de quem trabalhou sem sinal. O 'encerrar' segue por
   // último: é terminal, e antes das baixas seria recusado por elas.
-  const reenviarFila = useCallback(async () => {
+  const reenviarFila = useCallback(async ({ automatico = false } = {}) => {
     if ((await contarPendentes()) === 0 && (await contarPendentesDespesaEntrega()) === 0 && (await contarPendentesKmEntrega()) === 0) return;
+    // Sem sinal, cada tentativa custa até 60s (a baixa sobe a foto). Ir e voltar
+    // da rota não pode empilhar tentativas longas com o banner desabilitado —
+    // parece travado. O toque no banner ignora a folga e tenta na hora.
+    const agora = Date.now();
+    if (automatico && agora - ultimoReenvioRef.current < 30_000) return;
+    ultimoReenvioRef.current = agora;
     setReenviando(true);
     try {
       const rkIni = await processarFilaKmEntrega({ apenas: 'iniciar' });
@@ -101,14 +109,19 @@ export function MinhasViagensScreen({ navigation }: Props) {
   }, []);
 
   // Recarrega ao focar a tela (volta do detalhe/baixa) e tenta reenviar a fila.
+  //
+  // 🔴 O spinner de TELA CHEIA só na PRIMEIRA carga. Antes ele subia a cada foco,
+  // e o render é `if (carregando) return <spinner>`: sem sinal, `carregar` leva
+  // até 20s (timeout do axios), então voltar da baixa dava 20 segundos de tela
+  // em branco — com a lista já carregada na memória. Era o "app travou depois da
+  // primeira baixa". Recarregar é certo; esconder o que já está pronto não é.
   useFocusEffect(
     useCallback(() => {
       let ativo = true;
       (async () => {
-        setCarregando(true);
         await carregar();
         if (ativo) setCarregando(false);
-        void reenviarFila();
+        void reenviarFila({ automatico: true });
       })();
       return () => {
         ativo = false;

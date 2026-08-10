@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -50,11 +50,21 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [pendDespesa, setPendDespesa] = useState(0);
   const [pendKm, setPendKm] = useState(0);
   const [reenviandoDespesa, setReenviandoDespesa] = useState(false);
+  // Já conseguimos carregar a rota alguma vez? Decide se uma falha de rede vira
+  // tela de erro ou é apenas ignorada (seguimos com o que está na tela).
+  const temViagemRef = useRef(false);
+  // Quando foi a última tentativa AUTOMÁTICA de reenvio. O foco da tela dispara
+  // reenvio, e a subida da baixa carrega a foto (timeout de 60s): sem esta folga,
+  // ir e voltar da Baixa empilhava tentativas longas com o botão do banner
+  // desabilitado — parecia travado. O toque no banner ignora a folga.
+  const ultimoReenvioRef = useRef(0);
 
   const carregar = useCallback(async () => {
     try {
       const v = await obterViagem(viagemId);
       setViagem(v);
+      setErro(''); // some com o erro de uma tentativa anterior; sem isto ele grudava
+      temViagemRef.current = true;
       // Rota ainda sem KM de saída: o formulário nasce ABERTO (é o primeiro ato da
       // rota, não um botão a descobrir), então a sugestão do odômetro é semeada
       // aqui. Só preenche campo vazio — nunca por cima do que ele digitou.
@@ -63,7 +73,15 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
         setKmInput((atual) => (atual === '' ? String(odometro) : atual));
       }
     } catch {
-      setErro('Não foi possível carregar a viagem.');
+      // 🔴 Sem sinal, `carregar` falha — e ele roda a CADA foco, inclusive ao
+      // voltar da Baixa. Antes isso virava tela de erro definitiva: o `erro`
+      // nunca era limpo e o render é `erro || !viagem`, então a rota sumia da
+      // tela e não voltava nem com o sinal de volta. Era o "app travou depois da
+      // primeira baixa".
+      // Já tendo a rota carregada, falha de rede não pode apagá-la: offline é o
+      // modo normal de trabalho do entregador, e a fila cuida do que ficou. Só
+      // vira tela de erro quando nunca conseguimos carregar.
+      if (!temViagemRef.current) setErro('Não foi possível carregar a viagem.');
     } finally {
       setCarregando(false);
     }
@@ -78,12 +96,17 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // apagava a foto**. Quem trabalhou sem sinal perdia a prova de entrega, que é
   // lastro de cobrança. O 'encerrar' segue por último: é terminal, e subindo antes
   // seria recusado pelas baixas que ainda estão na fila.
-  const reenviarPendencias = useCallback(async () => {
+  const reenviarPendencias = useCallback(async ({ automatico = false } = {}) => {
     const total =
       (await contarPendentesBaixas()) +
       (await contarPendentesDespesaEntrega()) +
       (await contarPendentesKmEntrega());
     if (total === 0) return;
+    // Sem sinal, cada tentativa custa até 60s (a baixa sobe a foto). Ir e voltar
+    // da Baixa não pode enfileirar uma tentativa longa por foco.
+    const agora = Date.now();
+    if (automatico && agora - ultimoReenvioRef.current < 30_000) return;
+    ultimoReenvioRef.current = agora;
     setReenviandoDespesa(true);
     try {
       const rkIni = await processarFilaKmEntrega({ apenas: 'iniciar' });
@@ -131,7 +154,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       void carregar();
-      void reenviarPendencias();
+      void reenviarPendencias({ automatico: true });
     }, [carregar, reenviarPendencias]),
   );
 
