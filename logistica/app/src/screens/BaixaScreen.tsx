@@ -1,14 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
-  Keyboard,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -22,9 +19,9 @@ import type { RootStackParamList } from '../navigation';
 import { baixarEntrega, type BaixaPayload } from '../api/baixa';
 import { enfileirar } from '../offline/filaBaixas';
 import { SignaturePad } from '../components/SignaturePad';
+import { EntradaTextoModal } from '../components/EntradaTextoModal';
 import { uuid } from '../lib/uuid';
 import { temPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
-import { useScrollToFocusedInput } from '../lib/useScrollToFocusedInput';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Baixa'>;
@@ -52,20 +49,11 @@ async function capturarGeo(): Promise<{ geoLat?: number; geoLng?: number }> {
 
 export function BaixaScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets(); // espaço da barra de navegação (Android) p/ o botão não sumir
-  // Padrão da casa para o teclado não cobrir campo (mesmo de DespesaEntrega,
-  // SupervisorViagem e ViagemFrota): `aoFocar` leva O CAMPO EM FOCO para cima do
-  // teclado. Esta tela usava `scrollToEnd`, que rola para o FIM DO CONTEÚDO —
-  // com a foto e a assinatura na tela o conteúdo é alto, e "quem recebeu" saía
-  // de vista; só reaparecia ao digitar, quando o RN reposiciona no cursor.
-  //
-  // Folga MAIOR que o padrão (110) porque esta é a única tela com RODAPÉ FIXO: o
-  // "Confirmar entrega" fica fora do ScrollView, entre o campo e o teclado, e
-  // come ~90px (12 de topo + 16+16 do botão + texto + a barra do Android). O hook
-  // mede a partir do teclado e não enxerga esse rodapé, então com 110 o campo
-  // pousava colado nele — sem respiro, e qualquer coisa que apareça ali (o aviso
-  // "Cannot connect to Expo CLI" do Expo Go, visto em campo) cobre os dois.
-  const { scrollRef, aoFocar } = useScrollToFocusedInput(210);
-  const [kbHeight, setKbHeight] = useState(0); // altura do teclado → vira padding do rodapé do scroll
+  // Esta tela NÃO tem mais campo de texto: os dois (quem recebeu, motivo) abrem
+  // em tela própria, como a foto (câmera) e a assinatura (modal). Por isso saíram
+  // daqui o hook de rolagem e os listeners de teclado — com o rodapé FIXO do
+  // "Confirmar entrega" entre o campo e o teclado, nenhuma folga resolvia: o
+  // campo ficava colado no rodapé ou fora de vista (visto em campo, 10/08).
   const { entregaId, entregaNumero, destinatario } = route.params;
   const [resultado, setResultado] = useState<'ENTREGUE' | 'NAO_ENTREGUE'>('ENTREGUE');
   const [motivo, setMotivo] = useState('');
@@ -73,24 +61,11 @@ export function BaixaScreen({ route, navigation }: Props) {
   const [fotoUri, setFotoUri] = useState<string | null>(null);
   const [assinaturaUri, setAssinaturaUri] = useState<string | null>(null);
   const [mostrarAssinatura, setMostrarAssinatura] = useState(false);
+  // Qual campo de texto está aberto em tela própria (null = nenhum).
+  const [editando, setEditando] = useState<null | 'recebedor' | 'motivo'>(null);
   const [enviando, setEnviando] = useState(false);
   // Chave fixa da PRIMEIRA tentativa — reenvio (online ou da fila) não duplica.
   const idempotencyKey = useRef(uuid()).current;
-
-  // Teclado: quando ABRE, guardamos a altura (vira padding do fim do scroll, garantindo
-  // espaço para rolar) e, JÁ com o teclado aberto (evento, não timeout adivinhado), levamos
-  // o campo em foco à vista. Funciona com ou sem o resize nativo da janela.
-  useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    // Só a altura: quem leva o campo à vista é o `aoFocar`. O `scrollToEnd` que
-    // havia aqui competia com ele e jogava a tela para o fim do conteúdo.
-    const sub1 = Keyboard.addListener(showEvt, (e) => {
-      setKbHeight(e.endCoordinates?.height ?? 0);
-    });
-    const sub2 = Keyboard.addListener(hideEvt, () => setKbHeight(0));
-    return () => { sub1.remove(); sub2.remove(); };
-  }, []);
 
   const entregue = resultado === 'ENTREGUE';
   // Foto E assinatura são PERMITIDAS juntas (não são mais exclusivas). A entrega
@@ -177,7 +152,7 @@ export function BaixaScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.tela}>
-    <ScrollView ref={scrollRef} style={styles.container} contentContainerStyle={[styles.conteudo, { paddingBottom: 40 + kbHeight }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.conteudo} showsVerticalScrollIndicator={false}>
       <Text style={styles.titulo}>
         #{entregaNumero} · {destinatario}
       </Text>
@@ -232,31 +207,32 @@ export function BaixaScreen({ route, navigation }: Props) {
             )}
           </View>
 
+          {/* Abre em tela própria, como a foto (câmera) e a assinatura (modal).
+              Inline, o campo disputava o vão entre o teclado e o rodapé fixo e
+              acabava fora de vista — ver EntradaTextoModal. */}
           <Text style={styles.label}>Quem recebeu (opcional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nome de quem recebeu"
-            value={recebedor}
-            onChangeText={setRecebedor}
-            maxLength={120}
-            editable={!enviando}
-            returnKeyType="done"
-            onFocus={aoFocar}
-          />
+          <TouchableOpacity
+            style={styles.campoBotao}
+            onPress={() => setEditando('recebedor')}
+            disabled={enviando}
+          >
+            <Text style={recebedor ? styles.campoValor : styles.campoVazio}>
+              {recebedor || 'Toque para informar o nome'}
+            </Text>
+          </TouchableOpacity>
         </>
       ) : (
         <>
           <Text style={styles.label}>Motivo da não-entrega *</Text>
-          <TextInput
-            style={[styles.input, styles.inputArea]}
-            placeholder="Ex.: cliente ausente, endereço não localizado…"
-            value={motivo}
-            onChangeText={setMotivo}
-            maxLength={255}
-            multiline
-            editable={!enviando}
-            onFocus={aoFocar}
-          />
+          <TouchableOpacity
+            style={styles.campoBotao}
+            onPress={() => setEditando('motivo')}
+            disabled={enviando}
+          >
+            <Text style={motivo ? styles.campoValor : styles.campoVazio}>
+              {motivo || 'Toque para informar o motivo'}
+            </Text>
+          </TouchableOpacity>
         </>
       )}
 
@@ -285,6 +261,29 @@ export function BaixaScreen({ route, navigation }: Props) {
       visible={mostrarAssinatura}
       onOK={salvarAssinatura}
       onCancel={() => setMostrarAssinatura(false)}
+    />
+
+    <EntradaTextoModal
+      visible={editando === 'recebedor'}
+      titulo="Quem recebeu"
+      dica={`Entrega #${entregaNumero} — ${destinatario}. Opcional: vale como prova quando não há foto nem assinatura.`}
+      valorInicial={recebedor}
+      placeholder="Nome de quem recebeu"
+      maxLength={120}
+      onSalvar={(t) => { setRecebedor(t); setEditando(null); }}
+      onCancelar={() => setEditando(null)}
+    />
+    <EntradaTextoModal
+      visible={editando === 'motivo'}
+      titulo="Motivo da não-entrega"
+      dica="Diga o que impediu a entrega — é o que o escritório vê para decidir a nova tentativa."
+      valorInicial={motivo}
+      placeholder="Ex.: cliente ausente, endereço não localizado…"
+      maxLength={255}
+      multiline
+      obrigatorio
+      onSalvar={(t) => { setMotivo(t); setEditando(null); }}
+      onCancelar={() => setEditando(null)}
     />
     </View>
   );
@@ -337,16 +336,19 @@ const styles = StyleSheet.create({
   assinatura: { width: '100%', height: 180, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0' },
   refazer: { alignSelf: 'center', marginTop: 8 },
   refazerTxt: { color: CAPUL, fontWeight: '600' },
-  input: {
+  // Campo que abre em tela própria: parece um input, mas é um botão.
+  campoBotao: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 10,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
+    paddingVertical: 14,
     backgroundColor: '#fff',
+    minHeight: 50,
+    justifyContent: 'center',
   },
-  inputArea: { minHeight: 90, textAlignVertical: 'top' },
+  campoValor: { fontSize: 15, color: '#0f172a' },
+  campoVazio: { fontSize: 15, color: '#94a3b8' },
   gpsAviso: { fontSize: 12, color: '#94a3b8', textAlign: 'center', marginTop: 4 },
   confirmar: {
     backgroundColor: CAPUL,
