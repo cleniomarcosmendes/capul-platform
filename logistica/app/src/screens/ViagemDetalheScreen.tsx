@@ -50,6 +50,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [pendDespesa, setPendDespesa] = useState(0);
   const [pendKm, setPendKm] = useState(0);
   const [reenviandoDespesa, setReenviandoDespesa] = useState(false);
+  // Toque em "Dar baixa" que precisa subir o KM antes: sem este estado o botão
+  // ficava mudo enquanto isso, e mudo lê como travado.
+  const [preparandoBaixa, setPreparandoBaixa] = useState(false);
   // Já conseguimos carregar a rota alguma vez? Decide se uma falha de rede vira
   // tela de erro ou é apenas ignorada (seguimos com o que está na tela).
   const temViagemRef = useRef(false);
@@ -190,16 +193,46 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   }
 
   async function confirmarKm() {
-    if (!viagem || kmInput === '') return;
+    if (!viagem) return;
+    // ⚠️ NENHUM caminho daqui sai calado. Tocar em "Encerrar" e não ver nada
+    // acontecer — nem sucesso, nem erro — foi relatado em campo (10/08): sem
+    // mensagem, o entregador não tem como saber se o toque pegou, se o app
+    // travou ou o que falta preencher.
+    if (kmInput.trim() === '') {
+      Alert.alert('KM', 'Informe o número do hodômetro do veículo.');
+      return;
+    }
     // Sem KM de saída o formulário nasce aberto em 'iniciar' sem ninguém ter
     // clicado — então a ação vem daí quando `acaoKm` ainda está vazio.
     const acao = acaoKm ?? (viagem.kmInicial == null ? 'iniciar' : null);
-    if (!acao) return;
+    if (!acao) {
+      Alert.alert('KM', 'Escolha "Encerrar entrega (KM)" para informar o KM de retorno.');
+      return;
+    }
     const km = Number(kmInput);
     if (!Number.isFinite(km) || km < 0) { Alert.alert('KM', 'Informe um KM válido.'); return; }
     if (acao === 'encerrar' && viagem.kmInicial != null && km < viagem.kmInicial) {
       Alert.alert('KM de retorno', `O KM de retorno (${km}) é menor que o KM de saída (${viagem.kmInicial}).`);
       return;
+    }
+    // Igual ao de saída = rota com ZERO km rodado. É possível (rota cancelada na
+    // porta), mas quase sempre é o campo que veio preenchido e ninguém trocou —
+    // e KM rodado zerado contamina custo por km e manutenção preventiva. Pergunta
+    // antes, com o número na cara, em vez de gravar calado.
+    if (acao === 'encerrar' && viagem.kmInicial != null && km === viagem.kmInicial) {
+      const ok = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          'KM de retorno igual ao de saída',
+          `O hodômetro seria gravado em ${km}, o mesmo da saída — a rota fica com 0 km rodado.\n\n` +
+            'Se você rodou, corrija o número. Se a rota não saiu mesmo, pode confirmar.',
+          [
+            { text: 'Corrigir', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Confirmar 0 km', style: 'destructive', onPress: () => resolve(true) },
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) },
+        );
+      });
+      if (!ok) return;
     }
 
     // Encerrar é TERMINAL. O servidor recusa rota sem KM de saída ou com entrega
@@ -321,8 +354,17 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // Best-effort: continuando sem sinal, a baixa segue e vai para a fila dela.
   async function irParaBaixa(e: NonNullable<Parada['entrega']>) {
     if ((await contarPendentesKmEntrega()) > 0) {
-      const r = await processarFilaKmEntrega({ apenas: 'iniciar' });
-      if (r.descartadas.length) {
+      // Com feedback e prazo curto: este await fica ENTRE o toque e a tela de
+      // baixa, então sem isso o botão simplesmente não respondia por até 20s —
+      // o "clico e não acontece nada" relatado em campo. Estourando o prazo,
+      // seguimos assim mesmo: a baixa é enfileirada e o KM sobe depois.
+      setPreparandoBaixa(true);
+      const r = await Promise.race([
+        processarFilaKmEntrega({ apenas: 'iniciar' }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+      ]);
+      setPreparandoBaixa(false);
+      if (r && r.descartadas.length) {
         // O servidor recusou o KM em definitivo: a rota segue sem KM lá, e a baixa
         // seria recusada também. Melhor parar aqui, com o motivo, do que deixar ele
         // fotografar e assinar para levar erro no fim.
@@ -334,7 +376,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
         await carregar();
         return;
       }
-      if (r.enviadas > 0) await carregar();
+      if (r && r.enviadas > 0) await carregar();
     }
     navigation.navigate('Baixa', {
       entregaId: e.id,
@@ -404,7 +446,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
                   <Text style={styles.kmDica}>
                     {formKm === 'iniciar'
                       ? 'Leia o hodômetro no painel do veículo. Sem esse número a rota não começa: navegação, despesa e baixas ficam travadas.'
-                      : `Leia o hodômetro ao chegar (≥ ${viagem.kmInicial ?? 0}).`}
+                      : `Leia o hodômetro ao chegar. O campo vem com o KM de saída (${viagem.kmInicial ?? 0}) — troque pelo número de agora, que não pode ser menor que ele.`}
                   </Text>
                   <TextInput style={styles.kmInput} value={kmInput} onChangeText={setKmInput} keyboardType="numeric" placeholder="KM no painel" editable={!salvandoKm} />
                   <View style={styles.kmBtns}>
@@ -425,10 +467,16 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
                       comprovante — a tela avisava, mas deixava. O servidor recusa de
                       qualquer forma, e deixar tocar só para receber erro é pior do que
                       não deixar tocar: o botão fica travado com o motivo embaixo. */}
+                  {/* Apagado quando não dá, mas AINDA tocável — o toque diz o
+                      porquê. Botão morto não avisa nada: tocar e não acontecer
+                      nada foi lido como app travado (relato de campo, 10/08). */}
                   <TouchableOpacity
                     style={[styles.kmBtnEncerrar, impedimentos.length > 0 && styles.kmBtnOff]}
-                    disabled={impedimentos.length > 0}
-                    onPress={abrirEncerramento}>
+                    onPress={() =>
+                      impedimentos.length
+                        ? Alert.alert('Ainda não dá para encerrar', impedimentos.join('\n\n'))
+                        : abrirEncerramento()
+                    }>
                     <Text style={styles.kmBtnEncerrarTxt}>🏁 Encerrar entrega (KM)</Text>
                   </TouchableOpacity>
                   {impedimentos.map((i) => (
@@ -489,6 +537,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
           // hodômetro é justamente como o KM de saída se perdia.
           bloqueadoSemKm={semKmSaida}
           onBloqueado={avisarSemKm}
+          preparando={preparandoBaixa}
           onBaixar={(e) => void irParaBaixa(e)}
         />
       )}
@@ -501,11 +550,14 @@ function ParadaCard({
   onBaixar,
   bloqueadoSemKm = false,
   onBloqueado,
+  preparando = false,
 }: {
   parada: Parada;
   onBaixar: (e: NonNullable<Parada['entrega']>) => void;
   bloqueadoSemKm?: boolean;
   onBloqueado?: () => void;
+  /** Subindo o KM de saída antes de abrir a baixa — o botão precisa dizer isso. */
+  preparando?: boolean;
 }) {
   const e = parada.entrega;
   if (!e) {
@@ -558,10 +610,15 @@ function ParadaCard({
       {e.status === 'EM_VIAGEM' ? (
         <TouchableOpacity
           style={[styles.btnBaixa, bloqueadoSemKm && styles.btnBaixaOff]}
+          disabled={preparando}
           onPress={() => (bloqueadoSemKm ? onBloqueado?.() : onBaixar(e))}
         >
           <Text style={[styles.btnBaixaTxt, bloqueadoSemKm && styles.btnBaixaTxtOff]}>
-            {bloqueadoSemKm ? '🔒 Registre o KM de saída' : '✓ Dar baixa'}
+            {preparando
+              ? 'Enviando o KM de saída…'
+              : bloqueadoSemKm
+                ? '🔒 Registre o KM de saída'
+                : '✓ Dar baixa'}
           </Text>
         </TouchableOpacity>
       ) : null}

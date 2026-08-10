@@ -27,6 +27,13 @@ const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Baixa'>;
 
 /**
+ * Prazo da tentativa COM O ENTREGADOR ESPERANDO. Uma foto em rede fraca leva
+ * ~10s; passando disso, a rede não está boa e insistir só prende a pessoa na
+ * tela. A fila reenvia depois com prazo longo, e a baixa não se perde.
+ */
+const TIMEOUT_INTERATIVO = 15_000;
+
+/**
  * GPS por evento, best-effort: 6s de prazo; sem sinal/permissão → segue sem geo.
  *
  * Aqui a permissão é só CONSULTADA. Pedir a cada baixa era o que incomodava em
@@ -115,7 +122,12 @@ export function BaixaScreen({ route, navigation }: Props) {
       ...geo,
     };
     try {
-      await baixarEntrega(entregaId, payload, provas);
+      // Prazo CURTO: aqui tem gente parada na porta do cliente esperando a tela
+      // responder. Estourando, a baixa vai para a fila (que reenvia com o prazo
+      // longo, sem ninguém olhando) e ele segue a rota. Antes eram 60s de tela
+      // desabilitada antes de dizer "sem conexão" — era o "sistema travado ao
+      // finalizar a operação" relatado em campo.
+      await baixarEntrega(entregaId, payload, provas, { timeout: TIMEOUT_INTERATIVO });
       Alert.alert('Baixa registrada', `Entrega #${entregaNumero} — ${destinatario}.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);

@@ -27,6 +27,7 @@ export async function baixarEntrega(
   entregaId: string,
   payload: BaixaPayload,
   provas?: ProvasBaixa,
+  opts?: { timeout?: number },
 ): Promise<void> {
   const form = new FormData();
   form.append('resultado', payload.resultado);
@@ -45,6 +46,10 @@ export async function baixarEntrega(
 
   await api.post(`${LOGISTICA_BASE}/entregas/${entregaId}/baixar`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 60_000, // prova em rede móvel fraca demora — não abortar cedo
+    // Prova em rede móvel fraca demora — o padrão longo é para a FILA, que
+    // reenvia em segundo plano e não tem ninguém esperando na frente da tela.
+    // Quem chama com alguém olhando manda um prazo curto: passar disso, guardar
+    // offline e liberar a pessoa é melhor do que segurá-la até o fim do prazo.
+    timeout: opts?.timeout ?? 60_000,
   });
 }
