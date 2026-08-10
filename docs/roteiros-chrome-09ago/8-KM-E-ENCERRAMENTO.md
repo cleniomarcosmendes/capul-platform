@@ -111,12 +111,23 @@ await fetch('/api/v1/logistica/viagens/<ID_DA_ROTA>/iniciar', {
 
 ## 8.7 A entrega entra no KM da frota
 
-- [ ] **Frota → Monitor** (mês corrente): anotar **KM rodado** e **custo por km**.
-- [ ] O KM da rota que você acabou de encerrar **está somado** — antes o painel contava
-      só viagens de FROTA, embora a rota de entrega mova o **mesmo odômetro**.
+> ⚠️ **Olhe `kmRodadoMes`, não o ranking por departamento.** Na 1ª execução o item foi
+> dado como PASS lendo `rankingDepartamento` — e ele **não** mudou: continua contando só
+> viagens de FROTA, de propósito (ele mede o departamento **solicitante**, que a rota de
+> entrega não tem). O indicador que passou a incluir a entrega é o **KM rodado**.
 
-> Medido por API em 09/08, antes e depois: **29 → 41 km** no mês e custo por km de
-> **R$ 57,95 → R$ 40,99**. A distorção era de **41%**, no veículo que roda todo dia.
+- [ ] **Frota → Monitor** (mês corrente), ou `GET /frota/painel?mes=&ano=` →
+      `indicadores.kmRodadoMes` e `indicadores.custoPorKm`.
+- [ ] O KM da rota que você encerrou **está somado** — antes o painel contava só FROTA,
+      embora a rota de entrega mova o **mesmo odômetro**.
+- [ ] **Sanidade:** o valor tem de ser da ordem das distâncias rodadas (dezenas/centenas
+      de km), **não** da ordem da leitura do odômetro (dezenas de milhares). Se aparecer
+      um número enorme, é rota entrando na conta **sem KM de saída** — foi o defeito
+      achado nesta execução (`kmFinal - 0` = leitura inteira do hodômetro).
+
+> Medido por API em 09/08: **29 → 41 km** ao incluir a entrega. Depois da correção das
+> duas pontas, com as rotas do próprio roteiro encerradas: **61 km** e custo por km
+> **R$ 27,55**.
 
 ---
 

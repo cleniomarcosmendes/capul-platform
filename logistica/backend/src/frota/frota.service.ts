@@ -932,6 +932,15 @@ export class FrotaService {
           filialId,
           tipo: { in: [TipoViagem.FROTA, TipoViagem.ENTREGA] },
           veiculoId: { not: null },
+          // ⭐ As DUAS pontas: sem KM de saída não há distância a somar. Com só o
+          // `?? 0` a leitura INTEIRA do odômetro virava "km rodado" — uma rota
+          // encerrada à força sem KM de saída (kmFinal 60540) somava 60.540 km e o
+          // indicador do mês foi de 41 para 65.621. A viagem de FROTA sempre teve KM
+          // de saída (é obrigatório na saída), então isto só apareceu quando a
+          // ENTREGA entrou na conta — e o encerramento FORÇADO pode gravar o KM final
+          // sem o de saída, que é legítimo: ninguém inventa o hodômetro que não foi lido.
+          kmInicial: { not: null },
+          kmFinal: { not: null },
           situacao: StatusViagem.CONCLUIDA,
           dataHoraChegada: { gte: ini, lt: fimExcl },
           ...viagemVeicScope,

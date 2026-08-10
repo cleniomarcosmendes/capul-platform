@@ -264,3 +264,33 @@ describe('FrotaService.registrarSaidaIndividual — veículo opcional (ponto 3)'
       .rejects.toThrow(NotFoundException);
   });
 });
+
+/**
+ * ⭐ KM rodado do mês — as DUAS pontas (achado em 09/08, no roteiro 8).
+ *
+ * Ao incluir a ENTREGA no cômputo, uma rota encerrada À FORÇA sem KM de saída
+ * (kmFinal 60540, kmInicial null) somou 60.540 km: o `?? 0` transformava a leitura
+ * inteira do odômetro em distância. O indicador do mês foi de 41 para 65.621.
+ * A viagem de FROTA nunca expôs isso porque o KM de saída é obrigatório na saída.
+ */
+describe('FrotaService.painelFrota — KM rodado exige as duas pontas', () => {
+  it('a consulta do KM do mês filtra kmInicial E kmFinal não-nulos', async () => {
+    const prisma = createPrismaMock();
+    const core = { nomesDepartamentos: jest.fn().mockResolvedValue(new Map()), nomesUsuarios: jest.fn().mockResolvedValue(new Map()) } as any;
+    const svc = new FrotaService(prisma as any, dep(), core, dep(), locaisMock());
+    prisma.veiculo.findMany.mockResolvedValue([]);
+    prisma.veiculo.count.mockResolvedValue(0);
+    prisma.viagem.findMany.mockResolvedValue([]);
+    prisma.despesaVeiculo.count.mockResolvedValue(0);
+    prisma.despesaVeiculo.findMany.mockResolvedValue([]);
+    await svc.painelFrota({ sub: 'u1', filialId: 'f1' } as any, ['GESTOR_FROTA'], 8, 2026);
+
+    const doKm = prisma.viagem.findMany.mock.calls
+      .map((c: any) => c[0].where)
+      .find((w: any) => w?.situacao === 'CONCLUIDA' && w?.dataHoraChegada);
+    expect(doKm.kmInicial).toEqual({ not: null });
+    expect(doKm.kmFinal).toEqual({ not: null });
+    // E a ENTREGA continua no cômputo — a correção não pode desfazer o item 6.
+    expect(doKm.tipo).toEqual({ in: ['FROTA', 'ENTREGA'] });
+  });
+});
