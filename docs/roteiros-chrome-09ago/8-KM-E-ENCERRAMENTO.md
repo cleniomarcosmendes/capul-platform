@@ -17,8 +17,19 @@ mudança tem seis regras e mexe no que alimenta custo por km e manutenção prev
 A filial 01 tem **2 entregas livres** e **1 veículo disponível**, mas **nenhum
 entregador** — por isso o passo 1.
 
-- [ ] 1. `admin` → Configurador → `condutor_ind` → adicionar perfil **Logística /
-      Entregador**. *(Ele já é Operador de Entregas; com o multi-role, os dois convivem.)*
+- [ ] 1. `admin` → Configurador → `condutor_ind` → **trocar** o papel de Logística de
+      *Operador de Entregas* para **Entregador** (editar a linha existente, não
+      adicionar outra).
+
+> ⚠️ **É troca, não acúmulo.** A plataforma guarda **um papel por departamento**, e os
+> dois cairiam no mesmo (T.I.). Tentar adicionar uma 2ª linha ali **substitui** o papel
+> anterior — na 1ª execução deste roteiro (09/08) foi o que aconteceu: o `condutor_ind`
+> perdeu o acesso ao desktop e parecia regressão do multi-role. **Não era**: multi-role é
+> por DEPARTAMENTO. A tela agora **barra** o perfil duplicado em vez de sobrescrever
+> calada (`0bd7d4c0`..).
+>
+> Ele **não precisa logar** neste roteiro — é só o motorista atribuído à rota. Tudo é
+> feito pelo `admin`. O desfazer devolve o papel de Operador de Entregas.
 - [ ] 2. **Entregas → Nova**: criar **2 entregas** para a rota B (a rota A usa as duas
       que já existem). Endereço qualquer da filial 01.
 - [ ] 3. **Veículos → Novo**: cadastrar um 2º veículo da filial 01 (ex.: placa
@@ -114,6 +125,5 @@ await fetch('/api/v1/logistica/viagens/<ID_DA_ROTA>/iniciar', {
 - [ ] Encerrar (ou forçar o encerramento de) as rotas A e B, deixando os veículos livres.
 - [ ] Cancelar as entregas de teste criadas na preparação.
 - [ ] **Inativar** o veículo `TST8K88`.
-- [ ] **Remover o perfil Entregador** de `condutor_ind` — ele volta a ter só Operador de
-      Entregas. *(Papel esquecido contamina roteiro seguinte — já aconteceu com o
-      `supdeptb`.)*
+- [ ] **Devolver o papel de `condutor_ind` para *Operador de Entregas*** (editando a
+      linha, como no passo 1). *(Papel trocado e esquecido contamina roteiro seguinte.)*

@@ -379,6 +379,35 @@ export function UsuarioFormPage() {
       if (!mensagem) mensagem = 'Selecione o Departamento na aba Acesso.';
     }
 
+    /**
+     * ⭐ Perfil DUPLICADO no mesmo módulo + departamento.
+     *
+     * O banco guarda UM papel por (usuário × módulo × DEPARTAMENTO) e a gravação é
+     * upsert: a 2ª linha no mesmo departamento **substitui** a 1ª. Até 09/08 a tela
+     * deixava adicionar, mostrava as duas e salvava "com sucesso" — e o papel anterior
+     * sumia sem aviso. Aconteceu de verdade: um Operador de Entregas virou Entregador e
+     * perdeu o acesso ao desktop, sem nada na tela indicando a troca.
+     *
+     * Multi-role é por DEPARTAMENTO: para acumular papéis, use departamentos diferentes.
+     */
+    const vistos = new Map<string, number>();
+    for (const p of permissoes) {
+      if (!p.moduloId || !p.roleModuloId) continue;
+      const depto = MODULOS_COM_DEPARTAMENTO.includes(modulos.find((m) => m.id === p.moduloId)?.codigo ?? '')
+        ? p.departamentoId
+        : departamentoId;
+      if (!depto) continue;
+      const chave = `${p.moduloId}|${depto}`;
+      vistos.set(chave, (vistos.get(chave) ?? 0) + 1);
+      if (vistos.get(chave)! > 1) {
+        abas.add('permissoes');
+        const mod = modulos.find((m) => m.id === p.moduloId)?.nome ?? 'módulo';
+        const dep = [...departamentos, ...departamentosWorkspace].find((d) => d.id === depto)?.nome ?? 'departamento';
+        mensagem = `Há dois perfis de ${mod} no departamento "${dep}". A plataforma guarda UM papel por departamento — o segundo SUBSTITUIRIA o primeiro. Edite a linha existente, ou escolha outro departamento para acumular papéis.`;
+        break;
+      }
+    }
+
     return { abas, mensagem };
   }
 
