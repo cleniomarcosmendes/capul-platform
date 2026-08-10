@@ -20,6 +20,12 @@ export const usuarioService = {
     return data;
   },
 
+  /** Confirma QUEM é a chapa digitada (padrão do Chamado). null se o Protheus não conhece. */
+  async funcionarioPorMatricula(matricula: string): Promise<{ matricula: string; nome: string } | null> {
+    const { data } = await coreApi.get('/usuarios/funcionarios/por-matricula', { params: { matricula } });
+    return data || null;
+  },
+
   async criar(dto: {
     username: string;
     nome: string;

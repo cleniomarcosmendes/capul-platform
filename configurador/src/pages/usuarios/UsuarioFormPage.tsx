@@ -79,6 +79,8 @@ export function UsuarioFormPage() {
   // Busca de funcionário por nome (Protheus SA1, só chapas E…) → preenche a matrícula.
   const [funcNome, setFuncNome] = useState('');
   const [funcResultados, setFuncResultados] = useState<{ matricula: string; nome: string }[]>([]);
+  // Nome do colaborador da chapa digitada: undefined = conferindo; null = não achou.
+  const [nomeChapa, setNomeChapa] = useState<string | null | undefined>(null);
   const [funcBuscando, setFuncBuscando] = useState(false);
   const [funcMsg, setFuncMsg] = useState('');
   const buscarFuncionario = async () => {
@@ -91,6 +93,19 @@ export function UsuarioFormPage() {
       if (r.length === 0) setFuncMsg('Nenhum funcionário encontrado no Protheus com esse nome.');
     } catch { setFuncMsg('Falha ao buscar no Protheus.'); } finally { setFuncBuscando(false); }
   };
+  // Confere a chapa digitada no Protheus (debounce — o campo é digitado dígito a dígito).
+  useEffect(() => {
+    const chapa = matricula.trim();
+    if (!chapa) { setNomeChapa(null); return; }
+    setNomeChapa(undefined);
+    const t = setTimeout(() => {
+      usuarioService.funcionarioPorMatricula(chapa)
+        .then((f) => setNomeChapa(f?.nome ?? null))
+        .catch(() => setNomeChapa(null));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [matricula]);
+
   const escolherFuncionario = (f: { matricula: string; nome: string }) => {
     setMatricula(f.matricula);
     if (!nome.trim()) setNome(f.nome); // preenche o Nome Completo se ainda vazio
@@ -628,6 +643,16 @@ export function UsuarioFormPage() {
                     É a matrícula que liga este login à pessoa no Protheus. Sem ela, a Logística
                     não sabe de quem é a despesa e cai no departamento do login.
                   </p>
+                )}
+                {/* Confirmação de QUEM é a chapa digitada — mesmo padrão do Chamado.
+                    Um dígito errado cadastra outra pessoa, e isso decide quem aprova a
+                    despesa de quem na Logística: barato de errar, caro de descobrir. */}
+                {matricula.trim() && (
+                  nomeChapa === undefined
+                    ? <p className="mt-1 text-xs text-slate-400">Conferindo a matrícula no Protheus…</p>
+                    : nomeChapa
+                      ? <p className="mt-1 text-xs text-emerald-700">✓ {nomeChapa}</p>
+                      : <p className="mt-1 text-xs text-amber-600">Matrícula não encontrada no cadastro de colaboradores do Protheus — confira os dígitos.</p>
                 )}
                 {/* Buscar a chapa pelo nome no Protheus (quem cadastra sabe o nome, não a matrícula). */}
                 <div className="mt-2 flex gap-2">

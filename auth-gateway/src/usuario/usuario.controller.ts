@@ -38,13 +38,21 @@ export class UsuarioController {
     return this.usuarioService.findAll(filialId);
   }
 
-  // Busca funcionário por NOME no Protheus (SA1 filtrado a chapas E…) para preencher a
-  // matrícula no cadastro de usuário — quem cadastra sabe o nome, não a chapa. Declarado
-  // ANTES de `@Get(':id')` (senão "funcionarios" cairia como id).
+  // Busca funcionário no Protheus pelo cadastro de COLABORADOR (`infoFuncionario`),
+  // para preencher a matrícula no cadastro de usuário — quem cadastra sabe o nome, não
+  // a chapa. Declarado ANTES de `@Get(':id')` (senão "funcionarios" cairia como id).
   @Get('funcionarios')
   @UseGuards(ConfiguradorAdminGuard)
   buscarFuncionarios(@Query('nome') nome?: string) {
     return this.funcionarioLookup.buscarPorNome(nome ?? '');
+  }
+
+  /** Confirma QUEM é a chapa digitada (mesmo padrão do Chamado: digita a matrícula, a
+   *  tela mostra o nome). null quando o Protheus não conhece a chapa. */
+  @Get('funcionarios/por-matricula')
+  @UseGuards(ConfiguradorAdminGuard)
+  buscarFuncionarioPorMatricula(@Query('matricula') matricula?: string) {
+    return this.funcionarioLookup.buscarPorMatricula(matricula ?? '');
   }
 
   @Get('me/preferencias')

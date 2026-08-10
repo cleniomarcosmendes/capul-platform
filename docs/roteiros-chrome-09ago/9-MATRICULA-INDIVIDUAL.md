@@ -21,13 +21,31 @@
 - [ ] Tentar **salvar** sem matrícula → barra, com a mensagem mandando usar a busca por
       nome.
 
-## 9.2 A busca do Protheus preenche em dois cliques
+## 9.2 A busca vem do cadastro de COLABORADOR (corrigido em 09/08)
 
 Sem isto a exigência seria um fardo — quem cadastra sabe o nome, não a chapa.
 
 - [ ] No campo **"ou busque o funcionário pelo nome (Protheus)"**, digitar um nome e
       escolher da lista.
 - [ ] A **matrícula é preenchida sozinha**, e o aviso some.
+
+> ⚠️ **A fonte estava errada e foi trocada.** A busca usava a operação
+> **`clienteEndereco` (SA1 = CLIENTES)** e ficava com as linhas cujo código começa com
+> `E`, como heurística de "empregado". Mas a matrícula gravada aqui é o que liga o login
+> à PESSOA no Protheus — o `loginPortal` valida por ela e a Logística tira dela o
+> departamento que responde pelas despesas. Agora usa **`infoFuncionario`**
+> (INFOCLIENTES/infoPortal), o cadastro de colaborador — o mesmo que a Logística já
+> consome. *(Apontado pelo Clenio.)*
+
+## 9.2b ⭐ Digitou a matrícula, a tela mostra o nome (padrão do Chamado)
+
+- [ ] Digitar **`001047`** no campo Matrícula (sem usar a busca). Abaixo aparece
+      **"✓ CLENIO MARCOS MENDES"**.
+- [ ] Digitar uma chapa inexistente (ex.: `999999`) → **"Matrícula não encontrada no
+      cadastro de colaboradores do Protheus — confira os dígitos."**
+
+> Um dígito errado cadastra **outra pessoa** — e é a matrícula que decide quem aprova a
+> despesa de quem. Barato de errar, caro de descobrir depois.
 
 ## 9.3 PADRÃO continua sem exigir — e está certo
 

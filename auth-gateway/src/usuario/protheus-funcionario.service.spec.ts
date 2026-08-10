@@ -1,35 +1,40 @@
-import { mapFuncionariosSA1 } from './protheus-funcionario.service';
+import { mapFuncionarios } from './protheus-funcionario.service';
 
-// ⭐ SA1 (clienteEndereco) devolve clientes (A…) E empregados (E…). Para o cadastro de
-// usuário do Configurador só interessam os EMPREGADOS → filtrar chapas que começam com E.
-describe('mapFuncionariosSA1 (SA1 → só empregados E)', () => {
-  it('mantém só chapas E; descarta cliente A…; normaliza maiúscula', () => {
-    const r = mapFuncionariosSA1([
-      { matricula: 'E01047', nome: 'FULANO DE TAL' },
-      { matricula: 'A00086', nome: 'HUMBERTO (cliente)' },
-      { matricula: 'e2', nome: 'minúsculo vira E2' },
-    ]);
-    expect(r.map((x) => x.matricula)).toEqual(['E01047', 'E2']);
-    expect(r[0].nome).toBe('FULANO DE TAL');
+/**
+ * A busca de funcionário do cadastro de usuário passou a usar o `infoFuncionario`
+ * (INFOCLIENTES/infoPortal) — o cadastro de COLABORADOR.
+ *
+ * Antes usava `clienteEndereco` (SA1 = CLIENTES) e ficava com as linhas cujo código
+ * começa com "E", como heurística de empregado. Fonte errada: a matrícula gravada é o
+ * que liga o login à pessoa no Protheus (o `loginPortal` valida por ela, e a Logística
+ * tira dela o departamento que responde pelas despesas). Corrigido em 09/08/2026.
+ */
+describe('mapFuncionarios — resposta do infoFuncionario', () => {
+  it('lê funcionarios[] e faz trim (campos do Protheus vêm com espaço à direita)', () => {
+    const r = mapFuncionarios({ funcionarios: [{ matricula: 'E01047 ', nome: '  FULANO DE TAL  ', cc: '11010204' }] });
+    expect(r).toEqual([{ matricula: 'E01047', nome: 'FULANO DE TAL' }]);
   });
 
-  it('deduplica a mesma chapa (vem em vários endereços/lojas)', () => {
-    const r = mapFuncionariosSA1([
-      { matricula: 'E01047', nome: 'A' },
-      { matricula: 'E01047', nome: 'A' },
-      { matricula: 'E02', nome: 'B' },
-    ]);
-    expect(r).toHaveLength(2);
+  it('"não encontrado" (sem funcionarios[]) → lista vazia', () => {
+    expect(mapFuncionarios({ mensagem: 'Funcionario nao encontrado' })).toEqual([]);
   });
 
-  it('respeita o teto de resultados', () => {
-    const itens = Array.from({ length: 40 }, (_, i) => ({ matricula: `E${i}`, nome: 'x' }));
-    expect(mapFuncionariosSA1(itens, 25)).toHaveLength(25);
+  it('payload inesperado/nulo → lista vazia (não quebra a tela)', () => {
+    expect(mapFuncionarios(null)).toEqual([]);
+    expect(mapFuncionarios({ itens: [{ matricula: 'A0001', nome: 'CLIENTE' }] })).toEqual([]);
   });
 
-  it('entrada inválida (não-array / vazia) → []', () => {
-    expect(mapFuncionariosSA1(undefined)).toEqual([]);
-    expect(mapFuncionariosSA1(null)).toEqual([]);
-    expect(mapFuncionariosSA1([])).toEqual([]);
+  it('dedup por matrícula e teto de resultados', () => {
+    const itens = [
+      { matricula: 'E001', nome: 'A' }, { matricula: 'E001', nome: 'A' },
+      { matricula: 'E002', nome: 'B' }, { matricula: 'E003', nome: 'C' },
+    ];
+    expect(mapFuncionarios({ funcionarios: itens })).toHaveLength(3);
+    expect(mapFuncionarios({ funcionarios: itens }, 2)).toHaveLength(2);
+  });
+
+  // Sem nome não dá para confirmar quem é — e confirmar é o propósito do campo.
+  it('linha sem nome ou sem matrícula é descartada', () => {
+    expect(mapFuncionarios({ funcionarios: [{ matricula: 'E01', nome: '  ' }, { nome: 'SEM CHAPA' }] })).toEqual([]);
   });
 });
