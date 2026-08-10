@@ -609,7 +609,8 @@ export class EntregaService {
   async baixar(id: string, dto: BaixarEntregaDto, provas: { foto?: ProvaBinaria; assinatura?: ProvaBinaria }, user: JwtPayload) {
     const e = await this.prisma.entrega.findUnique({
       where: { id },
-      include: { cupons: true, parada: { select: { viagemId: true } } },
+      // `kmInicial` da rota: sem hodômetro de saída não se dá baixa (ver abaixo).
+      include: { cupons: true, parada: { select: { viagemId: true, viagem: { select: { kmInicial: true, numero: true } } } } },
     });
     if (!e) throw new NotFoundException('Entrega não encontrada.');
     assertPodeVerRegistro(user, e.filialId);
@@ -624,6 +625,21 @@ export class EntregaService {
           'A entrega precisa estar numa viagem despachada.',
       );
     }
+    /**
+     * ⭐ Ponto 1: sem KM de SAÍDA não se dá baixa.
+     *
+     * A regra já existia — mas só na TELA do app (o botão vira "🔒 Registre o KM de
+     * saída"). Client-side não é regra: qualquer outro caminho — desktop, versão
+     * antiga do app, chamada direta — passava ao largo, e a rota rodava inteira sem
+     * hodômetro. Sem KM de saída o trecho não entra no KM rodado e some do custo por
+     * km. Aqui é o servidor cobrando, que é onde a regra tem de morar.
+     */
+    if (e.parada?.viagem && e.parada.viagem.kmInicial == null) {
+      throw new BadRequestException(
+        `Registre o KM de saída da rota #${e.parada.viagem.numero} antes de dar baixa nas entregas.`,
+      );
+    }
+
     const entregue = dto.resultado === 'ENTREGUE';
     if (!entregue && !dto.motivo?.trim()) {
       throw new BadRequestException('Informe o motivo da não-entrega.');

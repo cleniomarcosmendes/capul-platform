@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Camera, CheckCircle2, FileText, Loader2, Phone, Plus, Printer, Send, Sparkles, Trash2,
+  AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, Camera, FileText, Loader2, Phone, Plus, Printer, Send, Sparkles, Trash2,
 } from 'lucide-react';
 import { logisticaApi } from '../services/api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -233,11 +233,12 @@ export function ViagemDetalhePage() {
     if (!ok) return;
     await acao(() => logisticaApi.post(`/viagens/${id}/despachar`, {}), 'Falha ao despachar.');
   }
-  async function concluir() {
-    const ok = await confirm('Concluir rota', 'Entregas ainda EM VIAGEM serão baixadas SEM prova e o veículo liberado. (O KM é registrado pelo motorista no app ao finalizar.)', { confirmLabel: 'Concluir', variant: 'warning' });
-    if (!ok) return;
-    await acao(() => logisticaApi.post(`/viagens/${id}/concluir`, {}), 'Falha ao concluir.');
-  }
+  // O botão "Concluir" saiu do desktop em 09/08 (ponto 1). Ele baixava as entregas
+  // ainda EM VIAGEM **sem prova** — o próprio texto de confirmação dizia isso — e
+  // liberava o veículo sem KM de retorno. Encerrar a rota é ato do CONDUTOR, no app:
+  // exige o hodômetro (lido no painel) e cada parada entregue ou recusada. Para a rota
+  // que ficou pendurada existe, aqui do lado, o "Forçar encerramento" do gestor — que
+  // pede o KM, deixa ele decidir o destino das entregas e grava quem forçou.
   // Encerramento FORÇADO (gestor): a rota ficou pendurada (o entregador esqueceu o
   // retorno). O gestor lê o KM no painel do veículo → odômetro fica íntegro.
   async function forcarEncerramento() {
@@ -326,12 +327,6 @@ export function ViagemDetalhePage() {
                 <Send className="h-3.5 w-3.5" /> Despachar
               </button>
             </>
-          )}
-          {v.situacao === 'EM_CURSO' && (
-            <button onClick={() => void concluir()} disabled={busy}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Concluir
-            </button>
           )}
           {v.situacao === 'EM_CURSO' && podeForcar && (
             <button onClick={() => { setKmForcar(''); setObsForcar(''); setDestinoForcar('NAO_ENTREGUE'); setForcarOpen(true); }} disabled={busy}

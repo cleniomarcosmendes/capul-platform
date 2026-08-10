@@ -1,5 +1,12 @@
 # Logística — fluxo de KM e rota simultânea na ENTREGA
 
+> ## ✅ IMPLEMENTADO em 09/08/2026
+> Os 6 itens da proposta viraram código. Verificado no ambiente:
+> **KM rodado do mês passou de 29 para 41 km** (a entrega entrou na conta) e o custo
+> por km caiu de R$ 57,95 para **R$ 40,99** — a distorção era de 41%.
+> Encerrar sem KM e encerrar com entrega sem baixa passaram a ser recusados.
+> Falta validar na tela (roteiro do Chrome).
+
 *Análise de 08/08/2026, a partir de relato dos usuários em teste: **com o login do
 ENTREGADOR o sistema deixa iniciar as entregas sem registrar o KM inicial**.*
 

@@ -222,7 +222,7 @@ export function IndicadoresPage() {
             {ind.km.viagens === 0 ? (
               <p className="px-4 py-6 text-center text-sm text-slate-400">
                 Nenhuma rota com hodômetro registrada no mês.<br />
-                <span className="text-xs">Informe o KM ao despachar e ao concluir a rota para alimentar este indicador.</span>
+                <span className="text-xs">O motorista informa o KM de saída e de retorno no app — é isso que alimenta este indicador.</span>
               </p>
             ) : (
               <>

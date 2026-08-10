@@ -916,9 +916,26 @@ export class FrotaService {
         select: { id: true, placa: true, modelo: true, kmAtual: true, kmProximaManutencao: true },
       }),
       this.prisma.despesaVeiculo.count({ where: { filialId, situacao: StatusDespesa.PENDENTE, ...despesaScope } }),
-      // Concluídas no mês (km rodado) — janela pela chegada.
+      /**
+       * Concluídas no mês (km rodado) — janela pela chegada.
+       *
+       * ⭐ Inclui ENTREGA junto com FROTA (ponto 1, 09/08). As duas movem o MESMO
+       * odômetro: ao concluir, a rota de entrega grava `veiculo.kmAtual` igual à
+       * viagem de frota. Mas este cálculo filtrava só `FROTA`, então o KM rodado
+       * ignorava o carro que roda TODO DIA fazendo entrega: o odômetro andava sem
+       * viagem que o explicasse e o custo por km saía inflado (mesmo custo dividido
+       * por menos km). `veiculoId: { not: null }` porque viagem sem veículo (ponto 3)
+       * não tem hodômetro para somar.
+       */
       this.prisma.viagem.findMany({
-        where: { filialId, tipo: TipoViagem.FROTA, situacao: StatusViagem.CONCLUIDA, dataHoraChegada: { gte: ini, lt: fimExcl }, ...viagemVeicScope },
+        where: {
+          filialId,
+          tipo: { in: [TipoViagem.FROTA, TipoViagem.ENTREGA] },
+          veiculoId: { not: null },
+          situacao: StatusViagem.CONCLUIDA,
+          dataHoraChegada: { gte: ini, lt: fimExcl },
+          ...viagemVeicScope,
+        },
         select: { kmInicial: true, kmFinal: true, veiculoId: true, veiculo: { select: { placa: true } } },
       }),
       this.prisma.despesaVeiculo.findMany({

@@ -18,16 +18,24 @@ export class CreateViagemDto {
   entregaIds?: string[];
 }
 
+/**
+ * Despacho da rota (DESKTOP). **Não pede KM** — e isso é regra, não esquecimento:
+ * KM é leitura do PAINEL do veículo, e o despacho acontece no escritório, às vezes
+ * com antecedência. Pedir hodômetro aqui só produz número inventado, e número
+ * inventado em KM contamina custo por km e manutenção preventiva. O KM de saída é
+ * apontado no APP, por quem está diante do veículo.
+ *
+ * O campo `kmInicial?` existia aqui e foi REMOVIDO em 09/08: ninguém o enviava, mas
+ * era a porta por onde um KM podia entrar sem hodômetro na frente.
+ */
 export class DespacharViagemDto {
   @IsOptional() @IsString() @MaxLength(120) localSaida?: string;
   @IsOptional() @IsString() @MaxLength(255) observacoesSaida?: string;
-  // Hodômetro na saída (opcional) — habilita os indicadores de KM rodado.
-  @IsOptional() @IsInt() @Min(0) kmInicial?: number;
 }
 
-/** Conclusão da viagem no balcão — hodômetro de chegada (opcional). */
+/** Conclusão da rota — hodômetro de chegada OBRIGATÓRIO (fecha o KM rodado). */
 export class ConcluirViagemDto {
-  @IsOptional() @IsInt() @Min(0) kmFinal?: number;
+  @IsInt() @Min(0) kmFinal!: number;
 }
 
 /**

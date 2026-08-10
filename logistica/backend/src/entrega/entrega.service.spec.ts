@@ -219,3 +219,50 @@ describe('EntregaService — data da entrega (ponto 2)', () => {
     ]);
   });
 });
+
+/**
+ * ⭐ Ponto 1 (09/08) — sem KM de SAÍDA não se dá baixa, e a regra vive no SERVIDOR.
+ *
+ * O app já travava o botão ("🔒 Registre o KM de saída"), mas client-side não é regra:
+ * qualquer outro caminho — desktop, versão antiga do app, chamada direta — passava ao
+ * largo e a rota rodava inteira sem hodômetro, sumindo do KM rodado e do custo por km.
+ */
+describe('EntregaService.baixar — exige o KM de saída da rota (ponto 1)', () => {
+  let prisma: any;
+  let svc: EntregaService;
+
+  const entrega = (kmInicial: number | null) => ({
+    id: 'e1', filialId: 'f1', status: 'EM_VIAGEM', cupons: [],
+    parada: { viagemId: 'v1', viagem: { kmInicial, numero: 7 } },
+  });
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new EntregaService(prisma, coreMock(), cofreMock(), geocodeMock(), condutorMock());
+  });
+
+  it('rota SEM KM de saída → recusa, dizendo o número da rota', async () => {
+    prisma.entrega.findUnique.mockResolvedValue(entrega(null));
+    await expect(
+      svc.baixar('e1', { resultado: 'ENTREGUE', recebedorNome: 'Fulano' } as any, {}, userF1),
+    ).rejects.toThrow(/KM de saída da rota #7/);
+    expect(prisma.entrega.update).not.toHaveBeenCalled();
+  });
+
+  it('rota COM KM de saída → deixa baixar', async () => {
+    prisma.entrega.findUnique.mockResolvedValue(entrega(1200));
+    prisma.entrega.update.mockResolvedValue({ id: 'e1', status: 'ENTREGUE', cupons: [] });
+    await expect(
+      svc.baixar('e1', { resultado: 'ENTREGUE', recebedorNome: 'Fulano' } as any, {}, userF1),
+    ).resolves.toBeDefined();
+  });
+
+  // A recusa é ato do entregador e também precisa do KM — senão bastaria recusar tudo
+  // para fugir da regra.
+  it('a RECUSA também exige o KM de saída', async () => {
+    prisma.entrega.findUnique.mockResolvedValue(entrega(null));
+    await expect(
+      svc.baixar('e1', { resultado: 'NAO_ENTREGUE', motivo: 'ausente' } as any, {}, userF1),
+    ).rejects.toThrow(/KM de saída/);
+  });
+});

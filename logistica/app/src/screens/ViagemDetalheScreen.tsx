@@ -284,15 +284,21 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
                       ⚠ Registre o KM de saída para liberar as baixas desta rota.
                     </Text>
                   )}
-                  <TouchableOpacity style={styles.kmBtnEncerrar} onPress={() => abrirAcaoKm('encerrar')}>
+                  {/* Encerrar exige TODAS as paradas resolvidas (ponto 1, 09/08). Antes o
+                      encerramento marcava as pendentes como ENTREGUE sem comprovante — a
+                      tela avisava, mas deixava. O botão agora fica desabilitado enquanto
+                      houver entrega sem baixa: o servidor recusa de qualquer forma, e
+                      deixar tocar só para receber erro é pior do que não deixar tocar. */}
+                  <TouchableOpacity
+                    style={[styles.kmBtnEncerrar, entregasPendentes.length > 0 && styles.kmBtnOff]}
+                    disabled={entregasPendentes.length > 0}
+                    onPress={() => abrirAcaoKm('encerrar')}>
                     <Text style={styles.kmBtnEncerrarTxt}>🏁 Encerrar entrega (KM)</Text>
                   </TouchableOpacity>
-                  {/* O risco na cara ANTES do toque, não só na confirmação. */}
                   {entregasPendentes.length > 0 && (
                     <Text style={styles.kmAviso}>
-                      Encerrar agora marca {entregasPendentes.length} entrega
-                      {entregasPendentes.length === 1 ? '' : 's'} pendente
-                      {entregasPendentes.length === 1 ? '' : 's'} como ENTREGUE, sem comprovante.
+                      Falta{entregasPendentes.length === 1 ? '' : 'm'} {entregasPendentes.length} entrega
+                      {entregasPendentes.length === 1 ? '' : 's'} — dê baixa ou recuse cada uma para encerrar a rota.
                     </Text>
                   )}
                 </View>
@@ -436,6 +442,7 @@ const styles = StyleSheet.create({
   kmInfo: { fontSize: 13, fontWeight: '600', color: '#475569' },
   kmBtnIniciar: { backgroundColor: CAPUL, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   kmBtnIniciarTxt: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  kmBtnOff: { opacity: 0.45 },
   kmBtnEncerrar: { borderWidth: 1, borderColor: '#1d4ed8', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   kmBtnEncerrarTxt: { color: '#1d4ed8', fontWeight: '700', fontSize: 13 },
   kmTitulo: { fontSize: 14, fontWeight: '800', color: '#0f172a' },

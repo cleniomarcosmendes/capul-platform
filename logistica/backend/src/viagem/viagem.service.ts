@@ -238,9 +238,29 @@ export class ViagemService {
     if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
       throw new BadRequestException(`Veículo não está disponível (situação: ${veiculo.situacao}).`);
     }
-    // Hodômetro da saída (opcional): não pode ser menor que o KM atual do veículo.
-    if (dto.kmInicial != null && dto.kmInicial < veiculo.kmAtual) {
-      throw new BadRequestException(`KM inicial (${dto.kmInicial}) menor que o KM atual do veículo (${veiculo.kmAtual}).`);
+    // ---- Uma rota por vez, por VEÍCULO e por MOTORISTA ----
+    // Não havia trava nenhuma: o mesmo carro (e a mesma pessoa) podia estar em duas
+    // rotas ao mesmo tempo, e o KM de uma sobrescrevia o da outra. Dizer QUAL rota
+    // está aberta importa — "veículo indisponível" manda o operador procurar sozinho.
+    const abertas = await this.prisma.viagem.findMany({
+      where: {
+        situacao: StatusViagem.EM_CURSO,
+        id: { not: id },
+        OR: [{ veiculoId }, ...(v.motoristaId ? [{ motoristaId: v.motoristaId }] : [])],
+      },
+      select: { numero: true, veiculoId: true, motoristaId: true },
+    });
+    const doVeiculo = abertas.find((a) => a.veiculoId === veiculoId);
+    if (doVeiculo) {
+      throw new BadRequestException(
+        `O veículo já está na rota #${doVeiculo.numero}, ainda em curso. Encerre-a (com o KM final) antes de despachar outra.`,
+      );
+    }
+    const doMotorista = abertas.find((a) => a.motoristaId && a.motoristaId === v.motoristaId);
+    if (doMotorista) {
+      throw new BadRequestException(
+        `O motorista já está na rota #${doMotorista.numero}, ainda em curso. Encerre-a antes de despachar outra.`,
+      );
     }
 
     const entregaIds = v.paradas.map((p) => p.entregaId).filter((x): x is string => !!x);
@@ -258,7 +278,7 @@ export class ViagemService {
           dataHoraSaida: new Date(),
           localSaida: dto.localSaida?.trim() || null,
           observacoesSaida: dto.observacoesSaida?.trim() || null,
-          kmInicial: dto.kmInicial ?? undefined,
+          // Sem KM aqui: o hodômetro é lido no veículo, pelo app. Ver DespacharViagemDto.
         },
         include: { paradas: { include: { entrega: true }, orderBy: { sequencia: 'asc' } } },
       });
@@ -299,27 +319,42 @@ export class ViagemService {
   async concluir(id: string, userFilialId?: string, userId?: string, dto?: ConcluirViagemDto) {
     const v = await this.prisma.viagem.findUnique({
       where: { id },
-      include: { paradas: { select: { entregaId: true } } },
+      // O status de cada entrega é o que decide se a rota pode encerrar.
+      include: { paradas: { select: { entregaId: true, entrega: { select: { status: true } } } } },
     });
     if (!v) throw new NotFoundException('Viagem não encontrada.');
     if (userFilialId && v.filialId !== userFilialId) throw new ForbiddenException('Viagem de outra filial.');
     if (v.situacao !== StatusViagem.EM_CURSO) {
       throw new BadRequestException(`Só conclui viagem EM_CURSO (atual: ${v.situacao}).`);
     }
-    // Hodômetro da chegada (opcional): não pode ser menor que o KM de saída.
+
+    // ---- Encerrar é: KM final + TODAS as paradas resolvidas ----
+    // Definição do Clenio: "finalizar significa informar o KM final, e entregar ou
+    // recusar as entregas". Antes o encerramento marcava as pendentes como ENTREGUE
+    // sozinho — a tela do app até avisava ("sem comprovante"), mas deixava. Isso
+    // fabricava entrega sem prova justamente nas paradas que ficaram sem baixa, e
+    // anulava o cofre da Fase 1b. Removido: agora o encerramento EXIGE que cada
+    // parada tenha sido baixada ou recusada. Para a rota pendurada existe o
+    // encerramento FORÇADO do gestor (`forcarEncerramento`), que é um juízo dele e
+    // fica auditado — não um efeito colateral de quem clicou em "encerrar".
     const kmFinal = dto?.kmFinal;
-    if (kmFinal != null && v.kmInicial != null && kmFinal < v.kmInicial) {
+    if (kmFinal == null) {
+      throw new BadRequestException('Informe o KM de retorno para encerrar a rota.');
+    }
+    if (v.kmInicial == null) {
+      throw new BadRequestException('Esta rota não tem KM de saída registrado — informe-o no app antes de encerrar.');
+    }
+    if (kmFinal < v.kmInicial) {
       throw new BadRequestException(`KM final (${kmFinal}) menor que o KM de saída (${v.kmInicial}).`);
     }
-    const entregaIds = v.paradas.map((p) => p.entregaId).filter((x): x is string => !!x);
+    const pendentes = v.paradas.filter((p) => p.entrega && p.entrega.status === StatusEntrega.EM_VIAGEM);
+    if (pendentes.length) {
+      throw new BadRequestException(
+        `${pendentes.length} entrega(s) ainda sem baixa. Registre a entrega ou a recusa de cada uma antes de encerrar a rota.`,
+      );
+    }
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.entrega.updateMany({
-        where: { id: { in: entregaIds }, status: StatusEntrega.EM_VIAGEM },
-        // Conclusão manual também carimba QUANDO e QUEM — rastreabilidade pra
-        // responder o cliente (sem isso a hora da entrega ficava vazia).
-        data: { status: StatusEntrega.ENTREGUE, dataHoraEntrega: new Date(), baixadoPorId: userId ?? null },
-      });
       if (v.veiculoId) {
         await tx.veiculo.update({
           where: { id: v.veiculoId },
