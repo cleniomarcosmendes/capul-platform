@@ -233,15 +233,12 @@ export class ViagemService {
     await this.core.assertEntregador(v.motoristaId, v.filialId);
     const veiculoId = v.veiculoId; // narrow estável p/ dentro da transaction
 
-    const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
-    if (!veiculo) throw new BadRequestException('Veículo não encontrado.');
-    if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
-      throw new BadRequestException(`Veículo não está disponível (situação: ${veiculo.situacao}).`);
-    }
     // ---- Uma rota por vez, por VEÍCULO e por MOTORISTA ----
     // Não havia trava nenhuma: o mesmo carro (e a mesma pessoa) podia estar em duas
     // rotas ao mesmo tempo, e o KM de uma sobrescrevia o da outra. Dizer QUAL rota
     // está aberta importa — "veículo indisponível" manda o operador procurar sozinho.
+    // Vem ANTES da checagem de disponibilidade: o veículo em rota está EM_USO, então
+    // aquela mensagem genérica venceria e esta nunca apareceria.
     const abertas = await this.prisma.viagem.findMany({
       where: {
         situacao: StatusViagem.EM_CURSO,
@@ -263,6 +260,11 @@ export class ViagemService {
       );
     }
 
+    const veiculo = await this.prisma.veiculo.findUnique({ where: { id: veiculoId } });
+    if (!veiculo) throw new BadRequestException('Veículo não encontrado.');
+    if (veiculo.situacao !== SituacaoVeiculo.DISPONIVEL) {
+      throw new BadRequestException(`Veículo não está disponível (situação: ${veiculo.situacao}).`);
+    }
     const entregaIds = v.paradas.map((p) => p.entregaId).filter((x): x is string => !!x);
 
     return this.prisma.$transaction(async (tx) => {
