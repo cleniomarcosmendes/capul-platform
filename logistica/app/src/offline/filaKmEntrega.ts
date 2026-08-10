@@ -7,10 +7,17 @@ import { iniciarEntrega, encerrarEntrega } from '../api/viagens';
  * iniciar/encerrar a entrega em local sem sinal; o KM (hodômetro do painel) que
  * falhar por REDE entra aqui e é reenviado quando a conexão voltar.
  *
- * ⚠️ ORDEM: 'encerrar' CONCLUI a rota (baixa as entregas restantes SEM prova e
- * libera o veículo). Por isso esta fila deve ser processada DEPOIS das filas de
- * baixa e de despesa — senão o encerrar concluiria a rota antes de uma baixa (com
- * foto) ainda pendente, perdendo a prova. Os sites de reenvio garantem essa ordem.
+ * ⚠️ ORDEM — os dois tipos vão em pontas OPOSTAS do reenvio, e é por isso que
+ * `processarFilaKmEntrega` aceita `apenas`:
+ *
+ * - **'iniciar' vai PRIMEIRO, antes das baixas.** O servidor recusa baixa em rota
+ *   sem KM de saída (`entrega.service.ts`). Mandar as baixas antes do KM fazia o
+ *   servidor devolver 400, e a fila de baixas trata 4xx como rejeição definitiva:
+ *   **descartava a baixa e apagava a foto** — perdia a prova de entrega de quem
+ *   trabalhou offline exatamente como mandamos ele trabalhar.
+ * - **'encerrar' vai POR ÚLTIMO**, depois de baixas e despesas. Ele conclui a rota
+ *   e é terminal; subindo antes, o servidor recusaria por causa das entregas ainda
+ *   sem baixa (as que estão na fila, prestes a subir).
  *
  * Idempotência: id determinístico por (viagem, tipo) — reenfileirar a mesma ação
  * não duplica; 'iniciar' reaplicado é no-op (grava o mesmo KM); 'encerrar' é
@@ -68,8 +75,17 @@ async function enviar(acao: AcaoKmEntrega): Promise<void> {
 export interface ResultadoFilaKmEntrega { enviadas: number; descartadas: Array<{ rotulo: string; motivo: string }>; restantes: number }
 let processando = false;
 
-/** Reenvia tudo (single-flight, FIFO). Chamar SEMPRE depois das filas de baixa e despesa. */
-export async function processarFilaKmEntrega(): Promise<ResultadoFilaKmEntrega> {
+/**
+ * Reenvia o KM pendente (single-flight, FIFO).
+ *
+ * `apenas` seleciona a ponta do reenvio (ver o bloco de ORDEM no topo): chame com
+ * `'iniciar'` ANTES das filas de baixa/despesa e com `'encerrar'` DEPOIS delas. O
+ * que não bate com o filtro fica intocado na fila para a outra chamada. Sem
+ * `apenas`, processa tudo — só serve quando não há baixa nem despesa em jogo.
+ */
+export async function processarFilaKmEntrega(
+  opts?: { apenas?: AcaoKmEntrega['tipo'] },
+): Promise<ResultadoFilaKmEntrega> {
   if (processando) return { enviadas: 0, descartadas: [], restantes: await contarPendentesKmEntrega() };
   processando = true;
   try {
@@ -78,6 +94,11 @@ export async function processarFilaKmEntrega(): Promise<ResultadoFilaKmEntrega> 
     const descartadas: ResultadoFilaKmEntrega['descartadas'] = [];
     let enviadas = 0;
     for (const item of itens) {
+      // Fora do filtro: não é a vez dele, volta para a fila sem contar tentativa.
+      if (opts?.apenas && item.acao.tipo !== opts.apenas) {
+        manter.push(item);
+        continue;
+      }
       try {
         await enviar(item.acao);
         enviadas++;

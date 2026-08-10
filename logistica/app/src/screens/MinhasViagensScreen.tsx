@@ -40,14 +40,30 @@ export function MinhasViagensScreen({ navigation }: Props) {
     }
   }, []);
 
-  // Tenta esvaziar as filas offline NA ORDEM CORRETA: baixas → despesas → KM.
-  // O KM (inclui o "encerrar", terminal) por ÚLTIMO — senão o encerrar concluiria
-  // a rota antes de uma baixa (com prova) ou despesa ainda pendente. Avisa o que o
-  // servidor rejeitou em definitivo.
+  // Esvazia as filas offline NA ORDEM QUE O SERVIDOR EXIGE:
+  //   KM de saída → baixas → despesas → KM de retorno (encerrar).
+  //
+  // ⚠️ O KM de saída ABRE a rota e vai PRIMEIRO. Antes as baixas subiam na frente
+  // dele: o servidor recusava cada uma ("Registre o KM de saída…"), e esta fila
+  // trata 4xx como rejeição definitiva — **descartava a baixa e apagava a foto**,
+  // perdendo a prova de entrega de quem trabalhou sem sinal. O 'encerrar' segue por
+  // último: é terminal, e antes das baixas seria recusado por elas.
   const reenviarFila = useCallback(async () => {
     if ((await contarPendentes()) === 0 && (await contarPendentesDespesaEntrega()) === 0 && (await contarPendentesKmEntrega()) === 0) return;
     setReenviando(true);
     try {
+      const rkIni = await processarFilaKmEntrega({ apenas: 'iniciar' });
+      // KM de saída recusado = no servidor a rota continua sem KM. Subir as baixas
+      // agora seria perdê-las com a foto — segura e devolve o motivo.
+      if (rkIni.descartadas.length > 0) {
+        Alert.alert(
+          'KM de saída recusado',
+          `${rkIni.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n')}\n\n` +
+            'As baixas continuam guardadas no aparelho. Abra a rota e registre o KM de saída de novo.',
+        );
+        await carregar();
+        return;
+      }
       const r = await processarFila();
       if (r.descartadas.length > 0) {
         Alert.alert(
@@ -56,7 +72,7 @@ export function MinhasViagensScreen({ navigation }: Props) {
         );
       }
       const rd = await processarFilaDespesaEntrega();
-      const rk = await processarFilaKmEntrega();
+      const rk = await processarFilaKmEntrega({ apenas: 'encerrar' });
       const descartadas = [...rd.descartadas, ...rk.descartadas];
       if (descartadas.length > 0) {
         Alert.alert(
@@ -64,7 +80,7 @@ export function MinhasViagensScreen({ navigation }: Props) {
           descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'),
         );
       }
-      if (r.enviadas > 0 || rk.enviadas > 0) await carregar();
+      if (rkIni.enviadas > 0 || r.enviadas > 0 || rk.enviadas > 0) await carregar();
     } finally {
       setReenviando(false);
     }

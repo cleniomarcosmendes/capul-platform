@@ -14,8 +14,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { obterViagem, iniciarEntrega, encerrarEntrega } from '../api/viagens';
-import { avisosEncerramento } from '../lib/avisosEncerramento';
-import { processarFila as processarFilaBaixas } from '../offline/filaBaixas';
+import { impedimentosEncerramento } from '../lib/impedimentosEncerramento';
+import {
+  contarPendentes as contarPendentesBaixas,
+  onFilaChange as onFilaBaixasChange,
+  processarFila as processarFilaBaixas,
+} from '../offline/filaBaixas';
 import { ehErroDeRede } from '../offline/filaFrota';
 import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFilaDespesaEntrega } from '../offline/filaDespesaEntrega';
 import { contarPendentesKmEntrega, onFilaKmEntregaChange, processarFilaKmEntrega, enfileirarKmEntrega } from '../offline/filaKmEntrega';
@@ -38,14 +42,25 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [acaoKm, setAcaoKm] = useState<null | 'iniciar' | 'encerrar'>(null);
   const [kmInput, setKmInput] = useState('');
   const [salvandoKm, setSalvandoKm] = useState(false);
-  // Filas offline da rota (banner + reenvio): despesa + KM de saída/retorno.
+  // Filas offline da rota (banner + reenvio): baixa + despesa + KM de saída/retorno.
+  // A baixa entra aqui porque é onde o entregador está quando trabalha sem sinal —
+  // ficar de fora do banner era ele não ter como saber que a prova não subiu.
+  const [pendBaixa, setPendBaixa] = useState(0);
   const [pendDespesa, setPendDespesa] = useState(0);
   const [pendKm, setPendKm] = useState(0);
   const [reenviandoDespesa, setReenviandoDespesa] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
-      setViagem(await obterViagem(viagemId));
+      const v = await obterViagem(viagemId);
+      setViagem(v);
+      // Rota ainda sem KM de saída: o formulário nasce ABERTO (é o primeiro ato da
+      // rota, não um botão a descobrir), então a sugestão do odômetro é semeada
+      // aqui. Só preenche campo vazio — nunca por cima do que ele digitou.
+      const odometro = v.veiculo?.kmAtual;
+      if (v.situacao === 'EM_CURSO' && v.kmInicial == null && odometro != null) {
+        setKmInput((atual) => (atual === '' ? String(odometro) : atual));
+      }
     } catch {
       setErro('Não foi possível carregar a viagem.');
     } finally {
@@ -53,24 +68,55 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     }
   }, [viagemId]);
 
-  // Esvazia as filas offline da rota NA ORDEM CORRETA: baixas → despesas → KM.
-  // O KM (que inclui o "encerrar", terminal) vai por ÚLTIMO — senão o encerrar
-  // concluiria a rota antes de uma baixa/despesa ainda pendente.
+  // Esvazia as filas offline NA ORDEM QUE O SERVIDOR EXIGE:
+  //   KM de saída → baixas → despesas → KM de retorno (encerrar).
+  //
+  // ⚠️ O KM de saída ABRE a rota e por isso vai PRIMEIRO. Antes as baixas subiam
+  // na frente dele: o servidor recusava cada uma ("Registre o KM de saída…"), e a
+  // fila de baixas trata 4xx como rejeição definitiva — **descartava a baixa e
+  // apagava a foto**. Quem trabalhou sem sinal perdia a prova de entrega, que é
+  // lastro de cobrança. O 'encerrar' segue por último: é terminal, e subindo antes
+  // seria recusado pelas baixas que ainda estão na fila.
   const reenviarPendencias = useCallback(async () => {
-    const total = (await contarPendentesDespesaEntrega()) + (await contarPendentesKmEntrega());
+    const total =
+      (await contarPendentesBaixas()) +
+      (await contarPendentesDespesaEntrega()) +
+      (await contarPendentesKmEntrega());
     if (total === 0) return;
     setReenviandoDespesa(true);
     try {
-      await processarFilaBaixas(); // baixas primeiro (prova antes do encerrar)
+      const rkIni = await processarFilaKmEntrega({ apenas: 'iniciar' });
+      // KM de saída recusado (ex.: menor que o odômetro do veículo) = no servidor a
+      // rota continua sem KM. Subir as baixas agora seria perdê-las com a foto —
+      // então segura tudo e devolve o motivo para ele corrigir o número.
+      if (rkIni.descartadas.length) {
+        Alert.alert(
+          'KM de saída recusado',
+          `${rkIni.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n')}\n\n` +
+            'As baixas continuam guardadas no aparelho. Registre o KM de saída de novo para liberar o envio.',
+        );
+        await carregar();
+        return;
+      }
+      const rb = await processarFilaBaixas();
+      if (rb.descartadas.length) {
+        Alert.alert('Baixas rejeitadas pelo servidor', rb.descartadas.map((d) => `#${d.entregaNumero}: ${d.motivo}`).join('\n'));
+      }
       const rd = await processarFilaDespesaEntrega();
-      const rk = await processarFilaKmEntrega();
+      const rk = await processarFilaKmEntrega({ apenas: 'encerrar' });
       const descartadas = [...rd.descartadas, ...rk.descartadas];
       if (descartadas.length) Alert.alert('Rejeitado pelo servidor', descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
-      if (rk.enviadas > 0) await carregar(); // o encerrar pode ter concluído a rota
+      // Recarrega se algo mudou o estado da rota no servidor: o KM de saída, as
+      // baixas ou o encerrar (que pode ter concluído a rota).
+      if (rkIni.enviadas > 0 || rb.enviadas > 0 || rk.enviadas > 0) await carregar();
     } finally { setReenviandoDespesa(false); }
   }, [carregar]);
 
   // Contadores das filas ao vivo (banner).
+  useEffect(() => {
+    void contarPendentesBaixas().then(setPendBaixa);
+    return onFilaBaixasChange(setPendBaixa);
+  }, []);
   useEffect(() => {
     void contarPendentesDespesaEntrega().then(setPendDespesa);
     return onFilaDespesaEntregaChange(setPendDespesa);
@@ -91,53 +137,47 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // Rastreamento foreground enquanto a viagem está em curso (Fase A).
   const { rastreando } = useRastreamento(viagemId, viagem?.situacao === 'EM_CURSO');
 
-  function abrirAcaoKm(acao: 'iniciar' | 'encerrar') {
-    // Sugere o KM com base no odômetro do veículo (mantido por todas as viagens);
-    // no encerrar, parte do KM de saída desta rota.
-    const base = acao === 'iniciar'
-      ? (viagem?.veiculo?.kmAtual ?? viagem?.kmInicial)
-      : (viagem?.kmInicial ?? viagem?.veiculo?.kmAtual);
+  // Só o encerramento se abre por clique: o KM de SAÍDA não tem botão, o
+  // formulário dele já nasce aberto (é o primeiro ato da rota) e a sugestão do
+  // odômetro é semeada em `carregar`.
+  function abrirEncerramento() {
+    // Parte do KM de saída desta rota; sem ele, do odômetro do veículo.
+    const base = viagem?.kmInicial ?? viagem?.veiculo?.kmAtual;
     setKmInput(base != null ? String(base) : '');
-    setAcaoKm(acao);
+    setAcaoKm('encerrar');
   }
 
   async function confirmarKm() {
     if (!viagem || kmInput === '') return;
+    // Sem KM de saída o formulário nasce aberto em 'iniciar' sem ninguém ter
+    // clicado — então a ação vem daí quando `acaoKm` ainda está vazio.
+    const acao = acaoKm ?? (viagem.kmInicial == null ? 'iniciar' : null);
+    if (!acao) return;
     const km = Number(kmInput);
     if (!Number.isFinite(km) || km < 0) { Alert.alert('KM', 'Informe um KM válido.'); return; }
-    if (acaoKm === 'encerrar' && viagem.kmInicial != null && km < viagem.kmInicial) {
+    if (acao === 'encerrar' && viagem.kmInicial != null && km < viagem.kmInicial) {
       Alert.alert('KM de retorno', `O KM de retorno (${km}) é menor que o KM de saída (${viagem.kmInicial}).`);
       return;
     }
 
-    // Encerrar é TERMINAL e o backend marca toda entrega ainda EM_VIAGEM como
-    // ENTREGUE (viagem.service.ts:318) — ou seja, fabrica entrega sem prova.
-    // Antes isso acontecia calado, e virava o atalho para fechar a rota sem
-    // baixar ninguém. Agora exige um "sim" consciente, com o número na cara.
-    if (acaoKm === 'encerrar') {
-      const avisos = avisosEncerramento({
+    // Encerrar é TERMINAL. O servidor recusa rota sem KM de saída ou com entrega
+    // sem baixa (`viagem.service.ts`, `concluir`) — o botão já fica travado por
+    // isso, e esta checagem é a rede: se algo mudou entre abrir o formulário e
+    // confirmar, ele vê o motivo em vez de um erro cru do servidor.
+    if (acao === 'encerrar') {
+      const impedimentos = impedimentosEncerramento({
         pendentes: entregasPendentes.length,
         kmInicial: viagem.kmInicial ?? null,
       });
-      if (avisos.length) {
-        const ok = await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Encerrar a rota?',
-            `${avisos.join('\n\n')}\n\nIsso não tem volta pelo app.`,
-            [
-              { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Encerrar mesmo assim', style: 'destructive', onPress: () => resolve(true) },
-            ],
-            { cancelable: true, onDismiss: () => resolve(false) },
-          );
-        });
-        if (!ok) return;
+      if (impedimentos.length) {
+        Alert.alert('Ainda não dá para encerrar', impedimentos.join('\n\n'));
+        return;
       }
     }
 
     setSalvandoKm(true);
     try {
-      if (acaoKm === 'iniciar') {
+      if (acao === 'iniciar') {
         await iniciarEntrega(viagem.id, km);
         setAcaoKm(null);
         await carregar();
@@ -147,7 +187,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       }
     } catch (e) {
       if (ehErroDeRede(e)) {
-        if (acaoKm === 'iniciar') {
+        if (acao === 'iniciar') {
           await enfileirarKmEntrega({ tipo: 'iniciar', viagemId: viagem.id, kmInicial: km });
           setViagem((v) => (v ? { ...v, kmInicial: km } : v)); // otimista: reflete o KM de saída na UI
           setAcaoKm(null);
@@ -199,7 +239,31 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const entregasPendentes = paradas
     .filter((p) => p.entrega?.status === 'EM_VIAGEM')
     .map((p) => p.entrega!);
+
+  // ⭐ A rota começa pela leitura do hodômetro (Clenio, 09/08: "KM é leitura do
+  // PAINEL"). O relato do pessoal em teste era iniciar a entrega sem apontar o KM
+  // — e era verdade: o despacho (no balcão) já deixava a viagem EM_CURSO, e no app
+  // dava para abrir a rota no Maps, navegar e lançar despesa; só a baixa travava,
+  // lá na frente, quando o hodômetro já não era mais o de saída.
+  // Agora, sem KM de saída, nada que seja RODAR a rota fica disponível: navegar,
+  // lançar despesa e dar baixa. Ligar para o cliente segue livre — é preparação,
+  // não execução da rota.
+  const semKmSaida = viagem.situacao === 'EM_CURSO' && viagem.kmInicial == null;
+  // Formulário aberto: por clique (`acaoKm`) ou porque a rota ainda não começou.
+  const formKm = acaoKm ?? (semKmSaida ? 'iniciar' : null);
+  const impedimentos = impedimentosEncerramento({
+    pendentes: entregasPendentes.length,
+    kmInicial: viagem.kmInicial ?? null,
+  });
+
+  function avisarSemKm() {
+    Alert.alert(
+      'Registre a saída primeiro',
+      'A rota começa pela leitura do hodômetro. Informe o KM de saída no topo da tela para liberar a navegação, a despesa e as baixas.',
+    );
+  }
   function abrirRotaCompleta() {
+    if (semKmSaida) { avisarSemKm(); return; }
     if (entregasPendentes.length === 0) { Alert.alert('Rota', 'Não há entregas pendentes.'); return; }
     const lista = entregasPendentes.slice(0, MAX_PARADAS_MAPS);
     if (entregasPendentes.length > MAX_PARADAS_MAPS) {
@@ -220,12 +284,13 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       keyExtractor={(p) => p.id}
       ListHeaderComponent={
         <View>
-          {(pendDespesa > 0 || pendKm > 0) && (
+          {(pendBaixa > 0 || pendDespesa > 0 || pendKm > 0) && (
             <TouchableOpacity style={styles.filaBanner} onPress={() => void reenviarPendencias()} disabled={reenviandoDespesa}>
               <Text style={styles.filaBannerTxt}>
                 {reenviandoDespesa
                   ? 'Reenviando pendências…'
                   : `📴 ${[
+                      pendBaixa > 0 ? `${pendBaixa} baixa${pendBaixa === 1 ? '' : 's'}` : null,
                       pendDespesa > 0 ? `${pendDespesa} despesa${pendDespesa === 1 ? '' : 's'}` : null,
                       pendKm > 0 ? `${pendKm} KM` : null,
                     ].filter(Boolean).join(' + ')} aguardando sinal — toque para reenviar`}
@@ -242,73 +307,65 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
             {paradas.length === 1 ? '' : 's'}
           </Text>
 
-          {entregasPendentes.length > 1 && (
-            <TouchableOpacity style={styles.rotaCompleta} onPress={abrirRotaCompleta}>
-              <Text style={styles.rotaCompletaTxt}>🗺️ Rota completa no Google Maps ({entregasPendentes.length} paradas)</Text>
-            </TouchableOpacity>
-          )}
-
+          {/* O KM vem ANTES de tudo que é rodar a rota — é o primeiro ato, não um
+              botão a descobrir depois de já ter saído com o carro. */}
           {viagem.situacao === 'EM_CURSO' && (
-            <View style={styles.kmBox}>
-              {acaoKm ? (
+            <View style={[styles.kmBox, semKmSaida && styles.kmBoxAbertura]}>
+              {formKm ? (
                 <>
-                  <Text style={styles.kmTitulo}>{acaoKm === 'iniciar' ? '🚚 KM de saída' : '🏁 KM de retorno'}</Text>
+                  <Text style={styles.kmTitulo}>{formKm === 'iniciar' ? '🚚 Comece pelo KM de saída' : '🏁 KM de retorno'}</Text>
                   <Text style={styles.kmDica}>
-                    {acaoKm === 'iniciar'
-                      ? 'Leia o hodômetro do painel ao sair.'
+                    {formKm === 'iniciar'
+                      ? 'Leia o hodômetro no painel do veículo. Sem esse número a rota não começa: navegação, despesa e baixas ficam travadas.'
                       : `Leia o hodômetro ao chegar (≥ ${viagem.kmInicial ?? 0}).`}
                   </Text>
                   <TextInput style={styles.kmInput} value={kmInput} onChangeText={setKmInput} keyboardType="numeric" placeholder="KM no painel" editable={!salvandoKm} />
                   <View style={styles.kmBtns}>
                     <TouchableOpacity style={[styles.kmConfirmar, salvandoKm && { opacity: 0.5 }]} onPress={() => void confirmarKm()} disabled={salvandoKm}>
-                      {salvandoKm ? <ActivityIndicator color="#fff" /> : <Text style={styles.kmConfirmarTxt}>{acaoKm === 'iniciar' ? 'Iniciar entrega' : 'Encerrar entrega'}</Text>}
+                      {salvandoKm ? <ActivityIndicator color="#fff" /> : <Text style={styles.kmConfirmarTxt}>{formKm === 'iniciar' ? 'Iniciar entrega' : 'Encerrar entrega'}</Text>}
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.kmCancelar} onPress={() => setAcaoKm(null)} disabled={salvandoKm}><Text style={styles.kmCancelarTxt}>Cancelar</Text></TouchableOpacity>
+                    {/* Sem KM de saída não há para onde cancelar — a rota não começou. */}
+                    {acaoKm != null && !semKmSaida && (
+                      <TouchableOpacity style={styles.kmCancelar} onPress={() => setAcaoKm(null)} disabled={salvandoKm}><Text style={styles.kmCancelarTxt}>Cancelar</Text></TouchableOpacity>
+                    )}
                   </View>
                 </>
               ) : (
                 <View style={styles.kmAcoes}>
-                  {viagem.kmInicial == null ? (
-                    <TouchableOpacity style={styles.kmBtnIniciar} onPress={() => abrirAcaoKm('iniciar')}>
-                      <Text style={styles.kmBtnIniciarTxt}>🚚 Iniciar entrega (KM)</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={styles.kmInfo}>🚚 KM de saída: {viagem.kmInicial}</Text>
-                  )}
-                  {/* Sem KM de saída a rota fecha sem KM rodado (Linha do KM e
-                      custo por km ficam furados). A baixa fica travada até
-                      registrar — é digitar o hodômetro aqui mesmo, e o valor
-                      reflete otimista, então funciona sem sinal também. */}
-                  {viagem.kmInicial == null && (
-                    <Text style={styles.kmAviso}>
-                      ⚠ Registre o KM de saída para liberar as baixas desta rota.
-                    </Text>
-                  )}
-                  {/* Encerrar exige TODAS as paradas resolvidas (ponto 1, 09/08). Antes o
-                      encerramento marcava as pendentes como ENTREGUE sem comprovante — a
-                      tela avisava, mas deixava. O botão agora fica desabilitado enquanto
-                      houver entrega sem baixa: o servidor recusa de qualquer forma, e
-                      deixar tocar só para receber erro é pior do que não deixar tocar. */}
+                  <Text style={styles.kmInfo}>🚚 KM de saída: {viagem.kmInicial}</Text>
+                  {/* Encerrar exige KM de saída E todas as paradas resolvidas (ponto 1,
+                      09/08). Antes o encerramento marcava as pendentes como ENTREGUE sem
+                      comprovante — a tela avisava, mas deixava. O servidor recusa de
+                      qualquer forma, e deixar tocar só para receber erro é pior do que
+                      não deixar tocar: o botão fica travado com o motivo embaixo. */}
                   <TouchableOpacity
-                    style={[styles.kmBtnEncerrar, entregasPendentes.length > 0 && styles.kmBtnOff]}
-                    disabled={entregasPendentes.length > 0}
-                    onPress={() => abrirAcaoKm('encerrar')}>
+                    style={[styles.kmBtnEncerrar, impedimentos.length > 0 && styles.kmBtnOff]}
+                    disabled={impedimentos.length > 0}
+                    onPress={abrirEncerramento}>
                     <Text style={styles.kmBtnEncerrarTxt}>🏁 Encerrar entrega (KM)</Text>
                   </TouchableOpacity>
-                  {entregasPendentes.length > 0 && (
-                    <Text style={styles.kmAviso}>
-                      Falta{entregasPendentes.length === 1 ? '' : 'm'} {entregasPendentes.length} entrega
-                      {entregasPendentes.length === 1 ? '' : 's'} — dê baixa ou recuse cada uma para encerrar a rota.
-                    </Text>
-                  )}
+                  {impedimentos.map((i) => (
+                    <Text key={i} style={styles.kmAviso}>{i}</Text>
+                  ))}
                 </View>
               )}
             </View>
           )}
+
+          {entregasPendentes.length > 1 && (
+            <TouchableOpacity style={[styles.rotaCompleta, semKmSaida && styles.botaoOff]} onPress={abrirRotaCompleta}>
+              <Text style={styles.rotaCompletaTxt}>🗺️ Rota completa no Google Maps ({entregasPendentes.length} paradas)</Text>
+            </TouchableOpacity>
+          )}
+
           {viagem.situacao === 'EM_CURSO' && (
             <TouchableOpacity
-              style={styles.despesaBtn}
-              onPress={() => navigation.navigate('DespesaEntrega', { viagemId: viagem.id, placa: viagem.veiculo?.placa })}
+              style={[styles.despesaBtn, semKmSaida && styles.botaoOff]}
+              onPress={() =>
+                semKmSaida
+                  ? avisarSemKm()
+                  : navigation.navigate('DespesaEntrega', { viagemId: viagem.id, placa: viagem.veiculo?.placa })
+              }
             >
               <Text style={styles.despesaBtnTxt}>💸 Lançar despesa (ex.: abastecer)</Text>
             </TouchableOpacity>
@@ -340,17 +397,11 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       renderItem={({ item }) => (
         <ParadaCard
           parada={item}
-          // Trava: sem KM de saída não há baixa. O despacho (no balcão) já deixa
-          // a entrega EM_VIAGEM, então o backend aceitaria — quem garante que a
-          // rota "começou de verdade" é esta tela.
-          bloqueadoSemKm={viagem.kmInicial == null}
-          onBloqueado={() => {
-            Alert.alert(
-              'Registre a saída primeiro',
-              'Informe o KM de saída no painel do veículo para começar as entregas desta rota.',
-              [{ text: 'Registrar agora', onPress: () => abrirAcaoKm('iniciar') }, { text: 'Agora não', style: 'cancel' }],
-            );
-          }}
+          // Trava: sem KM de saída a rota não começou — nem navegar nem baixar. O
+          // servidor recusa a baixa (`entrega.service.ts`), e navegar antes do
+          // hodômetro é justamente como o KM de saída se perdia.
+          bloqueadoSemKm={semKmSaida}
+          onBloqueado={avisarSemKm}
           onBaixar={(e) =>
             navigation.navigate('Baixa', {
               entregaId: e.id,
@@ -403,10 +454,17 @@ function ParadaCard({
       {e.observacoes ? <Text style={styles.obs}>Obs.: {e.observacoes}</Text> : null}
 
       <View style={styles.acoes}>
-        <TouchableOpacity style={[styles.btn, styles.btnWaze]} onPress={() => void abrirWaze(e)}>
+        {/* Navegar É rodar a rota — trava junto com a baixa enquanto faltar o KM
+            de saída. "Ligar" fica livre: confirmar com o cliente antes de sair é
+            preparação, não execução. */}
+        <TouchableOpacity
+          style={[styles.btn, styles.btnWaze, bloqueadoSemKm && styles.botaoOff]}
+          onPress={() => (bloqueadoSemKm ? onBloqueado?.() : void abrirWaze(e))}>
           <Text style={styles.btnTxt}>Waze</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.btn, styles.btnMaps]} onPress={() => void abrirGoogleMaps(e)}>
+        <TouchableOpacity
+          style={[styles.btn, styles.btnMaps, bloqueadoSemKm && styles.botaoOff]}
+          onPress={() => (bloqueadoSemKm ? onBloqueado?.() : void abrirGoogleMaps(e))}>
           <Text style={styles.btnTxt}>Maps</Text>
         </TouchableOpacity>
         {e.telefone ? (
@@ -438,6 +496,11 @@ const styles = StyleSheet.create({
   rotaCompleta: { backgroundColor: '#1d4ed8', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, alignItems: 'center', marginBottom: 10 },
   rotaCompletaTxt: { color: '#fff', fontWeight: '700', fontSize: 13 },
   kmBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 12, marginBottom: 10, gap: 8 },
+  // Rota que ainda não começou: o box é o assunto da tela, não mais um cartão.
+  kmBoxAbertura: { borderColor: CAPUL, borderWidth: 2, backgroundColor: '#f0fdf4' },
+  // Travado por falta de KM de saída: apagado, mas AINDA tocável — o toque explica
+  // o porquê. Botão morto deixaria o entregador sem saber o que fazer.
+  botaoOff: { opacity: 0.45 },
   kmAcoes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   kmInfo: { fontSize: 13, fontWeight: '600', color: '#475569' },
   kmBtnIniciar: { backgroundColor: CAPUL, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
