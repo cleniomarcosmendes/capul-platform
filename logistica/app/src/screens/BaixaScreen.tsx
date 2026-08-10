@@ -57,7 +57,14 @@ export function BaixaScreen({ route, navigation }: Props) {
   // teclado. Esta tela usava `scrollToEnd`, que rola para o FIM DO CONTEÚDO —
   // com a foto e a assinatura na tela o conteúdo é alto, e "quem recebeu" saía
   // de vista; só reaparecia ao digitar, quando o RN reposiciona no cursor.
-  const { scrollRef, aoFocar } = useScrollToFocusedInput();
+  //
+  // Folga MAIOR que o padrão (110) porque esta é a única tela com RODAPÉ FIXO: o
+  // "Confirmar entrega" fica fora do ScrollView, entre o campo e o teclado, e
+  // come ~90px (12 de topo + 16+16 do botão + texto + a barra do Android). O hook
+  // mede a partir do teclado e não enxerga esse rodapé, então com 110 o campo
+  // pousava colado nele — sem respiro, e qualquer coisa que apareça ali (o aviso
+  // "Cannot connect to Expo CLI" do Expo Go, visto em campo) cobre os dois.
+  const { scrollRef, aoFocar } = useScrollToFocusedInput(210);
   const [kbHeight, setKbHeight] = useState(0); // altura do teclado → vira padding do rodapé do scroll
   const { entregaId, entregaNumero, destinatario } = route.params;
   const [resultado, setResultado] = useState<'ENTREGUE' | 'NAO_ENTREGUE'>('ENTREGUE');
