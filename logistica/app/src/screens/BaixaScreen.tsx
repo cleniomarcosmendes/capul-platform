@@ -23,15 +23,22 @@ import { baixarEntrega, type BaixaPayload } from '../api/baixa';
 import { enfileirar } from '../offline/filaBaixas';
 import { SignaturePad } from '../components/SignaturePad';
 import { uuid } from '../lib/uuid';
+import { temPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
+import { useScrollToFocusedInput } from '../lib/useScrollToFocusedInput';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Baixa'>;
 
-/** GPS por evento, best-effort: 6s de prazo; sem sinal/permissão → segue sem geo. */
+/**
+ * GPS por evento, best-effort: 6s de prazo; sem sinal/permissão → segue sem geo.
+ *
+ * Aqui a permissão é só CONSULTADA. Pedir a cada baixa era o que incomodava em
+ * campo: o diálogo do sistema aparecia em toda entrega, com o cliente na porta.
+ * Quem pede é a tela da rota, uma vez, ao registrar o KM de saída.
+ */
 async function capturarGeo(): Promise<{ geoLat?: number; geoLng?: number }> {
   try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return {};
+    if (!(await temPermissaoLocalizacao())) return {};
     const pos = await Promise.race([
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000)),
@@ -45,7 +52,12 @@ async function capturarGeo(): Promise<{ geoLat?: number; geoLng?: number }> {
 
 export function BaixaScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets(); // espaço da barra de navegação (Android) p/ o botão não sumir
-  const scrollRef = useRef<ScrollView>(null); // rolar o campo à vista quando o teclado abrir
+  // Padrão da casa para o teclado não cobrir campo (mesmo de DespesaEntrega,
+  // SupervisorViagem e ViagemFrota): `aoFocar` leva O CAMPO EM FOCO para cima do
+  // teclado. Esta tela usava `scrollToEnd`, que rola para o FIM DO CONTEÚDO —
+  // com a foto e a assinatura na tela o conteúdo é alto, e "quem recebeu" saía
+  // de vista; só reaparecia ao digitar, quando o RN reposiciona no cursor.
+  const { scrollRef, aoFocar } = useScrollToFocusedInput();
   const [kbHeight, setKbHeight] = useState(0); // altura do teclado → vira padding do rodapé do scroll
   const { entregaId, entregaNumero, destinatario } = route.params;
   const [resultado, setResultado] = useState<'ENTREGUE' | 'NAO_ENTREGUE'>('ENTREGUE');
@@ -64,9 +76,10 @@ export function BaixaScreen({ route, navigation }: Props) {
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    // Só a altura: quem leva o campo à vista é o `aoFocar`. O `scrollToEnd` que
+    // havia aqui competia com ele e jogava a tela para o fim do conteúdo.
     const sub1 = Keyboard.addListener(showEvt, (e) => {
       setKbHeight(e.endCoordinates?.height ?? 0);
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     });
     const sub2 = Keyboard.addListener(hideEvt, () => setKbHeight(0));
     return () => { sub1.remove(); sub2.remove(); };
@@ -221,7 +234,7 @@ export function BaixaScreen({ route, navigation }: Props) {
             maxLength={120}
             editable={!enviando}
             returnKeyType="done"
-            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200)}
+            onFocus={aoFocar}
           />
         </>
       ) : (
@@ -235,6 +248,7 @@ export function BaixaScreen({ route, navigation }: Props) {
             maxLength={255}
             multiline
             editable={!enviando}
+            onFocus={aoFocar}
           />
         </>
       )}

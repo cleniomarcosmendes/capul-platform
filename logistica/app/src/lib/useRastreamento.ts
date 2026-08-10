@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import { enviarPosicao } from '../api/rastreamento';
 import { iniciarBackground, pararBackground } from '../tracking/backgroundLocation';
+import { garantirPermissaoLocalizacao } from './permissaoLocalizacao';
 
 /**
  * Rastreamento em tempo real (Fase A — FOREGROUND).
@@ -42,8 +43,9 @@ export function useRastreamento(viagemId: string, ativo: boolean): { rastreando:
         /* sem suporte a background: segue pro foreground */
       }
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted' || cancelado) return;
+        // Fonte única da permissão. O pedido normal acontece no KM de saída; se
+        // por algum caminho ainda não tiver sido decidido, aqui pergunta uma vez.
+        if (!(await garantirPermissaoLocalizacao()) || cancelado) return;
         subRef.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Balanced, timeInterval: 25_000, distanceInterval: 150 },
           (pos) => {

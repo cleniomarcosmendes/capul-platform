@@ -25,6 +25,7 @@ import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFil
 import { contarPendentesKmEntrega, onFilaKmEntregaChange, processarFilaKmEntrega, enfileirarKmEntrega } from '../offline/filaKmEntrega';
 import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, MAX_PARADAS_MAPS } from '../lib/navegar';
 import { useRastreamento } from '../lib/useRastreamento';
+import { garantirPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
 import type { Parada, Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -134,8 +135,26 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     }, [carregar, reenviarPendencias]),
   );
 
-  // Rastreamento foreground enquanto a viagem está em curso (Fase A).
-  const { rastreando } = useRastreamento(viagemId, viagem?.situacao === 'EM_CURSO');
+  // Rastreamento foreground enquanto a rota está RODANDO (Fase A). Antes bastava
+  // estar EM_CURSO — mas o despacho põe a viagem nesse estado ainda no balcão, e
+  // com isso o app pedia a localização assim que a rota era aberta, antes de o
+  // entregador sequer ter saído. A rota começa no KM de saída; o rastreio também.
+  const { rastreando } = useRastreamento(
+    viagemId,
+    viagem?.situacao === 'EM_CURSO' && viagem?.kmInicial != null,
+  );
+
+  // A rota começou: é AQUI que se pede a localização — uma vez, com o entregador
+  // parado no veículo lendo o hodômetro. Antes cada baixa pedia por conta própria
+  // e o diálogo do sistema aparecia em toda entrega, com o cliente na porta
+  // (relatado em campo, 10/08). Da baixa em diante só se CONSULTA a permissão.
+  async function pedirLocalizacaoDaRota() {
+    if (await garantirPermissaoLocalizacao()) return;
+    Alert.alert(
+      'Localização desligada',
+      'As entregas desta rota serão registradas sem a localização. Para ligar, autorize o acesso à localização nas configurações do aparelho.',
+    );
+  }
 
   // Só o encerramento se abre por clique: o KM de SAÍDA não tem botão, o
   // formulário dele já nasce aberto (é o primeiro ato da rota) e a sugestão do
@@ -181,6 +200,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
         await iniciarEntrega(viagem.id, km);
         setAcaoKm(null);
         await carregar();
+        await pedirLocalizacaoDaRota();
       } else {
         await encerrarEntrega(viagem.id, km);
         Alert.alert('Entrega encerrada', 'Rota concluída e veículo liberado.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
@@ -204,6 +224,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
           } else {
             Alert.alert('Salvo offline', 'Sem sinal — o KM de saída vai sincronizar quando a conexão voltar.');
           }
+          // A rota começou para ele mesmo sem sinal — a permissão é local e não
+          // depende do servidor, então pede aqui também.
+          await pedirLocalizacaoDaRota();
         } else {
           await enfileirarKmEntrega({ tipo: 'encerrar', viagemId: viagem.id, kmFinal: km });
           Alert.alert('Salvo offline', 'Sem sinal — a entrega vai ENCERRAR quando a conexão voltar.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
