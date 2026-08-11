@@ -17,7 +17,9 @@ export interface Coordenada {
   // Até onde a geocodificação chegou. LOGRADOURO/CEP = ponto preciso; BAIRRO/CIDADE
   // = fallback aproximado (âncora na área certa quando a rua não existe no OSM);
   // MANUAL = alguém arrastou o pin no mapa — vale mais que qualquer provedor.
-  precisao: 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL';
+  // CAMPO = aprendido do GPS das entregas realmente feitas ali (ver
+  // LocalAprendidoService): melhor que qualquer provedor, e perde só para MANUAL.
+  precisao: 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL' | 'CAMPO';
 }
 
 /**
@@ -42,6 +44,11 @@ export class GeocodeService {
   private nominatimChain: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly prisma: PrismaService) {}
+
+  /** Mesma chave usada no cache — exposta para o aprendizado de campo. */
+  chavePublica(e: EnderecoGeo): { chave: string; texto: string } {
+    return this.chaveDe(e);
+  }
 
   private chaveDe(e: EnderecoGeo): { chave: string; texto: string } {
     const norm = (v?: string | null) => (v ?? '').trim().toUpperCase().replace(/\s+/g, ' ');

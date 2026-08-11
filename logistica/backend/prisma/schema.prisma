@@ -577,9 +577,25 @@ model Entrega {
   // Quem recebeu a mercadoria (informado na baixa) — resposta rápida ao
   // cliente sem precisar abrir a trilha do cofre.
   recebedorNome     String?            @map("recebedor_nome")
-  // GPS POR EVENTO capturado na baixa (pontual — LGPD; não é rastreio contínuo).
+  // ⚠️ DUAS coordenadas, com significados OPOSTOS — não confundir:
+  //
+  // geoLat/geoLng = PIN DE PLANEJAMENTO: onde achamos que o endereço fica,
+  // derivado do texto pelo geocoder (ou corrigido à mão no mapa). É o que
+  // roteiriza e desenha o pin.
+  //
+  // baixaGeoLat/baixaGeoLng = ONDE A ENTREGA ACONTECEU: GPS por evento
+  // capturado no aparelho na hora da baixa (pontual — LGPD; não é rastreio
+  // contínuo).
+  //
+  // Até 11/08/2026 as duas dividiam as MESMAS colunas: a baixa sobrescrevia o
+  // pin com o GPS, e gravava NULL quando o GPS não vinha — apagando o
+  // planejamento. Separadas, viram o material do aprendizado de campo: comparar
+  // "onde achamos" com "onde de fato entregamos" é o que deixa o endereço ficar
+  // preciso com o tempo (ver GeocodeCache.aprendido*).
   geoLat            Decimal?           @map("geo_lat") @db.Decimal(10, 7)
   geoLng            Decimal?           @map("geo_lng") @db.Decimal(10, 7)
+  baixaGeoLat       Decimal?           @map("baixa_geo_lat") @db.Decimal(10, 7)
+  baixaGeoLng       Decimal?           @map("baixa_geo_lng") @db.Decimal(10, 7)
   cupons            EntregaCupom[]
   parada            Parada?
 
@@ -820,14 +836,27 @@ model GeocodeCache {
   endereco String // texto enviado ao provedor (debug/auditoria)
   lat      Decimal? @db.Decimal(10, 7)
   lng      Decimal? @db.Decimal(10, 7)
-  fonte    String? // BRASILAPI_CEP | NOMINATIM | MANUAL
-  precisao String? // CEP | LOGRADOURO | BAIRRO | CIDADE | MANUAL
+  fonte    String? // BRASILAPI_CEP | NOMINATIM | MANUAL | CAMPO
+  precisao String? // CEP | LOGRADOURO | BAIRRO | CIDADE | MANUAL | CAMPO
   criadoEm DateTime @default(now()) @map("criado_em")
   // Correção manual (operador arrastou o pin no mapa da montagem de rota).
   // fonte=MANUAL nunca é sobrescrita pelo provedor — vale para TODA entrega
   // futura naquele endereço, então precisa de dono e data.
   corrigidoPorId String?   @map("corrigido_por_id")
   corrigidoEm    DateTime? @map("corrigido_em")
+  // APRENDIDO EM CAMPO (fonte=CAMPO): coordenada consolidada a partir do GPS das
+  // entregas realmente feitas neste endereço. O geocoder acerta a rua, mas erra o
+  // ponto — quem esteve na porta sabe melhor. Promovido só com evidência
+  // concordante (ver LocalAprendidoService); `amostras` é quantas baixas
+  // sustentaram a decisão, e serve para explicar na tela por que o pin mudou.
+  // MANUAL vence CAMPO: decisão explícita do operador não é revogada por
+  // estatística.
+  aprendidoEm       DateTime? @map("aprendido_em")
+  aprendidoAmostras Int?      @map("aprendido_amostras")
+  // Distância (metros) entre o ponto aprendido e o que o provedor havia dado.
+  // Acima do limite de divergência a parada sai SINALIZADA na montagem — o
+  // endereço cadastrado pode estar errado, e isso é informação para o operador.
+  aprendidoDesvioM  Int?      @map("aprendido_desvio_m")
 
   @@map("geocode_cache")
   @@schema("logistica")

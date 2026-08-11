@@ -7,6 +7,9 @@ const coreMock = () => ({ validarFilial: jest.fn().mockResolvedValue(undefined),
 const cofreMock = () => ({ gravar: jest.fn().mockResolvedValue({ comprovanteId: 'cmp1', objectKey: 'k', hash: 'h' }) }) as any;
 const geocodeMock = () => ({ geocodificar: jest.fn().mockResolvedValue(null), statusCacheLote: jest.fn().mockResolvedValue([]) }) as any;
 const condutorMock = () => ({ validar: jest.fn().mockResolvedValue({ status: 'VALIDO', matricula: 'E00001', nome: 'Op' }) }) as any;
+// Aprendizado de campo roda em background depois da baixa — aqui só não pode
+// estourar. O comportamento dele tem suíte própria (local-aprendido.service.spec).
+const localAprendidoMock = () => ({ reavaliar: jest.fn().mockResolvedValue({ promovido: false, amostras: 0, desvioM: null }) }) as any;
 // Operador da filial f1 (não vê outras filiais) — exercita o escopo por filial.
 const userF1 = { sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'OPERADOR_ENTREGA' }] } as any;
 
@@ -20,7 +23,7 @@ describe('EntregaService', () => {
     prisma = createPrismaMock();
     core = coreMock();
     cofre = cofreMock();
-    svc = new EntregaService(prisma, core, cofre, geocodeMock(), condutorMock());
+    svc = new EntregaService(prisma, core, cofre, geocodeMock(), condutorMock(), localAprendidoMock());
   });
 
   describe('create', () => {
@@ -185,7 +188,7 @@ describe('EntregaService — data da entrega (ponto 2)', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new EntregaService(prisma, coreMock(), cofreMock(), geocodeMock(), condutorMock());
+    svc = new EntregaService(prisma, coreMock(), cofreMock(), geocodeMock(), condutorMock(), localAprendidoMock());
     prisma.contadorSequencial.upsert.mockResolvedValue({ ultimoNumero: 1 });
     prisma.entrega.create.mockResolvedValue({ id: 'e1', numero: 1, cupons: [] });
   });
@@ -238,7 +241,7 @@ describe('EntregaService.baixar — exige o KM de saída da rota (ponto 1)', () 
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new EntregaService(prisma, coreMock(), cofreMock(), geocodeMock(), condutorMock());
+    svc = new EntregaService(prisma, coreMock(), cofreMock(), geocodeMock(), condutorMock(), localAprendidoMock());
   });
 
   it('rota SEM KM de saída → recusa, dizendo o número da rota', async () => {

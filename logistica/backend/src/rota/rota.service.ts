@@ -5,7 +5,9 @@ import { GeocodeService } from './geocode.service.js';
 import { OsrmService } from './osrm.service.js';
 
 /** Até onde a geocodificação chegou naquele ponto (vem do GeocodeService). */
-type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL';
+// CAMPO = ponto aprendido do GPS das entregas feitas ali (LocalAprendidoService).
+// Não é aproximado: é o mais confiável que temos depois do pin arrastado à mão.
+type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL' | 'CAMPO';
 
 /** BAIRRO/CIDADE = âncora aproximada: o ponto usado na conta pode estar a
  *  centenas de metros (ou mais de 1 km, no centroide do município) do endereço

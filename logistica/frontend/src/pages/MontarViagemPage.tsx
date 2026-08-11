@@ -26,7 +26,7 @@ interface Entrega {
 // BAIRRO/CIDADE = âncora aproximada (o centroide do município chega a ficar mais
 // de 1 km do endereço real) — é a causa de uma parada vizinha da filial ser
 // tratada como distante e cair no fim da rota sugerida.
-type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL';
+type Precisao = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL' | 'CAMPO';
 type OrigemRota = 'FILIAL' | 'PRIMEIRA_ENTREGA' | null;
 
 const PRECISAO_INFO: Record<Precisao, { label: string; aproximada: boolean }> = {
@@ -35,6 +35,8 @@ const PRECISAO_INFO: Record<Precisao, { label: string; aproximada: boolean }> = 
   BAIRRO: { label: 'só o bairro', aproximada: true },
   CIDADE: { label: 'centro da cidade', aproximada: true },
   MANUAL: { label: 'corrigida à mão', aproximada: false },
+  // Aprendida do GPS das entregas já feitas ali — não é aproximada.
+  CAMPO: { label: 'aprendida em campo', aproximada: false },
 };
 
 const labelCore = (i: CoreItem) => i.nomeFantasia || i.nome || i.codigo || i.id.slice(0, 8);

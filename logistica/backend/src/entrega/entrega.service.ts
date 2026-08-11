@@ -20,6 +20,7 @@ const diaDaEntrega = (s?: string): Date => {
   return s.includes('T') ? new Date(s) : new Date(`${s}T12:00:00-03:00`);
 };
 import { GeocodeService } from '../rota/geocode.service.js';
+import { LocalAprendidoService } from '../rota/local-aprendido.service.js';
 import { ProtheusCondutorService } from '../protheus/protheus-condutor.service.js';
 import { assertPodeVerRegistro } from '../common/filial-scope.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
@@ -46,6 +47,7 @@ export class EntregaService {
     private readonly cofre: CofreService,
     private readonly geocode: GeocodeService,
     private readonly condutor: ProtheusCondutorService,
+    private readonly localAprendido: LocalAprendidoService,
   ) {}
 
   /**
@@ -742,8 +744,13 @@ export class EntregaService {
           recebedorNome: entregue ? dto.recebedorNome?.trim() || null : null,
           motivoNaoEntrega: entregue ? null : dto.motivo!.trim(),
           baixadoPorId: user.sub,
-          geoLat: dto.geoLat != null ? new Prisma.Decimal(dto.geoLat) : null,
-          geoLng: dto.geoLng != null ? new Prisma.Decimal(dto.geoLng) : null,
+          // ⚠️ GPS da baixa vai para as colunas DELE. Antes ia para geoLat/geoLng
+          // — o pin de planejamento —, sobrescrevendo-o e, pior, zerando-o quando
+          // não havia GPS: a entrega perdia a localização que o sistema já tinha.
+          // Agora as duas convivem, e é a comparação entre elas que alimenta o
+          // aprendizado de campo.
+          baixaGeoLat: dto.geoLat != null ? new Prisma.Decimal(dto.geoLat) : null,
+          baixaGeoLng: dto.geoLng != null ? new Prisma.Decimal(dto.geoLng) : null,
           temComprovante,
           comprovanteId,
         },
@@ -755,6 +762,23 @@ export class EntregaService {
       // chegada no painel do veículo. Ver ViagemService.concluir / .iniciar.
       return upd;
     });
+
+    // Aprendizado de campo: a baixa que acabou de acontecer é uma amostra nova
+    // de ONDE este endereço realmente fica. Reavalia em BACKGROUND — não é para
+    // segurar o entregador na porta do cliente, e falhar aqui não pode derrubar
+    // uma baixa que já está gravada.
+    if (dto.geoLat != null && dto.geoLng != null) {
+      void this.localAprendido
+        .reavaliar({
+          logradouro: e.endLogradouro,
+          numero: e.endNumero,
+          bairro: e.endBairro,
+          cidade: e.endCidade,
+          uf: e.endUf,
+          cep: e.endCep,
+        })
+        .catch(() => undefined);
+    }
 
     return this.comTotal(atualizada);
   }

@@ -12,7 +12,9 @@ import 'leaflet/dist/leaflet.css';
 // justamente esse caso que faz uma entrega vizinha da empresa cair no fim da
 // rota — ver rota.service.ts.
 
-export type PrecisaoMapa = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL';
+// CAMPO = ponto aprendido do GPS das entregas realmente feitas ali. Não é
+// aproximado — é o mais confiável depois do pin arrastado à mão.
+export type PrecisaoMapa = 'CEP' | 'LOGRADOURO' | 'BAIRRO' | 'CIDADE' | 'MANUAL' | 'CAMPO';
 
 export interface ParadaMapa {
   id: string;
@@ -38,12 +40,14 @@ const ehAproximada = (p?: PrecisaoMapa) => p != null && APROXIMADA.includes(p);
 const COR_OK = '#0284c7';
 const COR_APROX = '#d97706';
 const COR_MANUAL = '#059669';
+const COR_CAMPO = '#7c3aed'; // roxo: aprendido em campo, distinto do corrigido à mão
 const CENTRO_DEFAULT: [number, number] = [-16.3578, -46.9036]; // Unaí/MG
 
 function iconeParada(n: number, precisao?: PrecisaoMapa): L.DivIcon {
   const aprox = ehAproximada(precisao);
   const manual = precisao === 'MANUAL';
-  const cor = manual ? COR_MANUAL : aprox ? COR_APROX : COR_OK;
+  const campo = precisao === 'CAMPO';
+  const cor = manual ? COR_MANUAL : campo ? COR_CAMPO : aprox ? COR_APROX : COR_OK;
   const borda = aprox ? `2px dashed ${cor}` : '2px solid #fff';
   const fundo = aprox ? '#fffbeb' : cor;
   const texto = aprox ? cor : '#fff';
@@ -121,6 +125,8 @@ export function MapaRota({ paradas, origem, semPosicao = 0, onSelecionar, onCorr
       const estado =
         p.precisao === 'MANUAL'
           ? `<br><span style="color:${COR_MANUAL}">Posição corrigida à mão</span>`
+          : p.precisao === 'CAMPO'
+            ? `<br><span style="color:${COR_CAMPO}">Posição aprendida em campo<br>vem do GPS das entregas já feitas aqui</span>`
           : aprox
             ? `<br><span style="color:${COR_APROX}">Posição aproximada (${p.precisao === 'CIDADE' ? 'centro da cidade' : 'só o bairro'})<br>o endereço exato não foi encontrado</span>`
             : '<br><span style="color:#64748b">localizada na porta</span>';
