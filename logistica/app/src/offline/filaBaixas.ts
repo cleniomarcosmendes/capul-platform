@@ -63,6 +63,22 @@ export async function contarPendentes(): Promise<number> {
   return (await ler()).length;
 }
 
+/**
+ * Quais entregas já foram baixadas NO APARELHO e só esperam sinal — por id da
+ * entrega → resultado.
+ *
+ * Sem isto a tela da rota não tinha como saber: o status da entrega vem do
+ * servidor, que offline não recebeu nada, então a parada continuava em
+ * "Pendentes" com o botão "Dar baixa" como se nada tivesse acontecido (relatado
+ * pelo Clenio em 11/08, testando em modo avião). Além de confundir, convidava a
+ * baixar a mesma entrega duas vezes.
+ */
+export async function baixasNaFilaPorEntrega(): Promise<Record<string, BaixaPayload['resultado']>> {
+  const mapa: Record<string, BaixaPayload['resultado']> = {};
+  for (const item of await ler()) mapa[item.entregaId] = item.payload.resultado;
+  return mapa;
+}
+
 async function apagarFoto(uri: string | null) {
   if (!uri) return;
   await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);

@@ -16,6 +16,7 @@ import type { RootStackParamList } from '../navigation';
 import { obterViagem, iniciarEntrega, encerrarEntrega } from '../api/viagens';
 import { impedimentosEncerramento } from '../lib/impedimentosEncerramento';
 import {
+  baixasNaFilaPorEntrega,
   contarPendentes as contarPendentesBaixas,
   onFilaChange as onFilaBaixasChange,
   processarFila as processarFilaBaixas,
@@ -47,6 +48,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // A baixa entra aqui porque é onde o entregador está quando trabalha sem sinal —
   // ficar de fora do banner era ele não ter como saber que a prova não subiu.
   const [pendBaixa, setPendBaixa] = useState(0);
+  // Entregas já baixadas NO APARELHO, esperando sinal (id → resultado). O status
+  // que vem do servidor não sabe delas: offline ele não recebeu nada.
+  const [baixasNaFila, setBaixasNaFila] = useState<Record<string, 'ENTREGUE' | 'NAO_ENTREGUE'>>({});
   const [pendDespesa, setPendDespesa] = useState(0);
   const [pendKm, setPendKm] = useState(0);
   const [reenviandoDespesa, setReenviandoDespesa] = useState(false);
@@ -141,8 +145,14 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
 
   // Contadores das filas ao vivo (banner).
   useEffect(() => {
-    void contarPendentesBaixas().then(setPendBaixa);
-    return onFilaBaixasChange(setPendBaixa);
+    // O contador e o mapa andam juntos: a fila mudou, a tela muda com ela — sem
+    // depender de um novo carregamento do servidor (que offline não vem).
+    const sincronizar = (qtd: number) => {
+      setPendBaixa(qtd);
+      void baixasNaFilaPorEntrega().then(setBaixasNaFila);
+    };
+    void contarPendentesBaixas().then(sincronizar);
+    return onFilaBaixasChange(sincronizar);
   }, []);
   useEffect(() => {
     void contarPendentesDespesaEntrega().then(setPendDespesa);
@@ -312,23 +322,43 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   }
 
   const paradas = [...(viagem.paradas ?? [])].sort((a, b) => a.sequencia - b.sequencia);
-  const nPendentes = paradas.filter((p) => p.entrega?.status === 'EM_VIAGEM').length;
-  const nEntregues = paradas.filter((p) => p.entrega?.status === 'ENTREGUE').length;
+
+  /**
+   * Uma parada está RESOLVIDA quando o servidor já a deu por terminal **ou**
+   * quando a baixa está no aparelho esperando sinal. Sem a segunda metade, em
+   * modo avião a entrega baixada continuava em "Pendentes" com o botão "Dar
+   * baixa" — como se nada tivesse acontecido (relato do Clenio, 11/08).
+   *
+   * Tratar a fila como resolvida é o que também deixa ele **encerrar a rota
+   * offline**: a fila sobe as baixas antes do encerrar, então a ordem no
+   * servidor sai correta.
+   */
+  const resolvida = (p: Parada) =>
+    p.entrega != null &&
+    (p.entrega.status === 'ENTREGUE' ||
+      p.entrega.status === 'NAO_ENTREGUE' ||
+      baixasNaFila[p.entrega.id] != null);
+
+  const nPendentes = paradas.filter((p) => p.entrega?.status === 'EM_VIAGEM' && !resolvida(p)).length;
+  // Conta a não-entrega junto: antes ela não caía em NENHUM filtro (só em
+  // "Todas"), então uma recusa sumia da tela.
+  const nConcluidas = paradas.filter((p) => resolvida(p)).length;
   const paradasFiltradas = paradas.filter((p) => {
     if (filtro === 'TODAS') return true;
-    if (filtro === 'ENTREGUES') return p.entrega?.status === 'ENTREGUE';
-    return p.entrega?.status === 'EM_VIAGEM'; // PENDENTES
+    if (filtro === 'ENTREGUES') return resolvida(p);
+    return p.entrega?.status === 'EM_VIAGEM' && !resolvida(p); // PENDENTES
   });
 
   const chips: { id: Filtro; rotulo: string }[] = [
     { id: 'PENDENTES', rotulo: `Pendentes (${nPendentes})` },
-    { id: 'ENTREGUES', rotulo: `Entregues (${nEntregues})` },
+    { id: 'ENTREGUES', rotulo: `Concluídas (${nConcluidas})` },
     { id: 'TODAS', rotulo: `Todas (${paradas.length})` },
   ];
 
-  // Rota completa no Google Maps com as paradas PENDENTES, na ordem da rota.
+  // Rota completa no Google Maps, e o que impede encerrar: só o que ainda falta
+  // DE VERDADE — o que está na fila já foi feito, só não subiu.
   const entregasPendentes = paradas
-    .filter((p) => p.entrega?.status === 'EM_VIAGEM')
+    .filter((p) => p.entrega?.status === 'EM_VIAGEM' && !resolvida(p))
     .map((p) => p.entrega!);
 
   // ⭐ A rota começa pela leitura do hodômetro (Clenio, 09/08: "KM é leitura do
@@ -538,6 +568,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
           bloqueadoSemKm={semKmSaida}
           onBloqueado={avisarSemKm}
           preparando={preparandoBaixa}
+          naFila={item.entrega ? baixasNaFila[item.entrega.id] : undefined}
           onBaixar={(e) => void irParaBaixa(e)}
         />
       )}
@@ -551,6 +582,7 @@ function ParadaCard({
   bloqueadoSemKm = false,
   onBloqueado,
   preparando = false,
+  naFila,
 }: {
   parada: Parada;
   onBaixar: (e: NonNullable<Parada['entrega']>) => void;
@@ -558,6 +590,8 @@ function ParadaCard({
   onBloqueado?: () => void;
   /** Subindo o KM de saída antes de abrir a baixa — o botão precisa dizer isso. */
   preparando?: boolean;
+  /** Baixa feita no aparelho, esperando sinal (o servidor ainda não sabe). */
+  naFila?: 'ENTREGUE' | 'NAO_ENTREGUE';
 }) {
   const e = parada.entrega;
   if (!e) {
@@ -575,7 +609,11 @@ function ParadaCard({
         <Text style={styles.seq}>
           {parada.sequencia}. {e.destinatarioNome}
         </Text>
-        <Text style={[styles.status, entregue && styles.statusOk]}>{e.status}</Text>
+        {/* A fila manda no rótulo: o status do servidor ainda diz EM_VIAGEM,
+            porque offline ele não recebeu a baixa. Quem trabalhou é quem vale. */}
+        <Text style={[styles.status, (entregue || naFila === 'ENTREGUE') && styles.statusOk, naFila && styles.statusFila]}>
+          {naFila ? '📴 AGUARDANDO SINAL' : e.status}
+        </Text>
       </View>
       <Text style={styles.endereco}>{enderecoTexto(e)}</Text>
       {e.endComplemento ? <Text style={styles.linha}>Compl.: {e.endComplemento}</Text> : null}
@@ -607,7 +645,14 @@ function ParadaCard({
         ) : null}
       </View>
 
-      {e.status === 'EM_VIAGEM' ? (
+      {naFila ? (
+        // Sem botão de baixa: já foi baixada aqui. Oferecer de novo convidaria a
+        // duplicar a mesma entrega na fila.
+        <Text style={styles.naFilaAviso}>
+          {naFila === 'ENTREGUE' ? 'Entrega registrada' : 'Não-entrega registrada'} neste aparelho —
+          sobe sozinha quando a conexão voltar.
+        </Text>
+      ) : e.status === 'EM_VIAGEM' ? (
         <TouchableOpacity
           style={[styles.btnBaixa, bloqueadoSemKm && styles.btnBaixaOff]}
           disabled={preparando}
@@ -680,6 +725,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   statusOk: { color: CAPUL, backgroundColor: '#dcfce7' },
+  // Feita no aparelho, ainda não no servidor — âmbar, como o banner da fila.
+  statusFila: { color: '#92400e', backgroundColor: '#fef3c7' },
+  naFilaAviso: { marginTop: 10, color: '#b45309', fontSize: 13, fontWeight: '600' },
   endereco: { color: '#1e293b', fontSize: 15, marginTop: 8 },
   linha: { color: '#475569', fontSize: 14, marginTop: 4 },
   obs: { color: '#64748b', fontSize: 13, marginTop: 6, fontStyle: 'italic' },
