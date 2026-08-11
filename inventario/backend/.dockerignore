@@ -29,3 +29,9 @@ tests
 # nenhum ou se tests/ deixa de ser ignorado.
 scripts
 *.csv
+
+# Ferramentas de teste/preparação que vivem na RAIZ (o `scripts` acima não as
+# pega). Trazem login de contas reais da plataforma em texto — não podem ir para
+# a imagem, que é artefato de produção. Descoberto na revisão de 11/08/2026.
+smoke_ciclo_completo.py
+preparar_teste_chrome.py

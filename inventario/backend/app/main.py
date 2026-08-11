@@ -8661,8 +8661,21 @@ async def delete_multilista_counting_list(
 
 if assignments_router:
     try:
-        app.include_router(assignments_router, prefix="/api/v1/assignments", tags=["assignments"])
-        logger.info("✅ Router de assignments registrado")
+        # ⚠️ AUTENTICAÇÃO NO MOUNT — 11/08/2026.
+        # Duas rotas deste router não declaravam usuário (`assign-by-criteria`,
+        # que atribui produtos em massa, e `available-users`, que lista gente), e
+        # o nginx proxia `/api/v1/assignments/` — ou seja, rodavam abertas de
+        # fora. É a mesma classe do incidente das rotas `/api/v1/import/*`, que
+        # ganhou `require_staff_role` aqui mesmo em `:8473`.
+        # Exigir no MOUNT cobre o router inteiro e não depende de cada rota
+        # lembrar de declarar — que foi exatamente o que falhou.
+        app.include_router(
+            assignments_router,
+            prefix="/api/v1/assignments",
+            tags=["assignments"],
+            dependencies=[Depends(get_current_active_user)],
+        )
+        logger.info("✅ Router de assignments registrado (autenticado)")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar router de assignments: {e}")
 else:
@@ -8700,8 +8713,17 @@ else:
 # Incluir router de rascunhos de lotes
 if lot_draft_router:
     try:
-        app.include_router(lot_draft_router, prefix="/api/v1/lot-draft", tags=["lot-draft"])
-        logger.info("✅ Router de rascunhos de lotes registrado")
+        # ⚠️ AUTENTICAÇÃO NO MOUNT — 11/08/2026. Aqui era pior: NENHUMA das 5
+        # rotas declarava usuário, incluindo
+        # `DELETE /inventory/{id}/clear-all-drafts`, que apaga todos os rascunhos
+        # de lote do inventário. Proxiado pelo nginx, rodava aberto de fora.
+        app.include_router(
+            lot_draft_router,
+            prefix="/api/v1/lot-draft",
+            tags=["lot-draft"],
+            dependencies=[Depends(get_current_active_user)],
+        )
+        logger.info("✅ Router de rascunhos de lotes registrado (autenticado)")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar router de lot_draft: {e}")
 else:
