@@ -139,6 +139,13 @@ export class EntregaService {
     // Warm da geocodificação em BACKGROUND (não bloqueia a resposta): popula o
     // cache pra (1) o badge "entra na rota?" da fila e (2) o "Sugerir ordem"
     // sair instantâneo na montagem.
+    //
+    // E GRAVA O PIN na entrega. Antes a coordenada era calculada aqui e
+    // descartada — ficava só no cache —, então a entrega nascia sem `geoLat/
+    // geoLng` e só ganhava pin quando alguém rodasse "Sugerir ordem" ou o
+    // "Recalcular localizações" do gestor. Efeito visto na rota #28 (11/08):
+    // 3 de 4 entregas sem pin, embora as 4 coordenadas já estivessem no cache,
+    // resolvidas. Custo zero: a coordenada já está em mãos.
     void this.geocode
       .geocodificar({
         logradouro: snap.endLogradouro,
@@ -148,6 +155,14 @@ export class EntregaService {
         uf: snap.endUf,
         cep: snap.endCep,
       })
+      .then((c) =>
+        c
+          ? this.prisma.entrega.update({
+              where: { id: entrega.id },
+              data: { geoLat: c.lat, geoLng: c.lng },
+            })
+          : undefined,
+      )
       .catch(() => undefined);
 
     return this.comTotal(entrega);
