@@ -19,7 +19,7 @@ interface EntregaG {
   endBairro?: string | null; endCidade?: string | null; endUf?: string | null; endCep?: string | null;
   endReferencia?: string | null; horario?: string | null; observacoes?: string | null;
   quantidadeVolumes: number; origemVenda?: Origem | null; tentativas?: number;
-  status: Status; totalCupons: number;
+  status: Status; totalCupons: number; dataEntrega?: string | null;
   viagemNumero?: number | null; motivoNaoEntrega?: string | null; dataHoraEntrega?: string | null;
 }
 
@@ -34,7 +34,18 @@ const ORIGEM_LABEL: Record<Origem, string> = {
   PRESENCIAL: 'Presencial', TELE_VENDA: 'Tele-venda', OUTRO: 'Outro',
 };
 
-type SortKey = 'numero' | 'criadoEm' | 'destinatarioNome' | 'endBairro' | 'quantidadeVolumes' | 'totalCupons' | 'origemVenda' | 'status' | 'viagemNumero';
+type SortKey = 'numero' | 'criadoEm' | 'dataEntrega' | 'destinatarioNome' | 'endBairro' | 'quantidadeVolumes' | 'totalCupons' | 'origemVenda' | 'status' | 'viagemNumero';
+
+// Dia da entrega para exibição. `slice(0, 10)` em vez de `new Date(...)`: o dia é
+// gravado ancorado ao MEIO-DIA -03:00 justamente para não escorregar de fuso, e
+// converter aqui reintroduziria o problema. Mesmo padrão de MontarViagemPage.
+const diaBR = (iso?: string | null) => {
+  const dia = iso?.slice(0, 10);
+  if (!dia) return null;
+  const [a, m, d] = dia.split('-');
+  return `${d}/${m}/${a}`;
+};
+const hojeISO = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 type SortDir = 'asc' | 'desc';
 
 export function EntregasPage() {
@@ -89,6 +100,12 @@ export function EntregasPage() {
     const arr = [...itens];
     arr.sort((a, b) => {
       const va = a[sortKey]; const vb = b[sortKey];
+      // Vazio vai para o FIM nas duas direções (não entra na inversão). Sem isto,
+      // ordenar por "Entrega" traria primeiro as entregas SEM dia — as antigas,
+      // anteriores ao campo — encabeçando a fila, que é o oposto do útil (e o
+      // contrário do que o backend faz na montagem, com `nulls: 'last'`).
+      const vazio = (v: unknown) => v == null || v === '';
+      if (vazio(va) !== vazio(vb)) return vazio(va) ? 1 : -1;
       let cmp: number;
       if (typeof va === 'number' || typeof vb === 'number') cmp = (Number(va ?? -Infinity)) - (Number(vb ?? -Infinity));
       else cmp = String(va ?? '').localeCompare(String(vb ?? ''), 'pt-BR');
@@ -175,6 +192,7 @@ export function EntregasPage() {
               <tr>
                 <th className={th}><button onClick={() => toggleSort('numero')} className={btnSort}>Nº <SortIcon col="numero" /></button></th>
                 <th className={th}><button onClick={() => toggleSort('criadoEm')} className={btnSort}>Criada <SortIcon col="criadoEm" /></button></th>
+                <th className={th}><button onClick={() => toggleSort('dataEntrega')} className={btnSort}>Entrega <SortIcon col="dataEntrega" /></button></th>
                 <th className={th}><button onClick={() => toggleSort('destinatarioNome')} className={btnSort}>Destinatário <SortIcon col="destinatarioNome" /></button></th>
                 <th className={th}><button onClick={() => toggleSort('endBairro')} className={btnSort}>Endereço <SortIcon col="endBairro" /></button></th>
                 <th className={th}><button onClick={() => toggleSort('quantidadeVolumes')} className={btnSort}>Vol. <SortIcon col="quantidadeVolumes" /></button></th>
@@ -193,6 +211,18 @@ export function EntregasPage() {
                     {(e.tentativas ?? 1) > 1 && <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">♻{e.tentativas}ª</span>}
                   </td>
                   <td className="px-3 py-2 text-slate-500">{new Date(e.criadoEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                  {/* Dia combinado da entrega (ponto 2): há locais atendidos só em
+                      certos dias. Destaca o que não é de hoje — é o que o operador
+                      precisa enxergar na fila sem abrir a entrega. */}
+                  <td className="px-3 py-2">
+                    {e.dataEntrega ? (
+                      <span className={e.dataEntrega.slice(0, 10) !== hojeISO ? 'rounded bg-amber-100 px-1.5 py-0.5 text-amber-700' : 'text-slate-500'}>
+                        {diaBR(e.dataEntrega)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-slate-700">{e.destinatarioNome}</td>
                   <td className="px-3 py-2 text-slate-500">{e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''}{e.endBairro ? ` — ${e.endBairro}` : ''}</td>
                   <td className="px-3 py-2 text-slate-600">{e.quantidadeVolumes}</td>
