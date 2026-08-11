@@ -217,7 +217,9 @@ export function MontarViagemPage() {
         ? ` ${data.semCoordenada.length} sem localização foram pro fim — posicione com as setas.`
         : '';
       const via = data.fonteDistancia === 'OSRM' ? ' por rua' : data.distanciaKm != null ? ' em linha reta' : '';
-      toast('success', `Ordem sugerida pela distância (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km${via}` : ''}).${aviso}`);
+      // O KM agora inclui a VOLTA à filial — dizer isso evita que o número seja
+      // lido como "só a ida" e vire expectativa errada de KM para o motorista.
+      toast('success', `Ordem sugerida pela distância (${data.geocodificadas} localizadas${data.distanciaKm != null ? `, ~${data.distanciaKm} km${via}, ida e volta à filial` : ''}).${aviso}`);
     } catch (err) {
       const m = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
       toast('error', Array.isArray(m) ? m.join(', ') : m || 'Falha ao sugerir a ordem.');

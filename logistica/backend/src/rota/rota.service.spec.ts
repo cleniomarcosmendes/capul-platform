@@ -155,11 +155,14 @@ describe('RotaService.sugerirOrdem — transparência da localização', () => {
 
     expect(r.fonteDistancia).toBe('OSRM');
     expect(r.ordem).toEqual(['A', 'B', 'C', 'D']);
-    // 500 + 800 + 1000 + 20000 = 22,3 km. Aceitando a inversão daria 81,9 km.
-    expect(r.distanciaKm).toBe(22.3);
+    // Ida: 500 + 800 + 1000 + 20000 = 22,3 km. Aceitando a inversão daria 81,9.
+    // + VOLTA D→filial (30000) = 52,3 km — a rota é um ciclo, o veículo retorna
+    // à loja. Repare que a volta aqui é maior que toda a ida: é exatamente o
+    // trecho que faltava no KM previsto.
+    expect(r.distanciaKm).toBe(52.3);
   });
 
-  it('2-opt avalia a inversão que vai até a última parada (rota aberta)', async () => {
+  it('2-opt avalia a inversão que vai até a última parada (e paga a volta à filial)', async () => {
     // 2 paradas: NN escolhe A (mais perto da filial), mas A→B custa 100 e o
     // caminho B→A custa 1 — inverter vale a pena. O laço anterior parava antes
     // desse trecho e a troca nunca era sequer considerada.
@@ -183,7 +186,41 @@ describe('RotaService.sugerirOrdem — transparência da localização', () => {
     const r = await svcOsrm.sugerirOrdem('f1', ['A', 'B']);
 
     expect(r.ordem).toEqual(['B', 'A']); // 2 km + 1 km = 3, contra 1 + 100 = 101
-    expect(r.distanciaKm).toBe(3);
+    // + volta A→filial (1000) = 4 km. O ciclo não muda a escolha aqui, mas muda
+    // o número mostrado — e é esse que vira expectativa de KM para o motorista.
+    expect(r.distanciaKm).toBe(4);
+  });
+
+  // ⭐ Clenio, 11/08: "o ponto de partida e de retorno deve ser sempre o endereço
+  // da filial/loja — não percebi na rota o caminho para RETORNO". A rota é um
+  // CICLO. Este teste falha se alguém voltar a otimizar caminho aberto: ali o
+  // algoritmo pode terminar no ponto mais distante da loja sem pagar nada, e a
+  // volta — normalmente o trecho mais longo — some do KM previsto.
+  it('a volta à filial MUDA a ordem escolhida, não só a distância', async () => {
+    // Ida: filial→A→B custa 2 km e filial→B→A custa 3 km — a rota ABERTA
+    // escolheria A,B. Mas B→filial custa 10 km e A→filial custa 1 km, então o
+    // ciclo inteiro é 12 km por A,B contra 4 km por B,A. Fechando, B vem antes.
+    prisma.entrega.findMany.mockResolvedValue([entrega('A'), entrega('B')]);
+    const M = [
+      // filial       A        B        (metros)
+      [0, 1000, 2000], // filial →
+      [1000, 0, 1000], // A →  (A volta barato para a filial)
+      [10000, 1000, 0], // B →  (B volta CARO para a filial)
+    ];
+    const svcOsrm = new RotaService(
+      prisma,
+      geocodeMock({
+        'RUA PREFEITO JOAO COSTA, 1455': { ...UNAI_FILIAL, precisao: 'LOGRADOURO' },
+        'RUA A': { ...VIZINHA_DA_FILIAL, precisao: 'LOGRADOURO' },
+        'RUA B': { ...MEIO_CAMINHO, precisao: 'LOGRADOURO' },
+      }),
+      osrmMatriz(M),
+    );
+
+    const r = await svcOsrm.sugerirOrdem('f1', ['A', 'B']);
+
+    expect(r.ordem).toEqual(['B', 'A']);
+    expect(r.distanciaKm).toBe(4); // 2 (ida) + 1 (B→A) + 1 (volta A→filial)
   });
 
   it('reproduz o caso relatado: vizinha ancorada no centro da cidade perde a 1ª posição — e sai marcada', async () => {

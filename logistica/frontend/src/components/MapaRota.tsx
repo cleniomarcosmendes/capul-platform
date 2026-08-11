@@ -104,7 +104,7 @@ export function MapaRota({ paradas, origem, semPosicao = 0, onSelecionar, onCorr
     const pontos: [number, number][] = [];
     if (origem) {
       L.marker([origem.lat, origem.lng], { icon: iconeOrigem(), zIndexOffset: 500 })
-        .bindPopup('<b>Filial</b><br><span style="color:#64748b">partida da rota</span>')
+        .bindPopup('<b>Filial</b><br><span style="color:#64748b">partida e retorno da rota</span>')
         .addTo(camada);
       pontos.push([origem.lat, origem.lng]);
     }
@@ -140,6 +140,22 @@ export function MapaRota({ paradas, origem, semPosicao = 0, onSelecionar, onCorr
 
     if (pontos.length >= 2) {
       L.polyline(pontos, { color: COR_OK, weight: 3, opacity: 0.65 }).addTo(camada);
+    }
+
+    // A VOLTA à filial, tracejada. A rota é um ciclo — o veículo não fica na
+    // última entrega —, e o traçado terminava na última parada: "não percebi na
+    // rota o caminho para RETORNO" (Clenio, 11/08). Tracejada de propósito: é
+    // percurso, não uma parada a mais, e a distinção importa para quem lê o mapa.
+    if (origem && pontos.length >= 2) {
+      const ultima = pontos[pontos.length - 1];
+      L.polyline([ultima, [origem.lat, origem.lng]], {
+        color: COR_OK,
+        weight: 2.5,
+        opacity: 0.5,
+        dashArray: '6 8',
+      })
+        .bindPopup('<b>Retorno à filial</b><br><span style="color:#64748b">a rota fecha onde começou</span>')
+        .addTo(camada);
     }
 
     if (pontos.length && ultimaComposicao.current !== chaveComposicao) {

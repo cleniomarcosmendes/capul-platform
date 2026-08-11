@@ -162,6 +162,10 @@ export class RotaService {
       dist += custo(ant, p);
       ant = p;
     }
+    // A VOLTA para a filial conta: o veículo não fica na última entrega. Sem
+    // isto o KM previsto saía menor do que o rodado — e justamente pelo trecho
+    // mais longo, já que a rota tende a terminar no ponto mais distante.
+    dist += custo(ant, partida);
     const distanciaKm = matriz ? dist / 1000 : dist; // OSRM vem em metros
 
     return {
@@ -299,6 +303,13 @@ export class RotaService {
   private duasOpt(rota: Ponto[], partida: Ponto, custo: Custo): Ponto[] {
     const r = [...rota];
     const antes = (i: number) => (i < 0 ? partida : r[i]);
+    // ⭐ A rota é um CICLO: sai da filial e VOLTA para ela (Clenio, 11/08 — "o
+    // ponto de partida e de retorno deve ser sempre o endereço da filial/loja").
+    // Antes o trecho final não tinha sucessor e a volta não entrava na conta, o
+    // que fazia o 2-opt otimizar um caminho ABERTO: ele podia terminar a rota no
+    // ponto mais distante da loja sem pagar nada por isso. Depois da última
+    // parada, o sucessor é a partida.
+    const depois = (j: number) => (j + 1 < r.length ? r[j + 1] : partida);
     let melhorou = true;
     let guard = 0;
     while (melhorou && guard++ < 50) {
@@ -311,9 +322,9 @@ export class RotaService {
         for (let j = i + 2; j < r.length; j++) {
           mioloAtual += custo(r[j - 1], r[j]);
           mioloInvertido += custo(r[j], r[j - 1]);
-          const fecha = j + 1 < r.length;
-          const atual = custo(antes(i), r[i + 1]) + mioloAtual + (fecha ? custo(r[j], r[j + 1]) : 0);
-          const trocado = custo(antes(i), r[j]) + mioloInvertido + (fecha ? custo(r[i + 1], r[j + 1]) : 0);
+          const seguinte = depois(j);
+          const atual = custo(antes(i), r[i + 1]) + mioloAtual + custo(r[j], seguinte);
+          const trocado = custo(antes(i), r[j]) + mioloInvertido + custo(r[i + 1], seguinte);
           if (trocado < atual - 1e-9) {
             // inverte o trecho i+1..j
             let a = i + 1;
