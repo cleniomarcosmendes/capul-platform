@@ -201,16 +201,21 @@ export function FrotaPage() {
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
           <h3 className="text-sm font-semibold text-slate-700">
-            {tipo === 'FROTA' ? 'Rotas de frota' : tipo === 'ENTREGA' ? 'Rotas de entrega' : 'Todas as rotas do veículo'}
+            {tipo === 'FROTA' ? 'Viagens de frota' : tipo === 'ENTREGA' ? 'Rotas de entrega' : 'Tudo que o veículo rodou'}
           </h3>
           <div className="flex items-center gap-2">
+            {/* "Viagens", não "Frota": a entrega TAMBÉM é frota (mesmo veículo, mesmo
+                odômetro) — opor "Frota × Entregas" negaria justamente o que esta lista
+                passou a afirmar. O par certo é a viagem administrativa × a rota de
+                entrega, e "Viagem" é como o menu já chama esta tela ("Registro de
+                Viagem"), preservado na renomeação de 28/06 que levou Viagem→Rota. */}
             <select
               value={tipo}
               onChange={(e) => setTipo(e.target.value as 'FROTA' | 'ENTREGA' | 'TODAS')}
               className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-              title="Rota de frota é a saída administrativa; a de entrega roda no mesmo veículo e soma no mesmo odômetro."
+              title="Viagem de frota é a saída administrativa; a rota de entrega roda no mesmo veículo e soma no mesmo odômetro."
             >
-              <option value="FROTA">Frota</option>
+              <option value="FROTA">Viagens</option>
               <option value="ENTREGA">Entregas</option>
               <option value="TODAS">Todas</option>
             </select>
@@ -240,7 +245,7 @@ export function FrotaPage() {
           </div>
         ) : viagens.length === 0 ? (
           <div className="py-12 text-center text-sm text-slate-400">
-            {tipo === 'FROTA' ? 'Nenhuma rota de frota.' : tipo === 'ENTREGA' ? 'Nenhuma rota de entrega.' : 'Nenhuma rota.'}
+            {tipo === 'FROTA' ? 'Nenhuma viagem de frota.' : tipo === 'ENTREGA' ? 'Nenhuma rota de entrega.' : 'Nada rodado.'}
           </div>
         ) : (
           <table className="w-full text-sm">
