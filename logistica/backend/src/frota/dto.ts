@@ -13,6 +13,16 @@ export class ParadaPlanejadaDto {
   @IsOptional() @IsString() @MaxLength(120) propriedade?: string;
 }
 
+/**
+ * Recorte de tipo da lista de viagens da tela de Frota (`?tipo=`).
+ *
+ * `FROTA` é o default (comportamento histórico). `ENTREGA` traz as rotas de
+ * entrega, que rodam no mesmo veículo e já entram no KM/custo da frota. SUPERVISOR
+ * fica de fora de propósito — o RDV é container mensal, não uma saída de veículo.
+ */
+export const FILTROS_TIPO_VIAGEM = ['FROTA', 'ENTREGA', 'TODAS'] as const;
+export type FiltroTipoViagem = (typeof FILTROS_TIPO_VIAGEM)[number];
+
 export class BuscarCondutorDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
   matricula!: string;

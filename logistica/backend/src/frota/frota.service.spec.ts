@@ -12,7 +12,10 @@ describe('FrotaService — escopo de visibilidade das viagens de frota', () => {
   let svc: FrotaService;
   beforeEach(() => {
     prisma = createPrismaMock();
-    svc = new FrotaService(prisma, dep(), dep(), dep(), locaisMock());
+    // `listar` resolve o nome do condutor da ENTREGA pelo motoristaId (core), então
+    // o core aqui precisa ser um mock de verdade — não o `dep()` vazio.
+    const core = { nomesUsuarios: jest.fn().mockResolvedValue(new Map()) } as any;
+    svc = new FrotaService(prisma, dep(), core, dep(), locaisMock());
   });
 
   // ⭐ Vazamento pego 05/07: a lista mostrava TODAS as viagens da filial p/ qualquer papel.
@@ -21,6 +24,49 @@ describe('FrotaService — escopo de visibilidade das viagens de frota', () => {
     await svc.listar(comRole('OPERADOR_ENTREGA'));
     const where = prisma.viagem.findMany.mock.calls[0][0].where;
     expect(where.OR).toEqual([{ criadoPorId: 'u1' }, { veiculo: { supervisorId: 'u1' } }]);
+  });
+
+  // Filtro de tipo (12/08): a rota de ENTREGA roda no mesmo veículo e move o mesmo
+  // odômetro — a Linha do KM e o custo/km já a somavam, só a LISTA a ignorava.
+  it('listar: sem ?tipo → só FROTA (comportamento histórico da tela)', async () => {
+    prisma.viagem.findMany.mockResolvedValue([]);
+    await svc.listar(comRole('GESTOR_FROTA'));
+    expect(prisma.viagem.findMany.mock.calls[0][0].where.tipo).toBe('FROTA');
+  });
+
+  it('listar tipo=ENTREGA: traz as rotas de entrega', async () => {
+    prisma.viagem.findMany.mockResolvedValue([]);
+    await svc.listar(comRole('GESTOR_FROTA'), undefined, 'ENTREGA');
+    expect(prisma.viagem.findMany.mock.calls[0][0].where.tipo).toBe('ENTREGA');
+  });
+
+  // ⭐ TODAS não pode virar "sem filtro": SUPERVISOR (RDV) é container MENSAL da
+  // prestação de contas, não uma saída de veículo — não pode entrar na lista.
+  it('listar tipo=TODAS: FROTA + ENTREGA, nunca SUPERVISOR', async () => {
+    prisma.viagem.findMany.mockResolvedValue([]);
+    await svc.listar(comRole('GESTOR_FROTA'), undefined, 'TODAS');
+    expect(prisma.viagem.findMany.mock.calls[0][0].where.tipo).toEqual({ in: ['FROTA', 'ENTREGA'] });
+  });
+
+  // O escopo do não-gestor continua valendo com o filtro de tipo ligado — o recorte
+  // de tipo não pode virar porta de entrada para viagem de outro departamento.
+  it('listar tipo=TODAS (operador): mantém o recorte pelas SUAS', async () => {
+    prisma.viagem.findMany.mockResolvedValue([]);
+    await svc.listar(comRole('OPERADOR_ENTREGA'), undefined, 'TODAS');
+    const where = prisma.viagem.findMany.mock.calls[0][0].where;
+    expect(where.tipo).toEqual({ in: ['FROTA', 'ENTREGA'] });
+    expect(where.OR).toEqual([{ criadoPorId: 'u1' }, { veiculo: { supervisorId: 'u1' } }]);
+  });
+
+  // Na ENTREGA o condutor é o motoristaId (usuário), não o par condutorMatricula/Nome.
+  it('listar: condutor da ENTREGA vem do motoristaId (coluna não sai vazia)', async () => {
+    prisma.viagem.findMany.mockResolvedValue([
+      { id: 'v1', numero: 1, situacao: 'CONCLUIDA', tipo: 'ENTREGA', motoristaId: 'm1', condutorNome: null, criadoPorId: 'u1', veiculo: { placa: 'SUP01' }, _count: { paradas: 3 } },
+    ]);
+    const core = { nomesUsuarios: jest.fn().mockResolvedValue(new Map([['m1', 'Wanderson']])) } as any;
+    const s2 = new FrotaService(prisma, dep(), core, dep(), locaisMock());
+    const [linha] = await s2.listar(comRole('GESTOR_FROTA'), undefined, 'ENTREGA');
+    expect(linha).toMatchObject({ tipo: 'ENTREGA', condutorNome: 'Wanderson', paradas: 3 });
   });
 
   it('listar (Gestor de Frota): SEM filtro — vê todas da filial', async () => {

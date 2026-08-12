@@ -11,7 +11,7 @@ import { CondutorTokenService } from '../common/condutor-token.service.js';
 import { temRoleLogistica } from '../common/roles-logistica.js';
 import { LocalClienteService } from '../local/local-cliente.service.js';
 import { resolverDataEvento } from './data-evento.js';
-import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, type ParadaPlanejadaDto } from './dto.js';
+import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, type ParadaPlanejadaDto, type FiltroTipoViagem } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -1342,7 +1342,21 @@ export class FrotaService {
     if (!ehMinha) throw new NotFoundException('Viagem de frota não encontrada.');
   }
 
-  async listar(user: JwtPayload, situacao?: StatusViagem) {
+  /**
+   * Viagens da tela de Frota. `tipo` recorta o que a lista responde:
+   *
+   * - `FROTA` (default): a viagem administrativa, com condutor autenticado por
+   *   matrícula+senha — o comportamento histórico da tela.
+   * - `ENTREGA`: as rotas de entrega, que rodam no MESMO veículo e movem o MESMO
+   *   odômetro. Só não apareciam aqui: a Linha do KM e o custo/km já as somavam
+   *   (ponto 1, 09/08), então o carro de entrega tinha KM e custo na frota mas
+   *   nenhuma viagem que os explicasse — a lista era o único lugar que as ignorava.
+   * - `TODAS`: as duas, para responder "o que este carro fez no mês".
+   *
+   * SUPERVISOR nunca entra: o RDV é container MENSAL da prestação de contas, não
+   * uma saída de veículo — listá-lo aqui misturaria mês com viagem.
+   */
+  async listar(user: JwtPayload, situacao?: StatusViagem, tipo: FiltroTipoViagem = 'FROTA') {
     // Escopo: Gestor de Frota / ADMIN veem TODAS as viagens da filial; os demais
     // (operador, registrador, gestor de entregas) só veem as SUAS — quem registrou
     // a saída (criadoPorId) ou é supervisor de área do veículo (mesmo dono do ajuste).
@@ -1351,19 +1365,29 @@ export class FrotaService {
     // Supervisor de Departamento: "minha operação" abrange os veículos do(s) seu(s)
     // departamento(s) — deps computados uma vez p/ o flag ehMinha da lista.
     const depsSup = this.ehSupervisorFrota(user) ? await this.deptosSupervisionados(user) : [];
+    const tipoWhere = tipo === 'TODAS'
+      ? { tipo: { in: [TipoViagem.FROTA, TipoViagem.ENTREGA] } }
+      : { tipo: TipoViagem[tipo] };
     const viagens = await this.prisma.viagem.findMany({
       where: {
-        tipo: TipoViagem.FROTA, filialId: ehGestor ? undefined : user.filialId!, ...(situacao ? { situacao } : {}),
+        ...tipoWhere, filialId: ehGestor ? undefined : user.filialId!, ...(situacao ? { situacao } : {}),
         ...escopo,
       },
       include: { veiculo: { select: { placa: true, modelo: true, supervisorId: true, departamentoLotacaoId: true } }, _count: { select: { paradas: true } } },
       orderBy: { criadoEm: 'desc' },
       take: 200,
     });
+    // Na ENTREGA o condutor é o `motoristaId` (usuário do sistema), não o par
+    // condutorMatricula/Nome da frota — sem isto a coluna Condutor sairia vazia
+    // justamente nas linhas novas. Um lookup só para a página inteira.
+    const nomesMotorista = await this.core.nomesUsuarios(
+      viagens.map((v) => v.motoristaId).filter((x): x is string => !!x),
+    );
     return viagens.map((v) => ({
-      id: v.id, numero: v.numero, situacao: v.situacao,
+      id: v.id, numero: v.numero, situacao: v.situacao, tipo: v.tipo,
       placa: v.veiculo?.placa ?? '—', modelo: v.veiculo?.modelo ?? null,
-      condutorNome: v.condutorNome, condutorMatricula: v.condutorMatricula,
+      condutorNome: v.condutorNome ?? (v.motoristaId ? nomesMotorista.get(v.motoristaId) ?? null : null),
+      condutorMatricula: v.condutorMatricula,
       kmInicial: v.kmInicial, kmFinal: v.kmFinal,
       kmRodado: v.kmFinal != null && v.kmInicial != null ? v.kmFinal - v.kmInicial : null,
       finalidade: v.observacoesSaida, localSaida: v.localSaida,

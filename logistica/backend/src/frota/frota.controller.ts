@@ -1,10 +1,10 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
 import { StatusViagem } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { rolesLogistica } from '../common/roles-logistica.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, CancelarSaidaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, CancelarSaidaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, FILTROS_TIPO_VIAGEM, type FiltroTipoViagem } from './dto.js';
 
 
 @Controller('frota')
@@ -95,13 +95,25 @@ export class FrotaController {
     return this.frota.registrarRetornoPortaria(id, dto, user);
   }
 
-  /** Lista viagens de frota da filial (filtro de situação opcional). */
+  /** Lista viagens da filial (filtros de situação e tipo opcionais). `tipo` aceita
+   *  FROTA (default), ENTREGA ou TODAS — ver FiltroTipoViagem. */
   // PORTARIA precisa ler a lista/detalhe p/ o "Retorno pela portaria" (método
   // @Roles substitui o da classe — daí repetir os operacionais + PORTARIA).
   @Get('viagens')
   @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'REGISTRADOR_FROTA', 'PORTARIA', 'COORDENADOR', 'SUPERVISOR', 'SUPERVISOR_FROTA')
-  listar(@CurrentUser() user: JwtPayload, @Query('situacao') situacao?: StatusViagem) {
-    return this.frota.listar(user, situacao);
+  listar(
+    @CurrentUser() user: JwtPayload,
+    @Query('situacao') situacao?: StatusViagem,
+    @Query('tipo') tipo?: string,
+  ) {
+    // Validação EXPLÍCITA: um valor fora da lista chegaria ao service como chave
+    // inexistente de TipoViagem (undefined), o filtro de tipo sumiria do where e a
+    // lista passaria a incluir as viagens SUPERVISOR (RDV) — que não são saídas de
+    // veículo. Rejeitar é mais seguro que cair no default em silêncio.
+    if (tipo !== undefined && !(FILTROS_TIPO_VIAGEM as readonly string[]).includes(tipo)) {
+      throw new BadRequestException(`tipo inválido: use ${FILTROS_TIPO_VIAGEM.join(', ')}.`);
+    }
+    return this.frota.listar(user, situacao, tipo as FiltroTipoViagem | undefined);
   }
 
   /** Detalhe de uma viagem de frota (página de operações). */

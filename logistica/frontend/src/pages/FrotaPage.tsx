@@ -17,6 +17,9 @@ import { MoedaInput } from '../components/MoedaInput';
 
 export interface ViagemFrota {
   id: string; numero: number; situacao: string;
+  // Vem do backend p/ a lista poder misturar os dois tipos: a rota de ENTREGA roda
+  // no mesmo veículo e move o mesmo odômetro, mas tem tela de detalhe própria.
+  tipo?: 'FROTA' | 'ENTREGA';
   placa: string; modelo?: string | null;
   condutorNome?: string | null; condutorMatricula?: string | null;
   kmInicial?: number | null; kmFinal?: number | null; kmRodado?: number | null;
@@ -153,12 +156,18 @@ export function FrotaPage() {
   const [veiculos, setVeiculos] = useState<VeiculoDisp[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState('');
+  // Recorte de tipo. Default FROTA = comportamento histórico da tela; "Entregas" e
+  // "Todas" respondem "o que este carro fez no mês", que antes só a Linha do KM
+  // sabia responder (a lista era o único lugar da frota que ignorava a entrega).
+  const [tipo, setTipo] = useState<'FROTA' | 'ENTREGA' | 'TODAS'>('FROTA');
 
   const carregar = async () => {
     setLoading(true);
     try {
       const [v, frota] = await Promise.all([
-        logisticaApi.get<ViagemFrota[]>('/frota/viagens', { params: filtro ? { situacao: filtro } : {} }),
+        logisticaApi.get<ViagemFrota[]>('/frota/viagens', {
+          params: { ...(filtro ? { situacao: filtro } : {}), ...(tipo !== 'FROTA' ? { tipo } : {}) },
+        }),
         // Registro de Viagem = frota COMPARTILHÁVEL: veículo de passeio de qualquer
         // filial/depto pode ser usado (comum, sem transferência). todasFiliais ignora
         // o escopo de filial do usuário (diferente das Entregas, que são por filial).
@@ -175,7 +184,7 @@ export function FrotaPage() {
   useEffect(() => {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtro]);
+  }, [filtro, tipo]);
 
   return (
     <div className="space-y-5">
@@ -190,25 +199,49 @@ export function FrotaPage() {
       <SaidaForm veiculos={veiculos} onDone={carregar} />
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-700">Rotas de frota</h3>
-          <select
-            value={filtro}
-            onChange={(e) => setFiltro(e.target.value)}
-            className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-          >
-            <option value="">Todas</option>
-            <option value="EM_CURSO">Em curso</option>
-            <option value="CONCLUIDA">Concluídas</option>
-          </select>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+          <h3 className="text-sm font-semibold text-slate-700">
+            {tipo === 'FROTA' ? 'Rotas de frota' : tipo === 'ENTREGA' ? 'Rotas de entrega' : 'Todas as rotas do veículo'}
+          </h3>
+          <div className="flex items-center gap-2">
+            <select
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value as 'FROTA' | 'ENTREGA' | 'TODAS')}
+              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+              title="Rota de frota é a saída administrativa; a de entrega roda no mesmo veículo e soma no mesmo odômetro."
+            >
+              <option value="FROTA">Frota</option>
+              <option value="ENTREGA">Entregas</option>
+              <option value="TODAS">Todas</option>
+            </select>
+            <select
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+            >
+              <option value="">Todas</option>
+              <option value="EM_CURSO">Em curso</option>
+              <option value="CONCLUIDA">Concluídas</option>
+            </select>
+          </div>
         </div>
+        {tipo !== 'FROTA' && (
+          // A entrega entra como LEITURA: acerto, despesa e ajuste são atos da viagem
+          // de frota. Dizer isso evita a leitura de que a tela "perdeu" as ações.
+          <p className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-500">
+            A rota de entrega aparece aqui porque usa o mesmo veículo e o mesmo odômetro. Ela abre na tela de
+            Entregas — acerto e despesa continuam sendo da viagem de frota.
+          </p>
+        )}
 
         {loading && viagens.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-12 text-slate-400">
             <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
           </div>
         ) : viagens.length === 0 ? (
-          <div className="py-12 text-center text-sm text-slate-400">Nenhuma rota de frota.</div>
+          <div className="py-12 text-center text-sm text-slate-400">
+            {tipo === 'FROTA' ? 'Nenhuma rota de frota.' : tipo === 'ENTREGA' ? 'Nenhuma rota de entrega.' : 'Nenhuma rota.'}
+          </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
@@ -913,10 +946,23 @@ function SaidaForm({ veiculos, onDone }: { veiculos: VeiculoDisp[]; onDone: () =
 function LinhaViagem({ v }: { v: ViagemFrota }) {
   const navigate = useNavigate();
   const sit = SIT_META[v.situacao] ?? { label: v.situacao, cls: 'bg-slate-100 text-slate-600' };
-  // Linha clicável → tela de detalhe da viagem (retorno/despesa/paradas/ajuste).
+  const ehEntrega = v.tipo === 'ENTREGA';
+  // Linha clicável → detalhe da viagem (retorno/despesa/paradas/ajuste). A ENTREGA
+  // tem tela PRÓPRIA: `/frota/viagens/:id` responde 404 para ela de propósito (o
+  // detalhe de frota exige tipo FROTA), então mandar para lá daria "não encontrada".
   return (
-    <tr className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/frota/viagens/${v.id}`)}>
-      <td className="px-4 py-2 font-mono text-slate-500">{v.numero}</td>
+    <tr
+      className="cursor-pointer hover:bg-slate-50"
+      onClick={() => navigate(ehEntrega ? `/viagens/${v.id}` : `/frota/viagens/${v.id}`)}
+    >
+      <td className="px-4 py-2 font-mono text-slate-500">
+        {v.numero}
+        {ehEntrega && (
+          <span className="ml-1.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-700">
+            entrega
+          </span>
+        )}
+      </td>
       <td className="px-4 py-2">{v.placa}{v.modelo ? <span className="text-slate-400"> · {v.modelo}</span> : null}</td>
       <td className="px-4 py-2">{v.condutorNome ?? '—'}</td>
       <td className="px-4 py-2 text-slate-600"><span className="block max-w-[14rem] truncate" title={v.finalidade ?? ''}>{v.finalidade ?? '—'}</span></td>
