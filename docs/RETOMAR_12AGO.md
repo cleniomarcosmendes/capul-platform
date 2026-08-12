@@ -7,7 +7,7 @@ válida e está reproduzida no §3).
 
 ## 1. 🥇 O que não anda sozinho: o PUSH
 
-**106 commits locais, nada em `origin/main`.** `origin/main` == `4daf094` == o que
+**110 commits locais, nada em `origin/main`.** `origin/main` == `4daf094` == o que
 roda em PROD. O roteiro manda o Douglas chegar ao alvo por `git pull` — **sem push
 não há alvo**, e é a única coisa que bloqueia o deploy inteiro.
 
@@ -20,9 +20,21 @@ O push é do Clenio.
 | | |
 |---|---|
 | Base | `4daf094` — **confirmada em PROD por evidência** (bundle servido contém textos exclusivos dela e não os do delta) |
-| Alvo | `1227fa95` |
-| Delta | 106 commits · 4 migrations Prisma (170→174) · 7 SQL do Inventário (015–021) |
+| Alvo | o **HEAD após esta atualização de docs** — o hash final está no roteiro (era `1227fa95`; +4 commits em 12/08, ver §2.1) |
+| Delta | 110 commits · 4 migrations Prisma (170→174) · 7 SQL do Inventário (015–021) |
 | Risco | MÉDIO · `nginx.conf` **não** mudou |
+
+### 2.1 Revisão de 12/08 — alvo movido para `f01daeeb`
+
+O roteiro foi atualizado **no lugar** (mesmo arquivo — renomear foi o que criou a
+confusão 0801/0803). Os 3 commits novos: `f194a278` (docs) e `316144cb`+`f01daeeb`
+(Logística — a lista de viagens da Frota passa a enxergar a ENTREGA, com seletor
+**Viagens · Entregas · Todas** e default igual ao comportamento atual).
+
+O 4º é este próprio commit de documentação — por isso o alvo é o HEAD, não `f01daeeb`.
+
+**Nada estrutural mudou:** sem migration, sem `.env`, sem nginx, mesma lista de
+rebuild, mesmo gate 0/170 → 4/174. Suíte da Logística 352 → **357**.
 
 **Gates executados:** `check-migrations-all.sh` OK · typecheck de 10 alvos ·
 601 testes (TI 109 · Fiscal 54 · Auth 20 · Logística 352 · App 66 · Inventário 116)
