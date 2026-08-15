@@ -18,9 +18,17 @@ import { useEffect } from 'react';
  *                        (UI/render) ou do ambiente (Expo Go, economia de bateria)
  *   linhas de 1s, 3s…  → a thread trava mesmo, e o tamanho diz o quanto
  */
+/**
+ * ⚠️ Ligado em QUALQUER modo de bundle, de proposito. Guardado por `__DEV__`,
+ * ele nao rodava com `--no-dev --minify` — exatamente o modo em que a medicao
+ * importa (bundle de producao e o que separa defeito real de lentidao de dev).
+ * Trocar para `false` quando a apuracao fechar.
+ */
+const LIGADO = true;
+
 export function useDetectorDeTravamento(rotulo: string, limiteMs = 400): void {
   useEffect(() => {
-    if (!__DEV__) return;
+    if (!LIGADO) return;
     const INTERVALO = 500;
     let anterior = Date.now();
     const id = setInterval(() => {

@@ -370,6 +370,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
    * KM antes das baixas.
    */
   const irParaBaixa = useCallback((e: NonNullable<Parada['entrega']>) => {
+    console.log(`[TOQUE] dar-baixa #${e.numero} @ ${Date.now()}`); // 🔬 TEMPORÁRIO
     navigation.navigate('Baixa', {
       entregaId: e.id,
       entregaNumero: e.numero,
@@ -605,7 +606,14 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
               <TouchableOpacity
                 key={c.id}
                 style={[styles.filtroChip, filtro === c.id && styles.filtroChipOn]}
-                onPress={() => setFiltro(c.id)}
+                onPress={() => {
+                  // 🔬 TEMPORÁRIO: o chip é o handler mais puro da tela (só
+                  // setState). Se ESTA linha sai no Metro e a tela não muda, o
+                  // toque chegou e o problema é render/nativo; se não sai, o
+                  // toque não chegou ao handler.
+                  console.log(`[TOQUE] filtro ${c.id} @ ${Date.now()}`);
+                  setFiltro(c.id);
+                }}
               >
                 <Text style={[styles.filtroTxt, filtro === c.id && styles.filtroTxtOn]}>{c.rotulo}</Text>
               </TouchableOpacity>
