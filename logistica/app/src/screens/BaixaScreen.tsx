@@ -23,6 +23,7 @@ import { EntradaTextoModal } from '../components/EntradaTextoModal';
 import { uuid } from '../lib/uuid';
 import { temPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
 import { reduzirFoto } from '../lib/foto';
+import { avisarEVoltar } from '../lib/avisarEVoltar';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Baixa'>;
@@ -156,9 +157,7 @@ export function BaixaScreen({ route, navigation }: Props) {
           if (pct >= 100) setEtapa('Registrando a entrega…');
         },
       });
-      Alert.alert('Baixa registrada', `Entrega #${entregaNumero} — ${destinatario}.`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      avisarEVoltar(() => navigation.goBack(), 'Baixa registrada', `Entrega #${entregaNumero} — ${destinatario}.`);
     } catch (err) {
       const status = isAxiosError(err) ? err.response?.status : undefined;
       const negocio =
@@ -180,10 +179,10 @@ export function BaixaScreen({ route, navigation }: Props) {
           fotoUri: entregue ? fotoUri ?? undefined : undefined,
           assinaturaUri: entregue ? assinaturaUri ?? undefined : undefined,
         });
-        Alert.alert(
+        avisarEVoltar(
+          () => navigation.goBack(),
           'Sem conexão — baixa guardada',
           'A baixa foi salva no aparelho e será enviada automaticamente quando houver sinal.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }],
         );
       }
     } finally {

@@ -16,6 +16,7 @@ import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
 import { useScrollToFocusedInput } from '../lib/useScrollToFocusedInput';
 import type { TipoDespesa } from '../types/api';
+import { avisarEVoltar } from '../lib/avisarEVoltar';
 
 const CAPUL = '#1e7d3a';
 const MAX_FOTOS_DESPESA = 5;
@@ -85,12 +86,12 @@ export function DespesaEntregaScreen({ route, navigation }: Props) {
     };
     try {
       await lancarDespesaEntrega(payload, fotoUris);
-      Alert.alert('Despesa lançada', 'Registrada como custo do veículo.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+      avisarEVoltar(() => navigation.goBack(), 'Despesa lançada', 'Registrada como custo do veículo.');
     } catch (e) {
       if (ehErroDeRede(e)) {
         // Sem sinal (a rua): guarda a despesa + fotos e sincroniza depois.
         await enfileirarDespesaEntrega({ id: idem, rotulo: `Despesa R$ ${valor}`, viagemId, payload, fotoUris });
-        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e as fotos) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        avisarEVoltar(() => navigation.goBack(), 'Salvo offline', 'Sem sinal — a despesa (e as fotos) vão sincronizar quando a conexão voltar.');
       } else {
         const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
         Alert.alert('Não foi possível lançar', String(msg || 'Verifique a conexão e tente novamente.'));

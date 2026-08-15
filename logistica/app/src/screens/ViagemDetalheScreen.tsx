@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   FlatList,
   StyleSheet,
   Text,
@@ -27,6 +28,7 @@ import { contarPendentesKmEntrega, onFilaKmEntregaChange, processarFilaKmEntrega
 import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, MAX_PARADAS_MAPS } from '../lib/navegar';
 import { useRastreamento } from '../lib/useRastreamento';
 import { garantirPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
+import { avisarEVoltar } from '../lib/avisarEVoltar';
 import type { Parada, Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -48,15 +50,19 @@ const DIAGNOSTICO = true;
 /** Contador próprio: só ELE re-renderiza a cada 500ms, não a tela toda. */
 function FaixaDiagnostico({ flags }: { flags: string }) {
   const [tique, setTique] = useState(0);
+  const [appEstado, setAppEstado] = useState<string>(AppState.currentState);
   useEffect(() => {
     const id = setInterval(() => setTique((t) => t + 1), 500);
-    return () => clearInterval(id);
+    // Se a Activity do Android for recriada (falta de memória depois da câmera),
+    // o app passa por background→active. É o rastro que isso deixaria.
+    const sub = AppState.addEventListener('change', (s) => setAppEstado(String(s)));
+    return () => { clearInterval(id); sub.remove(); };
   }, []);
   return (
     // `pointerEvents="none"`: a faixa NUNCA pode receber toque — seria criar o
     // próprio defeito que ela existe para investigar.
     <View style={styles.diagBarra} pointerEvents="none">
-      <Text style={styles.diagTxt}>🔬 {tique} · {flags}</Text>
+      <Text style={styles.diagTxt}>🔬 {tique} · app={appEstado} · {flags}</Text>
     </View>
   );
 }
@@ -86,6 +92,8 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // Toque em "Dar baixa" que precisa subir o KM antes: sem este estado o botão
   // ficava mudo enquanto isso, e mudo lê como travado.
   const [preparandoBaixa, setPreparandoBaixa] = useState(false);
+  /** 🔬 TEMPORÁRIO — quantos toques chegaram ao React nesta tela. */
+  const [toques, setToques] = useState(0);
   // Já conseguimos carregar a rota alguma vez? Decide se uma falha de rede vira
   // tela de erro ou é apenas ignorada (seguimos com o que está na tela).
   const temViagemRef = useRef(false);
@@ -298,7 +306,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
         await pedirLocalizacaoDaRota();
       } else {
         await encerrarEntrega(viagem.id, km);
-        Alert.alert('Entrega encerrada', 'Rota concluída e veículo liberado.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        avisarEVoltar(() => navigation.goBack(), 'Entrega encerrada', 'Rota concluída e veículo liberado.');
       }
     } catch (e) {
       if (ehErroDeRede(e)) {
@@ -324,7 +332,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
           await pedirLocalizacaoDaRota();
         } else {
           await enfileirarKmEntrega({ tipo: 'encerrar', viagemId: viagem.id, kmFinal: km });
-          Alert.alert('Salvo offline', 'Sem sinal — a entrega vai ENCERRAR quando a conexão voltar.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+          avisarEVoltar(() => navigation.goBack(), 'Salvo offline', 'Sem sinal — a entrega vai ENCERRAR quando a conexão voltar.');
         }
       } else {
         const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
@@ -479,7 +487,14 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View
+      style={{ flex: 1 }}
+      // 🔬 TEMPORÁRIO — só OBSERVA o toque (devolve false, não captura nada).
+      // Diz se o dedo chega ao React: `toques` parado enquanto ele toca = o
+      // evento morre antes do JS; subindo sem o botão reagir = chega, mas algo
+      // acima o consome.
+      onStartShouldSetResponderCapture={DIAGNOSTICO ? () => { setToques((t) => t + 1); return false; } : undefined}
+    >
     <FlatList
       contentContainerStyle={styles.lista}
       data={paradasFiltradas}
@@ -619,7 +634,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     {DIAGNOSTICO && (
       <FaixaDiagnostico
         flags={
-          `prep=${preparandoBaixa ? 'SIM' : 'não'} · reenv=${reenviandoDespesa ? 'SIM' : 'não'} · ` +
+          `toques=${toques} · prep=${preparandoBaixa ? 'SIM' : 'não'} · reenv=${reenviandoDespesa ? 'SIM' : 'não'} · ` +
           `km=${salvandoKm ? 'SIM' : 'não'} · fila b/d/k=${pendBaixa}/${pendDespesa}/${pendKm}`
         }
       />
