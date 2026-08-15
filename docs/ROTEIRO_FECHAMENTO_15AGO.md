@@ -1,7 +1,7 @@
 # Roteiro de Fechamento — 14–15/08/2026
 
 **Sessão**: onda de correções no módulo Logística (balcão + app do entregador)
-**Alvo**: `9a85a855`..`97cf2c85` · **23 commits locais, NADA pushado**
+**Alvo**: `639eceb9` · **28 commits** (24 pushados em 15/08 + 4 de segurança)
 **Base**: `4daf094` (o que roda em PROD) → o delta desta sessão soma ao que já
 estava represado desde 12/08 (`bdb510a0`)
 
@@ -12,12 +12,18 @@ estava represado desde 12/08 (`bdb510a0`)
 | Gate | Resultado |
 |---|---|
 | `logistica/backend` — `tsc --noEmit` | ✅ limpo |
-| `logistica/backend` — Jest | ✅ **357 testes** |
+| `logistica/backend` — Jest | ✅ **363 testes** |
 | `logistica/frontend` — `tsc -b` | ✅ limpo |
 | `logistica/frontend` — ESLint | ✅ 0/0 |
 | `logistica/app` — ESLint | ✅ 0/0 *(instalado nesta sessão)* |
 | `logistica/app` — `tsc --noEmit` | ✅ limpo |
 | `logistica/app` — Jest | ✅ **71 testes** (era 62) |
+| `auth-gateway` — tsc + Jest | ✅ **30 testes** (era 20) |
+| `gestao-ti/backend` — tsc + Jest | ✅ **109 testes** |
+| `fiscal/backend` — tsc + Jest | ✅ **54 testes** |
+| `inventario/backend` — pytest | ✅ **121 testes** (era 119) |
+| `tsc -b` nos 5 frontends | ✅ limpos |
+| `check-migrations-all.sh` | ✅ 4 backends consistentes |
 | Containers | ✅ 19/19 no ar |
 | Erros nos backends (level 50) | ✅ nenhum |
 | `git status` | ✅ limpo |
@@ -114,16 +120,44 @@ o encaminhamento para o Metro não existe.
 
 ---
 
+## 4.4 🔒 `/security-review` — EXECUTADO, 5 achados corrigidos
+
+Rodado no escopo correto (**todo o delta de produção**, `4daf094`→alvo, não só a
+sessão) + **verificação de estado** das rotas sem autenticação × `nginx.conf`.
+Método: 2 revisões independentes → 6 achados → 4 verificadores adversariais →
+**5 confirmados**, 1 descartado. Todos corrigidos.
+
+| # | Achado | Sev. | Novo? | Correção |
+|---|---|---|---|---|
+| 1 | Condutor reescrevia/apagava despesa **já APROVADA** | High | **SIM** | `11e5752a` — trava do valor decidido |
+| 2 | OPERATOR lia o **saldo do sistema** em 6 rotas | High | não | `639eceb9` — 5 projetadas + 1 bloqueada |
+| 3 | **Credencial PROD do Protheus** legível por qualquer autenticado | High | não | `43a366cf` — guard de ADMIN |
+| 4 | **TLS sem validação** nos clientes Protheus | High | não | `10e8c8f5` — validação ligada |
+| 5 | SSRF cego no testador de conexão | Medium | não | `43a366cf` — só host cadastrado |
+
+**Descartado na verificação:** CRUD de usuários do Inventário sem autenticação —
+real, mas o nginx não expõe (`/api/v1/users` fora da lista branca), a porta não é
+publicada e sob `UNIFIED_AUTH` a linha é inerte (o papel vem do JWT). Fica como
+defesa em profundidade, não bloqueia.
+
+**Duas descobertas que mudaram a correção:**
+- A configuração `show_previous_counts` governa **contagens anteriores**, não o
+  saldo — e o código avisa para **não bloquear** as rotas de contagem ("o OPERATOR
+  PRECISA chamá-las"). Por isso projeção, não 403.
+- O Protheus usa **CA pública** (Sectigo): a validação de TLS foi ligada **sem
+  precisar de arquivo de CA**, verificado dentro do container.
+
+---
+
 ## 5. Antes do deploy (gates da casa)
 
 1. `docs/ROTEIRO_FINALIZACAO.md` — ETAPA 2 completa ✅ (feito acima)
-2. `./scripts/check-migrations-all.sh` — **esta sessão não criou migration**
-3. `/security-review` — obrigatório antes de fechar roteiro de deploy;
-   ⚠️ revisar o **ESTADO**, não só o delta (11/08: gate dado como limpo com 7
-   rotas abertas em PROD, pré-existentes)
-4. O roteiro de deploy vigente (`PlatformCapul_20260811_Roteiro_Deploy.md`) tem
-   alvo `bdb510a0` — **precisa ser atualizado NO LUGAR** para o novo alvo se
-   este delta entrar junto
+2. `./scripts/check-migrations-all.sh` — ✅ executado, 4 backends consistentes;
+   **esta sessão não criou migration**
+3. `/security-review` — ✅ **executado** (§4.4), 5 achados corrigidos
+4. `PlatformCapul_20260811_Roteiro_Deploy.md` — ✅ atualizado **no lugar**: alvo
+   **`639eceb9`**, 138 commits, com o bloco 🔒 do `/security-review` e as
+   mudanças de comportamento a comunicar (Configurador, Inventário, TLS)
 
 ---
 
@@ -134,7 +168,7 @@ o encaminhamento para o Metro não existe.
 | 1 | `git push` do delta local | **Clenio** (push é só dele) |
 | 2 | Build do **APK de homologação** (módulo nativo novo) | Marco/Douglas |
 | 3 | Conferir entregas com **centavos zerados** (defeito 2.1.1) | Clenio |
-| 4 | Rotacionar 4 senhas no histórico do git + credencial Protheus | Clenio |
+| 4 | 🔴 **Rotacionar a credencial do Protheus** — foi legível por qualquer conta autenticada enquanto o achado nº 3 esteve aberto (§4.4); + as 4 senhas no histórico do git | Clenio |
 | 5 | Regra de firewall `CAPUL API dev (8085)` — **criada à toa**, pode remover | Clenio |
 
 ---
