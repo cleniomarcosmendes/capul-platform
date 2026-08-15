@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  AppState,
   FlatList,
   StyleSheet,
   Text,
@@ -35,42 +34,6 @@ import type { Parada, Viagem } from '../types/api';
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ViagemDetalhe'>;
 
-/**
- * 🔬 TEMPORÁRIO — faixa de diagnóstico do "app trava depois da baixa" (14/08).
- * Trocar para `false` (ou apagar junto com `FaixaDiagnostico`) quando fechar.
- *
- * Ela separa três causas que dão o MESMO sintoma para quem está com o aparelho
- * na mão ("clico e não acontece nada"):
- *   • contador PAROU        → a thread de JS está bloqueada;
- *   • contador ANDANDO + alguma flag em SIM → é botão desabilitado por estado;
- *   • contador ANDANDO + todas as flags em não → o toque não chega ao React
- *     (janela nativa órfã por cima), que nenhum log de rede mostraria.
- */
-const DIAGNOSTICO = true;
-
-/** Contador próprio: só ELE re-renderiza a cada 500ms, não a tela toda. */
-function FaixaDiagnostico({ flags, toquesRef }: { flags: string; toquesRef: React.MutableRefObject<number> }) {
-  const [tique, setTique] = useState(0);
-  const [appEstado, setAppEstado] = useState<string>(AppState.currentState);
-  useEffect(() => {
-    const id = setInterval(() => setTique((t) => t + 1), 500);
-    // Se a Activity do Android for recriada (falta de memória depois da câmera),
-    // o app passa por background→active. É o rastro que isso deixaria.
-    const sub = AppState.addEventListener('change', (s) => setAppEstado(String(s)));
-    return () => { clearInterval(id); sub.remove(); };
-  }, []);
-  return (
-    // `pointerEvents="none"`: a faixa NUNCA pode receber toque — seria criar o
-    // próprio defeito que ela existe para investigar.
-    <View style={styles.diagBarra} pointerEvents="none">
-      {/* Lê o REF no render de 500ms. Contar toque com `setState` re-renderizava
-          a tela a CADA toque — inclusive o botão sendo pressionado, que perdia o
-          gesto. O instrumento não pode alterar o que ele mede. */}
-      <Text style={styles.diagTxt}>🔬 {tique} · app={appEstado} · toques={toquesRef.current} · {flags}</Text>
-    </View>
-  );
-}
-
 type Filtro = 'PENDENTES' | 'ENTREGUES' | 'TODAS';
 
 export function ViagemDetalheScreen({ route, navigation }: Props) {
@@ -93,8 +56,6 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [pendDespesa, setPendDespesa] = useState(0);
   const [pendKm, setPendKm] = useState(0);
   const [reenviandoDespesa, setReenviandoDespesa] = useState(false);
-  /** 🔬 TEMPORÁRIO — quantos toques chegaram ao React. REF, nunca state. */
-  const toquesRef = useRef(0);
   // Confirmação da baixa/despesa que ACABOU de acontecer — no lugar do Alert,
   // que disputava foco com a transição de tela (ver `lib/avisoTela.ts`).
   const [aviso, setAviso] = useState<Aviso | null>(null);
@@ -452,7 +413,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
    * e se o KM não subir a tempo, a baixa vai para a fila, que já sabe mandar o
    * KM antes das baixas.
    */
-  function irParaBaixa(e: NonNullable<Parada['entrega']>) {
+  const irParaBaixa = useCallback((e: NonNullable<Parada['entrega']>) => {
     navigation.navigate('Baixa', {
       entregaId: e.id,
       entregaNumero: e.numero,
@@ -472,15 +433,17 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
         })
         .catch(() => undefined);
     }
-  }
+    // Estável de propósito: `ParadaCard` é memoizado, e prop nova a cada render
+    // anularia a memoização — voltando a redesenhar todo cartão da lista.
+  }, [navigation, pendKm, carregar]);
 
 
-  function avisarSemKm() {
+  const avisarSemKm = useCallback(() => {
     Alert.alert(
       'Registre a saída primeiro',
       'A rota começa pela leitura do hodômetro. Informe o KM de saída no topo da tela para liberar a navegação, a despesa e as baixas.',
     );
-  }
+  }, []);
   function abrirRotaCompleta() {
     if (semKmSaida) { avisarSemKm(); return; }
     if (entregasPendentes.length === 0) { Alert.alert('Rota', 'Não há entregas pendentes.'); return; }
@@ -497,25 +460,21 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   }
 
   return (
-    <View
-      style={{ flex: 1 }}
-      // 🔬 TEMPORÁRIO — só OBSERVA o toque (devolve false, não captura nada).
-      // Diz se o dedo chega ao React: `toques` parado enquanto ele toca = o
-      // evento morre antes do JS; subindo sem o botão reagir = chega, mas algo
-      // acima o consome.
-      onStartShouldSetResponderCapture={DIAGNOSTICO ? () => { toquesRef.current += 1; return false; } : undefined}
-    >
+    <View style={{ flex: 1 }}>
     <FlatList
       contentContainerStyle={styles.lista}
+      // ⭐ Sem isto, o padrão do RN é `'never'`: com o teclado aberto, o PRIMEIRO
+      // toque fora do campo é gasto só para fechá-lo, e o botão só reage no
+      // segundo. Esta tela tem o campo de KM (saída e retorno), então o
+      // entregador digitava o hodômetro e, logo depois, precisava tocar duas
+      // vezes em "Dar baixa" / "Encerrar entrega" — sem nada na tela explicando.
+      // `handled`: o toque no botão vale de primeira e o toque no vazio ainda
+      // fecha o teclado. (Clenio, viagens 36–39.)
+      keyboardShouldPersistTaps="handled"
       data={paradasFiltradas}
       keyExtractor={(p) => p.id}
       ListHeaderComponent={
         <View>
-          {aviso && (
-            <View style={[styles.avisoBanner, aviso.tipo === 'atencao' && styles.avisoBannerAtencao]}>
-              <Text style={styles.avisoTxt}>{aviso.texto}</Text>
-            </View>
-          )}
           {(pendBaixa > 0 || pendDespesa > 0 || pendKm > 0) && (
             <TouchableOpacity style={styles.filaBanner} onPress={() => void reenviarPendencias()} disabled={reenviandoDespesa}>
               <Text style={styles.filaBannerTxt}>
@@ -641,24 +600,26 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
           bloqueadoSemKm={semKmSaida}
           onBloqueado={avisarSemKm}
           naFila={item.entrega ? baixasNaFila[item.entrega.id] : undefined}
-          onBaixar={(e) => irParaBaixa(e)}
+          onBaixar={irParaBaixa}
         />
       )}
     />
-    {DIAGNOSTICO && (
-      <FaixaDiagnostico
-        toquesRef={toquesRef}
-        flags={
-          `reenv=${reenviandoDespesa ? 'SIM' : 'não'} · ` +
-          `km=${salvandoKm ? 'SIM' : 'não'} · fila b/d/k=${pendBaixa}/${pendDespesa}/${pendKm}`
-        }
-      />
-    )}
+      {/* ⚠️ FLUTUANTE, fora do cabeçalho da lista. Dentro dele, aparecer e sumir
+          reposicionava tudo: o botão saía de baixo do dedo justamente enquanto
+          ele tocava. E `pointerEvents="none"` para não roubar toque nenhum. */}
+      {aviso && (
+        <View
+          style={[styles.avisoBanner, aviso.tipo === 'atencao' && styles.avisoBannerAtencao]}
+          pointerEvents="none"
+        >
+          <Text style={styles.avisoTxt}>{aviso.texto}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
-function ParadaCard({
+const ParadaCard = React.memo(function ParadaCard({
   parada,
   onBaixar,
   bloqueadoSemKm = false,
@@ -746,7 +707,7 @@ function ParadaCard({
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   centro: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
@@ -828,10 +789,7 @@ const styles = StyleSheet.create({
   btnBaixaTxtOff: { color: '#64748b' },
   kmAviso: { width: '100%', color: '#b45309', fontSize: 12, fontWeight: '600' },
   // Confirmação do que acabou de acontecer (substitui o Alert). Some em 5s.
-  avisoBanner: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 8 },
+  avisoBanner: { position: 'absolute', top: 8, left: 12, right: 12, backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 12, elevation: 4 },
   avisoBannerAtencao: { backgroundColor: '#fef3c7', borderColor: '#fcd34d' },
   avisoTxt: { color: '#14532d', fontSize: 13, fontWeight: '700' },
-  // 🔬 TEMPORÁRIO — remover junto com FaixaDiagnostico.
-  diagBarra: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#0f172a', paddingVertical: 4, paddingHorizontal: 8 },
-  diagTxt: { color: '#7dd3fc', fontSize: 10, fontWeight: '700', textAlign: 'center' },
 });

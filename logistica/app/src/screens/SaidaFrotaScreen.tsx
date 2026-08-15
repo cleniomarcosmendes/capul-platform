@@ -225,7 +225,9 @@ export function SaidaFrotaScreen({ navigation }: Props) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.conteudo}>
+    <ScrollView
+      // Teclado aberto: sem isto o primeiro toque só o fecha (ver ViagemDetalheScreen).
+      keyboardShouldPersistTaps="handled" style={styles.container} contentContainerStyle={styles.conteudo}>
       {/* INDIVIDUAL sem matrícula no cadastro: pede SÓ a matrícula. Sem senha —
           ele já entrou com a dele; a senha do portal RH é do gate PADRAO. */}
       {ehIndividual && precisaMatricula && (
