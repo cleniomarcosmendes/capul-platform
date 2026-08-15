@@ -28,12 +28,33 @@ import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, 
 import { useRastreamento } from '../lib/useRastreamento';
 import { garantirPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
 import { useDetectorDeTravamento } from '../lib/detectorTravamento';
+import { lerDiagnostico, registrarToque } from '../lib/diagnostico';
 import { avisarEVoltar } from '../lib/avisarEVoltar';
 import { onAviso, publicarAviso, type Aviso } from '../lib/avisoTela';
 import type { Parada, Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ViagemDetalhe'>;
+
+/**
+ * 🔬 TEMPORÁRIO — faixa de diagnóstico (15/08). Remover quando fechar.
+ *
+ * Só ELA se redesenha, a cada 500ms; nada aqui usa `setState` da tela e a faixa
+ * não recebe toque (`pointerEvents="none"`) — instrumento que interfere no gesto
+ * já mascarou a causa uma vez.
+ */
+function FaixaDiagnostico() {
+  const [, forcar] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => forcar((n) => n + 1), 500);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <View style={styles.diagBarra} pointerEvents="none">
+      <Text style={styles.diagTxt}>🔬 {lerDiagnostico()}</Text>
+    </View>
+  );
+}
 
 type Filtro = 'PENDENTES' | 'ENTREGUES' | 'TODAS';
 
@@ -370,7 +391,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
    * KM antes das baixas.
    */
   const irParaBaixa = useCallback((e: NonNullable<Parada['entrega']>) => {
-    console.log(`[TOQUE] dar-baixa #${e.numero} @ ${Date.now()}`); // 🔬 TEMPORÁRIO
+    registrarToque(`baixa#${e.numero}`); // 🔬
     navigation.navigate('Baixa', {
       entregaId: e.id,
       entregaNumero: e.numero,
@@ -607,11 +628,10 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
                 key={c.id}
                 style={[styles.filtroChip, filtro === c.id && styles.filtroChipOn]}
                 onPress={() => {
-                  // 🔬 TEMPORÁRIO: o chip é o handler mais puro da tela (só
-                  // setState). Se ESTA linha sai no Metro e a tela não muda, o
-                  // toque chegou e o problema é render/nativo; se não sai, o
-                  // toque não chegou ao handler.
-                  console.log(`[TOQUE] filtro ${c.id} @ ${Date.now()}`);
+                  // 🔬 O chip é o handler mais puro da tela (só setState). Se o
+                  // contador sobe e a tela não muda, o toque virou execução e o
+                  // custo está no render; se não sobe, o toque não chega aqui.
+                  registrarToque(`filtro:${c.id}`);
                   setFiltro(c.id);
                 }}
               >
@@ -648,6 +668,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       {/* ⚠️ FLUTUANTE, fora do cabeçalho da lista. Dentro dele, aparecer e sumir
           reposicionava tudo: o botão saía de baixo do dedo justamente enquanto
           ele tocava. E `pointerEvents="none"` para não roubar toque nenhum. */}
+      <FaixaDiagnostico />
       {aviso && (
         <View
           style={[styles.avisoBanner, aviso.tipo === 'atencao' && styles.avisoBannerAtencao]}
@@ -830,6 +851,9 @@ const styles = StyleSheet.create({
   btnBaixaTxtOff: { color: '#64748b' },
   kmAviso: { width: '100%', color: '#b45309', fontSize: 12, fontWeight: '600' },
   // Confirmação do que acabou de acontecer (substitui o Alert). Some em 5s.
+  // 🔬 TEMPORÁRIO — remover junto com FaixaDiagnostico.
+  diagBarra: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#0f172a', paddingVertical: 4, paddingHorizontal: 8 },
+  diagTxt: { color: '#7dd3fc', fontSize: 10, fontWeight: '700', textAlign: 'center' },
   avisoBanner: { position: 'absolute', top: 8, left: 12, right: 12, backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 12, elevation: 4 },
   avisoBannerAtencao: { backgroundColor: '#fef3c7', borderColor: '#fcd34d' },
   avisoTxt: { color: '#14532d', fontSize: 13, fontWeight: '700' },

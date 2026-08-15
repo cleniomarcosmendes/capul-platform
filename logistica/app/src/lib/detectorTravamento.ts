@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { registrarTravamento } from './diagnostico';
 
 /**
  * 🔬 Detector de travamento da thread de JS — só em desenvolvimento.
@@ -36,6 +37,8 @@ export function useDetectorDeTravamento(rotulo: string, limiteMs = 400): void {
       const atraso = agora - anterior - INTERVALO;
       anterior = agora;
       if (atraso > limiteMs) {
+        // Vai para o coletor: em bundle de produção o console NÃO chega ao Metro.
+        registrarTravamento(atraso);
         // `log`, nunca `warn`: warn cai no LogBox, que simboliza a pilha
         // consultando o Metro — caro justamente quando algo ja esta lento.
         console.log(`[TRAVOU] ${rotulo}: a thread de JS ficou ${atraso}ms parada`);
