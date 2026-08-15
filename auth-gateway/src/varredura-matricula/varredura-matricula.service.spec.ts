@@ -173,3 +173,65 @@ describe('VarreduraMatriculaService', () => {
     );
   });
 });
+
+/**
+ * Baldes por card (pedido do Clenio): cada número da tela abre a lista de quem
+ * está nele. O ganho não é cosmético — `falhas` e `semMatricula` eram cegos, e
+ * são justamente os dois que dizem o que a varredura NÃO cobriu.
+ */
+describe('VarreduraMatriculaService — listas por card', () => {
+  const usuario = (n: number, matricula: string | null) => ({
+    id: `u${n}`, username: `user${n}`, nome: `Fulano ${n}`, matricula,
+  });
+
+  const montar = (usuarios: any[], situacoes: Record<string, any>) => {
+    const prisma: any = {
+      usuario: { findMany: jest.fn().mockResolvedValue(usuarios), updateMany: jest.fn() },
+      systemLog: { create: jest.fn().mockResolvedValue({}), findFirst: jest.fn() },
+      systemConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
+    const protheus: any = {
+      verificarMatricula: jest.fn().mockImplementation((m: string) => Promise.resolve(situacoes[m] ?? 'FALHA')),
+    };
+    return new VarreduraMatriculaService(prisma, { notify: jest.fn() } as any, protheus);
+  };
+
+  it('cada usuário cai em UM balde, e o balde diz quem é', async () => {
+    const svc = montar(
+      [usuario(1, 'E001'), usuario(2, 'E002'), usuario(3, 'E003'), usuario(4, null)],
+      { E001: 'ATIVO', E002: 'NAO_ENCONTRADO', E003: 'FALHA' },
+    );
+
+    const r = await svc.run();
+
+    expect(r.listas.ativos.map((u) => u.username)).toEqual(['user1']);
+    expect(r.listas.desligados.map((u) => u.username)).toEqual(['user2']);
+    expect(r.listas.falhas.map((u) => u.username)).toEqual(['user3']);
+    expect(r.listas.semMatricula.map((u) => u.username)).toEqual(['user4']);
+    // Quem está no balde `semMatricula` está lá por NÃO ter matrícula.
+    expect(r.listas.semMatricula[0].matricula).toBeNull();
+  });
+
+  it('⭐ as contagens são derivadas das listas — não há como divergirem', async () => {
+    const svc = montar(
+      [usuario(1, 'E001'), usuario(2, 'E002'), usuario(3, 'E003'), usuario(4, null), usuario(5, '')],
+      { E001: 'ATIVO', E002: 'ATIVO', E003: 'NAO_ENCONTRADO' },
+    );
+
+    const r = await svc.run();
+
+    expect(r.ativos).toBe(r.listas.ativos.length);
+    expect(r.naoEncontrados).toBe(r.listas.desligados.length);
+    expect(r.falhas).toBe(r.listas.falhas.length);
+    expect(r.semMatricula).toBe(r.listas.semMatricula.length);
+    // `verificados` conta só quem foi de fato consultado no Protheus.
+    expect(r.verificados).toBe(3);
+    expect(r.semMatricula).toBe(2); // null e string vazia
+  });
+
+  it('`desligados` continua sendo o atalho de `listas.desligados`', async () => {
+    const svc = montar([usuario(1, 'E001')], { E001: 'NAO_ENCONTRADO' });
+    const r = await svc.run();
+    expect(r.desligados).toBe(r.listas.desligados);
+  });
+});

@@ -12,6 +12,33 @@ const TETO_PADRAO_PCT = 20;
 /** Pausa entre consultas ao Protheus, em ms. */
 const INTERVALO_MS = 300;
 
+export interface UsuarioVarredura {
+  id: string;
+  username: string;
+  nome: string;
+  /** `null` no balde `semMatricula` — é justamente o que falta nele. */
+  matricula: string | null;
+}
+
+/**
+ * ⭐ Guarda QUEM, não só QUANTOS.
+ *
+ * A varredura já percorre usuário a usuário; descartar a identidade de quem não
+ * é "desligado" só empobrecia o resultado. Com os baldes, cada número da tela
+ * pode ser aberto — e os dois que mais importam são os que antes eram cegos:
+ * `falhas` (não foi verificado, e ninguém sabia quem) e `semMatricula` (está
+ * FORA da varredura, ou seja, o limite real da cobertura).
+ *
+ * As contagens são DERIVADAS destas listas (ver `run`), então número e lista não
+ * têm como divergir.
+ */
+export interface ListasVarredura {
+  ativos: UsuarioVarredura[];
+  desligados: UsuarioVarredura[];
+  falhas: UsuarioVarredura[];
+  semMatricula: UsuarioVarredura[];
+}
+
 export interface ResultadoVarredura {
   verificados: number;
   ativos: number;
@@ -21,8 +48,9 @@ export interface ResultadoVarredura {
   bloqueados: number;
   abortada: boolean;
   motivoAborto?: string;
-  /** Quem seria (ou foi) desativado — é o que o Configurador mostra. */
-  desligados: Array<{ id: string; username: string; nome: string; matricula: string }>;
+  /** Quem seria (ou foi) desativado — atalho de `listas.desligados`. */
+  desligados: UsuarioVarredura[];
+  listas: ListasVarredura;
 }
 
 /**
@@ -79,26 +107,39 @@ export class VarreduraMatriculaService {
     });
 
     const comMatricula = usuarios.filter((u) => (u.matricula ?? '').trim() !== '');
-    const semMatricula = usuarios.length - comMatricula.length;
 
-    const r: ResultadoVarredura = {
-      verificados: 0, ativos: 0, naoEncontrados: 0, falhas: 0,
-      semMatricula, bloqueados: 0, abortada: false, desligados: [],
+    const listas: ListasVarredura = {
+      ativos: [],
+      desligados: [],
+      falhas: [],
+      semMatricula: usuarios
+        .filter((u) => (u.matricula ?? '').trim() === '')
+        .map((u) => ({ id: u.id, username: u.username, nome: u.nome, matricula: null })),
     };
 
     for (const u of comMatricula) {
       const situacao: SituacaoMatricula = await this.protheus.verificarMatricula(u.matricula!);
-      r.verificados++;
-      if (situacao === 'ATIVO') r.ativos++;
-      else if (situacao === 'FALHA') r.falhas++;
-      else {
-        r.naoEncontrados++;
-        r.desligados.push({ id: u.id, username: u.username, nome: u.nome, matricula: u.matricula! });
-      }
+      const item: UsuarioVarredura = { id: u.id, username: u.username, nome: u.nome, matricula: u.matricula! };
+      if (situacao === 'ATIVO') listas.ativos.push(item);
+      else if (situacao === 'FALHA') listas.falhas.push(item);
+      else listas.desligados.push(item);
       // Espaça TODAS as consultas, não só as que acharam algo: são ~130 chamadas
       // seguidas ao ERP, e o Protheus é sistema de terceiro em produção.
       await this.pausa();
     }
+
+    // Contagens DERIVADAS das listas — número e detalhe não podem divergir.
+    const r: ResultadoVarredura = {
+      verificados: listas.ativos.length + listas.desligados.length + listas.falhas.length,
+      ativos: listas.ativos.length,
+      naoEncontrados: listas.desligados.length,
+      falhas: listas.falhas.length,
+      semMatricula: listas.semMatricula.length,
+      bloqueados: 0,
+      abortada: false,
+      desligados: listas.desligados,
+      listas,
+    };
 
     // Freio de mão: proporção alta = problema nosso, não demissão em massa.
     const base = r.ativos + r.naoEncontrados; // só quem o Protheus REALMENTE respondeu

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { varreduraMatriculaService } from '../../services/varredura-matricula.service';
-import type { ResultadoVarredura, StatusVarredura } from '../../services/varredura-matricula.service';
+import type { ResultadoVarredura, StatusVarredura, UsuarioVarredura } from '../../services/varredura-matricula.service';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
+
+type Balde = 'verificados' | 'ativos' | 'desligados' | 'falhas' | 'semMatricula' | 'bloqueados';
 
 function formatData(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -27,6 +29,8 @@ export function VarreduraMatriculaPage() {
   const [rodando, setRodando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [teto, setTeto] = useState(20);
+  /** Card aberto. `null` = nenhum — a lista só aparece quando se pede. */
+  const [aberto, setAberto] = useState<Balde | null>(null);
 
   useEffect(() => {
     void refresh();
@@ -185,12 +189,12 @@ export function VarreduraMatriculaPage() {
         {dados && (
           <>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              <Indicador rotulo="Verificados" valor={dados.verificados} />
-              <Indicador rotulo="Ativos" valor={dados.ativos} cor="text-emerald-700" />
-              <Indicador rotulo="Desligados" valor={dados.naoEncontrados} cor="text-red-700" />
-              <Indicador rotulo="Falhas" valor={dados.falhas} cor="text-amber-700" />
-              <Indicador rotulo="Sem matrícula" valor={dados.semMatricula} cor="text-slate-500" />
-              <Indicador rotulo="Bloqueados" valor={dados.bloqueados} cor="text-red-700" />
+              <Indicador balde="verificados" rotulo="Verificados" valor={dados.verificados} aberto={aberto} onAbrir={setAberto} />
+              <Indicador balde="ativos" rotulo="Ativos" valor={dados.ativos} cor="text-emerald-700" aberto={aberto} onAbrir={setAberto} />
+              <Indicador balde="desligados" rotulo="Desligados" valor={dados.naoEncontrados} cor="text-red-700" aberto={aberto} onAbrir={setAberto} />
+              <Indicador balde="falhas" rotulo="Falhas" valor={dados.falhas} cor="text-amber-700" aberto={aberto} onAbrir={setAberto} />
+              <Indicador balde="semMatricula" rotulo="Sem matrícula" valor={dados.semMatricula} cor="text-slate-500" aberto={aberto} onAbrir={setAberto} />
+              <Indicador balde="bloqueados" rotulo="Bloqueados" valor={dados.bloqueados} cor="text-red-700" aberto={aberto} onAbrir={setAberto} />
             </div>
 
             {dados.abortada && (
@@ -215,35 +219,12 @@ export function VarreduraMatriculaPage() {
               </p>
             )}
 
-            {dados.desligados.length > 0 && (
-              <div className="mt-4">
-                <p className="mb-2 text-sm font-semibold text-slate-700">
-                  {dados.bloqueados > 0 ? 'Usuários desativados' : 'Usuários que seriam desativados'}
-                </p>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="border-b border-slate-200 text-left text-slate-500">
-                      <tr>
-                        <th className="py-2 pr-4 font-medium">Usuário</th>
-                        <th className="py-2 pr-4 font-medium">Nome</th>
-                        <th className="py-2 font-medium">Matrícula</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dados.desligados.map((d) => (
-                        <tr key={d.id} className="border-b border-slate-100">
-                          <td className="py-2 pr-4 font-mono text-slate-800">{d.username}</td>
-                          <td className="py-2 pr-4 text-slate-700">{d.nome}</td>
-                          <td className="py-2 font-mono text-slate-600">{d.matricula}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  Para reativar alguém desta lista, use o cadastro de usuários — a desativação é reversível.
-                </p>
-              </div>
+            {aberto && (
+              <TabelaBalde
+                balde={aberto}
+                dados={dados}
+                onFechar={() => setAberto(null)}
+              />
             )}
           </>
         )}
@@ -252,11 +233,114 @@ export function VarreduraMatriculaPage() {
   );
 }
 
-function Indicador({ rotulo, valor, cor = 'text-slate-800' }: { rotulo: string; valor: number; cor?: string }) {
+/**
+ * Card clicável. Vazio não abre — e fica sem cara de botão, para o operador não
+ * tocar num número que não tem o que mostrar.
+ */
+function Indicador({
+  balde, rotulo, valor, cor = 'text-slate-800', aberto, onAbrir,
+}: {
+  balde: Balde; rotulo: string; valor: number; cor?: string;
+  aberto: Balde | null; onAbrir: (b: Balde | null) => void;
+}) {
+  const temLista = valor > 0;
+  const selecionado = aberto === balde;
   return (
-    <div className="rounded-lg border border-slate-200 p-3">
+    <button
+      type="button"
+      disabled={!temLista}
+      onClick={() => onAbrir(selecionado ? null : balde)}
+      className={`rounded-lg border p-3 text-left transition ${
+        selecionado ? 'border-capul-600 ring-2 ring-capul-600/20' : 'border-slate-200'
+      } ${temLista ? 'cursor-pointer hover:border-capul-400 hover:bg-slate-50' : 'cursor-default opacity-70'}`}
+    >
       <p className="text-xs text-slate-500">{rotulo}</p>
       <p className={`text-xl font-bold ${cor}`}>{valor}</p>
+      {temLista && (
+        <p className="mt-0.5 text-[11px] text-slate-400">{selecionado ? 'ocultar' : 'ver lista'}</p>
+      )}
+    </button>
+  );
+}
+
+/** O que cada card mostra, e por que aquela lista importa. */
+const BALDES: Record<Balde, { titulo: string; nota?: string }> = {
+  verificados: {
+    titulo: 'Usuários verificados no Protheus',
+    nota: 'Todos os que têm matrícula e foram consultados — ativos, desligados e falhas.',
+  },
+  ativos: { titulo: 'Ativos no Protheus', nota: 'Matrícula encontrada. Nada a fazer com estes.' },
+  desligados: {
+    titulo: 'Sem matrícula no Protheus (desligados)',
+    nota: 'O Protheus respondeu e não tem esta chapa. A desativação é reversível pelo cadastro de usuários.',
+  },
+  falhas: {
+    titulo: 'Não foi possível verificar',
+    nota: 'Protheus fora do ar, credencial ou endpoint no ambiente errado. NÃO entram na conta do freio e NUNCA são bloqueados.',
+  },
+  semMatricula: {
+    titulo: 'Sem matrícula cadastrada',
+    nota: 'Ficam FORA da varredura — não há o que consultar. Enquanto o campo estiver vazio, um desligado com esse login não é alcançado. Preencha no cadastro do usuário.',
+  },
+  bloqueados: {
+    titulo: 'Usuários desativados nesta execução',
+    nota: 'Reversível pelo cadastro de usuários.',
+  },
+};
+
+function listaDoBalde(balde: Balde, dados: ResultadoVarredura): UsuarioVarredura[] {
+  const l = dados.listas;
+  switch (balde) {
+    case 'verificados': return [...l.ativos, ...l.desligados, ...l.falhas];
+    case 'ativos': return l.ativos;
+    case 'desligados': return l.desligados;
+    case 'falhas': return l.falhas;
+    case 'semMatricula': return l.semMatricula;
+    // Bloqueados são os desligados que a execução de fato desativou.
+    case 'bloqueados': return dados.bloqueados > 0 ? l.desligados : [];
+  }
+}
+
+function TabelaBalde({
+  balde, dados, onFechar,
+}: { balde: Balde; dados: ResultadoVarredura; onFechar: () => void }) {
+  const lista = listaDoBalde(balde, dados);
+  const info = BALDES[balde];
+  return (
+    <div className="mt-4 rounded-lg border border-slate-200">
+      <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">
+            {info.titulo} <span className="font-normal text-slate-500">({lista.length})</span>
+          </p>
+          {info.nota && <p className="mt-1 text-xs text-slate-500">{info.nota}</p>}
+        </div>
+        <button onClick={onFechar} className="shrink-0 text-sm text-slate-500 hover:text-slate-700">
+          fechar
+        </button>
+      </div>
+      <div className="max-h-96 overflow-auto">
+        <table className="min-w-full text-sm">
+          <thead className="sticky top-0 border-b border-slate-200 bg-white text-left text-slate-500">
+            <tr>
+              <th className="px-4 py-2 font-medium">Usuário</th>
+              <th className="px-4 py-2 font-medium">Nome</th>
+              <th className="px-4 py-2 font-medium">Matrícula</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lista.map((u) => (
+              <tr key={u.id} className="border-b border-slate-100">
+                <td className="px-4 py-2 font-mono text-slate-800">{u.username}</td>
+                <td className="px-4 py-2 text-slate-700">{u.nome}</td>
+                <td className="px-4 py-2 font-mono text-slate-600">
+                  {u.matricula ?? <span className="italic text-slate-400">não informada</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

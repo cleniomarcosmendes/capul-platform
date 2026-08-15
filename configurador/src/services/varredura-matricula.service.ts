@@ -1,10 +1,18 @@
 import { coreApi } from './api';
 
-export interface Desligado {
+export interface UsuarioVarredura {
   id: string;
   username: string;
   nome: string;
-  matricula: string;
+  /** `null` no balde "sem matrícula" — é o que falta nele. */
+  matricula: string | null;
+}
+
+export interface ListasVarredura {
+  ativos: UsuarioVarredura[];
+  desligados: UsuarioVarredura[];
+  falhas: UsuarioVarredura[];
+  semMatricula: UsuarioVarredura[];
 }
 
 export interface ResultadoVarredura {
@@ -16,7 +24,8 @@ export interface ResultadoVarredura {
   bloqueados: number;
   abortada: boolean;
   motivoAborto?: string;
-  desligados: Desligado[];
+  desligados: UsuarioVarredura[];
+  listas: ListasVarredura;
 }
 
 export interface StatusVarredura {
