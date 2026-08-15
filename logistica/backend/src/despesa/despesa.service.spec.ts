@@ -157,7 +157,13 @@ describe('DespesaService — acerto pelo condutor identificado (5a)', () => {
   let svc: DespesaService;
   let token: any;
   const caixa = { sub: 'caixa1', filialId: 'f1', tipo: 'PADRAO', modulos: [{ codigo: 'LOGISTICA', role: 'REGISTRADOR_FROTA' }] } as any;
-  const despesa = { id: 'dsp1', filialId: 'f1', veiculoId: 'v1', viagemId: 'vg1', comprovanteObjectKey: null };
+  // `situacao`/`aprovadoPorId` explícitos: no banco eles SEMPRE existem (a coluna tem
+  // default PENDENTE) e a trava do valor decidido falha FECHADA — sem eles o fixture
+  // era lido como "já analisada" e não representava o caso que este teste descreve.
+  const despesa = {
+    id: 'dsp1', filialId: 'f1', veiculoId: 'v1', viagemId: 'vg1', comprovanteObjectKey: null,
+    situacao: 'PENDENTE', aprovadoPorId: null,
+  };
 
   beforeEach(() => {
     prisma = createPrismaMock();
@@ -195,5 +201,103 @@ describe('DespesaService — acerto pelo condutor identificado (5a)', () => {
   it('acerto ENCERRADO → nem o condutor identificado altera', async () => {
     prisma.viagem.findUnique.mockResolvedValue({ acertoEncerradoEm: new Date() });
     await expect(svc.atualizar('dsp1', {} as any, caixa, ['REGISTRADOR_FROTA'], 'tk')).rejects.toThrow(/Acerto encerrado/);
+  });
+});
+
+/**
+ * ⭐ A DECISÃO VALE PARA O VALOR DECIDIDO — lado da FROTA (achado do
+ * /security-review de 15/08).
+ *
+ * O acesso do condutor ao acerto (`x-condutor-token`) foi aberto sem esta trava: o
+ * ramo do token só checava `acertoEncerradoEm`, e **aprovar não fecha o acerto**
+ * (quem fecha é a ação explícita de encerrar). Logo APROVADA com acerto aberto é o
+ * estado NORMAL, e nessa janela o próprio beneficiário reescrevia o valor: R$ 50
+ * aprovados viravam R$ 5.000 e seguiam APROVADA, com o carimbo do supervisor colado
+ * no número novo. `acertoViagem` soma as APROVADA em `saldo = adiantamento -
+ * totalDespesas` — isto é dinheiro a pagar ao condutor.
+ *
+ * O módulo RDV já tinha a regra (`SupervisorService.editarDespesa`); a frota não.
+ */
+describe('DespesaService — condutor não mexe no valor já decidido', () => {
+  let prisma: any;
+  let svc: DespesaService;
+  const condutorToken = { verificar: jest.fn(), emitir: jest.fn() } as any;
+  const gestor = () => ({ sub: 'g1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'GESTOR_FROTA' }] }) as any;
+  const condutor = () => ({ sub: 'caixa', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'REGISTRADOR_FROTA' }] }) as any;
+
+  const despesa = (over: Record<string, unknown> = {}) => ({
+    id: 'd1', filialId: 'f1', veiculoId: 'v1', viagemId: 'vg1', criadoPorId: 'caixa',
+    situacao: 'PENDENTE', aprovadoPorId: null, tipoDespesaId: 't1',
+    numeroDocumento: null, semNota: false, comprovanteObjectKey: null,
+    ...over,
+  });
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new DespesaService(prisma, dep(), dep(), condutorToken);
+    // Acerto ABERTO: é o estado em que a despesa já pode estar aprovada.
+    prisma.viagem.findUnique.mockResolvedValue({ acertoEncerradoEm: null });
+    prisma.despesaVeiculo.update.mockResolvedValue({});
+    prisma.despesaVeiculo.delete.mockResolvedValue({});
+    prisma.anexoDespesa.findMany.mockResolvedValue([]);
+  });
+
+  it('APROVADA: condutor NÃO altera o valor — o beneficiário não reescreve o que foi aprovado', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(
+      despesa({ situacao: 'APROVADA', aprovadoPorId: 'sup1' }),
+    );
+    await expect(
+      svc.atualizar('d1', { valor: 5000 } as any, condutor(), ['REGISTRADOR_FROTA'], 'tok'),
+    ).rejects.toThrow(/já passou por análise/i);
+    expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
+  });
+
+  it('CONTESTADA: condutor NÃO apaga — senão a rejeição sumia e ele relançava limpa', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(
+      despesa({ situacao: 'CONTESTADA', aprovadoPorId: 'sup1' }),
+    );
+    await expect(
+      svc.excluir('d1', condutor(), ['REGISTRADOR_FROTA'], 'tok'),
+    ).rejects.toThrow(/só o gestor/i);
+    expect(prisma.despesaVeiculo.delete).not.toHaveBeenCalled();
+  });
+
+  it('voltou a PENDENTE mas JÁ FOI analisada: continua travada — o marcador é aprovadoPorId', async () => {
+    // Olhar só a `situacao` deixaria lavar a decisão com uma edição intermediária.
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(
+      despesa({ situacao: 'PENDENTE', aprovadoPorId: 'sup1' }),
+    );
+    await expect(
+      svc.atualizar('d1', { valor: 5000 } as any, condutor(), ['REGISTRADOR_FROTA'], 'tok'),
+    ).rejects.toThrow(/já passou por análise/i);
+  });
+
+  it('PENDENTE e nunca analisada: o condutor edita à vontade — é dele e ninguém decidiu', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(despesa());
+    await svc.atualizar('d1', { valor: 80 } as any, condutor(), ['REGISTRADOR_FROTA'], 'tok');
+    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+    // Sem carimbo de aprovação: nada foi decidido.
+    expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.aprovadoPorId).toBeUndefined();
+  });
+
+  it('APROVADA: condutor ainda ajusta o que NÃO é dinheiro (observação)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(
+      despesa({ situacao: 'APROVADA', aprovadoPorId: 'sup1' }),
+    );
+    await svc.atualizar('d1', { observacao: 'nota fiscal reenviada' } as any, condutor(), ['REGISTRADOR_FROTA'], 'tok');
+    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+  });
+
+  it('AUTORIDADE corrige valor decidido: mantém a aprovação, mas REFAZ o carimbo', async () => {
+    // O aval passa a ser de quem editou, sobre o valor novo — o acerto nunca exibe
+    // aprovação de um número que não foi o aprovado.
+    prisma.despesaVeiculo.findUnique.mockResolvedValue(
+      despesa({ situacao: 'APROVADA', aprovadoPorId: 'sup1' }),
+    );
+    prisma.veiculo.findFirst.mockResolvedValue({ id: 'v1', filialId: 'f1' });
+    await svc.atualizar('d1', { valor: 120 } as any, gestor(), ['GESTOR_FROTA']);
+    const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
+    expect(data.aprovadoPorId).toBe('g1');
+    expect(data.aprovadoEm).toBeInstanceOf(Date);
   });
 });

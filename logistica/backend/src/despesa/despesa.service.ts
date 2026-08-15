@@ -757,7 +757,7 @@ export class DespesaService {
     user: JwtPayload,
     roles?: string[],
     condutorToken?: string,
-  ) {
+  ): Promise<'CONDUTOR' | 'AUTORIDADE'> {
     if (condutorToken && d.viagemId) {
       // Token preso a {viagem, condutor}: vale só para a viagem da despesa.
       this.condutorToken.verificar(condutorToken, d.viagemId);
@@ -765,15 +765,57 @@ export class DespesaService {
         where: { id: d.viagemId }, select: { acertoEncerradoEm: true },
       });
       if (v?.acertoEncerradoEm) throw new BadRequestException('Acerto encerrado — reabra o acerto para alterar.');
-      return;
+      // ⚠️ Quem entra por aqui é o CONDUTOR — a parte interessada, não a autoridade.
+      // Devolve o caminho usado para o chamador aplicar a regra do valor decidido.
+      return 'CONDUTOR';
     }
     await this.assertPodeGerirVeiculo(d.veiculoId, user, roles, d);
+    return 'AUTORIDADE';
+  }
+
+  /**
+   * ⭐ A DECISÃO VALE PARA O VALOR QUE FOI DECIDIDO.
+   *
+   * `aprovadoPorId` é gravado tanto no APROVADA quanto no CONTESTADA e sobrevive a
+   * uma volta para PENDENTE — então ele, e não a `situacao` atual, é o marcador de
+   * "já passou por análise". Olhar só a situação permitiria lavar a decisão com uma
+   * edição intermediária.
+   */
+  private jaPassouPorAnalise(d: { situacao: StatusDespesa; aprovadoPorId: string | null }) {
+    return d.situacao !== 'PENDENTE' || !!d.aprovadoPorId;
   }
 
   async atualizar(id: string, dto: AtualizarDespesaDto, user: JwtPayload, roles?: string[], condutorToken?: string) {
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
     if (!d || (!ehGestor(roles) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeMexerNoAcerto(d, user, roles, condutorToken);
+    const via = await this.assertPodeMexerNoAcerto(d, user, roles, condutorToken);
+
+    // ⭐ QUEM NÃO DECIDIU NÃO MEXE NO VALOR DECIDIDO (achado do /security-review, 15/08).
+    //
+    // O acesso do condutor ao acerto foi aberto sem esta trava: o token só olhava
+    // `acertoEncerradoEm`, e aprovar NÃO fecha o acerto (`aprovar()` não toca nele;
+    // quem fecha é a ação explícita de encerrar). Então APROVADA com acerto aberto é
+    // o estado NORMAL — e nessa janela o próprio beneficiário reescrevia o valor: uma
+    // despesa aprovada em R$ 50 virava R$ 5.000 e seguia APROVADA, com o carimbo do
+    // supervisor colado no número novo. `acertoViagem` soma as APROVADA e devolve
+    // `saldo = adiantamento - totalDespesas`, ou seja, isso vira dinheiro a pagar.
+    //
+    // Mesma regra que o RDV já aplica em `SupervisorService.editarDespesa`. Fornecedor,
+    // observação e comprovante não mexem no dinheiro e seguem livres.
+    const mexeNoDinheiro = dto.valor !== undefined || dto.tipoDespesaId !== undefined || dto.dataDespesa !== undefined;
+    const redecisao: { aprovadoPorId?: string; aprovadoEm?: Date } = {};
+    if (mexeNoDinheiro && this.jaPassouPorAnalise(d)) {
+      if (via === 'CONDUTOR') {
+        throw new ForbiddenException(
+          'Esta despesa já passou por análise — você não altera o valor dela. Peça ao gestor da frota ou ao supervisor do veículo.',
+        );
+      }
+      // A autoridade pode corrigir, mas o aval passa a ser DELA sobre o valor novo:
+      // carimbo refeito, para o acerto nunca exibir aprovação de um número que não foi
+      // o aprovado. Espelha a regra do RDV.
+      redecisao.aprovadoPorId = user.sub;
+      redecisao.aprovadoEm = new Date();
+    }
 
     if (dto.tipoDespesaId) {
       const tipo = await this.prisma.tipoDespesa.findFirst({ where: { id: dto.tipoDespesaId, ativo: true } });
@@ -804,6 +846,7 @@ export class DespesaService {
         observacao: dto.observacao !== undefined ? (dto.observacao.trim() || null) : undefined,
         numeroDocumento,
         semNota,
+        ...redecisao,
       },
     });
   }
@@ -812,7 +855,17 @@ export class DespesaService {
   async excluir(id: string, user: JwtPayload, roles?: string[], condutorToken?: string) {
     const d = await this.prisma.despesaVeiculo.findUnique({ where: { id } });
     if (!d || (!ehGestor(roles) && d.filialId !== user.filialId)) throw new NotFoundException('Despesa não encontrada nesta filial.');
-    await this.assertPodeMexerNoAcerto(d, user, roles, condutorToken);
+    const via = await this.assertPodeMexerNoAcerto(d, user, roles, condutorToken);
+    // ⭐ Depois de analisada, só a autoridade apaga. Sem isto o condutor apagava a
+    // despesa CONTESTADA e relançava limpa, como PENDENTE — a rejeição sumia sem
+    // rastro, junto com os binários do cofre (o `storage.remove` abaixo é definitivo).
+    // Mesma regra do RDV (`SupervisorService.removerDespesa`). Enquanto está PENDENTE
+    // ele apaga à vontade: é dele e ninguém analisou.
+    if (via === 'CONDUTOR' && this.jaPassouPorAnalise(d)) {
+      throw new ForbiddenException(
+        'Esta despesa já passou por análise — só o gestor da frota ou o supervisor do veículo pode removê-la.',
+      );
+    }
     // Anexos: o cascade apaga as LINHAS; os binários no cofre saem aqui (antes do delete).
     const anexos = await this.prisma.anexoDespesa.findMany({ where: { despesaId: id }, select: { objectKey: true } });
     await this.prisma.despesaVeiculo.delete({ where: { id } });
