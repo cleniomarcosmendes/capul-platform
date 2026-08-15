@@ -44,7 +44,7 @@ jest.mock('@react-native-async-storage/async-storage', () => {
   };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- o mock do AsyncStorage só existe depois do jest.mock, então tem que ser `require`
 const loja: Map<string, string> = require('@react-native-async-storage/async-storage').default.__loja;
 
 beforeEach(() => {

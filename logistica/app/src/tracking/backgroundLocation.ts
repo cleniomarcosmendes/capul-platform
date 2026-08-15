@@ -52,10 +52,12 @@ async function postPosicao(viagemId: string, coords: Location.LocationObjectCoor
     });
 
   let token = await getAccess();
-  let resp = await enviar(token);
+  const resp = await enviar(token);
   if (resp.status === 401) {
     token = await tentarRefresh();
-    if (token) resp = await enviar(token);
+    // Sem reatribuir `resp`: ninguém lê o resultado da 2ª tentativa — este ping
+    // é best-effort e o retorno não muda nada daqui para a frente.
+    if (token) await enviar(token);
   }
   // best-effort: ping perdido (sem sinal / token morto) não é fatal.
 }

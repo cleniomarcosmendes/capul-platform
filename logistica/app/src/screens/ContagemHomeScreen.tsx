@@ -27,13 +27,14 @@ export function ContagemHomeScreen({ navigation }: Props) {
       setErro(null);
       setListas(await listarMinhasListas());
     } catch (e) {
+      // Extraído UMA vez e já tipado: antes o mesmo caminho era reescrito três
+      // vezes com `as any`, que apaga justamente a checagem que evita ler
+      // `.mensagem` de algo que não é objeto.
+      const detalhe = (e as { response?: { data?: { detail?: { mensagem?: string } | string } } })
+        ?.response?.data?.detail;
       setErro(
-        (e as { response?: { data?: { detail?: { mensagem?: string } | string } } })?.response?.data?.detail
-          ? String(
-              typeof (e as any).response.data.detail === 'string'
-                ? (e as any).response.data.detail
-                : (e as any).response.data.detail.mensagem,
-            )
+        detalhe
+          ? String(typeof detalhe === 'string' ? detalhe : detalhe.mensagem)
           : 'Não foi possível carregar suas listas.',
       );
     } finally {
