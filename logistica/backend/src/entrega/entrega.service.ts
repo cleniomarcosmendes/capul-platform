@@ -678,6 +678,12 @@ export class EntregaService {
     let temComprovante = false;
     if (entregue && temProvaBinaria) {
       const cupom = e.cupons.find((c) => c.numeroCupom)?.numeroCupom ?? null;
+      // Quanto cada etapa custa, em ms e em bytes. "O app parece travado ao
+      // confirmar" só sai do campo da sensação com número: aqui se vê se a
+      // demora foi o carimbo, o cofre — ou nem estava no servidor.
+      const t0 = Date.now();
+      let msCarimbo = 0;
+      const bytesRecebidos = (provas.foto?.buffer.length ?? 0) + (provas.assinatura?.buffer.length ?? 0);
 
       // Grava UMA prova. FOTO: carimba metadados na imagem (auto-contida,
       // anti-fraude; best-effort). ASSINATURA não é carimbada.
@@ -699,7 +705,9 @@ export class EntregaService {
               fmtGeo(dto.geoLat, dto.geoLng) ?? '',
               new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
             ].filter((l): l is string => !!l && l.trim().length > 0);
+            const tCarimbo = Date.now();
             binario = await carimbarProvaEntrega(prova.buffer, linhas);
+            msCarimbo += Date.now() - tCarimbo;
             mimeType = 'image/jpeg';
           } catch (err) {
             this.logger.warn(`Falha ao carimbar prova da entrega ${e.id}; gravando original. ${String(err)}`);
@@ -731,6 +739,14 @@ export class EntregaService {
       // A FOTO é a prova "primária" (badge/consulta); a assinatura fica no cofre.
       comprovanteId = cidFoto ?? cidAssin;
       temComprovante = true;
+
+      const msTotal = Date.now() - t0;
+      this.logger.log(
+        `Baixa #${e.numero}: prova em ${msTotal}ms ` +
+          `(carimbo ${msCarimbo}ms · cofre ${msTotal - msCarimbo}ms) · ` +
+          `${(bytesRecebidos / 1024).toFixed(0)}KB recebidos` +
+          `${provas.foto ? ' · foto' : ''}${provas.assinatura ? ' · assinatura' : ''}`,
+      );
     }
 
     const novoStatus = entregue ? StatusEntrega.ENTREGUE : StatusEntrega.NAO_ENTREGUE;
