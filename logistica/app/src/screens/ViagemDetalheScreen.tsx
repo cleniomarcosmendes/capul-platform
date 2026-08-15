@@ -27,6 +27,7 @@ import { contarPendentesKmEntrega, onFilaKmEntregaChange, processarFilaKmEntrega
 import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, MAX_PARADAS_MAPS } from '../lib/navegar';
 import { useRastreamento } from '../lib/useRastreamento';
 import { garantirPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
+import { useDetectorDeTravamento } from '../lib/detectorTravamento';
 import { avisarEVoltar } from '../lib/avisarEVoltar';
 import { onAviso, publicarAviso, type Aviso } from '../lib/avisoTela';
 import type { Parada, Viagem } from '../types/api';
@@ -71,6 +72,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const totalPendRef = useRef(0);
   /** O 1º foco é a abertura da tela; os seguintes são volta de outra tela. */
   const primeiroFocoRef = useRef(true);
+
+  // 🔬 Só em DEV, só log no Metro: mede se a thread de JS trava (ver o arquivo).
+  useDetectorDeTravamento('ViagemDetalhe');
 
   const carregar = useCallback(async () => {
     try {
