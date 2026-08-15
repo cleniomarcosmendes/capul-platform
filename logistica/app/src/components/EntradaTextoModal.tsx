@@ -50,8 +50,15 @@ export function EntradaTextoModal({
 
   const podeSalvar = !obrigatorio || texto.trim().length > 0;
 
+  // ⭐ Fechado = NADA montado. `<Modal visible={false}>` não desmonta os filhos,
+  // e a tela de Baixa carrega DOIS destes (quem recebeu + motivo) o tempo todo,
+  // cada um com um `TextInput` de `autoFocus`. Mesmo tratamento dado ao
+  // SignaturePad em 14/08 — Modal montado sobre tela que vai ser desmontada é
+  // fonte conhecida de janela nativa órfã no Android, que engole os toques.
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onCancelar}>
+    <Modal visible animationType="slide" onRequestClose={onCancelar}>
       <View style={styles.tela}>
         <Text style={styles.titulo}>{titulo}</Text>
         {dica ? <Text style={styles.dica}>{dica}</Text> : null}

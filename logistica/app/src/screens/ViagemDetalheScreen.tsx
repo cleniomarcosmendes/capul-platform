@@ -32,6 +32,35 @@ import type { Parada, Viagem } from '../types/api';
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ViagemDetalhe'>;
 
+/**
+ * 🔬 TEMPORÁRIO — faixa de diagnóstico do "app trava depois da baixa" (14/08).
+ * Trocar para `false` (ou apagar junto com `FaixaDiagnostico`) quando fechar.
+ *
+ * Ela separa três causas que dão o MESMO sintoma para quem está com o aparelho
+ * na mão ("clico e não acontece nada"):
+ *   • contador PAROU        → a thread de JS está bloqueada;
+ *   • contador ANDANDO + alguma flag em SIM → é botão desabilitado por estado;
+ *   • contador ANDANDO + todas as flags em não → o toque não chega ao React
+ *     (janela nativa órfã por cima), que nenhum log de rede mostraria.
+ */
+const DIAGNOSTICO = true;
+
+/** Contador próprio: só ELE re-renderiza a cada 500ms, não a tela toda. */
+function FaixaDiagnostico({ flags }: { flags: string }) {
+  const [tique, setTique] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTique((t) => t + 1), 500);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    // `pointerEvents="none"`: a faixa NUNCA pode receber toque — seria criar o
+    // próprio defeito que ela existe para investigar.
+    <View style={styles.diagBarra} pointerEvents="none">
+      <Text style={styles.diagTxt}>🔬 {tique} · {flags}</Text>
+    </View>
+  );
+}
+
 type Filtro = 'PENDENTES' | 'ENTREGUES' | 'TODAS';
 
 export function ViagemDetalheScreen({ route, navigation }: Props) {
@@ -450,6 +479,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   }
 
   return (
+    <View style={{ flex: 1 }}>
     <FlatList
       contentContainerStyle={styles.lista}
       data={paradasFiltradas}
@@ -586,6 +616,15 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
         />
       )}
     />
+    {DIAGNOSTICO && (
+      <FaixaDiagnostico
+        flags={
+          `prep=${preparandoBaixa ? 'SIM' : 'não'} · reenv=${reenviandoDespesa ? 'SIM' : 'não'} · ` +
+          `km=${salvandoKm ? 'SIM' : 'não'} · fila b/d/k=${pendBaixa}/${pendDespesa}/${pendKm}`
+        }
+      />
+    )}
+    </View>
   );
 }
 
@@ -666,12 +705,22 @@ function ParadaCard({
           sobe sozinha quando a conexão voltar.
         </Text>
       ) : e.status === 'EM_VIAGEM' ? (
+        // ⚠️ SEM `disabled`. A regra desta base é "apagado mas TOCÁVEL, e o toque
+        // explica" — e era justamente aqui que ela estava sendo quebrada: com
+        // `disabled`, o toque não fazia nada e não dizia nada, que é como o
+        // entregador lê app travado. Se `preparando` ficasse presa em true por
+        // qualquer motivo, a tela inteira virava botão morto e calado.
         <TouchableOpacity
-          style={[styles.btnBaixa, bloqueadoSemKm && styles.btnBaixaOff]}
-          disabled={preparando}
-          onPress={() => (bloqueadoSemKm ? onBloqueado?.() : onBaixar(e))}
+          style={[styles.btnBaixa, (bloqueadoSemKm || preparando) && styles.btnBaixaOff]}
+          onPress={() =>
+            preparando
+              ? Alert.alert('Um instante', 'Estou enviando o KM de saída antes de abrir a baixa. Se demorar, toque de novo em alguns segundos.')
+              : bloqueadoSemKm
+                ? onBloqueado?.()
+                : onBaixar(e)
+          }
         >
-          <Text style={[styles.btnBaixaTxt, bloqueadoSemKm && styles.btnBaixaTxtOff]}>
+          <Text style={[styles.btnBaixaTxt, (bloqueadoSemKm || preparando) && styles.btnBaixaTxtOff]}>
             {preparando
               ? 'Enviando o KM de saída…'
               : bloqueadoSemKm
@@ -763,4 +812,7 @@ const styles = StyleSheet.create({
   btnBaixaOff: { backgroundColor: '#e2e8f0' },
   btnBaixaTxtOff: { color: '#64748b' },
   kmAviso: { width: '100%', color: '#b45309', fontSize: 12, fontWeight: '600' },
+  // 🔬 TEMPORÁRIO — remover junto com FaixaDiagnostico.
+  diagBarra: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#0f172a', paddingVertical: 4, paddingHorizontal: 8 },
+  diagTxt: { color: '#7dd3fc', fontSize: 10, fontWeight: '700', textAlign: 'center' },
 });
