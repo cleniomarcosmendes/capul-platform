@@ -101,7 +101,7 @@ Plataforma corporativa modular com microservicos independentes:
 - Docs: `docs/PLANO_MODULO_FISCAL_v2.0.md` (plano mestre), `docs/PENDENCIAS_PROTHEUS_18ABR2026.md` (formais)
 - **Regra critica**: NUNCA disparar consultas SEFAZ em loop ou cron nao supervisionado — risco de bloqueio do CNPJ da CAPUL (ver `memory/feedback_sefaz_nunca_em_loop.md`)
 
-### 7. Logistica / Entregas (`/entregas`) *(em desenvolvimento — Fase 1a/1b + Supervisores/RDV e gestão de Frota; app do entregador validado no aparelho em 10–11/08/2026)*
+### 7. Logistica / Entregas (`/entregas`) *(em desenvolvimento — Fase 1a/1b + Supervisores/RDV e gestão de Frota; app do entregador validado no aparelho em 10–11/08/2026; onda de desempenho/toque do app em 14–15/08 — aguardando validação em APK de HOMOLOGAÇÃO)*
 - Entregas domiciliares do supermercado (Unaí/MG): cadastro de entrega (balcao), montagem de viagem, frota, romaneio/etiquetas, painel
 - **Supervisores/RDV**: planejamentos + workflow de aprovação do coordenador + fechamento mensal (prestação de contas de representantes). Hierarquia: **Sup. de Departamento → Coordenador → Supervisor de Área**. Visita: rótulo contextual (planejar × registrar). **App = execução** (o planejamento é feito no desktop; a lista do app pede `escopo=meus` e traz só o RDV do próprio usuário).
 - **⭐ RDV — as 4 regras de integridade (onda 31/07–01/08, `40db4ac`..`8866090`)**, que valem para qualquer mexida futura no módulo:
@@ -113,6 +113,18 @@ Plataforma corporativa modular com microservicos independentes:
 - **Geolocalização de campo (Fase A)**: locais do cliente (`LocalCliente`) aprendidos das marcações de campo (consolidação por medóide, robusta a outlier) — o Protheus não tem esse dado. **SEDE** (visita técnica → tipo PROPRIEDADE) × **SILO/ponto de entrega** (entrega de ração rural → tipo ENTREGA) são locais distintos; entrega urbana não gera geo. "Ver no mapa" usa a coordenada consolidada. Gravar no Protheus = Fase C (futura). Ver `memory/project_geo_local_cliente.md`
 - **Despesa com vários comprovantes** (foto/PDF, até 5): tabela `anexo_despesa` (cofre/MinIO), padrão em supervisor + frota, web + app, convivendo com o comprovante único legado. Ver `memory/project_despesa_multi_anexo.md`
 - **Gestão de Frota**: saída de veículos, adiantamento/acerto de viagem, manutenção, linha do KM, custos/análise (custo de frota restrito a GESTOR_FROTA/ADMIN). Saída e retorno aceitam **data/hora informada** (lançamento retroativo de quem saiu às pressas; teto de 7 dias, futuro barrado) — `criadoEm` segue sendo o carimbo de *quando foi registrado* e `fechadoPorId`/`fechadoEm` registram **quem fechou** a viagem.
+- **⚠️ App — o que mudou em 14–15/08 (vale para quem mexer no app):** a foto é
+  **reduzida a 1080px NO APARELHO** antes de subir (o servidor reduz para isso de
+  qualquer forma) e a original é apagada; o carimbo da prova saiu do event loop
+  para um **worker** (uma baixa congelava a API inteira por ~2,4s); **nenhum
+  `Alert` perto de `navigation` e nenhum `await` antes de navegar** — diálogo
+  nativo em cima da transição e leitura de disco no toque deixavam a tela sem
+  resposta; `keyboardShouldPersistTaps` nas listas com campo (o teclado comia o
+  1º toque); e `removeClippedSubviews={false}` nas listas — no Android o padrão
+  desanexa o item, que continua visível e **para de receber toque**. Ver
+  `memory/project_app_baixa_travamento_14ago.md`.
+- **⚠️ App: `expo-image-manipulator` é módulo NATIVO** — exige **APK novo**; OTA
+  sobre o APK antigo derruba o app instalado (`runtimeVersion` fixo em 1.0.0).
 - **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota. A precisão de cada parada é exibida na montagem (o fallback de município fica a ~1,2 km e reordenava a rota), e o operador **corrige a coordenada arrastando o pin** — gravado no **cache de geocode** (`fonte=MANUAL`), então vale para as próximas entregas no mesmo endereço e sobrevive ao recálculo.
 - **⭐ A rota é um CICLO** (11/08): sai da filial e **volta para ela**. O 2-opt fecha o percurso, o KM previsto inclui a volta e o mapa a desenha tracejada. Antes o caminho era ABERTO — terminar no ponto mais distante da loja não custava nada, e o trecho mais longo sumia do KM.
 - **⭐ Duas coordenadas por entrega, com significados OPOSTOS** (11/08, migration `20260811190000`): `geo_lat/lng` = **pin de planejamento** (geocodificado, roteiriza); `baixa_geo_lat/lng` = **onde a entrega aconteceu** (GPS por evento). Dividiam a mesma coluna e a baixa sobrescrevia o pin — gravando NULL sem GPS, apagando o planejamento.
@@ -291,4 +303,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 11/08/2026*
+*Ultima atualizacao: 15/08/2026*
