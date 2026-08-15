@@ -29,7 +29,7 @@ import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, 
 import { useRastreamento } from '../lib/useRastreamento';
 import { garantirPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
 import { avisarEVoltar } from '../lib/avisarEVoltar';
-import { onAviso, type Aviso } from '../lib/avisoTela';
+import { onAviso, publicarAviso, type Aviso } from '../lib/avisoTela';
 import type { Parada, Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -93,9 +93,6 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [pendDespesa, setPendDespesa] = useState(0);
   const [pendKm, setPendKm] = useState(0);
   const [reenviandoDespesa, setReenviandoDespesa] = useState(false);
-  // Toque em "Dar baixa" que precisa subir o KM antes: sem este estado o botão
-  // ficava mudo enquanto isso, e mudo lê como travado.
-  const [preparandoBaixa, setPreparandoBaixa] = useState(false);
   /** 🔬 TEMPORÁRIO — quantos toques chegaram ao React. REF, nunca state. */
   const toquesRef = useRef(0);
   // Confirmação da baixa/despesa que ACABOU de acontecer — no lugar do Alert,
@@ -437,51 +434,46 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // nesse meio-tempo, subir o KM aqui evita que ele digite a baixa inteira para
   // receber "Registre o KM de saída da rota #N" logo depois de já tê-lo informado.
   // Best-effort: continuando sem sinal, a baixa segue e vai para a fila dela.
-  async function irParaBaixa(e: NonNullable<Parada['entrega']>) {
-    if ((await contarPendentesKmEntrega()) > 0) {
-      // Com feedback e prazo curto: este await fica ENTRE o toque e a tela de
-      // baixa, então sem isso o botão simplesmente não respondia por até 20s —
-      // o "clico e não acontece nada" relatado em campo. Estourando o prazo,
-      // seguimos assim mesmo: a baixa é enfileirada e o KM sobe depois.
-      setPreparandoBaixa(true);
-      // ⚠️ `finally`: este estado desabilita o botão "Dar baixa" de TODOS os
-      // cartões da tela. Ficando preso em `true` por uma falha aqui, a tela
-      // inteira vira botão morto e calado — e só sai disso desmontando (sair da
-      // rota e entrar de novo). Desligar fora do finally era apostar que nada
-      // entre o toque e a navegação pode falhar.
-      let r: Awaited<ReturnType<typeof processarFilaKmEntrega>> | null = null;
-      try {
-        r = await Promise.race([
-          processarFilaKmEntrega({ apenas: 'iniciar' }),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
-        ]);
-      } catch {
-        // Best-effort: isto é adiantamento, não a baixa. Falhando, seguimos para
-        // a tela de baixa — o KM sobe pela fila depois. O que não pode é o toque
-        // morrer aqui, calado.
-      } finally {
-        setPreparandoBaixa(false);
-      }
-      if (r && r.descartadas.length) {
-        // O servidor recusou o KM em definitivo: a rota segue sem KM lá, e a baixa
-        // seria recusada também. Melhor parar aqui, com o motivo, do que deixar ele
-        // fotografar e assinar para levar erro no fim.
-        Alert.alert(
-          'KM de saída recusado',
-          `${r.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n')}\n\n` +
-            'Corrija o KM de saída no topo da tela antes de dar baixa.',
-        );
-        await carregar();
-        return;
-      }
-      if (r && r.enviadas > 0) await carregar();
-    }
+  /**
+   * ⭐ NAVEGA PRIMEIRO. Nada de `await` entre o dedo e a tela.
+   *
+   * Aqui havia um `await contarPendentesKmEntrega()` como PRIMEIRA linha — uma
+   * leitura do AsyncStorage (SQLite, atravessando a ponte nativa) cobrada em
+   * TODO toque, mesmo com a fila vazia. Logo depois de uma baixa a ponte está
+   * ocupada (arquivo de foto, filas, re-render), a leitura demora, e o toque
+   * parece morto; ele toca de novo, enfileira outra leitura e piora. Era o
+   * "tenho que clicar várias vezes até abrir" (Clenio, viagens 36–38).
+   *
+   * E era leitura desnecessária: `pendKm` já vive no estado, alimentado pelo
+   * listener da fila. Dá para decidir sem tocar no disco.
+   *
+   * O adiantamento do KM continua acontecendo — mas ATRÁS da navegação, sem
+   * ninguém esperando. Se o servidor recusar, o aviso aparece na faixa da rota;
+   * e se o KM não subir a tempo, a baixa vai para a fila, que já sabe mandar o
+   * KM antes das baixas.
+   */
+  function irParaBaixa(e: NonNullable<Parada['entrega']>) {
     navigation.navigate('Baixa', {
       entregaId: e.id,
       entregaNumero: e.numero,
       destinatario: e.destinatarioNome,
     });
+
+    if (pendKm > 0) {
+      void processarFilaKmEntrega({ apenas: 'iniciar' })
+        .then((r) => {
+          if (r.descartadas.length) {
+            publicarAviso(
+              `KM de saída recusado — ${r.descartadas.map((d) => `${d.rotulo}: ${d.motivo}`).join('; ')}. Corrija o KM no topo da rota.`,
+              'atencao',
+            );
+          }
+          if (r.enviadas > 0 || r.descartadas.length) void carregar();
+        })
+        .catch(() => undefined);
+    }
   }
+
 
   function avisarSemKm() {
     Alert.alert(
@@ -648,9 +640,8 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
           // hodômetro é justamente como o KM de saída se perdia.
           bloqueadoSemKm={semKmSaida}
           onBloqueado={avisarSemKm}
-          preparando={preparandoBaixa}
           naFila={item.entrega ? baixasNaFila[item.entrega.id] : undefined}
-          onBaixar={(e) => void irParaBaixa(e)}
+          onBaixar={(e) => irParaBaixa(e)}
         />
       )}
     />
@@ -658,7 +649,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       <FaixaDiagnostico
         toquesRef={toquesRef}
         flags={
-          `prep=${preparandoBaixa ? 'SIM' : 'não'} · reenv=${reenviandoDespesa ? 'SIM' : 'não'} · ` +
+          `reenv=${reenviandoDespesa ? 'SIM' : 'não'} · ` +
           `km=${salvandoKm ? 'SIM' : 'não'} · fila b/d/k=${pendBaixa}/${pendDespesa}/${pendKm}`
         }
       />
@@ -672,15 +663,12 @@ function ParadaCard({
   onBaixar,
   bloqueadoSemKm = false,
   onBloqueado,
-  preparando = false,
   naFila,
 }: {
   parada: Parada;
   onBaixar: (e: NonNullable<Parada['entrega']>) => void;
   bloqueadoSemKm?: boolean;
   onBloqueado?: () => void;
-  /** Subindo o KM de saída antes de abrir a baixa — o botão precisa dizer isso. */
-  preparando?: boolean;
   /** Baixa feita no aparelho, esperando sinal (o servidor ainda não sabe). */
   naFila?: 'ENTREGUE' | 'NAO_ENTREGUE';
 }) {
@@ -744,27 +732,15 @@ function ParadaCard({
           sobe sozinha quando a conexão voltar.
         </Text>
       ) : e.status === 'EM_VIAGEM' ? (
-        // ⚠️ SEM `disabled`. A regra desta base é "apagado mas TOCÁVEL, e o toque
-        // explica" — e era justamente aqui que ela estava sendo quebrada: com
-        // `disabled`, o toque não fazia nada e não dizia nada, que é como o
-        // entregador lê app travado. Se `preparando` ficasse presa em true por
-        // qualquer motivo, a tela inteira virava botão morto e calado.
+        // ⚠️ SEM `disabled` e SEM estado de "preparando": o toque leva DIRETO
+        // para a tela de baixa. Qualquer trabalho antes de navegar — nem que
+        // fosse uma leitura de disco — é toque que não responde.
         <TouchableOpacity
-          style={[styles.btnBaixa, (bloqueadoSemKm || preparando) && styles.btnBaixaOff]}
-          onPress={() =>
-            preparando
-              ? Alert.alert('Um instante', 'Estou enviando o KM de saída antes de abrir a baixa. Se demorar, toque de novo em alguns segundos.')
-              : bloqueadoSemKm
-                ? onBloqueado?.()
-                : onBaixar(e)
-          }
+          style={[styles.btnBaixa, bloqueadoSemKm && styles.btnBaixaOff]}
+          onPress={() => (bloqueadoSemKm ? onBloqueado?.() : onBaixar(e))}
         >
-          <Text style={[styles.btnBaixaTxt, (bloqueadoSemKm || preparando) && styles.btnBaixaTxtOff]}>
-            {preparando
-              ? 'Enviando o KM de saída…'
-              : bloqueadoSemKm
-                ? '🔒 Registre o KM de saída'
-                : '✓ Dar baixa'}
+          <Text style={[styles.btnBaixaTxt, bloqueadoSemKm && styles.btnBaixaTxtOff]}>
+            {bloqueadoSemKm ? '🔒 Registre o KM de saída' : '✓ Dar baixa'}
           </Text>
         </TouchableOpacity>
       ) : null}

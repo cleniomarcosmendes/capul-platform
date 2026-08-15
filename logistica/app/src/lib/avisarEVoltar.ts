@@ -1,4 +1,4 @@
-import { Alert, InteractionManager } from 'react-native';
+import { Alert } from 'react-native';
 
 /**
  * Avisa e volta — nesta ordem, e é a ordem que importa.
@@ -32,7 +32,8 @@ export function avisarEVoltar(voltar: () => void, titulo: string, mensagem?: str
   // acontecia — era preciso insistir muitas vezes até a próxima tela abrir.
   // Quem volta para uma tela que sabe mostrar faixa deve preferir
   // `publicarAviso` (`lib/avisoTela.ts`) e não abrir diálogo nenhum.
-  InteractionManager.runAfterInteractions(() => {
-    setTimeout(() => Alert.alert(titulo, mensagem), 300);
-  });
+  // `setTimeout` puro: o `InteractionManager` está DEPRECADO no RN 0.85 e o
+  // próprio aviso dele apareceu na tela do Clenio. 350ms cobre a transição do
+  // native-stack com folga.
+  setTimeout(() => Alert.alert(titulo, mensagem), 350);
 }
