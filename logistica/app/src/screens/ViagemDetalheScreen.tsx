@@ -319,6 +319,61 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     }
   }
 
+  // ⚠️ ESTES useCallback FICAM AQUI, ANTES dos `return` antecipados abaixo.
+  // Hook depois de return condicional quebra a tela com "Rendered more hooks
+  // than during the previous render": no render em que a rota ainda está
+  // carregando roda menos hooks que no render completo. Como função comum
+  // podiam morar lá embaixo; como hook, não.
+  /**
+   * ⭐ NAVEGA PRIMEIRO. Nada de `await` entre o dedo e a tela.
+   *
+   * Aqui havia um `await contarPendentesKmEntrega()` como PRIMEIRA linha — uma
+   * leitura do AsyncStorage (SQLite, atravessando a ponte nativa) cobrada em
+   * TODO toque, mesmo com a fila vazia. Logo depois de uma baixa a ponte está
+   * ocupada (arquivo de foto, filas, re-render), a leitura demora, e o toque
+   * parece morto; ele toca de novo, enfileira outra leitura e piora. Era o
+   * "tenho que clicar várias vezes até abrir" (Clenio, viagens 36–38).
+   *
+   * E era leitura desnecessária: `pendKm` já vive no estado, alimentado pelo
+   * listener da fila. Dá para decidir sem tocar no disco.
+   *
+   * O adiantamento do KM continua acontecendo — mas ATRÁS da navegação, sem
+   * ninguém esperando. Se o servidor recusar, o aviso aparece na faixa da rota;
+   * e se o KM não subir a tempo, a baixa vai para a fila, que já sabe mandar o
+   * KM antes das baixas.
+   */
+  const irParaBaixa = useCallback((e: NonNullable<Parada['entrega']>) => {
+    navigation.navigate('Baixa', {
+      entregaId: e.id,
+      entregaNumero: e.numero,
+      destinatario: e.destinatarioNome,
+    });
+
+    if (pendKm > 0) {
+      void processarFilaKmEntrega({ apenas: 'iniciar' })
+        .then((r) => {
+          if (r.descartadas.length) {
+            publicarAviso(
+              `KM de saída recusado — ${r.descartadas.map((d) => `${d.rotulo}: ${d.motivo}`).join('; ')}. Corrija o KM no topo da rota.`,
+              'atencao',
+            );
+          }
+          if (r.enviadas > 0 || r.descartadas.length) void carregar();
+        })
+        .catch(() => undefined);
+    }
+    // Estável de propósito: `ParadaCard` é memoizado, e prop nova a cada render
+    // anularia a memoização — voltando a redesenhar todo cartão da lista.
+  }, [navigation, pendKm, carregar]);
+
+
+  const avisarSemKm = useCallback(() => {
+    Alert.alert(
+      'Registre a saída primeiro',
+      'A rota começa pela leitura do hodômetro. Informe o KM de saída no topo da tela para liberar a navegação, a despesa e as baixas.',
+    );
+  }, []);
+
   if (carregando) {
     return (
       <View style={styles.centro}>
@@ -395,55 +450,6 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // nesse meio-tempo, subir o KM aqui evita que ele digite a baixa inteira para
   // receber "Registre o KM de saída da rota #N" logo depois de já tê-lo informado.
   // Best-effort: continuando sem sinal, a baixa segue e vai para a fila dela.
-  /**
-   * ⭐ NAVEGA PRIMEIRO. Nada de `await` entre o dedo e a tela.
-   *
-   * Aqui havia um `await contarPendentesKmEntrega()` como PRIMEIRA linha — uma
-   * leitura do AsyncStorage (SQLite, atravessando a ponte nativa) cobrada em
-   * TODO toque, mesmo com a fila vazia. Logo depois de uma baixa a ponte está
-   * ocupada (arquivo de foto, filas, re-render), a leitura demora, e o toque
-   * parece morto; ele toca de novo, enfileira outra leitura e piora. Era o
-   * "tenho que clicar várias vezes até abrir" (Clenio, viagens 36–38).
-   *
-   * E era leitura desnecessária: `pendKm` já vive no estado, alimentado pelo
-   * listener da fila. Dá para decidir sem tocar no disco.
-   *
-   * O adiantamento do KM continua acontecendo — mas ATRÁS da navegação, sem
-   * ninguém esperando. Se o servidor recusar, o aviso aparece na faixa da rota;
-   * e se o KM não subir a tempo, a baixa vai para a fila, que já sabe mandar o
-   * KM antes das baixas.
-   */
-  const irParaBaixa = useCallback((e: NonNullable<Parada['entrega']>) => {
-    navigation.navigate('Baixa', {
-      entregaId: e.id,
-      entregaNumero: e.numero,
-      destinatario: e.destinatarioNome,
-    });
-
-    if (pendKm > 0) {
-      void processarFilaKmEntrega({ apenas: 'iniciar' })
-        .then((r) => {
-          if (r.descartadas.length) {
-            publicarAviso(
-              `KM de saída recusado — ${r.descartadas.map((d) => `${d.rotulo}: ${d.motivo}`).join('; ')}. Corrija o KM no topo da rota.`,
-              'atencao',
-            );
-          }
-          if (r.enviadas > 0 || r.descartadas.length) void carregar();
-        })
-        .catch(() => undefined);
-    }
-    // Estável de propósito: `ParadaCard` é memoizado, e prop nova a cada render
-    // anularia a memoização — voltando a redesenhar todo cartão da lista.
-  }, [navigation, pendKm, carregar]);
-
-
-  const avisarSemKm = useCallback(() => {
-    Alert.alert(
-      'Registre a saída primeiro',
-      'A rota começa pela leitura do hodômetro. Informe o KM de saída no topo da tela para liberar a navegação, a despesa e as baixas.',
-    );
-  }, []);
   function abrirRotaCompleta() {
     if (semKmSaida) { avisarSemKm(); return; }
     if (entregasPendentes.length === 0) { Alert.alert('Rota', 'Não há entregas pendentes.'); return; }
