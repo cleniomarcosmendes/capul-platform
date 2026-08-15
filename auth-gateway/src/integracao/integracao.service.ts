@@ -235,7 +235,45 @@ export class IntegracaoService {
 
   // --- Testar conexao ---
 
+  /**
+   * ⭐ Só testa HOST JÁ CADASTRADO (achado do /security-review de 15/08, SSRF).
+   *
+   * O DTO valida `url` apenas com `@IsString()`, e daqui saía um `http(s).request`
+   * para o `hostname`/`port` que viessem no corpo — com método e `Authorization`
+   * arbitrários e `rejectUnauthorized: false`. De dentro da rede do Docker isso
+   * alcança `postgres:5432`, `redis`, `minio`, os backends dos outros módulos e as
+   * rotas `/api/v1/internal/*` que o nginx bloqueia de fora de propósito; a
+   * diferença entre timeout e conexão recusada serve de oráculo para mapear a
+   * topologia interna.
+   *
+   * O guard de ADMIN já reduziu quem alcança; esta trava tira o alvo arbitrário:
+   * testar conexão só faz sentido contra endpoint que ALGUÉM CADASTROU.
+   */
+  private async assertHostCadastrado(url: string) {
+    let alvo: URL;
+    try {
+      alvo = new URL(url);
+    } catch {
+      throw new BadRequestException('URL inválida.');
+    }
+    if (alvo.protocol !== 'http:' && alvo.protocol !== 'https:') {
+      throw new BadRequestException('Only http/https are supported for connection testing.');
+    }
+    const endpoints = await this.prisma.integracaoApiEndpoint.findMany({ select: { url: true } });
+    const hostsConhecidos = new Set<string>();
+    for (const e of endpoints) {
+      try { hostsConhecidos.add(new URL(e.url).host); } catch { /* linha malformada não habilita nada */ }
+    }
+    if (!hostsConhecidos.has(alvo.host)) {
+      throw new BadRequestException(
+        `Host "${alvo.host}" não está cadastrado em nenhum endpoint de integração. ` +
+          'Cadastre o endpoint antes de testar a conexão.',
+      );
+    }
+  }
+
   async testarConexao(dto: TestarEndpointDto) {
+    await this.assertHostCadastrado(dto.url);
     const startTime = Date.now();
     const timeoutMs = dto.timeoutMs || 15000;
 
