@@ -13,6 +13,14 @@ type TipoCliente = 'IDENTIFICADO' | 'RECORRENTE_LOCAL' | 'EVENTUAL';
 
 const TRAVA_CEP_OFF = { logradouro: false, bairro: false, cidade: false, uf: false };
 
+/**
+ * O que vai no número da nota quando a entrega não tem nota — reentrega do que
+ * voltou, troca, cortesia, ou nota que ainda não saiu. Marcador combinado com o
+ * Clenio (14/08) para que o campo diga a verdade em vez de receber um número
+ * inventado; nesse caso o motivo passa a ser obrigatório em Observações.
+ */
+const SEM_NOTA = 'S/NF';
+
 interface Cupom { numeroCupom: string; valor: string }
 
 // Busca unificada (GET /cadastro/busca) — fontes locais.
@@ -191,6 +199,7 @@ export function EntregaNovaPage() {
   const { toast } = useToast();
   const ultimoCupomRef = useRef<HTMLInputElement>(null);
   const ultimoValorRef = useRef<HTMLInputElement>(null);
+  const obsRef = useRef<HTMLInputElement>(null);
   const matriculaRef = useRef<HTMLInputElement>(null);
   const nomeRef = useRef<HTMLInputElement>(null);
   const logradouroRef = useRef<HTMLInputElement>(null);
@@ -495,11 +504,36 @@ export function EntregaNovaPage() {
   // Cliente identificado: matrícula (A/C/E/F + dígitos). Monta o seletor
   // agregando TODAS as fontes do cliente: Protheus + endereços já salvos pra
   // essa matrícula + histórico (assim um "novo endereço" usado antes reaparece).
+  /**
+   * Apaga o cliente que uma busca anterior carregou — nome, telefone, vínculo e
+   * endereços. NÃO mexe na matrícula (é o que o operador acabou de digitar).
+   *
+   * ⭐ Existe porque uma matrícula errada deixava o cliente ANTERIOR na tela: a
+   * busca só preenchia `if (nome)`, então, não achando nada, o nome e o telefone
+   * de quem foi consultado antes continuavam ali. A tela dizia "Matrícula não
+   * encontrada" e, ao lado, os dados de OUTRA pessoa — e nada impedia registrar a
+   * entrega no nome errado. Relatado pelo Clenio em 14/08.
+   */
+  function limparClienteCarregado() {
+    setDestinatarioNome('');
+    // Só marca o "pular" se o telefone de fato muda: marcar à toa deixaria a
+    // flag pendurada e a próxima digitação de telefone não buscaria.
+    if (telefone) { pularBuscaTelRef.current = true; setTelefone(''); }
+    setClienteLocalId('');
+    setEnderecoEntregaId('');
+    setEnderecosSugeridos([]);
+    enderecoNovo();
+  }
+
   function montarSeletorMatricula(data: BuscaResp, mat: string) {
     const c = data.protheus?.clientes?.[0];
     const cards = coletarEnderecos(data);
     const nome = c?.nome ?? data.historicoEntregas[0]?.destinatarioNome ?? '';
     const tel = c?.telefone ?? data.historicoEntregas.find((h) => h.telefone)?.telefone ?? null;
+    // Zera ANTES de aplicar o que veio: assim nada da consulta anterior
+    // sobrevive por omissão — nem quando a nova matrícula não existe, nem quando
+    // ela existe mas vem sem telefone (que antes herdava o do cliente de antes).
+    limparClienteCarregado();
     if (nome) setDestinatarioNome(nome);
     if (tel) { pularBuscaTelRef.current = true; setTelefone(maskTelefone(tel)); }
     setClienteLocalId('');
@@ -542,6 +576,9 @@ export function EntregaNovaPage() {
   }
 
   // Bloqueia Enter de submeter o form acidentalmente — só o botão Registrar grava.
+  /** Registrando sem número de nota → o motivo em Observações passa a ser exigido. */
+  const exigeMotivoSemNota = !modoEdicao && !cupons[0]?.numeroCupom.trim();
+
   function bloquearEnterSubmit(e: KeyboardEvent<HTMLFormElement>) {
     const alvo = e.target as HTMLElement;
     if (e.key === 'Enter' && alvo.tagName !== 'TEXTAREA') e.preventDefault();
@@ -599,6 +636,35 @@ export function EntregaNovaPage() {
     if (!logradouro.trim()) {
       toast('warning', 'Informe o endereço (rua / avenida).'); logradouroRef.current?.focus(); return;
     }
+    /**
+     * ⭐ Nota e valor são OBRIGATÓRIOS ao registrar — com saída explícita, não
+     * bloqueio (decisão do Clenio, 14/08).
+     *
+     * Existe entrega legítima sem nota: reentrega do que voltou, troca, cortesia,
+     * ou a nota que ainda não saiu. Exigir o número sem saída empurraria o balcão
+     * para a gambiarra — digitar `0`/`999` só para conseguir salvar, e aí o campo
+     * deixa de significar qualquer coisa. Então: sem número, a nota é gravada como
+     * `S/NF` e o **motivo passa a ser obrigatório** em Observações. Fica registrado
+     * o que aconteceu, em vez de um número inventado.
+     *
+     * Só na CRIAÇÃO: entrega antiga, gravada antes desta regra, continua editável
+     * sem ter que inventar justificativa retroativa.
+     */
+    if (!modoEdicao) {
+      const primeiro = cupons[0];
+      const temNota = !!primeiro?.numeroCupom.trim();
+      if (!temNota) {
+        if (!observacoes.trim()) {
+          toast('warning', `Entrega sem nota: diga o motivo em Observações (a nota será registrada como "${SEM_NOTA}").`);
+          obsRef.current?.focus();
+          return;
+        }
+      } else if (!(parseMoeda(primeiro.valor) > 0)) {
+        toast('warning', 'Informe o valor da nota.');
+        ultimoValorRef.current?.focus();
+        return;
+      }
+    }
     setSalvando(true);
     if (modoEdicao) {
       // Edição (PATCH): só os campos editáveis; cupons substituem o conjunto.
@@ -628,6 +694,23 @@ export function EntregaNovaPage() {
       }
       return;
     }
+    // Linhas em branco saem; o que sobra vai normalizado. Nenhuma linha
+    // preenchida = a entrega sem nota que a validação acima autorizou — ela
+    // precisa entrar como `S/NF`, e não simplesmente sumir: é o registro de que
+    // a decisão foi tomada, com o motivo nas Observações ao lado.
+    //
+    // ⚠️ `parseMoeda`, NUNCA `parseFloat`: o estado guarda a string MASCARADA em
+    // pt-BR ("1.234,56"). `parseFloat` lê isso como número americano e erra de
+    // dois jeitos, um deles CALADO:
+    //   "1.234,56" → 1.234  (3 casas → o servidor recusa: "valor must be a number
+    //                        conforming to the specified constraints")
+    //   "123,45"   → 123    (sem erro nenhum — grava R$ 123,00 e PERDE os centavos)
+    // O caminho de edição (PATCH) já usava `parseMoeda`; só a criação divergia.
+    // Relatado pelo Clenio em 14/08.
+    const cuponsPayload = cupons
+      .filter((c) => c.numeroCupom.trim() || c.valor)
+      .map((c) => ({ numeroCupom: c.numeroCupom.trim() || SEM_NOTA, valor: c.valor ? parseMoeda(c.valor) : undefined }));
+    if (cuponsPayload.length === 0) cuponsPayload.push({ numeroCupom: SEM_NOTA, valor: undefined });
     try {
       const { data } = await logisticaApi.post('/entregas', {
         filialId,
@@ -652,9 +735,7 @@ export function EntregaNovaPage() {
         origemVenda,
         dataEntrega: dataEntrega || undefined,
         observacoes: observacoes || undefined,
-        cupons: cupons
-          .filter((c) => c.numeroCupom || c.valor)
-          .map((c) => ({ numeroCupom: c.numeroCupom || undefined, valor: c.valor ? parseFloat(c.valor) : undefined })),
+        cupons: cuponsPayload,
       });
       toast('success', `Entrega nº ${data.numero} registrada.`);
       resetForm();
@@ -911,7 +992,7 @@ export function EntregaNovaPage() {
         <div className="grid grid-cols-1 gap-x-6 gap-y-4 lg:grid-cols-2">
         {/* Cupons / Notas */}
         <div>
-          <label className={lbl}>Cupons / Notas</label>
+          <label className={lbl}>Cupons / Notas {!modoEdicao && '*'}</label>
           <div className="mt-1 space-y-2">
             {cupons.map((c, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -943,6 +1024,15 @@ export function EntregaNovaPage() {
               className="flex items-center gap-1 text-xs font-medium text-capul-700 hover:underline"><Plus className="h-3 w-3" /> Adicionar cupom / Nota Fiscal</button>
             <div className="text-sm text-slate-600">Total: <strong>R$ {totalCupons.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
           </div>
+          {/* A regra do S/NF tem que estar NA TELA — validação que só aparece
+              no toast, depois de tentar salvar, o operador descobre errando. */}
+          {exigeMotivoSemNota && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+              Sem o número da nota, a entrega é registrada como <strong>{SEM_NOTA}</strong> e o
+              motivo passa a ser <strong>obrigatório em Observações</strong> (reentrega, troca,
+              cortesia, nota ainda não emitida…).
+            </p>
+          )}
           <p className="mt-1 text-[11px] text-slate-400">Enter no nº vai para o valor; Enter no valor adiciona outro cupom (precisa nº + valor). O cadastro só é gravado no botão “Salvar entrega”.</p>
         </div>
 
@@ -983,8 +1073,15 @@ export function EntregaNovaPage() {
             )}
           </div>
           <div className="flex-1">
-            <label className={lbl}>Observações</label>
-            <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} className={inp} />
+            {/* Vira obrigatório quando a entrega vai sem nota: é ali que fica dito
+                POR QUE, e é o que sustenta o `S/NF` no lugar de um número inventado. */}
+            <label className={lbl}>Observações {exigeMotivoSemNota && <span className="text-amber-700">* motivo da entrega sem nota</span>}</label>
+            <input
+              ref={obsRef}
+              value={observacoes}
+              onChange={(e) => setObservacoes(e.target.value)}
+              placeholder={exigeMotivoSemNota ? 'Ex.: reentrega — cliente ausente na 1ª tentativa' : undefined}
+              className={inp} />
           </div>
         </div>
         </div>
