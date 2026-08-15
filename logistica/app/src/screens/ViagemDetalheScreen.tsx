@@ -29,6 +29,7 @@ import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, 
 import { useRastreamento } from '../lib/useRastreamento';
 import { garantirPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
 import { avisarEVoltar } from '../lib/avisarEVoltar';
+import { onAviso, type Aviso } from '../lib/avisoTela';
 import type { Parada, Viagem } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -94,6 +95,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [preparandoBaixa, setPreparandoBaixa] = useState(false);
   /** 🔬 TEMPORÁRIO — quantos toques chegaram ao React nesta tela. */
   const [toques, setToques] = useState(0);
+  // Confirmação da baixa/despesa que ACABOU de acontecer — no lugar do Alert,
+  // que disputava foco com a transição de tela (ver `lib/avisoTela.ts`).
+  const [aviso, setAviso] = useState<Aviso | null>(null);
   // Já conseguimos carregar a rota alguma vez? Decide se uma falha de rede vira
   // tela de erro ou é apenas ignorada (seguimos com o que está na tela).
   const temViagemRef = useRef(false);
@@ -179,6 +183,17 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       if (rkIni.enviadas > 0 || rb.enviadas > 0 || rk.enviadas > 0) await carregar();
     } finally { setReenviandoDespesa(false); }
   }, [carregar]);
+
+  // Aviso publicado pela tela de Baixa/Despesa ao voltar. Some sozinho em 5s —
+  // é confirmação, não decisão: não pede toque e não bloqueia nada.
+  useEffect(() => {
+    return onAviso((a) => setAviso(a));
+  }, []);
+  useEffect(() => {
+    if (!aviso) return;
+    const id = setTimeout(() => setAviso(null), 5000);
+    return () => clearTimeout(id);
+  }, [aviso]);
 
   // Contadores das filas ao vivo (banner).
   useEffect(() => {
@@ -501,6 +516,11 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       keyExtractor={(p) => p.id}
       ListHeaderComponent={
         <View>
+          {aviso && (
+            <View style={[styles.avisoBanner, aviso.tipo === 'atencao' && styles.avisoBannerAtencao]}>
+              <Text style={styles.avisoTxt}>{aviso.texto}</Text>
+            </View>
+          )}
           {(pendBaixa > 0 || pendDespesa > 0 || pendKm > 0) && (
             <TouchableOpacity style={styles.filaBanner} onPress={() => void reenviarPendencias()} disabled={reenviandoDespesa}>
               <Text style={styles.filaBannerTxt}>
@@ -827,6 +847,10 @@ const styles = StyleSheet.create({
   btnBaixaOff: { backgroundColor: '#e2e8f0' },
   btnBaixaTxtOff: { color: '#64748b' },
   kmAviso: { width: '100%', color: '#b45309', fontSize: 12, fontWeight: '600' },
+  // Confirmação do que acabou de acontecer (substitui o Alert). Some em 5s.
+  avisoBanner: { backgroundColor: '#dcfce7', borderColor: '#86efac', borderWidth: 1, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 8 },
+  avisoBannerAtencao: { backgroundColor: '#fef3c7', borderColor: '#fcd34d' },
+  avisoTxt: { color: '#14532d', fontSize: 13, fontWeight: '700' },
   // 🔬 TEMPORÁRIO — remover junto com FaixaDiagnostico.
   diagBarra: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#0f172a', paddingVertical: 4, paddingHorizontal: 8 },
   diagTxt: { color: '#7dd3fc', fontSize: 10, fontWeight: '700', textAlign: 'center' },

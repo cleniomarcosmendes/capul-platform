@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, InteractionManager } from 'react-native';
 
 /**
  * Avisa e volta — nesta ordem, e é a ordem que importa.
@@ -26,5 +26,13 @@ import { Alert } from 'react-native';
  */
 export function avisarEVoltar(voltar: () => void, titulo: string, mensagem?: string): void {
   voltar();
-  Alert.alert(titulo, mensagem);
+  // ⚠️ E ainda ESPERA a transição terminar. Voltar antes resolveu a tela surda,
+  // mas o diálogo aberto em cima da transição criou o sintoma seguinte: os
+  // toques chegavam (medido: `toques=488`) e a navegação seguinte não
+  // acontecia — era preciso insistir muitas vezes até a próxima tela abrir.
+  // Quem volta para uma tela que sabe mostrar faixa deve preferir
+  // `publicarAviso` (`lib/avisoTela.ts`) e não abrir diálogo nenhum.
+  InteractionManager.runAfterInteractions(() => {
+    setTimeout(() => Alert.alert(titulo, mensagem), 300);
+  });
 }

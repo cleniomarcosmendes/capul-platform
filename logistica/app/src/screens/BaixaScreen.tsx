@@ -23,7 +23,7 @@ import { EntradaTextoModal } from '../components/EntradaTextoModal';
 import { uuid } from '../lib/uuid';
 import { temPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
 import { reduzirFoto } from '../lib/foto';
-import { avisarEVoltar } from '../lib/avisarEVoltar';
+import { publicarAviso } from '../lib/avisoTela';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Baixa'>;
@@ -157,7 +157,10 @@ export function BaixaScreen({ route, navigation }: Props) {
           if (pct >= 100) setEtapa('Registrando a entrega…');
         },
       });
-      avisarEVoltar(() => navigation.goBack(), 'Baixa registrada', `Entrega #${entregaNumero} — ${destinatario}.`);
+      // Sem diálogo: publica o aviso e volta. A tela da rota mostra a
+      // confirmação. Alert aqui atropelava a transição — ver `lib/avisoTela.ts`.
+      publicarAviso(`✓ Baixa registrada — #${entregaNumero} ${destinatario}`);
+      navigation.goBack();
     } catch (err) {
       const status = isAxiosError(err) ? err.response?.status : undefined;
       const negocio =
@@ -179,11 +182,11 @@ export function BaixaScreen({ route, navigation }: Props) {
           fotoUri: entregue ? fotoUri ?? undefined : undefined,
           assinaturaUri: entregue ? assinaturaUri ?? undefined : undefined,
         });
-        avisarEVoltar(
-          () => navigation.goBack(),
-          'Sem conexão — baixa guardada',
-          'A baixa foi salva no aparelho e será enviada automaticamente quando houver sinal.',
+        publicarAviso(
+          `📴 Sem conexão — baixa #${entregaNumero} guardada no aparelho, sobe sozinha quando houver sinal`,
+          'atencao',
         );
+        navigation.goBack();
       }
     } finally {
       setEnviando(false);
