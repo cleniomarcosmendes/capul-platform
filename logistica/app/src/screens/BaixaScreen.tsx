@@ -71,6 +71,17 @@ export function BaixaScreen({ route, navigation }: Props) {
   // Qual campo de texto está aberto em tela própria (null = nenhum).
   const [editando, setEditando] = useState<null | 'recebedor' | 'motivo'>(null);
   const [enviando, setEnviando] = useState(false);
+  /**
+   * O que está acontecendo AGORA, em texto, e quanto da prova já subiu.
+   *
+   * Confirmar a entrega não é instantâneo e nunca foi: pega o GPS (até 6s), sobe
+   * foto e assinatura, e o servidor ainda carimba a foto e grava no cofre. Isso
+   * tudo acontecia atrás de um spinner mudo — e espera muda é lida como
+   * travamento (Clenio, 14/08: "fica parecendo que está travado"). Cada etapa
+   * agora se anuncia, e a da prova mostra o percentual REAL de bytes enviados.
+   */
+  const [etapa, setEtapa] = useState('');
+  const [progresso, setProgresso] = useState<number | null>(null);
   // Chave fixa da PRIMEIRA tentativa — reenvio (online ou da fila) não duplica.
   const idempotencyKey = useRef(uuid()).current;
 
@@ -109,6 +120,9 @@ export function BaixaScreen({ route, navigation }: Props) {
 
   async function confirmar() {
     setEnviando(true);
+    setProgresso(null);
+    // Até 6s parado aqui esperando o GPS — a etapa mais silenciosa de todas.
+    setEtapa('Obtendo a localização…');
     const geo = await capturarGeo();
     const provas = entregue
       ? { fotoUri: fotoUri ?? undefined, assinaturaUri: assinaturaUri ?? undefined }
@@ -127,7 +141,18 @@ export function BaixaScreen({ route, navigation }: Props) {
       // longo, sem ninguém olhando) e ele segue a rota. Antes eram 60s de tela
       // desabilitada antes de dizer "sem conexão" — era o "sistema travado ao
       // finalizar a operação" relatado em campo.
-      await baixarEntrega(entregaId, payload, provas, { timeout: TIMEOUT_INTERATIVO });
+      const temBinario = !!provas?.fotoUri || !!provas?.assinaturaUri;
+      setEtapa(temBinario ? 'Enviando a prova…' : 'Registrando a entrega…');
+      await baixarEntrega(entregaId, payload, provas, {
+        timeout: TIMEOUT_INTERATIVO,
+        onProgresso: (pct) => {
+          setProgresso(pct);
+          // 100% = o último byte saiu daqui. O que resta é o servidor carimbar a
+          // foto e gravar no cofre — dizer "enviando" nessa hora seria mentir, e
+          // é justamente onde a espera parecia travamento.
+          if (pct >= 100) setEtapa('Registrando a entrega…');
+        },
+      });
       Alert.alert('Baixa registrada', `Entrega #${entregaNumero} — ${destinatario}.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -143,6 +168,7 @@ export function BaixaScreen({ route, navigation }: Props) {
         Alert.alert('Não foi possível dar baixa', String(msg));
       } else {
         // Sem rede (ou instabilidade): guarda na fila e segue a rota.
+        setEtapa('Guardando no aparelho…');
         await enfileirar({
           entregaId,
           entregaNumero,
@@ -159,6 +185,8 @@ export function BaixaScreen({ route, navigation }: Props) {
       }
     } finally {
       setEnviando(false);
+      setEtapa('');
+      setProgresso(null);
     }
   }
 
@@ -254,13 +282,40 @@ export function BaixaScreen({ route, navigation }: Props) {
     {/* Botão FIXO no rodapé (sempre visível, acima da barra do Android) — o usuário não
         precisa rolar para confirmar. */}
     <View style={[styles.rodape, { paddingBottom: insets.bottom + 10 }]}>
+      {/* Enquanto envia, o rodapé NARRA: etapa em texto e, na subida da prova, a
+          barra com o percentual real de bytes. Antes era só um spinner branco
+          dentro do botão — nenhuma pista de que algo estava andando, nem de
+          quanto faltava, e a espera passava por travamento. */}
+      {enviando && (
+        <View style={styles.progressoBox}>
+          <Text style={styles.progressoTxt}>
+            {etapa}
+            {progresso != null && progresso < 100 ? ` ${progresso}%` : ''}
+          </Text>
+          <View style={styles.barraFundo}>
+            <View
+              style={[
+                styles.barraCheia,
+                // Sem percentual (GPS, gravação no servidor) a barra fica cheia e
+                // pálida: há trabalho em curso, só não dá para medir. Fingir
+                // porcentagem numa etapa que não se mede seria pior.
+                progresso != null ? { width: `${progresso}%` } : styles.barraIndefinida,
+              ]}
+            />
+          </View>
+          <Text style={styles.progressoDica}>Não feche o aplicativo.</Text>
+        </View>
+      )}
       <TouchableOpacity
         style={[styles.confirmar, !podeConfirmar && styles.confirmarOff, !entregue && styles.confirmarErr]}
         onPress={confirmar}
         disabled={!podeConfirmar}
       >
         {enviando ? (
-          <ActivityIndicator color="#fff" />
+          <View style={styles.confirmandoLinha}>
+            <ActivityIndicator color="#fff" />
+            <Text style={styles.confirmarTxt}>{etapa || 'Enviando…'}</Text>
+          </View>
         ) : (
           <Text style={styles.confirmarTxt}>
             {entregue ? 'Confirmar entrega' : 'Confirmar não-entrega'}
@@ -372,4 +427,12 @@ const styles = StyleSheet.create({
   confirmarErr: { backgroundColor: '#b91c1c' },
   confirmarOff: { opacity: 0.45 },
   confirmarTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  confirmandoLinha: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // Narrativa do envio (etapa + barra), acima do botão.
+  progressoBox: { marginBottom: 10, gap: 6 },
+  progressoTxt: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  progressoDica: { fontSize: 11, color: '#64748b' },
+  barraFundo: { height: 8, borderRadius: 999, backgroundColor: '#e2e8f0', overflow: 'hidden' },
+  barraCheia: { height: 8, borderRadius: 999, backgroundColor: CAPUL },
+  barraIndefinida: { width: '100%', opacity: 0.35 },
 });

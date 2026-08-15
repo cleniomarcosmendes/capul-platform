@@ -27,7 +27,17 @@ export async function baixarEntrega(
   entregaId: string,
   payload: BaixaPayload,
   provas?: ProvasBaixa,
-  opts?: { timeout?: number },
+  opts?: {
+    timeout?: number;
+    /**
+     * Progresso REAL do upload (0–100), byte a byte. Existe para a tela poder
+     * dizer o que está acontecendo enquanto a prova sobe: a foto é o que demora,
+     * e barra parada num spinner mudo é lida como app travado (relato de campo).
+     * Chega a 100 quando o último byte saiu — daí em diante quem está trabalhando
+     * é o servidor (carimbo + cofre), e a tela deve dizer isso.
+     */
+    onProgresso?: (pct: number) => void;
+  },
 ): Promise<void> {
   const form = new FormData();
   form.append('resultado', payload.resultado);
@@ -51,5 +61,13 @@ export async function baixarEntrega(
     // Quem chama com alguém olhando manda um prazo curto: passar disso, guardar
     // offline e liberar a pessoa é melhor do que segurá-la até o fim do prazo.
     timeout: opts?.timeout ?? 60_000,
+    onUploadProgress: opts?.onProgresso
+      ? (ev) => {
+          // Sem `total` (servidor/navegador não informou) não dá para calcular
+          // percentual — melhor não inventar número do que mostrar barra mentindo.
+          if (!ev.total) return;
+          opts.onProgresso!(Math.min(100, Math.round((ev.loaded / ev.total) * 100)));
+        }
+      : undefined,
   });
 }

@@ -389,11 +389,24 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       // o "clico e não acontece nada" relatado em campo. Estourando o prazo,
       // seguimos assim mesmo: a baixa é enfileirada e o KM sobe depois.
       setPreparandoBaixa(true);
-      const r = await Promise.race([
-        processarFilaKmEntrega({ apenas: 'iniciar' }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
-      ]);
-      setPreparandoBaixa(false);
+      // ⚠️ `finally`: este estado desabilita o botão "Dar baixa" de TODOS os
+      // cartões da tela. Ficando preso em `true` por uma falha aqui, a tela
+      // inteira vira botão morto e calado — e só sai disso desmontando (sair da
+      // rota e entrar de novo). Desligar fora do finally era apostar que nada
+      // entre o toque e a navegação pode falhar.
+      let r: Awaited<ReturnType<typeof processarFilaKmEntrega>> | null = null;
+      try {
+        r = await Promise.race([
+          processarFilaKmEntrega({ apenas: 'iniciar' }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+        ]);
+      } catch {
+        // Best-effort: isto é adiantamento, não a baixa. Falhando, seguimos para
+        // a tela de baixa — o KM sobe pela fila depois. O que não pode é o toque
+        // morrer aqui, calado.
+      } finally {
+        setPreparandoBaixa(false);
+      }
       if (r && r.descartadas.length) {
         // O servidor recusou o KM em definitivo: a rota segue sem KM lá, e a baixa
         // seria recusada também. Melhor parar aqui, com o motivo, do que deixar ele

@@ -19,6 +19,15 @@ export function SignaturePad({
 }) {
   const ref = useRef<SignatureViewRef>(null);
 
+  // ⭐ Fechado = NADA montado. `<Modal visible={false}>` não desmonta os filhos:
+  // o WebView do quadro de assinatura nascia junto com a tela de Baixa e vivia
+  // nela inteira, mesmo em entrega que nunca coletou assinatura. Um WebView por
+  // baixa, e o entregador faz uma atrás da outra — o Android acumula, começa a
+  // pausar para coletar lixo e OS TOQUES CAEM NO CHÃO (relato do Clenio em
+  // 14/08: "clico nas opções e não acontece nada"; sair da tela e voltar
+  // resolvia, que é justamente o que liberava essa memória).
+  if (!visible) return null;
+
   // Esconde o rodapé padrão da lib — usamos nossos próprios botões.
   const webStyle = `
     .m-signature-pad--footer { display: none; margin: 0; }
