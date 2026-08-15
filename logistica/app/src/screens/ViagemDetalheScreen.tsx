@@ -28,7 +28,7 @@ import { abrirGoogleMaps, abrirWaze, abrirRotaGoogleMaps, enderecoTexto, ligar, 
 import { useRastreamento } from '../lib/useRastreamento';
 import { garantirPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
 import { useDetectorDeTravamento } from '../lib/detectorTravamento';
-import { lerDiagnostico, registrarToque } from '../lib/diagnostico';
+import { lerDiagnostico, registrarToque, registrarToqueRaiz } from '../lib/diagnostico';
 import { avisarEVoltar } from '../lib/avisarEVoltar';
 import { onAviso, publicarAviso, type Aviso } from '../lib/avisoTela';
 import type { Parada, Viagem } from '../types/api';
@@ -515,7 +515,12 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View
+      style={{ flex: 1 }}
+      // 🔬 Só OBSERVA (devolve false, não captura) e escreve num REF — nenhum
+      // render por toque. Diz se o evento CHEGA ao React.
+      onStartShouldSetResponderCapture={() => { registrarToqueRaiz(); return false; }}
+    >
     <FlatList
       contentContainerStyle={styles.lista}
       // ⭐ Sem isto, o padrão do RN é `'never'`: com o teclado aberto, o PRIMEIRO

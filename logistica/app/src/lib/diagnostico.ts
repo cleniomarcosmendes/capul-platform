@@ -13,7 +13,9 @@
  * medir — erro que já custou duas rodadas de teste (7fe2b05d).
  */
 interface Estado {
-  /** Toques que chegaram a um handler (não à camada nativa: ao HANDLER). */
+  /** Toques que a RAIZ da tela viu chegar (antes de qualquer botão). */
+  toquesRaiz: number;
+  /** Toques que viraram EXECUÇÃO de handler. */
   toques: number;
   /** Rótulo e instante do último toque que executou. */
   ultimoToque: string;
@@ -27,6 +29,7 @@ interface Estado {
 }
 
 const estado: Estado = {
+  toquesRaiz: 0,
   toques: 0,
   ultimoToque: '—',
   ultimoToqueEm: 0,
@@ -34,6 +37,16 @@ const estado: Estado = {
   piorMs: 0,
   ultimaMs: 0,
 };
+
+/**
+ * Chamar no observador da RAIZ da tela — mede o evento CHEGANDO, antes de
+ * qualquer botão decidir. A diferença entre este número e `toques` é o
+ * diagnóstico: raiz sobe e handler não = o toque chega ao React mas morre no
+ * caminho até o botão; raiz não sobe = o evento nem chega ao React.
+ */
+export function registrarToqueRaiz(): void {
+  estado.toquesRaiz += 1;
+}
 
 /** Chamar DENTRO do handler — mede que o toque virou execução, não só evento. */
 export function registrarToque(rotulo: string): void {
@@ -55,7 +68,7 @@ export function registrarTravamento(ms: number): void {
 export function lerDiagnostico(): string {
   const desde = estado.ultimoToqueEm ? Math.round((Date.now() - estado.ultimoToqueEm) / 1000) : -1;
   return (
-    `toques=${estado.toques} · ult=${estado.ultimoToque}` +
+    `raiz=${estado.toquesRaiz} · exec=${estado.toques} · ult=${estado.ultimoToque}` +
     (desde >= 0 ? ` há ${desde}s` : '') +
     ` · travas=${estado.travamentos} (pior ${estado.piorMs}ms · ult ${estado.ultimaMs}ms)`
   );
