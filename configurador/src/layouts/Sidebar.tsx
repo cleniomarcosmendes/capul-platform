@@ -16,8 +16,7 @@ import {
   HardDrive,
   ScrollText,
   MapPin,
-  X,
-} from 'lucide-react';
+  X, UserCheck, } from 'lucide-react';
 
 type MenuItem =
   | { section: string; roles?: string[] }
@@ -40,6 +39,7 @@ const menuItems: MenuItem[] = [
   { label: 'Certificado A1', icon: ShieldCheck, path: '/configurador/certificado-fiscal', roles: ADMINS },
   { label: 'Backup & DR', icon: HardDrive, path: '/configurador/backup-dr', roles: ADMINS },
   { label: 'Retencao Logs', icon: ScrollText, path: '/configurador/audit-retention', roles: ADMINS },
+  { label: 'Varredura Matriculas', icon: UserCheck, path: '/configurador/varredura-matricula', roles: ADMINS },
   { label: 'Rastreamento GPS', icon: MapPin, path: '/configurador/rastreamento-gps', roles: ADMINS },
 ];
 
