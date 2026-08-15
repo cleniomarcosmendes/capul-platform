@@ -10,6 +10,9 @@ import { IntegracaoModule } from '../integracao/integracao.module';
   imports: [AuditLogModule, IntegracaoModule],
   controllers: [UsuarioController],
   providers: [UsuarioService, CapabilityService, ProtheusFuncionarioService],
-  exports: [UsuarioService, CapabilityService],
+  // `ProtheusFuncionarioService` exportado para a varredura de matrículas — é o
+  // mesmo cliente que a tela de cadastro usa, então a chapa é validada contra a
+  // MESMA fonte nos dois caminhos (cadastrar e verificar).
+  exports: [UsuarioService, CapabilityService, ProtheusFuncionarioService],
 })
 export class UsuarioModule {}

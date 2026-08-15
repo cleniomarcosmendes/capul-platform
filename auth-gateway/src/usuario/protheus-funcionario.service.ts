@@ -6,6 +6,24 @@ import { IntegracaoService } from '../integracao/integracao.service';
 export interface FuncionarioProtheus { matricula: string; nome: string }
 
 /**
+ * Resultado TRI-ESTADO de uma verificação de matrícula.
+ *
+ * ⭐ Existe porque `[]` não serve para decidir bloqueio. As consultas de tela
+ * colapsam tudo em lista vazia (o que é certo lá: sem resultado, o operador
+ * digita à mão). Para a varredura que DESATIVA usuário, "não existe" e "não
+ * consegui perguntar" levam a ações opostas:
+ *
+ *   ATIVO          → o funcionário está no Protheus; nada a fazer
+ *   NAO_ENCONTRADO → o Protheus RESPONDEU e não tem essa matrícula → desligado
+ *   FALHA          → 401/timeout/rede/config → **NUNCA bloquear**
+ *
+ * Sem essa separação, uma rotação de credencial, uma instabilidade de rede ou o
+ * endpoint apontado para o ambiente errado desativariam a empresa inteira de uma
+ * vez — e o `infoFuncionario` já esteve apontado para HOMOLOGAÇÃO em produção.
+ */
+export type SituacaoMatricula = 'ATIVO' | 'NAO_ENCONTRADO' | 'FALHA';
+
+/**
  * Normaliza a resposta do `infoFuncionario` (INFOCLIENTES/infoPortal), que é o cadastro
  * de COLABORADOR do Protheus. Formato: `{ funcionarios: [{ matricula, nome, cc }] }` —
  * ou `{ mensagem: "...não encontrado..." }`, que vira lista vazia. Campos vêm com
@@ -67,16 +85,48 @@ export class ProtheusFuncionarioService {
     return achados[0] ?? null;
   }
 
-  /** Chama o `infoFuncionario` com a query informada. Lista vazia em qualquer falha. */
-  private async consultar(query: string, logLabel: string): Promise<FuncionarioProtheus[]> {
-    let cfg: Awaited<ReturnType<IntegracaoService['getEndpointsAtivos']>>;
+  /**
+   * Verifica se a matrícula existe no cadastro de FUNCIONÁRIO do Protheus.
+   *
+   * O Protheus devolve **apenas funcionários ATIVOS** (confirmado com o Clenio em
+   * 15/08) — então ausência, quando ele de fato respondeu, significa desligado.
+   * É a única leitura que autoriza desativar um usuário da plataforma.
+   */
+  async verificarMatricula(matricula: string): Promise<SituacaoMatricula> {
+    const chapa = (matricula ?? '').trim().toUpperCase();
+    if (!chapa) return 'FALHA'; // sem chapa não há o que verificar — nunca "não encontrado"
+
+    const cfg = await this.getConfig();
+    if (!cfg) return 'FALHA';
+    const ep = cfg.endpoints.find((e) => e.operacao === 'infoFuncionario');
+    if (!ep) {
+      this.logger.warn('Operação infoFuncionario não cadastrada (PROTHEUS) — verificação indisponível');
+      return 'FALHA';
+    }
+    const authHeader = cfg.tipoAuth === 'BEARER' ? `Bearer ${cfg.authConfig}` : `Basic ${cfg.authConfig}`;
+    const url = `${ep.url}?MATRICULA=${encodeURIComponent(chapa)}`;
+    const data = await this.requestJson(url, authHeader, ep.timeoutMs || 8000, ep.metodo || 'GET', `infoFuncionario MATRICULA=${chapa}`);
+    // `null` = não houve resposta utilizável (status>=400, timeout, rede, parse).
+    if (!data) return 'FALHA';
+    // Respondeu: agora sim, lista vazia significa que a matrícula não existe.
+    return mapFuncionarios(data).length > 0 ? 'ATIVO' : 'NAO_ENCONTRADO';
+  }
+
+  /** Config da integração PROTHEUS, ou null quando indisponível. */
+  private async getConfig() {
     try {
-      cfg = await this.integracao.getEndpointsAtivos('PROTHEUS');
+      return await this.integracao.getEndpointsAtivos('PROTHEUS');
     } catch {
       this.logger.warn('Integração PROTHEUS não cadastrada — consulta de funcionário indisponível');
-      return [];
+      return null;
     }
-    const ep = cfg?.endpoints.find((e) => e.operacao === 'infoFuncionario');
+  }
+
+  /** Chama o `infoFuncionario` com a query informada. Lista vazia em qualquer falha. */
+  private async consultar(query: string, logLabel: string): Promise<FuncionarioProtheus[]> {
+    const cfg = await this.getConfig();
+    if (!cfg) return [];
+    const ep = cfg.endpoints.find((e) => e.operacao === 'infoFuncionario');
     if (!ep) { this.logger.warn('Operação infoFuncionario não cadastrada (PROTHEUS) — consulta indisponível'); return []; }
     const authHeader = cfg.tipoAuth === 'BEARER' ? `Bearer ${cfg.authConfig}` : `Basic ${cfg.authConfig}`;
     const data = await this.requestJson(`${ep.url}?${query}`, authHeader, ep.timeoutMs || 8000, ep.metodo || 'GET', logLabel);
