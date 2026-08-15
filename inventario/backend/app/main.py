@@ -2345,8 +2345,16 @@ async def list_inventory_products(
                 "countings": countings_list
             })
         
+        # ⭐ Contagem cega (/security-review, 15/08): esta rota devolvia
+        # `expected_quantity` e `difference` por produto, além do histórico de
+        # ciclos. É a gêmea de `/counting-lists/{id}/products`, que já era
+        # projetada — esta vive em outro caminho e passou. Projeção, não bloqueio.
+        from app.api.v1.endpoints.counting_lists import aplicar_contagem_cega
+        for _p in produtos:
+            aplicar_contagem_cega(_p, current_user, inventory)
+
         logger.info(f"✅ Listados {len(produtos)} produtos do inventário {inventory_id}")
-        
+
         return {
             "inventory_id": inventory_id,
             "inventory_name": inventory.name,
@@ -5567,6 +5575,7 @@ async def search_product_for_counting(
             }
         
         # Retornar dados do produto e inventários
+        from app.api.v1.endpoints.counting_lists import aplicar_contagem_cega, mascarar_saldo_dos_lotes
         inventory_items = []
         for inventory, item in active_inventories:
             inventory_items.append({
@@ -5579,6 +5588,9 @@ async def search_product_for_counting(
                 "last_counted_at": item.last_counted_at.isoformat() if item.last_counted_at else None,
                 "assigned_to_user": item.last_counted_by == current_user.id
             })
+            # ⭐ Contagem cega: o operador bipa o produto e recebia o saldo do
+            # sistema junto (/security-review, 15/08). Projeção, não bloqueio.
+            aplicar_contagem_cega(inventory_items[-1], current_user, inventory)
         
         # Buscar lotes se produto controla lote
         lots = []
@@ -5595,6 +5607,10 @@ async def search_product_for_counting(
                 "balance": float(lot.b8_saldo) if lot.b8_saldo else 0,
                 "expiry_date": lot.b8_dtvalid.isoformat() if lot.b8_dtvalid else None
             } for lot in lots_query]
+            # ⚠️ `balance` é o saldo do sistema POR LOTE (SB8010.b8_saldo): somando
+            # os lotes o operador reconstruiria o esperado que a máscara acima acabou
+            # de tirar. O `lot_number` fica — ele precisa saber QUAL lote conta.
+            mascarar_saldo_dos_lotes(lots, current_user, campo="balance")
         
         return {
             "found": True,
@@ -6134,7 +6150,8 @@ async def get_my_counting_assignments(
     """Listar itens atribuídos ao usuário atual para contagem"""
     try:
         from app.models.models import InventoryList, InventoryItem, SB1010, CountingAssignment, Counting
-        
+        from app.api.v1.endpoints.counting_lists import aplicar_contagem_cega
+
         # Buscar atribuições ativas do usuário atual
         query = db.query(
             CountingAssignment, 
@@ -6197,7 +6214,17 @@ async def get_my_counting_assignments(
                 ],
                 "status": "COUNTED" if existing_counts else "PENDING"
             })
-        
+
+            # ⭐ Projeção da CONTAGEM CEGA (achado do /security-review de 15/08).
+            # Esta é a rota que o próprio contador chama para saber o que contar —
+            # e ela devolvia `expected_quantity`, ou seja, o saldo do sistema item
+            # a item, ANTES de ele contar. Bastava digitar o número de volta e a
+            # contagem deixava de verificar coisa alguma.
+            # Projeção, NÃO bloqueio: o OPERATOR precisa deste endpoint (a própria
+            # `aplicar_contagem_cega` avisa para não confundir os dois). Para STAFF
+            # nada muda; `show_previous_counts` da lista segue mandando no histórico.
+            aplicar_contagem_cega(inventories[inv_id]["items"][-1], current_user, inventory)
+
         return {
             "inventories": list(inventories.values()),
             "total_items": sum(len(inv["items"]) for inv in inventories.values()),
@@ -6340,10 +6367,9 @@ async def search_product_in_inventory(
         )
         
         logger.info(f"Quantidade encontrada: {quantity_info}")
-        
-        return {
-            "success": True,
-            "data": {
+
+        from app.api.v1.endpoints.counting_lists import aplicar_contagem_cega
+        dados = {
                 "inventory_item_id": str(inventory_item.id),
                 "product_code": product.b1_cod.strip(),
                 "barcode": product.b1_codbar.strip() if product.b1_codbar else None,
@@ -6361,9 +6387,13 @@ async def search_product_in_inventory(
                         "observation": count.observation
                     } for count in existing_counts
                 ]
-            }
         }
-        
+        # ⭐ Contagem cega (/security-review, 15/08): esta rota devolvia
+        # `expected_quantity` para quem vai contar. Projeção, não bloqueio — o
+        # OPERATOR precisa dela; para STAFF nada muda.
+        aplicar_contagem_cega(dados, current_user, inventory)
+        return {"success": True, "data": dados}
+
     except HTTPException:
         raise
     except Exception as e:
@@ -7886,13 +7916,23 @@ async def get_round_discrepancies(
         print(f"Erro ao buscar divergências da rodada: {e}")
         return {"success": False, "message": f"Erro interno: {str(e)}"}
 
-@app.get("/api/v1/inventory/lists/{inventory_id}/discrepancies", tags=["Inventory"])
+# ⭐ STAFF only — expõe saldo do sistema, variação E quem contou em cada ciclo
+# (/security-review, 15/08). Aqui é BLOQUEIO e não projeção, ao contrário das rotas
+# de contagem: nada do fluxo do operador chama esta rota — o frontend usa
+# `/api/v1/discrepancies`, que já é staff-only (`main.py`, filtro de divergências).
+# Divergência é o retrato de onde a contagem não fechou: entregá-la a quem conta é
+# entregar o gabarito depois da prova.
+@app.get(
+    "/api/v1/inventory/lists/{inventory_id}/discrepancies",
+    tags=["Inventory"],
+    dependencies=[Depends(require_staff_role)],
+)
 async def get_inventory_discrepancies(
     inventory_id: str,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Listar divergências de um inventário"""
+    """[STAFF only — expõe saldo do sistema] Listar divergências de um inventário"""
     try:
         from app.models.models import InventoryList, Discrepancy, InventoryItem, SB1010, Counting, User
         import uuid
@@ -8352,6 +8392,15 @@ async def generate_final_inventory_report(
         variance_percentage = (variance_value / total_expected_value * 100) if total_expected_value > 0 else 0
         # ✅ v2.19.8: Variação física
         qty_variance = total_counted_qty - total_expected_qty
+
+        # ⭐ Contagem cega (/security-review, 15/08): o relatório devolvia
+        # `expected_quantity`, `variance` e os campos de VALOR — e qualquer um
+        # deles, com o que o operador contou, reconstrói o esperado. Projeção, não
+        # bloqueio: a tela de Relatórios não tem trava de papel no frontend, então
+        # bloquear aqui deixaria o operador sem a página; para STAFF nada muda.
+        from app.api.v1.endpoints.counting_lists import aplicar_contagem_cega
+        for _it in report_items:
+            aplicar_contagem_cega(_it, current_user, inventory)
 
         return {
             "inventory": {

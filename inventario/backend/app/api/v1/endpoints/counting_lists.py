@@ -91,7 +91,15 @@ def _is_staff(user) -> bool:
 # Campos que revelam o saldo do sistema. Nomes variam entre os endpoints, por
 # isso a lista é ampla — melhor remover um campo inexistente do que deixar
 # passar.
-_CAMPOS_SALDO = ("expected_quantity", "system_qty", "expected", "saldo", "variacao", "difference")
+# ⚠️ 15/08/2026 (/security-review) — entraram as variantes em INGLÊS e as de VALOR.
+# O relatório final devolvia `variance` (= contado − esperado) e `expected_value` /
+# `variance_value`: qualquer um deles, somado ao que o operador contou, reconstrói o
+# esperado que a máscara acabou de remover. Esta tupla é o ÚNICO lugar a mexer quando
+# aparecer um campo novo derivado do saldo.
+_CAMPOS_SALDO = (
+    "expected_quantity", "system_qty", "expected", "saldo", "variacao", "difference",
+    "variance", "expected_value", "variance_value",
+)
 
 # Listas de LOTES no payload, e o campo de cada uma que carrega o SALDO DO
 # SISTEMA por lote. Some os lotes e você reconstrói o `system_qty` que a máscara

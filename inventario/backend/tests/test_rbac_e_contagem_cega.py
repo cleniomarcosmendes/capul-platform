@@ -342,3 +342,103 @@ def test_importador_preenche_toda_coluna_obrigatoria_dos_espelhos(db_session):
         + ', '.join(faltando)
         + '. A importação de produtos vai falhar com NotNullViolation no meio.'
     )
+
+
+# ==========================================================================
+# 4. Contagem cega — as SEIS rotas que passaram batido (/security-review 15/08)
+# ==========================================================================
+#
+# O helper existia e era chamado em 4 lugares; outras 6 rotas devolviam saldo do
+# sistema para o OPERATOR sem passar por ele. A mais grave é `my-assignments`: a
+# rota que o PRÓPRIO contador chama para saber o que contar, devolvendo o
+# `expected_quantity` de cada item ANTES da contagem — bastava digitar o número
+# de volta e a contagem deixava de verificar qualquer coisa.
+#
+# O comentário do próprio helper já previa o risco: "rotas espalhadas entre
+# main.py e api/v1/endpoints/. Endpoint novo que devolva saldo por lote precisa
+# passar por aqui." A remediação tinha sido feita rota a rota.
+
+from app.api.v1.endpoints.counting_lists import (
+    _CAMPOS_SALDO,
+    aplicar_contagem_cega,
+    mascarar_saldo_dos_lotes,
+)
+
+OPERADOR = SimpleNamespace(role="OPERATOR", username="contador", id=uuid4())
+SUPERVISOR = SimpleNamespace(role="SUPERVISOR", username="chefe", id=uuid4())
+LISTA = SimpleNamespace(current_cycle=1, show_previous_counts=False)
+
+
+def test_campos_de_valor_e_variance_tambem_somem():
+    """⭐ `variance` = contado − esperado. Sozinho ele DEVOLVE o esperado.
+
+    Estes três entraram na tupla em 15/08: o relatório final os expunha, e
+    mascarar só `expected_quantity` deixava o saldo reconstruível por subtração.
+    """
+    for campo in ("variance", "expected_value", "variance_value"):
+        assert campo in _CAMPOS_SALDO, f"{campo} precisa sair para o OPERATOR"
+
+    item = {
+        "product_code": "P1", "counted_quantity": 8,
+        "expected_quantity": 10, "variance": -2,
+        "expected_value": 100.0, "variance_value": -20.0,
+    }
+    aplicar_contagem_cega(item, OPERADOR, LISTA)
+
+    assert item["counted_quantity"] == 8      # o trabalho DELE fica
+    assert item["product_code"] == "P1"
+    for campo in ("expected_quantity", "variance", "expected_value", "variance_value"):
+        assert campo not in item
+
+
+def test_staff_continua_vendo_tudo():
+    """A projeção não pode atrapalhar quem supervisiona — é para isso que ela olha o papel."""
+    item = {"expected_quantity": 10, "variance": -2, "expected_value": 100.0}
+    aplicar_contagem_cega(item, SUPERVISOR, LISTA)
+    assert item["expected_quantity"] == 10
+    assert item["variance"] == -2
+
+
+def test_saldo_por_lote_do_search_product_some():
+    """`POST /counting/search-product` devolvia `lots[].balance` (SB8010.b8_saldo).
+
+    Somar os lotes reconstrói o esperado do item. O `lot_number` FICA: o contador
+    precisa saber qual lote está contando.
+    """
+    lots = [
+        {"lot_number": "L1", "balance": 30.0, "expiry_date": None},
+        {"lot_number": "L2", "balance": 12.0, "expiry_date": None},
+    ]
+    mascarar_saldo_dos_lotes(lots, OPERADOR, campo="balance")
+
+    assert [l["lot_number"] for l in lots] == ["L1", "L2"]
+    assert all("balance" not in l for l in lots)
+
+
+def test_saldo_por_lote_fica_para_staff():
+    lots = [{"lot_number": "L1", "balance": 30.0}]
+    mascarar_saldo_dos_lotes(lots, SUPERVISOR, campo="balance")
+    assert lots[0]["balance"] == 30.0
+
+
+def test_rotas_que_expoem_saldo_passam_pela_projecao():
+    """Guarda de REGRESSÃO por leitura do fonte.
+
+    Não é teste de comportamento — é a rede que o módulo não tinha: as rotas vivem
+    espalhadas entre `main.py` e `api/v1/endpoints/`, e a correção anterior foi
+    aplicada uma a uma, deixando seis para trás. Se alguém acrescentar/renomear um
+    handler que devolva saldo sem projetar, isto cai.
+    """
+    from pathlib import Path
+
+    fonte = Path(__file__).resolve().parents[1] / "app" / "main.py"
+    texto = fonte.read_text(encoding="utf-8")
+
+    # As 5 rotas que PROJETAM (a 6ª, lists/{id}/discrepancies, é bloqueada por
+    # require_staff_role — não tem consumidor no frontend).
+    assert texto.count("aplicar_contagem_cega(") >= 6, (
+        "alguma rota que devolve saldo deixou de passar pela contagem cega"
+    )
+    assert 'mascarar_saldo_dos_lotes(lots, current_user, campo="balance")' in texto
+    # A divergência por lista é STAFF: expõe saldo, variação e QUEM contou.
+    assert 'dependencies=[Depends(require_staff_role)],\n)\nasync def get_inventory_discrepancies' in texto
