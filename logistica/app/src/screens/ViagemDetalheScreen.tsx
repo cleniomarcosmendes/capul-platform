@@ -67,6 +67,10 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // ir e voltar da Baixa empilhava tentativas longas com o botão do banner
   // desabilitado — parecia travado. O toque no banner ignora a folga.
   const ultimoReenvioRef = useRef(0);
+  /** Soma das 3 filas, espelhada do estado — evita ler disco no caminho quente. */
+  const totalPendRef = useRef(0);
+  /** O 1º foco é a abertura da tela; os seguintes são volta de outra tela. */
+  const primeiroFocoRef = useRef(true);
 
   const carregar = useCallback(async () => {
     try {
@@ -106,11 +110,15 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // lastro de cobrança. O 'encerrar' segue por último: é terminal, e subindo antes
   // seria recusado pelas baixas que ainda estão na fila.
   const reenviarPendencias = useCallback(async ({ automatico = false } = {}) => {
-    const total =
-      (await contarPendentesBaixas()) +
-      (await contarPendentesDespesaEntrega()) +
-      (await contarPendentesKmEntrega());
-    if (total === 0) return;
+    // ⭐ Sem tocar no DISCO no caso comum. Aqui havia TRÊS leituras sequenciais do
+    // AsyncStorage (SQLite, atravessando a ponte nativa) a cada FOCO da tela —
+    // inclusive com tudo zerado, que é o normal. Caíam bem na janela em que a
+    // tela está voltando da baixa e o entregador já está tocando, e ponte
+    // ocupada atrasa a entrega dos toques. Mesmo defeito que o `irParaBaixa`
+    // tinha, em outro lugar. Os três contadores já vivem no estado, mantidos
+    // pelos listeners das filas; o ref só evita recriar este callback a cada
+    // mudança deles (o efeito de foco depende dele).
+    if (totalPendRef.current === 0) return;
     // Sem sinal, cada tentativa custa até 60s (a baixa sobe a foto). Ir e voltar
     // da Baixa não pode enfileirar uma tentativa longa por foco.
     const agora = Date.now();
@@ -156,6 +164,11 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     return () => clearTimeout(id);
   }, [aviso]);
 
+  // Espelho dos contadores para leitura SÍNCRONA (ver `reenviarPendencias`).
+  useEffect(() => {
+    totalPendRef.current = pendBaixa + pendDespesa + pendKm;
+  }, [pendBaixa, pendDespesa, pendKm]);
+
   // Contadores das filas ao vivo (banner).
   useEffect(() => {
     // O contador e o mapa andam juntos: a fila mudou, a tela muda com ela — sem
@@ -177,10 +190,20 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   }, []);
 
   // Ao focar (inclusive voltando da Baixa/Despesa) recarrega e tenta reenviar as filas.
+  //
+  // ⚠️ VOLTANDO de outra tela, espera a transição terminar. O foco dispara no
+  // COMEÇO da animação: recarregar ali põe resposta de rede + re-render da lista
+  // inteira em cima da transição, e é justamente quando ele já está tocando o
+  // próximo botão. Na ABERTURA da tela não há espera — seria atraso puro.
   useFocusEffect(
     useCallback(() => {
-      void carregar();
-      void reenviarPendencias({ automatico: true });
+      const atraso = primeiroFocoRef.current ? 0 : 400;
+      primeiroFocoRef.current = false;
+      const id = setTimeout(() => {
+        void carregar();
+        void reenviarPendencias({ automatico: true });
+      }, atraso);
+      return () => clearTimeout(id);
     }, [carregar, reenviarPendencias]),
   );
 
