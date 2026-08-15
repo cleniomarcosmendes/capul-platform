@@ -49,7 +49,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ViagemDetalhe'>;
 const DIAGNOSTICO = true;
 
 /** Contador próprio: só ELE re-renderiza a cada 500ms, não a tela toda. */
-function FaixaDiagnostico({ flags }: { flags: string }) {
+function FaixaDiagnostico({ flags, toquesRef }: { flags: string; toquesRef: React.MutableRefObject<number> }) {
   const [tique, setTique] = useState(0);
   const [appEstado, setAppEstado] = useState<string>(AppState.currentState);
   useEffect(() => {
@@ -63,7 +63,10 @@ function FaixaDiagnostico({ flags }: { flags: string }) {
     // `pointerEvents="none"`: a faixa NUNCA pode receber toque — seria criar o
     // próprio defeito que ela existe para investigar.
     <View style={styles.diagBarra} pointerEvents="none">
-      <Text style={styles.diagTxt}>🔬 {tique} · app={appEstado} · {flags}</Text>
+      {/* Lê o REF no render de 500ms. Contar toque com `setState` re-renderizava
+          a tela a CADA toque — inclusive o botão sendo pressionado, que perdia o
+          gesto. O instrumento não pode alterar o que ele mede. */}
+      <Text style={styles.diagTxt}>🔬 {tique} · app={appEstado} · toques={toquesRef.current} · {flags}</Text>
     </View>
   );
 }
@@ -93,8 +96,8 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   // Toque em "Dar baixa" que precisa subir o KM antes: sem este estado o botão
   // ficava mudo enquanto isso, e mudo lê como travado.
   const [preparandoBaixa, setPreparandoBaixa] = useState(false);
-  /** 🔬 TEMPORÁRIO — quantos toques chegaram ao React nesta tela. */
-  const [toques, setToques] = useState(0);
+  /** 🔬 TEMPORÁRIO — quantos toques chegaram ao React. REF, nunca state. */
+  const toquesRef = useRef(0);
   // Confirmação da baixa/despesa que ACABOU de acontecer — no lugar do Alert,
   // que disputava foco com a transição de tela (ver `lib/avisoTela.ts`).
   const [aviso, setAviso] = useState<Aviso | null>(null);
@@ -508,7 +511,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       // Diz se o dedo chega ao React: `toques` parado enquanto ele toca = o
       // evento morre antes do JS; subindo sem o botão reagir = chega, mas algo
       // acima o consome.
-      onStartShouldSetResponderCapture={DIAGNOSTICO ? () => { setToques((t) => t + 1); return false; } : undefined}
+      onStartShouldSetResponderCapture={DIAGNOSTICO ? () => { toquesRef.current += 1; return false; } : undefined}
     >
     <FlatList
       contentContainerStyle={styles.lista}
@@ -653,8 +656,9 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
     />
     {DIAGNOSTICO && (
       <FaixaDiagnostico
+        toquesRef={toquesRef}
         flags={
-          `toques=${toques} · prep=${preparandoBaixa ? 'SIM' : 'não'} · reenv=${reenviandoDespesa ? 'SIM' : 'não'} · ` +
+          `prep=${preparandoBaixa ? 'SIM' : 'não'} · reenv=${reenviandoDespesa ? 'SIM' : 'não'} · ` +
           `km=${salvandoKm ? 'SIM' : 'não'} · fila b/d/k=${pendBaixa}/${pendDespesa}/${pendKm}`
         }
       />
