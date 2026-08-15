@@ -159,6 +159,8 @@ export function MinhasViagensScreen({ navigation }: Props) {
         </TouchableOpacity>
       )}
       <FlatList
+      // Android desanexa view fora da tela e ela para de receber toque (ver ViagemDetalheScreen).
+      removeClippedSubviews={false}
       contentContainerStyle={viagens.length === 0 ? styles.vazioWrap : styles.lista}
       data={viagens}
       keyExtractor={(v) => v.id}

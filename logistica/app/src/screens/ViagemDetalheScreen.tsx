@@ -43,6 +43,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ViagemDetalhe'>;
  * não recebe toque (`pointerEvents="none"`) — instrumento que interfere no gesto
  * já mascarou a causa uma vez.
  */
+/** Ligar SÓ para investigar. Em homologação quem testa é usuário. */
+const MOSTRAR_DIAGNOSTICO = false;
+
 function FaixaDiagnostico() {
   const [, forcar] = useState(0);
   useEffect(() => {
@@ -522,6 +525,13 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       onStartShouldSetResponderCapture={() => { registrarToqueRaiz(); return false; }}
     >
     <FlatList
+      // ⭐ Android liga `removeClippedSubviews` por PADRÃO no FlatList: ele
+      // desanexa da hierarquia nativa as views tidas como fora da tela. O item
+      // continua VISÍVEL e para de receber toque — botão desenhado, toque no
+      // vazio — e só volta quando a lista se redesenha. Foi o que a medição de
+      // 15/08 apontou: 18 toques chegando à raiz da tela e só 2 virando
+      // execução de handler (`raiz=18 · exec=2`), com a thread de JS livre.
+      removeClippedSubviews={false}
       contentContainerStyle={styles.lista}
       // ⭐ Sem isto, o padrão do RN é `'never'`: com o teclado aberto, o PRIMEIRO
       // toque fora do campo é gasto só para fechá-lo, e o botão só reage no
@@ -673,7 +683,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       {/* ⚠️ FLUTUANTE, fora do cabeçalho da lista. Dentro dele, aparecer e sumir
           reposicionava tudo: o botão saía de baixo do dedo justamente enquanto
           ele tocava. E `pointerEvents="none"` para não roubar toque nenhum. */}
-      <FaixaDiagnostico />
+      {MOSTRAR_DIAGNOSTICO && <FaixaDiagnostico />}
       {aviso && (
         <View
           style={[styles.avisoBanner, aviso.tipo === 'atencao' && styles.avisoBannerAtencao]}

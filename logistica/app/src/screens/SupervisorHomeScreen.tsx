@@ -40,6 +40,8 @@ export function SupervisorHomeScreen({ navigation }: Props) {
 
   return (
     <FlatList
+      // Android desanexa view fora da tela e ela para de receber toque (ver ViagemDetalheScreen).
+      removeClippedSubviews={false}
       data={viagens}
       keyExtractor={(v) => v.id}
       contentContainerStyle={styles.list}

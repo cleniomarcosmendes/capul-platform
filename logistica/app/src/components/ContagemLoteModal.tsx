@@ -151,6 +151,8 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
         </View>
 
         <FlatList
+      // Android desanexa view fora da tela e ela para de receber toque (ver ViagemDetalheScreen).
+      removeClippedSubviews={false}
           data={item.lotes}
           keyExtractor={(l) => l.numero}
           contentContainerStyle={{ padding: 12, gap: 8, paddingBottom: 24 }}

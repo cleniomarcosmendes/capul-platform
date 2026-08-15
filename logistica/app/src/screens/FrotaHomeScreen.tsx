@@ -58,6 +58,8 @@ export function FrotaHomeScreen({ navigation }: Props) {
       <Text style={styles.secao}>Veículos na rua ({viagens.length})</Text>
 
       <FlatList
+      // Android desanexa view fora da tela e ela para de receber toque (ver ViagemDetalheScreen).
+      removeClippedSubviews={false}
         contentContainerStyle={viagens.length === 0 ? styles.vazioWrap : styles.lista}
         data={viagens}
         keyExtractor={(v, i) => v.id ?? `idx-${i}`}

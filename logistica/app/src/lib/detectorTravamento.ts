@@ -25,7 +25,7 @@ import { registrarTravamento } from './diagnostico';
  * importa (bundle de producao e o que separa defeito real de lentidao de dev).
  * Trocar para `false` quando a apuracao fechar.
  */
-const LIGADO = true;
+const LIGADO = false;
 
 export function useDetectorDeTravamento(rotulo: string, limiteMs = 400): void {
   useEffect(() => {

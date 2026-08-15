@@ -60,6 +60,8 @@ export function ContagemHomeScreen({ navigation }: Props) {
 
   return (
     <FlatList
+      // Android desanexa view fora da tela e ela para de receber toque (ver ViagemDetalheScreen).
+      removeClippedSubviews={false}
       style={styles.container}
       contentContainerStyle={{ padding: 16, gap: 12 }}
       data={listas}
