@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
 import { MfaNaoSuportadoError } from '../api/client';
+import { API_URL } from '../api/config';
+import { VERSAO_LABEL } from '../lib/versao';
 
 const CAPUL = '#1e7d3a';
 
@@ -104,6 +106,15 @@ export function LoginScreen() {
             <Text style={styles.botaoTxt}>Entrar</Text>
           )}
         </TouchableOpacity>
+
+        {/* ⭐ A QUAL SERVIDOR este app está falando. Sem isto, errar de ambiente
+            não dá erro de ambiente: dá "credenciais inválidas" ou "meu dado
+            sumiu", e a pessoa vai caçar defeito onde não há. Aconteceu em 15/08:
+            um bundle de produção caiu no fallback de homologação e o login
+            deixou de funcionar sem nenhuma pista do porquê. Também é o que o
+            suporte precisa ouvir quando o entregador liga. */}
+        <Text style={styles.ambiente}>{API_URL.replace(/^https?:\/\//, '')}</Text>
+        <Text style={styles.ambiente}>{VERSAO_LABEL}</Text>
       </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -111,6 +122,7 @@ export function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  ambiente: { marginTop: 10, fontSize: 11, color: '#94a3b8', textAlign: 'center' },
   container: { flex: 1, backgroundColor: CAPUL },
   // Ancora o card no topo (paddingTop) em vez de centralizar — garante que a
   // senha fique acima do teclado sem depender do windowSoftInputMode do Android.
