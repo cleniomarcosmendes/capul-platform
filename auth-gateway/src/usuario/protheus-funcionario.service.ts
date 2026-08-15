@@ -103,7 +103,16 @@ export class ProtheusFuncionarioService {
         method: metodo,
         headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
         timeout: timeoutMs,
-        rejectUnauthorized: false,
+        // ⭐ TLS VALIDADO. Era `false`, e por ali passavam a credencial Basic de PRODUÇÃO
+        // do Protheus e — no login do portal — a SENHA do funcionário. Achado do
+        // /security-review de 15/08: com a validação desligada, quem estivesse no caminho
+        // apresentava qualquer certificado, colhia as credenciais e ainda podia responder
+        // "autenticacao: OK" para matrícula arbitrária (é essa resposta, e só ela, que
+        // autoriza o login de conta `autenticaPortal`).
+        // Verificado em 15/08 que NÃO era necessário: `apiportal.capul.com.br` usa
+        // certificado Sectigo (CA pública) e valida com o repositório padrão — testado
+        // dentro do container, sem arquivo de CA nenhum.
+        rejectUnauthorized: true,
       };
       const req = transport.request(options, (res) => {
         let body = '';
