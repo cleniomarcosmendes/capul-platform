@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { reduzirFoto, reduzirFotos } from '../lib/foto';
 import * as Location from 'expo-location';
 import { isAxiosError } from 'axios';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -285,13 +286,21 @@ export function SupervisorViagemScreen({ route }: Props) {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Comprovante', 'Permita o acesso à câmera para fotografar o recibo.'); return; }
     const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
-    if (!r.canceled && r.assets[0]?.uri) setFotoUris((prev) => [...prev, r.assets[0].uri].slice(0, MAX_FOTOS_DESPESA));
+    // Reduz ANTES de entrar no estado: o que estiver aqui e o que sobe.
+    if (!r.canceled && r.assets[0]?.uri) {
+      const uri = await reduzirFoto(r.assets[0]);
+      setFotoUris((prev) => [...prev, uri].slice(0, MAX_FOTOS_DESPESA));
+    }
   };
   const escolherFotos = async () => {
     const restante = MAX_FOTOS_DESPESA - fotoUris.length;
     if (restante <= 0) { Alert.alert('Comprovantes', `Máximo de ${MAX_FOTOS_DESPESA} fotos.`); return; }
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: restante, quality: 0.6 });
-    if (!r.canceled) setFotoUris((prev) => [...prev, ...r.assets.map((a) => a.uri)].slice(0, MAX_FOTOS_DESPESA));
+    // Galeria manda um LOTE de originais de uma vez — o pior caso de bytes.
+    if (!r.canceled) {
+      const uris = await reduzirFotos(r.assets);
+      setFotoUris((prev) => [...prev, ...uris].slice(0, MAX_FOTOS_DESPESA));
+    }
   };
   const removerFoto = (i: number) => setFotoUris((prev) => prev.filter((_, idx) => idx !== i));
 

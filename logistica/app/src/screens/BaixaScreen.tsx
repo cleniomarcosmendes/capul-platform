@@ -22,6 +22,7 @@ import { SignaturePad } from '../components/SignaturePad';
 import { EntradaTextoModal } from '../components/EntradaTextoModal';
 import { uuid } from '../lib/uuid';
 import { temPermissaoLocalizacao } from '../lib/permissaoLocalizacao';
+import { reduzirFoto } from '../lib/foto';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Baixa'>;
@@ -99,7 +100,9 @@ export function BaixaScreen({ route, navigation }: Props) {
     }
     const r = await ImagePicker.launchCameraAsync({ quality: 0.6, base64: false });
     if (!r.canceled && r.assets[0]?.uri) {
-      setFotoUri(r.assets[0].uri);
+      // Reduz ANTES de guardar no estado: o que estiver aqui é o que sobe e o
+      // que a pré-visualização segura na memória.
+      setFotoUri(await reduzirFoto(r.assets[0]));
     }
   }
 
