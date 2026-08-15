@@ -1,5 +1,7 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { SaveFormat } from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
+
 
 /**
  * Reduz a foto NO APARELHO, antes de subir.
@@ -46,6 +48,15 @@ export async function reduzirFoto(foto: FotoOriginal): Promise<string> {
       [{ resize: { width: LARGURA_MAX_FOTO } }],
       { compress: QUALIDADE, format: SaveFormat.JPEG },
     );
+    // A original de 12MP não serve mais para nada: o que sobe e o que a tela
+    // mostra é a reduzida. Deixá-la no cache fazia CADA baixa somar dois
+    // arquivos, e o entregador faz uma atrás da outra — cache inchado vira
+    // pressão de memória, que no Android aparece como pausa de coleta de lixo
+    // (a interface "trava" por instantes). Best-effort: falhar aqui não afeta a
+    // baixa, que já tem a foto de que precisa.
+    if (r.uri !== foto.uri) {
+      await FileSystem.deleteAsync(foto.uri, { idempotent: true }).catch(() => undefined);
+    }
     return r.uri;
   } catch {
     return foto.uri;
