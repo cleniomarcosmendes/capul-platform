@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { useAuth } from '../auth/AuthContext';
 import { VERSAO_LABEL } from '../lib/versao';
+import { aquecerCadastrosDeApoio } from '../offline/aquecerCache';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
@@ -50,6 +51,15 @@ export function HomeScreen({ navigation }: Props) {
   const podeSupervisor = !!role && ROLES_SUPERVISOR.includes(role);
   // Sem o módulo no token, `roleInventario` é null e o card não habilita.
   const podeContagem = !!roleInventario && ROLES_INVENTARIO.includes(roleInventario);
+
+  // Cadastros de apoio no aparelho ENQUANTO AINDA HÁ SINAL. O lançador é por
+  // onde todo mundo passa depois do login, normalmente ainda no pátio: sem isto,
+  // a tela de despesa só seria cacheada se alguém a abrisse com rede — e o
+  // primeiro a abri-la costuma ser quem já está no posto, sem sinal, diante de
+  // um seletor de tipo vazio. Best-effort: falhar aqui não muda nada na tela.
+  useEffect(() => {
+    void aquecerCadastrosDeApoio({ frota: podeFrota, supervisor: podeSupervisor });
+  }, [podeFrota, podeSupervisor]);
 
   return (
     // O bloco de baixo (Sair + versão) é empurrado pro fim da tela; sem o inset
