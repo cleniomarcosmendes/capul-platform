@@ -4,6 +4,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { listarViagensSupervisor, type ViagemSup } from '../api/supervisor';
+import { comCache } from '../offline/cacheLeitura';
+import { FaixaOffline } from '../components/FaixaOffline';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'SupervisorHome'>;
@@ -23,22 +25,35 @@ export function SupervisorHomeScreen({ navigation }: Props) {
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   const [erro, setErro] = useState('');
+  const [offlineEm, setOfflineEm] = useState<number | null>(null);
 
+  // O RDV é executado em campo, na estrada — o mesmo sinal ruim da entrega.
   const carregar = useCallback(async () => {
     setErro('');
-    try { setViagens(await listarViagensSupervisor('EM_CURSO')); }
+    try {
+      const r = await comCache<ViagemSup[]>(
+        'supervisor:viagens:EM_CURSO',
+        () => listarViagensSupervisor('EM_CURSO'),
+        { aoCache: (c) => { setViagens(c.dado); setCarregando(false); } },
+      );
+      setViagens(r.dado);
+      setOfflineEm(r.deCache ? r.atualizadoEm : null);
+    }
     catch { setErro('Não foi possível carregar as viagens.'); }
   }, []);
 
+  // Spinner de tela cheia só na 1ª carga (ver MinhasViagensScreen).
   useFocusEffect(useCallback(() => {
     let ativo = true;
-    (async () => { setCarregando(true); await carregar(); if (ativo) setCarregando(false); })();
+    (async () => { await carregar(); if (ativo) setCarregando(false); })();
     return () => { ativo = false; };
   }, [carregar]));
 
   if (carregando) return <View style={styles.center}><ActivityIndicator size="large" color={CAPUL} /></View>;
 
   return (
+    <>
+    {offlineEm !== null && <FaixaOffline atualizadoEm={offlineEm} />}
     <FlatList
       // Android desanexa view fora da tela e ela para de receber toque (ver ViagemDetalheScreen).
       removeClippedSubviews={false}
@@ -60,6 +75,7 @@ export function SupervisorHomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       )}
     />
+    </>
   );
 }
 

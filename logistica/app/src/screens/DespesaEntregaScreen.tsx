@@ -10,6 +10,7 @@ import type { RootStackParamList } from '../navigation';
 import { tiposDespesa, fornecedoresDespesa, type FornecedorDespesa } from '../api/frota';
 import { lancarDespesaEntrega } from '../api/viagens';
 import { ehErroDeRede } from '../offline/filaFrota';
+import { comCache } from '../offline/cacheLeitura';
 import { enfileirarDespesaEntrega } from '../offline/filaDespesaEntrega';
 import { SelectBusca } from '../components/SelectBusca';
 import { uuid } from '../lib/uuid';
@@ -42,9 +43,20 @@ export function DespesaEntregaScreen({ route, navigation }: Props) {
   const [fotoUris, setFotoUris] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
 
+  // ⚠️ Guardados no aparelho: a fila já sabia enfileirar a despesa sem sinal,
+  // mas o formulário se montava com as listas VAZIAS — sem tipo de despesa não
+  // há o que selecionar, e o lançamento offline não acontecia. Mesmas chaves da
+  // tela de frota: o cadastro é o mesmo, e quem passou por uma tela já deixou
+  // pronto para a outra.
   useEffect(() => {
-    void (async () => { try { setTipos(await tiposDespesa()); } catch { /* vazio */ } })();
-    void (async () => { try { setFornecedores(await fornecedoresDespesa()); } catch { /* vazio */ } })();
+    void (async () => {
+      try { setTipos((await comCache('despesas:tipos', tiposDespesa, { aoCache: (c) => setTipos(c.dado) })).dado); }
+      catch { /* vazio */ }
+    })();
+    void (async () => {
+      try { setFornecedores((await comCache('despesas:fornecedores', fornecedoresDespesa, { aoCache: (c) => setFornecedores(c.dado) })).dado); }
+      catch { /* vazio */ }
+    })();
   }, []);
 
   const podeLancar = !!tipoId && valor !== '' && parseMoeda(valor) > 0 && !salvando;

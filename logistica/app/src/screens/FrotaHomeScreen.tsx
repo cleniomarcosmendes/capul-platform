@@ -6,6 +6,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { listarViagensFrota } from '../api/frota';
+import { comCache } from '../offline/cacheLeitura';
+import { FaixaOffline } from '../components/FaixaOffline';
 import type { ViagemFrota } from '../types/api';
 
 const CAPUL = '#1e7d3a';
@@ -17,21 +19,36 @@ export function FrotaHomeScreen({ navigation }: Props) {
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   const [erro, setErro] = useState('');
+  const [offlineEm, setOfflineEm] = useState<number | null>(null);
 
+  // A frota roda com o mesmo sinal ruim da entrega: quem sai com o veículo é
+  // quem está na estrada. A lista de veículos na rua fica GUARDADA no aparelho —
+  // sem ela, o condutor sem sinal não alcança a própria viagem para registrar
+  // parada, check-in ou despesa (ações que a `filaFrota` já sabe enfileirar,
+  // mas que só existem DENTRO da viagem que ele não conseguia abrir).
   const carregar = useCallback(async () => {
     setErro('');
     try {
-      setViagens(await listarViagensFrota('EM_CURSO'));
+      const r = await comCache<ViagemFrota[]>(
+        'frota:viagens:EM_CURSO',
+        () => listarViagensFrota('EM_CURSO'),
+        { aoCache: (c) => { setViagens(c.dado); setCarregando(false); } },
+      );
+      setViagens(r.dado);
+      setOfflineEm(r.deCache ? r.atualizadoEm : null);
     } catch {
       setErro('Não foi possível carregar as viagens em curso.');
     }
   }, []);
 
+  // ⚠️ O spinner de tela cheia só na PRIMEIRA carga. Antes `setCarregando(true)`
+  // subia a CADA foco: sem sinal, voltar de uma parada dava até 20s (timeout do
+  // axios) de tela em branco com a lista já pronta na memória — o mesmo padrão
+  // que virou "o app travou" na tela da rota, em 14/08.
   useFocusEffect(
     useCallback(() => {
       let ativo = true;
       (async () => {
-        setCarregando(true);
         await carregar();
         if (ativo) setCarregando(false);
       })();
@@ -51,6 +68,7 @@ export function FrotaHomeScreen({ navigation }: Props) {
 
   return (
     <View style={{ flex: 1 }}>
+      {offlineEm !== null && <FaixaOffline atualizadoEm={offlineEm} />}
       <TouchableOpacity style={styles.cta} onPress={() => navigation.navigate('SaidaFrota')}>
         <Text style={styles.ctaTxt}>＋ Registrar saída de veículo</Text>
       </TouchableOpacity>

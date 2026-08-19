@@ -11,6 +11,7 @@ import {
   buscarCondutor, validarCondutor, veiculosDisponiveis, registrarSaida, registrarSaidaIndividual,
   listarLocaisParada, type LocalParada,
 } from '../api/frota';
+import { comCache } from '../offline/cacheLeitura';
 import type { VeiculoFrota } from '../types/api';
 import { isoDeDataHora, dataBR, horaBR, mascaraData, mascaraHora } from '../lib/dataHoraLocal';
 
@@ -65,7 +66,14 @@ export function SaidaFrotaScreen({ navigation }: Props) {
   const [salvando, setSalvando] = useState(false);
 
   // Locais cadastrados (atalho do planejamento — pode-se digitar avulso também).
-  useEffect(() => { void (async () => { try { setLocais(await listarLocaisParada()); } catch { /* vazio */ } })(); }, []);
+  // Guardados no aparelho: cadastro de apoio, muda pouco, e sem ele o campo de
+  // rota planejada fica sem sugestão nenhuma quando falta sinal.
+  useEffect(() => {
+    void (async () => {
+      try { setLocais((await comCache('frota:locais', () => listarLocaisParada(), { aoCache: (c) => setLocais(c.dado) })).dado); }
+      catch { /* vazio */ }
+    })();
+  }, []);
 
   const addLocal = (n: string) => setPlanejadasTxt((t) => (t.trim() ? `${t}\n${n}` : n));
   // Sugeridos: globais (sem veículo/depto) + os do veículo selecionado. Curto.
@@ -84,8 +92,10 @@ export function SaidaFrotaScreen({ navigation }: Props) {
     void (async () => {
       setCarregandoVeiculos(true);
       try {
-        const lista = await veiculosDisponiveis();
-        if (ativo) setVeiculos(lista);
+        const r = await comCache('frota:veiculos:disponiveis', () => veiculosDisponiveis(), {
+          aoCache: (c) => { if (ativo) { setVeiculos(c.dado); setCarregandoVeiculos(false); } },
+        });
+        if (ativo) setVeiculos(r.dado);
       } catch {
         if (ativo) setVeiculos([]);
       } finally {

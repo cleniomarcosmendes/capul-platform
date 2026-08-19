@@ -24,6 +24,8 @@ import { useAuth } from '../auth/AuthContext';
 import {
   enfileirarSupervisor, processarFilaSupervisor, contarPendentesSupervisor, onFilaSupervisorChange, ehErroDeRede,
 } from '../offline/filaSupervisor';
+import { comCache } from '../offline/cacheLeitura';
+import { FaixaOffline } from '../components/FaixaOffline';
 
 const CAPUL = '#1e7d3a';
 const MAX_FOTOS_DESPESA = 5;
@@ -149,31 +151,49 @@ export function SupervisorViagemScreen({ route }: Props) {
   // ficou no desktop, 27/07). Continua carregando porque é o que explica o saldo da RDV.
   const [meuSup, setMeuSup] = useState<MeuCadastroSup | null>(null);
   const [adiants, setAdiants] = useState<AdiantamentoSup[]>([]);
+  const [offlineEm, setOfflineEm] = useState<number | null>(null);
 
+  // Tudo o que a tela lê fica GUARDADO no aparelho. O RDV é executado na
+  // estrada: sem isto, o supervisor sem sinal batia em "Falha ao carregar o
+  // planejamento" e não alcançava a tela — embora a `filaSupervisor` já
+  // soubesse enfileirar visita e despesa. Atividade e tipo de despesa são o
+  // caso mais duro: sem eles o formulário não tem o que selecionar.
   const carregar = useCallback(async () => {
-    const [d, a, t] = await Promise.all([
-      obterViagemSupervisor(viagemId), listarAtividadesSup(), listarTiposDespesaSup(),
+    const [rd, ra, rt] = await Promise.all([
+      comCache<ViagemSupDetalhe>(`sup:viagem:${viagemId}`, () => obterViagemSupervisor(viagemId), {
+        aoCache: (c) => setV(c.dado),
+      }),
+      comCache('sup:atividades', listarAtividadesSup, { aoCache: (c) => setAtivs(c.dado) }),
+      comCache('sup:tipos-despesa', listarTiposDespesaSup, { aoCache: (c) => setTipos(c.dado) }),
     ]);
-    setV(d); setAtivs(a); setTipos(t);
+    const d = rd.dado;
+    setV(d); setAtivs(ra.dado); setTipos(rt.dado);
+    setOfflineEm(rd.deCache ? rd.atualizadoEm : null);
     // Veículos p/ o seletor da despesa. Best-effort: sem eles a despesa ainda herda o
     // carro do planejamento — só não dá pra trocar.
-    try { setVeiculos(await listarVeiculosSup()); } catch { /* silencioso */ }
+    try { setVeiculos((await comCache('sup:veiculos', listarVeiculosSup, { aoCache: (c) => setVeiculos(c.dado) })).dado); } catch { /* silencioso */ }
     // Adiantamentos do mês (auto-serviço): resolve o próprio cadastro e lista o mês da
     // viagem. Falha aqui não bloqueia visitas/despesas (bloco isolado).
     try {
-      const meu = await meuCadastroSup();
+      const meu = (await comCache<MeuCadastroSup | null>('sup:meu-cadastro', meuCadastroSup, { aoCache: (c) => setMeuSup(c.dado) })).dado;
       setMeuSup(meu);
-      setAdiants(meu && d.mesReferencia ? await listarAdiantamentosSup(meu.id, d.mesReferencia) : []);
+      const mes = d.mesReferencia;
+      setAdiants(
+        meu && mes
+          ? (await comCache(`sup:adiantamentos:${meu.id}:${mes}`, () => listarAdiantamentosSup(meu.id, mes), { aoCache: (c) => setAdiants(c.dado) })).dado
+          : [],
+      );
     } catch { /* silencioso — não derruba o resto da tela */ }
     // Planejamentos em curso do supervisor → seletor opcional de "a qual planejamento
     // pertence" a despesa (default = este). Best-effort.
-    try { setPlanejamentos(await listarViagensSupervisor('EM_CURSO')); } catch { /* silencioso */ }
+    try { setPlanejamentos((await comCache('supervisor:viagens:EM_CURSO', () => listarViagensSupervisor('EM_CURSO'), { aoCache: (c) => setPlanejamentos(c.dado) })).dado); } catch { /* silencioso */ }
   }, [viagemId]);
 
   useFocusEffect(useCallback(() => {
     let ativo = true;
     (async () => {
-      setCarregando(true);
+      // Spinner de tela cheia só na 1ª carga: sem sinal, `setCarregando(true)`
+      // a cada foco escondia por até 20s uma tela que já estava pronta.
       await processarFilaSupervisor().catch(() => undefined); // sincroniza o que ficou offline
       try { await carregar(); } catch { Alert.alert('Erro', 'Falha ao carregar o planejamento.'); }
       if (ativo) setCarregando(false);
@@ -381,6 +401,7 @@ export function SupervisorViagemScreen({ route }: Props) {
 
   return (
     <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.container}>
+      {offlineEm !== null && <FaixaOffline atualizadoEm={offlineEm} />}
       {pendentes > 0 && (
         <TouchableOpacity style={styles.banner} onPress={() => void sincronizar()}>
           <Text style={styles.bannerTxt}>📴 {pendentes} registro(s) aguardando sinal — toque para reenviar</Text>

@@ -18,7 +18,10 @@ import { setCondutorToken, getCondutorToken } from '../api/client';
 import { SelectBusca } from '../components/SelectBusca';
 import {
   enfileirarFrota, processarFilaFrota, contarPendentesFrota, onFilaFrotaChange, ehErroDeRede,
+  paradasNaFilaFrota, paradasAvulsasNaFila,
 } from '../offline/filaFrota';
+import { comCache } from '../offline/cacheLeitura';
+import { FaixaOffline } from '../components/FaixaOffline';
 import { uuid } from '../lib/uuid';
 import { maskMoeda, parseMoeda } from '../lib/moeda';
 import { useScrollToFocusedInput, type AoFocar } from '../lib/useScrollToFocusedInput';
@@ -65,10 +68,25 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
   // Limpa o token de condutor ao sair da viagem (não vaza p/ outra viagem/sessão).
   useEffect(() => () => setCondutorToken(null), []);
 
+  // Mesma chave da FrotaHome: quem abriu a lista já deixou a viagem no aparelho.
+  // Sem isto, o condutor sem sinal batia em "Viagem não está mais em curso" — o
+  // texto sugere que a viagem ACABOU, quando o que faltou foi rede. Todas as
+  // ações do miolo (parada, check-in, pular, despesa) já sabiam trabalhar
+  // offline pela `filaFrota`; o que não dava para alcançar era a TELA delas.
+  const [offlineEm, setOfflineEm] = useState<number | null>(null);
   const carregar = useCallback(async () => {
     try {
-      const lista = await listarViagensFrota('EM_CURSO');
-      setViagem(lista.find((v) => v.id === viagemId) ?? null);
+      const r = await comCache<ViagemFrota[]>(
+        'frota:viagens:EM_CURSO',
+        () => listarViagensFrota('EM_CURSO'),
+        { aoCache: (c) => {
+          setViagem(c.dado.find((v) => v.id === viagemId) ?? null);
+          setOfflineEm(c.atualizadoEm);
+          setCarregando(false);
+        } },
+      );
+      setViagem(r.dado.find((v) => v.id === viagemId) ?? null);
+      setOfflineEm(r.deCache ? r.atualizadoEm : null);
     } catch { /* mantém */ } finally { setCarregando(false); }
   }, [viagemId]);
 
@@ -96,6 +114,7 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
 
   return (
     <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" style={styles.container} contentContainerStyle={styles.conteudo}>
+      {offlineEm !== null && <FaixaOffline atualizadoEm={offlineEm} />}
       {rastreando && (
         <View style={styles.rastreioBanner}>
           <Text style={styles.rastreioTxt}>📍 Localização ativa durante a viagem</Text>
@@ -198,12 +217,32 @@ function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; on
   const [ckObs, setCkObs] = useState('');
   const [ckBusy, setCkBusy] = useState(false);
 
+  // O que já foi feito NO APARELHO e ainda não subiu. O status da parada vem do
+  // servidor, que offline não recebeu nada — sem este mapa o check-in sem sinal
+  // não aparecia em lugar nenhum, e o condutor registrava de novo.
+  const [naFila, setNaFila] = useState<Record<string, 'CHECKIN' | 'PULADA'>>({});
+  const [avulsasNaFila, setAvulsasNaFila] = useState<{ id: string; local: string }[]>([]);
+  const lerFila = useCallback(async () => {
+    setNaFila(await paradasNaFilaFrota());
+    setAvulsasNaFila(await paradasAvulsasNaFila(viagem.id));
+  }, [viagem.id]);
+  useEffect(() => { void lerFila(); return onFilaFrotaChange(() => void lerFila()); }, [lerFila]);
+
   const carregar = useCallback(async () => {
-    try { setParadas(await listarParadasFrota(viagem.id)); } catch { /* mantém */ }
+    try {
+      const r = await comCache<ParadaFrotaItem[]>(
+        `frota:paradas:${viagem.id}`,
+        () => listarParadasFrota(viagem.id),
+        { aoCache: (c) => setParadas(c.dado) },
+      );
+      setParadas(r.dado);
+    } catch { /* mantém */ }
   }, [viagem.id]);
   useEffect(() => { void carregar(); }, [carregar]);
 
-  const planejadas = paradas.filter((p) => p.status === 'PLANEJADA');
+  // Uma parada só continua PLANEJADA se não estiver resolvida na fila também.
+  const planejadas = paradas.filter((p) => p.status === 'PLANEJADA' && naFila[p.id] == null);
+  const resolvidasNaFila = paradas.filter((p) => p.status === 'PLANEJADA' && naFila[p.id] != null);
 
   async function confirmarChegada(pid: string, rotulo: string) {
     setCkBusy(true);
@@ -219,6 +258,7 @@ function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; on
       if (ehErroDeRede(e)) {
         await enfileirarFrota({ id: uuid(), rotulo: `Check-in: ${rotulo}`, acao: { tipo: 'checkin', viagemId: viagem.id, paradaId: pid, payload, condutorToken: getCondutorToken() ?? undefined } });
         setCheckinId(null); setCkKm(''); setCkObs(''); onRegistrada();
+        await lerFila(); // a parada sai de "planejadas" na hora
         Alert.alert('Salvo offline', 'Sem sinal — o check-in vai sincronizar quando a conexão voltar.');
       } else {
         const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
@@ -233,6 +273,7 @@ function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; on
       if (ehErroDeRede(e)) {
         await enfileirarFrota({ id: uuid(), rotulo: `Pular: ${rotulo}`, acao: { tipo: 'pular', viagemId: viagem.id, paradaId: pid, condutorToken: getCondutorToken() ?? undefined } });
         onRegistrada();
+        await lerFila();
         Alert.alert('Salvo offline', 'Sem sinal — vai sincronizar quando a conexão voltar.');
       } else { Alert.alert('Erro', 'Não foi possível pular a parada.'); }
     }
@@ -254,6 +295,7 @@ function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; on
       if (ehErroDeRede(e)) {
         await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Parada: ${payload.local}`, acao: { tipo: 'parada', viagemId: viagem.id, payload, condutorToken: getCondutorToken() ?? undefined } });
         setLocal(''); setKm(''); setObs(''); onRegistrada();
+        await lerFila();
         Alert.alert('Salvo offline', 'Sem sinal — a parada vai sincronizar quando a conexão voltar.');
       } else {
         const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
@@ -292,6 +334,27 @@ function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; on
                   <TouchableOpacity style={styles.btnCancel} onPress={() => pular(p.id, p.planejadoLocal ?? p.local ?? 'parada')}><Text style={styles.btnCancelTxt}>Pular</Text></TouchableOpacity>
                 </View>
               )}
+            </View>
+          ))}
+        </>
+      )}
+
+      {(resolvidasNaFila.length > 0 || avulsasNaFila.length > 0) && (
+        <>
+          <Text style={[styles.passo, { marginTop: 12 }]}>
+            📴 Feitas sem sinal ({resolvidasNaFila.length + avulsasNaFila.length})
+          </Text>
+          <Text style={styles.dicaMini}>Já registradas no aparelho — sobem sozinhas quando a conexão voltar.</Text>
+          {resolvidasNaFila.map((p) => (
+            <View key={p.id} style={styles.paradaCard}>
+              <Text style={styles.paradaLocal}>
+                {naFila[p.id] === 'PULADA' ? '⏭️' : '✅'} {p.planejadoLocal ?? p.local}
+              </Text>
+            </View>
+          ))}
+          {avulsasNaFila.map((a) => (
+            <View key={a.id} style={styles.paradaCard}>
+              <Text style={styles.paradaLocal}>✅ {a.local}</Text>
             </View>
           ))}
         </>
@@ -426,9 +489,20 @@ function DespesaForm({ viagem, onPronto, aoFocar }: { viagem: ViagemFrota; onPro
   const [fotoUris, setFotoUris] = useState<string[]>([]);
   const [salvando, setSalvando] = useState(false);
 
+  // ⚠️ Cadastros de apoio TÊM de ficar no aparelho. A `filaFrota` já sabia
+  // enfileirar a despesa sem sinal, mas o formulário se montava com listas
+  // VAZIAS: sem tipo de despesa não há o que selecionar, e o lançamento offline
+  // era impossível na prática — fila pronta para um dado que ninguém conseguia
+  // preencher. Mudam raramente; guardar é barato.
   useEffect(() => {
-    void (async () => { try { setTipos(await tiposDespesa()); } catch { /* vazio */ } })();
-    void (async () => { try { setFornecedores(await fornecedoresDespesa()); } catch { /* vazio */ } })();
+    void (async () => {
+      try { setTipos((await comCache('despesas:tipos', tiposDespesa, { aoCache: (c) => setTipos(c.dado) })).dado); }
+      catch { /* vazio */ }
+    })();
+    void (async () => {
+      try { setFornecedores((await comCache('despesas:fornecedores', fornecedoresDespesa, { aoCache: (c) => setFornecedores(c.dado) })).dado); }
+      catch { /* vazio */ }
+    })();
   }, []);
 
   const podeLancar = !!tipoId && valor !== '' && parseMoeda(valor) > 0 && !salvando;

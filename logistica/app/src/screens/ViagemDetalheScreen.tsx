@@ -14,6 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { obterViagem, iniciarEntrega, encerrarEntrega } from '../api/viagens';
+import { comCache, gravarCache } from '../offline/cacheLeitura';
+import { FaixaOffline } from '../components/FaixaOffline';
 import { impedimentosEncerramento } from '../lib/impedimentosEncerramento';
 import {
   baixasNaFilaPorEntrega,
@@ -86,7 +88,15 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
   const [aviso, setAviso] = useState<Aviso | null>(null);
   // Já conseguimos carregar a rota alguma vez? Decide se uma falha de rede vira
   // tela de erro ou é apenas ignorada (seguimos com o que está na tela).
+  //
+  // ⚠️ Isto é um `useRef`: ele protege quem FICA na tela (ir à Baixa e voltar),
+  // mas zera quando a tela é DESMONTADA — voltar para a lista e tocar de novo no
+  // card monta uma tela nova. Era esse o buraco do relato de 18/08 em HLG. Quem
+  // cobre o caso agora é o cache em disco (`comCache`), que sobrevive à
+  // remontagem e ao app fechado; este ref continua como segunda linha.
   const temViagemRef = useRef(false);
+  // Preenchido = a rota na tela veio do aparelho, não do servidor.
+  const [offlineEm, setOfflineEm] = useState<number | null>(null);
   // Quando foi a última tentativa AUTOMÁTICA de reenvio. O foco da tela dispara
   // reenvio, e a subida da baixa carrega a foto (timeout de 60s): sem esta folga,
   // ir e voltar da Baixa empilhava tentativas longas com o botão do banner
@@ -102,7 +112,23 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
 
   const carregar = useCallback(async () => {
     try {
-      const v = await obterViagem(viagemId);
+      // 🔴 A rota fica GUARDADA no aparelho (`capul_cache:viagem:<id>`).
+      // Antes vinha só da rede, e a tela remontada sem sinal — voltar para a
+      // lista e tocar no card de novo — dava "Não foi possível carregar a
+      // viagem", com a rota inteira já tendo sido exibida segundos antes.
+      // Offline é o modo normal de trabalho do entregador: a rede ATUALIZA a
+      // rota, ela não é condição para a rota existir.
+      const r = await comCache<Viagem>(`viagem:${viagemId}`, () => obterViagem(viagemId), {
+        aoCache: (c) => {
+          setViagem(c.dado);
+          setErro('');
+          temViagemRef.current = true;
+          setOfflineEm(c.atualizadoEm);
+          setCarregando(false); // pinta já; não segura a tela esperando a rede
+        },
+      });
+      const v = r.dado;
+      setOfflineEm(r.deCache ? r.atualizadoEm : null);
       setViagem(v);
       setErro(''); // some com o erro de uma tentativa anterior; sem isto ele grudava
       temViagemRef.current = true;
@@ -339,7 +365,14 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       if (ehErroDeRede(e)) {
         if (acao === 'iniciar') {
           await enfileirarKmEntrega({ tipo: 'iniciar', viagemId: viagem.id, kmInicial: km });
-          setViagem((v) => (v ? { ...v, kmInicial: km } : v)); // otimista: reflete o KM de saída na UI
+          // Otimista: reflete o KM de saída na UI — E NO CACHE. Só na memória, o
+          // KM sumia ao sair e voltar para a rota: o cache em disco devolvia a
+          // viagem sem `kmInicial` e a tela voltava a barrar navegar/baixar,
+          // com o KM já guardado na fila. O que o usuário fez tem de sobreviver
+          // à remontagem tanto quanto o que veio do servidor.
+          const comKm = { ...viagem, kmInicial: km };
+          setViagem(comKm);
+          await gravarCache(`viagem:${viagem.id}`, comKm);
           setAcaoKm(null);
           // Tenta subir NA HORA, em vez de esperar o próximo foco de tela. Se a
           // falha foi um piscar de rede, o KM entra já e a rota nasce válida no
@@ -440,6 +473,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       </View>
     );
   }
+  const faixaOffline = offlineEm !== null ? <FaixaOffline atualizadoEm={offlineEm} /> : null;
 
   const paradas = [...(viagem.paradas ?? [])].sort((a, b) => a.sequencia - b.sequencia);
 
@@ -524,6 +558,7 @@ export function ViagemDetalheScreen({ route, navigation }: Props) {
       // render por toque. Diz se o evento CHEGA ao React.
       onStartShouldSetResponderCapture={() => { registrarToqueRaiz(); return false; }}
     >
+    {faixaOffline}
     <FlatList
       // ⭐ Android liga `removeClippedSubviews` por PADRÃO no FlatList: ele
       // desanexa da hierarquia nativa as views tidas como fora da tela. O item

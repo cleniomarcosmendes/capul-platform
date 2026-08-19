@@ -13,6 +13,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { minhasViagens } from '../api/viagens';
+import { comCache } from '../offline/cacheLeitura';
+import { FaixaOffline } from '../components/FaixaOffline';
 import { contarPendentes, onFilaChange, processarFila } from '../offline/filaBaixas';
 import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFilaDespesaEntrega } from '../offline/filaDespesaEntrega';
 import { contarPendentesKmEntrega, onFilaKmEntregaChange, processarFilaKmEntrega } from '../offline/filaKmEntrega';
@@ -30,13 +32,28 @@ export function MinhasViagensScreen({ navigation }: Props) {
   const [pendentesDespesa, setPendentesDespesa] = useState(0);
   const [pendentesKm, setPendentesKm] = useState(0);
   const [reenviando, setReenviando] = useState(false);
+  // null = a lista veio do servidor agora. Preenchido = está mostrando o que
+  // ficou guardado no aparelho (e desde quando).
+  const [offlineEm, setOfflineEm] = useState<number | null>(null);
   // Quando foi a última tentativa AUTOMÁTICA de reenvio (folga entre focos).
   const ultimoReenvioRef = useRef(0);
 
+  // 🔴 A lista fica GUARDADA no aparelho. Antes vinha só da rede: com o app
+  // reaberto sem sinal (Android mata o processo numa rota longa), o entregador
+  // via "Nenhuma viagem em curso" — como se não houvesse rota nenhuma para o
+  // dia. O `aoCache` pinta na hora o que está no disco; a rede, quando responde,
+  // substitui.
   const carregar = useCallback(async () => {
     setErro('');
     try {
-      setViagens(await minhasViagens());
+      const r = await comCache<Viagem[]>('viagens:minhas', minhasViagens, {
+        aoCache: (c) => {
+          setViagens(c.dado);
+          setCarregando(false); // não segura a tela esperando a rede
+        },
+      });
+      setViagens(r.dado);
+      setOfflineEm(r.deCache ? r.atualizadoEm : null);
     } catch {
       setErro('Não foi possível carregar as viagens.');
     }
@@ -145,6 +162,7 @@ export function MinhasViagensScreen({ navigation }: Props) {
 
   return (
     <View style={{ flex: 1 }}>
+      {offlineEm !== null && <FaixaOffline atualizadoEm={offlineEm} />}
       {(pendentes > 0 || pendentesDespesa > 0 || pendentesKm > 0) && (
         <TouchableOpacity style={styles.fila} onPress={() => void reenviarFila()} disabled={reenviando}>
           <Text style={styles.filaTxt}>

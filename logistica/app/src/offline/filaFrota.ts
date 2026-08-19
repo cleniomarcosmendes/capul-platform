@@ -50,6 +50,33 @@ async function ler(): Promise<ItemFrota[]> {
 async function gravar(itens: ItemFrota[]) { await AsyncStorage.setItem(KEY, JSON.stringify(itens)); notificar(itens.length); }
 export async function contarPendentesFrota(): Promise<number> { return (await ler()).length; }
 
+/**
+ * Paradas já resolvidas NO APARELHO, esperando sinal (paradaId → o que foi feito).
+ *
+ * Mesmo mecanismo do `baixasNaFilaPorEntrega` da entrega, e pela mesma razão: o
+ * status da parada vem do servidor, que offline não recebeu nada. Sem isto, o
+ * condutor fazia o check-in sem sinal, via a parada continuar **PLANEJADA** com
+ * o botão de chegada ali — parecia que não pegou, e convidava a registrar duas
+ * vezes. (Na entrega isso foi relatado em 11/08, em modo avião; aqui era o mesmo
+ * defeito, ainda de pé.)
+ */
+export async function paradasNaFilaFrota(): Promise<Record<string, 'CHECKIN' | 'PULADA'>> {
+  const mapa: Record<string, 'CHECKIN' | 'PULADA'> = {};
+  for (const item of await ler()) {
+    if (item.acao.tipo === 'checkin') mapa[item.acao.paradaId] = 'CHECKIN';
+    else if (item.acao.tipo === 'pular') mapa[item.acao.paradaId] = 'PULADA';
+  }
+  return mapa;
+}
+
+/** Paradas AD-HOC ainda na fila (não existem no servidor). Rótulo para a tela
+ *  mostrar o que o condutor registrou sem sinal — senão ele digita de novo. */
+export async function paradasAvulsasNaFila(viagemId: string): Promise<{ id: string; local: string }[]> {
+  return (await ler())
+    .filter((i) => i.acao.tipo === 'parada' && i.acao.viagemId === viagemId)
+    .map((i) => ({ id: i.id, local: (i.acao as { payload: ParadaPayload }).payload.local }));
+}
+
 async function apagarFotos(uris: string[]) {
   for (const uri of uris) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
 }

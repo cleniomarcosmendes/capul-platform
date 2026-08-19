@@ -4,6 +4,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { listarMinhasListas, type MinhaListaContagem } from '../api/inventario';
+import { comCache } from '../offline/cacheLeitura';
+import { FaixaOffline } from '../components/FaixaOffline';
 
 const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'ContagemHome'>;
@@ -21,11 +23,20 @@ export function ContagemHomeScreen({ navigation }: Props) {
   const [listas, setListas] = useState<MinhaListaContagem[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [offlineEm, setOfflineEm] = useState<number | null>(null);
 
   const carregar = useCallback(async () => {
     try {
       setErro(null);
-      setListas(await listarMinhasListas());
+      // A lista fica no aparelho. O PACOTE de itens já era offline
+      // (`contagemOffline`), mas a HOME não era: sem sinal o contador não
+      // chegava até a lista que ele já tinha baixado — a porta estava trancada
+      // com a chave do lado de dentro.
+      const r = await comCache<MinhaListaContagem[]>('inventario:minhas-listas', listarMinhasListas, {
+        aoCache: (c) => { setListas(c.dado); setCarregando(false); },
+      });
+      setListas(r.dado);
+      setOfflineEm(r.deCache ? r.atualizadoEm : null);
     } catch (e) {
       // Extraído UMA vez e já tipado: antes o mesmo caminho era reescrito três
       // vezes com `as any`, que apaga justamente a checagem que evita ler
@@ -59,6 +70,8 @@ export function ContagemHomeScreen({ navigation }: Props) {
   }
 
   return (
+    <>
+    {offlineEm !== null && <FaixaOffline atualizadoEm={offlineEm} />}
     <FlatList
       // Android desanexa view fora da tela e ela para de receber toque (ver ViagemDetalheScreen).
       removeClippedSubviews={false}
@@ -95,6 +108,7 @@ export function ContagemHomeScreen({ navigation }: Props) {
         />
       )}
     />
+    </>
   );
 }
 

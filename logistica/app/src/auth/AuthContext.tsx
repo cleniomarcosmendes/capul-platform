@@ -99,7 +99,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Renova SEMPRE no boot — o access salvo pode ser de uma sessão antiga sem
       // `modulos` (role viria null). Se o refresh falhar (sessão velha/inválida),
       // NÃO caímos num access-lixo: limpamos e mostramos o login.
-      let access: string | null = null;
+      // Sem inicializador: todo caminho do `catch` retorna, então o valor só
+      // pode vir do `doRefresh`.
+      let access: string | null;
       try {
         access = await doRefresh();
       } catch (e) {
@@ -107,10 +109,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Sem rede: o access salvo é o que temos. Vencido ele funciona igual —
         // offline nenhuma request sobe de qualquer forma, e quando o sinal
         // voltar o 401 dispara o refresh silencioso. As telas leem do cache.
-        access = await getAccess();
-        if (access) {
-          setAccessToken(access);
-          aplicarToken(access);
+        const salvo = await getAccess();
+        if (salvo) {
+          setAccessToken(salvo);
+          aplicarToken(salvo);
           setStatus('authenticated');
           return;
         }
