@@ -125,7 +125,6 @@ export async function processarFilaFrota(): Promise<ResultadoFilaFrota> {
 }
 
 /** Erro de REDE (sem resposta do servidor) — candidato a enfileirar. */
-export function ehErroDeRede(e: unknown): boolean {
-  if (!isAxiosError(e)) return false;
-  return !e.response; // timeout / sem conexão / DNS — sem status HTTP
-}
+// Fonte única em `lib/erroRede` (era duplicada aqui e em `filaSupervisor`).
+// Reexportado porque as telas importam daqui desde a Fase 2d.
+export { ehErroDeRede } from '../lib/erroRede';

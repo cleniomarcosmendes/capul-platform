@@ -110,8 +110,6 @@ export async function processarFilaSupervisor(): Promise<ResultadoFilaSupervisor
   } finally { processando = false; }
 }
 
-/** Erro de REDE (sem resposta do servidor) — candidato a enfileirar. */
-export function ehErroDeRede(e: unknown): boolean {
-  if (!isAxiosError(e)) return false;
-  return !e.response; // timeout / sem conexão / DNS — sem status HTTP
-}
+// Fonte única em `lib/erroRede`. Reexportado porque a tela do supervisor
+// importa daqui.
+export { ehErroDeRede } from '../lib/erroRede';

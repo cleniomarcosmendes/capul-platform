@@ -1,5 +1,6 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { API_URL, AUTH_BASE } from './config';
+import { ehErroDeRede } from '../lib/erroRede';
 import { clearTokens, getRefresh, saveTokens } from '../auth/storage';
 import type { LoginResponse } from '../types/api';
 
@@ -40,8 +41,27 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 // concorrentes que tomarem 401 esperam o mesmo refresh). ---
 let refreshing: Promise<string | null> | null = null;
 
+/**
+ * Erro do refresh quando **a rede faltou** — distinto de "o servidor recusou".
+ *
+ * 🔴 As duas coisas caíam no mesmo `return null`, e quem chama tratava isso como
+ * sessão morta: **apagava o refresh do keystore**. Na prática, o entregador que
+ * reabrisse o app sem sinal (Android matou em background numa rota longa) era
+ * jogado no login E ficava sem credencial — e o login também precisa de rede.
+ * Ele terminava o dia sem conseguir entrar, com as baixas presas no aparelho.
+ * Sem rede a sessão CONTINUA; só rejeição do auth-gateway desloga.
+ */
+export class SemRedeError extends Error {
+  constructor() {
+    super('Sem conexão para renovar a sessão.');
+    this.name = 'SemRedeError';
+  }
+}
+
 /** Renova o access token a partir do refresh salvo. Exportado para o boot do
- *  AuthContext (garantir access+role frescos) além do uso no interceptor 401. */
+ *  AuthContext (garantir access+role frescos) além do uso no interceptor 401.
+ *  `null` = o servidor RECUSOU (sessão morta). Lança `SemRedeError` quando foi
+ *  só a rede — o caller não pode confundir os dois. */
 export async function doRefresh(): Promise<string | null> {
   const refresh = await getRefresh();
   if (!refresh) return null;
@@ -53,7 +73,8 @@ export async function doRefresh(): Promise<string | null> {
     await saveTokens(data.accessToken, data.refreshToken);
     accessToken = data.accessToken;
     return data.accessToken;
-  } catch {
+  } catch (e) {
+    if (ehErroDeRede(e)) throw new SemRedeError();
     return null;
   }
 }
@@ -68,17 +89,30 @@ api.interceptors.response.use(
     if (status === 401 && original && !original._retry && !isAuthCall) {
       original._retry = true;
       refreshing = refreshing ?? doRefresh();
-      const novo = await refreshing.finally(() => {
+      // ⚠️ `catch` aqui, e não só no `doRefresh`: com sinal INSTÁVEL o request
+      // original volta 401 (access vencido) e o refresh cai por timeout. Antes
+      // isso apagava a sessão no meio da rota — por instabilidade de rede, não
+      // por sessão inválida. Sem rede: devolve o erro e deixa a sessão viva; a
+      // fila offline segura o que não subiu e reenvia quando o sinal voltar.
+      let novo: string | null = null;
+      let semRede = false;
+      try {
+        novo = await refreshing;
+      } catch {
+        semRede = true;
+      } finally {
         refreshing = null;
-      });
+      }
       if (novo) {
         original.headers.set('Authorization', `Bearer ${novo}`);
         return api(original);
       }
-      // Refresh falhou → sessão morta. Limpa e avisa o app.
-      await clearTokens();
-      accessToken = null;
-      onAuthFailure?.();
+      if (!semRede) {
+        // O auth-gateway RECUSOU o refresh → sessão morta. Limpa e avisa o app.
+        await clearTokens();
+        accessToken = null;
+        onAuthFailure?.();
+      }
     }
     return Promise.reject(error);
   },
