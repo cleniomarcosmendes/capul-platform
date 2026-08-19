@@ -12,6 +12,7 @@ import {
   listarLocaisParada, type LocalParada,
 } from '../api/frota';
 import { comCache } from '../offline/cacheLeitura';
+import { ehErroDeRede } from '../lib/erroRede';
 import type { VeiculoFrota } from '../types/api';
 import { isoDeDataHora, dataBR, horaBR, mascaraData, mascaraHora } from '../lib/dataHoraLocal';
 
@@ -163,8 +164,10 @@ export function SaidaFrotaScreen({ navigation }: Props) {
           ? 'Portal indisponível. Tente novamente em instantes.'
           : 'Senha inválida.');
       }
-    } catch {
-      setErroSenha('Falha ao validar. Verifique a conexão.');
+    } catch (e) {
+      setErroSenha(ehErroDeRede(e)
+        ? 'Sem sinal — a senha é conferida no portal do RH e precisa de conexão. Tente ainda no pátio.'
+        : 'Falha ao validar. Tente novamente.');
     } finally {
       setValidando(false);
     }
@@ -216,6 +219,24 @@ export function SaidaFrotaScreen({ navigation }: Props) {
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (e) {
+      // ⭐ Retirar o veículo é a ÚNICA ação do app que exige rede, e ela tem de
+      // dizer isso com todas as letras. Offline caía no genérico "Não foi
+      // possível registrar. Tente novamente." — que manda o condutor tentar de
+      // novo contra uma parede, sem saber que o problema é sinal nem que a hora
+      // de resolver é AGORA, no pátio, antes de sair.
+      // Não vai para fila de propósito: a saída valida a senha no Protheus ao
+      // vivo e é ela que RESERVA o carro. Duas saídas offline no mesmo veículo
+      // só apareceriam na sincronização, com os dois já na estrada.
+      if (ehErroDeRede(e)) {
+        Alert.alert(
+          'Sem conexão para retirar o veículo',
+          'A retirada precisa de sinal: ela confirma sua identidade e reserva o carro para você — ' +
+            'sem isso, outra pessoa poderia sair com o mesmo veículo.\n\n' +
+            'Faça a retirada ainda no pátio, no WiFi da empresa. Depois de retirado, ' +
+            'TODO o resto da viagem funciona sem sinal: paradas, check-in, despesas e o retorno.',
+        );
+        return;
+      }
       const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
       // Individual sem matrícula no cadastro: em vez de só informar o erro,
       // abre o campo para ele digitar a dele e seguir na hora. Antes a mensagem
