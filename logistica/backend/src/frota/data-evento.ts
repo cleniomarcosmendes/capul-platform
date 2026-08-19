@@ -23,7 +23,7 @@ export const TOLERANCIA_RELOGIO_MS = 10 * 60 * 1000;
 
 export function resolverDataEvento(
   informada: string | undefined,
-  rotulo: 'saída' | 'chegada',
+  rotulo: 'saída' | 'chegada' | 'parada' | 'chegada na parada',
   agora: Date = new Date(),
 ): Date {
   if (!informada) return agora;

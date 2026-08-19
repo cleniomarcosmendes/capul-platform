@@ -306,6 +306,19 @@ export class AddParadaDto {
   // Idempotência (fila offline): reenvio com a mesma chave não duplica.
   @IsOptional() @IsString() @MaxLength(60)
   idempotencyKey?: string;
+
+  /**
+   * ISO 8601 — QUANDO a parada aconteceu, informado pelo app.
+   *
+   * ⚠️ Existe por causa da viagem de vários dias com sinal instável: sem ela o
+   * servidor carimbava `new Date()` no momento em que a FILA subiu. Um condutor
+   * fora por quatro dias voltava com as paradas dos quatro dias empilhadas no
+   * minuto da sincronização — o caderno da rota perdia a única coisa que ele
+   * registra, que é a sequência do que aconteceu e quando.
+   * Mesma validação da saída/chegada: futuro barrado, teto de 7 dias.
+   */
+  @IsOptional() @IsString()
+  dataHora?: string;
 }
 
 /** Cadastro de local/ponto de parada (pick-list do planejamento). */
@@ -350,6 +363,10 @@ export class PlanejarParadasDto {
 
 /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */
 export class CheckinParadaDto {
+  /** ISO 8601 — quando o condutor chegou. Ver `AddParadaDto.dataHora`. */
+  @IsOptional() @IsString()
+  dataHora?: string;
+
   @IsOptional() @IsString() @MaxLength(120)
   local?: string;
 

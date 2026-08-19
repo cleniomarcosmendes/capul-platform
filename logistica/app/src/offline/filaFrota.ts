@@ -41,6 +41,9 @@ export interface ItemFrota {
   criadoEm: string;
   tentativas: number;
   ultimoErro: string | null;
+  /** O servidor recusou por IDENTIFICAÇÃO vencida (403), não pelo conteúdo.
+   *  O item fica na fila esperando o condutor se identificar de novo. */
+  precisaCondutor?: boolean;
 }
 
 const KEY = 'capul_fila_frota';
@@ -79,6 +82,32 @@ export async function paradasNaFilaFrota(): Promise<Record<string, 'CHECKIN' | '
 
 /** Paradas AD-HOC ainda na fila (não existem no servidor). Rótulo para a tela
  *  mostrar o que o condutor registrou sem sinal — senão ele digita de novo. */
+/** Quantos itens desta viagem esperam o condutor se identificar de novo.
+ *  A tela usa para pedir a identificação em vez de deixar a fila parada. */
+export async function pendentesPrecisamCondutor(viagemId: string): Promise<number> {
+  return (await ler()).filter((i) => i.precisaCondutor && i.acao.viagemId === viagemId).length;
+}
+
+/**
+ * Recarimba os itens desta viagem com o token de condutor recém-emitido.
+ *
+ * É o que devolve à fila o direito de subir depois que a identificação venceu:
+ * o condutor passa pelo gate outra vez (matrícula + senha, com sinal) e o
+ * trabalho guardado no aparelho volta a valer — sem que ele precise redigitar
+ * nada nem refotografar cupom.
+ */
+export async function reautenticarFilaFrota(viagemId: string, token: string): Promise<number> {
+  const itens = await ler();
+  let n = 0;
+  const novos = itens.map((i) => {
+    if (i.acao.viagemId !== viagemId || i.acao.condutorToken === undefined) return i;
+    n += 1;
+    return { ...i, precisaCondutor: false, acao: { ...i.acao, condutorToken: token } };
+  });
+  if (n) await gravar(novos);
+  return n;
+}
+
 /** Viagens cujo RETORNO está na fila: já fecharam para quem está em campo, mas
  *  ainda constam EM_CURSO no servidor. A tela usa isto para não oferecer
  *  "registrar retorno" duas vezes no mesmo veículo. */
@@ -154,6 +183,18 @@ export async function processarFilaFrota(): Promise<ResultadoFilaFrota> {
         enviadas++;
       } catch (err) {
         const status = isAxiosError(err) ? err.response?.status : undefined;
+        // 🔴 403 num item que carrega token de CONDUTOR não é recusa do
+        // conteúdo — é a identificação que venceu. O token vale 6h ("cobre uma
+        // jornada"), e a viagem de frota dura DIAS: um condutor fora por quatro
+        // dias voltava e a fila descartava tudo de uma vez, **apagando as fotos
+        // dos cupons** junto (a política de 4xx = rejeição definitiva). Ele
+        // perdia as despesas da viagem inteira e nem sabia por quê.
+        // O item FICA na fila; a tela pede a identificação e recarimba.
+        const identificacaoVencida = status === 403 && item.acao.condutorToken !== undefined;
+        if (identificacaoVencida) {
+          manter.push({ ...item, tentativas: item.tentativas + 1, ultimoErro: 'identificação do condutor vencida', precisaCondutor: true });
+          continue;
+        }
         const negocio = status !== undefined && status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
         if (negocio) {
           const msg = (isAxiosError(err) && (err.response?.data as { message?: string } | undefined)?.message) || `Rejeitada (HTTP ${status}).`;

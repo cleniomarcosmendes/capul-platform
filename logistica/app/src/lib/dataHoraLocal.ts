@@ -53,6 +53,20 @@ export function dataBR(d: Date): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+/**
+ * "2026-08-19" do dia de HOJE, no fuso do APARELHO.
+ *
+ * ⚠️ Não use `toISOString().slice(0,10)`: ele converte para UTC, e no Brasil
+ * (UTC-3) toda despesa lançada depois das 21h viraria a data do dia seguinte.
+ *
+ * Serve para FIXAR a data do gasto ao enfileirar sem sinal — deixar vazio faz o
+ * servidor usar "hoje", que numa viagem de vários dias é o dia da sincronização.
+ */
+export function dataISOHoje(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /** "15:20" a partir de um Date — para pré-preencher o campo. */
 export function horaBR(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');

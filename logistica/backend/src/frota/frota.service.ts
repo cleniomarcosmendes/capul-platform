@@ -1110,7 +1110,8 @@ export class FrotaService {
         precisaoM: dto.precisaoM ?? null,
         noLocal: noLocalEff,
         localClienteId: localId,
-        dataHora: new Date(),
+        // Informada pelo app (parada registrada sem sinal) ou agora.
+        dataHora: resolverDataEvento(dto.dataHora, 'parada'),
         realizadaEm: new Date(),
         idempotencyKey: dto.idempotencyKey ?? null,
       },
@@ -1147,6 +1148,7 @@ export class FrotaService {
     if (v.situacao !== StatusViagem.EM_CURSO) throw new BadRequestException('A rota não está em curso — não é possível alterar paradas.');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== id) throw new NotFoundException('Parada não encontrada nesta viagem.');
+    const dataChegadaParada = resolverDataEvento(dto.dataHora, 'chegada na parada');
     const noLocalEff = dto.noLocal ?? (dto.latitude != null);
     const clienteMatricula = dto.clienteMatricula?.trim().toUpperCase() || p.clienteMatricula;
     const propriedade = dto.propriedade?.trim() || p.propriedade;
@@ -1167,8 +1169,10 @@ export class FrotaService {
         precisaoM: dto.precisaoM ?? undefined,
         noLocal: noLocalEff,
         localClienteId: localId ?? undefined,
-        dataHora: new Date(),
-        realizadaEm: new Date(),
+        // Informada pelo app (check-in feito sem sinal) ou agora — as duas
+        // colunas recebem o MESMO instante, senão a parada teria duas horas.
+        dataHora: dataChegadaParada,
+        realizadaEm: dataChegadaParada,
       },
       select: { id: true, sequencia: true, status: true, local: true, km: true, realizadaEm: true },
     });

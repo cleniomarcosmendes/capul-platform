@@ -69,3 +69,66 @@ it('o retorno entra por ÚLTIMO — a fila é FIFO, então paradas e despesas so
   expect(itens[itens.length - 1].acao.tipo).toBe('retorno');
   expect(await contarPendentesFrota()).toBe(4);
 });
+
+/**
+ * ⭐ Viagem de VÁRIOS DIAS (levantado pelo Clenio em 19/08).
+ *
+ * O token de condutor vale 6h ("cobre uma jornada"), e a viagem de frota dura
+ * dias. Quem sai na segunda e volta na quinta sincroniza com o token vencido:
+ * o servidor responde 403, e a política de "4xx = rejeição definitiva"
+ * descartava tudo de uma vez — **apagando junto as fotos dos cupons**. Ele
+ * perdia as despesas da viagem inteira sem entender por quê.
+ */
+describe('identificação do condutor vencida (viagem de vários dias)', () => {
+  const { processarFilaFrota, reautenticarFilaFrota, pendentesPrecisamCondutor, enfileirarFrota: enf } =
+    jest.requireActual('../filaFrota') as typeof import('../filaFrota');
+  const api = jest.requireMock('../../api/frota');
+
+  const erro403 = Object.assign(new Error('403'), {
+    isAxiosError: true,
+    response: { status: 403, data: { message: 'Sessão do condutor expirou.' } },
+  });
+
+  beforeEach(async () => {
+    const AsyncStorage = jest.requireMock('@react-native-async-storage/async-storage').default;
+    await AsyncStorage.removeItem('capul_fila_frota');
+    jest.clearAllMocks();
+  });
+
+  it('403 MANTÉM o item na fila — não descarta e não apaga a foto', async () => {
+    await enf({ id: 'x1', rotulo: 'Despesa R$ 300', acao: { tipo: 'despesa', viagemId: 'v9', payload: { viagemId: 'v9', tipoDespesaId: 't', valor: 300 }, fotoUris: ['file:///cupom.jpg'], condutorToken: 'token-velho' } });
+    api.lancarDespesaViagem.mockRejectedValueOnce(erro403);
+
+    const r = await processarFilaFrota();
+    expect(r.descartadas).toHaveLength(0);   // ⭐ nada jogado fora
+    expect(r.restantes).toBe(1);
+    expect(await pendentesPrecisamCondutor('v9')).toBe(1);
+
+    const fs = jest.requireMock('expo-file-system/legacy');
+    expect(fs.deleteAsync).not.toHaveBeenCalled(); // ⭐ o cupom continua no aparelho
+  });
+
+  it('reidentificar recarimba o token e o trabalho guardado sobe', async () => {
+    // Repete o cenário: a despesa ficou na fila com o token vencido.
+    await enf({ id: 'x1', rotulo: 'Despesa R$ 300', acao: { tipo: 'despesa', viagemId: 'v9', payload: { viagemId: 'v9', tipoDespesaId: 't', valor: 300 }, fotoUris: ['file:///cupom.jpg'], condutorToken: 'token-velho' } });
+    api.lancarDespesaViagem.mockRejectedValueOnce(erro403);
+    await processarFilaFrota();
+    expect(await pendentesPrecisamCondutor('v9')).toBe(1);
+
+    api.lancarDespesaViagem.mockResolvedValueOnce(undefined);
+    const n = await reautenticarFilaFrota('v9', 'token-novo');
+    expect(n).toBe(1);
+    expect(await pendentesPrecisamCondutor('v9')).toBe(0);
+
+    const r = await processarFilaFrota();
+    expect(r.enviadas).toBe(1);
+    expect(r.restantes).toBe(0);
+  });
+
+  it('403 SEM token de condutor segue sendo recusa definitiva (INDIVIDUAL)', async () => {
+    await enf({ id: 'x2', rotulo: 'Parada: X', acao: { tipo: 'parada', viagemId: 'v9', payload: { local: 'X' } } });
+    api.adicionarParadaFrota.mockRejectedValueOnce(erro403);
+    const r = await processarFilaFrota();
+    expect(r.descartadas).toHaveLength(1); // permissão de verdade, não identificação vencida
+  });
+});

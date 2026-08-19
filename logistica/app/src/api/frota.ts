@@ -118,7 +118,10 @@ export async function registrarRetorno(viagemId: string, p: RetornoPayload): Pro
 }
 
 /** Tipos de despesa ativos (pra o select do lançamento). */
-export interface ParadaPayload { local: string; km?: number; observacao?: string; latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean; clienteMatricula?: string; clienteNome?: string; idempotencyKey?: string }
+/** `dataHora` (ISO): QUANDO a parada aconteceu — preenchido ao enfileirar sem
+ *  sinal. Sem ela o servidor carimba a hora em que a fila subiu, e uma viagem
+ *  de dias volta com todas as paradas empilhadas no minuto da sincronização. */
+export interface ParadaPayload { local: string; km?: number; observacao?: string; latitude?: number; longitude?: number; precisaoM?: number; noLocal?: boolean; clienteMatricula?: string; clienteNome?: string; idempotencyKey?: string; dataHora?: string }
 
 /** Registra uma parada (ad-hoc) na viagem em curso — o "caderno" da frota. */
 export async function adicionarParadaFrota(viagemId: string, p: ParadaPayload): Promise<void> {
@@ -137,7 +140,7 @@ export async function listarParadasFrota(viagemId: string): Promise<ParadaFrotaI
   return data;
 }
 
-export interface CheckinPayload { km?: number; latitude?: number; longitude?: number; observacao?: string; precisaoM?: number; noLocal?: boolean; clienteMatricula?: string; clienteNome?: string }
+export interface CheckinPayload { km?: number; latitude?: number; longitude?: number; observacao?: string; precisaoM?: number; noLocal?: boolean; clienteMatricula?: string; clienteNome?: string; dataHora?: string }
 
 /** Check-in numa parada planejada → REALIZADA (KM + GPS opcional + obs). */
 export async function checkinParadaFrota(viagemId: string, paradaId: string, p: CheckinPayload): Promise<void> {

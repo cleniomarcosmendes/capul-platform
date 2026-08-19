@@ -19,6 +19,7 @@ import { SelectBusca } from '../components/SelectBusca';
 import {
   enfileirarFrota, processarFilaFrota, contarPendentesFrota, onFilaFrotaChange, ehErroDeRede,
   paradasNaFilaFrota, paradasAvulsasNaFila, retornosNaFilaFrota,
+  pendentesPrecisamCondutor, reautenticarFilaFrota,
 } from '../offline/filaFrota';
 import { comCache } from '../offline/cacheLeitura';
 import { FaixaOffline } from '../components/FaixaOffline';
@@ -28,7 +29,7 @@ import { useScrollToFocusedInput, type AoFocar } from '../lib/useScrollToFocused
 import { useRastreamento } from '../lib/useRastreamento';
 import { useAuth } from '../auth/AuthContext';
 import type { TipoDespesa, ViagemFrota } from '../types/api';
-import { isoDeDataHora, dataBR, horaBR, mascaraData, mascaraHora } from '../lib/dataHoraLocal';
+import { isoDeDataHora, dataBR, horaBR, mascaraData, mascaraHora, dataISOHoje } from '../lib/dataHoraLocal';
 
 const CAPUL = '#1e7d3a';
 const MAX_FOTOS_DESPESA = 5;
@@ -67,6 +68,9 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
   // continua EM_CURSO — sem isto o condutor veria o botão "Retorno" de novo,
   // no veículo que ele acabou de entregar.
   const [retornoNaFila, setRetornoNaFila] = useState(false);
+  // Itens que o servidor recusou por IDENTIFICAÇÃO vencida (token do condutor
+  // vale 6h; a viagem dura dias). Ficam guardados esperando o gate de novo.
+  const [precisamCondutor, setPrecisamCondutor] = useState(0);
   const [pendentes, setPendentes] = useState(0);
 
   // Limpa o token de condutor ao sair da viagem (não vaza p/ outra viagem/sessão).
@@ -97,6 +101,7 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
   // Ao focar: tenta sincronizar a fila offline e recarrega.
   const lerRetornoNaFila = useCallback(async () => {
     setRetornoNaFila((await retornosNaFilaFrota()).has(viagemId));
+    setPrecisamCondutor(await pendentesPrecisamCondutor(viagemId));
   }, [viagemId]);
   useFocusEffect(useCallback(() => {
     void processarFilaFrota().finally(() => void carregar());
@@ -127,6 +132,18 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
         <View style={styles.rastreioBanner}>
           <Text style={styles.rastreioTxt}>📍 Localização ativa durante a viagem</Text>
         </View>
+      )}
+      {precisamCondutor > 0 && (
+        // Tocável de propósito: reabre o gate. Quem ficou DIAS com o app aberto
+        // tem `condutorOk` em memória e nunca mais veria a tela de
+        // identificação — leria o aviso sem ter como agir sobre ele.
+        <TouchableOpacity style={styles.bannerAlerta} onPress={() => setCondutorOk(false)}>
+          <Text style={styles.bannerTxt}>
+            🔐 {precisamCondutor} registro(s) guardado(s) esperam você se identificar de novo —
+            a identificação da viagem vale 6 horas. Nada foi perdido: toque para informar
+            matrícula e senha e enviar.
+          </Text>
+        </TouchableOpacity>
       )}
       {pendentes > 0 && (
         <TouchableOpacity style={styles.banner} onPress={() => void sincronizar()}>
@@ -193,7 +210,19 @@ function GateCondutor({ viagem, onOk, aoFocar }: { viagem: ViagemFrota; onOk: ()
     setValidando(true); setErro('');
     try {
       const r = await autenticarCondutor(viagem.id, matricula.trim(), senha);
-      if (r.valida) { setCondutorToken(r.token); onOk(); }
+      if (r.valida) {
+        setCondutorToken(r.token);
+        // ⭐ Devolve à fila o direito de subir: os registros feitos em campo
+        // carregam o token ANTIGO, que venceu em 6h. Sem recarimbar, o condutor
+        // se identificaria de novo e o trabalho guardado continuaria travado.
+        const n = await reautenticarFilaFrota(viagem.id, r.token);
+        if (n > 0) {
+          const res = await processarFilaFrota();
+          if (res.enviadas > 0) Alert.alert('Sincronizado', `${res.enviadas} registro(s) que estavam guardados foram enviados.`);
+          if (res.descartadas.length) Alert.alert('Recusado pelo servidor', res.descartadas.map((d) => `• ${d.rotulo}: ${d.motivo}`).join('\n'));
+        }
+        onOk();
+      }
       else setErro(
         r.motivo === 'NAO_E_O_CONDUTOR' ? 'Esta matrícula não é a do condutor que iniciou a viagem.'
         : r.motivo === 'INDISPONIVEL' ? 'Portal do RH indisponível. Tente novamente em instantes.'
@@ -277,7 +306,10 @@ function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; on
       await carregar(); onRegistrada();
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarFrota({ id: uuid(), rotulo: `Check-in: ${rotulo}`, acao: { tipo: 'checkin', viagemId: viagem.id, paradaId: pid, payload, condutorToken: getCondutorToken() ?? undefined } });
+        // ⭐ Carimba a hora da CHEGADA. Sem isso o servidor gravaria a hora em
+        // que a fila subiu — numa viagem de quatro dias, as paradas dos quatro
+        // dias empilhadas no mesmo minuto.
+        await enfileirarFrota({ id: uuid(), rotulo: `Check-in: ${rotulo}`, acao: { tipo: 'checkin', viagemId: viagem.id, paradaId: pid, payload: { ...payload, dataHora: new Date().toISOString() }, condutorToken: getCondutorToken() ?? undefined } });
         setCheckinId(null); setCkKm(''); setCkObs(''); onRegistrada();
         await lerFila(); // a parada sai de "planejadas" na hora
         Alert.alert('Salvo offline', 'Sem sinal — o check-in vai sincronizar quando a conexão voltar.');
@@ -314,7 +346,7 @@ function ParadaForm({ viagem, onRegistrada, aoFocar }: { viagem: ViagemFrota; on
       Alert.alert('Parada registrada', 'Pode registrar a próxima quando chegar.');
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Parada: ${payload.local}`, acao: { tipo: 'parada', viagemId: viagem.id, payload, condutorToken: getCondutorToken() ?? undefined } });
+        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Parada: ${payload.local}`, acao: { tipo: 'parada', viagemId: viagem.id, payload: { ...payload, dataHora: new Date().toISOString() }, condutorToken: getCondutorToken() ?? undefined } });
         setLocal(''); setKm(''); setObs(''); onRegistrada();
         await lerFila();
         Alert.alert('Salvo offline', 'Sem sinal — a parada vai sincronizar quando a conexão voltar.');
@@ -594,8 +626,20 @@ function DespesaForm({ viagem, onPronto, aoFocar }: { viagem: ViagemFrota; onPro
       Alert.alert('Despesa lançada', 'Entrou como pendente de validação do supervisor.', [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
       if (ehErroDeRede(e)) {
-        await enfileirarFrota({ id: payload.idempotencyKey, rotulo: `Despesa R$ ${valor}`, acao: { tipo: 'despesa', viagemId: viagem.id, payload, fotoUris, condutorToken: getCondutorToken() ?? undefined } });
-        Alert.alert('Salvo offline', 'Sem sinal — a despesa (e as fotos) vão sincronizar quando a conexão voltar.', [{ text: 'OK', onPress: onPronto }]);
+        // ⭐ Data do gasto FIXADA agora. `dataDespesa` vazio significa "hoje" no
+        // servidor — e "hoje" é o dia em que a fila subir. Numa viagem de vários
+        // dias, o abastecimento de segunda entrava como despesa de quinta:
+        // mês errado no fechamento e acerto de viagem que não bate com o cupom.
+        await enfileirarFrota({
+          id: payload.idempotencyKey,
+          rotulo: `Despesa R$ ${valor}`,
+          acao: {
+            tipo: 'despesa', viagemId: viagem.id,
+            payload: { ...payload, dataDespesa: payload.dataDespesa ?? dataISOHoje() },
+            fotoUris, condutorToken: getCondutorToken() ?? undefined,
+          },
+        });
+        Alert.alert('Salvo offline', `Sem sinal — a despesa (e as fotos) vão sincronizar quando a conexão voltar, com a data de hoje (${dataBR(new Date())}).`, [{ text: 'OK', onPress: onPronto }]);
       } else {
         const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
         Alert.alert('Não foi possível lançar', String(msg || 'Tente novamente.'));
@@ -678,6 +722,7 @@ const styles = StyleSheet.create({
   acoes: { flexDirection: 'row', gap: 8 },
   acao: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingVertical: 14, alignItems: 'center', backgroundColor: '#fff' },
   acaoOff: { opacity: 0.45 },
+  bannerAlerta: { backgroundColor: '#b45309', borderRadius: 10, padding: 12, marginBottom: 10 },
   acaoOn: { backgroundColor: CAPUL, borderColor: CAPUL },
   acaoTxt: { fontSize: 15, fontWeight: '700', color: '#334155' },
   acaoTxtOn: { color: '#fff' },
