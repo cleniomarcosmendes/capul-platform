@@ -7,6 +7,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { listarViagensFrota } from '../api/frota';
 import { comCache } from '../offline/cacheLeitura';
+import { mostrarAvisosPendentes } from '../offline/mostrarAvisos';
 import { FaixaOffline } from '../components/FaixaOffline';
 import type { ViagemFrota } from '../types/api';
 
@@ -51,6 +52,7 @@ export function FrotaHomeScreen({ navigation }: Props) {
       (async () => {
         await carregar();
         if (ativo) setCarregando(false);
+        void mostrarAvisosPendentes();
       })();
       return () => { ativo = false; };
     }, [carregar]),

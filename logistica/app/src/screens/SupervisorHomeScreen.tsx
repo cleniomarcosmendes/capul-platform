@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { listarViagensSupervisor, type ViagemSup } from '../api/supervisor';
 import { comCache } from '../offline/cacheLeitura';
+import { mostrarAvisosPendentes } from '../offline/mostrarAvisos';
 import { FaixaOffline } from '../components/FaixaOffline';
 
 const CAPUL = '#1e7d3a';
@@ -46,6 +47,7 @@ export function SupervisorHomeScreen({ navigation }: Props) {
   useFocusEffect(useCallback(() => {
     let ativo = true;
     (async () => { await carregar(); if (ativo) setCarregando(false); })();
+    void mostrarAvisosPendentes();
     return () => { ativo = false; };
   }, [carregar]));
 

@@ -18,7 +18,7 @@ export function FaixaOffline({ atualizadoEm }: { atualizadoEm: number | null }) 
   return (
     <View style={styles.faixa}>
       <Text style={styles.txt}>
-        📴 Sem sinal — dados do aparelho{hora ? `, de ${hora}` : ''}
+        📴 Sem sinal — dados do aparelho{hora ? ` de ${hora}` : ''}
       </Text>
     </View>
   );

@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { minhasViagens } from '../api/viagens';
 import { comCache } from '../offline/cacheLeitura';
+import { mostrarAvisosPendentes } from '../offline/mostrarAvisos';
 import { FaixaOffline } from '../components/FaixaOffline';
 import { contarPendentes, onFilaChange, processarFila } from '../offline/filaBaixas';
 import { contarPendentesDespesaEntrega, onFilaDespesaEntregaChange, processarFilaDespesaEntrega } from '../offline/filaDespesaEntrega';
@@ -139,6 +140,7 @@ export function MinhasViagensScreen({ navigation }: Props) {
         await carregar();
         if (ativo) setCarregando(false);
         void reenviarFila({ automatico: true });
+        void mostrarAvisosPendentes();
       })();
       return () => {
         ativo = false;

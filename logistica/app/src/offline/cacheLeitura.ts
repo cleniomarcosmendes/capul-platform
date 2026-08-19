@@ -10,12 +10,12 @@ import { ehErroDeRede } from '../lib/erroRede';
  * frota, os veículos, os tipos de despesa. Isso vinha SEMPRE da rede, sem cópia
  * local, e o efeito só aparecia quando a rede sumia:
  *
- *  - reabrir a carga sem sinal → \"Não foi possível carregar a viagem\" (o app
+ *  - reabrir a carga sem sinal → "Não foi possível carregar a viagem" (o app
  *    tinha acabado de mostrar a mesma rota, mas a tela remonta e o estado morre);
- *  - app reaberto sem sinal → lista vazia, \"Nenhuma viagem em curso\".
+ *  - app reaberto sem sinal → lista vazia, "Nenhuma viagem em curso".
  *
  * O padrão certo já existia no mesmo app, no Inventário (`contagemOffline.ts`,
- * o \"pacote\" da lista). Aqui ele fica genérico, porque a regra vale para toda
+ * o "pacote" da lista). Aqui ele fica genérico, porque a regra vale para toda
  * leitura do app: **a rede ATUALIZA a tela; ela não é condição para a tela
  * existir.**
  *
@@ -72,7 +72,7 @@ export async function gravarCache<T>(chave: string, dado: T): Promise<void> {
  * responde, se a rede ainda não voltou. Sem ele a tela ficaria até 20s (timeout
  * do axios) em branco antes de mostrar um dado que já estava ali — foi
  * exatamente esse padrão, com o spinner escondendo dado pronto, que virou
- * \"o app travou\" em 14/08.
+ * "o app travou" em 14/08.
  *
  * Lança quando não há rede E não há cache — aí a tela não tem mesmo o que
  * mostrar, e o erro é honesto.
@@ -112,8 +112,21 @@ export async function limparCacheDeLeitura(): Promise<void> {
   if (chaves.length) await AsyncStorage.multiRemove(chaves);
 }
 
-/** \"08:15\" — rótulo curto de quando o dado veio do servidor. */
+/**
+ * Quando o servidor entregou este dado: "08:15", "ontem, 16:40", "16/08, 09:12".
+ *
+ * ⚠️ A DATA aparece assim que não é hoje, e isso não é enfeite. O supervisor de
+ * RDV roda vários dias fora, com o aparelho entrando e saindo da rede: um rótulo
+ * só com a hora faria um planejamento de três dias atrás parecer "desta manhã",
+ * e ele decidiria o roteiro em cima de um retrato velho sem saber que era velho.
+ */
 export function horaDoCache(em: number | null): string {
   if (!em) return '';
-  return new Date(em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(em);
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dia = (x: Date) => `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`;
+  const agora = new Date();
+  if (dia(d) === dia(agora)) return hora;
+  if (dia(d) === dia(new Date(agora.getTime() - 86_400_000))) return `ontem, ${hora}`;
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}, ${hora}`;
 }
