@@ -66,6 +66,34 @@ Antes de começar, no desktop: criar entregas, montar a carga e despachar.
 > no Protheus e é o que reserva o carro. Se o teste 4.1 for feito em modo avião,
 > a recusa é o comportamento correto.
 
+## 4b. Viagem de VÁRIOS DIAS (o cenário que mais quebra)
+
+O que este bloco testa não aparece numa tarde: **a identificação do condutor
+vale 6 horas e a viagem dura dias.** Antes, quem saía na segunda e voltava na
+quinta perdia tudo na sincronização — inclusive as fotos dos cupons.
+
+Para testar sem esperar 4 dias, use a **data do aparelho**: registre as ações,
+depois adiante o relógio do celular em 1 dia e só então volte a ter sinal.
+
+| # | Passo | Esperado |
+|---|---|---|
+| 4b.1 | Com sinal, login **PADRÃO** (compartilhado) · abrir a viagem · identificar-se (matrícula+senha) | Entra na viagem |
+| 4b.2 | Modo avião · registrar 2 paradas em horários diferentes (ex.: 09:00 e 15:00) | Ambas em "Feitas sem sinal" |
+| 4b.3 | Lançar 1 despesa com foto do cupom, deixando a **data em branco** | "Salvo offline… com a data de hoje (DD/MM/AAAA)" — ⭐ a data tem de aparecer na mensagem |
+| 4b.4 | **Adiantar o relógio do aparelho em 1 dia** · sair do modo avião | — |
+| 4b.5 | Abrir a viagem | ⭐ Faixa laranja: **"🔐 N registro(s) … esperam você se identificar de novo … Nada foi perdido"** |
+| 4b.6 | ⚠️ Conferir que **NADA sumiu** | Os registros continuam contados na fila; a foto do cupom não pode ter sido apagada |
+| 4b.7 | Tocar na faixa · informar matrícula e senha | "Sincronizado — N registro(s) que estavam guardados foram enviados" |
+| 4b.8 | No desktop, conferir as **paradas** | ⭐ Horários de **09:00 e 15:00 do dia da viagem** — não a hora da sincronização, nem as duas no mesmo minuto |
+| 4b.9 | No desktop, conferir a **despesa** | ⭐ Data do **dia do gasto**, não do dia em que sincronizou; foto do cupom presente |
+| 4b.10 | **Voltar o relógio do aparelho** para o automático | — |
+
+> 🔴 Se em 4b.5 os registros tiverem **sumido** em vez de aparecer a faixa
+> laranja: pare e avise. É o defeito antigo, e ele leva as fotos junto.
+>
+> Login **INDIVIDUAL** não passa por isso (usa a sessão do próprio usuário) —
+> este bloco só vale para conta PADRÃO.
+
 ## 5. RDV (supervisor) sem sinal
 
 | # | Passo | Esperado |
