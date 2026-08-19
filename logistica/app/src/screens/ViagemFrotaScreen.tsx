@@ -18,7 +18,7 @@ import { setCondutorToken, getCondutorToken } from '../api/client';
 import { SelectBusca } from '../components/SelectBusca';
 import {
   enfileirarFrota, processarFilaFrota, contarPendentesFrota, onFilaFrotaChange, ehErroDeRede,
-  paradasNaFilaFrota, paradasAvulsasNaFila,
+  paradasNaFilaFrota, paradasAvulsasNaFila, retornosNaFilaFrota,
 } from '../offline/filaFrota';
 import { comCache } from '../offline/cacheLeitura';
 import { FaixaOffline } from '../components/FaixaOffline';
@@ -63,6 +63,10 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
   const [viagem, setViagem] = useState<ViagemFrota | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [aba, setAba] = useState<Aba>(null);
+  // Retorno já fechado NO APARELHO, esperando sinal. No servidor a viagem
+  // continua EM_CURSO — sem isto o condutor veria o botão "Retorno" de novo,
+  // no veículo que ele acabou de entregar.
+  const [retornoNaFila, setRetornoNaFila] = useState(false);
   const [pendentes, setPendentes] = useState(0);
 
   // Limpa o token de condutor ao sair da viagem (não vaza p/ outra viagem/sessão).
@@ -91,12 +95,16 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
   }, [viagemId]);
 
   // Ao focar: tenta sincronizar a fila offline e recarrega.
+  const lerRetornoNaFila = useCallback(async () => {
+    setRetornoNaFila((await retornosNaFilaFrota()).has(viagemId));
+  }, [viagemId]);
   useFocusEffect(useCallback(() => {
     void processarFilaFrota().finally(() => void carregar());
     void contarPendentesFrota().then(setPendentes);
-    const off = onFilaFrotaChange(setPendentes);
+    void lerRetornoNaFila();
+    const off = onFilaFrotaChange((n) => { setPendentes(n); void lerRetornoNaFila(); });
     return off;
-  }, [carregar]));
+  }, [carregar, lerRetornoNaFila]));
 
   const sincronizar = async () => {
     const r = await processarFilaFrota();
@@ -141,14 +149,27 @@ export function ViagemFrotaScreen({ route, navigation }: Props) {
             <TouchableOpacity style={[styles.acao, aba === 'parada' && styles.acaoOn]} onPress={() => setAba(aba === 'parada' ? null : 'parada')}>
               <Text style={[styles.acaoTxt, aba === 'parada' && styles.acaoTxtOn]}>📍 Parada</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.acao, aba === 'retorno' && styles.acaoOn]} onPress={() => setAba(aba === 'retorno' ? null : 'retorno')}>
-              <Text style={[styles.acaoTxt, aba === 'retorno' && styles.acaoTxtOn]}>🏁 Retorno</Text>
+            <TouchableOpacity
+              style={[styles.acao, aba === 'retorno' && styles.acaoOn, retornoNaFila && styles.acaoOff]}
+              onPress={() => { if (!retornoNaFila) setAba(aba === 'retorno' ? null : 'retorno'); }}
+              disabled={retornoNaFila}
+            >
+              <Text style={[styles.acaoTxt, aba === 'retorno' && styles.acaoTxtOn]}>
+                {retornoNaFila ? '🏁 Fechado' : '🏁 Retorno'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.acao, aba === 'despesa' && styles.acaoOn]} onPress={() => setAba(aba === 'despesa' ? null : 'despesa')}>
               <Text style={[styles.acaoTxt, aba === 'despesa' && styles.acaoTxtOn]}>💸 Despesa</Text>
             </TouchableOpacity>
           </View>
 
+          {retornoNaFila && (
+            <View style={styles.banner}>
+              <Text style={styles.bannerTxt}>
+                🏁 Retorno já registrado no aparelho — sobe quando a conexão voltar.
+              </Text>
+            </View>
+          )}
           {aba === 'parada' && <ParadaForm viagem={viagem} onRegistrada={() => void carregar()} aoFocar={aoFocar} />}
           {aba === 'retorno' && <RetornoForm viagem={viagem} ehIndividual={ehIndividual} onPronto={() => navigation.goBack()} aoFocar={aoFocar} />}
           {aba === 'despesa' && <DespesaForm viagem={viagem} onPronto={() => { setAba(null); void carregar(); }} aoFocar={aoFocar} />}
@@ -402,14 +423,41 @@ function RetornoForm({ viagem, ehIndividual, onPronto, aoFocar }: { viagem: Viag
       dataHoraChegada = iso;
     }
     setSalvando(true);
+    // ⭐ Sem sinal, o retorno é carimbado com a HORA DE AGORA e vai para a fila.
+    // Isso é o que torna o fechamento offline honesto: sem `dataHoraChegada`, o
+    // servidor gravaria a hora em que a fila SUBIU — que pode ser horas depois,
+    // já na sede — e a viagem apareceria mais longa do que foi, contaminando
+    // duração, KM/h e o custo da frota. Mesma ideia do "Cheguei antes", só que
+    // preenchido pelo app.
+    const payload = {
+      kmFinal: Number(kmFinal),
+      observacoes: obs.trim() || undefined,
+      dataHoraChegada,
+    };
     try {
-      await registrarRetorno(viagem.id, {
-        kmFinal: Number(kmFinal), observacoes: obs.trim() || undefined, dataHoraChegada,
-      });
+      await registrarRetorno(viagem.id, payload);
       Alert.alert('Retorno registrado', `${viagem.placa} de volta.`, [{ text: 'OK', onPress: onPronto }]);
     } catch (e) {
-      const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
-      Alert.alert('Não foi possível registrar', String(msg || 'Tente novamente.'));
+      if (ehErroDeRede(e)) {
+        await enfileirarFrota({
+          id: uuid(),
+          rotulo: `Retorno: ${viagem.placa}`,
+          acao: {
+            tipo: 'retorno',
+            viagemId: viagem.id,
+            payload: { ...payload, dataHoraChegada: dataHoraChegada ?? new Date().toISOString() },
+            condutorToken: getCondutorToken() ?? undefined,
+          },
+        });
+        Alert.alert(
+          'Retorno salvo offline',
+          `${viagem.placa} fechado no aparelho, com a hora de agora. Sobe sozinho quando a conexão voltar — deixe o app aberto ao pegar sinal.`,
+          [{ text: 'OK', onPress: onPronto }],
+        );
+      } else {
+        const msg = isAxiosError(e) ? (e.response?.data as { message?: string })?.message : undefined;
+        Alert.alert('Não foi possível registrar', String(msg || 'Tente novamente.'));
+      }
     } finally { setSalvando(false); }
   }
 
@@ -629,6 +677,7 @@ const styles = StyleSheet.create({
   linhaInfo: { fontSize: 14, color: '#475569', marginTop: 4 },
   acoes: { flexDirection: 'row', gap: 8 },
   acao: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingVertical: 14, alignItems: 'center', backgroundColor: '#fff' },
+  acaoOff: { opacity: 0.45 },
   acaoOn: { backgroundColor: CAPUL, borderColor: CAPUL },
   acaoTxt: { fontSize: 15, fontWeight: '700', color: '#334155' },
   acaoTxtOn: { color: '#fff' },

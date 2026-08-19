@@ -43,6 +43,23 @@ async function ler(): Promise<ItemSupervisor[]> {
 async function gravar(itens: ItemSupervisor[]) { await AsyncStorage.setItem(KEY, JSON.stringify(itens)); notificar(itens.length); }
 export async function contarPendentesSupervisor(): Promise<number> { return (await ler()).length; }
 
+/**
+ * Visitas já apontadas NO APARELHO, esperando sinal (paradaId → o que foi feito).
+ *
+ * Mesmo mecanismo do `baixasNaFilaPorEntrega` (entrega) e do
+ * `paradasNaFilaFrota` (frota), pela mesma razão: o status vem do servidor, que
+ * offline não recebeu nada. Sem isto o supervisor apontava a visita sem sinal e
+ * ela continuava PLANEJADA na tela, com os botões "Realizar/Pular" ali —
+ * parecia que não pegou e convidava a apontar de novo.
+ */
+export async function visitasNaFilaSupervisor(): Promise<Record<string, 'REALIZADA' | 'PULADA'>> {
+  const mapa: Record<string, 'REALIZADA' | 'PULADA'> = {};
+  for (const item of await ler()) {
+    if (item.acao.tipo === 'apontar') mapa[item.acao.paradaId] = item.acao.status;
+  }
+  return mapa;
+}
+
 async function apagarFotos(uris: string[]) {
   for (const uri of uris) await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
 }

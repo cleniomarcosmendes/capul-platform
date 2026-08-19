@@ -23,6 +23,7 @@ import { useScrollToFocusedInput } from '../lib/useScrollToFocusedInput';
 import { useAuth } from '../auth/AuthContext';
 import {
   enfileirarSupervisor, processarFilaSupervisor, contarPendentesSupervisor, onFilaSupervisorChange, ehErroDeRede,
+  visitasNaFilaSupervisor,
 } from '../offline/filaSupervisor';
 import { comCache } from '../offline/cacheLeitura';
 import { FaixaOffline } from '../components/FaixaOffline';
@@ -129,6 +130,10 @@ export function SupervisorViagemScreen({ route }: Props) {
   const [carregando, setCarregando] = useState(true);
   const [agindo, setAgindo] = useState(false);
   const [pendentes, setPendentes] = useState(0);
+  // Visitas apontadas no aparelho, ainda sem subir. O status vem do servidor,
+  // que offline não recebeu nada — sem este mapa a visita apontada sem sinal
+  // continuava PLANEJADA na tela, convidando a apontar de novo.
+  const [visitasNaFila, setVisitasNaFila] = useState<Record<string, 'REALIZADA' | 'PULADA'>>({});
   // form visita
   const [cliNome, setCliNome] = useState(''); const [muni, setMuni] = useState(''); const [ativId, setAtivId] = useState('');
   const [prop, setProp] = useState(''); const [vObs, setVObs] = useState('');
@@ -199,7 +204,11 @@ export function SupervisorViagemScreen({ route }: Props) {
       if (ativo) setCarregando(false);
     })();
     void contarPendentesSupervisor().then(setPendentes);
-    const off = onFilaSupervisorChange(setPendentes);
+    void visitasNaFilaSupervisor().then(setVisitasNaFila);
+    const off = onFilaSupervisorChange((n) => {
+      setPendentes(n);
+      void visitasNaFilaSupervisor().then(setVisitasNaFila);
+    });
     return () => { ativo = false; off(); };
   }, [carregar]));
 
@@ -219,7 +228,9 @@ export function SupervisorViagemScreen({ route }: Props) {
   // explicar que a decisão é no desktop. O app não aprova: é ferramenta de execução.
   const podeAprovar = role === 'COORDENADOR' || role === 'SUPERVISOR_FROTA' || role === 'ADMIN';
   // Aprovado mas ainda não iniciado: há visitas planejadas esperando o "Liberar para execução".
-  const temPlanejadaPendente = (v?.paradas ?? []).some((p) => (p.status ?? 'PLANEJADA') === 'PLANEJADA');
+  const temPlanejadaPendente = (v?.paradas ?? []).some(
+    (p) => (p.status ?? 'PLANEJADA') === 'PLANEJADA' && visitasNaFila[p.id] == null,
+  );
 
   const limparVisita = () => { setCliNome(''); setMuni(''); setAtivId(''); setProp(''); setVObs(''); };
 
@@ -493,12 +504,15 @@ export function SupervisorViagemScreen({ route }: Props) {
       )}
       {v.paradas.length === 0 && <Text style={styles.vazio}>Nenhuma visita ainda.</Text>}
       {v.paradas.map((p) => {
-        const st = VIS[p.status ?? 'REALIZADA'] ?? { l: p.status ?? '—', bg: '#f1f5f9', fg: '#64748b' };
+        // O que está na fila JÁ ACONTECEU para quem está em campo — só não subiu.
+        const naFila = visitasNaFila[p.id];
+        const status = naFila ?? p.status;
+        const st = VIS[status ?? 'REALIZADA'] ?? { l: status ?? '—', bg: '#f1f5f9', fg: '#64748b' };
         return (
           <View key={p.id} style={styles.item}>
             <View style={styles.itemHead}>
               <Text style={styles.itemTitle}>{p.clienteNome ?? '—'}{p.municipio ? ` · ${p.municipio}` : ''}</Text>
-              <Badge bg={st.bg} fg={st.fg} label={st.l} />
+              <Badge bg={st.bg} fg={st.fg} label={naFila ? `${st.l} · sem sinal` : st.l} />
             </View>
             <Text style={styles.itemSub}>{p.atividade?.nome ?? '—'}{p.propriedade ? ` · ${p.propriedade}` : ''}</Text>
             {p.status === 'PULADA' && p.motivoPulada ? (
@@ -516,7 +530,7 @@ export function SupervisorViagemScreen({ route }: Props) {
                 </TouchableOpacity>
               );
             })()}
-            {emExecucao && p.status === 'PLANEJADA' && (
+            {emExecucao && p.status === 'PLANEJADA' && !naFila && (
               <View style={styles.apRow}>
                 <TouchableOpacity style={[styles.apBtn, styles.apOk]} onPress={() => abrirRelato(p)}><Text style={styles.apOkTxt}>Realizar</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.apBtn} onPress={() => { setPularId(p.id); setMotivoPular(''); }}><Text style={styles.apTxt}>Pular</Text></TouchableOpacity>

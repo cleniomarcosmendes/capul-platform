@@ -2,8 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { isAxiosError } from 'axios';
 import {
-  adicionarParadaFrota, checkinParadaFrota, pularParadaFrota, lancarDespesaViagem,
-  type ParadaPayload, type CheckinPayload, type DespesaViagemPayload,
+  adicionarParadaFrota, checkinParadaFrota, pularParadaFrota, lancarDespesaViagem, registrarRetorno,
+  type ParadaPayload, type CheckinPayload, type DespesaViagemPayload, type RetornoPayload,
 } from '../api/frota';
 import { getCondutorToken, setCondutorToken } from '../api/client';
 
@@ -17,6 +17,13 @@ import { getCondutorToken, setCondutorToken } from '../api/client';
  * check-in/pular são por paradaId (reexecutar é no-op). Política de reenvio
  * igual à fila de baixas: sucesso → remove; erro de NEGÓCIO (4xx ≠ 401/408/429)
  * → remove e reporta; rede/5xx/401 → mantém.
+ *
+ * ⚠️ A SAÍDA continua exigindo rede, de propósito: no login PADRÃO ela valida a
+ * senha do condutor no Protheus em tempo real, e é ela que RESERVA o veículo —
+ * dois condutores offline poderiam sair com o mesmo carro e só descobrir na
+ * sincronização. O RETORNO entra na fila (não pede senha; usa o token do gate
+ * capturado na abertura da viagem) e vai naturalmente por último: a fila é FIFO
+ * e em série, então paradas e despesas da viagem sobem antes dele.
  */
 // `condutorToken`: prova do condutor (login PADRÃO) capturada no enfileiramento —
 // reaplicada no reenvio, pois o token global pode estar limpo quando a fila roda.
@@ -24,7 +31,8 @@ export type AcaoFrota =
   | { tipo: 'parada'; viagemId: string; payload: ParadaPayload; condutorToken?: string }
   | { tipo: 'checkin'; viagemId: string; paradaId: string; payload: CheckinPayload; condutorToken?: string }
   | { tipo: 'pular'; viagemId: string; paradaId: string; condutorToken?: string }
-  | { tipo: 'despesa'; viagemId: string; payload: DespesaViagemPayload; fotoUris: string[]; condutorToken?: string };
+  | { tipo: 'despesa'; viagemId: string; payload: DespesaViagemPayload; fotoUris: string[]; condutorToken?: string }
+  | { tipo: 'retorno'; viagemId: string; payload: RetornoPayload; condutorToken?: string };
 
 export interface ItemFrota {
   id: string;          // idempotencyKey (parada/despesa) ou uuid local (checkin/pular)
@@ -71,6 +79,15 @@ export async function paradasNaFilaFrota(): Promise<Record<string, 'CHECKIN' | '
 
 /** Paradas AD-HOC ainda na fila (não existem no servidor). Rótulo para a tela
  *  mostrar o que o condutor registrou sem sinal — senão ele digita de novo. */
+/** Viagens cujo RETORNO está na fila: já fecharam para quem está em campo, mas
+ *  ainda constam EM_CURSO no servidor. A tela usa isto para não oferecer
+ *  "registrar retorno" duas vezes no mesmo veículo. */
+export async function retornosNaFilaFrota(): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (const item of await ler()) if (item.acao.tipo === 'retorno') ids.add(item.acao.viagemId);
+  return ids;
+}
+
 export async function paradasAvulsasNaFila(viagemId: string): Promise<{ id: string; local: string }[]> {
   return (await ler())
     .filter((i) => i.acao.tipo === 'parada' && i.acao.viagemId === viagemId)
@@ -111,6 +128,7 @@ async function enviar(acao: AcaoFrota): Promise<void> {
       case 'checkin': return await checkinParadaFrota(acao.viagemId, acao.paradaId, acao.payload);
       case 'pular': return await pularParadaFrota(acao.viagemId, acao.paradaId);
       case 'despesa': return await lancarDespesaViagem(acao.payload, acao.fotoUris);
+      case 'retorno': { await registrarRetorno(acao.viagemId, acao.payload); return; }
     }
   } finally {
     setCondutorToken(anterior);
