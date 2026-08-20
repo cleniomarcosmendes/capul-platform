@@ -175,7 +175,13 @@ export class DashboardIndicadoresService {
       for (const it of nf.itens) {
         const iv = Number(it.valorTotal);
         somaItens += iv;
-        add(cc, it.centroCustoId, `${it.centroCusto.codigo} · ${it.centroCusto.nome}`, iv);
+        // Item sem centro de custo entra num balde próprio em vez de derrubar o
+        // indicador. Há NULLs históricos (coluna nasceu nullable em 06/04) e,
+        // até 20/08, apagar um centro de custo zerava o campo dos itens — o
+        // valor precisa continuar somando no total, só não tem rateio.
+        // Mesmo padrão do "Sem departamento" e do "Não classificado" acima.
+        add(cc, it.centroCustoId ?? '__scc',
+            it.centroCusto ? `${it.centroCusto.codigo} · ${it.centroCusto.nome}` : 'Sem centro de custo', iv);
         const t = it.produto.tipoProduto;
         add(tipo, t?.id ?? '__nc', t?.descricao ?? 'Não classificado', iv);
       }
@@ -444,7 +450,8 @@ export class DashboardIndicadoresService {
         const iv = Number(it.valorTotal);
         somaItens += iv;
         if (dimensao === 'centroCusto') {
-          addS(it.centroCustoId, `${it.centroCusto.codigo} · ${it.centroCusto.nome}`, mi, iv);
+          addS(it.centroCustoId ?? '__scc',
+               it.centroCusto ? `${it.centroCusto.codigo} · ${it.centroCusto.nome}` : 'Sem centro de custo', mi, iv);
         } else {
           const t = it.produto.tipoProduto;
           addS(t?.id ?? '__nc', t?.descricao ?? 'Não classificado', mi, iv);

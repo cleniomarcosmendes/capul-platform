@@ -2714,8 +2714,27 @@ model NotaFiscalItem {
   produtoId String        @map("produto_id")
   produto   ProdutoConfig @relation(fields: [produtoId], references: [id])
 
-  centroCustoId String      @map("centro_custo_id")
-  centroCusto   CentroCusto @relation(fields: [centroCustoId], references: [id])
+  /// ⚠️ OPCIONAL porque o BANCO permite NULL desde a migration 20260406110000,
+  /// que criou a coluna nullable de propósito ("por seguranca, deixamos nullable
+  /// e o backend validara") — o `NOT NULL` planejado nunca foi aplicado.
+  /// Declarar `String` aqui era o Prisma acreditar numa garantia que não existe:
+  /// bastava UMA linha com NULL para o P2032 ("Error converting field
+  /// centroCustoId ... found null") derrubar a QUERY INTEIRA — a tela de Notas
+  /// Fiscais e o Dashboard de investimento juntos, em produção, com a lista
+  /// vindo VAZIA em vez de incompleta (incidente de 20/08/2026).
+  /// A API segue exigindo o campo (`CreateNotaFiscalDto` tem @IsNotEmpty): o
+  /// opcional aqui descreve o passado, não afrouxa a entrada.
+  /// ⚠️ `rateio_template_itens` e `parcela_rateio_itens` têm a mesma coluna e
+  /// continuam NOT NULL no banco — não replicar isto lá.
+  centroCustoId String?      @map("centro_custo_id")
+  /// `onDelete: Restrict` — apagar centro de custo EM USO tem de FALHAR. Era
+  /// SET NULL (explícito na migration de 06/04): o Postgres apagava com sucesso
+  /// e ZERAVA o centro de custo dos itens, destruindo o rateio do histórico sem
+  /// avisar. O auth-gateway até tenta proteger ("possui vínculos, inative-o em
+  /// vez de excluir"), mas o catch nunca disparava — não havia violação de FK
+  /// para capturar. As outras duas tabelas já eram RESTRICT; esta era a única
+  /// fora do padrão.
+  centroCusto   CentroCusto? @relation(fields: [centroCustoId], references: [id], onDelete: Restrict)
 
   projetoId String?  @map("projeto_id")
   projeto   Projeto? @relation(fields: [projetoId], references: [id])
