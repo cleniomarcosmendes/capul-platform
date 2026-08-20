@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { resolverInfCte, resolverProtCTe } from './resolver-inf-cte.js';
 import { XMLParser } from 'fast-xml-parser';
 import { ORGAO_RECEPCAO_MAP } from '../../nfe/parsers/nfe-parser.service.js';
 import { TIPO_EVENTO_LABEL } from '../../nfe/documento-evento.service.js';
@@ -100,6 +101,8 @@ const RESPONSAVEL_SEGURO_MAP: Record<string, string> = {
 
 @Injectable()
 export class CteParserService {
+  private readonly logger = new Logger(CteParserService.name);
+
   private readonly xmlParser: XMLParser;
 
   constructor() {
@@ -121,11 +124,19 @@ export class CteParserService {
       throw new BadRequestException(`XML CT-e inválido: ${(err as Error).message}`);
     }
 
-    const cteProc = root?.cteProc;
-    const CTe = cteProc?.CTe ?? root?.CTe;
-    if (!CTe) throw new BadRequestException('Estrutura <CTe> não encontrada.');
-    const inf = CTe.infCte;
-    if (!inf) throw new BadRequestException('Bloco <infCte> ausente.');
+    // 🔴 Era `root?.cteProc?.CTe ?? root?.CTe` — só o CT-e NORMAL. CT-e
+    // Simplificado (`cteSimpProc/CTeSimp`) e CT-e OS (`cteOSProc/CTeOS`) caíam
+    // em "Estrutura <CTe> não encontrada", mesmo com o XML íntegro na base.
+    // Ver `resolver-inf-cte.ts` para o caso que expôs isso.
+    const resolvido = resolverInfCte(root);
+    if (!resolvido) throw new BadRequestException('Estrutura <CTe> não encontrada.');
+    if (resolvido.generico) {
+      this.logger.warn(
+        `CT-e em raiz não catalogada ("${resolvido.raiz}") — lido pela varredura genérica. ` +
+          'Vale acrescentar o caminho explícito em resolver-inf-cte.ts.',
+      );
+    }
+    const inf = resolvido.infCte;
 
     const dadosGerais = this.parseDadosGerais(inf);
     const emitente = this.parseParticipante(inf.emit, 'emitente');
@@ -156,7 +167,11 @@ export class CteParserService {
     const seguro = this.parseSeguro(infCTeNorm?.seg) ?? this.extrairSeguroDoModal(modal);
     const infoAdicionais = this.parseInfoAdicionais(inf);
 
-    const protocolo = cteProc ? this.parseProtocolo(cteProc.protCTe) : null;
+    // O envelope muda com a variante (cteProc / cteSimpProc / cteOSProc), e é
+    // ele que carrega o protocolo — sem isto o Simplificado abriria SEM a prova
+    // de autorização.
+    const protCTe = resolverProtCTe(root);
+    const protocolo = protCTe ? this.parseProtocolo(protCTe) : null;
     if (protocolo && !protocolo.chave) protocolo.chave = dadosGerais.chave;
 
     return {

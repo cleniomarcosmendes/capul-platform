@@ -228,6 +228,29 @@ export class CteController {
    * Query opcional `apenasDesistidos=false` reseta tambem FALHA_TECNICA
    * (não-terminal). Default true: só os PROTHEUS_DESISTIU.
    */
+  /**
+   * Endpoint admin — relê os metadados dos CT-e que ficaram **sem chave** e
+   * regrava (chave, modelo, dhEmi, razão social do emitente).
+   *
+   * Recupera os documentos que a plataforma recebeu, guardou inteiros e não
+   * conseguiu indexar: CT-e Simplificado (`cteSimpProc`) e CT-e OS
+   * (`cteOSProc`), que o extrator lia com a raiz do CT-e normal. Eles existiam
+   * na base e ninguém os achava pela chave — a tela dizia "não encontrado".
+   *
+   * ⚠️ **Não consulta o SEFAZ.** Trabalha só sobre o XML já guardado. Isso é
+   * deliberado: o certificado da CAPUL já levou um 656 (consumo indevido), e
+   * reconsultar documento por documento para recuperar o que já temos seria
+   * pedir para repetir. Idempotente — a 2ª execução processa zero.
+   */
+  @Post('distribuicao/reprocessar-metadados')
+  @RoleMinima('ADMIN_TI')
+  async reprocessarMetadados(@Query('limite') limite?: string) {
+    const n = Number(limite);
+    return this.documento.reprocessarMetadadosSemChave(
+      Number.isFinite(n) && n > 0 ? Math.min(n, 5000) : 500,
+    );
+  }
+
   @Post('distribuicao/resetar-tentativas-protheus')
   @RoleMinima('ADMIN_TI')
   async resetarTentativasProtheus(@Query('apenasDesistidos') apenasDesistidos?: string) {

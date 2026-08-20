@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { resolverInfCte, chaveDoInfCte } from '../parsers/resolver-inf-cte.js';
 import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -173,20 +174,39 @@ export class CteDocumentoService {
     try {
       const parsed = this.parser.parse(xml);
 
-      if (schema === 'procCTe' || schema === 'procCTeSimp') {
-        const infCte = parsed?.cteProc?.CTe?.infCte ?? parsed?.CTe?.infCte;
-        if (!infCte) {
+      // 🔴 Aqui era `parsed?.cteProc?.CTe?.infCte ?? parsed?.CTe?.infCte` — a raiz
+      // do CT-e NORMAL — e valia só para `procCTe`/`procCTeSimp`. Duas
+      // consequências, as duas silenciosas:
+      //   1. CT-e Simplificado (raiz `cteSimpProc/CTeSimp`) era gravado com
+      //      `chave = NULL`: o documento existia, o XML estava íntegro, e
+      //      NINGUÉM conseguia achá-lo pela chave. Foi assim que o CT-e 1950 da
+      //      Distribuidora Carvalho "sumiu" (19/08/2026).
+      //   2. CT-e OS (`cteOSProc/CTeOS`, modelo 67) caía como DESCONHECIDO e
+      //      nem entrava neste ramo — também sem chave.
+      // Agora QUALQUER variante que tenha `<infCte Id="CTe…">` é lida, inclusive
+      // uma raiz nova que a SEFAZ venha a publicar (ver `resolverInfCte`).
+      if (schema !== 'resCTe' && schema !== 'procEventoCTe' && schema !== 'resEventoCTe') {
+        const resolvido = resolverInfCte(parsed);
+        if (!resolvido) {
           return { chave: null, modelo: null, dhEmi: null, emitenteRazaoSocial: null, erro: `Estrutura ${schema} inesperada` };
         }
-        const idAttr = typeof infCte['@_Id'] === 'string' ? infCte['@_Id'] : '';
-        const chave = idAttr.startsWith('CTe') && idAttr.length === 47 ? idAttr.substring(3) : null;
+        if (resolvido.generico) {
+          this.logger.warn(
+            `CT-e nsu/schema=${schema} veio em raiz não catalogada ("${resolvido.raiz}") — ` +
+              'lido pela varredura genérica. Acrescentar o caminho em resolver-inf-cte.ts.',
+          );
+        }
+        const infCte = resolvido.infCte;
+        const chave = chaveDoInfCte(infCte);
         const modelo = infCte.ide?.mod ? Number(infCte.ide.mod) : null;
         return {
           chave,
           modelo,
           dhEmi: this.parseDateSafe(infCte.ide?.dhEmi),
           emitenteRazaoSocial: this.normalizarRazaoSocial(infCte.emit?.xNome),
-          erro: null,
+          // Sem chave o documento continua invisível — isso é erro, e tem de
+          // aparecer em `erro_parse` em vez de passar como sucesso mudo.
+          erro: chave ? null : `Estrutura ${schema} sem Id de chave (raiz "${resolvido.raiz}")`,
         };
       }
 
@@ -212,6 +232,72 @@ export class CteDocumentoService {
 
   /** Normaliza o <xNome> do emitente p/ a coluna VARCHAR(120): string trim,
    *  vazio→null, truncado a 120 chars (xNome do schema CT-e vai até 60). */
+  /**
+   * Relê os metadados dos documentos que ficaram SEM CHAVE e regrava.
+   *
+   * O XML sempre foi guardado inteiro — o que faltou foi conseguir lê-lo. Então
+   * o conserto é offline: reprocessa o que está no banco, **sem uma única
+   * consulta ao SEFAZ**. Isso importa aqui: o certificado da CAPUL já foi
+   * marcado com 656 (consumo indevido) uma vez, e reconsultar documento por
+   * documento para "recuperar" o que já temos seria pedir para acontecer de novo.
+   *
+   * Idempotente: só toca em linhas com `chave IS NULL`. Rodar duas vezes seguidas
+   * processa zero na segunda.
+   */
+  async reprocessarMetadadosSemChave(limite = 500): Promise<{
+    examinados: number;
+    corrigidos: number;
+    aindaSemChave: Array<{ id: number; schema: string; motivo: string }>;
+  }> {
+    const pendentes = await this.prisma.client.cteDocumento.findMany({
+      where: { chave: null },
+      select: { id: true, schema: true, xml: true },
+      orderBy: { id: 'asc' },
+      take: limite,
+    });
+
+    let corrigidos = 0;
+    const aindaSemChave: Array<{ id: number; schema: string; motivo: string }> = [];
+
+    for (const doc of pendentes) {
+      if (!doc.xml) {
+        aindaSemChave.push({ id: doc.id, schema: doc.schema, motivo: 'sem XML guardado' });
+        continue;
+      }
+      const meta = this.extrairMetadadosDocumento(doc.xml, doc.schema);
+      if (!meta.chave) {
+        aindaSemChave.push({ id: doc.id, schema: doc.schema, motivo: meta.erro ?? 'chave não encontrada' });
+        continue;
+      }
+      await this.prisma.client.cteDocumento.update({
+        where: { id: doc.id },
+        data: {
+          chave: meta.chave,
+          modelo: meta.modelo,
+          dhEmi: meta.dhEmi,
+          emitenteRazaoSocial: meta.emitenteRazaoSocial,
+          erroParse: null,
+        },
+      });
+      // Mesma reconciliação do caminho normal: eventos que chegaram antes do
+      // documento ficaram com `documentoId` nulo esperando por esta chave.
+      const reconciliados = await this.prisma.client.cteEvento.updateMany({
+        where: { chave: meta.chave, documentoId: null },
+        data: { documentoId: doc.id },
+      });
+      corrigidos += 1;
+      this.logger.log(
+        `Metadados recuperados: doc id=${doc.id} schema=${doc.schema} chave=${meta.chave.slice(0, 8)}…` +
+          (reconciliados.count > 0 ? ` · ${reconciliados.count} evento(s) reconciliado(s)` : ''),
+      );
+    }
+
+    this.logger.log(
+      `Reprocessamento de metadados: ${pendentes.length} examinado(s), ${corrigidos} corrigido(s), ${aindaSemChave.length} ainda sem chave.`,
+    );
+    return { examinados: pendentes.length, corrigidos, aindaSemChave };
+  }
+
   private normalizarRazaoSocial(xNome: unknown): string | null {
     if (xNome == null) return null;
     const s = String(xNome).trim();
