@@ -808,6 +808,10 @@ export class SupervisorService {
     if (!['RASCUNHO', 'AJUSTADO', 'REJEITADO'].includes(v.statusPlanejamento ?? '')) {
       throw new BadRequestException('Só envia planejamento em rascunho, ajustado ou rejeitado.');
     }
+    // Mês encerrado: o `retirar da aprovação` já respeitava e o `enviar` não — dava para
+    // colocar na fila do aprovador um planejamento de um mês cuja prestação de contas já
+    // foi aceita (e que não aceita mais visita nem despesa). Reabra o mês para mexer nele.
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     return this.prisma.viagem.update({ where: { id }, data: { statusPlanejamento: 'ENVIADO' } });
   }
 
@@ -847,6 +851,11 @@ export class SupervisorService {
     const v = await this.planejamentoOuErro(id, filialId);
     if (v.statusPlanejamento !== 'ENVIADO') throw new BadRequestException('Só decide planejamento que foi ENVIADO para aprovação.');
     await this.assertPodeDecidir(v.supervisorRegistro, user);
+    // `cancelar` e `devolver` já respeitavam o fechamento; `decidir` era o único ato do
+    // aprovador que passava por cima dele — e aprovava um planejamento que em seguida
+    // não aceitaria visita nem despesa (o mês está encerrado), travando o representante
+    // com um "aprovado" que não dá para executar. Reabrir o mês é o caminho.
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
     if (decisao !== 'APROVADO' && !comentario?.trim()) throw new BadRequestException('Informe o comentário do ajuste/rejeição.');
     return this.prisma.viagem.update({
       where: { id },
@@ -1413,10 +1422,18 @@ export class SupervisorService {
 
   async reabrirViagem(id: string, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
-    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, departamentoId: true } } } });
+    const v = await this.prisma.viagem.findUnique({ where: { id }, include: { supervisorRegistro: { select: { coordenadorId: true, departamentoId: true, matricula: true } } } });
     if (!v || v.tipo !== TipoViagem.SUPERVISOR) throw new NotFoundException('Viagem de supervisor não encontrada.');
     if (v.filialId !== filialId) throw new ForbiddenException('Viagem de outra filial.');
     await this.assertEscopoSupervisor(v.supervisorRegistro, user);
+    // Reabrir o planejamento CONCLUÍDO/CANCELADO destrava visita e despesa de novo — é
+    // ato de quem aprova, igual ao encerramento do mês. O `assertEscopoSupervisor`
+    // sozinho não garante isso: ele inclui o ramo de auto-serviço, e aqui só não abria
+    // o próprio POR ACIDENTE (a `matricula` não vinha no select, então o ramo nunca
+    // casava). Agora a matrícula vem — e a trava é explícita, por AUTORIDADE.
+    if (!(await this.ehAutoridadeSobre(v.supervisorRegistro, user))) {
+      throw new ForbiddenException('Reabrir o planejamento é de quem aprova a sua prestação de contas — peça a ele.');
+    }
     // Cancelado por engano: reabrir REATIVA e devolve para AJUSTADO (o representante
     // reconfigura e reenvia), limpando o rastro do cancelamento. As despesas que o
     // cancelamento contestou NÃO voltam sozinhas para PENDENTE — quem decidiu que
@@ -1758,11 +1775,36 @@ export class SupervisorService {
   }
 
   // ---- Encerramento mensal do RDV (TEMA 2) ----
+  /**
+   * ⭐ FECHAR/REABRIR O MÊS É ATO DE QUEM APROVA — nunca do próprio representante.
+   *
+   * Encerrar o mês é o aceite da prestação de contas: congela despesas, adiantamentos
+   * e visitas e dá o saldo como conferido. Reabrir desfaz esse aceite e libera o valor
+   * para mudar. As duas pontas da mesma decisão, e nenhuma é do dono da conta.
+   *
+   * Aqui estava o furo (reproduzido em 21/08 com o Fabricio, que é COORDENADOR e ao
+   * mesmo tempo representante com RDV próprio): as duas rotas usavam
+   * `assertEscopoSupervisor`, que é ALCANCE e inclui o ramo de auto-serviço "sou eu
+   * mesmo, por matrícula" — o mesmo ramo que já tinha derrubado o adiantamento
+   * (`086447af`) e o `editarViagem` (`e5136fcd`). Ele fechava e reabria o próprio mês.
+   * O @Roles não protegia: COORDENADOR é papel legítimo, e o que falta não é papel, é
+   * AUTORIDADE SOBRE AQUELE REPRESENTANTE — o cadastro do coordenador roteia para o
+   * departamento, então quem fecha o mês dele é o Supervisor de Departamento.
+   *
+   * A trava passa a ser `ehAutoridadeSobre`, igual ao adiantamento (01/08). Quem está
+   * no topo da pirâmide segue fechando o seu (é autoridade sobre si — não há a quem
+   * pedir), e ADMIN passa como suporte.
+   */
   async fecharRdv(supervisorId: string, mes: number, user: JwtPayload) {
     const filialId = filialDoUsuario(user);
     const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
-    await this.assertEscopoSupervisor(sup, user); // coordenador do supervisor ou gestor
+    await this.assertEscopoSupervisor(sup, user); // alcança este representante?
+    if (!(await this.ehAutoridadeSobre(sup, user))) {
+      throw new ForbiddenException(
+        'O encerramento do mês é de quem aprova a sua prestação de contas (coordenador ou supervisor de departamento) — peça a ele.',
+      );
+    }
     await this.prisma.fechamentoRdv.upsert({
       where: { supervisorId_mesReferencia: { supervisorId, mesReferencia: mes } },
       create: { supervisorId, mesReferencia: mes, fechadoPorId: user.sub },
@@ -1775,6 +1817,12 @@ export class SupervisorService {
     const sup = await this.prisma.supervisor.findUnique({ where: { id: supervisorId } });
     if (!sup || sup.filialId !== filialId) throw new NotFoundException('Supervisor não encontrado.');
     await this.assertEscopoSupervisor(sup, user);
+    // Reabrir é mais sensível que fechar: destrava o valor de um mês já aceito.
+    if (!(await this.ehAutoridadeSobre(sup, user))) {
+      throw new ForbiddenException(
+        'Reabrir o mês é de quem aprova a sua prestação de contas (coordenador ou supervisor de departamento) — peça a ele.',
+      );
+    }
     await this.prisma.fechamentoRdv.deleteMany({ where: { supervisorId, mesReferencia: mes } });
     return { fechado: false as const };
   }

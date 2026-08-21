@@ -1664,3 +1664,142 @@ describe('SupervisorService.retirarDaAprovacao', () => {
     await expect(svc.retirarDaAprovacao('v1', dono())).rejects.toThrow(/RDV do mês encerrado/);
   });
 });
+
+/**
+ * ⭐ ENCERRAMENTO DO MÊS É DE QUEM APROVA (21/08).
+ *
+ * Reproduzido pelo Clenio numa demonstração: o `fabricioneiva` é COORDENADOR do
+ * Kelver e, ao mesmo tempo, representante com RDV próprio (cadastro sem
+ * `coordenadorId`, roteado pelo DEPARTAMENTO). Ele fechava — e reabria — o próprio
+ * mês, porque `fechar`/`reabrir` usavam `assertEscopoSupervisor`, que é ALCANCE e
+ * traz o ramo de auto-serviço "sou eu mesmo, por matrícula".
+ *
+ * Mesma raiz do adiantamento (01/08) e do `editarViagem` (06/08): a trava tem de ser
+ * por AUTORIDADE sobre aquele representante, não por papel nem por alcance.
+ */
+describe('SupervisorService — encerrar/reabrir o mês é da autoridade, nunca do próprio', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+  });
+  // Coordenador que também é representante: o cadastro DELE não tem coordenadorId
+  // (roteia pelo departamento → quem fecha é o Supervisor de Departamento).
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const supDepto = () => ({ sub: 'u-depto', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR_FROTA' }] }) as any;
+  const cadastroDoCoord = { id: 's-coord', filialId: 'f1', coordenadorId: null, departamentoId: 'd1', matricula: '003448' };
+  const cadastroDoRep = { id: 's-rep', filialId: 'f1', coordenadorId: 'u-coord', departamentoId: 'd1', matricula: '005274' };
+  // matriculaDoUsuario: o logado é o próprio coordenador/representante 003448.
+  const logadoEhOCoord = () => prisma.$queryRaw.mockResolvedValue([{ matricula: '003448', nome: 'Fabricio' }]);
+
+  it('coordenador NÃO fecha o próprio mês (alcança por auto-serviço, mas não é autoridade sobre si)', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue(cadastroDoCoord);
+    logadoEhOCoord();
+    await expect(svc.fecharRdv('s-coord', 202608, coord())).rejects.toThrow(/encerramento do mês é de quem aprova/);
+    expect(prisma.fechamentoRdv.upsert).not.toHaveBeenCalled();
+  });
+
+  it('coordenador NÃO reabre o próprio mês (destravar o valor já aceito é pior que fechar)', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue(cadastroDoCoord);
+    logadoEhOCoord();
+    await expect(svc.reabrirRdv('s-coord', 202608, coord())).rejects.toThrow(/Reabrir o mês é de quem aprova/);
+    expect(prisma.fechamentoRdv.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('coordenador fecha o mês do REPRESENTANTE dele (caminho legítimo, segue passando)', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue(cadastroDoRep);
+    await svc.fecharRdv('s-rep', 202608, coord());
+    expect(prisma.fechamentoRdv.upsert).toHaveBeenCalled();
+    expect(prisma.fechamentoRdv.upsert.mock.calls[0][0].create.fechadoPorId).toBe('u-coord');
+  });
+
+  it('Supervisor de Departamento fecha o mês do coordenador (é a autoridade dele)', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue(cadastroDoCoord);
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    await svc.fecharRdv('s-coord', 202608, supDepto());
+    expect(prisma.fechamentoRdv.upsert).toHaveBeenCalled();
+  });
+
+  it('Supervisor de Departamento reabre o mês do coordenador', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue(cadastroDoCoord);
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    await svc.reabrirRdv('s-coord', 202608, supDepto());
+    expect(prisma.fechamentoRdv.deleteMany).toHaveBeenCalled();
+  });
+
+  it('representante de OUTRO departamento continua barrado antes mesmo da autoridade (alcance)', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ ...cadastroDoRep, departamentoId: 'd9' });
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    await expect(svc.fecharRdv('s-rep', 202608, supDepto())).rejects.toThrow(/fora do seu departamento/);
+  });
+});
+
+// Varredura 21/08: `enviar` e `decidir` eram os dois atos do ciclo do planejamento que
+// ignoravam o mês encerrado (`retirar`, `cancelar` e `devolver` já respeitavam).
+describe('SupervisorService — mês encerrado trava também enviar/decidir o planejamento', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const dono = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const plan = (status: string) => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: status,
+    criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  const mesFechado = () => prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // logado = dono
+  });
+
+  it('enviar com o mês FECHADO → barrado', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('RASCUNHO'));
+    mesFechado();
+    await expect(svc.enviarPlanejamento('v1', dono())).rejects.toThrow(/RDV do mês encerrado/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('decidir com o mês FECHADO → barrado (não aprova o que não poderá ser executado)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    mesFechado();
+    await expect(svc.decidirPlanejamento('v1', 'APROVADO', undefined, coord())).rejects.toThrow(/RDV do mês encerrado/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('com o mês ABERTO os dois seguem funcionando', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('RASCUNHO'));
+    await svc.enviarPlanejamento('v1', dono());
+    expect(prisma.viagem.update.mock.calls[0][0].data.statusPlanejamento).toBe('ENVIADO');
+    prisma.viagem.findUnique.mockResolvedValue(plan('ENVIADO'));
+    await svc.decidirPlanejamento('v1', 'APROVADO', undefined, coord());
+    expect(prisma.viagem.update.mock.calls[1][0].data.statusPlanejamento).toBe('APROVADO');
+  });
+});
+
+// `reabrirViagem` só não abria o próprio planejamento por acidente (a `matricula` não
+// vinha no include, então o ramo de auto-serviço do escopo nunca casava). Trava explícita.
+describe('SupervisorService.reabrirViagem — reabrir é da autoridade', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+  });
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const viagem = (reg: any) => ({ id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'CONCLUIDA', statusPlanejamento: 'CONCLUIDO', supervisorRegistro: reg });
+
+  it('coordenador NÃO reabre o PRÓPRIO planejamento concluído', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(viagem({ coordenadorId: null, departamentoId: 'd1', matricula: '003448' }));
+    prisma.$queryRaw.mockResolvedValue([{ matricula: '003448', nome: 'Fabricio' }]);
+    await expect(svc.reabrirViagem('v1', coord())).rejects.toThrow(/quem aprova/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('coordenador reabre o planejamento do REPRESENTANTE dele', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(viagem({ coordenadorId: 'u-coord', departamentoId: 'd1', matricula: '005274' }));
+    await svc.reabrirViagem('v1', coord());
+    expect(prisma.viagem.update.mock.calls[0][0].data.situacao).toBe('EM_CURSO');
+  });
+});
