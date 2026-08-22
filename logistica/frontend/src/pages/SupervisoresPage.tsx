@@ -954,7 +954,9 @@ function FechamentoTab() {
                         <td className="py-2 font-medium">{brl(a.valor)}</td>
                         <td className="py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${adiantBadge(a.situacao).cls}`} title={a.situacao === 'REJEITADO' ? (a.motivoRejeicao ?? '') : ''}>{adiantBadge(a.situacao).label}</span></td>
                         <td className="py-2 text-slate-500">{a.observacao ?? ''}</td>
-                        <td className="py-2 text-right">{!ehSupervisorArea && <button onClick={() => void remover(a.id)} className="text-xs text-rose-600 hover:underline">Remover</button>}</td>
+                        {/* O4: com o mês ENCERRADO a API recusa remover (400) — o link
+                            não pode continuar convidando. */}
+                        <td className="py-2 text-right">{!ehSupervisorArea && !rdv?.fechado && <button onClick={() => void remover(a.id)} className="text-xs text-rose-600 hover:underline">Remover</button>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -966,6 +968,10 @@ function FechamentoTab() {
               {ehSupervisorArea ? (
                 <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-400">
                   O adiantamento é lançado pelo seu coordenador (ou pelo supervisor de departamento) — peça a ele.
+                </p>
+              ) : rdv?.fechado ? (
+                <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-amber-700">
+                  🔒 Mês encerrado — para lançar adiantamento, reabra o mês no painel ao lado.
                 </p>
               ) : (
               <form onSubmit={lancar} className="mt-3 border-t border-slate-100 pt-3">

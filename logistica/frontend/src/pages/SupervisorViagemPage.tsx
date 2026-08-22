@@ -8,6 +8,7 @@ import { errMsg } from './frota-utils';
 import { papelLabel } from './supervisor-utils';
 import { DataInput } from '../components/DataInput';
 import { MoedaInput } from '../components/MoedaInput';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface Atividade { id: string; nome: string; ativo: boolean }
 interface Visita {
@@ -57,6 +58,9 @@ interface ViagemDetalhe {
   condutorNome?: string | null; condutorMatricula?: string | null;
   supervisorRegistro?: { id: string; nome: string; coordenadorId?: string | null } | null;
   paradas: Visita[]; despesas: DespesaV[];
+  // Mês da prestação de contas já ENCERRADO — a tela precisa saber para não oferecer
+  // ação que a API vai negar com 400 (O2 da varredura de 21/08).
+  mesFechado?: boolean;
   // O logado é o representante DONO deste RDV (por matrícula) ou ADMIN. Quem
   // aprova monta o roteiro, mas apontar visita e concluir são do dono — o backend
   // responde isso porque a regra é por matrícula, que a tela não tem.
@@ -246,6 +250,16 @@ export function SupervisorViagemPage() {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  /**
+   * ⭐ O1 (varredura de 21/08): FALHOU numa ação → avisa **e recarrega**.
+   *
+   * Sem o recarregar, a aba ficava mostrando o estado VELHO depois de um 400 de
+   * estado — "Enviado", com o botão Aprovar ativo — e dava para clicar de novo
+   * indefinidamente. É o candidato mais forte para o "cliquei em aprovar e deu erro"
+   * da demonstração: a tela estava aberta havia um tempo e o planejamento já tinha
+   * mudado por baixo. Recarregar transforma um erro que se repete num estado certo.
+   */
+  const falhou = (e: unknown, msg: string) => { toast('error', errMsg(e, msg)); void carregar(); };
   // Locais já aprendidos do cliente selecionado (para o seletor no form da visita).
   useEffect(() => {
     const m = clienteMatricula.trim();
@@ -255,7 +269,14 @@ export function SupervisorViagemPage() {
 
   // Trava os formulários de lançamento. Concluída (histórico) OU cancelada: nos dois
   // casos o backend recusa visita/despesa — a tela não pode oferecer o que vai dar erro.
-  const travada = v?.situacao === 'CONCLUIDA' || v?.statusPlanejamento === 'CANCELADO';
+  /**
+   * ⭐ O2: mês ENCERRADO trava o RDV inteiro no backend — visita, despesa, enviar,
+   * decidir, criar. A tela seguia oferecendo tudo e o usuário só descobria no 400.
+   * Entra na `travada` (mesmo efeito de "concluída/cancelada": some o formulário) e
+   * some com os botões de decisão logo abaixo.
+   */
+  const mesFechado = v?.mesFechado === true;
+  const travada = v?.situacao === 'CONCLUIDA' || v?.statusPlanejamento === 'CANCELADO' || mesFechado;
   // Fase de planejamento (espelha o backend): a visita adicionada aqui nasce PLANEJADA
   // (monta o roteiro). Fora disso ela nasce REALIZADA (visita de fato, em campo).
   // "Planejamento" (montar o roteiro) = TUDO antes da execução começar. ENVIADO e
@@ -276,9 +297,19 @@ export function SupervisorViagemPage() {
    * autoridade lança no RDV do representante — ele mandou o comprovante e ela digitou)
    * quem confere é o REPRESENTANTE, porque a despesa entra na conta dele.
    */
+  const ehCoordDesteSup = !!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id;
   const souODono = v?.souDono !== false;
   const confereEstaDespesa = (d: DespesaV) =>
     d.situacao === 'PENDENTE' && d.criadoPorId !== usuario?.id && (souODono || podeAprovarDespesa);
+  /**
+   * ⭐ O5: quem NÃO lançou não altera o valor — regra do backend desde 01/08, que a
+   * tela ignorava: o lápis aparecia para todos, o formulário abria, aceitava o valor
+   * novo e só quebrava no Salvar ("Esta despesa foi lançada por outra pessoa…").
+   * Espelha a guarda: o autor do lançamento, a autoridade sobre o representante, ou
+   * ADMIN. Quem não pode tem o caminho certo — contestar.
+   */
+  const ehAutoridadeDesteRep = temRole('ADMIN', 'SUPERVISOR_FROTA') || ehCoordDesteSup;
+  const podeMexerNaDespesa = (d: DespesaV) => d.criadoPorId === usuario?.id || ehAutoridadeDesteRep;
   // Quem decide ADIANTAMENTO: só ADMIN, Supervisor de Departamento ou o COORDENADOR deste
   // supervisor (gestores de entrega/frota NÃO — espelha o @Roles do backend).
   // Durante a EXECUÇÃO a visita incluída nasce REALIZADA — é execução, não roteiro.
@@ -298,7 +329,6 @@ export function SupervisorViagemPage() {
   // Categoria do tipo escolhido decide se a despesa tem veículo (combustível/pedágio
   // têm; alimentação/hospedagem não).
   const tipoSelEhVeiculo = tipos.find((t) => t.id === dTipo)?.categoria === 'VEICULO';
-  const ehCoordDesteSup = !!v?.supervisorRegistro?.coordenadorId && v.supervisorRegistro.coordenadorId === usuario?.id;
   const podeDecidirAdiantamento = temRole('ADMIN', 'SUPERVISOR_FROTA') || (temRole('COORDENADOR') && ehCoordDesteSup);
 
   const limparForm = () => { setCliMat(''); setCliNome(''); setMunicipio(''); setAtividadeId(''); setPropriedade(''); setObs(''); setDataVisita(''); setLocalClienteId(''); setEditVisitaId(null); };
@@ -336,19 +366,19 @@ export function SupervisorViagemPage() {
       else await logisticaApi.post(`/supervisor/viagens/${id}/visitas`, body);
       toast('success', editVisitaId ? 'Visita atualizada.' : 'Visita registrada.');
       limparForm(); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao salvar visita.')); } finally { setSalvando(false); }
+    } catch (e) { falhou(e, 'Falha ao salvar visita.'); } finally { setSalvando(false); }
   };
 
   const remover = async (visita: Visita) => {
     try { await logisticaApi.delete(`/supervisor/viagens/${id}/visitas/${visita.id}`); toast('success', 'Visita removida.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
+    catch (e) { falhou(e, 'Falha ao remover.'); }
   };
   const apontar = async (visita: Visita, status: 'REALIZADA' | 'PULADA', observacao?: string) => {
     try {
       await logisticaApi.patch(`/supervisor/viagens/${id}/visitas/${visita.id}/apontar`, { status, ...(observacao !== undefined ? { observacao } : {}) });
       toast('success', status === 'REALIZADA' ? 'Visita realizada.' : 'Visita pulada.');
       await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao apontar a visita.')); }
+    } catch (e) { falhou(e, 'Falha ao apontar a visita.'); }
   };
   /**
    * Realizar abre o RELATO da visita — o que foi tratado/coletado em campo. Grava em
@@ -359,6 +389,13 @@ export function SupervisorViagemPage() {
    * roteiro foi montado, às vezes escrita pelo coordenador), para COMPLEMENTAR em vez
    * de apagar sem ver. Opcional — dá para confirmar sem escrever nada.
    */
+  /**
+   * ⭐ O6: remover visita e remover despesa somem NO CLIQUE, sem confirmar — e visita
+   * apontada/despesa com comprovante não voltam. As outras telas do módulo já usam o
+   * ConfirmDialog; aqui faltava.
+   */
+  const [visitaParaRemover, setVisitaParaRemover] = useState<Visita | null>(null);
+  const [despParaRemover, setDespParaRemover] = useState<DespesaV | null>(null);
   const [relatoVisita, setRelatoVisita] = useState<Visita | null>(null);
   const [relato, setRelato] = useState('');
   const confirmarRealizada = async () => {
@@ -373,7 +410,7 @@ export function SupervisorViagemPage() {
       await logisticaApi.patch(`/supervisor/viagens/${id}/retirar`);
       toast('success', 'Planejamento puxado de volta — o roteiro voltou a ficar editável.');
       await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao puxar de volta.')); }
+    } catch (e) { falhou(e, 'Falha ao puxar de volta.'); }
   };
   const salvarVeiculo = async () => {
     try {
@@ -381,18 +418,18 @@ export function SupervisorViagemPage() {
       toast('success', veiculoSel ? 'Veículo do planejamento atualizado.' : 'Veículo removido do planejamento.');
       setEditandoVeiculo(false);
       await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao trocar o veículo.')); }
+    } catch (e) { falhou(e, 'Falha ao trocar o veículo.'); }
   };
   const concluir = async () => {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/concluir`); toast('success', 'Viagem concluída.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao concluir.')); }
+    catch (e) { falhou(e, 'Falha ao concluir.'); }
   };
   const reabrir = async () => {
     try {
       await logisticaApi.patch(`/supervisor/viagens/${id}/reabrir`);
       toast('success', v?.statusPlanejamento === 'CANCELADO' ? 'Planejamento reativado — voltou para ajuste.' : 'Viagem reaberta para correção.');
       await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao reabrir.')); }
+    } catch (e) { falhou(e, 'Falha ao reabrir.'); }
   };
   // Força maior depois do aval: cancelar (a viagem não vai acontecer) ou devolver para
   // reconfiguração (volta a AJUSTADO e o representante reenvia). Ambos exigem texto.
@@ -401,22 +438,22 @@ export function SupervisorViagemPage() {
       await logisticaApi.patch(`/supervisor/viagens/${id}/cancelar`, { motivo });
       toast('success', 'Planejamento cancelado.');
       setAcaoForca(null); setTxtForca(''); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao cancelar o planejamento.')); }
+    } catch (e) { falhou(e, 'Falha ao cancelar o planejamento.'); }
   };
   const devolverPlanejamento = async (comentario: string) => {
     try {
       await logisticaApi.patch(`/supervisor/viagens/${id}/devolver`, { comentario });
       toast('success', 'Devolvido para reconfiguração.');
       setAcaoForca(null); setTxtForca(''); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao devolver o planejamento.')); }
+    } catch (e) { falhou(e, 'Falha ao devolver o planejamento.'); }
   };
   const enviar = async () => {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/enviar`); toast('success', 'Enviado ao coordenador.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao enviar.')); }
+    catch (e) { falhou(e, 'Falha ao enviar.'); }
   };
   const iniciar = async () => {
     try { await logisticaApi.patch(`/supervisor/viagens/${id}/iniciar`); toast('success', 'Viagem liberada para execução.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao iniciar.')); }
+    catch (e) { falhou(e, 'Falha ao iniciar.'); }
   };
 
   const limparDesp = () => { setShowDesp(false); setEditDespId(null); setDTipo(''); setDValor(''); setDData(''); setDForn(''); setDObs(''); setDRecibos([]); setDVeiculo(''); };
@@ -433,13 +470,13 @@ export function SupervisorViagemPage() {
       const url = URL.createObjectURL(data as Blob);
       window.open(url, '_blank', 'noopener');
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (e) { toast('error', errMsg(e, 'Falha ao abrir o comprovante.')); }
+    } catch (e) { falhou(e, 'Falha ao abrir o comprovante.'); }
   };
   const verComprovante = (dId: string) => abrirBlob(`/supervisor/viagens/${id}/despesas/${dId}/comprovante`);
   const verAnexo = (dId: string, anexoId: string) => abrirBlob(`/supervisor/viagens/${id}/despesas/${dId}/anexos/${anexoId}`);
   const removerAnexo = async (dId: string, anexoId: string) => {
     try { await logisticaApi.delete(`/supervisor/viagens/${id}/despesas/${dId}/anexos/${anexoId}`); toast('success', 'Anexo removido.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao remover o anexo.')); }
+    catch (e) { falhou(e, 'Falha ao remover o anexo.'); }
   };
   // Acrescenta arquivos escolhidos ao lote (cap MAX_ANEXOS).
   const addRecibos = (files: FileList | null) => {
@@ -473,18 +510,18 @@ export function SupervisorViagemPage() {
       const jaAprovada = (resp?.data as { situacao?: string } | undefined)?.situacao === 'APROVADA';
       toast('success', editDespId ? 'Despesa atualizada.' : jaAprovada ? 'Despesa lançada e já aprovada.' : 'Despesa lançada — aguarda aprovação.');
       limparDesp(); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao salvar despesa.')); } finally { setSalvandoDesp(false); }
+    } catch (e) { falhou(e, 'Falha ao salvar despesa.'); } finally { setSalvandoDesp(false); }
   };
   const removerDespesa = async (dId: string) => {
     try { await logisticaApi.delete(`/supervisor/viagens/${id}/despesas/${dId}`); toast('success', 'Despesa removida.'); await carregar(); }
-    catch (e) { toast('error', errMsg(e, 'Falha ao remover.')); }
+    catch (e) { falhou(e, 'Falha ao remover.'); }
   };
   const decidirDespesa = async (dId: string, decisao: 'APROVADA' | 'CONTESTADA', motivo?: string) => {
     try {
       await logisticaApi.patch(`/supervisor/viagens/${id}/despesas/${dId}/decidir`, { decisao, motivo });
       toast('success', decisao === 'APROVADA' ? 'Despesa aprovada.' : 'Despesa rejeitada.');
       setRejDesp(null); setMotivoRej(''); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao decidir a despesa.')); }
+    } catch (e) { falhou(e, 'Falha ao decidir a despesa.'); }
   };
   // Decisão do coordenador sobre um ADIANTAMENTO pendente (auto-serviço do supervisor).
   const decidirAdiantamento = async (aid: string, decisao: 'APROVAR' | 'REJEITAR', motivo?: string) => {
@@ -492,7 +529,7 @@ export function SupervisorViagemPage() {
       await logisticaApi.patch(`/supervisor/adiantamentos/${aid}/decidir`, { decisao, motivo });
       toast('success', decisao === 'APROVAR' ? 'Adiantamento aprovado.' : 'Adiantamento rejeitado.');
       setRejAdiantId(null); setMotivoAdiant(''); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao decidir o adiantamento.')); }
+    } catch (e) { falhou(e, 'Falha ao decidir o adiantamento.'); }
   };
   // Decisão do coordenador sobre o PLANEJAMENTO (aqui no detalhe, com visitas +
   // despesas + comprovantes à vista — não mais "às cegas" na fila da Coordenação).
@@ -501,7 +538,7 @@ export function SupervisorViagemPage() {
       await logisticaApi.patch(`/supervisor/viagens/${id}/decidir`, { decisao, comentario });
       toast('success', decisao === 'APROVADO' ? 'Planejamento aprovado.' : decisao === 'AJUSTADO' ? 'Devolvido para ajuste.' : 'Planejamento rejeitado.');
       setDecPlan(null); setComPlan(''); await carregar();
-    } catch (e) { toast('error', errMsg(e, 'Falha ao decidir o planejamento.')); }
+    } catch (e) { falhou(e, 'Falha ao decidir o planejamento.'); }
   };
 
   // Só a carga INICIAL (sem dados ainda) mostra a tela cheia de "Carregando…". Recarregar
@@ -573,7 +610,7 @@ export function SupervisorViagemPage() {
           {v.statusPlanejamento === 'ENVIADO' && v.souDono !== false && (
             <button onClick={() => void retirar()} className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100" title="Tira da fila de aprovação e volta para rascunho, para você editar e reenviar">Puxar de volta</button>
           )}
-          {v.statusPlanejamento === 'ENVIADO' && podeAprovarDespesa && (
+          {v.statusPlanejamento === 'ENVIADO' && podeAprovarDespesa && !mesFechado && (
             <>
               <button onClick={() => void decidirPlanejamento('APROVADO')} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Aprovar</button>
               <button onClick={() => { setDecPlan('AJUSTADO'); setComPlan(''); }} className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100">Ajustar</button>
@@ -590,7 +627,7 @@ export function SupervisorViagemPage() {
                 : `Aguardando ${v.condutorNome ?? 'o representante'} enviar para aprovação.`}
             </span>
           )}
-          {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') && v.souDono !== false &&
+          {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') && v.souDono !== false && !mesFechado &&
             <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700" title="Depois de enviar, o roteiro fica travado até quem aprova devolver ou decidir">Enviar para aprovação</button>}
           {v.statusPlanejamento === 'APROVADO' && v.souDono !== false &&
             <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
@@ -605,7 +642,7 @@ export function SupervisorViagemPage() {
             <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Concluído — peça ao coordenador para reabrir, se precisar corrigir.</span>}
           {/* Força maior DEPOIS do aval — Ajustar/Rejeitar só existem no ENVIADO. Só a
               autoridade que aprova (coordenador do representante / Supervisor de Departamento). */}
-          {(v.statusPlanejamento === 'APROVADO' || v.statusPlanejamento === 'EM_EXECUCAO') && podeAprovarDespesa && (
+          {(v.statusPlanejamento === 'APROVADO' || v.statusPlanejamento === 'EM_EXECUCAO') && podeAprovarDespesa && !mesFechado && (
             <>
               <button onClick={() => { setAcaoForca('DEVOLVER'); setTxtForca(''); }} className="rounded-lg border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100" title="Volta para o representante reconfigurar e reenviar">Devolver p/ reconfigurar</button>
               <button onClick={() => { setAcaoForca('CANCELAR'); setTxtForca(''); }} className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100" title="A viagem não vai acontecer (força maior)">Cancelar planejamento</button>
@@ -615,6 +652,15 @@ export function SupervisorViagemPage() {
             <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100" title="Cancelado por engano: reativa e volta para ajuste">Reativar planejamento</button>}
         </div>
       </div>
+
+      {/* Mês encerrado: diz ANTES do clique por que a tela está sem ações. */}
+      {mesFechado && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-800">
+          <b>🔒 RDV do mês encerrado.</b> A prestação de contas de {fmtMes(v.mesReferencia)} já foi aceita — este planejamento
+          não recebe visita nem despesa, não é enviado e não é decidido.
+          <span className="mt-1 block text-xs text-amber-700">Para voltar a mexer, quem aprova (coordenador ou supervisor de departamento) precisa reabrir o mês em <b>Supervisores → Fechamento</b>.</span>
+        </div>
+      )}
 
       {/* Cancelado: o motivo fica à vista — é o rastro de por que a viagem aprovada não saiu. */}
       {v.statusPlanejamento === 'CANCELADO' && (
@@ -831,7 +877,7 @@ export function SupervisorViagemPage() {
                     {!roteiroCongelado && (
                       <>
                         <button onClick={() => abrirEdicaoVisita(p)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
-                        <button onClick={() => void remover(p)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => setVisitaParaRemover(p)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
                       </>
                     )}
                   </div>
@@ -990,10 +1036,10 @@ export function SupervisorViagemPage() {
                     {d.situacao === 'PENDENTE' && d.criadoPorId === usuario?.id && (
                       <span className="text-[11px] text-slate-400" title="Quem lança não aprova o próprio lançamento">aguardando conferência</span>
                     )}
-                    {!travada && (
+                    {!travada && podeMexerNaDespesa(d) && (
                       <>
                         <button onClick={() => abrirEdicaoDesp(d)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
-                        <button onClick={() => void removerDespesa(d.id)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => setDespParaRemover(d)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
                       </>
                     )}
                   </div>
@@ -1010,6 +1056,27 @@ export function SupervisorViagemPage() {
           </tbody>
         </table>
       </div>
+
+      {/* O6: as duas remoções pedem confirmação — visita apontada e despesa com
+          comprovante não voltam depois de apagadas. */}
+      <ConfirmDialog
+        open={!!visitaParaRemover}
+        titulo="Remover a visita?"
+        mensagem={`${visitaParaRemover?.clienteNome ?? 'Esta visita'}${visitaParaRemover?.municipio ? ` · ${visitaParaRemover.municipio}` : ''} sai do roteiro. Se já foi apontada em campo, o relato também se perde.`}
+        confirmLabel="Remover"
+        perigo
+        onConfirm={() => { const p = visitaParaRemover; setVisitaParaRemover(null); if (p) void remover(p); }}
+        onCancel={() => setVisitaParaRemover(null)}
+      />
+      <ConfirmDialog
+        open={!!despParaRemover}
+        titulo="Remover a despesa?"
+        mensagem={`${despParaRemover?.tipoDespesa?.nome ?? 'A despesa'} de ${brl(despParaRemover?.valor ?? 0)} sai da prestação de contas — o comprovante anexado é apagado junto.`}
+        confirmLabel="Remover"
+        perigo
+        onConfirm={() => { const d = despParaRemover; setDespParaRemover(null); if (d) void removerDespesa(d.id); }}
+        onCancel={() => setDespParaRemover(null)}
+      />
     </div>
   );
 }
