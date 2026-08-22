@@ -4,8 +4,14 @@
 módulo **Supervisores (RDV)**: o `fabricioneiva` **encerrou o próprio mês** (regra que
 já tínhamos tratado em 01/08 para despesa e adiantamento) e a **aprovação do
 planejamento do `kelvereduardo` deu erro**. O primeiro foi reproduzido por API,
-corrigido e coberto por teste (commit `4f3ce3e0`). O segundo **ainda não reproduzi** —
-o caso 2 aqui existe para capturar a mensagem exata.
+corrigido e coberto por teste (commit `4f3ce3e0`). O segundo nunca reproduziu.
+
+> **✅ Executado no Chrome em 21/08 — 16 passaram, 2 falharam, 1 parcial, 7 observações
+> de tela.** As duas falhas novas (**F1** despesa aprovada mantinha a aprovação quando
+> quem lançou editava o valor; **F2** criar planejamento furava o mês encerrado) e as
+> observações **O1–O6** foram corrigidas na sequência. O texto abaixo já incorpora as
+> correções que a execução pediu — em especial **separar CRIAR de ENVIAR no caso 3** e
+> especificar direito o item de valor no caso 4, que era o que escondia a F1.
 
 **Tempo:** ~35 min. **Tela:** `https://localhost/entregas/` → **Supervisores**.
 
@@ -140,10 +146,21 @@ Este caso passa pelos estados um a um; **pare no que falhar** e anote (0.3).
 
 ## 3 · Mês encerrado trava o ciclo inteiro (novo em 21/08)
 
+> ⚠️ **Separe CRIAR de ENVIAR.** Na 1ª execução (21/08) o roteiro juntava os dois num
+> passo só e por isso quase perdeu a falha **F2**: `enviar` recusava e **`criar`
+> passava**. Cada ação abaixo é um item próprio de propósito.
+
 - [ ] Como **Fabricio**: encerrar o mês do **Kelver**.
-- [ ] Como **Kelver**: tentar **criar/enviar** planejamento de 08/2026 → deve recusar
-      com *"RDV do mês encerrado"*. (Antes, **enviar** passava.)
-- [ ] Como **Kelver**: tentar lançar **despesa** ou **visita** → mesma recusa.
+- [ ] Como **Kelver**: **criar** planejamento de 08/2026 → deve recusar com
+      *"RDV do mês encerrado — não dá para criar planejamento."* **(era a F2)**
+- [ ] Como **Kelver**, num planejamento que já existia: **enviar para aprovação** →
+      *"…não dá para enviar para aprovação."*
+- [ ] Como **Kelver**: **lançar despesa** e **incluir visita** → mesma recusa, cada uma
+      citando a própria ação.
+- [ ] Como **Fabricio**: **aprovar** um planejamento ENVIADO daquele mês →
+      *"…não dá para decidir o planejamento."*
+- [ ] Na tela do planejamento, conferir a **tarja amarela "🔒 RDV do mês encerrado"** e
+      que os botões de ação **sumiram** (não é para descobrir no clique).
 - [ ] Como **Fabricio**: **reabrir** o mês → tudo volta a funcionar.
 
 ---
@@ -158,8 +175,19 @@ Cinco minutos, porque a suspeita era de regressão geral.
 - [ ] **Quem decide é quem NÃO lançou** — Fabricio lança uma despesa **no RDV do
       Kelver**: ela nasce **PENDENTE** e **quem aprova é o Kelver**. O botão "Aprovar"
       dessa despesa **não** aparece para o Fabricio.
-- [ ] **A decisão vale para o valor** — Kelver edita o **valor** de uma despesa já
-      aprovada → ela volta para **PENDENTE**.
+- [ ] **Quem lançou corrige** (regra de autoria, que vem ANTES da regra de valor):
+      Kelver tentar editar o valor de uma despesa lançada pelo **Fabricio** →
+      *"Esta despesa foi lançada por outra pessoa — você não altera o valor dela.
+      Se não reconhece o lançamento, conteste: quem lançou corrige."* O **lápis nem
+      deve aparecer** para ele (corrigido em 21/08 — antes o formulário abria e só
+      quebrava no Salvar).
+- [ ] **A decisão vale para o valor — sentido do representante:** despesa **do próprio
+      Kelver**, aprovada pelo Fabricio; Kelver edita o valor → volta para **PENDENTE**.
+- [ ] **A decisão vale para o valor — sentido do coordenador** *(é aqui que estava a
+      falha F1)*: **Fabricio lança** no RDV do Kelver (nasce PENDENTE) → **Kelver
+      confirma** (APROVADA) → **Fabricio edita o valor**. Esperado **agora**: volta para
+      **PENDENTE** e o Kelver reconfere. Antes seguia **APROVADA**, recarimbada pelo
+      próprio Fabricio — ele aprovava o próprio lançamento pela porta dos fundos.
 - [ ] **Adiantamento é de quem aprova** — como **Kelver**, a aba Fechamento mostra
       *"O adiantamento é lançado pelo seu coordenador"* e **não** tem formulário.
       Como **Fabricio**, tentar lançar adiantamento **para si** não deve existir na
@@ -167,11 +195,23 @@ Cinco minutos, porque a suspeita era de regressão geral.
 
 ---
 
-## 5 · Estado do DEV depois dos meus testes de hoje
+## 4.1 · O que NÃO é defeito (decidido, para não virar achado de novo)
 
-- Não sobrou nenhum mês encerrado (`logistica.fechamento_rdv` está **vazia**).
-- O planejamento **nº 55** do Kelver foi criado por mim para reproduzir e está
-  **CANCELADO** com o motivo *"planejamento de TESTE da revisão técnica 21/08"* —
-  pode ignorar.
-- A viagem **nº 48** do Fabricio foi reaberta e **reconcluída** no teste do
-  `reabrirViagem`; voltou ao estado original (**Concluída**).
+- **O aprovador inclui, edita e remove visita no planejamento APROVADO.** É a decisão
+  de 02/08 (`aceeab87`): o roteiro congela para o DONO a partir do envio, e quem
+  responde por ele nos estados **Enviado** e **Aprovado** é quem aprova. Só na
+  **execução** (EM_EXECUCAO) a caneta volta para o representante.
+- **A autoridade que NÃO lançou pode editar o valor e a despesa segue APROVADA**, com o
+  carimbo refeito em nome dela — ela está decidindo sobre o valor novo. O que não pode
+  é editar o que **ela mesma** lançou (F1).
+
+## 5 · Estado do DEV (atualizado após a execução de 21/08)
+
+- `logistica.fechamento_rdv` **vazia** — nenhum mês encerrado.
+- **#55** e **#60** — CANCELADOS, com o motivo dizendo que são teste. **#60** era o
+  órfão da F2.
+- **#56** — carrega as duas despesas de teste (`TESTE roteiro 21/08`). A de **R$ 12,34**
+  está **PENDENTE**: é o resultado do fix da F1 — o Fabricio editou o valor e ela
+  voltou para a conferência do Kelver.
+- **#57**, **#58** — Aprovados; **#59** — Enviado, na fila do Fabricio.
+- Viagem **#48** (do Fabricio) segue **Concluída**, como estava.
