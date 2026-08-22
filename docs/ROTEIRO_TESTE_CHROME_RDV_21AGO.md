@@ -146,6 +146,13 @@ Este caso passa pelos estados um a um; **pare no que falhar** e anote (0.3).
 
 ## 3 · Mês encerrado trava o ciclo inteiro (novo em 21/08)
 
+> ⭐ **Este caso é o que mais rendeu: três execuções, três furos no mesmo guard**
+> (`criar` em 21/08; `iniciar`, `concluir`, `veículo` e `reabrir` em 22/08). Hoje existe
+> um **teste de invariante** que varre o serviço inteiro atrás de método de escrita sem
+> a checagem — então um furo novo quebra a suíte antes de chegar aqui. Continue rodando
+> os itens mesmo assim: o teste garante que a checagem EXISTE, não que a **tela** parou
+> de oferecer o botão.
+
 > ⚠️ **Separe CRIAR de ENVIAR.** Na 1ª execução (21/08) o roteiro juntava os dois num
 > passo só e por isso quase perdeu a falha **F2**: `enviar` recusava e **`criar`
 > passava**. Cada ação abaixo é um item próprio de propósito.
@@ -159,6 +166,14 @@ Este caso passa pelos estados um a um; **pare no que falhar** e anote (0.3).
       citando a própria ação.
 - [ ] Como **Fabricio**: **aprovar** um planejamento ENVIADO daquele mês →
       *"…não dá para decidir o planejamento."*
+- [ ] **Executar também é mexer no mês** *(era a 3ª falha, achada em 22/08)*: num
+      planejamento **Aprovado**, **Liberar para execução** → *"…não dá para liberar para
+      execução."*; num **Em execução**, **Concluir** → *"…não dá para concluir o
+      planejamento."*
+- [ ] **Trocar o veículo** do planejamento → *"…não dá para trocar o veículo"* (é dele
+      que a despesa herda o custo da frota).
+- [ ] Como **Fabricio**, num planejamento **Concluído**: **Reabrir para corrigir** →
+      *"…não dá para reabrir o planejamento"* — o caminho é reabrir o **mês** primeiro.
 - [ ] Na tela do planejamento, conferir a **tarja amarela "🔒 RDV do mês encerrado"** e
       que os botões de ação **sumiram** (não é para descobrir no clique).
 - [ ] Como **Fabricio**: **reabrir** o mês → tudo volta a funcionar.
@@ -205,7 +220,7 @@ Cinco minutos, porque a suspeita era de regressão geral.
   carimbo refeito em nome dela — ela está decidindo sobre o valor novo. O que não pode
   é editar o que **ela mesma** lançou (F1).
 
-## 5 · Estado do DEV (atualizado após a execução de 21/08)
+## 5 · Estado do DEV (atualizado após a 2ª execução, 22/08)
 
 - `logistica.fechamento_rdv` **vazia** — nenhum mês encerrado.
 - **#55** e **#60** — CANCELADOS, com o motivo dizendo que são teste. **#60** era o
@@ -213,5 +228,7 @@ Cinco minutos, porque a suspeita era de regressão geral.
 - **#56** — carrega as duas despesas de teste (`TESTE roteiro 21/08`). A de **R$ 12,34**
   está **PENDENTE**: é o resultado do fix da F1 — o Fabricio editou o valor e ela
   voltou para a conferência do Kelver.
-- **#57**, **#58** — Aprovados; **#59** — Enviado, na fila do Fabricio.
+- **#57** — Aprovado. **#58** — **Em execução**: a 3ª falha o concluiu com o mês
+  encerrado; reabri depois da correção, e ele serve agora para testar o `concluir`.
+- **#59** — Enviado, na fila do Fabricio.
 - Viagem **#48** (do Fabricio) segue **Concluída**, como estava.
