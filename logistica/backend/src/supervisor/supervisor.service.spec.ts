@@ -1894,3 +1894,123 @@ describe('SupervisorService — mensagem do mês encerrado cita a ação', () =>
       .rejects.toThrow(/não dá para decidir o planejamento/);
   });
 });
+
+/**
+ * ⭐⭐ INVARIANTE ESTRUTURAL — o guard do mês encerrado, varrido por teste (22/08).
+ *
+ * Três vezes seguidas o mesmo defeito: `assertRdvAberto` foi aplicado ROTA A ROTA e
+ * ficou faltando justamente na que ninguém tinha testado — `editar`/`remover` (01/08),
+ * `enviar`/`decidir` (21/08), `criar` (21/08) e `iniciar`/`concluir`/`veículo`/`reabrir`
+ * (22/08, achados pela skill do Chrome). A observação que fechou o assunto veio dela:
+ * *"vale varrer o controller inteiro atrás de rotas de escrita sem a checagem, em vez
+ * de ir tapando uma a uma"*.
+ *
+ * Este teste É essa varredura, agora permanente: lê o FONTE do serviço, acha todo
+ * método que escreve no Prisma e exige `assertRdvAberto` — a não ser que esteja na
+ * lista de dispensados abaixo, cada um com o motivo. Método de escrita novo sem guard
+ * quebra aqui, na hora, e quem escrever precisa dizer por que dispensa.
+ */
+describe('SupervisorService — INVARIANTE: toda escrita do RDV respeita o mês encerrado', () => {
+  // Dispensados, com o porquê. Mexer nesta lista é decisão de negócio, não limpeza.
+  const DISPENSADOS: Record<string, string> = {
+    anexarReciboDespesa: 'helper privado — quem chama (lançar/editar despesa) já checa',
+    anexarComprovantes: 'helper privado — idem',
+    criarSupervisor: 'cadastro do time: não pertence a um mês',
+    atualizarSupervisor: 'cadastro do time: não pertence a um mês',
+    criarAtividade: 'catálogo de atividades: não pertence a um mês',
+    atualizarAtividade: 'catálogo de atividades: não pertence a um mês',
+    definirSupervisorDepartamento: 'cadastro de responsável por departamento',
+    removerSupervisorDepartamento: 'cadastro de responsável por departamento',
+    fecharRdv: 'É o próprio encerramento',
+    reabrirRdv: 'É o que destrava o mês — não pode ser travado por ele',
+  };
+
+  it('nenhum método de escrita fica sem `assertRdvAberto` (fora os dispensados)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const src = fs.readFileSync(path.join(__dirname, 'supervisor.service.ts'), 'utf8').split('\n');
+    const inicios: { linha: number; nome: string }[] = [];
+    src.forEach((l, i) => {
+      const m = /^ {2}(?:async |private async |private )?([a-zA-Z][a-zA-Z0-9_]*)\(/.exec(l);
+      if (m) inicios.push({ linha: i, nome: m[1] });
+    });
+    inicios.push({ linha: src.length, nome: '__fim__' });
+    const semGuard: string[] = [];
+    for (let k = 0; k < inicios.length - 1; k++) {
+      const { linha, nome } = inicios[k];
+      if (nome === 'assertRdvAberto' || nome in DISPENSADOS) continue;
+      const corpo = src.slice(linha, inicios[k + 1].linha).join('\n');
+      const escreve = /\.(create|update|updateMany|delete|deleteMany|upsert)\(/.test(corpo);
+      if (escreve && !corpo.includes('assertRdvAberto')) semGuard.push(nome);
+    }
+    expect(semGuard).toEqual([]);
+  });
+
+  it('a lista de dispensados não guarda nome que já sumiu do serviço', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const src = fs.readFileSync(path.join(__dirname, 'supervisor.service.ts'), 'utf8');
+    const orfaos = Object.keys(DISPENSADOS).filter((n) => !new RegExp(`\\n {2}(?:async |private async |private )?${n}\\(`).test(src));
+    expect(orfaos).toEqual([]);
+  });
+});
+
+// As quatro rotas que faltavam (achadas pela skill do Chrome em 22/08): executar também
+// é mexer no mês. O caso real: com o mês do Kelver encerrado, o #58 saiu de APROVADO,
+// foi para EM_EXECUCAO e terminou CONCLUÍDO, tudo com a prestação de contas já aceita.
+describe('SupervisorService — mês encerrado trava também EXECUTAR', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const dono = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const plan = (status: string, situacao = 'EM_CURSO') => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao, statusPlanejamento: status,
+    criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1', veiculoId: 've1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // logado = dono
+    prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
+  });
+
+  it('liberar para execução → barrado', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    await expect(svc.iniciarExecucao('v1', dono())).rejects.toThrow(/não dá para liberar para execução/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('concluir → barrado', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('EM_EXECUCAO'));
+    await expect(svc.concluirViagemSupervisor('v1', dono())).rejects.toThrow(/não dá para concluir o planejamento/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('trocar o veículo do planejamento → barrado (é de onde a despesa herda o custo)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    prisma.veiculo.findFirst.mockResolvedValue({ id: 've2', filialId: 'f1', ativo: true });
+    await expect(svc.definirVeiculoPlanejamento('v1', 've2', dono())).rejects.toThrow(/não dá para trocar o veículo/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('reabrir o planejamento concluído → barrado (reabra o MÊS primeiro)', async () => {
+    prisma.viagem.findUnique.mockResolvedValue(plan('CONCLUIDO', 'CONCLUIDA'));
+    await expect(svc.reabrirViagem('v1', coord())).rejects.toThrow(/não dá para reabrir o planejamento/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+  });
+
+  it('com o mês ABERTO, liberar e concluir seguem funcionando', async () => {
+    prisma.fechamentoRdv.findUnique.mockResolvedValue(null);
+    prisma.viagem.findUnique.mockResolvedValue(plan('APROVADO'));
+    await svc.iniciarExecucao('v1', dono());
+    expect(prisma.viagem.update.mock.calls[0][0].data.statusPlanejamento).toBe('EM_EXECUCAO');
+    prisma.viagem.findUnique.mockResolvedValue(plan('EM_EXECUCAO'));
+    await svc.concluirViagemSupervisor('v1', dono());
+    expect(prisma.viagem.update.mock.calls[1][0].data.statusPlanejamento).toBe('CONCLUIDO');
+  });
+});

@@ -795,6 +795,7 @@ export class SupervisorService {
     const filialId = filialDoUsuario(user);
     const v = await this.planejamentoDoDono(id, user);
     this.assertNaoCancelado(v);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'trocar o veículo do planejamento');
     if (veiculoId) {
       const ve = await this.prisma.veiculo.findFirst({ where: { id: veiculoId, filialId, ativo: true } });
       if (!ve) throw new BadRequestException('Veículo não encontrado (ou inativo) nesta filial.');
@@ -962,6 +963,11 @@ export class SupervisorService {
     if (!['APROVADO', 'AJUSTADO'].includes(v.statusPlanejamento ?? '')) {
       throw new BadRequestException('Só inicia execução de planejamento aprovado/ajustado.');
     }
+    // ⭐ 22/08: o guard do mês encerrado cobria PLANEJAR e LANÇAR e não cobria EXECUTAR
+    // — dava para liberar e concluir um planejamento de um mês cuja prestação de contas
+    // já foi aceita. Executar sem poder apontar visita nem lançar despesa (as duas
+    // recusam) é um ciclo que só produz estado errado.
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'liberar para execução');
     return this.prisma.viagem.update({ where: { id }, data: { statusPlanejamento: 'EM_EXECUCAO' } });
   }
 
@@ -1258,6 +1264,7 @@ export class SupervisorService {
     const v = await this.planejamentoParaExecutar(id, user);
     this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) return v;
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'concluir o planejamento');
     return this.prisma.viagem.update({
       where: { id },
       data: { situacao: StatusViagem.CONCLUIDA, statusPlanejamento: 'CONCLUIDO', dataHoraChegada: new Date() },
@@ -1455,6 +1462,9 @@ export class SupervisorService {
     if (!(await this.ehAutoridadeSobre(v.supervisorRegistro, user))) {
       throw new ForbiddenException('Reabrir o planejamento é de quem aprova a sua prestação de contas — peça a ele.');
     }
+    // Reabrir existe para CORRIGIR — e corrigir dentro de um mês já aceito é justamente
+    // o que o fechamento impede. O caminho é reabrir o MÊS primeiro (mesma autoridade).
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'reabrir o planejamento');
     // Cancelado por engano: reabrir REATIVA e devolve para AJUSTADO (o representante
     // reconfigura e reenvia), limpando o rastro do cancelamento. As despesas que o
     // cancelamento contestou NÃO voltam sozinhas para PENDENTE — quem decidiu que
