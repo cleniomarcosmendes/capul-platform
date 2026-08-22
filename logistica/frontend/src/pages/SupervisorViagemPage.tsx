@@ -629,14 +629,14 @@ export function SupervisorViagemPage() {
           )}
           {(v.statusPlanejamento === 'RASCUNHO' || v.statusPlanejamento === 'AJUSTADO' || v.statusPlanejamento === 'REJEITADO') && v.souDono !== false && !mesFechado &&
             <button onClick={() => void enviar()} className="rounded-lg bg-capul-600 px-4 py-2 text-sm font-medium text-white hover:bg-capul-700" title="Depois de enviar, o roteiro fica travado até quem aprova devolver ou decidir">Enviar para aprovação</button>}
-          {v.statusPlanejamento === 'APROVADO' && v.souDono !== false &&
+          {v.statusPlanejamento === 'APROVADO' && v.souDono !== false && !mesFechado &&
             <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
-          {v.statusPlanejamento === 'EM_EXECUCAO' && v.souDono !== false &&
+          {v.statusPlanejamento === 'EM_EXECUCAO' && v.souDono !== false && !mesFechado &&
             <button onClick={() => void concluir()} className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Concluir</button>}
           {/* Reabrir é ato de QUEM APROVA (coordenador do representante / supervisor de
               departamento). Sem este gate o botão aparecia para todo mundo — inclusive
               para o próprio representante, que tomava 403 ao clicar. */}
-          {v.statusPlanejamento === 'CONCLUIDO' && podeAprovarDespesa &&
+          {v.statusPlanejamento === 'CONCLUIDO' && podeAprovarDespesa && !mesFechado &&
             <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100">Reabrir para corrigir</button>}
           {v.statusPlanejamento === 'CONCLUIDO' && !podeAprovarDespesa &&
             <span className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Concluído — peça ao coordenador para reabrir, se precisar corrigir.</span>}
@@ -648,7 +648,7 @@ export function SupervisorViagemPage() {
               <button onClick={() => { setAcaoForca('CANCELAR'); setTxtForca(''); }} className="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100" title="A viagem não vai acontecer (força maior)">Cancelar planejamento</button>
             </>
           )}
-          {v.statusPlanejamento === 'CANCELADO' && podeAprovarDespesa &&
+          {v.statusPlanejamento === 'CANCELADO' && podeAprovarDespesa && !mesFechado &&
             <button onClick={() => void reabrir()} className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100" title="Cancelado por engano: reativa e volta para ajuste">Reativar planejamento</button>}
         </div>
       </div>
@@ -657,7 +657,8 @@ export function SupervisorViagemPage() {
       {mesFechado && (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-800">
           <b>🔒 RDV do mês encerrado.</b> A prestação de contas de {fmtMes(v.mesReferencia)} já foi aceita — este planejamento
-          não recebe visita nem despesa, não é enviado e não é decidido.
+          não recebe visita nem despesa, não é enviado, não é decidido, não é liberado para execução nem concluído,
+          e não muda de veículo.
           <span className="mt-1 block text-xs text-amber-700">Para voltar a mexer, quem aprova (coordenador ou supervisor de departamento) precisa reabrir o mês em <b>Supervisores → Fechamento</b>.</span>
         </div>
       )}
