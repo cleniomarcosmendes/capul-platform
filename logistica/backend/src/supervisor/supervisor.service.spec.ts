@@ -1256,16 +1256,24 @@ describe('SupervisorService — a decisão vale para o valor decidido', () => {
     expect(prisma.despesaVeiculo.update.mock.calls[0][0].data.situacao).toBeUndefined();
   });
 
-  it('a AUTORIDADE editando mantém aprovada, mas RECARIMBA a decisão (é dela, sobre o valor novo)', async () => {
+  // ⚠️ INVERTIDO EM 22/08. Este caso afirmava que "a AUTORIDADE editando mantém aprovada
+  // e recarimba a decisão". A 3ª execução do roteiro mostrou o que isso permitia: o
+  // coordenador aprova a despesa do representante e depois, sozinho, muda o valor —
+  // aprovado, sem reconferência, sem o dono ver. Vale a regra simétrica do CLAUDE.md:
+  // quem não lançou não altera o valor; se está errado, CONTESTA.
+  it('a AUTORIDADE não altera o valor da despesa alheia — nem para "corrigir"', async () => {
     prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
+    await expect(svc.editarDespesa('v1', 'd1', { valor: 120 } as any, coord()))
+      .rejects.toThrow(/lançada por outra pessoa/);
+    expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
+  });
+
+  it('a AUTORIDADE editando o que ELA MESMA lançou devolve para PENDENTE (o dono reconfere)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-coord', tipoDespesaId: 't1', veiculoId: null });
     await svc.editarDespesa('v1', 'd1', { valor: 120 } as any, coord());
     const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
-    expect(data.situacao).toBeUndefined();
-    // Campo da DESPESA é aprovadoPorId (decididoPorId é do Adiantamento). O mock aceita
-    // qualquer chave, então só o teste de ponta a ponta pegou a troca — daí a asserção
-    // pelo nome exato.
-    expect(data.aprovadoPorId).toBe('u-coord');
-    expect(Object.keys(data)).not.toContain('decididoPorId');
+    expect(data.situacao).toBe('PENDENTE');
+    expect(Object.keys(data)).not.toContain('decididoPorId'); // campo da despesa é aprovadoPorId
   });
 
   it('representante NÃO apaga despesa CONTESTADA (era o caminho "some e volta limpa")', async () => {
@@ -1428,11 +1436,14 @@ describe('SupervisorService — quem não lançou não mexe no valor', () => {
     expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
   });
 
-  it('a AUTORIDADE corrige o valor da despesa que o representante lançou', async () => {
+  // ⚠️ INVERTIDO EM 22/08 — ver a nota no caso da autoridade acima. Nem PENDENTE ela
+  // reescreve: o número é de quem lançou, e o caminho da autoridade é contestar.
+  it('a AUTORIDADE não reescreve o valor lançado pelo representante (contesta)', async () => {
     prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
     prisma.$queryRaw.mockResolvedValue([{ matricula: 'E09999', nome: 'Coord' }]); // não é o dono
-    await svc.editarDespesa('v1', 'd1', { valor: 80 } as any, coord());
-    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+    await expect(svc.editarDespesa('v1', 'd1', { valor: 80 } as any, coord()))
+      .rejects.toThrow(/conteste: quem lançou corrige|lançada por outra pessoa/);
+    expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
   });
 
   // MÉDIO do mesmo review: a volta para PENDENTE não pode reabrir a exclusão.
@@ -1836,14 +1847,44 @@ describe('SupervisorService — F1: editar não re-carimba a aprovação de quem
     expect(data.aprovadoPorId).toBeUndefined(); // preserva o histórico da decisão anterior
   });
 
-  it('autoridade que NÃO lançou edita o valor → segue APROVADA, com o carimbo refeito', async () => {
+  /**
+   * ⭐ 22/08 — a regra de autoria vale NOS DOIS SENTIDOS.
+   *
+   * Este caso já foi teste do comportamento oposto ("a autoridade edita e mantém o
+   * aval"), que veio do código de 01/08 e eu tinha documentado como intencional. A 3ª
+   * execução do roteiro mostrou o arranjo real que ele permitia: o coordenador APROVA a
+   * despesa do representante e depois, sozinho, muda o valor — que segue APROVADO, sem
+   * voltar para conferência e sem o dono da conta ver. O CLAUDE.md sempre disse a versão
+   * simétrica: "quem não lançou NÃO altera o valor".
+   */
+  it('autoridade que NÃO lançou NÃO altera o valor — o caminho dela é contestar', async () => {
     prisma.despesaVeiculo.findUnique.mockResolvedValue({
       id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-rep', aprovadoPorId: 'u-coord', tipoDespesaId: 't1', veiculoId: 've1',
     });
-    await svc.editarDespesa('v1', 'd1', { valor: 77 } as any, coord());
+    await expect(svc.editarDespesa('v1', 'd1', { valor: 88 } as any, coord()))
+      .rejects.toThrow(/lançada por outra pessoa/);
+    expect(prisma.despesaVeiculo.update).not.toHaveBeenCalled();
+  });
+
+  it('…mas segue corrigindo fornecedor/observação da despesa alheia (não é dinheiro)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({
+      id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-rep', aprovadoPorId: 'u-coord', tipoDespesaId: 't1', veiculoId: 've1',
+    });
+    await svc.editarDespesa('v1', 'd1', { observacao: 'nota do coordenador' } as any, coord());
     const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
-    expect(data.situacao).toBeUndefined();
-    expect(data.aprovadoPorId).toBe('u-coord');
+    expect(data.situacao).toBeUndefined(); // não mexeu no valor → o aval fica de pé
+    expect(data.observacao).toBe('nota do coordenador');
+  });
+
+  it('o próprio representante editando a SUA despesa aprovada → volta para PENDENTE', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({
+      id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-rep', aprovadoPorId: 'u-coord', tipoDespesaId: 't1', veiculoId: 've1',
+    });
+    const rep = { sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] } as any;
+    prisma.$queryRaw.mockResolvedValue([{ matricula: '005274', nome: 'Kelver' }]); // logado = dono
+    await svc.editarDespesa('v1', 'd1', { valor: 88 } as any, rep);
+    const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
+    expect(data.situacao).toBe('PENDENTE');
   });
 });
 

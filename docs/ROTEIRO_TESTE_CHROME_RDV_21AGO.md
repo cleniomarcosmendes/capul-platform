@@ -203,6 +203,14 @@ Cinco minutos, porque a suspeita era de regressão geral.
       confirma** (APROVADA) → **Fabricio edita o valor**. Esperado **agora**: volta para
       **PENDENTE** e o Kelver reconfere. Antes seguia **APROVADA**, recarimbada pelo
       próprio Fabricio — ele aprovava o próprio lançamento pela porta dos fundos.
+- [ ] **A regra de autoria prende NOS DOIS SENTIDOS** *(2ª forma da F1, 22/08)*: numa
+      despesa **lançada pelo Kelver e já aprovada**, o **Fabricio** clica no lápis →
+      **o lápis não deve existir** para ele; pela API, **403** *"Esta despesa foi lançada
+      por outra pessoa…"*. Antes ele mudava o valor e a despesa seguia **Aprovada**.
+- [ ] **O caminho da autoridade é CONTESTAR:** na mesma despesa aprovada o Fabricio tem
+      **Contestar** → informa o motivo → a despesa fica **Contestada**; o **Kelver**
+      corrige o valor e ela volta para **PENDENTE**, para o Fabricio aprovar de novo.
+      *(Fornecedor e observação — que não são dinheiro — o Fabricio segue corrigindo.)*
 - [ ] **Adiantamento é de quem aprova** — como **Kelver**, a aba Fechamento mostra
       *"O adiantamento é lançado pelo seu coordenador"* e **não** tem formulário.
       Como **Fabricio**, tentar lançar adiantamento **para si** não deve existir na
@@ -216,9 +224,11 @@ Cinco minutos, porque a suspeita era de regressão geral.
   de 02/08 (`aceeab87`): o roteiro congela para o DONO a partir do envio, e quem
   responde por ele nos estados **Enviado** e **Aprovado** é quem aprova. Só na
   **execução** (EM_EXECUCAO) a caneta volta para o representante.
-- **A autoridade que NÃO lançou pode editar o valor e a despesa segue APROVADA**, com o
-  carimbo refeito em nome dela — ela está decidindo sobre o valor novo. O que não pode
-  é editar o que **ela mesma** lançou (F1).
+- ~~A autoridade que NÃO lançou pode editar o valor~~ — **ERRADO, corrigido em 22/08.**
+  Eu tinha documentado isto como intencional (vinha do código de 01/08) e a 3ª execução
+  mostrou o que permitia: o coordenador **aprova** a despesa do representante e depois,
+  **sozinho**, muda o valor — aprovado, sem reconferência e sem o dono da conta ver. A
+  regra do CLAUDE.md sempre foi simétrica: **quem não lançou não altera o valor**.
 
 ## 5 · Estado do DEV (atualizado após a 2ª execução, 22/08)
 
@@ -226,9 +236,12 @@ Cinco minutos, porque a suspeita era de regressão geral.
 - **#55** e **#60** — CANCELADOS, com o motivo dizendo que são teste. **#60** era o
   órfão da F2.
 - **#56** — carrega as duas despesas de teste (`TESTE roteiro 21/08`). A de **R$ 12,34**
-  está **PENDENTE**: é o resultado do fix da F1 — o Fabricio editou o valor e ela
-  voltou para a conferência do Kelver.
+  está **PENDENTE** (fix da F1: o Fabricio editou e ela voltou para a conferência do
+  Kelver). A de **R$ 77,00** também está **PENDENTE**, agora depois de percorrer o ciclo
+  novo inteiro: aprovada → contestada pelo Fabricio → corrigida pelo Kelver. As duas
+  esperam decisão do Fabricio.
+- **#59** — tem a despesa de **R$ 15,00** que o Fabricio lançou no RDV do Kelver:
+  **PENDENTE**, esperando a conferência do **Kelver** (a conta é dele).
 - **#57** — Aprovado. **#58** — **Em execução**: a 3ª falha o concluiu com o mês
   encerrado; reabri depois da correção, e ele serve agora para testar o `concluir`.
-- **#59** — Enviado, na fila do Fabricio.
 - Viagem **#48** (do Fabricio) segue **Concluída**, como estava.

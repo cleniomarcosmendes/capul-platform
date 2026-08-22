@@ -1560,9 +1560,8 @@ export class SupervisorService {
     // ninguém rever. Fornecedor, observação e comprovante não mexem no dinheiro e não
     // reabrem.
     //
-    // Quando quem edita É a autoridade sobre o representante, a despesa continua
-    // APROVADA — mas com o carimbo REFEITO (quem/quando), porque a decisão passa a ser
-    // dele sobre o valor novo. Espelha a regra de 27/07 do lançamento.
+    // Vale para QUALQUER um que edite — inclusive a autoridade. Ela não corrige o número
+    // de outra pessoa: contesta, e quem lançou corrige.
     const mexeNoDinheiro = dto.valor !== undefined || dto.tipoDespesaId !== undefined
       || dto.data !== undefined || dto.veiculoId !== undefined;
     const jaDecidida = d.situacao !== 'PENDENTE';
@@ -1577,41 +1576,35 @@ export class SupervisorService {
     //
     // Quem discorda do que lançaram para si tem o caminho certo: CONTESTAR. Aí quem
     // lançou corrige — e é ele quem responde pelo número.
+    //
+    // ⭐ 22/08: a regra VALE NOS DOIS SENTIDOS. Até aqui a autoridade escapava dela —
+    // e o resultado era o pior arranjo possível: o coordenador APROVAVA a despesa do
+    // representante e depois, sozinho, mudava o valor, que seguia APROVADO, sem voltar
+    // para conferência e sem o dono da conta ver (R$ 77 → R$ 88 no DEV). A regra
+    // prendia só "para baixo": o representante era barrado ao mexer no lançamento do
+    // coordenador, o coordenador não. O CLAUDE.md sempre disse a versão simétrica —
+    // "quem não lançou NÃO altera o valor" — e o código é que trazia a exceção.
+    //
+    // Para a autoridade o caminho é o mesmo que ela oferece ao representante:
+    // CONTESTAR (com motivo, que fica no rastro) e quem lançou corrige. Corrigir o
+    // número de outra pessoa em silêncio nunca é o caminho. ADMIN passa (suporte).
     if (mexeNoDinheiro && !this.ehAdmin(user) && d.criadoPorId !== user.sub) {
-      const autoridadeEdita = await this.ehAutoridadeSobre(v.supervisorRegistro, user);
-      if (!autoridadeEdita) {
-        throw new ForbiddenException(
-          'Esta despesa foi lançada por outra pessoa — você não altera o valor dela. Se não reconhece o lançamento, conteste: quem lançou corrige.',
-        );
-      }
+      throw new ForbiddenException(
+        'Esta despesa foi lançada por outra pessoa — você não altera o valor dela. Se o valor está errado, conteste com o motivo: quem lançou corrige.',
+      );
     }
     const redecisao: Prisma.DespesaVeiculoUncheckedUpdateInput = {};
     if (mexeNoDinheiro && jaDecidida) {
-      // ⭐ F1 (21/08): o re-carimbo só vale para quem PODERIA decidir esta despesa agora.
+      // ⭐ Mexeu no dinheiro de uma linha já decidida → ela VOLTA PARA ANÁLISE, sem
+      // exceção. Depois da guarda acima só o AUTOR do lançamento (ou ADMIN) chega aqui,
+      // e manter o aval seria aprovar o próprio número — a auto-aprovação por
+      // composição que o `decidirDespesa` barra na porta da frente (`42bb60d6`).
       //
-      // Manter APROVADA ao editar é, na prática, decidir de novo — então tem de obedecer
-      // à mesma regra do `decidirDespesa`: QUEM LANÇOU NÃO APROVA O PRÓPRIO LANÇAMENTO.
-      // O furo apareceu no caminho em que a autoridade lança no RDV do representante:
-      // Fabricio lança R$ 12,34 (nasce PENDENTE) → Kelver confere (APROVADA, a conta é
-      // dele) → Fabricio edita para R$ 999,00 e a linha seguia APROVADA, agora carimbada
-      // pelo PRÓPRIO Fabricio. Editar + re-carimbar compunha exatamente a auto-aprovação
-      // que `decidirDespesa` barra na porta da frente (mesma família do `42bb60d6`).
-      //
-      // Sendo o autor, volta para PENDENTE e quem confere é o dono — que é quem paga.
-      const autoridade = await this.ehAutoridadeSobre(v.supervisorRegistro, user)
-        && d.criadoPorId !== user.sub;
-      // Campos da DESPESA são aprovadoPorId/aprovadoEm (decididoPorId/decididoEm são
-      // do Adiantamento) — trocar os dois derruba o update com 500.
-      if (autoridade) {
-        Object.assign(redecisao, { aprovadoPorId: user.sub, aprovadoEm: new Date() });
-      } else {
-        // Volta para análise, MAS preserva `aprovadoPorId`/`aprovadoEm` como registro de
-        // que esta linha já passou por decisão — é o que `removerDespesa` consulta.
-        // Zerar os dois (como eu fazia) devolvia a despesa ao estado "nunca decidida" e
-        // reabria a exclusão: contestada → edita → PENDENTE → apaga → relança limpa,
-        // exatamente o caminho que a guarda de ontem queria fechar.
-        Object.assign(redecisao, { situacao: 'PENDENTE', motivoContestacao: null });
-      }
+      // Preserva `aprovadoPorId`/`aprovadoEm` como registro de que esta linha JÁ passou
+      // por decisão — é o que o `removerDespesa` consulta. Zerar os dois devolvia a
+      // despesa ao estado "nunca decidida" e reabria a exclusão: contestada → edita →
+      // PENDENTE → apaga → relança limpa.
+      Object.assign(redecisao, { situacao: 'PENDENTE', motivoContestacao: null });
     }
     return this.prisma.despesaVeiculo.update({
       where: { id: despesaId },

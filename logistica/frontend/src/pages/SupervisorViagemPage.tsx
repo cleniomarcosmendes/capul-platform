@@ -48,7 +48,7 @@ const STATUS_VISITA: Record<string, { label: string; cls: string }> = {
 };
 const statusVisita = (s?: string | null) => STATUS_VISITA[s ?? 'REALIZADA'] ?? { label: s ?? '—', cls: 'bg-slate-100 text-slate-600' };
 interface AnexoV { id: string; mime?: string | null; ordem?: number }
-interface DespesaV { id: string; valor: number | string; situacao: string; veiculoId?: string | null; criadoPorId?: string; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null; anexos?: AnexoV[] }
+interface DespesaV { id: string; valor: number | string; situacao: string; veiculoId?: string | null; criadoPorId?: string; aprovadoPorId?: string | null; motivoContestacao?: string | null; tipoDespesaId?: string; fornecedor?: string | null; observacao?: string | null; tipoDespesa?: { nome: string; categoria: string } | null; dataDespesa?: string | null; comprovanteObjectKey?: string | null; anexos?: AnexoV[] }
 const MAX_ANEXOS = 5;
 interface VeiculoOpc { id: string; placa: string; modelo?: string | null; ativo?: boolean }
 interface ViagemDetalhe {
@@ -309,7 +309,23 @@ export function SupervisorViagemPage() {
    * ADMIN. Quem não pode tem o caminho certo — contestar.
    */
   const ehAutoridadeDesteRep = temRole('ADMIN', 'SUPERVISOR_FROTA') || ehCoordDesteSup;
-  const podeMexerNaDespesa = (d: DespesaV) => d.criadoPorId === usuario?.id || ehAutoridadeDesteRep;
+  /**
+   * ⭐ EDITAR o valor é só de QUEM LANÇOU (22/08) — inclusive para a autoridade, que
+   * até então escapava da regra e reescrevia o número do representante em silêncio.
+   * ADMIN passa (suporte). Quem discorda tem o caminho abaixo: contestar.
+   */
+  const podeEditarDespesa = (d: DespesaV) => d.criadoPorId === usuario?.id || temRole('ADMIN');
+  /** REMOVER espelha o backend: depois de decidida, só a autoridade; antes disso, o dono. */
+  const jaPassouPorDecisao = (d: DespesaV) => d.situacao !== 'PENDENTE' || !!d.aprovadoPorId;
+  const podeRemoverDespesa = (d: DespesaV) => temRole('ADMIN')
+    || (jaPassouPorDecisao(d) ? ehAutoridadeDesteRep : (souODono || ehAutoridadeDesteRep));
+  /**
+   * CONTESTAR uma despesa JÁ APROVADA é o caminho de quem não pode editar: devolve com
+   * motivo, e quem lançou corrige (a edição dele reabre a conferência). Sem isto,
+   * fechar a edição para a autoridade a deixaria só com "apagar".
+   */
+  const podeContestarDecidida = (d: DespesaV) => d.situacao === 'APROVADA'
+    && (ehAutoridadeDesteRep || souODono || d.criadoPorId === usuario?.id);
   // Quem decide ADIANTAMENTO: só ADMIN, Supervisor de Departamento ou o COORDENADOR deste
   // supervisor (gestores de entrega/frota NÃO — espelha o @Roles do backend).
   // Durante a EXECUÇÃO a visita incluída nasce REALIZADA — é execução, não roteiro.
@@ -1037,11 +1053,14 @@ export function SupervisorViagemPage() {
                     {d.situacao === 'PENDENTE' && d.criadoPorId === usuario?.id && (
                       <span className="text-[11px] text-slate-400" title="Quem lança não aprova o próprio lançamento">aguardando conferência</span>
                     )}
-                    {!travada && podeMexerNaDespesa(d) && (
-                      <>
-                        <button onClick={() => abrirEdicaoDesp(d)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
-                        <button onClick={() => setDespParaRemover(d)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
-                      </>
+                    {!travada && podeContestarDecidida(d) && (
+                      <button onClick={() => { setRejDesp(d.id); setMotivoRej(''); }} className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100" title="O valor está errado? Devolva com o motivo — quem lançou corrige.">Contestar</button>
+                    )}
+                    {!travada && podeEditarDespesa(d) && (
+                      <button onClick={() => abrirEdicaoDesp(d)} className="text-slate-400 hover:text-capul-600" title="Editar"><Pencil className="h-4 w-4" /></button>
+                    )}
+                    {!travada && podeRemoverDespesa(d) && (
+                      <button onClick={() => setDespParaRemover(d)} className="text-slate-400 hover:text-red-600" title="Remover"><Trash2 className="h-4 w-4" /></button>
                     )}
                   </div>
                   {rejDesp === d.id && (
