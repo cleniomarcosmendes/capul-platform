@@ -1803,3 +1803,94 @@ describe('SupervisorService.reabrirViagem — reabrir é da autoridade', () => {
     expect(prisma.viagem.update.mock.calls[0][0].data.situacao).toBe('EM_CURSO');
   });
 });
+
+/**
+ * ⭐ Achados da execução do roteiro no Chrome (21/08) — as duas falhas novas.
+ */
+describe('SupervisorService — F1: editar não re-carimba a aprovação de quem lançou', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const coord = () => ({ sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] }) as any;
+  const plan = () => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1', veiculoId: 've1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: '005274', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.viagem.findUnique.mockResolvedValue(plan());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: '003448', nome: 'Fabricio' }]);
+  });
+
+  // O caminho do furo: a autoridade lança no RDV do representante (nasce PENDENTE), o
+  // representante confere (APROVADA) e a autoridade edita o valor. Manter APROVADA aqui
+  // é a autoridade aprovando o PRÓPRIO lançamento pela porta dos fundos.
+  it('autoridade que LANÇOU edita o valor → volta para PENDENTE (o dono reconfere)', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({
+      id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-coord', aprovadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: 've1',
+    });
+    await svc.editarDespesa('v1', 'd1', { valor: 999 } as any, coord());
+    const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
+    expect(data.situacao).toBe('PENDENTE');
+    expect(data.aprovadoPorId).toBeUndefined(); // preserva o histórico da decisão anterior
+  });
+
+  it('autoridade que NÃO lançou edita o valor → segue APROVADA, com o carimbo refeito', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({
+      id: 'd1', viagemId: 'v1', situacao: 'APROVADA', criadoPorId: 'u-rep', aprovadoPorId: 'u-coord', tipoDespesaId: 't1', veiculoId: 've1',
+    });
+    await svc.editarDespesa('v1', 'd1', { valor: 77 } as any, coord());
+    const data = prisma.despesaVeiculo.update.mock.calls[0][0].data;
+    expect(data.situacao).toBeUndefined();
+    expect(data.aprovadoPorId).toBe('u-coord');
+  });
+});
+
+describe('SupervisorService — F2: criar planejamento respeita o mês encerrado', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const rep = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: '005274', nome: 'Kelver' }]);
+    prisma.supervisor.findFirst.mockResolvedValue({ id: 's1', coordenadorId: 'u-coord', departamentoId: 'd1' });
+  });
+
+  it('mês encerrado → 400 e NADA é criado', async () => {
+    prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
+    await expect(svc.criarViagemSupervisor({ mesReferencia: 202608 } as any, rep()))
+      .rejects.toThrow(/RDV do mês encerrado.*criar planejamento/);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('mês aberto → cria normalmente', async () => {
+    prisma.fechamentoRdv.findUnique.mockResolvedValue(null);
+    await svc.criarViagemSupervisor({ mesReferencia: 202608 } as any, rep());
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+});
+
+// O3: a recusa diz qual AÇÃO foi barrada, em vez da lista fixa "despesas, adiantamentos
+// ou visitas" — que aparecia até ao aprovar um planejamento.
+describe('SupervisorService — mensagem do mês encerrado cita a ação', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]);
+    prisma.viagem.findUnique.mockResolvedValue({
+      id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'ENVIADO',
+      criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1',
+      supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+    });
+  });
+  it('aprovar planejamento fala em "decidir o planejamento", não em despesas/visitas', async () => {
+    const coord = { sub: 'u-coord', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'COORDENADOR' }] } as any;
+    await expect(svc.decidirPlanejamento('v1', 'APROVADO', undefined, coord))
+      .rejects.toThrow(/não dá para decidir o planejamento/);
+  });
+});

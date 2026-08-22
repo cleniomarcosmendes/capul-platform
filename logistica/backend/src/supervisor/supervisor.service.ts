@@ -79,7 +79,7 @@ export class SupervisorService {
     // (reproduzido na varredura de 01/08 — 200, anexo zerado) e o valor continuava
     // aprovado, agora sem lastro. Mesma regra da remoção da despesa: depois de
     // decidida, só quem aprova mexe; e mês encerrado não se altera.
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'apagar o comprovante');
     if ((a.despesa.situacao !== 'PENDENTE' || a.despesa.aprovadoPorId) && !(await this.ehAutoridadeSobre(v.supervisorRegistro, user))) {
       throw new ForbiddenException(
         'Esta despesa já passou por análise — o comprovante dela não pode ser removido. Fale com quem aprova.',
@@ -326,6 +326,12 @@ export class SupervisorService {
       throw new BadRequestException('Seu cadastro não tem coordenador nem departamento vinculado (quem aprova). Peça ao Supervisor de Departamento para vincular antes de criar o planejamento.');
     }
     const supervisorRegistroId = reg.id;
+    // ⭐ F2 (21/08): mês encerrado trava o CICLO INTEIRO — e a criação escapava.
+    // Visita, despesa, enviar, retirar e decidir recusavam; `POST /viagens` respondia
+    // 201 e nascia um planejamento inerte (não recebe visita, não recebe despesa, não
+    // é enviado), poluindo a base e desmentindo a promessa do encerramento. O guard
+    // vem DEPOIS de resolver o cadastro, porque é ele que diz de quem é o mês.
+    await this.assertRdvAberto(supervisorRegistroId, dto.mesReferencia, 'criar planejamento');
 
     // Veículo: o cliente manda o que está no seletor (o desktop já pré-seleciona a
     // sugestão e deixa trocar). Campo AUSENTE = cliente antigo → cai na sugestão do
@@ -364,10 +370,17 @@ export class SupervisorService {
 
   /** RDV do mês encerrado? (TEMA 2) — bloqueia despesa/adiantamento/visita. Sem
    *  supervisor cadastrado ou mês → não trava (nada a fechar). */
-  private async assertRdvAberto(supervisorId: string | null | undefined, mes: number | null | undefined) {
+  private async assertRdvAberto(supervisorId: string | null | undefined, mes: number | null | undefined, acao?: string) {
     if (!supervisorId || mes == null) return;
     const f = await this.prisma.fechamentoRdv.findUnique({ where: { supervisorId_mesReferencia: { supervisorId, mesReferencia: mes } } });
-    if (f) throw new BadRequestException('RDV do mês encerrado — reabra o mês (coordenador/gestor) para alterar despesas, adiantamentos ou visitas.');
+    // A mensagem cita a AÇÃO que foi recusada (O3 da varredura de 21/08): a lista fixa
+    // "despesas, adiantamentos ou visitas" aparecia até ao APROVAR um planejamento, e
+    // quem lia não entendia o que a frase tinha a ver com o botão que apertou.
+    if (f) {
+      throw new BadRequestException(
+        `RDV do mês encerrado — ${acao ? `não dá para ${acao}. ` : ''}Reabra o mês (coordenador/supervisor de departamento) para voltar a mexer neste RDV.`,
+      );
+    }
   }
   /** Matrícula+nome do usuário logado (core, read-only) — usado no auto-serviço do
    *  supervisor (identifica o supervisor pelo próprio login, sem matrícula+senha). */
@@ -811,7 +824,7 @@ export class SupervisorService {
     // Mês encerrado: o `retirar da aprovação` já respeitava e o `enviar` não — dava para
     // colocar na fila do aprovador um planejamento de um mês cuja prestação de contas já
     // foi aceita (e que não aceita mais visita nem despesa). Reabra o mês para mexer nele.
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'enviar para aprovação');
     return this.prisma.viagem.update({ where: { id }, data: { statusPlanejamento: 'ENVIADO' } });
   }
 
@@ -837,7 +850,7 @@ export class SupervisorService {
     if (v.statusPlanejamento !== 'ENVIADO') {
       throw new BadRequestException('Só dá para puxar de volta um planejamento que está aguardando aprovação e ainda não foi decidido.');
     }
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'puxar de volta');
     // Volta a RASCUNHO e limpa o comentário de uma devolução anterior — ele se referia
     // à versão antiga e confundiria na próxima leitura.
     return this.prisma.viagem.update({
@@ -855,7 +868,7 @@ export class SupervisorService {
     // aprovador que passava por cima dele — e aprovava um planejamento que em seguida
     // não aceitaria visita nem despesa (o mês está encerrado), travando o representante
     // com um "aprovado" que não dá para executar. Reabrir o mês é o caminho.
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'decidir o planejamento');
     if (decisao !== 'APROVADO' && !comentario?.trim()) throw new BadRequestException('Informe o comentário do ajuste/rejeição.');
     return this.prisma.viagem.update({
       where: { id },
@@ -887,7 +900,7 @@ export class SupervisorService {
     if (v.statusPlanejamento === 'CONCLUIDO' || v.situacao === StatusViagem.CONCLUIDA) {
       throw new BadRequestException('Planejamento concluído — reabra (Supervisor de Departamento) antes de cancelar.');
     }
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'cancelar o planejamento');
     const aprovadas = await this.prisma.despesaVeiculo.count({ where: { viagemId: id, situacao: 'APROVADA' } });
     if (aprovadas > 0) {
       throw new BadRequestException(`Este planejamento tem ${aprovadas} despesa(s) já APROVADA(s) — resolva-as antes de cancelar (o valor já entrou na prestação de contas).`);
@@ -927,7 +940,7 @@ export class SupervisorService {
       throw new BadRequestException('Só devolve para reconfiguração planejamento aprovado ou em execução (no ENVIADO use Ajustar/Rejeitar).');
     }
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Planejamento concluído — reabra antes de devolver.');
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'devolver para reconfiguração');
     return this.prisma.viagem.update({
       where: { id },
       data: {
@@ -1087,9 +1100,17 @@ export class SupervisorService {
     // `souDono` separa planejar de executar na tela: o aprovador edita o roteiro,
     // mas apontar visita e concluir são do representante.
     const souDono = await this.ehDonoDoPlanejamento(v, user);
+    // `mesFechado`: a tela precisa SABER que o mês está encerrado (O2 da varredura de
+    // 21/08). Sem isto ela oferecia Aprovar, Lançar despesa e Incluir visita normalmente
+    // e o usuário só descobria depois do clique, no 400 — a mesma família "a tela promete
+    // o que a API nega" que estamos fechando desde 01/08.
+    const mesFechado = !!v.supervisorRegistroId && v.mesReferencia != null
+      && !!(await this.prisma.fechamentoRdv.findUnique({
+        where: { supervisorId_mesReferencia: { supervisorId: v.supervisorRegistroId, mesReferencia: v.mesReferencia } },
+      }));
     // Papel/departamento/aprovador: a tela chamava todo representante de "Supervisor".
     const [enriquecida] = await this.enriquecerRepresentantes([v], filialId);
-    return { ...enriquecida, kmTotalSaidas, souDono };
+    return { ...enriquecida, kmTotalSaidas, souDono, mesFechado };
   }
 
   // ---- Visitas (paradas) da viagem ----
@@ -1104,7 +1125,7 @@ export class SupervisorService {
     // e só o dono declara que esteve no cliente.
     if (v.statusPlanejamento === 'EM_EXECUCAO') await this.assertDonoDoPlanejamento(v, user);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para adicionar visitas.');
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'incluir visita');
     if (dto.atividadeId) {
       const a = await this.prisma.atividadeVisita.findUnique({ where: { id: dto.atividadeId } });
       if (!a || (a.filialId && a.filialId !== filialId)) throw new BadRequestException('Atividade inválida para esta filial.');
@@ -1183,7 +1204,7 @@ export class SupervisorService {
     const v = await this.planejamentoParaExecutar(viagemId, user);
     this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Planejamento concluído — reabra para apontar.');
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'apontar a visita');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
     if (dto.atividadeId) {
@@ -1224,7 +1245,7 @@ export class SupervisorService {
     this.assertNaoCancelado(v);
     await this.assertRoteiroEditavel(v, user);
     // Mês encerrado trava também a visita — `adicionar` e `apontar` já travavam.
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'remover a visita');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover visitas.');
@@ -1249,7 +1270,7 @@ export class SupervisorService {
     const v = await this.planejamentoDoDono(viagemId, user);
     this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para lançar despesas.');
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'lançar despesa');
     // Fila offline (app): reenvio com a mesma chave não duplica a despesa.
     if (dto.idempotencyKey) {
       const ja = await this.prisma.despesaVeiculo.findUnique({ where: { idempotencyKey: dto.idempotencyKey }, include: { tipoDespesa: { select: { nome: true, categoria: true } } } });
@@ -1325,7 +1346,7 @@ export class SupervisorService {
     // contas já fechada. `lancarDespesa` e `decidirAdiantamento` já respeitavam o
     // fechamento; esta rota não — dava para contestar uma despesa aprovada depois do
     // mês fechado e mudar o valor devido (reproduzido na varredura de 01/08).
-    await this.assertRdvAberto(d.viagem?.supervisorRegistroId, d.viagem?.mesReferencia);
+    await this.assertRdvAberto(d.viagem?.supervisorRegistroId, d.viagem?.mesReferencia, 'decidir a despesa');
     // ⭐ QUEM DECIDE É QUEM NÃO LANÇOU (01/08).
     //
     // No caminho normal o representante lança e a autoridade aprova. Mas a autoridade
@@ -1378,7 +1399,7 @@ export class SupervisorService {
     });
     if (!d || d.viagemId !== viagemId) throw new NotFoundException('Despesa não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para remover despesas.');
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'remover a despesa');
     // ⭐ Depois de DECIDIDA, só a autoridade apaga. Sem isto o representante apagava a
     // despesa que o coordenador tinha CONTESTADO e relançava limpa, como PENDENTE — a
     // rejeição sumia sem deixar rastro. Enquanto está pendente ele apaga à vontade: é
@@ -1458,7 +1479,7 @@ export class SupervisorService {
     this.assertNaoCancelado(v);
     await this.assertRoteiroEditavel(v, user);
     // Mês encerrado trava também a visita — `adicionar` e `apontar` já travavam.
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'editar a visita');
     const p = await this.prisma.parada.findUnique({ where: { id: paradaId } });
     if (!p || p.viagemId !== viagemId) throw new NotFoundException('Visita não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
@@ -1489,7 +1510,7 @@ export class SupervisorService {
     if (!d || d.viagemId !== viagemId) throw new NotFoundException('Despesa não encontrada.');
     if (v.situacao === StatusViagem.CONCLUIDA) throw new BadRequestException('Viagem concluída — reabra para editar.');
     // Mês encerrado não se mexe — `lancarDespesa` já respeitava isso, editar não.
-    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia);
+    await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'editar a despesa');
     // Trocar o tipo reclassifica a categoria → recalcula se tem veículo.
     let tipoId: string | undefined;
     let veiculoId: string | null | undefined;
@@ -1556,7 +1577,19 @@ export class SupervisorService {
     }
     const redecisao: Prisma.DespesaVeiculoUncheckedUpdateInput = {};
     if (mexeNoDinheiro && jaDecidida) {
-      const autoridade = await this.ehAutoridadeSobre(v.supervisorRegistro, user);
+      // ⭐ F1 (21/08): o re-carimbo só vale para quem PODERIA decidir esta despesa agora.
+      //
+      // Manter APROVADA ao editar é, na prática, decidir de novo — então tem de obedecer
+      // à mesma regra do `decidirDespesa`: QUEM LANÇOU NÃO APROVA O PRÓPRIO LANÇAMENTO.
+      // O furo apareceu no caminho em que a autoridade lança no RDV do representante:
+      // Fabricio lança R$ 12,34 (nasce PENDENTE) → Kelver confere (APROVADA, a conta é
+      // dele) → Fabricio edita para R$ 999,00 e a linha seguia APROVADA, agora carimbada
+      // pelo PRÓPRIO Fabricio. Editar + re-carimbar compunha exatamente a auto-aprovação
+      // que `decidirDespesa` barra na porta da frente (mesma família do `42bb60d6`).
+      //
+      // Sendo o autor, volta para PENDENTE e quem confere é o dono — que é quem paga.
+      const autoridade = await this.ehAutoridadeSobre(v.supervisorRegistro, user)
+        && d.criadoPorId !== user.sub;
       // Campos da DESPESA são aprovadoPorId/aprovadoEm (decididoPorId/decididoEm são
       // do Adiantamento) — trocar os dois derruba o update com 500.
       if (autoridade) {
@@ -1696,7 +1729,7 @@ export class SupervisorService {
     if (!sup || sup.filialId !== filialId) throw new BadRequestException('Supervisor inválido para esta filial.');
     await this.assertEscopoSupervisor(sup, user);
     if (dto.mesReferencia % 100 < 1 || dto.mesReferencia % 100 > 12) throw new BadRequestException('Mês de referência inválido (AAAAMM).');
-    await this.assertRdvAberto(dto.supervisorId, dto.mesReferencia);
+    await this.assertRdvAberto(dto.supervisorId, dto.mesReferencia, 'lançar adiantamento');
     // ⭐ Adiantamento é lançado por QUEM APROVA aquele representante — nunca por ele
     // mesmo (01/08, decisão do Clenio; fecha o item 2 do backlog de 27/07). O
     // auto-serviço tinha saído do app em 27/07 e continuava no desktop, nascendo
@@ -1736,7 +1769,7 @@ export class SupervisorService {
     const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true, departamentoId: true } } } });
     if (!a || a.supervisor.filialId !== filialId) throw new NotFoundException('Adiantamento não encontrado.');
     await this.assertPodeDecidir(a.supervisor, user);
-    await this.assertRdvAberto(a.supervisorId, a.mesReferencia);
+    await this.assertRdvAberto(a.supervisorId, a.mesReferencia, 'decidir o adiantamento');
     if (a.situacao !== 'PENDENTE') throw new BadRequestException('Este adiantamento já foi decidido.');
     const aprovar = decisao === 'APROVAR';
     if (!aprovar && !motivo?.trim()) throw new BadRequestException('Informe o motivo da rejeição.');
@@ -1761,7 +1794,7 @@ export class SupervisorService {
     const a = await this.prisma.adiantamento.findUnique({ where: { id }, include: { supervisor: { select: { filialId: true, coordenadorId: true, departamentoId: true, matricula: true } } } });
     if (!a || a.supervisor.filialId !== filialId) throw new NotFoundException('Adiantamento não encontrado.');
     await this.assertEscopoSupervisor(a.supervisor, user);
-    await this.assertRdvAberto(a.supervisorId, a.mesReferencia);
+    await this.assertRdvAberto(a.supervisorId, a.mesReferencia, 'remover o adiantamento');
     // ⭐ Adiantamento aprovado é DÍVIDA do representante: só o APROVADO entra no saldo,
     // então apagar aumenta o que a empresa deve a ele. Só a autoridade tira. Enquanto
     // PENDENTE (auto-serviço, ninguém decidiu) ele mesmo pode remover.
