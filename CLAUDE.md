@@ -111,6 +111,17 @@ Plataforma corporativa modular com microservicos independentes:
   4. **Adiantamento é lançado por quem aprova** — auto-serviço encerrado em 01/08, inclusive no desktop. Ninguém lança o próprio (nem o coordenador); só APROVADO entra no saldo.
   5. **Quem lançou corrige; quem não lançou CONTESTA.** A regra vale **nos dois sentidos** — inclusive para a autoridade, que até 22/08 escapava dela e reescrevia o valor do representante em silêncio (aprovava e depois mudava o número, sem reconferência). Editar valor/tipo/data/veículo é só de quem lançou (ADMIN é suporte); quem discorda devolve **com motivo** e quem lançou corrige. Campos que não são dinheiro (fornecedor, observação, comprovante) não reabrem a decisão.
   6. **Encerrar/reabrir o MÊS é ato de quem aprova**, nunca do dono da conta — e o mês encerrado **trava o ciclo inteiro**: criar, enviar, decidir, visita, despesa, liberar para execução, concluir, trocar veículo e reabrir planejamento. ⚠️ Ao mexer no módulo, lembre que a guarda de alcance (`assertEscopoSupervisor`, que inclui auto-serviço por matrícula) **não é** a de autoridade (`ehAutoridadeSobre`) — trocar uma pela outra já abriu três furos. Um **teste de invariante** varre o fonte do serviço e exige `assertRdvAberto` em todo método que escreve: método novo sem guard quebra a suíte.
+- **⭐ Mês do planejamento ≠ data de realização** (23/08): o planejamento é MENSAL, mas a
+  execução atravessa a virada (sai 30/08, volta 02/09). **Visita e despesa aceitam data
+  fora do mês** — quem ancora a prestação de contas é o `mesReferencia` do PLANEJAMENTO,
+  que é por onde a `rdvMensal` agrega. Só o **adiantamento** exige data no mês (ele não
+  pertence a um planejamento). Sobra uma checagem na despesa: **data no futuro** não
+  entra. ⚠️ O que de fato trava a execução tardia é o **mês encerrado** — não feche o mês
+  enquanto houver visita a executar (ou reabra).
+- **Concluir com visita não apontada**: a API **recusa e diz quantas são**; só encerra com
+  `confirmarPendentes`, e aí as PLANEJADAS viram **PULADA** com o motivo escrito. Antes
+  encerrava calado e a visita ficava "planejada" dentro de um planejamento concluído —
+  estado que some da conta de puladas, que é o número que o coordenador lê.
 - **Veículo na despesa do RDV**: cadastro do veículo aponta o **representante responsável** (coordenador OU supervisor de área, validado contra a Equipe e gravado em chapa `E00000`) → o planejamento **sugere** esse carro → a despesa **herda** e pode trocar. Categoria VEÍCULO **exige** veículo — antes o combustível do RDV nascia sem carro e sumia de Custos da Frota.
 - **Geolocalização de campo (Fase A)**: locais do cliente (`LocalCliente`) aprendidos das marcações de campo (consolidação por medóide, robusta a outlier) — o Protheus não tem esse dado. **SEDE** (visita técnica → tipo PROPRIEDADE) × **SILO/ponto de entrega** (entrega de ração rural → tipo ENTREGA) são locais distintos; entrega urbana não gera geo. "Ver no mapa" usa a coordenada consolidada. Gravar no Protheus = Fase C (futura). Ver `memory/project_geo_local_cliente.md`
 - **Despesa com vários comprovantes** (foto/PDF, até 5): tabela `anexo_despesa` (cofre/MinIO), padrão em supervisor + frota, web + app, convivendo com o comprovante único legado. Ver `memory/project_despesa_multi_anexo.md`
@@ -305,4 +316,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 22/08/2026*
+*Ultima atualizacao: 23/08/2026*
