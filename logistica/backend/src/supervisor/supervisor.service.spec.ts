@@ -2112,3 +2112,54 @@ describe('SupervisorService.concluirViagemSupervisor — visita pendente pede co
     expect(prisma.parada.updateMany).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * ⭐ A data da despesa não precisa cair no mês do planejamento (23/08).
+ *
+ * Levantado pelo Clenio: o planejamento é MENSAL, mas a execução pode atravessar a
+ * virada — sai 30/08, volta 02/09, abastece no dia 1º. A despesa é da viagem de agosto.
+ * Quem decide o mês da prestação de contas é o `mesReferencia` do PLANEJAMENTO; a data
+ * nunca decidiu isso, então a trava não protegia o fechamento — só barrava um caso real.
+ * A visita nunca teve essa trava: agora as duas seguem a mesma regra.
+ */
+describe('SupervisorService — despesa pode ter data no mês seguinte ao do planejamento', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const dono = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const plan = () => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    // Planejamento de JUNHO e despesa de JULHO: a virada já aconteceu, então a data é
+    // passada (o futuro segue barrado — ver o caso abaixo).
+    criadoPorId: 'u-rep', mesReferencia: 202606, supervisorRegistroId: 's1', veiculoId: 've1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.viagem.findUnique.mockResolvedValue(plan());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]);
+    prisma.tipoDespesa.findFirst.mockResolvedValue({ id: 't1', categoria: 'INDIVIDUO', ativo: true });
+    prisma.despesaVeiculo.create.mockResolvedValue({ id: 'd1' });
+  });
+
+  it('viagem que atravessa a virada: despesa de 01/07 num planejamento de 06/2026 é ACEITA', async () => {
+    await svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 80, data: '2026-07-01' } as any, dono());
+    expect(prisma.despesaVeiculo.create).toHaveBeenCalled();
+    const d = prisma.despesaVeiculo.create.mock.calls[0][0].data;
+    // o que decide o mês da RDV é o planejamento, não a data
+    expect(d.viagemId).toBe('v1');
+  });
+
+  it('data no FUTURO segue barrada — é o único erro que não aparece no relatório', async () => {
+    const amanha = new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    await expect(svc.lancarDespesa('v1', { tipoDespesaId: 't1', valor: 80, data: amanha } as any, dono()))
+      .rejects.toThrow(/no futuro/);
+    expect(prisma.despesaVeiculo.create).not.toHaveBeenCalled();
+  });
+
+  it('editar para uma data do mês seguinte também é aceito', async () => {
+    prisma.despesaVeiculo.findUnique.mockResolvedValue({ id: 'd1', viagemId: 'v1', situacao: 'PENDENTE', criadoPorId: 'u-rep', tipoDespesaId: 't1', veiculoId: null });
+    await svc.editarDespesa('v1', 'd1', { data: '2026-07-02' } as any, dono());
+    expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
+  });
+});

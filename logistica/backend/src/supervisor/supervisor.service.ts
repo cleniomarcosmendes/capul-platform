@@ -1344,7 +1344,14 @@ export class SupervisorService {
       if (!ve) throw new BadRequestException('Veículo da despesa não encontrado nesta filial.');
     }
     const dataDespesa = this.parseData(dto.data);
-    this.assertDataNoMes(dataDespesa, v.mesReferencia, 'despesa');
+    // A data da despesa NÃO precisa cair no mês do planejamento (23/08). Uma viagem que
+    // atravessa a virada (sai 30/08, volta 02/09) abastece no dia 1º, e essa despesa é
+    // da viagem de agosto. Quem decide o mês da prestação de contas é o `mesReferencia`
+    // do PLANEJAMENTO — a data nunca decidiu isso, então a trava não protegia o
+    // fechamento: só barrava um caso real. A visita nunca teve essa trava; agora as duas
+    // seguem a mesma regra (decisão do Clenio: "uma coisa é o mês de planejamento, outra
+    // é a data de realização"). Sobra o único erro que ninguém enxerga no relatório:
+    this.assertDataNaoFutura(dataDespesa, 'despesa');
     const d = await this.prisma.despesaVeiculo.create({
       data: {
         filialId,
@@ -1584,7 +1591,7 @@ export class SupervisorService {
       if (!ve) throw new BadRequestException('Veículo da despesa não encontrado nesta filial.');
     }
     // Editar a data também respeita o mês do planejamento (RDV é mensal).
-    if (dto.data !== undefined) this.assertDataNoMes(this.parseData(dto.data), v.mesReferencia, 'despesa');
+    if (dto.data !== undefined) this.assertDataNaoFutura(this.parseData(dto.data), 'despesa');
     // Troca do comprovante: sobe o novo e remove o antigo (best-effort).
     if (recibo) {
       if (d.comprovanteObjectKey) {
@@ -1987,8 +1994,27 @@ export class SupervisorService {
     const s = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // AAAA-MM-DD
     return Number(s.slice(0, 4)) * 100 + Number(s.slice(5, 7));
   }
-  /** Barra lançamento com data fora do mês do planejamento (RDV é mensal). */
-  private assertDataNoMes(d: Date, mesReferencia: number | null | undefined, rotulo: 'despesa' | 'adiantamento') {
+  /**
+   * Única checagem de data que sobrou no lançamento de despesa: o FUTURO.
+   *
+   * Data no futuro é sempre erro de digitação (não existe cupom de amanhã) e é o único
+   * engano que não aparece na leitura do RDV — o relatório agrega DIA × TIPO, e uma
+   * despesa de 2027 vai para o fim da grade sem chamar atenção. Custa uma linha e nunca
+   * dispara no uso legítimo.
+   */
+  private assertDataNaoFutura(d: Date, rotulo: 'despesa' | 'adiantamento') {
+    const hoje = new Date();
+    if (this.diaDaData(d) > this.diaDaData(hoje)) {
+      throw new BadRequestException(`Data da ${rotulo} está no futuro — confira o dia (e o ano).`);
+    }
+  }
+  /** AAAA-MM-DD (em -03:00) — comparável como texto. */
+  private diaDaData(d: Date): string {
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  }
+  /** Barra ADIANTAMENTO com data fora do mês (ele não pertence a um planejamento: o mês
+   *  vem do próprio lançamento, então a data é a única âncora que ele tem). */
+  private assertDataNoMes(d: Date, mesReferencia: number | null | undefined, rotulo: 'adiantamento') {
     if (!mesReferencia) return;
     const m = this.mesDaData(d);
     if (m !== mesReferencia) {
