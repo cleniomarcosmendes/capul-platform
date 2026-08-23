@@ -222,8 +222,15 @@ export function SupervisorViagemScreen({ route }: Props) {
   const sp = v?.statusPlanejamento ?? null;
   // Trava os lançamentos: concluída (histórico) OU cancelada — nos dois casos o backend
   // recusa visita/despesa, então a tela não pode oferecer o que vai dar erro.
-  const concluida = v?.situacao === 'CONCLUIDA' || sp === 'CANCELADO';
-  const emExecucao = sp === 'EM_EXECUCAO';
+  /**
+   * ⭐ Mês da prestação de contas ENCERRADO (22/08). O backend recusa TUDO neste RDV —
+   * visita, despesa, liberar para execução, concluir. O app não sabia disso: oferecia as
+   * ações e, pior, offline o lançamento ia para a FILA e voltava 400 depois, longe do
+   * cupom de papel. Entra na mesma trava de "concluída/cancelada".
+   */
+  const mesFechado = v?.mesFechado === true;
+  const concluida = v?.situacao === 'CONCLUIDA' || sp === 'CANCELADO' || mesFechado;
+  const emExecucao = sp === 'EM_EXECUCAO' && !mesFechado;
   // Quem aprova (coordenador / supervisor de departamento / admin) — usado só para
   // explicar que a decisão é no desktop. O app não aprova: é ferramenta de execução.
   const podeAprovar = role === 'COORDENADOR' || role === 'SUPERVISOR_FROTA' || role === 'ADMIN';
@@ -426,20 +433,27 @@ export function SupervisorViagemScreen({ route }: Props) {
           <Text style={styles.coment}>Coordenador: {v.comentarioCoordenador}</Text>
         )}
         <View style={styles.wfRow}>
-          {sp === 'APROVADO' && (
+          {sp === 'APROVADO' && !mesFechado && (
             <TouchableOpacity style={[styles.wfBtn, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(iniciarExecucaoApp, 'Viagem liberada para execução.')}><Text style={styles.wfBtnTxt}>Liberar para execução</Text></TouchableOpacity>
           )}
           {emExecucao && (
             <TouchableOpacity style={[styles.wfBtn, styles.wfBtnAlt, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(concluirPlanejamentoApp, 'Planejamento concluído.')}><Text style={[styles.wfBtnTxt, styles.wfBtnTxtAlt]}>Concluir</Text></TouchableOpacity>
           )}
         </View>
+        {mesFechado && (
+          <Text style={styles.cancelado}>
+            🔒 RDV de {fmtMes(v.mesReferencia)} encerrado — a prestação de contas do mês já foi aceita. Não dá para
+            lançar visita nem despesa, nem liberar/concluir. Quem aprova (coordenador ou supervisor de departamento)
+            precisa reabrir o mês.
+          </Text>
+        )}
         {sp === 'CANCELADO' && (
           <Text style={styles.cancelado}>
             ⛔ Planejamento cancelado{v.motivoCancelamento ? ` — ${v.motivoCancelamento}` : ''}. Não aceita mais visitas nem despesas.
           </Text>
         )}
         {(sp === 'RASCUNHO' || sp === 'AJUSTADO' || sp === 'REJEITADO' || sp === 'ENVIADO') && (
-          <Text style={styles.coment}>✎ O planejamento é montado e enviado ao coordenador no computador. Aqui você executa quando aprovado.</Text>
+          <Text style={styles.coment}>✎ O planejamento é montado e enviado para aprovação no computador. Aqui você executa quando aprovado.</Text>
         )}
         {/* O app é EXECUÇÃO: aprovar/ajustar/rejeitar e cancelar ficam no desktop. Sem
             este aviso, o coordenador abria um planejamento ENVIADO e não achava o que
@@ -508,7 +522,7 @@ export function SupervisorViagemScreen({ route }: Props) {
         <Text style={styles.hint}>Planejamento aprovado. Toque em “Liberar para execução” (no topo) para apontar as visitas como realizadas ou puladas.</Text>
       )}
       {sp === 'ENVIADO' && temPlanejadaPendente && (
-        <Text style={styles.hint}>Enviado — aguardando o coordenador aprovar. Depois você inicia a execução e aponta as visitas.</Text>
+        <Text style={styles.hint}>Enviado — aguardando aprovação. Depois você libera a execução e aponta as visitas.</Text>
       )}
       {v.paradas.length === 0 && <Text style={styles.vazio}>Nenhuma visita ainda.</Text>}
       {v.paradas.map((p) => {

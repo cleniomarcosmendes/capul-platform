@@ -13,6 +13,19 @@ import { adicionarVisitaApp, apontarVisitaApp, lancarDespesaApp, type NovaVisita
  * despesa carregam idempotencyKey (backend dedupe); apontar é por paradaId+status
  * (reexecutar é no-op). Política igual às outras filas: sucesso → remove; erro de
  * NEGÓCIO (4xx ≠ 401/408/429) → remove e reporta; rede/5xx/401 → mantém.
+ *
+ * ⭐ EXCEÇÃO: "RDV do mês encerrado" NÃO é rejeição definitiva (22/08).
+ *
+ * O 4xx vale como "não adianta reenviar" porque a rejeição é do lançamento em si. O mês
+ * encerrado é diferente: o lançamento está certo, quem o bloqueia é um ESTADO que a
+ * autoridade desfaz com um clique ("reabra o mês"). Tratá-lo como definitivo fazia o
+ * pior estrago possível — o representante lançava a despesa em campo, o coordenador
+ * encerrava o mês naquele dia, e a fila **descartava a despesa e APAGAVA as fotos do
+ * cupom** ao sincronizar. Dinheiro e evidência perdidos, e o cupom de papel já foi.
+ *
+ * Agora o item FICA na fila com o motivo à vista; quando o mês for reaberto ele sobe
+ * sozinho. Mesma lição de 10/08 (`filaBaixas`): fila que apaga prova é pior que fila
+ * que acumula.
  */
 export type AcaoSupervisor =
   | { tipo: 'visita'; viagemId: string; payload: NovaVisita }
@@ -112,11 +125,18 @@ export async function processarFilaSupervisor(): Promise<ResultadoFilaSupervisor
         enviadas++;
       } catch (err) {
         const status = isAxiosError(err) ? err.response?.status : undefined;
-        const negocio = status !== undefined && status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+        const msgSrv = (isAxiosError(err) && (err.response?.data as { message?: string } | undefined)?.message) || '';
+        // Bloqueio TEMPORÁRIO: o mês encerrado é desfeito por quem aprova. Segura o item
+        // (com as fotos) em vez de descartar — ver o cabeçalho.
+        const mesEncerrado = /mês encerrado|mes encerrado/i.test(msgSrv);
+        const negocio = status !== undefined && status >= 400 && status < 500
+          && status !== 401 && status !== 408 && status !== 429 && !mesEncerrado;
         if (negocio) {
-          const msg = (isAxiosError(err) && (err.response?.data as { message?: string } | undefined)?.message) || `Rejeitada (HTTP ${status}).`;
+          const msg = msgSrv || `Rejeitada (HTTP ${status}).`;
           if (item.acao.tipo === 'despesa') await apagarFotos(item.acao.fotoUris);
           descartadas.push({ rotulo: item.rotulo, motivo: String(msg) });
+        } else if (mesEncerrado) {
+          manter.push({ ...item, tentativas: item.tentativas + 1, ultimoErro: 'aguardando a reabertura do mês' });
         } else {
           manter.push({ ...item, tentativas: item.tentativas + 1, ultimoErro: status ? `HTTP ${status}` : 'sem conexão' });
         }

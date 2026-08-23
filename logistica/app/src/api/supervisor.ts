@@ -66,6 +66,13 @@ export interface ViagemSupDetalhe extends ViagemSup {
   paradas: VisitaSup[]; despesas: DespesaSup[];
   /** O logado é o representante DONO deste RDV (ou ADMIN). */
   souDono?: boolean;
+  /**
+   * Mês da prestação de contas já ENCERRADO. Com ele o backend recusa TUDO neste RDV
+   * (visita, despesa, liberar para execução, concluir) — a tela precisa saber para não
+   * oferecer, e principalmente para o lançamento não ir parar na fila offline, onde o
+   * 400 chegaria depois, longe do cupom de papel.
+   */
+  mesFechado?: boolean;
 }
 export interface AtividadeSup { id: string; nome: string; ativo?: boolean }
 export interface TipoDespesaSup { id: string; nome: string; categoria: string; ativo?: boolean }
