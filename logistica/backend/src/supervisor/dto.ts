@@ -20,6 +20,14 @@ export class DevolverPlanejamentoDto {
   @IsString() @IsNotEmpty() @MaxLength(500) comentario!: string;
 }
 
+/**
+ * Conclusão do planejamento. `confirmarPendentes` é o "sim, pode encerrar assim" para o
+ * caso de haver visita ainda PLANEJADA — sem ele o backend recusa e diz quantas são.
+ */
+export class ConcluirPlanejamentoDto {
+  @IsOptional() @IsBoolean() confirmarPendentes?: boolean;
+}
+
 // ---- Adiantamento (mensal, vários) ----
 export class LancarAdiantamentoDto {
   @IsString() @IsNotEmpty() @MaxLength(40) supervisorId!: string;

@@ -4,7 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { SupervisorService } from './supervisor.service.js';
 import type { ReciboBinario } from '../despesa/despesa.service.js';
-import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DefinirSupervisorDepartamentoDto, DefinirVeiculoPlanejamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
+import { AdicionarVisitaDto, ApontarVisitaDto, AtualizarAtividadeDto, ConcluirPlanejamentoDto, AtualizarSupervisorDto, CancelarPlanejamentoDto, CriarAtividadeDto, CriarSupervisorDto, CriarViagemSupervisorDto, DecidirAdiantamentoDto, DecidirDespesaDto, DecidirPlanejamentoDto, DefinirSupervisorDepartamentoDto, DefinirVeiculoPlanejamentoDto, DevolverPlanejamentoDto, EditarDespesaSupervisorDto, LancarAdiantamentoDto, LancarDespesaSupervisorDto } from './dto.js';
 
 /** Converte o arquivo do multer no binário do comprovante (ou undefined). */
 const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
@@ -117,8 +117,10 @@ export class SupervisorController {
   // departamento/coordenação) é aplicado no serviço.
   @Patch('viagens/:id/concluir')
   @Roles('SUPERVISOR', 'COORDENADOR', 'SUPERVISOR_FROTA')
-  concluirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.svc.concluirViagemSupervisor(id, user);
+  concluirViagem(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body() dto?: ConcluirPlanejamentoDto) {
+    // Body opcional: o cliente antigo conclui sem corpo e, havendo visita pendente,
+    // recebe o 400 que pede a confirmação — em vez de encerrar calado.
+    return this.svc.concluirViagemSupervisor(id, user, dto?.confirmarPendentes);
   }
 
   // ---- Workflow do planejamento (6b) ----

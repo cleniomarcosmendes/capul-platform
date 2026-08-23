@@ -235,9 +235,29 @@ export function SupervisorViagemScreen({ route }: Props) {
   // explicar que a decisão é no desktop. O app não aprova: é ferramenta de execução.
   const podeAprovar = role === 'COORDENADOR' || role === 'SUPERVISOR_FROTA' || role === 'ADMIN';
   // Aprovado mas ainda não iniciado: há visitas planejadas esperando o "Liberar para execução".
-  const temPlanejadaPendente = (v?.paradas ?? []).some(
+  const planejadasPendentes = (v?.paradas ?? []).filter(
     (p) => (p.status ?? 'PLANEJADA') === 'PLANEJADA' && visitasNaFila[p.id] == null,
   );
+  const temPlanejadaPendente = planejadasPendentes.length > 0;
+  /**
+   * ⭐ Concluir sem apontar (22/08): antes encerrava calado e a visita ficava PLANEJADA
+   * dentro de um planejamento CONCLUÍDO. Agora pergunta — e o backend só aceita com o
+   * confirmarPendentes, marcando as pendentes como PULADA com o motivo escrito.
+   * Conta descontando o que já está na FILA offline: o que ele apontou sem sinal já
+   * foi feito, e perguntar por isso seria a tela ignorando o próprio aparelho.
+   */
+  const concluirComPergunta = () => {
+    const n = planejadasPendentes.length;
+    if (n === 0) { void acao((id) => concluirPlanejamentoApp(id), 'Planejamento concluído.'); return; }
+    Alert.alert(
+      `Concluir com ${n} visita(s) sem apontamento?`,
+      `Você não apontou ${n} visita(s) do roteiro. Concluindo agora, elas entram no relatório do mês como NÃO REALIZADAS. Se foram feitas, volte e aponte cada uma.`,
+      [
+        { text: 'Voltar e apontar', style: 'cancel' },
+        { text: 'Concluir assim mesmo', style: 'destructive', onPress: () => void acao((id) => concluirPlanejamentoApp(id, true), `Concluído — ${n} visita(s) marcada(s) como não realizada(s).`) },
+      ],
+    );
+  };
 
   const limparVisita = () => { setCliNome(''); setMuni(''); setAtivId(''); setProp(''); setVObs(''); };
 
@@ -437,7 +457,7 @@ export function SupervisorViagemScreen({ route }: Props) {
             <TouchableOpacity style={[styles.wfBtn, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(iniciarExecucaoApp, 'Viagem liberada para execução.')}><Text style={styles.wfBtnTxt}>Liberar para execução</Text></TouchableOpacity>
           )}
           {emExecucao && (
-            <TouchableOpacity style={[styles.wfBtn, styles.wfBtnAlt, agindo && styles.btnOff]} disabled={agindo} onPress={() => void acao(concluirPlanejamentoApp, 'Planejamento concluído.')}><Text style={[styles.wfBtnTxt, styles.wfBtnTxtAlt]}>Concluir</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.wfBtn, styles.wfBtnAlt, agindo && styles.btnOff]} disabled={agindo} onPress={concluirComPergunta}><Text style={[styles.wfBtnTxt, styles.wfBtnTxtAlt]}>Concluir</Text></TouchableOpacity>
           )}
         </View>
         {mesFechado && (

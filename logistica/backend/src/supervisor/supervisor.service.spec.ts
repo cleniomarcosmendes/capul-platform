@@ -2055,3 +2055,60 @@ describe('SupervisorService — mês encerrado trava também EXECUTAR', () => {
     expect(prisma.viagem.update.mock.calls[1][0].data.statusPlanejamento).toBe('CONCLUIDO');
   });
 });
+
+/**
+ * ⭐ Concluir com visita PENDENTE (22/08, relato do Clenio no planejamento #58).
+ *
+ * Ele concluiu sem apontar a visita: o sistema encerrou calado e a visita ficou
+ * PLANEJADA dentro de um planejamento CONCLUÍDO — estado que mente nas duas leituras
+ * (parece "a fazer" numa viagem que acabou, e some da conta de visitas puladas, que é o
+ * número que o coordenador usa para saber o que não aconteceu no campo).
+ */
+describe('SupervisorService.concluirViagemSupervisor — visita pendente pede confirmação', () => {
+  let prisma: any;
+  let svc: SupervisorService;
+  const dono = () => ({ sub: 'u-rep', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR' }] }) as any;
+  const plan = () => ({
+    id: 'v1', tipo: 'SUPERVISOR', filialId: 'f1', situacao: 'EM_CURSO', statusPlanejamento: 'EM_EXECUCAO',
+    criadoPorId: 'u-rep', mesReferencia: 202608, supervisorRegistroId: 's1',
+    supervisorRegistro: { coordenadorId: 'u-coord', matricula: 'E01047', departamentoId: 'd1' },
+  });
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new SupervisorService(prisma, condutorMock(), coreMock(), storageMock(), locaisMock());
+    prisma.viagem.findUnique.mockResolvedValue(plan());
+    prisma.$queryRaw.mockResolvedValue([{ matricula: 'E01047', nome: 'Rep' }]); // logado = dono
+    prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
+  });
+
+  it('com visita PLANEJADA e sem confirmação → 400 dizendo QUANTAS são (a tela precisa do número)', async () => {
+    prisma.parada.count.mockResolvedValue(3);
+    await expect(svc.concluirViagemSupervisor('v1', dono())).rejects.toThrow(/3 visita\(s\) sem apontamento/);
+    expect(prisma.viagem.update).not.toHaveBeenCalled();
+    expect(prisma.parada.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('confirmando: as pendentes viram PULADA com o motivo escrito, e o planejamento conclui', async () => {
+    prisma.parada.count.mockResolvedValue(2);
+    await svc.concluirViagemSupervisor('v1', dono(), true);
+    const upd = prisma.parada.updateMany.mock.calls[0][0];
+    expect(upd.where).toEqual({ viagemId: 'v1', status: 'PLANEJADA' });
+    expect(upd.data.status).toBe('PULADA');
+    expect(upd.data.motivoPulada).toMatch(/Não realizada/);
+    expect(prisma.viagem.update.mock.calls[0][0].data.statusPlanejamento).toBe('CONCLUIDO');
+  });
+
+  it('sem visita pendente conclui direto — e não toca em parada nenhuma', async () => {
+    prisma.parada.count.mockResolvedValue(0);
+    await svc.concluirViagemSupervisor('v1', dono());
+    expect(prisma.parada.updateMany).not.toHaveBeenCalled();
+    expect(prisma.viagem.update.mock.calls[0][0].data.situacao).toBe('CONCLUIDA');
+  });
+
+  it('mês encerrado continua barrando ANTES de qualquer pergunta sobre visita', async () => {
+    prisma.fechamentoRdv.findUnique.mockResolvedValue({ supervisorId: 's1', mesReferencia: 202608 });
+    prisma.parada.count.mockResolvedValue(3);
+    await expect(svc.concluirViagemSupervisor('v1', dono(), true)).rejects.toThrow(/RDV do mês encerrado/);
+    expect(prisma.parada.updateMany).not.toHaveBeenCalled();
+  });
+});

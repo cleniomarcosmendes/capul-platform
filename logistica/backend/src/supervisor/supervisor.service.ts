@@ -1259,15 +1259,53 @@ export class SupervisorService {
     return { ok: true };
   }
 
-  async concluirViagemSupervisor(id: string, user: JwtPayload) {
+  /**
+   * ⭐ CONCLUIR COM VISITA PENDENTE: pergunta antes, e não deixa estado mentiroso (22/08).
+   *
+   * Relatado pelo Clenio no planejamento #58: ele concluiu sem apontar a visita, o
+   * sistema encerrou calado e a visita ficou **PLANEJADA dentro de um planejamento
+   * CONCLUÍDO** — um estado que mente nas duas leituras. No relatório mensal de visitas
+   * ela aparece como algo "a fazer" de uma viagem que acabou; e some da conta de
+   * visitas puladas, que é justamente o número que o coordenador usa para saber o que
+   * não aconteceu no campo.
+   *
+   * Duas coisas, então:
+   *
+   * 1. **Recusa e conta**: havendo visita PLANEJADA, a conclusão pede confirmação
+   *    explícita (`confirmarPendentes`). Sem ela o backend responde 400 dizendo
+   *    QUANTAS são — é a tela que transforma isso em "tem 3 visitas sem apontamento,
+   *    confirma?". Uma API que encerra em silêncio não dá à tela como perguntar.
+   *
+   * 2. **Fecha o estado**: confirmando, as pendentes viram PULADA com o motivo escrito
+   *    — não realizadas porque a viagem foi encerrada. Continua sendo o representante
+   *    quem conclui (é execução), e o rastro fica: quem lê o mês vê "pulada" e o porquê,
+   *    em vez de uma visita eternamente planejada.
+   *
+   * Quem quer apontar uma a uma segue podendo: basta não confirmar e voltar à lista.
+   */
+  async concluirViagemSupervisor(id: string, user: JwtPayload, confirmarPendentes?: boolean) {
     // Concluir encerra a execução — mesmo dono de `apontarVisita`.
     const v = await this.planejamentoParaExecutar(id, user);
     this.assertNaoCancelado(v);
     if (v.situacao === StatusViagem.CONCLUIDA) return v;
     await this.assertRdvAberto(v.supervisorRegistroId, v.mesReferencia, 'concluir o planejamento');
-    return this.prisma.viagem.update({
-      where: { id },
-      data: { situacao: StatusViagem.CONCLUIDA, statusPlanejamento: 'CONCLUIDO', dataHoraChegada: new Date() },
+    const pendentes = await this.prisma.parada.count({ where: { viagemId: id, status: 'PLANEJADA' } });
+    if (pendentes > 0 && !confirmarPendentes) {
+      throw new BadRequestException(
+        `Este planejamento tem ${pendentes} visita(s) sem apontamento. Aponte cada uma como realizada ou pulada — ou confirme a conclusão, e elas entram como NÃO REALIZADAS.`,
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      if (pendentes > 0) {
+        await tx.parada.updateMany({
+          where: { viagemId: id, status: 'PLANEJADA' },
+          data: { status: 'PULADA', motivoPulada: 'Não realizada — planejamento concluído sem apontamento.' },
+        });
+      }
+      return tx.viagem.update({
+        where: { id },
+        data: { situacao: StatusViagem.CONCLUIDA, statusPlanejamento: 'CONCLUIDO', dataHoraChegada: new Date() },
+      });
     });
   }
 

@@ -175,7 +175,14 @@ export async function criarPlanejamentoApp(mesReferencia: number, veiculoId?: st
 /** Workflow do supervisor: enviar ao coordenador · iniciar execução · concluir. */
 export async function enviarPlanejamentoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/enviar`); }
 export async function iniciarExecucaoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/iniciar`); }
-export async function concluirPlanejamentoApp(id: string): Promise<void> { await api.patch(`${B}/viagens/${id}/concluir`); }
+/**
+ * Concluir. `confirmarPendentes` é o aceite de encerrar com visita ainda PLANEJADA —
+ * sem ele o backend recusa (400) dizendo quantas são, para a tela poder perguntar.
+ * Confirmando, as pendentes entram como PULADA com o motivo registrado.
+ */
+export async function concluirPlanejamentoApp(id: string, confirmarPendentes = false): Promise<void> {
+  await api.patch(`${B}/viagens/${id}/concluir`, { confirmarPendentes });
+}
 
 /** Cadastro do supervisor logado (auto-serviço) — null se ainda não montado no time. */
 export async function meuCadastroSup(): Promise<MeuCadastroSup | null> {

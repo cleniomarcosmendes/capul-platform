@@ -276,6 +276,8 @@ export function SupervisorViagemPage() {
    * some com os botões de decisão logo abaixo.
    */
   const mesFechado = v?.mesFechado === true;
+  /** Visitas que ninguém apontou (nem realizada, nem pulada) — o que a conclusão vai fechar. */
+  const visitasPendentes = (v?.paradas ?? []).filter((p) => (p.status ?? 'PLANEJADA') === 'PLANEJADA').length;
   const travada = v?.situacao === 'CONCLUIDA' || v?.statusPlanejamento === 'CANCELADO' || mesFechado;
   // Fase de planejamento (espelha o backend): a visita adicionada aqui nasce PLANEJADA
   // (monta o roteiro). Fora disso ela nasce REALIZADA (visita de fato, em campo).
@@ -410,6 +412,8 @@ export function SupervisorViagemPage() {
    * apontada/despesa com comprovante não voltam. As outras telas do módulo já usam o
    * ConfirmDialog; aqui faltava.
    */
+  /** Conclusão com visita ainda PLANEJADA: pergunta antes (o backend recusa sem o aceite). */
+  const [confirmarConclusao, setConfirmarConclusao] = useState(false);
   const [visitaParaRemover, setVisitaParaRemover] = useState<Visita | null>(null);
   const [despParaRemover, setDespParaRemover] = useState<DespesaV | null>(null);
   const [relatoVisita, setRelatoVisita] = useState<Visita | null>(null);
@@ -436,10 +440,18 @@ export function SupervisorViagemPage() {
       await carregar();
     } catch (e) { falhou(e, 'Falha ao trocar o veículo.'); }
   };
-  const concluir = async () => {
-    try { await logisticaApi.patch(`/supervisor/viagens/${id}/concluir`); toast('success', 'Viagem concluída.'); await carregar(); }
-    catch (e) { falhou(e, 'Falha ao concluir.'); }
+  const concluir = async (confirmarPendentes = false) => {
+    try {
+      await logisticaApi.patch(`/supervisor/viagens/${id}/concluir`, { confirmarPendentes });
+      toast('success', confirmarPendentes && visitasPendentes > 0
+        ? `Planejamento concluído — ${visitasPendentes} visita(s) marcada(s) como não realizada(s).`
+        : 'Planejamento concluído.');
+      setConfirmarConclusao(false);
+      await carregar();
+    } catch (e) { setConfirmarConclusao(false); falhou(e, 'Falha ao concluir.'); }
   };
+  /** Tem visita sem apontamento? Pergunta. Senão, conclui direto. */
+  const pedirConclusao = () => { if (visitasPendentes > 0) setConfirmarConclusao(true); else void concluir(); };
   const reabrir = async () => {
     try {
       await logisticaApi.patch(`/supervisor/viagens/${id}/reabrir`);
@@ -648,7 +660,7 @@ export function SupervisorViagemPage() {
           {v.statusPlanejamento === 'APROVADO' && v.souDono !== false && !mesFechado &&
             <button onClick={() => void iniciar()} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700" title="Libera o apontamento das visitas em campo (app)">Liberar para execução</button>}
           {v.statusPlanejamento === 'EM_EXECUCAO' && v.souDono !== false && !mesFechado &&
-            <button onClick={() => void concluir()} className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Concluir</button>}
+            <button onClick={pedirConclusao} className="rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100">Concluir</button>}
           {/* Reabrir é ato de QUEM APROVA (coordenador do representante / supervisor de
               departamento). Sem este gate o botão aparecia para todo mundo — inclusive
               para o próprio representante, que tomava 403 ao clicar. */}
@@ -1079,6 +1091,15 @@ export function SupervisorViagemPage() {
 
       {/* O6: as duas remoções pedem confirmação — visita apontada e despesa com
           comprovante não voltam depois de apagadas. */}
+      <ConfirmDialog
+        open={confirmarConclusao}
+        titulo={`Concluir com ${visitasPendentes} visita(s) sem apontamento?`}
+        mensagem={`Você não apontou ${visitasPendentes} visita(s) do roteiro. Concluindo agora, elas entram no relatório do mês como NÃO REALIZADAS, com o motivo registrado. Se foram feitas, volte e aponte cada uma antes de concluir.`}
+        confirmLabel="Concluir assim mesmo"
+        cancelLabel="Voltar e apontar"
+        onConfirm={() => void concluir(true)}
+        onCancel={() => setConfirmarConclusao(false)}
+      />
       <ConfirmDialog
         open={!!visitaParaRemover}
         titulo="Remover a visita?"
