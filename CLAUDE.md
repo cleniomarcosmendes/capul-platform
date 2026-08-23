@@ -136,6 +136,16 @@ Plataforma corporativa modular com microservicos independentes:
   1º toque); e `removeClippedSubviews={false}` nas listas — no Android o padrão
   desanexa o item, que continua visível e **para de receber toque**. Ver
   `memory/project_app_baixa_travamento_14ago.md`.
+- **⭐ Fila offline: 4xx de CONTEÚDO ≠ 4xx de ESTADO** (22–23/08). Rejeição do lançamento
+  ("informe o veículo") é definitiva → descarta. Bloqueio de estado (**"mês encerrado"**,
+  **"acerto encerrado"**) é temporário — quem desfaz é a autoridade com um clique: o item
+  **fica na fila com as fotos** e sobe quando reabrirem. Tratado como definitivo, o app
+  descartava a despesa e **apagava o cupom** com o papel já no lixo (vale para
+  `filaSupervisor` e `filaFrota`).
+- **⭐ Quem registra a saída do veículo lança a despesa dela**: COORDENADOR e SUPERVISOR
+  entram nas rotas de despesa da frota (`POST /despesas/viagem`, `PATCH`/`DELETE`
+  `/despesas/:id`, `GET /despesas/fornecedores`) — o escopo por viagem fica no serviço
+  (`assertOpera`). Sem isso o ciclo ficava partido: saída ✅ → despesa 🔴 → retorno ✅.
 - **⚠️ App: `expo-image-manipulator` é módulo NATIVO** — exige **APK novo**; OTA
   sobre o APK antigo derruba o app instalado (`runtimeVersion` fixo em 1.0.0).
 - **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota. A precisão de cada parada é exibida na montagem (o fallback de município fica a ~1,2 km e reordenava a rota), e o operador **corrige a coordenada arrastando o pin** — gravado no **cache de geocode** (`fonte=MANUAL`), então vale para as próximas entregas no mesmo endereço e sobrevive ao recálculo.
@@ -316,4 +326,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 23/08/2026*
+*Ultima atualizacao: 23/08/2026 (revisao pre-HLG)*
