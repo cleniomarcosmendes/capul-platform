@@ -195,11 +195,27 @@ export async function processarFilaFrota(): Promise<ResultadoFilaFrota> {
           manter.push({ ...item, tentativas: item.tentativas + 1, ultimoErro: 'identificação do condutor vencida', precisaCondutor: true });
           continue;
         }
-        const negocio = status !== undefined && status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+        const msgSrv = (isAxiosError(err) && (err.response?.data as { message?: string } | undefined)?.message) || '';
+        /**
+         * ⭐ Bloqueio TEMPORÁRIO ≠ rejeição do lançamento (23/08 — mesma correção que a
+         * fila do supervisor recebeu em 22/08).
+         *
+         * "Acerto encerrado — reabra o acerto para lançar despesas" não recusa a despesa:
+         * recusa o MOMENTO, e quem desfaz é o gestor com um clique. Tratado como
+         * definitivo, o condutor abastecia em campo, o acerto era encerrado no escritório
+         * naquele dia, e a sincronização **descartava a despesa e apagava as fotos do
+         * cupom** — com o papel já no lixo. Fila que apaga prova é pior que fila que
+         * acumula: o item fica, com as fotos, e sobe quando reabrirem.
+         */
+        const temporario = /acerto encerrado|mês encerrado|mes encerrado/i.test(msgSrv);
+        const negocio = status !== undefined && status >= 400 && status < 500
+          && status !== 401 && status !== 408 && status !== 429 && !temporario;
         if (negocio) {
-          const msg = (isAxiosError(err) && (err.response?.data as { message?: string } | undefined)?.message) || `Rejeitada (HTTP ${status}).`;
+          const msg = msgSrv || `Rejeitada (HTTP ${status}).`;
           if (item.acao.tipo === 'despesa') await apagarFotos(item.acao.fotoUris);
           descartadas.push({ rotulo: item.rotulo, motivo: String(msg) });
+        } else if (temporario) {
+          manter.push({ ...item, tentativas: item.tentativas + 1, ultimoErro: 'aguardando a reabertura do acerto' });
         } else {
           manter.push({ ...item, tentativas: item.tentativas + 1, ultimoErro: status ? `HTTP ${status}` : 'sem conexão' });
         }

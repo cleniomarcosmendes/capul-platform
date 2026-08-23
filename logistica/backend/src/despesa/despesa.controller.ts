@@ -67,7 +67,9 @@ export class DespesaController {
   // ---- Fornecedores (cadastro próprio da logística) ----
   // Leitura liberada ao REGISTRADOR_FROTA — escolhe o fornecedor ao lançar despesa.
   @Get('fornecedores')
-  @Roles('REGISTRADOR_FROTA', 'ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  // COORDENADOR/SUPERVISOR entram junto com o lançamento (ver o POST 'viagem'): sem a
+  // lista, o seletor de posto abria VAZIO e em silêncio (o .catch da tela engole o 403).
+  @Roles('REGISTRADOR_FROTA', 'ENTREGADOR', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA', 'COORDENADOR', 'SUPERVISOR')
   listarFornecedores(@Query('ativos') ativos?: string) {
     return this.despesas.listarFornecedores(ativos === 'true' || ativos === '1');
   }
@@ -140,7 +142,20 @@ export class DespesaController {
   /** Lançamento na viagem em curso → PENDENTE (herda o condutor da viagem). Recibos opcionais. */
   @Post('viagem')
   // Operacional: o REGISTRADOR_FROTA pode lançar na viagem (vira PENDENTE → supervisor aprova).
-  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  //
+  // ⭐ COORDENADOR e SUPERVISOR entraram em 24/08. Eles já REGISTRAVAM a saída do veículo
+  // (o menu "Registro de Viagem" os inclui e o `POST /frota/viagens/individual` aceita) e
+  // já REGISTRAVAM o retorno — mas o abastecimento DAQUELA viagem dava 403. O ciclo
+  // ficava partido no meio: saída ✅ → despesa 🔴 → retorno ✅, e o combustível do
+  // representante nunca chegava em Custos da Frota. Pior no APP, onde a despesa vai para
+  // a fila offline e o 403 só volta na sincronização — quando a fila descarta o
+  // lançamento E as fotos do cupom.
+  //
+  // Não abre nada: quem escopa é o serviço (`assertOpera` → só a viagem que a pessoa
+  // registrou, ou o veículo sob supervisão dela). O papel só decide se ela ALCANÇA a
+  // rota. Mesmo motivo do `GET tipos`, que já tinha os dois — a lista foi corrigida e o
+  // lançamento não (papel novo não revisitado nas listas).
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA', 'COORDENADOR', 'SUPERVISOR')
   @UseInterceptors(AnyFilesInterceptor({ limits: { fileSize: 15 * 1024 * 1024, files: 5 } }))
   lancarNaViagem(
     @Body() dto: LancarDespesaViagemDto,
@@ -186,7 +201,8 @@ export class DespesaController {
   /** Editar despesa: gestor de frota / supervisor do veículo / supervisor do
    *  departamento — ou o CONDUTOR que se identificou nesta viagem (login PADRÃO). */
   @Patch(':id')
-  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  // Idem: quem lança precisa corrigir. O escopo por viagem está em `assertPodeMexerNoAcerto`.
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA', 'COORDENADOR', 'SUPERVISOR')
   atualizar(
     @Param('id') id: string,
     @Body() dto: AtualizarDespesaDto,
@@ -198,7 +214,7 @@ export class DespesaController {
 
   /** Excluir despesa — mesma regra do editar. */
   @Delete(':id')
-  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA')
+  @Roles('REGISTRADOR_FROTA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVISOR_FROTA', 'COORDENADOR', 'SUPERVISOR')
   excluir(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,

@@ -1,4 +1,5 @@
-import { enfileirarFrota, paradasNaFilaFrota, retornosNaFilaFrota, paradasAvulsasNaFila, contarPendentesFrota } from '../filaFrota';
+import { enfileirarFrota, paradasNaFilaFrota, retornosNaFilaFrota, paradasAvulsasNaFila, contarPendentesFrota, processarFilaFrota } from '../filaFrota';
+import { lancarDespesaViagem } from '../../api/frota';
 
 /**
  * O que estes testes protegem: **o que foi feito sem sinal tem de APARECER.**
@@ -130,5 +131,43 @@ describe('identificação do condutor vencida (viagem de vários dias)', () => {
     api.adicionarParadaFrota.mockRejectedValueOnce(erro403);
     const r = await processarFilaFrota();
     expect(r.descartadas).toHaveLength(1); // permissão de verdade, não identificação vencida
+  });
+});
+
+/**
+ * ⭐ Bloqueio TEMPORÁRIO não descarta (23/08) — irmão do teste da fila do supervisor.
+ *
+ * "Acerto encerrado" não recusa a despesa, recusa o MOMENTO: quem desfaz é o gestor.
+ * Tratado como definitivo, a sincronização apagava a despesa E as fotos do cupom, com o
+ * papel já no lixo.
+ */
+describe('filaFrota — acerto encerrado segura o item em vez de descartar', () => {
+  const erro = (status: number, message: string) => Object.assign(new Error(message), {
+    isAxiosError: true, response: { status, data: { message } },
+  });
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    let r = await processarFilaFrota();
+    while (r.restantes > 0) {
+      (lancarDespesaViagem as jest.Mock).mockResolvedValue({});
+      r = await processarFilaFrota();
+    }
+  });
+
+  it('“Acerto encerrado” mantém a despesa e as fotos na fila', async () => {
+    await enfileirarFrota({ id: 'x1', rotulo: 'Despesa: Posto', acao: { tipo: 'despesa', viagemId: 'v1', payload: {} as never, fotoUris: [] } });
+    (lancarDespesaViagem as jest.Mock).mockRejectedValue(erro(400, 'Acerto encerrado — reabra o acerto para lançar despesas.'));
+    const r = await processarFilaFrota();
+    expect(r.descartadas).toHaveLength(0);
+    expect(await contarPendentesFrota()).toBe(1);
+  });
+
+  it('rejeição de conteúdo segue descartando', async () => {
+    await enfileirarFrota({ id: 'x2', rotulo: 'Despesa: Posto', acao: { tipo: 'despesa', viagemId: 'v1', payload: {} as never, fotoUris: [] } });
+    (lancarDespesaViagem as jest.Mock).mockRejectedValue(erro(400, 'Viagem sem veículo.'));
+    const r = await processarFilaFrota();
+    expect(r.descartadas).toHaveLength(1);
+    expect(await contarPendentesFrota()).toBe(0);
   });
 });
