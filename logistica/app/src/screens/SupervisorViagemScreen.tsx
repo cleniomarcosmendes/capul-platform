@@ -445,7 +445,7 @@ export function SupervisorViagemScreen({ route }: Props) {
             este aviso, o coordenador abria um planejamento ENVIADO e não achava o que
             fazer — a única pendência da tela era justamente a que ele não pode resolver aqui. */}
         {sp === 'ENVIADO' && podeAprovar && (
-          <Text style={styles.coment}>🖥️ A aprovação é feita no computador (Entregas › Supervisores › Coordenação). O app é para a execução em campo.</Text>
+          <Text style={styles.coment}>🖥️ A aprovação é feita no computador (Entregas › Prestação de Contas (RDV) › Coordenação). O app é para a execução em campo.</Text>
         )}
       </View>
 
@@ -469,9 +469,17 @@ export function SupervisorViagemScreen({ route }: Props) {
               </View>
             );
           })}
-          {/* Adiantamento é SÓ LEITURA no app (27/07): lançar/remover ficou no desktop.
-              A lista fica porque é ela que explica o saldo da RDV para quem está em campo. */}
-          <Text style={styles.coment}>💻 O lançamento do adiantamento é feito no computador (Entregas › Supervisores).</Text>
+          {/* Adiantamento é SÓ LEITURA no app. A lista fica porque é ela que explica o
+              saldo da RDV para quem está em campo.
+
+              ⚠️ A mensagem daqui dizia "é feito no computador (Entregas › Supervisores)" e
+              estava errada em dois níveis (22/08). O menu chama-se **Prestação de Contas
+              (RDV)** desde então — mas o pior é que a frase falava de ONDE quando a regra é
+              sobre QUEM: em 27/07 o auto-serviço saiu do app e em **01/08 saiu também do
+              desktop** (regra 4). O representante não lança o próprio adiantamento em lugar
+              nenhum; quem lança é quem aprova. Mandá-lo ao computador só o faria procurar
+              um formulário que não existe para ele. */}
+          <Text style={styles.coment}>💰 O adiantamento é lançado por quem aprova a sua prestação de contas (coordenador ou supervisor de departamento) — peça a ele. Aqui você acompanha.</Text>
         </View>
       )}
 
