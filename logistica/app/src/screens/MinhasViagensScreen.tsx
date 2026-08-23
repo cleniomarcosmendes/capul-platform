@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation';
 import { minhasViagens } from '../api/viagens';
+import { useAuth } from '../auth/AuthContext';
 import { comCache } from '../offline/cacheLeitura';
 import { mostrarAvisosPendentes } from '../offline/mostrarAvisos';
 import { FaixaOffline } from '../components/FaixaOffline';
@@ -25,6 +26,22 @@ const CAPUL = '#1e7d3a';
 type Props = NativeStackScreenProps<RootStackParamList, 'MinhasViagens'>;
 
 export function MinhasViagensScreen({ navigation }: Props) {
+  /**
+   * ⭐ QUEM ESTÁ LOGADO, À VISTA (23/08).
+   *
+   * O celular é do VEÍCULO, não do entregador — então a sessão de quem saiu ontem
+   * continua aberta para quem pega o carro hoje. Sem o nome na tela, o motorista novo
+   * roda o dia inteiro e TODAS as baixas ficam assinadas com o nome do anterior: a
+   * prova de entrega aponta para a pessoa errada, e não há como saber depois.
+   *
+   * O "Sair" existia só no Início; aqui ele fica onde o turno começa.
+   */
+  const { nome, logout } = useAuth();
+  const trocarUsuario = () => Alert.alert(
+    'Encerrar a sessão?',
+    `Você está usando o app como ${nome ?? 'este usuário'}. Encerre para o próximo motorista entrar com a matrícula dele — as baixas ficam no nome de quem está logado.`,
+    [{ text: 'Continuar como estou', style: 'cancel' }, { text: 'Encerrar sessão', style: 'destructive', onPress: () => void logout() }],
+  );
   const [viagens, setViagens] = useState<Viagem[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
@@ -165,6 +182,10 @@ export function MinhasViagensScreen({ navigation }: Props) {
   return (
     <View style={{ flex: 1 }}>
       {offlineEm !== null && <FaixaOffline atualizadoEm={offlineEm} />}
+      <TouchableOpacity style={styles.quem} onPress={trocarUsuario} accessibilityRole="button">
+        <Text style={styles.quemTxt} numberOfLines={1}>👤 {nome ?? 'Usuário'}</Text>
+        <Text style={styles.quemAcao}>não é você? trocar</Text>
+      </TouchableOpacity>
       {(pendentes > 0 || pendentesDespesa > 0 || pendentesKm > 0) && (
         <TouchableOpacity style={styles.fila} onPress={() => void reenviarFila()} disabled={reenviando}>
           <Text style={styles.filaTxt}>
@@ -214,6 +235,10 @@ export function MinhasViagensScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  // Barra de identidade: discreta, mas legível — é ela que evita a baixa no nome errado.
+  quem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#f1f5f9', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  quemTxt: { flex: 1, fontSize: 13, fontWeight: '600', color: '#334155' },
+  quemAcao: { fontSize: 12, color: '#1e7d3a', fontWeight: '600' },
   centro: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   lista: { padding: 12, gap: 10 },
   vazioWrap: { flexGrow: 1, justifyContent: 'center', padding: 24 },

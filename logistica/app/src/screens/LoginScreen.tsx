@@ -59,8 +59,12 @@ export function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
       <View style={styles.box}>
-        <Text style={styles.titulo}>CAPUL Logística</Text>
-        <Text style={styles.sub}>Entregas e Frota</Text>
+        {/* O app começou em Entregas e Frota e hoje também faz RDV do supervisor e
+            contagem de Inventário — o subtítulo antigo ("Entregas e Frota") já estava
+            menor que o produto. O nome fica no da plataforma e o subtítulo diz o que o
+            app É, não a lista de módulos: assim não envelhece no quinto módulo. */}
+        <Text style={styles.titulo}>CAPUL Platform</Text>
+        <Text style={styles.sub}>Aplicativo de campo</Text>
 
         <TextInput
           style={styles.input}
