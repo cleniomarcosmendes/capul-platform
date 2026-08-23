@@ -5,6 +5,7 @@ import {
 import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { mesAnoDoFiltro } from '../common/mes-ano.js';
 import { rolesLogistica } from '../common/roles-logistica.js';
 import { DespesaService, type FiltroAnalise, type ReciboBinario } from './despesa.service.js';
 import {
@@ -94,15 +95,15 @@ export class DespesaController {
 
   @Get('indicadores')
   indicadores(@CurrentUser() user: JwtPayload, @Query('mes') mes: string, @Query('ano') ano: string) {
-    const now = new Date();
-    return this.despesas.indicadores(user, rolesLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear());
+    const { m, a } = mesAnoDoFiltro(mes, ano);
+    return this.despesas.indicadores(user, rolesLogistica(user), m, a);
   }
 
   /** Análise — total agrupado por veículo/tipo/fornecedor/departamento (manchete + grupos). */
   @Get('indicadores/analitico')
   indicadoresAnalitico(@CurrentUser() user: JwtPayload, @Query('mes') mes: string, @Query('ano') ano: string, @Query() q: Record<string, string>) {
-    const now = new Date();
-    return this.despesas.indicadoresAnalitico(user, rolesLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear(), filtroDe(q));
+    const { m, a } = mesAnoDoFiltro(mes, ano);
+    return this.despesas.indicadoresAnalitico(user, rolesLogistica(user), m, a, filtroDe(q));
   }
 
   /** Análise — despesas que compõem um grupo (drill-down). */
@@ -113,8 +114,8 @@ export class DespesaController {
     @Query('dimensao') dimensao: string, @Query('chave') chave: string,
     @Query() q: Record<string, string>,
   ) {
-    const now = new Date();
-    return this.despesas.indicadoresDocumentos(user, rolesLogistica(user), Number(mes) || now.getUTCMonth() + 1, Number(ano) || now.getUTCFullYear(), dimensao, chave, filtroDe(q));
+    const { m, a } = mesAnoDoFiltro(mes, ano);
+    return this.despesas.indicadoresDocumentos(user, rolesLogistica(user), m, a, dimensao, chave, filtroDe(q));
   }
 
   /** Lançamento direto (supervisor/gestor) → APROVADA. Recibo (foto/PDF) opcional. */

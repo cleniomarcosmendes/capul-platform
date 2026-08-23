@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { mesAnoDoFiltro } from '../common/mes-ano.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { resolverFilialLeitura } from '../common/filial-scope.js';
 import { PainelService, type FiltroEntrega } from './painel.service.js';
@@ -30,9 +31,7 @@ export class PainelController {
     @Query('mes') mes?: string,
     @Query('ano') ano?: string,
   ) {
-    const agora = new Date();
-    const m = mes ? parseInt(mes, 10) : agora.getUTCMonth() + 1;
-    const a = ano ? parseInt(ano, 10) : agora.getUTCFullYear();
+    const { m, a } = mesAnoDoFiltro(mes, ano);
     return this.painel.resumo(resolverFilialLeitura(user, filialId), m, a);
   }
 
@@ -44,9 +43,7 @@ export class PainelController {
     @Query('ano') ano?: string,
     @Query('filialId') filialId?: string,
   ) {
-    const agora = new Date();
-    const m = mes ? parseInt(mes, 10) : agora.getUTCMonth() + 1;
-    const a = ano ? parseInt(ano, 10) : agora.getUTCFullYear();
+    const { m, a } = mesAnoDoFiltro(mes, ano);
     return this.painel.indicadoresMes(resolverFilialLeitura(user, filialId), m, a);
   }
 
@@ -59,9 +56,7 @@ export class PainelController {
     @Query('filialId') filialId?: string,
     @Query() q?: Record<string, string>,
   ) {
-    const agora = new Date();
-    const m = mes ? parseInt(mes, 10) : agora.getUTCMonth() + 1;
-    const a = ano ? parseInt(ano, 10) : agora.getUTCFullYear();
+    const { m, a } = mesAnoDoFiltro(mes, ano);
     return this.painel.analiseEntregas(resolverFilialLeitura(user, filialId), m, a, filtroEntregaDe(q ?? {}));
   }
 
@@ -75,9 +70,7 @@ export class PainelController {
     @Query('filialId') filialId?: string,
     @Query() q?: Record<string, string>,
   ) {
-    const agora = new Date();
-    const m = mes ? parseInt(mes, 10) : agora.getUTCMonth() + 1;
-    const a = ano ? parseInt(ano, 10) : agora.getUTCFullYear();
+    const { m, a } = mesAnoDoFiltro(mes, ano);
     return this.painel.analiseEntregasDocumentos(resolverFilialLeitura(user, filialId), m, a, dimensao, chave, filtroEntregaDe(q ?? {}));
   }
 }
