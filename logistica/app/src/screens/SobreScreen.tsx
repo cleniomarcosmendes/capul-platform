@@ -75,6 +75,12 @@ export function SobreScreen() {
           <>
             <Linha rotulo="Atualização" valor={UPDATE_ID ?? '—'} />
             <Linha rotulo="Publicada em" valor={dataHora(UPDATE_EM)} />
+            {/* Sem isto o "build" acima seria uma mentira discreta: ele vem do
+                manifesto do bundle, e num OTA o APK instalado pode ser outro. */}
+            <Text style={styles.ressalva}>
+              Versão e build acima descrevem o bundle em execução. O APK instalado pode ter outro
+              número — quem manda no que roda é este bundle.
+            </Text>
           </>
         ) : null}
         <Linha rotulo="Runtime" valor={RUNTIME_VERSION ?? '—'} />
@@ -153,4 +159,5 @@ const styles = StyleSheet.create({
   btn: { backgroundColor: CAPUL, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   btnTxt: { color: '#fff', fontWeight: '700', fontSize: 15 },
   ajuda: { fontSize: 12, color: '#94a3b8', lineHeight: 17 },
+  ressalva: { fontSize: 12, color: '#92400e', backgroundColor: '#fffbeb', borderRadius: 8, padding: 8, lineHeight: 17 },
 });

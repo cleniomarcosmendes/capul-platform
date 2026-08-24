@@ -14,6 +14,14 @@ import * as Updates from 'expo-updates';
  */
 export const VERSAO = Constants.expoConfig?.version ?? '—';
 
+/**
+ * ⚠️ `versionCode` do MANIFESTO do bundle em execução — **não** do APK instalado.
+ * Depois de um OTA os dois divergem: o bundle novo diz 4 e o binário no aparelho
+ * continua 3. Ler o número real do binário exige `expo-application`, que é
+ * módulo NATIVO — instalar só para isso obrigaria a um APK novo, justamente o
+ * que a tela existe para evitar. A saída honesta é dizer de onde o número vem:
+ * a tela "Versão" avisa quando a origem é OTA (ver `ORIGEM_BUNDLE`).
+ */
 const BUILD = Constants.expoConfig?.android?.versionCode;
 
 interface ExtraBuild {
