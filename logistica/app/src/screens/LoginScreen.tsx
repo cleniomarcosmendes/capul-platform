@@ -14,10 +14,14 @@ import { useAuth } from '../auth/AuthContext';
 import { MfaNaoSuportadoError } from '../api/client';
 import { API_URL } from '../api/config';
 import { VERSAO_LABEL } from '../lib/versao';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 const CAPUL = '#1e7d3a';
 
-export function LoginScreen() {
+export function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
   const [usuario, setUsuario] = useState('');
   const [senha, setSenha] = useState('');
@@ -118,7 +122,12 @@ export function LoginScreen() {
             deixou de funcionar sem nenhuma pista do porquê. Também é o que o
             suporte precisa ouvir quando o entregador liga. */}
         <Text style={styles.ambiente}>{API_URL.replace(/^https?:\/\//, '')}</Text>
-        <Text style={styles.ambiente}>{VERSAO_LABEL}</Text>
+        {/* Antes de entrar já dá para conferir contra qual build se vai testar —
+            inclusive quando o login é o que está falhando. */}
+        <TouchableOpacity onPress={() => navigation.navigate('Sobre')} hitSlop={10}>
+          <Text style={styles.ambiente}>{VERSAO_LABEL}</Text>
+          <Text style={styles.ambienteLink}>ver versões</Text>
+        </TouchableOpacity>
       </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -127,6 +136,7 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   ambiente: { marginTop: 10, fontSize: 11, color: '#94a3b8', textAlign: 'center' },
+  ambienteLink: { marginTop: 2, fontSize: 11, color: '#cbd5e1', textAlign: 'center', textDecorationLine: 'underline' },
   container: { flex: 1, backgroundColor: CAPUL },
   // Ancora o card no topo (paddingTop) em vez de centralizar — garante que a
   // senha fique acima do teclado sem depender do windowSoftInputMode do Android.

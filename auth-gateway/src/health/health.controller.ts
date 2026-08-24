@@ -4,6 +4,7 @@ import type Redis from 'ioredis';
 import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CLIENT } from '../redis/redis.module';
+import { VERSAO_BUILD, type VersaoBuild } from '../common/versao';
 
 interface CheckResult {
   ok: boolean;
@@ -13,6 +14,8 @@ interface CheckResult {
 
 interface HealthResponse {
   status: 'ok' | 'degraded' | 'down';
+  /** Qual build está no ar — o app mostra na tela "Sobre" (ver common/versao.ts). */
+  versao: VersaoBuild;
   timestamp: string;
   uptime: number;
   checks: {
@@ -62,6 +65,7 @@ export class HealthController {
 
     return {
       status,
+      versao: VERSAO_BUILD,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       checks: { database, redis },

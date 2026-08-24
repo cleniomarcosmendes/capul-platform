@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { Public } from '../common/decorators/public.decorator.js';
+import { VERSAO_BUILD, type VersaoBuild } from '../common/versao.js';
 
 interface CheckResult {
   ok: boolean;
@@ -11,6 +12,8 @@ interface CheckResult {
 interface HealthResponse {
   status: 'ok' | 'down';
   module: 'logistica';
+  /** Qual build está no ar — o app mostra na tela "Sobre" (ver common/versao.ts). */
+  versao: VersaoBuild;
   timestamp: string;
   uptime: number;
   checks: { database: CheckResult };
@@ -31,6 +34,7 @@ export class HealthController {
     return {
       status: database.ok ? 'ok' : 'down',
       module: 'logistica',
+      versao: VERSAO_BUILD,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       checks: { database },

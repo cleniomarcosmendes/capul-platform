@@ -148,6 +148,17 @@ Plataforma corporativa modular com microservicos independentes:
   (`assertOpera`). Sem isso o ciclo ficava partido: saída ✅ → despesa 🔴 → retorno ✅.
 - **⚠️ App: `expo-image-manipulator` é módulo NATIVO** — exige **APK novo**; OTA
   sobre o APK antigo derruba o app instalado (`runtimeVersion` fixo em 1.0.0).
+- **⭐ Identidade de build (24/08)**: `version`/`versionCode` ficam parados por meses
+  e nao distinguiam dois APKs — "estou testando a versao certa?" so tinha resposta
+  por fe. Agora **cada artefato carrega o commit**: o app grava em `extra.build`
+  (`app.config.js`) e mostra no rodape do Login/Home; `logistica-backend` e
+  `auth-gateway` devolvem `versao: {versao, commit, buildEm}` no `/health` (ARG do
+  Dockerfile → `src/common/versao.ts`), e a tela **Versao** do app (toque no rodape)
+  poe os dois lado a lado com veredito de alinhamento. Buildar com
+  `./scripts/build-com-versao.sh`; sem ele a imagem sai **`desconhecido`** — de
+  proposito, porque rotulo errado encerra a investigacao com a resposta trocada.
+  Servico novo que o app consome **tem de entrar** em `src/lib/versaoServicos.ts`,
+  senao o veredito mente por omissao. Ver `docs/VERSIONAMENTO_BUILD.md`
 - **Geocode** com fallback graduado rua→bairro→município (cidade pequena) + botão "Recalcular localizações" em Montar rota. A precisão de cada parada é exibida na montagem (o fallback de município fica a ~1,2 km e reordenava a rota), e o operador **corrige a coordenada arrastando o pin** — gravado no **cache de geocode** (`fonte=MANUAL`), então vale para as próximas entregas no mesmo endereço e sobrevive ao recálculo.
 - **⭐ A rota é um CICLO** (11/08): sai da filial e **volta para ela**. O 2-opt fecha o percurso, o KM previsto inclui a volta e o mapa a desenha tracejada. Antes o caminho era ABERTO — terminar no ponto mais distante da loja não custava nada, e o trecho mais longo sumia do KM.
 - **⭐ Duas coordenadas por entrega, com significados OPOSTOS** (11/08, migration `20260811190000`): `geo_lat/lng` = **pin de planejamento** (geocodificado, roteiriza); `baixa_geo_lat/lng` = **onde a entrega aconteceu** (GPS por evento). Dividiam a mesma coluna e a baixa sobrescrevia o pin — gravando NULL sem GPS, apagando o planejamento.
@@ -175,6 +186,10 @@ docker compose down                     # Parar
 # Rebuild servico especifico
 docker compose build gestao-ti-backend
 docker compose up -d gestao-ti-backend
+
+# Rebuild COM identidade de build (grava o commit na imagem; o /health devolve
+# e a tela "Versao" do app mostra). Ver docs/VERSIONAMENTO_BUILD.md
+./scripts/build-com-versao.sh logistica-backend auth-gateway
 
 # Databases
 docker compose exec gestao-ti-backend npx prisma migrate deploy

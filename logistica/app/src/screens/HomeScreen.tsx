@@ -110,7 +110,12 @@ export function HomeScreen({ navigation }: Props) {
         <Text style={styles.sairBtnTxt}>Sair</Text>
       </TouchableOpacity>
 
-      <Text style={styles.versao} selectable>{VERSAO_LABEL}</Text>
+      {/* O rótulo já diz o commit; o toque abre o detalhe COM a versão dos
+          serviços — é lá que se vê se o app novo está falando com backend novo. */}
+      <TouchableOpacity onPress={() => navigation.navigate('Sobre')} hitSlop={10}>
+        <Text style={styles.versao}>{VERSAO_LABEL}</Text>
+        <Text style={styles.versaoLink}>ver versões dos serviços</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -155,4 +160,5 @@ const styles = StyleSheet.create({
   },
   sairBtnTxt: { color: '#b91c1c', fontSize: 16, fontWeight: '700' },
   versao: { fontSize: 12, color: '#94a3b8', textAlign: 'center', marginTop: 10 },
+  versaoLink: { fontSize: 12, color: CAPUL, textAlign: 'center', marginTop: 2, textDecorationLine: 'underline' },
 });

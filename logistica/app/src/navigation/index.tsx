@@ -16,6 +16,7 @@ import { SupervisorHomeScreen } from '../screens/SupervisorHomeScreen';
 import { SupervisorViagemScreen } from '../screens/SupervisorViagemScreen';
 import { ContagemHomeScreen } from '../screens/ContagemHomeScreen';
 import { ContagemListaScreen } from '../screens/ContagemListaScreen';
+import { SobreScreen } from '../screens/SobreScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -32,6 +33,9 @@ export type RootStackParamList = {
   // Inventário — contagem (o app deixou de ser só da Logística).
   ContagemHome: undefined;
   ContagemLista: { listId: string; listName: string };
+  // Versões do app e dos serviços. Fica FORA do gate de login: a pergunta "que
+  // versão é esta?" costuma vir antes de entrar (e quando não se consegue entrar).
+  Sobre: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -123,9 +127,13 @@ export function RootNavigator() {
               component={ContagemListaScreen}
               options={({ route }) => ({ title: route.params.listName })}
             />
+            <Stack.Screen name="Sobre" component={SobreScreen} options={{ title: 'Versão' }} />
           </>
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Sobre" component={SobreScreen} options={{ title: 'Versão' }} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

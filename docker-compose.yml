@@ -217,7 +217,12 @@ services:
     logging: *default-logging
 
   auth-gateway:
-    build: ./auth-gateway
+    build:
+      context: ./auth-gateway
+      args:
+        # Identidade do build (tela "Sobre" do app). Vazio = "desconhecido".
+        APP_COMMIT: ${APP_COMMIT:-desconhecido}
+        APP_BUILD_TIME: ${APP_BUILD_TIME:-}
     container_name: capul-auth
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core&connection_limit=10
@@ -690,7 +695,12 @@ services:
     logging: *default-logging
 
   logistica-backend:
-    build: ./logistica/backend
+    build:
+      context: ./logistica/backend
+      args:
+        # Identidade do build (tela "Sobre" do app). Vazio = "desconhecido".
+        APP_COMMIT: ${APP_COMMIT:-desconhecido}
+        APP_BUILD_TIME: ${APP_BUILD_TIME:-}
     container_name: capul-logistica-api
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
