@@ -3,6 +3,7 @@ import {
   Modal, View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert,
   Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ItemContagem, ContagemDeLote } from '../offline/contagemOffline';
 
@@ -37,6 +38,10 @@ interface Props {
  * módulo inteiro, e no app ela ainda ficaria persistida no celular.
  */
 export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: Props) {
+  // Modal ocupa a tela inteira, borda a borda: sem esta folga o cabeçalho entra
+  // sob a barra de status e o "Salvar contagem" fica atrás da barra de
+  // navegação do Android (mesmo defeito visto no SignaturePad em 24/08).
+  const insets = useSafeAreaInsets();
   const iniciais = useMemo(() => {
     const jaContado = new Map((contagemAtual ?? []).map((l) => [l.numero, l.quantidade]));
     const mapa: Record<string, string> = {};
@@ -140,7 +145,7 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
   return (
     <Modal visible animationType="slide" onRequestClose={onFechar}>
       <View style={s.container}>
-        <View style={s.topo}>
+        <View style={[s.topo, { paddingTop: 16 + insets.top }]}>
           <Text style={s.codigo}>{item.product_code}</Text>
           <Text style={s.desc} numberOfLines={2}>{item.product_description}</Text>
           {tecladoAberto ? null : (
@@ -226,7 +231,7 @@ export function ContagemLoteModal({ item, contagemAtual, onSalvar, onFechar }: P
           }
         />
 
-        <View style={s.rodape}>
+        <View style={[s.rodape, { paddingBottom: 12 + insets.bottom }]}>
           <View style={s.totalBox}>
             <Text style={s.totalRotulo}>
               {faltaDecidir

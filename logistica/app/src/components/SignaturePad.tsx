@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SignatureScreen, { type SignatureViewRef } from 'react-native-signature-canvas';
 
 const CAPUL = '#1e7d3a';
@@ -18,6 +19,12 @@ export function SignaturePad({
   onCancel: () => void;
 }) {
   const ref = useRef<SignatureViewRef>(null);
+  // O Modal ocupa a tela INTEIRA (borda a borda no Android novo): sem folga das
+  // barras do sistema, o "Confirmar" nasce ATRÁS da barra de navegação e o
+  // título embaixo da barra de status (visto no aparelho em 24/08). O rodapé é
+  // o único caminho para gravar a assinatura — botão coberto é botão que não
+  // existe. Mesmo tratamento que o rodapé da BaixaScreen já faz.
+  const insets = useSafeAreaInsets();
 
   // ⭐ Fechado = NADA montado. `<Modal visible={false}>` não desmonta os filhos:
   // o WebView do quadro de assinatura nascia junto com a tela de Baixa e vivia
@@ -38,7 +45,17 @@ export function SignaturePad({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onCancel}>
-      <View style={styles.wrap}>
+      <View
+        style={[
+          styles.wrap,
+          {
+            paddingTop: 16 + insets.top,
+            paddingBottom: 16 + insets.bottom,
+            paddingLeft: 16 + insets.left,
+            paddingRight: 16 + insets.right,
+          },
+        ]}
+      >
         <Text style={styles.titulo}>Assinatura de quem recebeu</Text>
         <Text style={styles.dica}>Assine no quadro abaixo com o dedo.</Text>
         <View style={styles.canvas}>
@@ -67,7 +84,8 @@ export function SignaturePad({
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#f8fafc', padding: 16, gap: 10 },
+  // padding vem do componente (soma as folgas das barras do sistema).
+  wrap: { flex: 1, backgroundColor: '#f8fafc', gap: 10 },
   titulo: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginTop: 8 },
   dica: { fontSize: 13, color: '#64748b' },
   canvas: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, overflow: 'hidden', backgroundColor: '#fff' },

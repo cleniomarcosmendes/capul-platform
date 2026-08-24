@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CAPUL = '#1e7d3a';
 
@@ -42,6 +43,8 @@ export function EntradaTextoModal({
   onCancelar: () => void;
 }) {
   const [texto, setTexto] = useState(valorInicial);
+  // Folga das barras do sistema — o Modal é borda a borda (ver SignaturePad).
+  const insets = useSafeAreaInsets();
 
   // Reabrir a tela parte do valor já gravado — editar não recomeça do zero.
   useEffect(() => {
@@ -59,7 +62,7 @@ export function EntradaTextoModal({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onCancelar}>
-      <View style={styles.tela}>
+      <View style={[styles.tela, { paddingTop: 20 + insets.top, paddingBottom: 20 + insets.bottom }]}>
         <Text style={styles.titulo}>{titulo}</Text>
         {dica ? <Text style={styles.dica}>{dica}</Text> : null}
         <TextInput
@@ -92,7 +95,8 @@ export function EntradaTextoModal({
 }
 
 const styles = StyleSheet.create({
-  tela: { flex: 1, backgroundColor: '#fff', padding: 20, gap: 12 },
+  // padding vertical vem do componente (soma as folgas das barras do sistema).
+  tela: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 20, gap: 12 },
   titulo: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginTop: 8 },
   dica: { fontSize: 13, color: '#64748b' },
   input: {
