@@ -23,7 +23,10 @@ function commitDoBundle() {
       .toString()
       .trim();
     // Árvore suja = o bundle NÃO é o commit. Dizer isso é o ponto do rótulo.
-    const sujo = execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
+    // `-uno`: arquivo NÃO RASTREADO (rascunho, doc solto) não entra no bundle e
+    // não pode marcar o build como sujo — sujeira falsa em todo build ensina a
+    // ignorar a marca justamente quando ela for verdadeira.
+    const sujo = execSync('git status --porcelain -uno', { stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
       .trim().length > 0;
     return sujo ? `${hash}-sujo` : hash;
