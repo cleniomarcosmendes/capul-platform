@@ -61,8 +61,8 @@ export class ChamadoService {
     return this.core.updateHeader(id, dto, user, role);
   }
 
-  async assumir(id: string, user: JwtPayload) {
-    return this.core.assumir(id, user);
+  async assumir(id: string, user: JwtPayload, role: string) {
+    return this.core.assumir(id, user, role);
   }
 
   async transferirEquipe(id: string, dto: TransferirEquipeDto, user: JwtPayload, role: string) {
@@ -93,8 +93,8 @@ export class ChamadoService {
     return this.core.reabrir(id, dto, user, role);
   }
 
-  async vincularProjeto(chamadoId: string, projetoId: string) {
-    return this.core.vincularProjeto(chamadoId, projetoId);
+  async vincularProjeto(chamadoId: string, projetoId: string, user: JwtPayload, role: string) {
+    return this.core.vincularProjeto(chamadoId, projetoId, user, role);
   }
 
   async cancelar(id: string, user: JwtPayload, role: string) {
@@ -175,20 +175,20 @@ export class ChamadoService {
     return this.tempo.listarRegistrosTempo(chamadoId);
   }
 
-  async iniciarTempoChamado(chamadoId: string, userId: string, role: string) {
-    return this.tempo.iniciarTempoChamado(chamadoId, userId, role);
+  async iniciarTempoChamado(chamadoId: string, user: JwtPayload, userId: string, role: string) {
+    return this.tempo.iniciarTempoChamado(chamadoId, user, userId, role);
   }
 
   async encerrarTempoChamado(chamadoId: string, userId: string) {
     return this.tempo.encerrarTempoChamado(chamadoId, userId);
   }
 
-  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId?: string, role?: string) {
-    return this.tempo.ajustarRegistroTempoChamado(chamadoId, registroId, dto, userId, role);
+  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId?: string, role?: string, user?: JwtPayload) {
+    return this.tempo.ajustarRegistroTempoChamado(chamadoId, registroId, dto, userId, role, user);
   }
 
-  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId?: string, role?: string) {
-    return this.tempo.removerRegistroTempoChamado(chamadoId, registroId, userId, role);
+  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId?: string, role?: string, user?: JwtPayload) {
+    return this.tempo.removerRegistroTempoChamado(chamadoId, registroId, userId, role, user);
   }
 
   // ─── Anexos ───
@@ -197,15 +197,15 @@ export class ChamadoService {
     return this.anexos.listAnexos(chamadoId);
   }
 
-  async addAnexo(chamadoId: string, file: Express.Multer.File, userId: string, descricao?: string) {
-    return this.anexos.addAnexo(chamadoId, file, userId, descricao);
+  async addAnexo(chamadoId: string, file: Express.Multer.File, user: JwtPayload, role: string, descricao?: string) {
+    return this.anexos.addAnexo(chamadoId, file, user, role, descricao);
   }
 
   async getAnexoFile(chamadoId: string, anexoId: string) {
     return this.anexos.getAnexoFile(chamadoId, anexoId);
   }
 
-  async removeAnexo(chamadoId: string, anexoId: string) {
-    return this.anexos.removeAnexo(chamadoId, anexoId);
+  async removeAnexo(chamadoId: string, anexoId: string, user: JwtPayload, role: string) {
+    return this.anexos.removeAnexo(chamadoId, anexoId, user, role);
   }
 }

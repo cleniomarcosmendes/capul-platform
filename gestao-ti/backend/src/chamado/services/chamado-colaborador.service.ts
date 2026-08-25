@@ -25,7 +25,7 @@ export class ChamadoColaboradorService {
   }
 
   async adicionarColaborador(chamadoId: string, usuarioId: string, user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(chamadoId, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(chamadoId, user, role);
 
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
     if (!chamado.tecnicoId) {
@@ -105,7 +105,7 @@ export class ChamadoColaboradorService {
   }
 
   async removerColaborador(chamadoId: string, colaboradorId: string, user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(chamadoId, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(chamadoId, user, role);
 
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
     if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {

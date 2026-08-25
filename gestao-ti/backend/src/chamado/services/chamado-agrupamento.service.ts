@@ -8,7 +8,7 @@ import { StatusChamado } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
-import { hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
+import { ehStaffNoDepto } from '../../common/constants/roles.constant.js';
 
 /**
  * Servico de agrupamento de chamados (decidido em 13/05/2026).
@@ -35,12 +35,11 @@ export class ChamadoAgrupamentoService {
   ) {}
 
   async agrupar(chamadoFilhoId: string, agrupadorId: string, user: JwtPayload, role: string) {
-    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    // Multi-perfil (Juliana GESTOR/CTL + USUARIO_FINAL/TI) precisa ser
-    // detectado pelo JWT.departamentos[isTI], não pela role denormalizada.
-    if (!hasStaffPerfilEmTI(user)) {
-      throw new ForbiddenException('Apenas equipe T.I. pode agrupar chamados');
-    }
+    // ⭐ 25/08 — a checagem era `hasStaffPerfilEmTI`: staff em algum departamento
+    // marcado como T.I. Isso errava dos DOIS lados desde que o Workspace deixou de ser
+    // só do T.I.: quem atende no Fiscal não conseguia agrupar chamado DO FISCAL, e
+    // quem é staff no T.I. agrupava chamado de qualquer outro departamento. Quem
+    // agrupa é staff NO departamento dos chamados — checado abaixo, com eles em mãos.
     if (chamadoFilhoId === agrupadorId) {
       throw new BadRequestException('Chamado nao pode ser agrupado em si mesmo');
     }
@@ -50,19 +49,25 @@ export class ChamadoAgrupamentoService {
         where: { id: chamadoFilhoId },
         select: {
           id: true, numero: true, titulo: true, status: true, dataLimiteSla: true,
-          chamadoAgrupadorId: true, solicitanteId: true, tecnicoId: true,
+          chamadoAgrupadorId: true, solicitanteId: true, tecnicoId: true, departamentoId: true,
         },
       }),
       this.prisma.chamado.findUnique({
         where: { id: agrupadorId },
         select: {
           id: true, numero: true, titulo: true, status: true, tecnicoId: true,
-          chamadoAgrupadorId: true,
+          chamadoAgrupadorId: true, departamentoId: true,
         },
       }),
     ]);
     if (!filho) throw new NotFoundException('Chamado filho nao encontrado');
     if (!pai) throw new NotFoundException('Chamado agrupador nao encontrado');
+
+    // Nos DOIS: agrupar mexe no filho (vira AGRUPADO) e no pai (recebe o filho).
+    if (!ehStaffNoDepto(user, filho.departamentoId, role)
+        || !ehStaffNoDepto(user, pai.departamentoId, role)) {
+      throw new ForbiddenException('Você não atende chamados deste departamento.');
+    }
 
     if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(filho.status)) {
       throw new BadRequestException('Chamado finalizado nao pode ser agrupado');
@@ -148,12 +153,8 @@ export class ChamadoAgrupamentoService {
    * que ja esta atendendo.
    */
   async agruparMultiplos(agrupadorId: string, filhosIds: string[], user: JwtPayload, role: string) {
-    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    // Multi-perfil (Juliana GESTOR/CTL + USUARIO_FINAL/TI) precisa ser
-    // detectado pelo JWT.departamentos[isTI], não pela role denormalizada.
-    if (!hasStaffPerfilEmTI(user)) {
-      throw new ForbiddenException('Apenas equipe T.I. pode agrupar chamados');
-    }
+    // A permissão é conferida POR CHAMADO dentro de `agrupar` (departamento do filho
+    // e do pai) — cada falha vira um item em `erros`, e o resto do lote segue.
     if (!filhosIds || filhosIds.length === 0) {
       throw new BadRequestException('Informe pelo menos um chamado para agrupar');
     }
@@ -182,22 +183,20 @@ export class ChamadoAgrupamentoService {
   }
 
   async desagrupar(chamadoFilhoId: string, user: JwtPayload, role: string) {
-    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    // Multi-perfil (Juliana GESTOR/CTL + USUARIO_FINAL/TI) precisa ser
-    // detectado pelo JWT.departamentos[isTI], não pela role denormalizada.
-    if (!hasStaffPerfilEmTI(user)) {
-      throw new ForbiddenException('Apenas equipe T.I. pode desagrupar chamados');
-    }
-
     const filho = await this.prisma.chamado.findUnique({
       where: { id: chamadoFilhoId },
       select: {
+        departamentoId: true,
         id: true, numero: true, titulo: true, status: true,
         chamadoAgrupadorId: true, statusAnteriorAgrupamento: true,
         slaPausadoEm: true, dataLimiteSla: true, solicitanteId: true,
       },
     });
     if (!filho) throw new NotFoundException('Chamado nao encontrado');
+    // Quem desagrupa é staff NO departamento do chamado (⭐ 25/08 — vide `agrupar`).
+    if (!ehStaffNoDepto(user, filho.departamentoId, role)) {
+      throw new ForbiddenException('Você não atende chamados deste departamento.');
+    }
     if (!filho.chamadoAgrupadorId) {
       throw new BadRequestException('Chamado nao esta agrupado');
     }

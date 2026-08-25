@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { UPLOADS_DIR } from './chamado.constants.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -25,7 +26,25 @@ export class ChamadoAnexoService {
     });
   }
 
-  async addAnexo(chamadoId: string, file: Express.Multer.File, userId: string, descricao?: string) {
+  /**
+   * ⭐ 25/08 — anexar não tinha checagem NENHUMA (a rota nem `@Roles` tem): com o id do
+   * chamado, qualquer usuário do Workspace anexava arquivo em chamado de qualquer
+   * departamento. Agora vale a regra do resto do módulo — técnico, colaborador, quem
+   * abriu (caso normal: o solicitante anexa a foto do problema), quem está em cópia, ou
+   * quem manda NO DEPARTAMENTO DO CHAMADO.
+   */
+  async addAnexo(
+    chamadoId: string,
+    file: Express.Multer.File,
+    user: JwtPayload,
+    role: string,
+    descricao?: string,
+  ) {
+    await this.helpers.assertTecnicoOuColaborador(chamadoId, user, role, {
+      permitirSolicitante: true,
+      permitirCopia: true,
+    });
+    const userId = user.sub;
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
     if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
       throw new BadRequestException('Nao e possivel anexar arquivos em chamado finalizado');
@@ -57,7 +76,9 @@ export class ChamadoAnexoService {
     return { filePath, anexo };
   }
 
-  async removeAnexo(chamadoId: string, anexoId: string) {
+  /** Idem: remover anexo decidia só pelo `@Roles` denormalizado do controller. */
+  async removeAnexo(chamadoId: string, anexoId: string, user: JwtPayload, role: string) {
+    await this.helpers.assertTecnicoOuColaborador(chamadoId, user, role);
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
     if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
       throw new BadRequestException('Nao e possivel remover anexo de chamado finalizado');

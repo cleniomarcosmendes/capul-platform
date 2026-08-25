@@ -15,10 +15,12 @@ export const ROLES_TI = ['ADMIN', 'GESTOR', 'SUPORTE'] as const;
 export const ROLES_EXTERNOS = ['USUARIO_CHAVE', 'TERCEIRIZADO'] as const;
 
 /** Verifica se role e de gestor */
-export const isGestor = (role: string): boolean => ROLES_GESTORES.includes(role as typeof ROLES_GESTORES[number]);
+export const isGestor = (role: string): boolean =>
+  ROLES_GESTORES.includes(role as (typeof ROLES_GESTORES)[number]);
 
 /** Verifica se role e de TI */
-export const isTI = (role: string): boolean => ROLES_TI.includes(role as typeof ROLES_TI[number]);
+export const isTI = (role: string): boolean =>
+  ROLES_TI.includes(role as (typeof ROLES_TI)[number]);
 
 /**
  * S12 (25/05) — checa se o user tem perfil STAFF (ADMIN/GESTOR/SUPORTE)
@@ -33,12 +35,17 @@ export const isTI = (role: string): boolean => ROLES_TI.includes(role as typeof 
  * Tokens pré-S12 não trazem `isTI` em departamentos[] → todos retornam
  * false (conservador — equivale a "não é staff TI", não vaza).
  */
-export function hasStaffPerfilEmTI(user: JwtPayload | null | undefined): boolean {
+export function hasStaffPerfilEmTI(
+  user: JwtPayload | null | undefined,
+): boolean {
   if (!user) return false;
   const workspace = user.modulos?.find((m) => m.codigo === 'WORKSPACE');
   if (!workspace) return false;
   for (const depto of workspace.departamentos ?? []) {
-    if (depto.isTI && ROLES_TI.includes(depto.role as typeof ROLES_TI[number])) {
+    if (
+      depto.isTI &&
+      ROLES_TI.includes(depto.role as (typeof ROLES_TI)[number])
+    ) {
       return true;
     }
   }
@@ -60,12 +67,14 @@ export function hasStaffPerfilEmTI(user: JwtPayload | null | undefined): boolean
  *
  * Tokens pré-S12 (sem departamentos[]) → retorna [].
  */
-export function getDeptosOndeStaff(user: JwtPayload | null | undefined): string[] {
+export function getDeptosOndeStaff(
+  user: JwtPayload | null | undefined,
+): string[] {
   if (!user) return [];
   const workspace = user.modulos?.find((m) => m.codigo === 'WORKSPACE');
   if (!workspace) return [];
   return (workspace.departamentos ?? [])
-    .filter((d) => ROLES_TI.includes(d.role as typeof ROLES_TI[number]))
+    .filter((d) => ROLES_TI.includes(d.role as (typeof ROLES_TI)[number]))
     .map((d) => d.id);
 }
 
@@ -76,12 +85,16 @@ export function getDeptosOndeStaff(user: JwtPayload | null | undefined): string[
  * — inclusive as `restritaVisibilidade` —, enquanto o SUPORTE só vê as equipes
  * restritas de que é membro.
  */
-export function getDeptosOndeGestor(user: JwtPayload | null | undefined): string[] {
+export function getDeptosOndeGestor(
+  user: JwtPayload | null | undefined,
+): string[] {
   if (!user) return [];
   const workspace = user.modulos?.find((m) => m.codigo === 'WORKSPACE');
   if (!workspace) return [];
   return (workspace.departamentos ?? [])
-    .filter((d) => ROLES_GESTORES.includes(d.role as typeof ROLES_GESTORES[number]))
+    .filter((d) =>
+      ROLES_GESTORES.includes(d.role as (typeof ROLES_GESTORES)[number]),
+    )
     .map((d) => d.id);
 }
 
@@ -104,4 +117,77 @@ export function getRoleNoDepto(
   if (!user || !departamentoId) return undefined;
   const workspace = user.modulos?.find((m) => m.codigo === 'WORKSPACE');
   return workspace?.departamentos?.find((d) => d.id === departamentoId)?.role;
+}
+
+/**
+ * ⭐ 25/08 — O PAPEL É DO DEPARTAMENTO, e é o do departamento DO CHAMADO que decide.
+ *
+ * Contexto (auditoria `docs/AUDITORIA_WORKSPACE_ADMIN_GESTOR_25AGO.md`): o Workspace
+ * nasceu no T.I. e hoje atende vários departamentos — no Fiscal há quem responda
+ * chamado e quem seja gestor, e essas MESMAS pessoas são usuário final no T.I. Os dois
+ * papéis não se misturam.
+ *
+ * Só que `@Roles(...)` lê a role DENORMALIZADA do JWT (uma só para o módulo, e — pior —
+ * a do primeiro registro de permissão, de uma consulta sem ordem definida). Com ela,
+ * quem é SUPORTE no Fiscal passava no filtro também num chamado do T.I. O que segurava
+ * na prática era a VISIBILIDADE (não achar o id), não a autorização.
+ *
+ * `ehStaffNoDepto` é o que faltava: mesmo mecanismo que o "assumir automático" já usa
+ * (`getRoleNoDepto`), aplicado a quem AGE sobre o chamado.
+ */
+
+/**
+ * ADMIN em QUALQUER departamento = ADMIN do módulo (D36 — decisão mantida em 25/08).
+ *
+ * Lê `departamentos[]`, não a role denormalizada: o resultado passa a ser o mesmo
+ * independentemente de qual permissão o banco devolveu primeiro. Antes, um ADMIN de
+ * departamento podia ser rebaixado (ou não) conforme a ordem física das linhas.
+ */
+export function ehAdminEmAlgumDepto(
+  user: JwtPayload | null | undefined,
+  roleFallback?: string | null,
+): boolean {
+  const departamentos = user?.modulos?.find(
+    (m) => m.codigo === 'WORKSPACE',
+  )?.departamentos;
+  // Token antigo (pré Sub-fase 1.4) não traz departamentos[]: cai na role
+  // denormalizada, que é o comportamento que ele já tinha. Sessão aberta durante o
+  // deploy não pode virar 403.
+  if (!departamentos?.length) return roleFallback === 'ADMIN';
+  return departamentos.some((d) => d.role === 'ADMIN');
+}
+
+/**
+ * O user é STAFF (ADMIN/GESTOR/SUPORTE) NO departamento informado?
+ *
+ * `departamentoId` é o do CHAMADO (ou do projeto/registro) — não o "departamento do
+ * usuário", que não existe: ele tem um papel em cada.
+ */
+export function ehStaffNoDepto(
+  user: JwtPayload | null | undefined,
+  departamentoId: string | null | undefined,
+  roleFallback?: string | null,
+): boolean {
+  if (ehAdminEmAlgumDepto(user, roleFallback)) return true;
+  const departamentos = user?.modulos?.find(
+    (m) => m.codigo === 'WORKSPACE',
+  )?.departamentos;
+  if (!departamentos?.length) return isTI(roleFallback ?? ''); // token antigo — vide acima
+  const roleNoDepto = getRoleNoDepto(user, departamentoId);
+  return roleNoDepto !== undefined && isTI(roleNoDepto);
+}
+
+/** Idem, restrito a ADMIN/GESTOR (quem manda no departamento). */
+export function ehGestorNoDepto(
+  user: JwtPayload | null | undefined,
+  departamentoId: string | null | undefined,
+  roleFallback?: string | null,
+): boolean {
+  if (ehAdminEmAlgumDepto(user, roleFallback)) return true;
+  const departamentos = user?.modulos?.find(
+    (m) => m.codigo === 'WORKSPACE',
+  )?.departamentos;
+  if (!departamentos?.length) return isGestor(roleFallback ?? '');
+  const roleNoDepto = getRoleNoDepto(user, departamentoId);
+  return roleNoDepto !== undefined && isGestor(roleNoDepto);
 }

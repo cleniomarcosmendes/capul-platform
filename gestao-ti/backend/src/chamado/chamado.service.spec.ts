@@ -216,7 +216,7 @@ describe('ChamadoService', () => {
       prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'EM_ATENDIMENTO', tecnicoId: 'user-1' });
       prisma.historicoChamado.create.mockResolvedValue({});
 
-      const result = await service.assumir('ch-1', mockUser as any);
+      const result = await service.assumir('ch-1', mockUser as any, 'SUPORTE');
 
       expect(prisma.chamado.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -229,7 +229,7 @@ describe('ChamadoService', () => {
     it('lanca BadRequestException se status nao e ABERTO ou PENDENTE', async () => {
       prisma.chamado.findUnique.mockResolvedValue(baseChamado({ status: 'EM_ATENDIMENTO' }));
 
-      await expect(service.assumir('ch-1', mockUser as any)).rejects.toThrow(BadRequestException);
+      await expect(service.assumir('ch-1', mockUser as any, 'SUPORTE')).rejects.toThrow(BadRequestException);
     });
   });
 

@@ -7,7 +7,8 @@ import {
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { UpdateRegistroTempoChamadoDto } from '../dto/update-registro-tempo-chamado.dto.js';
-import { isGestor } from '../../common/constants/roles.constant.js';
+import { ehGestorNoDepto } from '../../common/constants/roles.constant.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
 export class ChamadoTempoService {
@@ -53,8 +54,13 @@ export class ChamadoTempoService {
     }
   }
 
-  async iniciarTempoChamado(chamadoId: string, userId: string, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(chamadoId, userId, role);
+  /**
+   * `user` é QUEM PEDE; `userId` é de quem é o timer (um gestor pode iniciar o de
+   * outro). A autorização olha quem pede — era o alvo que ia para o guard, o que só
+   * não pesava porque o atalho de gestor saía antes.
+   */
+  async iniciarTempoChamado(chamadoId: string, user: JwtPayload, userId: string, role: string) {
+    await this.helpers.assertTecnicoOuColaborador(chamadoId, user, role);
 
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
 
@@ -84,14 +90,19 @@ export class ChamadoTempoService {
     });
   }
 
-  private validarEdicaoRegistroChamado(registro: { horaFim: Date | null; horaInicio: Date; usuarioId: string }, userId: string, role: string) {
+  /**
+   * `ehGestor` chega pronto de quem chamou: é "gestor NO DEPARTAMENTO DO CHAMADO"
+   * (⭐ 25/08), não a role denormalizada do JWT — que é uma só para o módulo e fazia
+   * um gestor do Fiscal mandar em registro de tempo de chamado do T.I.
+   */
+  private validarEdicaoRegistroChamado(registro: { horaFim: Date | null; horaInicio: Date; usuarioId: string }, userId: string, ehGestor: boolean) {
     // Regra 1: nao editar registro com timer ativo
     if (!registro.horaFim) {
       throw new BadRequestException('Nao e possivel editar um registro com cronometro ativo. Encerre o cronometro primeiro.');
     }
 
     // Regra 2: apenas o dono ou gestores
-    if (registro.usuarioId !== userId && !isGestor(role)) {
+    if (registro.usuarioId !== userId && !ehGestor) {
       throw new ForbiddenException('Voce so pode editar seus proprios registros de tempo.');
     }
 
@@ -99,12 +110,12 @@ export class ChamadoTempoService {
     const limite = new Date();
     limite.setDate(limite.getDate() - 2);
     limite.setHours(0, 0, 0, 0);
-    if (new Date(registro.horaInicio) < limite && !isGestor(role)) {
+    if (new Date(registro.horaInicio) < limite && !ehGestor) {
       throw new BadRequestException('Nao e possivel editar registros com mais de 2 dias. Solicite ao gestor.');
     }
   }
 
-  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId?: string, role?: string) {
+  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId?: string, role?: string, user?: JwtPayload) {
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
     if (chamado.status === 'CANCELADO') {
       throw new BadRequestException('Nao e possivel editar registros de tempo em chamado cancelado');
@@ -116,7 +127,10 @@ export class ChamadoTempoService {
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
 
     if (userId && role) {
-      this.validarEdicaoRegistroChamado(registro, userId, role);
+      const chamadoDoRegistro = await this.helpers.getChamadoOrFail(chamadoId);
+      this.validarEdicaoRegistroChamado(
+        registro, userId, ehGestorNoDepto(user, chamadoDoRegistro.departamentoId, role),
+      );
       if (registro.usuarioId !== userId) {
         this.prisma.$queryRaw`
           INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at)
@@ -143,7 +157,7 @@ export class ChamadoTempoService {
     });
   }
 
-  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId?: string, role?: string) {
+  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId?: string, role?: string, user?: JwtPayload) {
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
     if (chamado.status === 'CANCELADO') {
       throw new BadRequestException('Nao e possivel remover registros de tempo em chamado cancelado');
@@ -154,7 +168,10 @@ export class ChamadoTempoService {
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
     if (userId && role) {
-      this.validarEdicaoRegistroChamado(registro, userId, role);
+      const chamadoDoRegistro = await this.helpers.getChamadoOrFail(chamadoId);
+      this.validarEdicaoRegistroChamado(
+        registro, userId, ehGestorNoDepto(user, chamadoDoRegistro.departamentoId, role),
+      );
       if (registro.usuarioId !== userId) {
         this.prisma.$queryRaw`
           INSERT INTO core.system_logs (id, level, message, module, action, usuario_id, metadata, created_at)

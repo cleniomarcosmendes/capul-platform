@@ -22,7 +22,7 @@ import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { ProtheusService } from '../../protheus/protheus.service.js';
 import { chamadoInclude, UPLOADS_DIR } from './chamado.constants.js';
-import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto, ehStaffNoDepto, ehGestorNoDepto } from '../../common/constants/roles.constant.js';
 import { hasCapability } from '../../common/helpers/capability.helper.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
@@ -909,7 +909,7 @@ export class ChamadoCoreService {
    * lancar (silenciarErrosIndividuais=true).
    */
   async adicionarCopiasComCheck(chamadoId: string, usuariosIds: string[], user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(chamadoId, user.sub, role, {
+    await this.helpers.assertTecnicoOuColaborador(chamadoId, user, role, {
       permitirSolicitante: true,
       permitirCopia: true,
     });
@@ -959,7 +959,7 @@ export class ChamadoCoreService {
    * workspace SAC, com contato do cliente. Em DEV o envio é mockado (logado).
    */
   async responderSac(id: string, texto: string, user: JwtPayload, role: string, file?: Express.Multer.File) {
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(id, user, role);
     const chamado = await this.helpers.getChamadoOrFail(id);
     if (['RESOLVIDO', 'FECHADO', 'CANCELADO'].includes(chamado.status)) {
       throw new BadRequestException('Chamado finalizado — reabra para responder o cliente.');
@@ -1049,8 +1049,10 @@ export class ChamadoCoreService {
 
     // Apenas o solicitante ou gestores podem editar o cabecalho
     const isCriador = chamado.solicitanteId === user.sub;
-    if (!isCriador && !isGestor(role)) {
-      throw new ForbiddenException('Apenas o solicitante ou gestores podem editar o cabecalho');
+    // Gestor DO DEPARTAMENTO DO CHAMADO (25/08) — `isGestor(role)` usava a role
+    // denormalizada, que é uma só para o módulo inteiro.
+    if (!isCriador && !ehGestorNoDepto(user, chamado.departamentoId, role)) {
+      throw new ForbiddenException('Apenas o solicitante ou gestores do departamento podem editar o cabecalho');
     }
 
     const data: Record<string, string> = {};
@@ -1076,7 +1078,7 @@ export class ChamadoCoreService {
    * clienteEmail — é justamente o que pode estar faltando.
    */
   async atualizarDadosClienteSac(id: string, dto: UpdateClienteSacDto, user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(id, user, role);
     const chamado = await this.helpers.getChamadoOrFail(id);
     const equipe = await this.prisma.equipe.findUnique({
       where: { id: chamado.equipeAtualId },
@@ -1103,8 +1105,18 @@ export class ChamadoCoreService {
     return updated;
   }
 
-  async assumir(id: string, user: JwtPayload) {
+  async assumir(id: string, user: JwtPayload, role: string) {
     const chamado = await this.helpers.getChamadoOrFail(id);
+
+    // ⭐ 25/08 — esta rota confiava SÓ no `@Roles('ADMIN','GESTOR','SUPORTE')` do
+    // controller, que lê a role denormalizada (uma para o módulo inteiro). Quem é
+    // SUPORTE no Fiscal passava nela também num chamado do T.I., onde é usuário final,
+    // e virava o técnico do chamado. Quem atende é staff NAQUELE departamento.
+    if (!ehStaffNoDepto(user, chamado.departamentoId, role)) {
+      throw new ForbiddenException(
+        'Você não atende chamados deste departamento. Só quem tem perfil de atendimento nele pode assumir.',
+      );
+    }
 
     if (!['ABERTO', 'PENDENTE', 'PENDENTE_USUARIO', 'REABERTO'].includes(chamado.status)) {
       throw new BadRequestException('Chamado nao pode ser assumido neste status');
@@ -1152,7 +1164,7 @@ export class ChamadoCoreService {
   }
 
   async transferirEquipe(id: string, dto: TransferirEquipeDto, user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(id, user, role);
 
     const chamado = await this.helpers.getChamadoOrFail(id);
 
@@ -1242,7 +1254,7 @@ export class ChamadoCoreService {
   }
 
   async transferirTecnico(id: string, dto: TransferirTecnicoDto, user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(id, user, role);
 
     const chamado = await this.helpers.getChamadoOrFail(id);
 
@@ -1308,7 +1320,7 @@ export class ChamadoCoreService {
   async comentar(id: string, dto: ComentarioChamadoDto, user: JwtPayload, role: string) {
     // Solicitante e copiados tambem podem comentar (copiado tem "papel de
     // solicitante" — decidido em 13/05/2026).
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role, {
+    await this.helpers.assertTecnicoOuColaborador(id, user, role, {
       permitirSolicitante: true,
       permitirCopia: true,
     });
@@ -1568,7 +1580,10 @@ export class ChamadoCoreService {
     if (!historico) throw new NotFoundException('Comentario nao encontrado');
 
     // Somente o autor ou gestores pode editar
-    if (historico.usuarioId !== user.sub && !isGestor(role)) {
+    // Gestor DO DEPARTAMENTO DO CHAMADO (25/08) — vide updateHeader.
+    const chamadoDoComentario = await this.helpers.getChamadoOrFail(chamadoId);
+    if (historico.usuarioId !== user.sub
+        && !ehGestorNoDepto(user, chamadoDoComentario.departamentoId, role)) {
       throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
     }
 
@@ -1582,7 +1597,7 @@ export class ChamadoCoreService {
   }
 
   async resolver(id: string, dto: ResolverChamadoDto, user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(id, user, role);
 
     const chamado = await this.helpers.getChamadoOrFail(id);
 
@@ -1657,7 +1672,7 @@ export class ChamadoCoreService {
   }
 
   async fechar(id: string, user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(id, user, role);
 
     const chamado = await this.helpers.getChamadoOrFail(id);
 
@@ -1703,7 +1718,7 @@ export class ChamadoCoreService {
 
   async reabrir(id: string, dto: ReabrirChamadoDto, user: JwtPayload, role: string) {
     // Solicitante tambem pode reabrir
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role, { permitirSolicitante: true });
+    await this.helpers.assertTecnicoOuColaborador(id, user, role, { permitirSolicitante: true });
 
     const chamado = await this.helpers.getChamadoOrFail(id);
 
@@ -1791,7 +1806,12 @@ export class ChamadoCoreService {
     return updated;
   }
 
-  async vincularProjeto(chamadoId: string, projetoId: string) {
+  /** `user`/`role` entraram em 25/08: a rota decidia só pelo `@Roles` do controller. */
+  async vincularProjeto(chamadoId: string, projetoId: string, user: JwtPayload, role: string) {
+    const chamado = await this.helpers.getChamadoOrFail(chamadoId);
+    if (!ehStaffNoDepto(user, chamado.departamentoId, role)) {
+      throw new ForbiddenException('Você não atende chamados deste departamento.');
+    }
     return this.prisma.chamado.update({
       where: { id: chamadoId },
       data: { projetoId },
@@ -1800,7 +1820,7 @@ export class ChamadoCoreService {
   }
 
   async cancelar(id: string, user: JwtPayload, role: string) {
-    await this.helpers.assertTecnicoOuColaborador(id, user.sub, role);
+    await this.helpers.assertTecnicoOuColaborador(id, user, role);
 
     const chamado = await this.helpers.getChamadoOrFail(id);
 
@@ -1886,12 +1906,14 @@ export class ChamadoCoreService {
   }
 
   async excluir(id: string, user: JwtPayload, role: string) {
-    const rolesPermitidas = ['ADMIN', 'GESTOR', 'SUPORTE'];
-    if (!rolesPermitidas.includes(role)) {
-      throw new ForbiddenException('Sem permissao para excluir chamados');
-    }
-
     const chamado = await this.helpers.getChamadoOrFail(id);
+
+    // ⭐ 25/08 — a lista de roles era conferida contra a role DENORMALIZADA: quem é
+    // SUPORTE no Fiscal apagava chamado do T.I., onde é usuário final. Quem apaga é
+    // staff NO departamento do chamado.
+    if (!ehStaffNoDepto(user, chamado.departamentoId, role)) {
+      throw new ForbiddenException('Sem permissao para excluir chamados deste departamento');
+    }
 
     if (chamado.status !== 'ABERTO') {
       throw new BadRequestException('Somente chamados com status ABERTO podem ser excluidos');

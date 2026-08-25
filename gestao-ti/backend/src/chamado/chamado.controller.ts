@@ -144,8 +144,8 @@ export class ChamadoController {
 
   @Post(':id/assumir')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  assumir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.service.assumir(id, user);
+  assumir(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
+    return this.service.assumir(id, user, role);
   }
 
   @Post(':id/transferir-equipe')
@@ -247,8 +247,10 @@ export class ChamadoController {
   vincularProjeto(
     @Param('id') id: string,
     @Body('projetoId') projetoId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.vincularProjeto(id, projetoId);
+    return this.service.vincularProjeto(id, projetoId, user, role);
   }
 
   @Post(':id/avaliar')
@@ -277,10 +279,11 @@ export class ChamadoController {
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
     @Body('descricao') descricao?: string,
   ) {
     if (!file) throw new BadRequestException('Arquivo obrigatorio');
-    return this.service.addAnexo(id, file, user.sub, descricao);
+    return this.service.addAnexo(id, file, user, role, descricao);
   }
 
   @Get(':id/anexos/:anexoId/download')
@@ -317,8 +320,13 @@ export class ChamadoController {
 
   @Delete(':id/anexos/:anexoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  removeAnexo(@Param('id') id: string, @Param('anexoId') anexoId: string) {
-    return this.service.removeAnexo(id, anexoId);
+  removeAnexo(
+    @Param('id') id: string,
+    @Param('anexoId') anexoId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.removeAnexo(id, anexoId, user, role);
   }
 
   // === Colaboradores ===
@@ -475,7 +483,7 @@ export class ChamadoController {
     @GestaoTiRole() role: string,
     @Body('usuarioId') usuarioId?: string,
   ) {
-    return this.service.iniciarTempoChamado(id, usuarioId || user.sub, role);
+    return this.service.iniciarTempoChamado(id, user, usuarioId || user.sub, role);
   }
 
   @Post(':id/registros-tempo/encerrar')
@@ -491,7 +499,7 @@ export class ChamadoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.ajustarRegistroTempoChamado(id, registroId, dto, user.sub, role);
+    return this.service.ajustarRegistroTempoChamado(id, registroId, dto, user.sub, role, user);
   }
 
   @Delete(':id/registros-tempo/:registroId')
@@ -501,6 +509,6 @@ export class ChamadoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.removerRegistroTempoChamado(id, registroId, user.sub, role);
+    return this.service.removerRegistroTempoChamado(id, registroId, user.sub, role, user);
   }
 }
