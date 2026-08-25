@@ -106,12 +106,17 @@ async function main() {
     { codigo: 'SUPERVISOR', nome: 'Supervisor', descricao: 'Criar e gerenciar inventarios da filial', moduloId: modInventario.id },
     { codigo: 'OPERATOR', nome: 'Operador', descricao: 'Contar itens do inventario', moduloId: modInventario.id },
     // Gestao TI
-    { codigo: 'ADMIN', nome: 'Administrador', descricao: 'Acesso total ao Workspace', moduloId: modGestaoTi.id },
-    { codigo: 'GESTOR', nome: 'Gestor', descricao: 'Gestao completa do departamento (Workspace)', moduloId: modGestaoTi.id },
-    { codigo: 'SUPORTE', nome: 'Suporte', descricao: 'Equipe que atende chamados, projetos, contratos, OS, paradas e base de conhecimento (Workspace)', moduloId: modGestaoTi.id },
-    { codigo: 'USUARIO_FINAL', nome: 'Usuario Final', descricao: 'Abrir chamados publicos e consultar status dos proprios chamados', moduloId: modGestaoTi.id },
-    { codigo: 'USUARIO_CHAVE', nome: 'Usuario-Chave', descricao: 'Usuarios-chave de projetos (acesso limitado a pendencias)', moduloId: modGestaoTi.id },
-    { codigo: 'TERCEIRIZADO', nome: 'Terceirizado', descricao: 'Analista externo com acesso restrito a projetos e pendencias vinculados', moduloId: modGestaoTi.id },
+    // ⚠️ Estes textos aparecem no Configurador (dica do seletor de papel + guia do "?").
+    // Nada de "TI" aqui: o Workspace nasceu no T.I. e hoje atende vários departamentos.
+    // Manter EM SINCRONIA com a migration 20260825120000_workspace_role_descricao_sem_ti.
+    // O ADMIN é GLOBAL por design (D36) — o departamento da permissão NÃO o restringe;
+    // quem precisa de poder só no departamento recebe GESTOR.
+    { codigo: 'ADMIN', nome: 'Administrador', descricao: 'Acesso total ao Workspace — enxerga TODOS os departamentos, não só o escolhido na linha', moduloId: modGestaoTi.id },
+    { codigo: 'GESTOR', nome: 'Gestor', descricao: 'Gestão completa do departamento', moduloId: modGestaoTi.id },
+    { codigo: 'SUPORTE', nome: 'Suporte', descricao: 'Equipe do departamento: atende chamados, projetos, contratos, OS, paradas e base de conhecimento', moduloId: modGestaoTi.id },
+    { codigo: 'USUARIO_FINAL', nome: 'Usuario Final', descricao: 'Abrir chamados públicos e consultar o status dos próprios chamados', moduloId: modGestaoTi.id },
+    { codigo: 'USUARIO_CHAVE', nome: 'Usuario-Chave', descricao: 'Usuário-chave de projetos (acesso limitado a pendências)', moduloId: modGestaoTi.id },
+    { codigo: 'TERCEIRIZADO', nome: 'Terceirizado', descricao: 'Analista externo com acesso restrito a projetos e pendências vinculados', moduloId: modGestaoTi.id },
     // Fiscal — hierarquia em 4 niveis (ver fiscal/backend/src/common/constants/roles.constant.ts)
     { codigo: 'OPERADOR_ENTRADA', nome: 'Operador de Entrada', descricao: 'Consulta NF-e/CT-e + cadastro pontual + historico proprio', moduloId: modFiscal.id },
     { codigo: 'ANALISTA_CADASTRO', nome: 'Analista de Cadastro', descricao: 'Operador + relatorios + divergencias + sincronizacao manual', moduloId: modFiscal.id },
@@ -122,8 +127,14 @@ async function main() {
   const roles: Record<string, { id: string }> = {};
   for (const r of rolesData) {
     const role = await prisma.roleModulo.upsert({
+      // ⭐ `update: {}` fazia deste seed um CREATE disfarçado: corrigir um texto aqui
+      // não chegava a nenhum ambiente já criado, e o erro sobrevivia calado (foi o
+      // caso do "Acesso total a gestao de TI", corrigido no seed e vivo no banco).
+      // O catálogo de papéis é do CÓDIGO — não há tela nem endpoint que o edite —,
+      // então o seed pode e deve mandar no nome e na descrição. O `codigo` é a
+      // chave e não se toca.
       where: { moduloId_codigo: { moduloId: r.moduloId, codigo: r.codigo } },
-      update: {},
+      update: { nome: r.nome, descricao: r.descricao },
       create: r,
     });
     roles[`${r.moduloId}:${r.codigo}`] = role;
