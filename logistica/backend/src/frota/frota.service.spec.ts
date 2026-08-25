@@ -69,6 +69,34 @@ describe('FrotaService — escopo de visibilidade das viagens de frota', () => {
     expect(linha).toMatchObject({ tipo: 'ENTREGA', condutorNome: 'Wanderson', paradas: 3 });
   });
 
+  // ⭐ 25/08 — o APP é execução individual; gestão (alterar/cancelar viagem de
+  // outro) é ato de DESKTOP. Relato do Clenio na HLG: entrou como ADMIN no app e
+  // viu a saída registrada por outra pessoa. A Frota era a última lista do app
+  // consumindo a visão do desktop crua (o RDV já mandava `escopo=meus` e a
+  // Entrega tem endpoint próprio).
+  it('listar escopo=meus (ADMIN): passa a filtrar pelas SUAS', async () => {
+    prisma.viagem.findMany.mockResolvedValue([]);
+    await svc.listar(comRole('ADMIN'), undefined, 'FROTA', 'meus');
+    const where = prisma.viagem.findMany.mock.calls[0][0].where;
+    expect(where.OR).toEqual([{ criadoPorId: 'u1' }, { veiculo: { supervisorId: 'u1' } }]);
+    expect(where.filialId).toBe('f1'); // volta a respeitar a filial, como qualquer não-gestor
+  });
+
+  it('listar escopo=meus (Gestor de Frota): idem — o papel não abre a lista', async () => {
+    prisma.viagem.findMany.mockResolvedValue([]);
+    await svc.listar(comRole('GESTOR_FROTA'), undefined, 'FROTA', 'meus');
+    expect(prisma.viagem.findMany.mock.calls[0][0].where.OR)
+      .toEqual([{ criadoPorId: 'u1' }, { veiculo: { supervisorId: 'u1' } }]);
+  });
+
+  // O desktop NÃO pode mudar de comportamento: quem não manda escopo continua
+  // vendo a frota inteira. É a mesma rota servindo as duas telas.
+  it('listar sem escopo (ADMIN): segue vendo todas — o desktop é a tela de gestão', async () => {
+    prisma.viagem.findMany.mockResolvedValue([]);
+    await svc.listar(comRole('ADMIN'));
+    expect(prisma.viagem.findMany.mock.calls[0][0].where.OR).toBeUndefined();
+  });
+
   it('listar (Gestor de Frota): SEM filtro — vê todas da filial', async () => {
     prisma.viagem.findMany.mockResolvedValue([]);
     await svc.listar(comRole('GESTOR_FROTA'));

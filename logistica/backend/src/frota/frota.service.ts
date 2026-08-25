@@ -11,7 +11,7 @@ import { CondutorTokenService } from '../common/condutor-token.service.js';
 import { temRoleLogistica } from '../common/roles-logistica.js';
 import { LocalClienteService } from '../local/local-cliente.service.js';
 import { resolverDataEvento } from './data-evento.js';
-import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, type ParadaPlanejadaDto, type FiltroTipoViagem } from './dto.js';
+import { SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, type ParadaPlanejadaDto, type FiltroTipoViagem, type FiltroEscopoViagem } from './dto.js';
 
 // Mesma normalização do toChapaPortal pra comparar matrículas com segurança.
 const chapa = (m: string) => 'E' + (m || '').replace(/\D/g, '').slice(-5).padStart(5, '0');
@@ -1360,11 +1360,22 @@ export class FrotaService {
    * SUPERVISOR nunca entra: o RDV é container MENSAL da prestação de contas, não
    * uma saída de veículo — listá-lo aqui misturaria mês com viagem.
    */
-  async listar(user: JwtPayload, situacao?: StatusViagem, tipo: FiltroTipoViagem = 'FROTA') {
+  async listar(user: JwtPayload, situacao?: StatusViagem, tipo: FiltroTipoViagem = 'FROTA', escopoPedido?: FiltroEscopoViagem) {
     // Escopo: Gestor de Frota / ADMIN veem TODAS as viagens da filial; os demais
     // (operador, registrador, gestor de entregas) só veem as SUAS — quem registrou
     // a saída (criadoPorId) ou é supervisor de área do veículo (mesmo dono do ajuste).
-    const ehGestor = this.ehGestorFrota(user);
+    //
+    // ⭐ `escopo=meus` desliga a visão de gestor MESMO para GESTOR_FROTA/ADMIN: é o
+    // que o APP pede. O app é execução individual — quem está em campo opera a sua
+    // saída —, enquanto alterar/cancelar viagem de outro é ato de GESTÃO, e gestão
+    // se faz no desktop. Mesma regra que o RDV já aplica (`supervisor.controller`,
+    // `escopo=meus`) e que a Entrega resolve por endpoint próprio (`/viagens/minhas`);
+    // a Frota era a última lista do app que consumia a visão do desktop crua, e por
+    // isso o ADMIN via no celular a saída registrada por outra pessoa.
+    //
+    // Quem decide o escopo é o CLIENTE, que sabe para que serve a tela — o servidor
+    // não tem como adivinhar isso pelo papel de quem chama.
+    const ehGestor = escopoPedido !== 'meus' && this.ehGestorFrota(user);
     const escopo = ehGestor ? {} : await this.escopoViagemNaoGestor(user);
     // Supervisor de Departamento: "minha operação" abrange os veículos do(s) seu(s)
     // departamento(s) — deps computados uma vez p/ o flag ehMinha da lista.

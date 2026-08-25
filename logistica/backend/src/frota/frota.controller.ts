@@ -4,7 +4,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { rolesLogistica } from '../common/roles-logistica.js';
 import { FrotaService } from './frota.service.js';
-import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, CancelarSaidaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, FILTROS_TIPO_VIAGEM, type FiltroTipoViagem } from './dto.js';
+import { BuscarCondutorDto, ValidarCondutorDto, SaidaFrotaDto, SaidaIndividualDto, RetornoFrotaDto, RetornoPortariaDto, CancelarSaidaDto, AjusteGestorDto, AddParadaDto, RegistrarManutencaoDto, SaidaPortariaDto, PlanejarParadasDto, CheckinParadaDto, CriarLocalParadaDto, AtualizarLocalParadaDto, FILTROS_TIPO_VIAGEM, type FiltroTipoViagem, FILTROS_ESCOPO_VIAGEM, type FiltroEscopoViagem } from './dto.js';
 
 
 @Controller('frota')
@@ -105,6 +105,10 @@ export class FrotaController {
     @CurrentUser() user: JwtPayload,
     @Query('situacao') situacao?: StatusViagem,
     @Query('tipo') tipo?: string,
+    // `escopo=meus` é o que o APP manda: em campo cada um opera a SUA saída, e a
+    // gestão (alterar/cancelar viagem de outro) é ato de DESKTOP. Sem o parâmetro
+    // vale a listagem do desktop, onde gestor/ADMIN veem a frota inteira.
+    @Query('escopo') escopo?: string,
   ) {
     // Validação EXPLÍCITA: um valor fora da lista chegaria ao service como chave
     // inexistente de TipoViagem (undefined), o filtro de tipo sumiria do where e a
@@ -113,7 +117,12 @@ export class FrotaController {
     if (tipo !== undefined && !(FILTROS_TIPO_VIAGEM as readonly string[]).includes(tipo)) {
       throw new BadRequestException(`tipo inválido: use ${FILTROS_TIPO_VIAGEM.join(', ')}.`);
     }
-    return this.frota.listar(user, situacao, tipo as FiltroTipoViagem | undefined);
+    // Mesmo tratamento do `tipo`: valor fora da lista não pode virar "sem escopo"
+    // em silêncio — um `escopo=meu` (typo) devolveria a frota inteira ao app.
+    if (escopo !== undefined && !(FILTROS_ESCOPO_VIAGEM as readonly string[]).includes(escopo)) {
+      throw new BadRequestException(`escopo inválido: use ${FILTROS_ESCOPO_VIAGEM.join(', ')}.`);
+    }
+    return this.frota.listar(user, situacao, tipo as FiltroTipoViagem | undefined, escopo as FiltroEscopoViagem | undefined);
   }
 
   /** Detalhe de uma viagem de frota (página de operações). */

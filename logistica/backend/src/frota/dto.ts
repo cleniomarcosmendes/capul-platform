@@ -23,6 +23,11 @@ export class ParadaPlanejadaDto {
 export const FILTROS_TIPO_VIAGEM = ['FROTA', 'ENTREGA', 'TODAS'] as const;
 export type FiltroTipoViagem = (typeof FILTROS_TIPO_VIAGEM)[number];
 
+/** Escopo pedido pelo CLIENTE. `meus` é o que o APP manda (ver frota.service#listar).
+ *  Mesma convenção do RDV (`supervisor.controller` → `escopo=meus`). */
+export const FILTROS_ESCOPO_VIAGEM = ['meus'] as const;
+export type FiltroEscopoViagem = (typeof FILTROS_ESCOPO_VIAGEM)[number];
+
 export class BuscarCondutorDto {
   @IsString() @IsNotEmpty() @MaxLength(20)
   matricula!: string;

@@ -148,6 +148,17 @@ Plataforma corporativa modular com microservicos independentes:
   (`assertOpera`). Sem isso o ciclo ficava partido: saída ✅ → despesa 🔴 → retorno ✅.
 - **⚠️ App: `expo-image-manipulator` é módulo NATIVO** — exige **APK novo**; OTA
   sobre o APK antigo derruba o app instalado (`runtimeVersion` fixo em 1.0.0).
+- **⭐ App = EXECUÇÃO; gestão é no DESKTOP (25/08)**: o app da Frota consumia a
+  listagem do desktop crua, entao ADMIN/GESTOR_FROTA viam no celular a saida
+  registrada por OUTRA pessoa. Agora o app manda **`escopo=meus`** em
+  `GET /frota/viagens` — mesma convencao que o RDV ja usava
+  (`supervisor.controller`) e que a Entrega resolve por endpoint proprio
+  (`/viagens/minhas`). **Quem decide o escopo e o CLIENTE**, que sabe para que
+  serve a tela; o desktop (sem o parametro) segue vendo a frota inteira. Sem o
+  cartao na lista **nao ha caminho** ate o detalhe (nao existe deep link no app),
+  entao esconder da lista ja e a trava — nao precisou mexer em permissao. Texto da
+  tela virou **"Meus veiculos na rua"**: "Veiculos na rua (0)" leria como frota
+  parada.
 - **⭐ Identidade de build (24/08)**: `version`/`versionCode` ficam parados por meses
   e nao distinguiam dois APKs — "estou testando a versao certa?" so tinha resposta
   por fe. Agora **cada artefato carrega o commit**: o app grava em `extra.build`

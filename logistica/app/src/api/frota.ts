@@ -50,9 +50,20 @@ export async function veiculosDisponiveis(
   return data;
 }
 
-/** Viagens de frota da filial (default: em curso). */
+/**
+ * Viagens de frota do PRÓPRIO usuário (default: em curso).
+ *
+ * `escopo=meus` é obrigatório aqui, exatamente como no RDV: sem ele o backend
+ * devolve a listagem do DESKTOP, onde GESTOR_FROTA/ADMIN veem a frota inteira —
+ * correto lá (é a tela de gestão), errado aqui, onde a lista significa "veículo
+ * que EU estou operando". Visto na HLG em 25/08: o ADMIN abria o app e via a
+ * saída registrada por outra pessoa.
+ *
+ * E é o que basta para a gestão ficar no desktop: sem o cartão na lista não há
+ * caminho até o detalhe (não existe deep link nem busca por número no app).
+ */
 export async function listarViagensFrota(situacao: 'EM_CURSO' | 'CONCLUIDA' = 'EM_CURSO'): Promise<ViagemFrota[]> {
-  const { data } = await api.get<ViagemFrota[]>(`${LOGISTICA_BASE}/frota/viagens`, { params: { situacao } });
+  const { data } = await api.get<ViagemFrota[]>(`${LOGISTICA_BASE}/frota/viagens`, { params: { situacao, escopo: 'meus' } });
   return data;
 }
 

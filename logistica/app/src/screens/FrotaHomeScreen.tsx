@@ -75,7 +75,11 @@ export function FrotaHomeScreen({ navigation }: Props) {
         <Text style={styles.ctaTxt}>＋ Registrar saída de veículo</Text>
       </TouchableOpacity>
 
-      <Text style={styles.secao}>Veículos na rua ({viagens.length})</Text>
+      {/* "Meus": desde 25/08 a lista é do PRÓPRIO usuário (`escopo=meus`). Sem o
+          "Meus", um gestor leria "Veículos na rua (0)" como "frota parada" — a
+          tela diria algo mais amplo do que mostra. O panorama da frota é do
+          desktop. */}
+      <Text style={styles.secao}>Meus veículos na rua ({viagens.length})</Text>
 
       <FlatList
       // Android desanexa view fora da tela e ela para de receber toque (ver ViagemDetalheScreen).
@@ -85,7 +89,9 @@ export function FrotaHomeScreen({ navigation }: Props) {
         keyExtractor={(v, i) => v.id ?? `idx-${i}`}
         refreshControl={<RefreshControl refreshing={atualizando} onRefresh={onRefresh} tintColor={CAPUL} />}
         ListEmptyComponent={
-          <Text style={styles.vazio}>{erro || 'Nenhum veículo em viagem agora.\nArraste para baixo para atualizar.'}</Text>
+          <Text style={styles.vazio}>
+            {erro || 'Você não tem saída de veículo em curso.\nRegistre uma saída acima, ou arraste para baixo para atualizar.'}
+          </Text>
         }
         renderItem={({ item }) => (
           <TouchableOpacity
