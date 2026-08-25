@@ -11,6 +11,8 @@ import { resolveDepartamento } from '../../common/helpers/resolve-departamento.h
 import { resolveDepartamentoLancamento } from '../../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
+import { ehGestorNoDepto, isGestor } from '../../common/constants/roles.constant.js';
+import { hasCapability } from '../../common/helpers/capability.helper.js';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -126,11 +128,23 @@ export class CompraNotaFiscalService {
   }
 
   /**
-   * Verifica se o usuario tem permissao para gerenciar compras/NFs de uma equipe.
-   * ADMIN e GESTOR_TI sempre tem acesso. Outros precisam ser membro da equipe com podeGerirCompras.
+   * Quem pode mexer nesta NF: quem manda NO DEPARTAMENTO DELA, ou o membro da equipe
+   * da NF com `podeGerirCompras`.
+   *
+   * ⭐ 25/08 — gêmeo do `ensureContratoPermission` (auditoria §3): era role
+   * DENORMALIZADA sem olhar departamento, sobre um `findUnique` sem filtro.
+   * `adminGlobal: false` porque aqui vale E1 (o ADMIN não escapa por role; o bypass do
+   * auditor é OVERSIGHT_PLATAFORMA), não D36.
    */
-  async ensureNFPermission(equipeId: string | null | undefined, usuarioId: string, role: string) {
-    if (role === 'ADMIN' || role === 'GESTOR') return;
+  async ensureNFPermission(
+    alvo: { equipeId: string | null | undefined; departamentoId?: string | null },
+    usuarioId: string,
+    role: string,
+    user?: JwtPayload,
+  ) {
+    if (user && hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return;
+    if (ehGestorNoDepto(user, alvo.departamentoId, role, { adminGlobal: false })) return;
+    const equipeId = alvo.equipeId;
     if (!equipeId) {
       throw new ForbiddenException('NF sem equipe associada. Associe uma equipe ou solicite a um ADMIN/GESTOR_TI.');
     }
@@ -145,8 +159,20 @@ export class CompraNotaFiscalService {
   /**
    * Retorna equipes onde o usuario pode gerenciar compras.
    */
-  async findEquipesParaCompras(usuarioId: string, role: string) {
-    if (role === 'ADMIN' || role === 'GESTOR') {
+  async findEquipesParaCompras(usuarioId: string, role: string, user?: JwtPayload) {
+    // Dropdown de "para qual equipe lanço": quem manda em ALGUM departamento escolhe
+    // entre as equipes DESSES departamentos — antes vinham as equipes da empresa toda.
+    const deptosOndeManda = (user?.modulos?.find((m) => m.codigo === 'WORKSPACE')?.departamentos ?? [])
+      .filter((d) => isGestor(d.role))
+      .map((d) => d.id);
+    if (user && deptosOndeManda.length > 0) {
+      return this.prisma.equipe.findMany({
+        where: { status: 'ATIVO', departamentoId: { in: deptosOndeManda } },
+        select: { id: true, nome: true, sigla: true, cor: true },
+        orderBy: { nome: 'asc' },
+      });
+    }
+    if (!user && (role === 'ADMIN' || role === 'GESTOR')) {
       return this.prisma.equipe.findMany({
         where: { status: 'ATIVO' },
         select: { id: true, nome: true, sigla: true, cor: true },
@@ -252,7 +278,7 @@ export class CompraNotaFiscalService {
     }
 
     // Verificar permissao na equipe
-    await this.ensureNFPermission(dto.equipeId, userId, role);
+    await this.ensureNFPermission({ equipeId: dto.equipeId, departamentoId: dto.departamentoId }, userId, role, user);
 
     // Se chave NF-e foi informada, valida via Fiscal antes de persistir.
     // O Fiscal já dispara SZR→SEFAZ→grava Protheus como efeito colateral.
@@ -349,7 +375,7 @@ export class CompraNotaFiscalService {
     }
 
     // Verificar permissao na equipe da NF existente
-    await this.ensureNFPermission(existing.equipeId, usuarioId, role);
+    await this.ensureNFPermission(existing, usuarioId, role, user);
 
     // Onda 3 S10 — gate de escrita (OVERSIGHT bypass).
     if (user) {
@@ -460,21 +486,21 @@ export class CompraNotaFiscalService {
     });
   }
 
-  async remove(id: string, usuarioId: string = '', role: string = 'ADMIN') {
+  async remove(id: string, usuarioId: string = '', role: string = 'ADMIN', user?: JwtPayload) {
     const existing = await this.prisma.notaFiscal.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Nota fiscal nao encontrada');
-    await this.ensureNFPermission(existing.equipeId, usuarioId, role);
+    await this.ensureNFPermission(existing, usuarioId, role, user);
     await this.prisma.notaFiscal.delete({ where: { id } });
     return { success: true };
   }
 
-  async duplicar(id: string, userId: string, filialId: string, role: string = 'ADMIN') {
+  async duplicar(id: string, userId: string, filialId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const original = await this.prisma.notaFiscal.findUnique({
       where: { id },
       include: { itens: true },
     });
     if (!original) throw new NotFoundException('Nota fiscal nao encontrada');
-    await this.ensureNFPermission(original.equipeId, userId, role);
+    await this.ensureNFPermission(original, userId, role, user);
 
     const itensData = original.itens.map((item) => ({
       produtoId: item.produtoId,
@@ -518,9 +544,11 @@ export class CompraNotaFiscalService {
     });
   }
 
-  async addAnexo(nfId: string, file: Express.Multer.File, userId: string) {
+  /** ⭐ 25/08 — idem contrato: anexar não checava nada. */
+  async addAnexo(nfId: string, file: Express.Multer.File, userId: string, role?: string, user?: JwtPayload) {
     const nf = await this.prisma.notaFiscal.findUnique({ where: { id: nfId } });
     if (!nf) throw new NotFoundException('Nota fiscal nao encontrada');
+    await this.ensureNFPermission(nf, userId, role ?? '', user);
     return this.prisma.anexoNotaFiscal.create({
       data: {
         nomeOriginal: file.originalname,
@@ -544,7 +572,10 @@ export class CompraNotaFiscalService {
     return { filePath, anexo };
   }
 
-  async removeAnexo(nfId: string, anexoId: string) {
+  async removeAnexo(nfId: string, anexoId: string, usuarioId?: string, role?: string, user?: JwtPayload) {
+    const nf = await this.prisma.notaFiscal.findUnique({ where: { id: nfId } });
+    if (!nf) throw new NotFoundException('Nota fiscal nao encontrada');
+    await this.ensureNFPermission(nf, usuarioId ?? '', role ?? '', user);
     const anexo = await this.prisma.anexoNotaFiscal.findFirst({
       where: { id: anexoId, notaFiscalId: nfId },
     });

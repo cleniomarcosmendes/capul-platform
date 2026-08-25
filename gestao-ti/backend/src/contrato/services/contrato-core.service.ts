@@ -15,6 +15,8 @@ import { resolveDepartamento } from '../../common/helpers/resolve-departamento.h
 import { resolveDepartamentoLancamento } from '../../common/helpers/resolve-departamento-lancamento.helper.js';
 import { applyDepartamentoFilterCadastroOpStaff, assertDepartamentoDoUser } from '../../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
+import { ehGestorNoDepto, isGestor } from '../../common/constants/roles.constant.js';
+import { hasCapability } from '../../common/helpers/capability.helper.js';
 
 @Injectable()
 export class ContratoCoreService {
@@ -29,14 +31,36 @@ export class ContratoCoreService {
   }
 
   /**
-   * Verifica se o usuario tem permissao para gerenciar contratos de uma equipe.
-   * ADMIN e GESTOR_TI sempre tem acesso. TECNICO precisa ser membro da equipe com podeGerirContratos.
+   * Quem pode mexer neste contrato: quem manda NO DEPARTAMENTO DELE, ou o membro da
+   * equipe do contrato com `podeGerirContratos`.
+   *
+   * ⭐ 25/08 (auditoria §3) — era `if (role === 'ADMIN' || role === 'GESTOR') return`,
+   * com a role DENORMALIZADA e sem olhar departamento nenhum. Como `findOne(id)` também
+   * não filtra, um GESTOR de qualquer departamento alterava rateio, parcela, anexo e
+   * vínculo de licença de contrato de OUTRO departamento — bastava ter o id. `create` e
+   * `update` já estavam protegidos (`assertDepartamentoDoUser`); a brecha era só nos
+   * filhos, e rateio é DINHEIRO (define para qual centro de custo a parcela vai).
+   *
+   * ⚠️ `adminGlobal: false` de propósito: aqui vale E1, não D36 — nos 6 cadastros
+   * operacionais o ADMIN não escapa por role; o bypass do auditor é a capability
+   * OVERSIGHT_PLATAFORMA, igual ao que `assertDepartamentoDoUser` já faz.
+   *
+   * Sem `user` (chamador antigo), cai na role denormalizada — o comportamento anterior.
    */
-  async ensureContratoPermission(equipeId: string | null | undefined, usuarioId: string, role: string) {
-    if (role === 'ADMIN' || role === 'GESTOR') return;
+  async ensureContratoPermission(
+    alvo: { equipeId: string | null | undefined; departamentoId?: string | null },
+    usuarioId: string,
+    role: string,
+    user?: JwtPayload,
+  ) {
+    if (user && hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return;
+    if (ehGestorNoDepto(user, alvo.departamentoId, role, { adminGlobal: false })) return;
+    const equipeId = alvo.equipeId;
     if (!equipeId) {
       throw new ForbiddenException('Contrato sem equipe associada. Associe uma equipe ao contrato ou solicite a um ADMIN/GESTOR_TI.');
     }
+    // A equipe pertence a um departamento, e esta é a equipe DO CONTRATO — ser membro
+    // dela já implica estar no departamento certo.
     const membro = await this.prisma.membroEquipe.findUnique({
       where: { usuarioId_equipeId: { usuarioId, equipeId } },
     });
@@ -65,8 +89,11 @@ export class ContratoCoreService {
    * Verifica se o usuario tem acesso ao modulo de contratos.
    * ADMIN e GESTOR_TI sempre tem acesso. Outros precisam ser membro de alguma equipe com podeGerirContratos.
    */
-  async verificarAcessoContratos(usuarioId: string, role: string): Promise<boolean> {
-    if (role === 'ADMIN' || role === 'GESTOR') return true;
+  async verificarAcessoContratos(usuarioId: string, role: string, user?: JwtPayload): Promise<boolean> {
+    // Porta do MÓDULO (menu/tela), não de um contrato específico: basta mandar em
+    // ALGUM departamento — o recorte por contrato é `ensureContratoPermission`.
+    if (user?.modulos?.find((m) => m.codigo === 'WORKSPACE')?.departamentos?.some((d) => isGestor(d.role))) return true;
+    if (!user && (role === 'ADMIN' || role === 'GESTOR')) return true;
     const count = await this.prisma.membroEquipe.count({
       where: { usuarioId, status: 'ATIVO', podeGerirContratos: true },
     });
@@ -130,9 +157,9 @@ export class ContratoCoreService {
     });
   }
 
-  async findOneWithPermission(id: string, usuarioId: string, role: string) {
+  async findOneWithPermission(id: string, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.findOne(id);
-    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.ensureContratoPermission(contrato, usuarioId, role, user);
     return contrato;
   }
 
@@ -150,7 +177,7 @@ export class ContratoCoreService {
   }
 
   async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
-    await this.ensureContratoPermission(dto.equipeId, usuarioId, role);
+    await this.ensureContratoPermission({ equipeId: dto.equipeId, departamentoId: dto.departamentoId }, usuarioId, role, user);
 
     if (dto.softwareId) {
       const sw = await this.prisma.software.findUnique({ where: { id: dto.softwareId } });
@@ -211,7 +238,7 @@ export class ContratoCoreService {
 
   async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.findOne(id);
-    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.ensureContratoPermission(contrato, usuarioId, role, user);
 
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao pode ser alterado');
@@ -269,9 +296,9 @@ export class ContratoCoreService {
     return updated;
   }
 
-  async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string, role: string = 'ADMIN') {
+  async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.findOne(id);
-    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const permitidos = TRANSICOES_VALIDAS[contrato.status];
     if (!permitidos.includes(novoStatus)) {
@@ -310,9 +337,9 @@ export class ContratoCoreService {
     return updated;
   }
 
-  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string, role: string = 'ADMIN') {
+  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.findOne(id);
-    await this.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.ensureContratoPermission(contrato, usuarioId, role, user);
 
     if (!['ATIVO', 'VENCIDO'].includes(contrato.status)) {
       throw new BadRequestException('Somente contratos ativos ou vencidos podem ser renovados');

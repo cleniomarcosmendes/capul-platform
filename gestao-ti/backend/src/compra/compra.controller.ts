@@ -139,7 +139,7 @@ export class CompraController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.findEquipesParaCompras(user.sub, role);
+    return this.service.findEquipesParaCompras(user.sub, role, user);
   }
 
   @Get('notas-fiscais/por-projeto/:projetoId')
@@ -197,7 +197,7 @@ export class CompraController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.removeNotaFiscal(id, user.sub, role);
+    return this.service.removeNotaFiscal(id, user.sub, role, user);
   }
 
   @Post('notas-fiscais/:id/duplicar')
@@ -207,7 +207,7 @@ export class CompraController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.duplicarNotaFiscal(id, user.sub, user.filialId, role);
+    return this.service.duplicarNotaFiscal(id, user.sub, user.filialId, role, user);
   }
 
   // --- Anexos de Notas Fiscais ---
@@ -228,9 +228,10 @@ export class CompraController {
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
     if (!file) throw new BadRequestException('Arquivo obrigatorio');
-    return this.service.addAnexoNF(id, file, user.sub);
+    return this.service.addAnexoNF(id, file, user.sub, role, user);
   }
 
   @Get('notas-fiscais/:id/anexos/:anexoId/download')
@@ -256,7 +257,12 @@ export class CompraController {
 
   @Delete('notas-fiscais/:id/anexos/:anexoId')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  removeAnexoNF(@Param('id') id: string, @Param('anexoId') anexoId: string) {
-    return this.service.removeAnexoNF(id, anexoId);
+  removeAnexoNF(
+    @Param('id') id: string,
+    @Param('anexoId') anexoId: string,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.removeAnexoNF(id, anexoId, user.sub, role, user);
   }
 }

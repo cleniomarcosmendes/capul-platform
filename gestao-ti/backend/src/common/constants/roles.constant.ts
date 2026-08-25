@@ -167,8 +167,13 @@ export function ehStaffNoDepto(
   user: JwtPayload | null | undefined,
   departamentoId: string | null | undefined,
   roleFallback?: string | null,
+  opts: { adminGlobal?: boolean } = {},
 ): boolean {
-  if (ehAdminEmAlgumDepto(user, roleFallback)) return true;
+  // `adminGlobal: false` = o ADMIN NÃO escapa. Não é detalhe: o Workspace tem DUAS
+  // decisões convivendo. D36 (ADMIN global) vale em chamado/projeto/dashboard, mas foi
+  // REVOGADO nos 6 cadastros operacionais (E1, 24/05) — lá o bypass é a capability
+  // OVERSIGHT_PLATAFORMA. Quem chama diz qual das duas está aplicando.
+  if ((opts.adminGlobal ?? true) && ehAdminEmAlgumDepto(user, roleFallback)) return true;
   const departamentos = user?.modulos?.find(
     (m) => m.codigo === 'WORKSPACE',
   )?.departamentos;
@@ -182,8 +187,9 @@ export function ehGestorNoDepto(
   user: JwtPayload | null | undefined,
   departamentoId: string | null | undefined,
   roleFallback?: string | null,
+  opts: { adminGlobal?: boolean } = {},
 ): boolean {
-  if (ehAdminEmAlgumDepto(user, roleFallback)) return true;
+  if ((opts.adminGlobal ?? true) && ehAdminEmAlgumDepto(user, roleFallback)) return true;
   const departamentos = user?.modulos?.find(
     (m) => m.codigo === 'WORKSPACE',
   )?.departamentos;

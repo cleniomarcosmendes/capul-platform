@@ -71,8 +71,8 @@ export class CompraService {
     return this.notaFiscalService.findByProjeto(projetoId);
   }
 
-  findEquipesParaCompras(usuarioId: string, role: string) {
-    return this.notaFiscalService.findEquipesParaCompras(usuarioId, role);
+  findEquipesParaCompras(usuarioId: string, role: string, user?: JwtPayload) {
+    return this.notaFiscalService.findEquipesParaCompras(usuarioId, role, user);
   }
 
   createNotaFiscal(dto: CreateNotaFiscalDto, userId: string, filialId: string, role: string, jwt?: string, user?: JwtPayload) {
@@ -92,25 +92,25 @@ export class CompraService {
     return this.notaFiscalService.validarChave(chave, jwt);
   }
 
-  removeNotaFiscal(id: string, usuarioId: string, role: string) {
-    return this.notaFiscalService.remove(id, usuarioId, role);
+  removeNotaFiscal(id: string, usuarioId: string, role: string, user?: JwtPayload) {
+    return this.notaFiscalService.remove(id, usuarioId, role, user);
   }
 
-  duplicarNotaFiscal(id: string, userId: string, filialId: string, role: string) {
-    return this.notaFiscalService.duplicar(id, userId, filialId, role);
+  duplicarNotaFiscal(id: string, userId: string, filialId: string, role: string, user?: JwtPayload) {
+    return this.notaFiscalService.duplicar(id, userId, filialId, role, user);
   }
 
   // Anexos NF
   listAnexosNF(nfId: string) {
     return this.notaFiscalService.listAnexos(nfId);
   }
-  addAnexoNF(nfId: string, file: Express.Multer.File, userId: string) {
-    return this.notaFiscalService.addAnexo(nfId, file, userId);
+  addAnexoNF(nfId: string, file: Express.Multer.File, userId: string, role?: string, user?: JwtPayload) {
+    return this.notaFiscalService.addAnexo(nfId, file, userId, role, user);
   }
   getAnexoFileNF(nfId: string, anexoId: string) {
     return this.notaFiscalService.getAnexoFile(nfId, anexoId);
   }
-  removeAnexoNF(nfId: string, anexoId: string) {
-    return this.notaFiscalService.removeAnexo(nfId, anexoId);
+  removeAnexoNF(nfId: string, anexoId: string, usuarioId?: string, role?: string, user?: JwtPayload) {
+    return this.notaFiscalService.removeAnexo(nfId, anexoId, usuarioId, role, user);
   }
 }

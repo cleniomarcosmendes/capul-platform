@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ContratoCoreService } from './contrato-core.service.js';
@@ -25,8 +26,13 @@ export class ContratoAnexoService {
     });
   }
 
-  async uploadAnexo(contratoId: string, file: Express.Multer.File) {
-    await this.core.findOne(contratoId);
+  /**
+   * ⭐ 25/08 — anexar não checava permissão nenhuma: com o id, dava para pendurar
+   * arquivo em contrato de qualquer departamento (mesmo padrão achado no chamado).
+   */
+  async uploadAnexo(contratoId: string, file: Express.Multer.File, usuarioId?: string, role?: string, user?: JwtPayload) {
+    const contrato = await this.core.findOne(contratoId);
+    await this.core.ensureContratoPermission(contrato, usuarioId ?? '', role ?? '', user);
 
     return this.prisma.anexoContrato.create({
       data: {
@@ -55,7 +61,9 @@ export class ContratoAnexoService {
     return { anexo, filePath };
   }
 
-  async excluirAnexo(contratoId: string, anexoId: string, usuarioId: string) {
+  async excluirAnexo(contratoId: string, anexoId: string, usuarioId: string, role?: string, user?: JwtPayload) {
+    const contratoDoAnexo = await this.core.findOne(contratoId);
+    await this.core.ensureContratoPermission(contratoDoAnexo, usuarioId, role ?? '', user);
     const anexo = await this.prisma.anexoContrato.findFirst({
       where: { id: anexoId, contratoId },
     });
@@ -95,9 +103,9 @@ export class ContratoAnexoService {
     return renovacoes;
   }
 
-  async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN') {
+  async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Nao e possivel vincular licencas a contrato finalizado');
     }
@@ -121,9 +129,9 @@ export class ContratoAnexoService {
     return updated;
   }
 
-  async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN') {
+  async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Nao e possivel desvincular licencas de contrato finalizado');
     }

@@ -153,7 +153,7 @@ export class ContratoController {
 
   @Get('acesso')
   verificarAcesso(@CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    return this.service.verificarAcessoContratos(user.sub, role).then(temAcesso => ({ temAcesso }));
+    return this.service.verificarAcessoContratos(user.sub, role, user).then(temAcesso => ({ temAcesso }));
   }
 
   @Get()
@@ -181,7 +181,7 @@ export class ContratoController {
 
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload, @GestaoTiRole() role: string) {
-    const contrato = await this.service.findOneWithPermission(id, user.sub, role);
+    const contrato = await this.service.findOneWithPermission(id, user.sub, role, user);
     // S15.7 (27/05) — gate STAFF do depto (bypass OVERSIGHT).
     assertStaffEmDepto(user, contrato.departamentoId);
     return contrato;
@@ -212,7 +212,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.alterarStatus(id, dto.status, user.sub, role);
+    return this.service.alterarStatus(id, dto.status, user.sub, role, user);
   }
 
   @Post(':id/renovar')
@@ -223,7 +223,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.renovar(id, dto, user.sub, role);
+    return this.service.renovar(id, dto, user.sub, role, user);
   }
 
   // --- Parcelas ---
@@ -241,7 +241,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.criarParcela(id, dto, user.sub, role);
+    return this.service.criarParcela(id, dto, user.sub, role, user);
   }
 
   @Patch(':id/parcelas/:pid')
@@ -253,7 +253,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.atualizarParcela(id, pid, dto, user.sub, role);
+    return this.service.atualizarParcela(id, pid, dto, user.sub, role, user);
   }
 
   @Post(':id/parcelas/:pid/pagar')
@@ -265,7 +265,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.pagarParcela(id, pid, dto, user.sub, role);
+    return this.service.pagarParcela(id, pid, dto, user.sub, role, user);
   }
 
   @Post(':id/parcelas/:pid/estornar')
@@ -276,7 +276,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.estornarParcela(id, pid, user.sub, role);
+    return this.service.estornarParcela(id, pid, user.sub, role, user);
   }
 
   @Post(':id/parcelas/:pid/cancelar')
@@ -287,7 +287,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.cancelarParcela(id, pid, user.sub, role);
+    return this.service.cancelarParcela(id, pid, user.sub, role, user);
   }
 
   // --- Rateio Template ---
@@ -305,13 +305,18 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.configurarRateioTemplate(id, dto, user.sub, role);
+    return this.service.configurarRateioTemplate(id, dto, user.sub, role, user);
   }
 
   @Post(':id/rateio-template/simular')
   @Roles('ADMIN', 'GESTOR', 'SUPORTE')
-  simularRateioTemplate(@Param('id') id: string, @Body() dto: SimularRateioDto) {
-    return this.service.simularRateioTemplate(id, dto);
+  simularRateioTemplate(
+    @Param('id') id: string,
+    @Body() dto: SimularRateioDto,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
+  ) {
+    return this.service.simularRateioTemplate(id, dto, user.sub, role, user);
   }
 
   // Reprocessa o rateio a partir do template em TODAS as parcelas (inclusive
@@ -324,7 +329,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.reprocessarRateioTemplate(id, user.sub, role, true);
+    return this.service.reprocessarRateioTemplate(id, user.sub, role, true, user);
   }
 
   // --- Rateio por Parcela ---
@@ -343,7 +348,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.configurarRateioParcela(id, pid, dto, user.sub, role);
+    return this.service.configurarRateioParcela(id, pid, dto, user.sub, role, user);
   }
 
   @Post(':id/parcelas/:pid/rateio/gerar')
@@ -355,7 +360,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.gerarRateioParcela(id, pid, dto, user.sub, role);
+    return this.service.gerarRateioParcela(id, pid, dto, user.sub, role, user);
   }
 
   @Post(':id/parcelas/:pid/rateio/copiar-pendentes')
@@ -384,7 +389,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.configurarRateioProjeto(id, pid, itens, user.sub, role);
+    return this.service.configurarRateioProjeto(id, pid, itens, user.sub, role, user);
   }
 
   @Delete(':id/parcelas/:pid/rateio-projeto')
@@ -395,7 +400,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.removerRateioProjeto(id, pid, user.sub, role);
+    return this.service.removerRateioProjeto(id, pid, user.sub, role, user);
   }
 
   // --- Anexos ---
@@ -426,9 +431,11 @@ export class ContratoController {
   uploadAnexo(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
     if (!file) throw new BadRequestException('Arquivo obrigatorio');
-    return this.service.uploadAnexo(id, file);
+    return this.service.uploadAnexo(id, file, user.sub, role, user);
   }
 
   @Get(':id/anexos/:aid/download')
@@ -457,8 +464,9 @@ export class ContratoController {
     @Param('id') id: string,
     @Param('aid') aid: string,
     @CurrentUser() user: JwtPayload,
+    @GestaoTiRole() role: string,
   ) {
-    return this.service.excluirAnexo(id, aid, user.sub);
+    return this.service.excluirAnexo(id, aid, user.sub, role, user);
   }
 
   // --- Renovacoes ---
@@ -478,7 +486,7 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.vincularLicenca(id, licencaId, user.sub, role);
+    return this.service.vincularLicenca(id, licencaId, user.sub, role, user);
   }
 
   @Delete(':id/licencas/:licId')
@@ -489,6 +497,6 @@ export class ContratoController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.service.desvincularLicenca(id, licId, user.sub, role);
+    return this.service.desvincularLicenca(id, licId, user.sub, role, user);
   }
 }

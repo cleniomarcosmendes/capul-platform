@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { ModalidadeRateio, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ContratoCoreService } from './contrato-core.service.js';
@@ -32,14 +33,20 @@ export class ContratoRateioService {
     });
   }
 
-  async simularRateioTemplate(contratoId: string, dto: SimularRateioDto) {
+  /**
+   * ⭐ 25/08 — simular não tinha checagem NENHUMA (só o `@Roles` do controller), e
+   * devolve cálculo sobre o `valorTotal` do contrato: era leitura do valor de contrato
+   * de qualquer departamento para quem tivesse o id.
+   */
+  async simularRateioTemplate(contratoId: string, dto: SimularRateioDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
     return this.computeRateio(dto.modalidade, dto.itens, new Decimal(contrato.valorTotal.toString()));
   }
 
-  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string, role: string = 'ADMIN') {
+  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     if (['RENOVADO', 'CANCELADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao permite alteracao de rateio');
@@ -125,9 +132,9 @@ export class ContratoRateioService {
     });
   }
 
-  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string, role: string = 'ADMIN') {
+  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
@@ -161,9 +168,9 @@ export class ContratoRateioService {
     return this.obterRateioParcela(contratoId, parcelaId);
   }
 
-  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string, role: string = 'ADMIN') {
+  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
@@ -304,9 +311,10 @@ export class ContratoRateioService {
     usuarioId: string,
     role: string = 'ADMIN',
     forcar = true,
+    user?: JwtPayload,
   ) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const template = await this.prisma.rateioTemplate.findUnique({
       where: { contratoId },
@@ -383,9 +391,10 @@ export class ContratoRateioService {
     itens: { projetoId: string; percentual?: number; valorCalculado: number }[],
     usuarioId: string,
     role: string = 'ADMIN',
+    user?: JwtPayload,
   ) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
@@ -440,9 +449,9 @@ export class ContratoRateioService {
     return this.obterRateioProjeto(contratoId, parcelaId);
   }
 
-  async removerRateioProjeto(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
+  async removerRateioProjeto(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },

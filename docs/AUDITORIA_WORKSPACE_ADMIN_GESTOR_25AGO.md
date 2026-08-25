@@ -109,7 +109,7 @@ assumir automático. Não é regra nova; é aplicar a que já foi escrita.
 
 ---
 
-## 3. ⚠️ Sub-recursos de Contrato e NF ignoram o departamento na ESCRITA
+## 3. ✅ CORRIGIDO (25/08, `b53b5bcc`+) — Sub-recursos de Contrato e NF ignoravam o departamento
 
 `contrato-core.service.ts:35`:
 
@@ -135,9 +135,21 @@ regra que o resto do módulo aplica não está aplicada aqui, e é escrita em **
 `@Roles`. Devolve cálculo sobre o `valorTotal` do contrato para qualquer staff que tenha
 o id.
 
-**Correção sugerida:** trocar as duas funções por um `assertDepartamentoDoUser(user, null,
-contrato.departamentoId)` + a checagem de equipe que já existe. Fica igual ao
-`create`/`update`.
+**Corrigido assim:** `ensureContratoPermission` e `ensureNFPermission` passaram a receber
+o **registro** (que traz `departamentoId`) e o `user`, e decidem por
+`ehGestorNoDepto(..., { adminGlobal: false })` + bypass por `OVERSIGHT_PLATAFORMA` —
+ou seja, aplicam **E1**, não D36. A checagem de equipe segue depois, e como a equipe é
+a *do contrato*, ser membro dela já implica o departamento certo. Sem `user` (chamador
+antigo/interno), cai na role denormalizada: o comportamento anterior.
+
+A varredura de invariante (`contrato-guard-invariante.spec.ts`) achou **4 escritas que
+ninguém tinha citado**: anexar e excluir anexo **de contrato** e **de NF** não checavam
+nada — com o id, dava para pendurar ou apagar arquivo em registro de qualquer
+departamento. Mesmo padrão do anexo de chamado. Também entraram:
+`simularRateioTemplate` (devolvia cálculo sobre o `valorTotal` sem checagem alguma) e
+`findEquipesParaCompras`, que listava as equipes da empresa inteira para quem fosse
+ADMIN/GESTOR pela role denormalizada — agora lista as dos departamentos onde a pessoa
+de fato manda.
 
 ---
 

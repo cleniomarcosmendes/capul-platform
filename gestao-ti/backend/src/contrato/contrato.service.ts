@@ -30,8 +30,8 @@ export class ContratoService {
 
   // --- Core ---
 
-  async verificarAcessoContratos(usuarioId: string, role: string): Promise<boolean> {
-    return this.core.verificarAcessoContratos(usuarioId, role);
+  async verificarAcessoContratos(usuarioId: string, role: string, user?: JwtPayload): Promise<boolean> {
+    return this.core.verificarAcessoContratos(usuarioId, role, user);
   }
 
   async findAll(filters: {
@@ -46,15 +46,15 @@ export class ContratoService {
     return this.core.findAll(filters, usuarioId, role, user);
   }
 
-  async findOneWithPermission(id: string, usuarioId: string, role: string) {
-    return this.core.findOneWithPermission(id, usuarioId, role);
+  async findOneWithPermission(id: string, usuarioId: string, role: string, user?: JwtPayload) {
+    return this.core.findOneWithPermission(id, usuarioId, role, user);
   }
 
   async findOne(id: string) {
     return this.core.findOne(id);
   }
 
-  async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: import('../common/interfaces/jwt-payload.interface').JwtPayload) {
+  async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     return this.core.create(dto, usuarioId, role, user);
   }
 
@@ -62,12 +62,12 @@ export class ContratoService {
     return this.core.update(id, dto, usuarioId, role, user);
   }
 
-  async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string, role: string = 'ADMIN') {
-    return this.core.alterarStatus(id, novoStatus, usuarioId, role);
+  async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.core.alterarStatus(id, novoStatus, usuarioId, role, user);
   }
 
-  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.core.renovar(id, dto, usuarioId, role);
+  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.core.renovar(id, dto, usuarioId, role, user);
   }
 
   // --- Parcelas ---
@@ -76,24 +76,24 @@ export class ContratoService {
     return this.parcela.listarParcelas(contratoId);
   }
 
-  async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.parcela.criarParcela(contratoId, dto, usuarioId, role);
+  async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.parcela.criarParcela(contratoId, dto, usuarioId, role, user);
   }
 
-  async atualizarParcela(contratoId: string, parcelaId: string, dto: UpdateParcelaDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.parcela.atualizarParcela(contratoId, parcelaId, dto, usuarioId, role);
+  async atualizarParcela(contratoId: string, parcelaId: string, dto: UpdateParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.parcela.atualizarParcela(contratoId, parcelaId, dto, usuarioId, role, user);
   }
 
-  async pagarParcela(contratoId: string, parcelaId: string, dto: PagarParcelaDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.parcela.pagarParcela(contratoId, parcelaId, dto, usuarioId, role);
+  async pagarParcela(contratoId: string, parcelaId: string, dto: PagarParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.parcela.pagarParcela(contratoId, parcelaId, dto, usuarioId, role, user);
   }
 
-  async estornarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
-    return this.parcela.estornarParcela(contratoId, parcelaId, usuarioId, role);
+  async estornarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.parcela.estornarParcela(contratoId, parcelaId, usuarioId, role, user);
   }
 
-  async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
-    return this.parcela.cancelarParcela(contratoId, parcelaId, usuarioId, role);
+  async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.parcela.cancelarParcela(contratoId, parcelaId, usuarioId, role, user);
   }
 
   // --- Rateio ---
@@ -102,28 +102,28 @@ export class ContratoService {
     return this.rateio.obterRateioTemplate(contratoId);
   }
 
-  async simularRateioTemplate(contratoId: string, dto: SimularRateioDto) {
-    return this.rateio.simularRateioTemplate(contratoId, dto);
+  async simularRateioTemplate(contratoId: string, dto: SimularRateioDto, usuarioId: string, role: string, user?: JwtPayload) {
+    return this.rateio.simularRateioTemplate(contratoId, dto, usuarioId, role, user);
   }
 
-  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.rateio.configurarRateioTemplate(contratoId, dto, usuarioId, role);
+  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.rateio.configurarRateioTemplate(contratoId, dto, usuarioId, role, user);
   }
 
-  async reprocessarRateioTemplate(contratoId: string, usuarioId: string, role: string = 'ADMIN', forcar = true) {
-    return this.rateio.reprocessarRateioTemplate(contratoId, usuarioId, role, forcar);
+  async reprocessarRateioTemplate(contratoId: string, usuarioId: string, role: string = 'ADMIN', forcar = true, user?: JwtPayload) {
+    return this.rateio.reprocessarRateioTemplate(contratoId, usuarioId, role, forcar, user);
   }
 
   async obterRateioParcela(contratoId: string, parcelaId: string) {
     return this.rateio.obterRateioParcela(contratoId, parcelaId);
   }
 
-  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.rateio.gerarRateioParcela(contratoId, parcelaId, dto, usuarioId, role);
+  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.rateio.gerarRateioParcela(contratoId, parcelaId, dto, usuarioId, role, user);
   }
 
-  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string, role: string = 'ADMIN') {
-    return this.rateio.configurarRateioParcela(contratoId, parcelaId, dto, usuarioId, role);
+  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.rateio.configurarRateioParcela(contratoId, parcelaId, dto, usuarioId, role, user);
   }
 
   async copiarRateioParaPendentes(contratoId: string, parcelaId: string, usuarioId: string) {
@@ -142,12 +142,13 @@ export class ContratoService {
     itens: { projetoId: string; percentual?: number; valorCalculado: number }[],
     usuarioId: string,
     role: string = 'ADMIN',
+    user?: JwtPayload,
   ) {
-    return this.rateio.configurarRateioProjeto(contratoId, parcelaId, itens, usuarioId, role);
+    return this.rateio.configurarRateioProjeto(contratoId, parcelaId, itens, usuarioId, role, user);
   }
 
-  async removerRateioProjeto(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
-    return this.rateio.removerRateioProjeto(contratoId, parcelaId, usuarioId, role);
+  async removerRateioProjeto(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.rateio.removerRateioProjeto(contratoId, parcelaId, usuarioId, role, user);
   }
 
   // --- Config (Naturezas, Tipos, Fornecedores, Produtos) ---
@@ -222,27 +223,27 @@ export class ContratoService {
     return this.anexo.listarAnexos(contratoId);
   }
 
-  async uploadAnexo(contratoId: string, file: Express.Multer.File) {
-    return this.anexo.uploadAnexo(contratoId, file);
+  async uploadAnexo(contratoId: string, file: Express.Multer.File, usuarioId?: string, role?: string, user?: JwtPayload) {
+    return this.anexo.uploadAnexo(contratoId, file, usuarioId, role, user);
   }
 
   async downloadAnexo(contratoId: string, anexoId: string) {
     return this.anexo.downloadAnexo(contratoId, anexoId);
   }
 
-  async excluirAnexo(contratoId: string, anexoId: string, usuarioId: string) {
-    return this.anexo.excluirAnexo(contratoId, anexoId, usuarioId);
+  async excluirAnexo(contratoId: string, anexoId: string, usuarioId: string, role?: string, user?: JwtPayload) {
+    return this.anexo.excluirAnexo(contratoId, anexoId, usuarioId, role, user);
   }
 
   async listarRenovacoes(contratoId: string) {
     return this.anexo.listarRenovacoes(contratoId);
   }
 
-  async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN') {
-    return this.anexo.vincularLicenca(contratoId, licencaId, usuarioId, role);
+  async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.anexo.vincularLicenca(contratoId, licencaId, usuarioId, role, user);
   }
 
-  async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN') {
-    return this.anexo.desvincularLicenca(contratoId, licencaId, usuarioId, role);
+  async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+    return this.anexo.desvincularLicenca(contratoId, licencaId, usuarioId, role, user);
   }
 }

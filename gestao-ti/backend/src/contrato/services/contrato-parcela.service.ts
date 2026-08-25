@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 import { ContratoCoreService } from './contrato-core.service.js';
 import { CreateParcelaDto } from '../dto/create-parcela.dto.js';
 import { UpdateParcelaDto } from '../dto/update-parcela.dto.js';
@@ -33,9 +34,9 @@ export class ContratoParcelaService {
     });
   }
 
-  async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string, role: string = 'ADMIN') {
+  async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
       throw new BadRequestException('Contrato finalizado nao permite novas parcelas');
@@ -65,9 +66,9 @@ export class ContratoParcelaService {
     return parcela;
   }
 
-  async atualizarParcela(contratoId: string, parcelaId: string, dto: UpdateParcelaDto, usuarioId: string, role: string = 'ADMIN') {
+  async atualizarParcela(contratoId: string, parcelaId: string, dto: UpdateParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
@@ -102,9 +103,9 @@ export class ContratoParcelaService {
     });
   }
 
-  async pagarParcela(contratoId: string, parcelaId: string, dto: PagarParcelaDto, usuarioId: string, role: string = 'ADMIN') {
+  async pagarParcela(contratoId: string, parcelaId: string, dto: PagarParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
@@ -138,9 +139,9 @@ export class ContratoParcelaService {
     return updated;
   }
 
-  async estornarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
+  async estornarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
@@ -171,9 +172,9 @@ export class ContratoParcelaService {
     return updated;
   }
 
-  async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN') {
+  async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
-    await this.core.ensureContratoPermission(contrato.equipeId, usuarioId, role);
+    await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
     const parcela = await this.prisma.parcelaContrato.findFirst({
       where: { id: parcelaId, contratoId },
