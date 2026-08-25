@@ -108,10 +108,10 @@ async function main() {
     // Gestao TI
     // ⚠️ Estes textos aparecem no Configurador (dica do seletor de papel + guia do "?").
     // Nada de "TI" aqui: o Workspace nasceu no T.I. e hoje atende vários departamentos.
-    // Manter EM SINCRONIA com a migration 20260825120000_workspace_role_descricao_sem_ti.
+    // Manter EM SINCRONIA com as migrations 20260825120000 e 20260825140000.
     // O ADMIN é GLOBAL por design (D36) — o departamento da permissão NÃO o restringe;
     // quem precisa de poder só no departamento recebe GESTOR.
-    { codigo: 'ADMIN', nome: 'Administrador', descricao: 'Acesso total ao Workspace — enxerga TODOS os departamentos, não só o escolhido na linha', moduloId: modGestaoTi.id },
+    { codigo: 'ADMIN', nome: 'Administrador', descricao: 'Acesso total ao Workspace — não fica restrito ao departamento escolhido: vê chamados, projetos e indicadores de TODOS. Cadastros (contrato, NF, ativo, licença, parada) continuam por departamento.', moduloId: modGestaoTi.id },
     { codigo: 'GESTOR', nome: 'Gestor', descricao: 'Gestão completa do departamento', moduloId: modGestaoTi.id },
     { codigo: 'SUPORTE', nome: 'Suporte', descricao: 'Equipe do departamento: atende chamados, projetos, contratos, OS, paradas e base de conhecimento', moduloId: modGestaoTi.id },
     { codigo: 'USUARIO_FINAL', nome: 'Usuario Final', descricao: 'Abrir chamados públicos e consultar o status dos próprios chamados', moduloId: modGestaoTi.id },
