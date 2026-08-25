@@ -103,7 +103,7 @@ export class ContratoAnexoService {
     return renovacoes;
   }
 
-  async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async vincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {
@@ -129,7 +129,7 @@ export class ContratoAnexoService {
     return updated;
   }
 
-  async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async desvincularLicenca(contratoId: string, licencaId: string, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
     if (['RENOVADO', 'CANCELADO', 'ENCERRADO'].includes(contrato.status)) {

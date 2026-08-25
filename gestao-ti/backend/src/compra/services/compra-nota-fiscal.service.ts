@@ -269,7 +269,7 @@ export class CompraNotaFiscalService {
     dto: CreateNotaFiscalDto,
     userId: string,
     filialId: string,
-    role: string = 'ADMIN',
+    role: string,
     jwt?: string,
     user?: JwtPayload,
   ) {
@@ -364,7 +364,7 @@ export class CompraNotaFiscalService {
     id: string,
     dto: UpdateNotaFiscalDto,
     usuarioId: string = '',
-    role: string = 'ADMIN',
+    role: string,
     jwt?: string,
     user?: JwtPayload,
   ) {
@@ -486,7 +486,7 @@ export class CompraNotaFiscalService {
     });
   }
 
-  async remove(id: string, usuarioId: string = '', role: string = 'ADMIN', user?: JwtPayload) {
+  async remove(id: string, usuarioId: string = '', role: string, user?: JwtPayload) {
     const existing = await this.prisma.notaFiscal.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Nota fiscal nao encontrada');
     await this.ensureNFPermission(existing, usuarioId, role, user);
@@ -494,7 +494,7 @@ export class CompraNotaFiscalService {
     return { success: true };
   }
 
-  async duplicar(id: string, userId: string, filialId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async duplicar(id: string, userId: string, filialId: string, role: string, user?: JwtPayload) {
     const original = await this.prisma.notaFiscal.findUnique({
       where: { id },
       include: { itens: true },

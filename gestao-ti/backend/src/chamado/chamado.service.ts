@@ -183,11 +183,11 @@ export class ChamadoService {
     return this.tempo.encerrarTempoChamado(chamadoId, userId);
   }
 
-  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId?: string, role?: string, user?: JwtPayload) {
+  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId: string, role: string, user?: JwtPayload) {
     return this.tempo.ajustarRegistroTempoChamado(chamadoId, registroId, dto, userId, role, user);
   }
 
-  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId?: string, role?: string, user?: JwtPayload) {
+  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId: string, role: string, user?: JwtPayload) {
     return this.tempo.removerRegistroTempoChamado(chamadoId, registroId, userId, role, user);
   }
 

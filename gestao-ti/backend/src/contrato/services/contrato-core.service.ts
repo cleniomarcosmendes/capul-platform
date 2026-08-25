@@ -176,7 +176,7 @@ export class ContratoCoreService {
     return contrato;
   }
 
-  async create(dto: CreateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async create(dto: CreateContratoDto, usuarioId: string, role: string, user?: JwtPayload) {
     await this.ensureContratoPermission({ equipeId: dto.equipeId, departamentoId: dto.departamentoId }, usuarioId, role, user);
 
     if (dto.softwareId) {
@@ -236,7 +236,7 @@ export class ContratoCoreService {
     return contrato;
   }
 
-  async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async update(id: string, dto: UpdateContratoDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.findOne(id);
     await this.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -296,7 +296,7 @@ export class ContratoCoreService {
     return updated;
   }
 
-  async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async alterarStatus(id: string, novoStatus: StatusContrato, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.findOne(id);
     await this.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -337,7 +337,7 @@ export class ContratoCoreService {
     return updated;
   }
 
-  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async renovar(id: string, dto: RenovarContratoDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.findOne(id);
     await this.ensureContratoPermission(contrato, usuarioId, role, user);
 

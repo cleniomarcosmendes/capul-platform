@@ -115,7 +115,13 @@ export class ChamadoTempoService {
     }
   }
 
-  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId?: string, role?: string, user?: JwtPayload) {
+  /**
+   * ⭐ 25/08 — `userId`/`role` eram opcionais e a validação inteira vivia dentro de
+   * `if (userId && role)`: sem eles, a edição passava SEM CHECAGEM NENHUMA. O
+   * controller sempre os manda, então nada muda na prática — o que muda é que agora
+   * não dá para esquecer. Fail-open não se conserta com disciplina.
+   */
+  async ajustarRegistroTempoChamado(chamadoId: string, registroId: string, dto: UpdateRegistroTempoChamadoDto, userId: string, role: string, user?: JwtPayload) {
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
     if (chamado.status === 'CANCELADO') {
       throw new BadRequestException('Nao e possivel editar registros de tempo em chamado cancelado');
@@ -126,7 +132,7 @@ export class ChamadoTempoService {
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
 
-    if (userId && role) {
+    {
       const chamadoDoRegistro = await this.helpers.getChamadoOrFail(chamadoId);
       this.validarEdicaoRegistroChamado(
         registro, userId, ehGestorNoDepto(user, chamadoDoRegistro.departamentoId, role),
@@ -157,7 +163,8 @@ export class ChamadoTempoService {
     });
   }
 
-  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId?: string, role?: string, user?: JwtPayload) {
+  /** Idem `ajustarRegistroTempoChamado`: a checagem era condicional. */
+  async removerRegistroTempoChamado(chamadoId: string, registroId: string, userId: string, role: string, user?: JwtPayload) {
     const chamado = await this.helpers.getChamadoOrFail(chamadoId);
     if (chamado.status === 'CANCELADO') {
       throw new BadRequestException('Nao e possivel remover registros de tempo em chamado cancelado');
@@ -167,7 +174,7 @@ export class ChamadoTempoService {
       where: { id: registroId, chamadoId },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
-    if (userId && role) {
+    {
       const chamadoDoRegistro = await this.helpers.getChamadoOrFail(chamadoId);
       this.validarEdicaoRegistroChamado(
         registro, userId, ehGestorNoDepto(user, chamadoDoRegistro.departamentoId, role),

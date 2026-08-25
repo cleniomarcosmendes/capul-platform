@@ -44,7 +44,7 @@ export class ContratoRateioService {
     return this.computeRateio(dto.modalidade, dto.itens, new Decimal(contrato.valorTotal.toString()));
   }
 
-  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async configurarRateioTemplate(contratoId: string, dto: ConfigurarRateioTemplateDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -132,7 +132,7 @@ export class ContratoRateioService {
     });
   }
 
-  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async gerarRateioParcela(contratoId: string, parcelaId: string, dto: GerarRateioParcelaDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -168,7 +168,7 @@ export class ContratoRateioService {
     return this.obterRateioParcela(contratoId, parcelaId);
   }
 
-  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async configurarRateioParcela(contratoId: string, parcelaId: string, dto: ConfigurarRateioDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -309,7 +309,7 @@ export class ContratoRateioService {
   async reprocessarRateioTemplate(
     contratoId: string,
     usuarioId: string,
-    role: string = 'ADMIN',
+    role: string,
     forcar = true,
     user?: JwtPayload,
   ) {
@@ -390,7 +390,7 @@ export class ContratoRateioService {
     parcelaId: string,
     itens: { projetoId: string; percentual?: number; valorCalculado: number }[],
     usuarioId: string,
-    role: string = 'ADMIN',
+    role: string,
     user?: JwtPayload,
   ) {
     const contrato = await this.core.findOne(contratoId);
@@ -449,7 +449,7 @@ export class ContratoRateioService {
     return this.obterRateioProjeto(contratoId, parcelaId);
   }
 
-  async removerRateioProjeto(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async removerRateioProjeto(contratoId: string, parcelaId: string, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 

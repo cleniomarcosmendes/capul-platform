@@ -34,7 +34,7 @@ export class ContratoParcelaService {
     });
   }
 
-  async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async criarParcela(contratoId: string, dto: CreateParcelaDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -66,7 +66,7 @@ export class ContratoParcelaService {
     return parcela;
   }
 
-  async atualizarParcela(contratoId: string, parcelaId: string, dto: UpdateParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async atualizarParcela(contratoId: string, parcelaId: string, dto: UpdateParcelaDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -103,7 +103,7 @@ export class ContratoParcelaService {
     });
   }
 
-  async pagarParcela(contratoId: string, parcelaId: string, dto: PagarParcelaDto, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async pagarParcela(contratoId: string, parcelaId: string, dto: PagarParcelaDto, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -139,7 +139,7 @@ export class ContratoParcelaService {
     return updated;
   }
 
-  async estornarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async estornarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 
@@ -172,7 +172,7 @@ export class ContratoParcelaService {
     return updated;
   }
 
-  async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string = 'ADMIN', user?: JwtPayload) {
+  async cancelarParcela(contratoId: string, parcelaId: string, usuarioId: string, role: string, user?: JwtPayload) {
     const contrato = await this.core.findOne(contratoId);
     await this.core.ensureContratoPermission(contrato, usuarioId, role, user);
 

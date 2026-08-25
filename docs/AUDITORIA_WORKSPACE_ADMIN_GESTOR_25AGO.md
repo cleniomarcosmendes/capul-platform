@@ -153,12 +153,25 @@ de fato manda.
 
 ---
 
-## 4. ⚠️ `role: string = 'ADMIN'` como valor padrão — 38 ocorrências
+## 4. ✅ CORRIGIDO (25/08) — `role: string = 'ADMIN'` como valor padrão (38 ocorrências)
 
-Métodos de serviço do Workspace declaram `role` com **default ADMIN**. Hoje os controllers
-sempre passam a role real, então não há falha ativa. Mas o padrão é **fail-open**: o
-próximo chamador que esquecer o argumento ganha privilégio máximo, e nada acusa. O default
-seguro seria o papel mais fraco (ou parâmetro obrigatório).
+Métodos de serviço do Workspace declaravam `role` com **default ADMIN** — fail-open: o
+próximo chamador que esquecesse o argumento ganharia privilégio máximo, e nada acusaria.
+
+**O parâmetro virou obrigatório nos 38.** A troca não quebrou **uma linha sequer** (tsc
+limpo), o que responde a dúvida que existia antes de mexer: ninguém dependia do default,
+nem job nem cron. Ou seja, o risco era todo futuro — e agora não existe.
+
+Junto, dois métodos onde a checagem inteira vivia dentro de `if (userId && role)`
+(ajustar/remover registro de tempo): sem os argumentos, a edição passava **sem checagem
+nenhuma**. Os parâmetros viraram obrigatórios e a validação, incondicional.
+
+Um teste de varredura (`sem-default-admin.spec.ts`) impede o padrão de voltar — inclusive
+com `= 'GESTOR'`.
+
+**Fica pendente:** 141 ocorrências de `role?: string` (opcional) no módulo. A maioria é
+caminho de leitura, mas vale uma varredura futura atrás de outras checagens condicionais
+como as duas acima.
 
 ---
 
