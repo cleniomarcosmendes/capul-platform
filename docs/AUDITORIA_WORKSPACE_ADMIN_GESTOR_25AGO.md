@@ -65,6 +65,48 @@ departamento, não pela role denormalizada. Enquanto isso não acontece, tratar
 "multi-perfil com roles diferentes" como configuração **não suportada**: hoje ela concede
 o papel mais forte a todos os departamentos.
 
+
+### 2b. O caso concreto da CAPUL: Fiscal × T.I. (pergunta do Clenio, 25/08)
+
+A base **já está** nesse cenário — 8 usuários com papéis diferentes por departamento:
+
+| Usuário | Perfis |
+|---|---|
+| danielaelvira, fabioavelar, mariaoliveira, vanessasilva | Fiscal=**SUPORTE** + T.I.=USUARIO_FINAL |
+| valdirenemendes | Fiscal=**SUPORTE** + T.I.=USUARIO_CHAVE |
+| vanialucia | Fiscal=**GESTOR** + T.I.=USUARIO_FINAL |
+| tatianeoliveira | Fiscal=**GESTOR** + T.I.=USUARIO_CHAVE |
+| thiagopereira | Fiscal=**ADMIN** + T.I.=SUPORTE |
+
+**O que já respeita o departamento** (e foi feito justamente para isso):
+
+- **Listagem de chamados** — a visão "vejo o departamento inteiro" só vale nos deptos
+  onde a pessoa é staff (`getDeptosOndeStaff`). Quem é SUPORTE no Fiscal vê o Fiscal
+  inteiro e, no T.I., **só os próprios chamados**. Nasceu do incidente Juliana.
+- **Assumir automático** ao abrir e ao reabrir — usa `getRoleNoDepto(user,
+  departamentoId)`, o papel **naquele** departamento.
+- **Equipe carrega o departamento**: transferir um chamado para equipe de outro depto
+  **re-deriva** `departamentoId` (C2.7). O chamado muda de dono junto com a equipe —
+  não fica metade em cada.
+- Os 6 cadastros operacionais e a tela de Equipes (`findAllParaConfig`).
+
+**Onde ainda mistura** — o `@Roles` do controller lê a role **denormalizada**, uma só
+para o módulo inteiro:
+
+```
+POST /chamados/:id/assumir   @Roles('ADMIN','GESTOR','SUPORTE')
+async assumir(id, user)      // <- o serviço NÃO olha departamento
+```
+
+Quem é SUPORTE no Fiscal passa nesse filtro **também num chamado do T.I.**, onde é
+USUARIO_FINAL. Mesmo desenho em `transferirEquipe`, `transferirTecnico` e `resolver`.
+O que hoje segura na prática é a **visibilidade** (ela não enxerga o chamado de T.I. de
+outra pessoa para pegar o id) — mas o próprio chamado dela em T.I. está ao alcance.
+
+**Correção natural:** onde o `@Roles` decide sobre um chamado, a role tem de ser a
+`getRoleNoDepto(user, chamado.departamentoId)` — o mecanismo já existe e já é usado no
+assumir automático. Não é regra nova; é aplicar a que já foi escrita.
+
 ---
 
 ## 3. ⚠️ Sub-recursos de Contrato e NF ignoram o departamento na ESCRITA
