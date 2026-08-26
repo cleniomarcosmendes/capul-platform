@@ -1,7 +1,7 @@
 # Roteiro de Fechamento — 25–26/08/2026
 
 **Sessão**: Workspace (papel por departamento, ponta a ponta) + dois ajustes de campo
-**Alvo**: `ec7a7e63` · **16 commits** desde `38fc8053` (12 pushados em 26/08 + 4 pendentes)
+**Alvo**: `e9334016` · **17 commits** desde `38fc8053` — ✅ **todos pushados em 26/08**
 **Base**: `38fc8053` — o que a HLG roda hoje
 
 ---
@@ -88,7 +88,7 @@ Estas três mudam o que as pessoas veem — sem aviso, viram chamado:
 ## 4. Deploy
 
 Roteiro: **`C:\Arquivos-de-projeto\PlatformCapul_20260826_Roteiro_Deploy_HLG_Incremental.md`**
-(atualizado nesta sessão para o alvo `ec7a7e63`).
+(atualizado nesta sessão para o alvo `e9334016`).
 
 🔴 **Mudou desde a 1ª versão dele:** o delta agora tem **3 migrations**, não 2 — entrou a
 `20260826120000_chamado_referencia` no schema `gestao_ti`. Isso obriga a rebuildar
@@ -100,7 +100,6 @@ existe.
 
 ## 5. ⛔ O que continua ABERTO
 
-- **Push** dos 4 commits (`89f51480`, `05255733`, `d44c689f`, `ec7a7e63`) — é do Clenio.
 - **`M scripts/build-com-versao.sh` na HLG** — o Douglas alterou o script no servidor;
   falta o `git diff` para trazer a adaptação ao repositório. Enquanto não vier, a HLG
   seguirá marcada `-sujo` mesmo depois do commit do certificado.
