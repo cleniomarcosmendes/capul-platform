@@ -171,6 +171,36 @@ export function MontarViagemPage() {
   const hojeISO = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
   const diaDe = (e?: Entrega) => e?.dataEntrega?.slice(0, 10) ?? null;
 
+  // ⏱ QUANDO a entrega foi lançada no balcão. É o sinal de "esperar ou sair": com
+  // pouca entrega na fila, o operador decide olhando o ritmo de chegada — se a última
+  // entrou agora há pouco, vale esperar encher o veículo; se faz uma hora, sai com o
+  // que tem. Não confundir com `horario` (preferência do cliente) nem com `dataEntrega`
+  // (o dia combinado).
+  const registradoEm = (e: Entrega) => {
+    const d = new Date(e.criadoEm);
+    if (Number.isNaN(d.getTime())) return null;
+    const hora = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+    }).format(d);
+    const dia = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+    // Só a hora quando foi hoje; de outro dia, a hora sozinha enganaria.
+    return { hora, dia, ehHoje: dia === hojeISO, d };
+  };
+
+  const haQuantoTempo = (desde: Date) => {
+    const min = Math.max(0, Math.round((Date.now() - desde.getTime()) / 60000));
+    if (min < 1) return 'agora';
+    if (min < 60) return `há ${min} min`;
+    const h = Math.floor(min / 60);
+    return h < 24 ? `há ${h}h${String(min % 60).padStart(2, '0')}` : `há ${Math.floor(h / 24)}d`;
+  };
+
+  // A entrada MAIS RECENTE da fila visível — é ela que responde "vale esperar?".
+  const ultimaEntrada = useMemo(() => {
+    const datas = fila.map((e) => new Date(e.criadoEm).getTime()).filter((t) => !Number.isNaN(t));
+    return datas.length > 0 ? new Date(Math.max(...datas)) : null;
+  }, [fila]);
+
   function adicionar(id: string) {
     const e = pendentes.find((x) => x.id === id);
     const dia = diaDe(e);
@@ -357,7 +387,15 @@ export function MontarViagemPage() {
         {/* Fila de pendentes */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-            <span>Fila de pendentes ({fila.length})</span>
+            <span className="flex items-baseline gap-2">
+              Fila de pendentes ({fila.length})
+              {ultimaEntrada && (
+                <span className="text-xs font-normal text-slate-500"
+                  title={`Entrega mais recente da fila registrada às ${new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(ultimaEntrada)}`}>
+                  · última entrada {haQuantoTempo(ultimaEntrada)}
+                </span>
+              )}
+            </span>
             {fila.length > 0 && (
               <button onClick={adicionarTodasVisiveis} className="text-xs font-medium text-capul-700 hover:underline">
                 + Adicionar {bairrosSel.length > 0 || busca ? 'as filtradas' : 'todas'} ({fila.length})
@@ -406,6 +444,16 @@ export function MontarViagemPage() {
                     <div className="truncate text-xs text-slate-500">
                       {e.endLogradouro}{e.endNumero ? `, ${e.endNumero}` : ''} — {(e.endBairro ?? '').trim() || 'sem bairro'} · {e.quantidadeVolumes} vol
                       {e.horario ? ` · prefere ${e.horario}` : ''}
+                      {(() => {
+                        const r = registradoEm(e);
+                        if (!r) return null;
+                        return (
+                          <span className="ml-1.5 whitespace-nowrap text-slate-400"
+                            title={`Lançada no balcão em ${r.dia.split('-').reverse().join('/')} às ${r.hora} (${haQuantoTempo(r.d)})`}>
+                            · ⏱ {r.ehHoje ? r.hora : `${r.dia.split('-').reverse().slice(0, 2).join('/')} ${r.hora}`}
+                          </span>
+                        );
+                      })()}
                       {diaDe(e) && diaDe(e) !== hojeISO && (
                         <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
                           title="Esta entrega é para outro dia">📅 {diaDe(e)!.split('-').reverse().slice(0, 2).join('/')}</span>
