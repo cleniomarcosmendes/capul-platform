@@ -310,6 +310,10 @@ export interface Chamado {
   /** Agrupamento (13/05/2026): se este eh filho, aponta para o pai. */
   chamadoAgrupadorId?: string | null;
   chamadoAgrupador?: { id: string; numero: number; titulo: string; status: StatusChamado } | null;
+  /** ⭐ 26/08 — laços de contexto criados por `#numero` no detalhamento. NÃO é
+   *  agrupamento: aqui os dois chamados seguem independentes (SLA, status, ciclo). */
+  referenciasFeitas?: { id: string; criadoEm: string; destino: { id: string; numero: number; titulo: string; status: StatusChamado } }[];
+  referenciasRecebidas?: { id: string; criadoEm: string; origem: { id: string; numero: number; titulo: string; status: StatusChamado } }[];
   /** Status anterior antes de agrupar (para restaurar ao desagrupar). */
   statusAnteriorAgrupamento?: string | null;
   slaPausadoEm?: string | null;

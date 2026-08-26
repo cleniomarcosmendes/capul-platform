@@ -589,6 +589,12 @@ export function ChamadoCreatePage() {
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
               placeholder="Explique o que esta acontecendo, o que voce precisa e qual o impacto no seu trabalho..."
             />
+            {/* ⭐ 26/08 — a dica que substitui o "Reabrir" para quem não é da equipe:
+                citar o chamado anterior liga os dois sem sujar o histórico do antigo. */}
+            <p className="mt-1 text-xs text-slate-500">
+              É continuação de um chamado anterior? Escreva <strong>#</strong> e o número dele
+              (ex.: <span className="font-mono">#152</span>) — os dois ficam ligados.
+            </p>
             <div className="mt-1 flex justify-end">
               <span
                 className={`text-xs ${

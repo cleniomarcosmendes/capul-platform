@@ -16,6 +16,18 @@ export const chamadoInclude = {
     select: { id: true, nomeOriginal: true, mimeType: true, tamanho: true, descricao: true, createdAt: true, usuarioId: true, usuario: { select: { id: true, nome: true } } },
     orderBy: { createdAt: 'desc' as const },
   },
+  // ⭐ 26/08 — laços de contexto (`#numero` no detalhamento). Os DOIS sentidos: o que
+  // este chamado cita ("seguimento de #123") e quem citou ele ("#456 veio deste").
+  // Sem o sentido inverso, quem atende o chamado antigo não fica sabendo que a demanda
+  // continuou em outro — que é justamente o caso de quem antes reabria.
+  referenciasFeitas: {
+    select: { id: true, criadoEm: true, destino: { select: { id: true, numero: true, titulo: true, status: true } } },
+    orderBy: { criadoEm: 'asc' as const },
+  },
+  referenciasRecebidas: {
+    select: { id: true, criadoEm: true, origem: { select: { id: true, numero: true, titulo: true, status: true } } },
+    orderBy: { criadoEm: 'asc' as const },
+  },
 };
 
 export const UPLOADS_DIR = path.join(process.cwd(), 'uploads', 'chamados');

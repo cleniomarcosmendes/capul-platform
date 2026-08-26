@@ -22,7 +22,7 @@ import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { ProtheusService } from '../../protheus/protheus.service.js';
 import { chamadoInclude, UPLOADS_DIR } from './chamado.constants.js';
-import { isGestor, isTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto, ehStaffNoDepto, ehGestorNoDepto } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto, ehStaffNoDepto, ehGestorNoDepto, ehAdminEmAlgumDepto } from '../../common/constants/roles.constant.js';
 import { hasCapability } from '../../common/helpers/capability.helper.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
@@ -665,6 +665,82 @@ export class ChamadoCoreService {
     return chamado;
   }
 
+
+  /**
+   * ⭐ 26/08 — REFERÊNCIA a outro chamado: `#123` no texto vira laço estruturado.
+   *
+   * Contrapartida de tirar o "Reabrir" do solicitante. Em vez de reabrir o chamado
+   * antigo para pedir coisa nova, ele abre um novo e escreve de onde veio.
+   *
+   * Por que `#` e não `@`: a tela inteira já chama o chamado de `#152` — o usuário digita
+   * o que enxerga. `@` é convenção de MENÇÃO A PESSOA em qualquer ferramenta, e usar os
+   * dois sentidos no mesmo campo seria ensinar um vocabulário que briga com o resto.
+   * (Se quiser trocar, é só o `GATILHO_REFERENCIA` abaixo.)
+   *
+   * Por que campo estruturado e não só o texto: citação em texto não navega, não conta e
+   * não sobrevive a uma edição do detalhamento. Mesmo motivo pelo qual o cliente da
+   * Venda Ativa foi para coluna própria em vez do assunto.
+   *
+   * A citação só vira laço se o autor PUDER VER o chamado citado — senão o campo viraria
+   * um sonar: digitar números até descobrir do que trata o chamado dos outros.
+   */
+  private static readonly GATILHO_REFERENCIA = /#(\d{1,9})\b/g;
+
+  private async criarReferencias(
+    origemId: string,
+    texto: string | null | undefined,
+    user: JwtPayload,
+    role: string,
+  ): Promise<{ numero: number; vinculado: boolean; motivo?: string }[]> {
+    if (!texto) return [];
+    const numeros = [...new Set(
+      [...texto.matchAll(ChamadoCoreService.GATILHO_REFERENCIA)].map((m) => Number(m[1])),
+    )];
+    if (numeros.length === 0) return [];
+
+    // ⚠️ "Pode citar" tem de ser exatamente "pode ver" — nem mais, nem menos. Mais
+    // largo vira sonar (digitar números até descobrir o chamado dos outros); mais
+    // estreito recusa laço para chamado que a pessoa tem aberto na tela ao lado, que foi
+    // o que aconteceu no primeiro teste: o ADMIN é global por D36 e mesmo assim levava
+    // "sem acesso".
+    const alcanceTotal = ehAdminEmAlgumDepto(user, role) || hasCapability(user, 'OVERSIGHT_PLATAFORMA');
+    const deptosOndeAtendo = getDeptosOndeStaff(user);
+    const candidatos = await this.prisma.chamado.findMany({
+      where: {
+        numero: { in: numeros },
+        ...(alcanceTotal ? {} : {
+          OR: [
+            { solicitanteId: user.sub },
+            { tecnicoId: user.sub },
+            { colaboradores: { some: { usuarioId: user.sub } } },
+            { copias: { some: { usuarioId: user.sub } } },
+            ...(deptosOndeAtendo.length > 0 ? [{ departamentoId: { in: deptosOndeAtendo } }] : []),
+          ],
+        }),
+      },
+      select: { id: true, numero: true },
+    });
+    const porNumero = new Map(candidatos.map((c) => [c.numero, c.id]));
+
+    const resultado: { numero: number; vinculado: boolean; motivo?: string }[] = [];
+    for (const numero of numeros) {
+      const destinoId = porNumero.get(numero);
+      if (!destinoId) {
+        // Silêncio aqui seria pior: quem citou precisa saber que o laço não existe.
+        resultado.push({ numero, vinculado: false, motivo: 'não encontrado ou sem acesso' });
+        continue;
+      }
+      if (destinoId === origemId) continue; // citar a si mesmo não é laço
+      await this.prisma.chamadoReferencia.upsert({
+        where: { origemId_destinoId: { origemId, destinoId } },
+        update: {},
+        create: { origemId, destinoId, criadoPorId: user.sub },
+      });
+      resultado.push({ numero, vinculado: true });
+    }
+    return resultado;
+  }
+
   async create(dto: CreateChamadoDto, user: JwtPayload, role: string) {
     // Identificação do colaborador (perfil PADRAO): a matrícula só é aceita se
     // a senha do portal RH conferir. Defesa em profundidade — a tela já valida,
@@ -848,7 +924,24 @@ export class ChamadoCoreService {
       await this.adicionarCopias(chamado.id, dto.copiasUsuariosIds, user, { silenciarErrosIndividuais: false });
     }
 
-    return chamado;
+    // `#numero` citado no detalhamento vira laço para o chamado anterior.
+    const referencias = await this.criarReferencias(chamado.id, dto.descricao, user, role);
+    if (referencias.some((r) => r.vinculado)) {
+      const citados = referencias.filter((r) => r.vinculado).map((r) => `#${r.numero}`).join(', ');
+      await this.prisma.historicoChamado.create({
+        data: {
+          tipo: 'COMENTARIO',
+          descricao: `Seguimento de ${citados}`,
+          publico: true,
+          chamadoId: chamado.id,
+          usuarioId: user.sub,
+        },
+      });
+    }
+
+    // A tela precisa saber o que NÃO virou laço para avisar quem escreveu — citação
+    // engolida em silêncio faria a pessoa achar que vinculou.
+    return { ...chamado, referencias };
   }
 
   /**
@@ -1740,10 +1833,36 @@ export class ChamadoCoreService {
   }
 
   async reabrir(id: string, dto: ReabrirChamadoDto, user: JwtPayload, role: string) {
-    // Solicitante tambem pode reabrir
-    await this.helpers.assertTecnicoOuColaborador(id, user, role, { permitirSolicitante: true });
-
     const chamado = await this.helpers.getChamadoOrFail(id);
+
+    // ⭐ 26/08 — REABRIR é ato de QUEM ATENDE. O solicitante saiu daqui.
+    //
+    // Motivo, relatado pelo Clenio: chamado resolvido virou atalho. Em vez de abrir uma
+    // demanda nova, o usuário reabria a antiga — e o histórico de um atendimento passava
+    // a carregar outro assunto, o tempo de resolução do primeiro contava o segundo, e o
+    // indicador de reabertura (que deveria medir "não resolvemos direito") media
+    // preguiça de abrir chamado.
+    //
+    // "Quem atende" aqui é mais largo que o guard genérico de propósito: além do técnico
+    // atribuído, do colaborador e de quem manda no departamento, entra o MEMBRO ATIVO DA
+    // EQUIPE que atende — ele é da equipe mesmo sem estar atribuído àquele chamado, e é
+    // exatamente quem o Clenio chamou de "da Equipe".
+    const membroDaEquipe = await this.prisma.membroEquipe.findUnique({
+      where: { usuarioId_equipeId: { usuarioId: user.sub, equipeId: chamado.equipeAtualId } },
+      select: { status: true },
+    });
+    if (membroDaEquipe?.status !== 'ATIVO') {
+      try {
+        await this.helpers.assertTecnicoOuColaborador(id, user, role);
+      } catch {
+        // A mensagem ENSINA a saída — recusar sem dizer o caminho empurra a pessoa a
+        // ligar para o suporte, que era o atrito que se queria evitar.
+        throw new ForbiddenException(
+          'Reabrir é da equipe que atende o chamado. Se a demanda é nova, abra um chamado '
+          + `novo e cite este no detalhamento escrevendo #${chamado.numero} — os dois ficam ligados.`,
+        );
+      }
+    }
 
     if (chamado.status === 'CANCELADO') {
       throw new BadRequestException('Chamado cancelado nao pode ser reaberto');
@@ -1757,10 +1876,6 @@ export class ChamadoCoreService {
     // `create()` — USUARIO_CHAVE/TERCEIRIZADO e qualquer um de fora da equipe
     // (outro workspace OU outra equipe da T.I.) reabrem sem auto-assumir.
     const rolesNaoAssumem = ['USUARIO_FINAL', 'USUARIO_CHAVE', 'TERCEIRIZADO'];
-    const membroDaEquipe = await this.prisma.membroEquipe.findUnique({
-      where: { usuarioId_equipeId: { usuarioId: user.sub, equipeId: chamado.equipeAtualId } },
-      select: { status: true },
-    });
     const roleNoDeptoDono = getRoleNoDepto(user, chamado.departamentoId) ?? role;
     const isTecnicoTI =
       membroDaEquipe?.status === 'ATIVO' && !rolesNaoAssumem.includes(roleNoDeptoDono);

@@ -601,6 +601,15 @@ model Chamado {
   chamadoAgrupador         Chamado?  @relation("ChamadoAgrupamento", fields: [chamadoAgrupadorId], references: [id])
   chamadosAgrupados        Chamado[] @relation("ChamadoAgrupamento")
 
+  /// ⭐ 26/08 — REFERÊNCIA entre chamados ("seguimento de #123"), criada quando o autor
+  /// cita `#numero` no detalhamento. NÃO confundir com AGRUPAMENTO acima: agrupar tem
+  /// efeito (filho vira AGRUPADO, SLA pausa, resolver cascateia); referenciar é só um
+  /// laço de contexto — os dois chamados seguem independentes.
+  /// Nasceu como contrapartida de tirar o "reabrir" do solicitante: em vez de reabrir o
+  /// antigo para pedir coisa nova, ele abre um novo e diz de onde veio.
+  referenciasFeitas        ChamadoReferencia[] @relation("ReferenciaOrigem")
+  referenciasRecebidas     ChamadoReferencia[] @relation("ReferenciaDestino")
+
   /// Status original antes de ser agrupado — usado para restaurar ao desagrupar.
   /// Tipo String (nao StatusChamado) pra evitar Prisma forcar enum em update parcial.
   statusAnteriorAgrupamento String?  @map("status_anterior_agrupamento")
@@ -623,6 +632,25 @@ model Chamado {
   @@index([tecnicoId])
   @@index([chamadoAgrupadorId])
   @@map("chamados")
+  @@schema("gestao_ti")
+}
+
+/// Laço de contexto entre dois chamados. `origem` cita `destino` ("este veio daquele").
+/// Sem efeito de estado: nada de SLA, status ou cascata — para isso existe o
+/// AGRUPAMENTO (`ChamadoAgrupamento`).
+model ChamadoReferencia {
+  id        String   @id @default(uuid())
+  origemId  String   @map("origem_id")
+  origem    Chamado  @relation("ReferenciaOrigem", fields: [origemId], references: [id], onDelete: Cascade)
+  destinoId String   @map("destino_id")
+  destino   Chamado  @relation("ReferenciaDestino", fields: [destinoId], references: [id], onDelete: Cascade)
+  /// Quem escreveu a citação (o autor do texto onde o `#numero` apareceu).
+  criadoPorId String @map("criado_por_id")
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  @@unique([origemId, destinoId])
+  @@index([destinoId])
+  @@map("chamado_referencias")
   @@schema("gestao_ti")
 }
 

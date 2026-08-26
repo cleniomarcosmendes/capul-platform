@@ -440,7 +440,14 @@ export function ChamadoDetalhePage() {
   const canTransferirTecnico = podeMovimentar && emAndamento && temTecnico;
   const canResolver = podeMovimentar && emAndamento && temTecnico;
   const canFechar = podeMovimentar && chamado.status === 'RESOLVIDO';
-  const canReabrir = (podeMovimentar || isSolicitante || isCopiado) && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
+  // ⭐ 26/08 — reabrir saiu das mãos do solicitante e de quem está em cópia: virou ato
+  // de quem ATENDE. Chamado resolvido estava virando atalho para não abrir um novo, o
+  // que sujava o histórico do atendimento antigo e o indicador de reabertura. Quem
+  // precisa de algo novo abre um chamado novo e cita o anterior com `#numero`.
+  // `isTecnico` entra porque o backend também aceita MEMBRO ATIVO DA EQUIPE que atende
+  // — informação que esta tela não tem. Quem for staff mas estiver fora da equipe recebe
+  // do backend um 403 que explica o caminho (abrir novo citando #numero).
+  const canReabrir = (podeMovimentar || isTecnico) && (chamado.status === 'RESOLVIDO' || chamado.status === 'FECHADO');
   const canCancelar = isGestor && emAndamento;
   const canExcluir = isTecnico && chamado.status === 'ABERTO';
   const canDuplicar = isTecnico || isSolicitante;
@@ -1583,6 +1590,43 @@ export function ChamadoDetalhePage() {
                 </div>
               </div>
             )}
+
+            {/* ⭐ Chamados relacionados (26/08) — laço de CONTEXTO criado por `#numero` no
+                detalhamento, contrapartida de tirar o "Reabrir" do solicitante. Fica
+                acima do agrupamento e visualmente mais discreto de propósito: agrupar
+                muda estado (SLA, cascata), referenciar não muda nada. */}
+            {(() => {
+              const cita = chamado.referenciasFeitas ?? [];
+              const citadoPor = chamado.referenciasRecebidas ?? [];
+              if (cita.length === 0 && citadoPor.length === 0) return null;
+              const linha = (c: { id: string; numero: number; titulo: string; status: StatusChamado }) => (
+                <Link key={c.id} to={`/gestao-ti/chamados/${c.id}`}
+                  className="flex items-center gap-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm hover:bg-slate-50">
+                  <span className="font-semibold text-slate-700">#{c.numero}</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-600">{c.titulo}</span>
+                  <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{c.status}</span>
+                </Link>
+              );
+              return (
+                <div className="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+                  <h3 className="text-sm font-semibold text-slate-700 mb-2">Chamados relacionados</h3>
+                  {cita.length > 0 && (
+                    <div className="mb-2">
+                      <p className="text-xs text-slate-500 mb-1">Este veio de:</p>
+                      <div className="space-y-1">{cita.map((r) => linha(r.destino))}</div>
+                    </div>
+                  )}
+                  {citadoPor.length > 0 && (
+                    <div>
+                      {/* Este é o sentido que faltava a quem atende: saber que a demanda
+                          continuou em outro chamado, em vez de descobrir por reabertura. */}
+                      <p className="text-xs text-slate-500 mb-1">Teve continuação em:</p>
+                      <div className="space-y-1">{citadoPor.map((r) => linha(r.origem))}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Agrupamento (decidido em 13/05/2026 — TI agrupa chamados com mesmo problema) */}
             {(() => {

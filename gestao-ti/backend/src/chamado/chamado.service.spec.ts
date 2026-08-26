@@ -357,6 +357,81 @@ describe('ChamadoService', () => {
     });
   });
 
+
+  // ⭐ 26/08 — reabrir virou ato de QUEM ATENDE. O chamado resolvido estava sendo usado
+  // como atalho para não abrir um novo (relato do Clenio).
+  describe('reabrir — só quem atende', () => {
+    it('solicitante NÃO reabre, e o erro diz o que fazer no lugar', async () => {
+      const chamado = baseChamado({ status: 'RESOLVIDO', solicitanteId: 'user-1', tecnicoId: 'outro', numero: 152 });
+      prisma.chamado.findUnique.mockResolvedValue({ ...chamado, colaboradores: [] });
+      prisma.membroEquipe.findUnique.mockResolvedValue(null); // não é da equipe
+
+      await expect(service.reabrir('ch-1', {} as any, mockUser as any, 'USUARIO_FINAL'))
+        .rejects.toThrow(/#152/); // a mensagem ensina a citar o chamado no novo
+      expect(prisma.chamado.update).not.toHaveBeenCalled();
+    });
+
+    it('membro ATIVO da equipe reabre mesmo sem estar atribuído', async () => {
+      const chamado = baseChamado({ status: 'RESOLVIDO', solicitanteId: 'outro', tecnicoId: null });
+      prisma.chamado.findUnique.mockResolvedValue(chamado);
+      prisma.membroEquipe.findUnique.mockResolvedValue({ status: 'ATIVO' });
+      prisma.chamado.update.mockResolvedValue({ ...chamado, status: 'EM_ATENDIMENTO' });
+      prisma.historicoChamado.create.mockResolvedValue({});
+
+      await expect(service.reabrir('ch-1', {} as any, mockUser as any, 'SUPORTE')).resolves.toBeDefined();
+    });
+  });
+
+
+  // ⭐ 26/08 — `#numero` no detalhamento vira laço estruturado (contrapartida de tirar o
+  // "Reabrir" do solicitante).
+  describe('referência a outro chamado (#numero)', () => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const citar = (texto: string, user: any = mockUser, role = 'SUPORTE') =>
+      (core as any).criarReferencias('origem-1', texto, user, role);
+
+    it('sem # no texto, nem consulta o banco', async () => {
+      const r = await citar('Texto sem citação nenhuma.');
+      expect(r).toEqual([]);
+      expect(prisma.chamado.findMany).not.toHaveBeenCalled();
+    });
+
+    it('cita #152 → cria o laço', async () => {
+      prisma.chamado.findMany.mockResolvedValue([{ id: 'ch-152', numero: 152 }]);
+      prisma.chamadoReferencia = { upsert: jest.fn().mockResolvedValue({}) } as any;
+
+      const r = await citar('Seguimento do #152, mesma impressora.');
+
+      expect(r).toEqual([{ numero: 152, vinculado: true }]);
+      expect(prisma.chamadoReferencia.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: { origemId: 'origem-1', destinoId: 'ch-152', criadoPorId: 'user-1' } }),
+      );
+    });
+
+    // Silêncio aqui faria a pessoa achar que vinculou. A tela precisa poder avisar.
+    it('número que a pessoa não vê volta como NÃO vinculado, com motivo', async () => {
+      prisma.chamado.findMany.mockResolvedValue([]);
+      const r = await citar('Olha o #99999999 ali.');
+      expect(r).toEqual([{ numero: 99999999, vinculado: false, motivo: expect.stringMatching(/acesso/) }]);
+    });
+
+    it('citar a si mesmo não vira laço', async () => {
+      prisma.chamado.findMany.mockResolvedValue([{ id: 'origem-1', numero: 7 }]);
+      prisma.chamadoReferencia = { upsert: jest.fn() } as any;
+      const r = await citar('Duplicado do #7 (que é este mesmo).');
+      expect(r).toEqual([]);
+      expect(prisma.chamadoReferencia.upsert).not.toHaveBeenCalled();
+    });
+
+    it('o mesmo número citado duas vezes conta uma vez', async () => {
+      prisma.chamado.findMany.mockResolvedValue([{ id: 'ch-9', numero: 9 }]);
+      prisma.chamadoReferencia = { upsert: jest.fn().mockResolvedValue({}) } as any;
+      const r = await citar('Vem do #9 — repito, #9.');
+      expect(r).toHaveLength(1);
+      expect(prisma.chamadoReferencia.upsert).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('cancelar', () => {
     it('cancela chamado com sucesso', async () => {
       const chamado = baseChamado({ status: 'ABERTO' });
