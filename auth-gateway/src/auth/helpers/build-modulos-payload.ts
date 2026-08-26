@@ -20,10 +20,20 @@ export interface ModuloPayload {
   /** Código do módulo (ex.: 'WORKSPACE', 'GESTAO_TI', 'FISCAL', ...). */
   codigo: string;
   /**
-   * Role denormalizada — igual à role do primeiro depto em `departamentos[]`.
-   * MANTIDA por retrocompatibilidade (Sub-fase 1.4 — caminho A).
-   * Consumidores antigos (guards) leem este campo; serão migrados pra
-   * iterar `departamentos[]` na Sub-fase 1.5/1.6.
+   * Role denormalizada do módulo — o papel MAIS FORTE que o usuário tem em algum
+   * departamento (ver `POSTO_DA_ROLE`).
+   *
+   * ⭐ 26/08 — era "a role do PRIMEIRO depto em `departamentos[]`", de um `findMany`
+   * **sem `ORDER BY`**: qual papel governava o módulo dependia da ordem em que o
+   * Postgres devolvesse as linhas. Com multi-perfil real (no Fiscal a pessoa atende
+   * chamado; no T.I. a mesma pessoa é usuária final), isso significava que um GESTOR do
+   * Fiscal podia ser tratado como USUARIO_FINAL — perdendo acesso no Fiscal — sem que
+   * ninguém tivesse mexido em permissão. E o contrário também.
+   *
+   * ⚠️ Este campo é PORTA GROSSA — serve para o `@Roles(...)` decidir se a pessoa pode
+   * alcançar a rota. **Não decide sobre um registro**: para isso vale o papel NO
+   * DEPARTAMENTO dele (`getRoleNoDepto` / `ehStaffNoDepto` no gestao-ti). Por isso o
+   * mais forte é a escolha certa aqui: a porta abre, e o guard fino decide onde.
    */
   role: string;
   /**
@@ -31,6 +41,26 @@ export interface ModuloPayload {
    * nesse módulo, com role específica e funcionalidades ativas.
    */
   departamentos: ModuloDepartamentoPayload[];
+}
+
+/**
+ * Hierarquia dos papéis do WORKSPACE, do mais forte ao mais fraco. Papel de outro
+ * módulo (ex.: SUPERVISOR_FROTA, da Logística) não está aqui e recebe posto neutro:
+ * hoje quem tem mais de um perfil fora do Workspace tem o MESMO papel nos dois, então
+ * não há o que ordenar — e empate mantém o primeiro da lista, que agora é ordenada.
+ */
+const POSTO_DA_ROLE: Record<string, number> = {
+  ADMIN: 100,
+  GESTOR: 90,
+  SUPORTE: 80,
+  USUARIO_CHAVE: 40,
+  TERCEIRIZADO: 30,
+  USUARIO_FINAL: 10,
+};
+const POSTO_NEUTRO = 50;
+
+function postoDaRole(codigo: string): number {
+  return POSTO_DA_ROLE[codigo] ?? POSTO_NEUTRO;
 }
 
 /**
@@ -53,6 +83,9 @@ export async function buildModulosPayload(
 ): Promise<ModuloPayload[]> {
   const permissoes = await prisma.permissaoModulo.findMany({
     where: { usuarioId, status: 'ATIVO' },
+    // Ordem ESTÁVEL — `departamentos[]` não pode mudar de ordem entre dois logins do
+    // mesmo usuário (a UI mostra o primeiro como padrão no seletor de workspace).
+    orderBy: [{ departamento: { nome: 'asc' } }],
     include: {
       modulo: { select: { codigo: true } },
       roleModulo: { select: { codigo: true } },
@@ -104,6 +137,10 @@ export async function buildModulosPayload(
     const existing = moduloMap.get(p.modulo.codigo);
     if (existing) {
       existing.departamentos.push(deptoPayload);
+      // O mais forte vence — decisão explícita, no lugar da ordem do banco.
+      if (postoDaRole(deptoPayload.role) > postoDaRole(existing.role)) {
+        existing.role = deptoPayload.role;
+      }
     } else {
       moduloMap.set(p.modulo.codigo, {
         codigo: p.modulo.codigo,
