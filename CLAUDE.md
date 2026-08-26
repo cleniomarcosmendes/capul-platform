@@ -202,6 +202,9 @@ docker compose up -d gestao-ti-backend
 # e a tela "Versao" do app mostra). Ver docs/VERSIONAMENTO_BUILD.md
 ./scripts/build-com-versao.sh logistica-backend auth-gateway
 
+# Certificado de DEV (clone novo vem sem — nginx/certs/* e ignorado de proposito)
+./scripts/gerar-cert-dev.sh
+
 # Databases
 docker compose exec gestao-ti-backend npx prisma migrate deploy
 docker compose exec gestao-ti-backend npx prisma db seed
