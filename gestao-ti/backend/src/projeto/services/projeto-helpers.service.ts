@@ -8,7 +8,8 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { EmailEnvolvidosService } from '../../email/email-envolvidos.service.js';
 import * as emailTpl from '../../email/email-templates.js';
-import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, ehStaffNoDepto } from '../../common/constants/roles.constant.js';
+import { hasCapability } from '../../common/helpers/capability.helper.js';
 import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -178,8 +179,10 @@ export class ProjetoHelpersService {
    * projetos de TI sem ser membro.
    */
   async assertMembroOuGestor(projetoId: string, user: JwtPayload, role: string) {
-    // Staff TI (ADMIN/GESTOR/SUPORTE em depto TI) edita qualquer projeto
-    if (hasStaffPerfilEmTI(user)) return;
+    // ⭐ 26/08 — quem atende NO DEPARTAMENTO DO PROJETO edita sem ser membro (antes:
+    // staff de T.I. editava projeto de qualquer departamento, e quem atende no Fiscal
+    // não editava nem o do Fiscal).
+    if (await this.ehStaffNoProjeto(projetoId, user, role)) return;
 
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },
@@ -214,9 +217,8 @@ export class ProjetoHelpersService {
    * consistencia aos 13 call-sites que herdam esta regra.
    */
   async checkProjetoAccessChave(projetoId: string, user: JwtPayload, role: string) {
-    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    // Multi-perfil seguro (incidente Juliana 25/05).
-    if (hasStaffPerfilEmTI(user)) return;
+    // ⭐ 26/08 — idem: quem atende no departamento DO PROJETO.
+    if (await this.ehStaffNoProjeto(projetoId, user, role)) return;
 
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },
@@ -284,6 +286,29 @@ export class ProjetoHelpersService {
    * 29/05 — criado pós-incidente HOM "Tatiane GESTOR/Fiscal + USUARIO_CHAVE/T.I.
    * tinha privilégios de GESTOR em projeto T.I." (memory feedback_workspace_role_por_depto).
    */
+  /**
+   * ⭐ 26/08 — Quem atende NO DEPARTAMENTO DO PROJETO (ADMIN/GESTOR/SUPORTE lá).
+   *
+   * Substitui `hasStaffPerfilEmTI(user)` nos pontos que decidem sobre UM projeto: aquele
+   * helper perguntava "é staff em algum departamento de T.I.?", herança da época em que
+   * o Workspace era só do T.I. Errava dos dois lados — quem atende no Fiscal não
+   * alcançava nota interna do projeto DO FISCAL, e quem atende no T.I. alcançava a de
+   * qualquer departamento.
+   *
+   * `OVERSIGHT_PLATAFORMA` continua passando: é o alcance transversal EXPLÍCITO, no
+   * lugar do implícito por nome de departamento.
+   */
+  async ehStaffNoProjeto(projetoId: string, user: JwtPayload | undefined, role?: string): Promise<boolean> {
+    if (!user) return false;
+    if (hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return true;
+    const projeto = await this.prisma.projeto.findUnique({
+      where: { id: projetoId },
+      select: { departamentoId: true },
+    });
+    if (!projeto) return false;
+    return ehStaffNoDepto(user, projeto.departamentoId, role);
+  }
+
   async getRoleNoDeptoProjeto(projetoId: string, user: JwtPayload, fallbackRole: string): Promise<string> {
     const projeto = await this.prisma.projeto.findUnique({
       where: { id: projetoId },

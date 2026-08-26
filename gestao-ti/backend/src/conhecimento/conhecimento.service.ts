@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { getDeptoIdsDoUser, assertStaffEmDepto } from '../common/helpers/departamento-filter.helper.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
-import { hasStaffPerfilEmTI, getDeptosOndeStaff } from '../common/constants/roles.constant.js';
+import { ehStaffDeTI, getDeptosOndeStaff } from '../common/constants/roles.constant.js';
 import { hasCapability } from '../common/helpers/capability.helper.js';
 import { ForbiddenException } from '@nestjs/common';
 
@@ -88,7 +88,7 @@ export class ConhecimentoService {
     if (!isOversight) {
       const deptosStaff = getDeptosOndeStaff(filters.user);
       const deptosOndeTemPerfil = getDeptoIdsDoUser(filters.user, filters.role) ?? [];
-      const ehStaffTI = hasStaffPerfilEmTI(filters.user);
+      const ehStaffTI = ehStaffDeTI(filters.user);
 
       const visibilityOr: Array<Record<string, unknown>> = [
         // Globais publicados — todos veem
@@ -153,7 +153,7 @@ export class ConhecimentoService {
     // Global
     if (equipeDeptoId === null) {
       if (isPublicado) return artigo;
-      if (hasStaffPerfilEmTI(user)) return artigo;
+      if (ehStaffDeTI(user)) return artigo;
       throw new NotFoundException('Artigo nao encontrado');
     }
 
@@ -179,8 +179,9 @@ export class ConhecimentoService {
       });
       assertStaffEmDepto(user, equipe?.departamentoId);
     } else {
-      // Artigo global — só staff TI (qualquer depto TI) edita.
-      if (!hasStaffPerfilEmTI(user)) {
+      // Artigo global — não tem departamento; a curadoria é do T.I. É o único lugar do
+      // módulo onde "é do T.I." ainda decide algo (26/08).
+      if (!ehStaffDeTI(user)) {
         throw new ForbiddenException('Artigo global — só staff de T.I. pode criar/editar.');
       }
     }

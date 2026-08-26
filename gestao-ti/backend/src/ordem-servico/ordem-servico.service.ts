@@ -4,7 +4,7 @@ import { CreateOsDto } from './dto/create-os.dto.js';
 import { UpdateOsDto } from './dto/update-os.dto.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 import { StatusOS } from '@prisma/client';
-import { isGestor, hasStaffPerfilEmTI, getDeptosOndeStaff } from '../common/constants/roles.constant.js';
+import { isGestor, ehGestorNoDepto, getDeptosOndeStaff } from '../common/constants/roles.constant.js';
 import { paginate } from '../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../common/helpers/resolve-departamento.helper.js';
 import { getDeptoIdsDoUser, assertDepartamentoDoUser } from '../common/helpers/departamento-filter.helper.js';
@@ -256,9 +256,15 @@ export class OrdemServicoService {
     });
     if (!historico) throw new NotFoundException('Comentario nao encontrado');
 
-    // S14.2 — `hasStaffPerfilEmTI(user)` substitui `isGestor(role)` quando
-    // disponível. Sem user (legacy), cai no antigo (preserva retrocompat).
-    const isAdmin = user ? hasStaffPerfilEmTI(user) : isGestor(role);
+    // ⭐ 26/08 — era `hasStaffPerfilEmTI`: staff em algum depto de T.I. editava
+    // comentário alheio em OS de qualquer departamento, e quem manda no departamento da
+    // OS não editava o da própria. O mesmo serviço já decide por departamento em
+    // `assertAlocadoOuGestor` — a inconsistência estava dentro de casa.
+    const os = await this.prisma.ordemServico.findUnique({
+      where: { id: osId },
+      select: { departamentoId: true },
+    });
+    const isAdmin = user ? ehGestorNoDepto(user, os?.departamentoId, role) : isGestor(role);
     if (historico.usuarioId !== userId && !isAdmin) {
       throw new ForbiddenException('Voce so pode editar seus proprios comentarios');
     }

@@ -10,7 +10,7 @@ import { UpdateProjetoDto } from '../dto/update-projeto.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { NotificacaoService } from '../../notificacao/notificacao.service.js';
 import { projetoListInclude, projetoDetailInclude } from './projeto.constants.js';
-import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, getDeptosOndeStaff } from '../../common/constants/roles.constant.js';
 import { ROLES_EXTERNOS } from '../../common/constants/roles.constant.js';
 import { paginate } from '../../common/prisma/paginate.helper.js';
 import { resolveDepartamento } from '../../common/helpers/resolve-departamento.helper.js';
@@ -111,12 +111,14 @@ export class ProjetoCoreService {
     // Busca: nome + descricao do projeto + busca profunda nas atividades,
     // comentarios de tarefa e pendencias (PR3 — pg_trgm). `comentVisib`
     // reusado no enriquecimento pos-query (anexarMatchProjeto).
-    // Visibilidade D29: comentario de tarefa interno (publica=false) so casa
-    // p/ staff TI — sem isto a busca varreria nota interna (vazamento).
-    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    // Multi-perfil (Juliana) precisa ser detectado pelo JWT.departamentos[].
-    const comentVisib: Prisma.ComentarioTarefaWhereInput = hasStaffPerfilEmTI(filters.user)
-      ? {}
+    // Visibilidade D29: comentario de tarefa interno (publica=false) so casa p/ quem
+    // atende — sem isto a busca varreria nota interna (vazamento).
+    // ⭐ 26/08 — a busca é sobre MUITOS projetos: a regra vira relacional. Interno só
+    // de projeto cujo departamento eu atendo (antes: staff de T.I. varria tudo, e quem
+    // atende fora do T.I. não achava nem o do próprio departamento).
+    const deptosOndeAtendo = getDeptosOndeStaff(filters.user);
+    const comentVisib: Prisma.ComentarioTarefaWhereInput = deptosOndeAtendo.length > 0
+      ? { OR: [{ publica: true }, { atividade: { projeto: { departamentoId: { in: deptosOndeAtendo } } } }] }
       : { publica: true };
 
     if (searchTerm) {

@@ -14,6 +14,11 @@ import { WORKSPACE_MENUS, perfilEnxerga } from '../../lib/workspace-menus';
 // Capability sensível (LGPD) — acesso a PII de sócios. Plano:
 // docs/PLANO_FISCAL_CONSULTA_SOCIOS_LGPD_v1.md
 const CAP_SOCIO = 'FISCAL_CONSULTA_SOCIOS';
+// Alcance transversal no Workspace. Desde 26/08 o papel vale POR DEPARTAMENTO — quem
+// atende no T.I. não enxerga mais o conteúdo interno do Fiscal (e vice-versa). Quem
+// precisa ver tudo passa a receber isto de forma NOMINAL, em vez de o privilégio vir
+// de estar num departamento chamado "Tecnologia".
+const CAP_OVERSIGHT = 'OVERSIGHT_PLATAFORMA';
 
 /**
  * Workspace Multi-Departamento (Onda 2 C2.2 — matriz multi-perfil).
@@ -68,6 +73,7 @@ export function UsuarioFormPage() {
   // Capabilities (LGPD) — só gerenciável por ADMIN em usuário existente.
   const [caps, setCaps] = useState<UsuarioCapability[]>([]);
   const [capMotivo, setCapMotivo] = useState('');
+  const [capMotivoOversight, setCapMotivoOversight] = useState('');
   const [capBusy, setCapBusy] = useState(false);
 
   const [username, setUsername] = useState('');
@@ -217,6 +223,51 @@ export function UsuarioFormPage() {
       setCapMotivo('');
       await carregarCaps(id);
       setMsg('Acesso a dados de sócio concedido.');
+    } catch (err) {
+      setErro(extrairMensagemErro(err));
+    } finally {
+      setCapBusy(false);
+    }
+  }
+
+  async function concederCapOversight() {
+    if (!id) return;
+    if (capMotivoOversight.trim().length < 5) {
+      setErro('Informe o motivo da concessão (mín. 5 caracteres) — fica registrado para auditoria.');
+      return;
+    }
+    setCapBusy(true);
+    setErro('');
+    setMsg('');
+    try {
+      await usuarioService.concederCapability(id, CAP_OVERSIGHT, capMotivoOversight.trim());
+      setCapMotivoOversight('');
+      await carregarCaps(id);
+      setMsg('Alcance em todos os departamentos concedido.');
+    } catch (err) {
+      setErro(extrairMensagemErro(err));
+    } finally {
+      setCapBusy(false);
+    }
+  }
+
+  async function revogarCapOversight() {
+    if (!id) return;
+    const ok = await confirm({
+      title: 'Revogar alcance em todos os departamentos?',
+      description:
+        'O usuário volta a enxergar apenas os departamentos em que tem perfil de atendimento. A concessão fica registrada para auditoria.',
+      variant: 'danger',
+      confirmLabel: 'Revogar',
+    });
+    if (!ok) return;
+    setCapBusy(true);
+    setErro('');
+    setMsg('');
+    try {
+      await usuarioService.revogarCapability(id, CAP_OVERSIGHT);
+      await carregarCaps(id);
+      setMsg('Alcance em todos os departamentos revogado.');
     } catch (err) {
       setErro(extrairMensagemErro(err));
     } finally {
@@ -1231,6 +1282,76 @@ export function UsuarioFormPage() {
                             className="px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
                           >
                             Conceder acesso
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Alcance transversal no Workspace (26/08). Desde a migração do papel
+                  por departamento, ver o conteúdo interno de OUTRO departamento deixou
+                  de vir de "estar no T.I." e passou a ser concessão nominal — visível,
+                  revogável e com motivo registrado. */}
+              {isAdminConfig && (() => {
+                const oversightCap = caps.find((c) => c.capability === CAP_OVERSIGHT);
+                const ativo = !!oversightCap?.ativo;
+                return (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <h2 className="font-semibold text-slate-800 flex items-center gap-2 mb-1">
+                      <Shield className="w-5 h-5 text-amber-600" />
+                      Alcance em todos os departamentos
+                    </h2>
+                    <p className="text-xs text-slate-500 mb-4">
+                      No Workspace, cada pessoa enxerga o conteúdo interno (chamado privado,
+                      nota interna, projeto) <strong>dos departamentos em que atende</strong>.
+                      Esta concessão dá acesso a <strong>todos</strong> — use para auditoria ou
+                      suporte transversal, nominalmente.
+                    </p>
+                    <div className={`rounded-lg border p-4 ${ativo ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200'}`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-800">Ver todos os departamentos</span>
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${ativo ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                              {ativo ? 'Concedido' : 'Sem acesso'}
+                            </span>
+                          </div>
+                          {ativo && oversightCap && (
+                            <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                              Concedido em {new Date(oversightCap.concedidoEm).toLocaleString('pt-BR')}
+                              {oversightCap.motivo ? ` · motivo: ${oversightCap.motivo}` : ''}
+                            </p>
+                          )}
+                        </div>
+                        {ativo && (
+                          <button
+                            type="button"
+                            onClick={revogarCapOversight}
+                            disabled={capBusy}
+                            className="px-3 py-1.5 text-xs font-medium rounded-md border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50 flex-shrink-0"
+                          >
+                            Revogar
+                          </button>
+                        )}
+                      </div>
+                      {!ativo && (
+                        <div className="mt-3 space-y-2">
+                          <textarea
+                            value={capMotivoOversight}
+                            onChange={(e) => setCapMotivoOversight(e.target.value)}
+                            rows={2}
+                            placeholder="Motivo da concessão (obrigatório — fica registrado para auditoria)"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent"
+                          />
+                          <button
+                            type="button"
+                            onClick={concederCapOversight}
+                            disabled={capBusy || capMotivoOversight.trim().length < 5}
+                            className="px-3 py-1.5 text-xs font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                          >
+                            Conceder alcance
                           </button>
                         </div>
                       )}

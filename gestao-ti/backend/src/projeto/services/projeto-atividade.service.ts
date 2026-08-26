@@ -10,7 +10,7 @@ import { EmailEnvolvidosService } from '../../email/email-envolvidos.service.js'
 import * as emailTpl from '../../email/email-templates.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { ProjetoAtividadeHistoricoService } from './projeto-atividade-historico.service.js';
-import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, getDeptosOndeStaff } from '../../common/constants/roles.constant.js';
 import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -25,10 +25,11 @@ export class ProjetoAtividadeService {
 
   async listAtividades(projetoId: string, user?: JwtPayload, role?: string) {
     await this.helpers.ensureProjetoExists(projetoId);
-    // S13a (25/05) — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    // Badge de notas na linha não conta internas p/ non-staff (senão vaza a
+    // Badge de notas na linha não conta internas p/ quem não atende (senão vaza a
     // quantidade de notas internas). Espelha o filtro de listComentarios.
-    const comentariosCount = hasStaffPerfilEmTI(user) ? true : { where: { publica: true } };
+    // ⭐ 26/08 — quem atende NO DEPARTAMENTO DO PROJETO (era staff de T.I.).
+    const atende = await this.helpers.ehStaffNoProjeto(projetoId, user, role);
+    const comentariosCount = atende ? true : { where: { publica: true } };
     return this.prisma.atividadeProjeto.findMany({
       where: { projetoId },
       include: {
@@ -447,8 +448,10 @@ export class ProjetoAtividadeService {
     // Regra única 14/05: nota interna (publica=false) só p/ staff TI (isTI:
     // ADMIN/GESTOR_TI/SUPORTE_TI). USUARIO_CHAVE/TERCEIRIZADO/non-staff só veem
     // públicas. Filtro no backend — frontend pode ser bypassado via API.
-    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    if (!hasStaffPerfilEmTI(user)) return comentarios.filter((c) => c.publica);
+    // ⭐ 26/08 — quem atende NO DEPARTAMENTO DO PROJETO.
+    if (!(await this.helpers.ehStaffNoProjeto(projetoId, user, role))) {
+      return comentarios.filter((c) => c.publica);
+    }
     return comentarios;
   }
 
@@ -460,10 +463,11 @@ export class ProjetoAtividadeService {
     });
     if (!atividade) throw new NotFoundException('Tarefa nao encontrada neste projeto');
 
-    // Defesa em profundidade: non-staff sempre grava publica=true (não pode
-    // criar nota interna mesmo forjando o body). Só isTI decide.
-    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    const publicaEfetiva = !hasStaffPerfilEmTI(user) ? true : (publica ?? true);
+    // Defesa em profundidade: quem não atende sempre grava publica=true (não cria nota
+    // interna nem forjando o body). ⭐ 26/08 — atende = staff NO DEPTO DO PROJETO.
+    const publicaEfetiva = !(await this.helpers.ehStaffNoProjeto(projetoId, user, role))
+      ? true
+      : (publica ?? true);
 
     const comentario = await this.prisma.comentarioTarefa.create({
       data: {
@@ -585,10 +589,9 @@ export class ProjetoAtividadeService {
     if (visivelPendencia !== undefined && comentario.atividade?.pendenciaId) {
       data.visivelPendencia = visivelPendencia;
     }
-    // Só staff TI altera o flag interno (defesa em profundidade — non-staff
-    // não muda publica nem editando a própria nota via API).
-    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    if (publica !== undefined && hasStaffPerfilEmTI(user)) {
+    // Só quem atende o departamento do projeto altera o flag interno (defesa em
+    // profundidade — não muda `publica` nem editando a própria nota via API).
+    if (publica !== undefined && await this.helpers.ehStaffNoProjeto(projetoId, user, role)) {
       data.publica = publica;
     }
     return this.prisma.comentarioTarefa.update({
@@ -601,13 +604,18 @@ export class ProjetoAtividadeService {
   async buscarComentarios(query: string, user?: JwtPayload, role?: string) {
     if (!query || query.trim().length < 2) return [];
 
+    // ⭐ 26/08 — busca GLOBAL: não dá para perguntar "atende este projeto?" por linha.
+    // A regra vira relacional: nota pública sempre; interna só de projeto cujo
+    // departamento é um dos que eu atendo. Antes, staff de T.I. varria a nota interna
+    // de qualquer departamento — e quem atende fora do T.I. não achava nem a própria.
+    const deptosOndeAtendo = getDeptosOndeStaff(user);
     const termo = query.trim();
     const comentarios = await this.prisma.comentarioTarefa.findMany({
       where: {
         texto: { contains: termo, mode: 'insensitive' },
-        // Busca global não vaza nota interna p/ non-staff (Regra única 14/05).
-        // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-        ...(hasStaffPerfilEmTI(user) ? {} : { publica: true }),
+        ...(deptosOndeAtendo.length > 0
+          ? { OR: [{ publica: true }, { atividade: { projeto: { departamentoId: { in: deptosOndeAtendo } } } }] }
+          : { publica: true }),
       },
       include: {
         usuario: { select: { id: true, nome: true } },

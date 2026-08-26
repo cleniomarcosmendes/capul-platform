@@ -372,6 +372,58 @@ describe('ChamadoService', () => {
   // #6 (18/06) — visibilidade restrita à equipe na LISTAGEM. O carve-out só
   // entra na cláusula de visibilidade por DEPTO-STAFF; gestor do workspace e
   // ADMIN veem tudo. Capturamos o `where` montado em prisma.chamado.findMany.
+
+  // ⭐ 26/08 — "staff" deixou de ser "staff em algum departamento de T.I." e passou a ser
+  // "staff NO DEPARTAMENTO DO CHAMADO". Perfis reais: no Fiscal a pessoa atende; no T.I.
+  // a mesma pessoa é usuária final.
+  describe('nota interna e chamado PRIVADO seguem o departamento do chamado', () => {
+    const suporteNoFiscal = {
+      sub: 'u-1', email: 'u@test.com', filialId: 'filial-1',
+      modulos: [{
+        codigo: 'WORKSPACE', role: 'SUPORTE',
+        departamentos: [
+          { id: 'dep-fiscal', nome: 'Fiscal', role: 'SUPORTE', isTI: false },
+          { id: 'dep-ti', nome: 'T.I.', role: 'USUARIO_FINAL', isTI: true },
+        ],
+      }],
+    } as any;
+
+    function chamadoDe(departamentoId: string, extra: Record<string, unknown> = {}) {
+      return {
+        ...baseChamado({ departamentoId, ...extra }),
+        copias: [],
+        historicos: [
+          { id: 'h1', publico: true, descricao: 'publico' },
+          { id: 'h2', publico: false, descricao: 'nota interna' },
+        ],
+      };
+    }
+
+    it('abre o PRIVADO do departamento onde atende', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(chamadoDe('dep-fiscal', { visibilidade: 'PRIVADO' }));
+      await expect(core.findOne('ch-1', suporteNoFiscal, 'SUPORTE')).resolves.toBeDefined();
+    });
+
+    // Antes: quem é SUPORTE no Fiscal criava privado no Fiscal (onda de 25/08) e NÃO
+    // conseguia abrir depois, porque a abertura exigia ser do T.I.
+    it('NÃO abre o PRIVADO de um departamento onde é usuária final', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(chamadoDe('dep-ti', { visibilidade: 'PRIVADO' }));
+      await expect(core.findOne('ch-1', suporteNoFiscal, 'SUPORTE')).rejects.toThrow(/restrito/i);
+    });
+
+    it('lê nota interna no departamento onde atende', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(chamadoDe('dep-fiscal'));
+      const ch = await core.findOne('ch-1', suporteNoFiscal, 'SUPORTE');
+      expect(ch.historicos).toHaveLength(2);
+    });
+
+    it('NÃO lê nota interna de chamado de outro departamento', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(chamadoDe('dep-ti'));
+      const ch = await core.findOne('ch-1', suporteNoFiscal, 'SUPORTE');
+      expect(ch.historicos.map((h: { id: string }) => h.id)).toEqual(['h1']);
+    });
+  });
+
   describe('findAll — visibilidade restrita à equipe', () => {
     function workspaceUser(role: 'SUPORTE' | 'GESTOR') {
       return {

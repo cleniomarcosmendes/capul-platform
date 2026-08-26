@@ -15,7 +15,7 @@ import { UpdatePendenciaDto } from '../dto/update-pendencia.dto.js';
 import { CreateInteracaoPendenciaDto } from '../dto/create-interacao-pendencia.dto.js';
 import { ProjetoHelpersService } from './projeto-helpers.service.js';
 import { PENDENCIA_UPLOADS_DIR } from './projeto.constants.js';
-import { isGestor, isTI, hasStaffPerfilEmTI } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI } from '../../common/constants/roles.constant.js';
 import type { JwtPayload } from '../../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -111,8 +111,8 @@ export class ProjetoPendenciaService {
     // GESTOR_TI/SUPORTE_TI (isTI). Antes filtrava apenas USUARIO_CHAVE e
     // TERCEIRIZADO; USUARIO_FINAL hipotético (ou roles legadas como
     // DESENVOLVEDOR/MANUTENCAO/INFRAESTRUTURA) viam internos.
-    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    if (!hasStaffPerfilEmTI(user)) {
+    // ⭐ 26/08 — quem lê a interação interna é quem atende o DEPARTAMENTO DO PROJETO.
+    if (!(await this.helpers.ehStaffNoProjeto(projetoId, user, role))) {
       pendencia.interacoes = pendencia.interacoes.filter((i) => i.publica);
     }
 
@@ -494,8 +494,10 @@ export class ProjetoPendenciaService {
     // não mostra o checkbox pra eles, mas evita bypass por API direto).
     // Staff = ADMIN/GESTOR_TI/SUPORTE_TI (isTI). 14/05/2026 — alinhamento com
     // Chamado e com a regra explicitada pelo Clenio (todo non-staff é restrito).
-    // S13a — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`.
-    const publica = !hasStaffPerfilEmTI(user) ? true : (dto.publica ?? true);
+    // ⭐ 26/08 — idem para ESCREVER.
+    const publica = !(await this.helpers.ehStaffNoProjeto(projetoId, user, role))
+      ? true
+      : (dto.publica ?? true);
 
     const interacao = await this.prisma.interacaoPendencia.create({
       data: {

@@ -23,8 +23,18 @@ export const isTI = (role: string): boolean =>
   ROLES_TI.includes(role as (typeof ROLES_TI)[number]);
 
 /**
- * S12 (25/05) — checa se o user tem perfil STAFF (ADMIN/GESTOR/SUPORTE)
- * em ALGUM departamento marcado como TI no JWT (`departamentos[].isTI`).
+ * O user é staff (ADMIN/GESTOR/SUPORTE) em ALGUM departamento marcado como T.I.
+ *
+ * ⚠️ 26/08 — RESTOU UM ÚNICO USO LEGÍTIMO: o **artigo GLOBAL** da base de conhecimento,
+ * que não pertence a departamento nenhum e é curado pelo T.I. Em todo o resto do módulo
+ * este teste foi trocado por "staff NO DEPARTAMENTO DO REGISTRO" (`ehStaffNoDepto`):
+ * perguntar "é do T.I.?" era herança da época em que o Workspace só existia lá, e
+ * errava dos dois lados — quem atende no Fiscal não alcançava a nota interna do próprio
+ * Fiscal, e quem atende no T.I. alcançava a de todo mundo.
+ *
+ * Não volte a usá-lo para decidir sobre um registro que tem departamento.
+ *
+ * S12 (25/05) — origem: substituiu `isTI(role)`, que lia a role denormalizada.
  *
  * Resolve o caso multi-perfil onde `role` denormalizada do JWT pode
  * sugerir staff (ex: GESTOR de Controladoria) mas o user NÃO é staff
@@ -35,7 +45,7 @@ export const isTI = (role: string): boolean =>
  * Tokens pré-S12 não trazem `isTI` em departamentos[] → todos retornam
  * false (conservador — equivale a "não é staff TI", não vaza).
  */
-export function hasStaffPerfilEmTI(
+export function ehStaffDeTI(
   user: JwtPayload | null | undefined,
 ): boolean {
   if (!user) return false;

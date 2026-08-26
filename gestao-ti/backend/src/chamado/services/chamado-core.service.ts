@@ -22,7 +22,7 @@ import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { ProtheusService } from '../../protheus/protheus.service.js';
 import { chamadoInclude, UPLOADS_DIR } from './chamado.constants.js';
-import { isGestor, isTI, hasStaffPerfilEmTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto, ehStaffNoDepto, ehGestorNoDepto } from '../../common/constants/roles.constant.js';
+import { isGestor, isTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto, ehStaffNoDepto, ehGestorNoDepto } from '../../common/constants/roles.constant.js';
 import { hasCapability } from '../../common/helpers/capability.helper.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
 import * as path from 'path';
@@ -274,10 +274,10 @@ export class ChamadoCoreService {
       }
 
       // Para roles nao-staff, restringir as filiais vinculadas ao usuario.
-      // S12 (25/05): `hasStaffPerfilEmTI(user)` substitui o check baseado em
-      // role denormalizado — multi-perfil (Juliana = GESTOR/CTL +
-      // USUARIO_FINAL/T.I.) precisa ser tratado como NÃO-staff pra filiais.
-      const isStaff = isGestor(role) || hasStaffPerfilEmTI(user);
+      // ⭐ 26/08 — era "staff em algum depto de T.I."; agora é "staff em ALGUM
+      // departamento". Aqui a pergunta é sobre a PESSOA (ela atende alguém?), não
+      // sobre um registro — quem recorta por departamento é a camada de baixo.
+      const isStaff = isGestor(role) || getDeptosOndeStaff(user).length > 0;
       if (!isStaff && !filters.filialId) {
         const userFiliais = await this.prisma.$queryRaw<{ filial_id: string }[]>`
           SELECT filial_id FROM core.usuario_filiais WHERE usuario_id = ${user.sub}
@@ -326,8 +326,11 @@ export class ChamadoCoreService {
           { tecnicoId: user.sub },
           { colaboradores: { some: { usuarioId: user.sub } } },
         ];
-      } else if (!filters.equipeId && !hasStaffPerfilEmTI(user)) {
-        // S12 (25/05) — substituído `isTI(role)` por `hasStaffPerfilEmTI(user)`.
+      } else if (!filters.equipeId && getDeptosOndeStaff(user).length === 0) {
+        // ⭐ 26/08 — quem NÃO atende em departamento nenhum cai no escopo reduzido
+        // (equipes-membro + pessoal). Quem atende em algum é recortado pela camada de
+        // baixo, que já limita aos departamentos onde ele é staff.
+        // (histórico: S12 trocou isTI(role) por staff-de-TI; 26/08 virou staff-no-departamento)
         // Incidente Juliana: role denormalizada vinha 'GESTOR' (do perfil CTL),
         // isTI('GESTOR')=true → este else-if era pulado → Layer 2 sozinho deixava
         // todos os chamados de T.I. passarem (T.I. ∈ deptos dela por causa do
@@ -359,8 +362,12 @@ export class ChamadoCoreService {
     // S12 — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`. Multi-perfil
     // não-staff TI (Juliana) precisa ter histórico privado escondido da busca
     // profunda (era vazamento pré-S12).
-    const histVisibilidade: Prisma.HistoricoChamadoWhereInput = hasStaffPerfilEmTI(user)
-      ? {}
+    // ⭐ 26/08 — a busca profunda varria nota interna se a pessoa fosse staff de T.I.,
+    // em chamado de QUALQUER departamento; e não varria a do próprio departamento de
+    // quem atende fora do T.I. Agora: público sempre, interno só onde eu atendo.
+    const deptosOndeAtendo = getDeptosOndeStaff(user);
+    const histVisibilidade: Prisma.HistoricoChamadoWhereInput = deptosOndeAtendo.length > 0
+      ? { OR: [{ publico: true }, { chamado: { departamentoId: { in: deptosOndeAtendo } } }] }
       : { publico: true };
 
     if (searchTerm) {
@@ -454,7 +461,6 @@ export class ChamadoCoreService {
       // ela vê todos chamados de CTL via depto + seus chamados em TI. Antes
       // o S12 zerava o filtro inteiro pra não-staffTI — agora restringe pelos
       // deptos onde ela é staff (mais correto: gestor CTL vê CTL completo).
-      const ehStaffTI = hasStaffPerfilEmTI(user);
       const deptosStaff = getDeptosOndeStaff(user);
       // Visibilidade restrita por equipe (18/06): a cláusula "vejo todos os
       // chamados do meu depto-staff" ganha um carve-out — chamado de equipe
@@ -499,11 +505,16 @@ export class ChamadoCoreService {
         ...deptoStaffClauses,
       ];
       const andClauses: Record<string, unknown>[] = [where, { OR: orVisibilidade }];
-      // S12 — força visibilidade=PUBLICO se não-staff TI (defesa em
-      // profundidade contra qualquer caminho Layer 1 que pule o filtro).
-      if (!ehStaffTI) {
-        andClauses.push({ visibilidade: 'PUBLICO' });
-      }
+      // Defesa em profundidade contra qualquer caminho da Layer 1 que pule o filtro.
+      // ⭐ 26/08 — era "não é staff de T.I. → só PÚBLICO", o que escondia do Fiscal o
+      // privado DO FISCAL e mostrava ao T.I. o privado de todo mundo. Agora: público
+      // sempre; privado só nos departamentos onde eu atendo.
+      andClauses.push({
+        OR: [
+          { visibilidade: 'PUBLICO' },
+          ...(deptosStaff.length > 0 ? [{ departamentoId: { in: deptosStaff } }] : []),
+        ],
+      });
       whereFiltrado = { AND: andClauses };
     }
 
@@ -628,14 +639,15 @@ export class ChamadoCoreService {
       }
     }
 
-    // Cinto-e-suspensório (14/05/2026): PRIVADO é staff-only no detalhe
-    // também. Criação já é restrita a ROLES_PODE_PRIVADO; aqui bloqueia
-    // acesso via link direto caso TI vincule non-staff por engano.
-    // S12 — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`. Multi-perfil
-    // GESTOR de outro depto (Juliana/CTL) NÃO é staff TI → não pode ver
-    // PRIVADO mesmo via link direto.
-    if (chamado.visibilidade === 'PRIVADO' && !hasStaffPerfilEmTI(user)) {
-      throw new ForbiddenException('Chamado privado — acesso restrito a equipe de TI');
+    // Cinto-e-suspensório (14/05/2026): PRIVADO é staff-only no detalhe também —
+    // bloqueia acesso por link direto.
+    //
+    // ⭐ 26/08 — era `hasStaffPerfilEmTI`: staff em algum depto de T.I. Isso deixava o
+    // Fiscal CRIAR um privado no Fiscal (a criação virou por departamento em 25/08) e
+    // NÃO CONSEGUIR ABRIR depois. Quem esconde e quem lê é quem atende NAQUELE
+    // departamento.
+    if (chamado.visibilidade === 'PRIVADO' && !ehStaffNoDepto(user, chamado.departamentoId, role)) {
+      throw new ForbiddenException('Chamado privado — restrito a quem atende este departamento');
     }
 
     // Filtro de comentário interno (14/05/2026 — fix): qualquer role
@@ -645,7 +657,8 @@ export class ChamadoCoreService {
     // (vazamento). Regra única S12 (25/05): staff = `hasStaffPerfilEmTI(user)`
     // — multi-perfil precisa ser detectado pelo JWT.departamentos[], não pela
     // role denormalizada (incidente Juliana).
-    if (!hasStaffPerfilEmTI(user)) {
+    // ⭐ 26/08 — idem: quem lê a nota interna é quem atende o departamento DO CHAMADO.
+    if (!ehStaffNoDepto(user, chamado.departamentoId, role)) {
       chamado.historicos = chamado.historicos.filter((h) => h.publico);
     }
 
@@ -1406,7 +1419,12 @@ export class ChamadoCoreService {
         // S12 — `hasStaffPerfilEmTI(user)` substitui `isTI(role)`. Caso
         // multi-perfil precisa ser detectado pelo JWT.departamentos[], senão
         // GESTOR de outro depto poderia gravar comentário interno (privado).
-        publico: !hasStaffPerfilEmTI(user) || isSolicitarInfo ? true : (dto.publico ?? true),
+        // ⭐ 26/08 — quem pode ESCREVER nota interna é quem atende este departamento
+        // (antes: staff de T.I., então o Fiscal só conseguia escrever comentário público
+        // nos próprios chamados).
+        publico: !ehStaffNoDepto(user, chamado.departamentoId, role) || isSolicitarInfo
+          ? true
+          : (dto.publico ?? true),
         chamadoId: id,
         usuarioId: user.sub,
       },
