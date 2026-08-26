@@ -432,6 +432,37 @@ describe('ChamadoService', () => {
     });
   });
 
+
+  // ⭐ 26/08 — relato do Clenio: quem entra EM CÓPIA recebia a notificação, abria pelo
+  // link, mas o chamado não aparecia na lista dele. A cláusula de cópia existia na
+  // camada de visibilidade desde o SAC — só que os ramos por papel, acima dela,
+  // cortavam antes com um AND.
+  describe('em cópia aparece na LISTA, não só na notificação', () => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    async function whereDoPapel(role: string) {
+      prisma.membroEquipe.findMany.mockResolvedValue([]);
+      const user = { sub: 'user-1', email: 'u@test.com', filialId: 'f1', modulos: [{ codigo: 'WORKSPACE', role, departamentos: [{ id: 'dep-x', role, isTI: false }] }] } as any;
+      await core.findAll(user, role, {});
+      return JSON.stringify(prisma.chamado.findMany.mock.calls.at(-1)?.[0]?.where ?? {});
+    }
+
+    it('USUARIO_FINAL vê o que abriu E o que está em cópia', async () => {
+      const where = await whereDoPapel('USUARIO_FINAL');
+      expect(where).toContain('copias');
+      expect(where).toContain('solicitanteId');
+      // e segue sem ver o que não é público
+      expect(where).toContain('PUBLICO');
+    });
+
+    it('USUARIO_CHAVE também', async () => {
+      expect(await whereDoPapel('USUARIO_CHAVE')).toContain('copias');
+    });
+
+    it('TERCEIRIZADO também', async () => {
+      expect(await whereDoPapel('TERCEIRIZADO')).toContain('copias');
+    });
+  });
+
   describe('cancelar', () => {
     it('cancela chamado com sucesso', async () => {
       const chamado = baseChamado({ status: 'ABERTO' });

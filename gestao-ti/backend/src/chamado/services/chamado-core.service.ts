@@ -292,7 +292,17 @@ export class ChamadoCoreService {
       }
 
       if (role === 'USUARIO_FINAL') {
-        where.solicitanteId = user.sub;
+        // ⭐ 26/08 — `solicitanteId = eu` era um AND cru: quem entrava EM CÓPIA recebia a
+        // notificação, clicava, via o chamado no detalhe... e não achava mais na lista.
+        // A cláusula de cópia existe na camada de baixo desde o SAC, mas ela é um OR de
+        // VISIBILIDADE — não tinha como resgatar um chamado que este AND já havia
+        // cortado. Regra da casa (20/06): "em cópia = acompanha", e acompanhar começa
+        // por enxergar na própria lista.
+        where.OR = [
+          { solicitanteId: user.sub },
+          { copias: { some: { usuarioId: user.sub } } },
+        ];
+        // Segue valendo: usuário final vê só o público (nota interna e PRIVADO não).
         where.visibilidade = 'PUBLICO';
       } else if (['USUARIO_CHAVE', 'TERCEIRIZADO'].includes(role)) {
         // Workspace Onda 2 C2.9 (24/05) — adicionado `equipeAtualId IN
@@ -310,6 +320,8 @@ export class ChamadoCoreService {
           { solicitanteId: user.sub },
           { tecnicoId: user.sub },
           { colaboradores: { some: { usuarioId: user.sub } } },
+          // ⭐ 26/08 — em cópia também aqui: a regra vale para QUALQUER usuário.
+          { copias: { some: { usuarioId: user.sub } } },
           ...(equipeIdsUC.length > 0 ? [{ equipeAtualId: { in: equipeIdsUC } }] : []),
         ];
         // Cinto-e-suspensório (14/05/2026): chamado PRIVADO é staff-only.
@@ -349,6 +361,8 @@ export class ChamadoCoreService {
           { solicitanteId: user.sub },
           { tecnicoId: user.sub },
           { colaboradores: { some: { usuarioId: user.sub } } },
+          // ⭐ 26/08 — em cópia (vide o ramo do USUARIO_FINAL).
+          { copias: { some: { usuarioId: user.sub } } },
           ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
         ];
       }
