@@ -705,14 +705,7 @@ export class ChamadoCoreService {
     // TERCEIRIZADO) só podem criar PUBLICO — solicitante tem direito de
     // acompanhar. Defesa em profundidade — frontend já oculta a opção,
     // backend valida pra defender contra request manipulado.
-    const ROLES_PODE_PRIVADO = ['ADMIN', 'GESTOR', 'SUPORTE'];
     const visibilidade = dto.visibilidade ?? 'PUBLICO';
-
-    if (visibilidade === 'PRIVADO' && !ROLES_PODE_PRIVADO.includes(role)) {
-      throw new ForbiddenException(
-        'Apenas equipe de TI (ADMIN/GESTOR_TI/SUPORTE_TI) pode criar chamados PRIVADOS',
-      );
-    }
 
     const sla = await this.prisma.slaDefinicao.findUnique({
       where: {
@@ -755,6 +748,16 @@ export class ChamadoCoreService {
     // `dto.departamentoId` (campo "Departamento do solicitante" no form) é
     // ignorado aqui — segue como info visual no form mas não define dono.
     const departamentoId = equipe.departamentoId ?? undefined;
+
+    // ⭐ 26/08 — PRIVADO era conferido contra a role denormalizada, e ANTES de o
+    // departamento-dono existir: quem é SUPORTE no Fiscal abria chamado privado no
+    // T.I. Quem pode esconder um chamado é quem atende NAQUELE departamento — por isso
+    // a checagem mora aqui embaixo, depois que a equipe define o dono.
+    if (visibilidade === 'PRIVADO' && !ehStaffNoDepto(user, departamentoId, role)) {
+      throw new ForbiddenException(
+        'Apenas quem atende chamados deste departamento pode criar chamados PRIVADOS',
+      );
+    }
 
     // Auto-assumir o chamado só quando o solicitante é membro ATIVO da própria
     // EQUIPE escolhida na abertura (equipeAtualId). USUARIO_CHAVE e TERCEIRIZADO
@@ -1335,7 +1338,9 @@ export class ChamadoCoreService {
     // - Solicitante (sempre)
     // - Copiados (tem "papel de solicitante" — decidido em 13/05/2026)
     // - Gestor (override)
-    if (!chamado.tecnicoId && chamado.solicitanteId !== user.sub && !isGestor(role)) {
+    // Gestor DO DEPARTAMENTO DO CHAMADO (26/08) — vide `updateHeader`.
+    if (!chamado.tecnicoId && chamado.solicitanteId !== user.sub
+        && !ehGestorNoDepto(user, chamado.departamentoId, role)) {
       const isCopia = await this.prisma.chamadoCopia.findUnique({
         where: { chamadoId_usuarioId: { chamadoId: id, usuarioId: user.sub } },
         select: { id: true },
@@ -1350,7 +1355,7 @@ export class ChamadoCoreService {
     // (não faz sentido o solicitante "solicitar info de si mesmo").
     const isSolicitarInfo = dto.solicitarInfoUsuario === true;
     if (isSolicitarInfo) {
-      if (chamado.solicitanteId === user.sub && !isGestor(role)) {
+      if (chamado.solicitanteId === user.sub && !ehGestorNoDepto(user, chamado.departamentoId, role)) {
         throw new BadRequestException(
           'Apenas o tecnico/colaborador/gestor pode solicitar informacoes ao solicitante.',
         );

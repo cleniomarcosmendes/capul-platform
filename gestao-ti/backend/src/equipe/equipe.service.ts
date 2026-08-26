@@ -16,7 +16,7 @@ import {
   assertStaffEmDepto,
 } from '../common/helpers/departamento-filter.helper.js';
 import { hasCapability } from '../common/helpers/capability.helper.js';
-import { getDeptosOndeStaff } from '../common/constants/roles.constant.js';
+import { getDeptosOndeStaff, getDeptosOndeGestor } from '../common/constants/roles.constant.js';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface.js';
 
 @Injectable()
@@ -365,8 +365,18 @@ export class EquipeService {
    * Para ADMIN/GESTOR_TI retorna todas as equipes ativas.
    * Para outros roles, retorna apenas equipes onde o usuario tem podeGerirContratos.
    */
-  async findEquipesParaContratos(usuarioId: string, role: string) {
-    if (role === 'ADMIN' || role === 'GESTOR') {
+  async findEquipesParaContratos(usuarioId: string, role: string, user?: JwtPayload) {
+    // ⭐ 26/08 — quem manda em ALGUM departamento via as equipes da empresa INTEIRA
+    // (role denormalizada). Agora vê as dos departamentos onde de fato manda. Gêmeo do
+    // `findEquipesParaCompras`, corrigido em 25/08.
+    const deptosOndeManda = getDeptosOndeGestor(user);
+    if (user && deptosOndeManda.length > 0) {
+      return this.prisma.equipe.findMany({
+        where: { status: 'ATIVO', departamentoId: { in: deptosOndeManda } },
+        orderBy: { ordem: 'asc' },
+      });
+    }
+    if (!user && (role === 'ADMIN' || role === 'GESTOR')) {
       return this.prisma.equipe.findMany({
         where: { status: 'ATIVO' },
         orderBy: { ordem: 'asc' },

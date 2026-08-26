@@ -234,11 +234,11 @@ export class ProjetoService {
     return this.tempoService.encerrarRegistroTempo(projetoId, atividadeId, userId);
   }
 
-  ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId?: string, role?: string, user?: JwtPayload) {
+  ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId: string, role: string, user?: JwtPayload) {
     return this.tempoService.ajustarRegistroTempo(projetoId, registroId, dto, userId, role, user);
   }
 
-  removerRegistroTempo(projetoId: string, registroId: string, userId?: string, role?: string, user?: JwtPayload) {
+  removerRegistroTempo(projetoId: string, registroId: string, userId: string, role: string, user?: JwtPayload) {
     return this.tempoService.removerRegistroTempo(projetoId, registroId, userId, role, user);
   }
 

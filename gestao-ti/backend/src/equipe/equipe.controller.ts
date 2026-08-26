@@ -48,7 +48,7 @@ export class EquipeController {
     @CurrentUser() user: JwtPayload,
     @GestaoTiRole() role: string,
   ) {
-    return this.equipeService.findEquipesParaContratos(user.sub, role);
+    return this.equipeService.findEquipesParaContratos(user.sub, role, user);
   }
 
   /**

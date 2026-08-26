@@ -102,15 +102,17 @@ export class ProjetoTempoService {
     return encerrado;
   }
 
-  async ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId?: string, role?: string, user?: JwtPayload) {
+  async ajustarRegistroTempo(projetoId: string, registroId: string, dto: UpdateRegistroTempoDto, userId: string, role: string, user?: JwtPayload) {
     await this.helpers.ensureProjetoExists(projetoId);
     const registro = await this.prisma.registroTempo.findFirst({
       where: { id: registroId, atividade: { projetoId } },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
 
-    if (userId && role) {
+    {
       // 29/05 — role NO DEPTO do projeto (não principal do JWT) em multi-perfil.
+      // ⭐ 26/08 — o bloco era `if (userId && role)`: sem os argumentos, a edição
+      // passava SEM CHECAGEM. Mesmo conserto feito no registro de tempo do chamado.
       const roleEfetiva = user
         ? await this.helpers.getRoleNoDeptoProjeto(projetoId, user, role)
         : role;
@@ -143,14 +145,16 @@ export class ProjetoTempoService {
     });
   }
 
-  async removerRegistroTempo(projetoId: string, registroId: string, userId?: string, role?: string, user?: JwtPayload) {
+  async removerRegistroTempo(projetoId: string, registroId: string, userId: string, role: string, user?: JwtPayload) {
     await this.helpers.ensureProjetoExists(projetoId);
     const registro = await this.prisma.registroTempo.findFirst({
       where: { id: registroId, atividade: { projetoId } },
     });
     if (!registro) throw new NotFoundException('Registro de tempo nao encontrado');
-    if (userId && role) {
+    {
       // 29/05 — role NO DEPTO do projeto (não principal do JWT) em multi-perfil.
+      // ⭐ 26/08 — o bloco era `if (userId && role)`: sem os argumentos, a edição
+      // passava SEM CHECAGEM. Mesmo conserto feito no registro de tempo do chamado.
       const roleEfetiva = user
         ? await this.helpers.getRoleNoDeptoProjeto(projetoId, user, role)
         : role;
