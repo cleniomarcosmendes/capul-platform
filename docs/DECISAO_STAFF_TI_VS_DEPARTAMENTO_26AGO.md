@@ -1,5 +1,12 @@
 # Decisão: "staff de T.I." ou "staff do departamento do registro"?
 
+> ### ✅ DECIDIDO E APLICADO em 26/08 — commit `cf55d4d6`
+> O Clenio optou por **migrar os 18** e fechar a inconsistência do privado. Conhecimento
+> (3) ficou como estava, e o helper virou `ehStaffDeTI`. O alcance transversal passou a
+> ser a capability `OVERSIGHT_PLATAFORMA`, que **ganhou tela no Configurador** — antes
+> só existia no backend, e conceder seria SQL na mão.
+> Deploy: §12 do roteiro `PlatformCapul_20260824b_...`.
+
 *26/08/2026 — levantamento pedido pelo Clenio. Nada foi alterado; este documento é para
 decidir.*
 
