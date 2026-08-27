@@ -19,9 +19,41 @@ testado que nunca subiu.
 
 ---
 
-## 2. As duas ondas
+## 2. Onda ≠ roteiro — o mapa
 
-### Onda 1 — `4daf094` → `b7f8bf2f` · **pronta há 16 dias**
+**"Onda" é recorte de PRODUÇÃO; os roteiros que geramos são de HOMOLOGAÇÃO.** Os dois não
+são a mesma coisa, e confundir isso é o que faria alguém entregar um roteiro de HLG ao
+Douglas.
+
+| Roteiro gerado | Intervalo | Commits | Migrations | Ambiente | Situação |
+|---|---|---|---|---|---|
+| `...20260811_Roteiro_Deploy.md` | `4daf094` → `b7f8bf2f` | 139 | 13 | **PROD** (e HLG) | ✅ HLG · 📋 **PROD pendente** |
+| `...20260819_..._HLG_Incremental.md` | `b7f8bf2f` → `e101ec74` | 12 | 0 | HLG | ✅ aplicado |
+| `...20260824_..._HLG_Incremental.md` | `e101ec74` → `95fd5a49` | 21 | 1 | HLG | ✅ aplicado |
+| `...20260824b_..._HLG_Incremental.md` | `95fd5a49` → `38fc8053` | 4 | 0 | HLG | ✅ aplicado (§0–§8) |
+| `...20260826_..._HLG_Incremental.md` | `38fc8053` → `fba71ad8` | 20 | 3 | HLG | 📋 **pendente** |
+
+Lendo a tabela:
+
+- **Onda 1 de PROD = exatamente um roteiro** — o de 11/08. Ele nasceu como roteiro de
+  produção (destinatário: Douglas) e foi usado também para levar a HLG até `b7f8bf2f`.
+  Está pronto, é só executar.
+- **Onda 2 de PROD = a SOMA dos quatro roteiros de HLG** (19/08 + 24/08 + 24b + 26/08),
+  que juntos levam de `b7f8bf2f` a `fba71ad8`: 12 + 21 + 4 + 20 = **57 commits** e
+  0 + 1 + 0 + 3 = **4 migrations**.
+
+⚠️ **Os quatro roteiros de HLG NÃO servem para produção**, por três motivos concretos:
+cada um parte de uma base diferente (encadeados, e o §0 de cada um confere um HEAD que
+PROD não tem); tratam do app por **OTA no canal `homolog`**; e trazem verificações
+escritas para a HLG. Por isso o passo 6 da sequência é **escrever um roteiro de PROD para
+a Onda 2** — um documento novo, consolidando os quatro num só delta `b7f8bf2f`→alvo, com
+a ordem de migrations e o smoke pensados para produção.
+
+---
+
+## 3. As duas ondas
+
+### Onda 1 — `4daf094` → `b7f8bf2f` · **pronta há 16 dias** *(= roteiro de 11/08)*
 
 | | |
 |---|---|
@@ -41,13 +73,13 @@ hoje **não está em produção**, e é proteção contra bloqueio do CNPJ da CA
 > roteiro: a `020` do Inventário (âncora de identidade) e a `20260811190000` da Logística
 > (backfill de coordenadas).
 
-### Onda 2 — `b7f8bf2f` → `fba71ad8` · **ainda não validada**
+### Onda 2 — `b7f8bf2f` → `fba71ad8` · **ainda não validada** *(= os 4 roteiros de HLG somados)*
 
 | | |
 |---|---|
 | Commits | **57** |
 | Migrations | **4** (`20260820120000` NF/centro de custo · `20260825120000` e `...140000` textos de papel · `20260826120000` `chamado_referencias`) |
-| Roteiro | Existe só para HLG (`...20260826...`); o de PROD **ainda não foi escrito** |
+| Roteiro | Os 4 de HLG cobrem o conteúdo; **o de PROD ainda não foi escrito** (passo 6) |
 | `/security-review` | ✅ da parte final (27/08); ⚠️ o escopo completo `b7f8bf2f`→alvo ainda não |
 | Validado em HLG | ❌ **não** — a HLG está em `38fc8053` |
 
@@ -56,7 +88,7 @@ os ajustes de chamado/entregas desta semana.
 
 ---
 
-## 3. A recomendação: **duas subidas, nesta ordem**
+## 4. A recomendação: **duas subidas, nesta ordem**
 
 **Primeiro a Onda 1, sozinha.** Ela está pronta, validada e com o gate de segurança
 feito; o único motivo de não estar em produção é fila. Adiar de novo não a torna mais
@@ -87,7 +119,7 @@ que precisa ser destravado primeiro**, antes de qualquer código novo.
 
 ---
 
-## 4. Sequência sugerida
+## 5. Sequência sugerida
 
 | # | Passo | Quem | Pré-requisito |
 |---|---|---|---|
@@ -96,7 +128,7 @@ que precisa ser destravado primeiro**, antes de qualquer código novo.
 | 3 | Validar em HLG (§7, duas contas) | Clenio | passo 2 |
 | 4 | `/security-review` escopo `b7f8bf2f`→alvo | — | passo 3 |
 | 5 | Decidir `OVERSIGHT_PLATAFORMA` | Clenio | passo 3 |
-| 6 | **Escrever o roteiro de PROD da Onda 2** | — | passos 3–5 |
+| 6 | **Escrever o roteiro de PROD da Onda 2** (consolida os 4 de HLG num delta só) | — | passos 3–5 |
 | 7 | **PROD ← Onda 2** | Douglas | passo 6 |
 
 Os passos 1 e 2 são **independentes** e podem correr no mesmo dia: um mexe em produção
@@ -104,7 +136,7 @@ com código de 11/08, o outro em homologação com código de 27/08.
 
 ---
 
-## 5. O que este plano NÃO resolve
+## 6. O que este plano NÃO resolve
 
 - **`M scripts/build-com-versao.sh` na HLG** — alteração feita direto no servidor, ainda
   sem `git diff`. Enquanto não voltar ao repositório, a HLG seguirá marcada `-sujo`.
