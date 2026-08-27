@@ -116,6 +116,10 @@ existe.
 ## 6. Gates da casa antes do deploy
 
 - [x] `check-migrations-all.sh` — 4 backends consistentes
-- [ ] `/security-review` do delta **+ verificação de ESTADO** (rotas anônimas × nginx) —
-      não executado nesta sessão. O delta mexe em autorização de ponta a ponta, então
-      este gate vale mais do que o normal aqui.
+- [x] `/security-review` do delta — **executado em 27/08**, 2 achados (ambos na
+      referência `#numero`), **ambos corrigidos** em `c89a1892`. Junto saiu um achado
+      não-security que bloqueava a saída do §6: a capability `OVERSIGHT_PLATAFORMA`
+      faltava na whitelist do auth-gateway (a tela concedia e tomava 400).
+- [ ] Verificação de **ESTADO** (rotas anônimas × `location` do nginx) — não feita nesta
+      sessão. O delta não adiciona rota nova nem `@Public`, mas a lição de 11/08 é que
+      esse gate é sobre o estado do ambiente, não sobre o diff.
