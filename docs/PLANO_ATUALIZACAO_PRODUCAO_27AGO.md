@@ -3,6 +3,17 @@
 *27/08/2026. Não é roteiro de execução — é a decisão de **em quantas vezes** e **em que
 ordem** tirar a produção de onde ela está.*
 
+> ### ✅ DECIDIDO (27/08, Clenio + Douglas + Marco): **subida ÚNICA**
+> A HLG será **recriada idêntica à PRODUÇÃO** e o deploy passa a ser um só —
+> `4daf094` → `fba71ad8`, pelo
+> **`C:\Arquivos-de-projeto\PlatformCapul_20260827_Roteiro_Deploy_UNIFICADO.md`**.
+>
+> Isto responde à objeção que este plano levantava contra juntar tudo. A ressalva era
+> que 17 migrations subiriam **sem nunca terem rodado juntas sobre dados reais**;
+> recriar a homologação a partir da produção elimina exatamente isso — o ensaio passa a
+> ser fiel, e a bateria de testes valida o conjunto, não os pedaços. As duas ondas
+> descritas abaixo viram **conteúdo** do roteiro único, não subidas separadas.
+
 ---
 
 ## 1. Onde a produção está
