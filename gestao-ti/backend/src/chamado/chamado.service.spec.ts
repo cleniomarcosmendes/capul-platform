@@ -463,6 +463,70 @@ describe('ChamadoService', () => {
     });
   });
 
+
+  // ⭐ 27/08 — achados do /security-review sobre a referência `#numero`.
+  describe('referência #numero — o que o /security-review achou', () => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const suporteNoDepto = {
+      sub: 'user-1', filialId: 'f1',
+      modulos: [{ codigo: 'WORKSPACE', role: 'SUPORTE', departamentos: [{ id: 'dep-x', nome: 'X', role: 'SUPORTE', isTI: false }] }],
+    } as any;
+
+    // Vuln 1: a consulta de citação reescrevia a regra e perdia o carve-out da equipe
+    // `restritaVisibilidade` — o SUPORTE não-membro citava e recebia título e id.
+    it('citar usa a MESMA regra da listagem (inclui o carve-out de equipe restrita)', async () => {
+      prisma.membroEquipe.findMany.mockResolvedValue([]);
+      prisma.chamado.findMany.mockResolvedValue([]);
+
+      await (core as any).criarReferencias('origem-1', 'olha o #10', suporteNoDepto, 'SUPORTE');
+
+      const where = JSON.stringify(prisma.chamado.findMany.mock.calls.at(-1)?.[0]?.where ?? {});
+      expect(where).toContain('restritaVisibilidade');
+      expect(where).toContain('PUBLICO');
+    });
+
+    it('teto de números por requisição (citação não é varredura)', async () => {
+      prisma.membroEquipe.findMany.mockResolvedValue([]);
+      prisma.chamado.findMany.mockResolvedValue([]);
+      const texto = Array.from({ length: 40 }, (_, i) => `#${i + 1}`).join(' ');
+
+      const r = await (core as any).criarReferencias('origem-1', texto, suporteNoDepto, 'SUPORTE');
+
+      expect(r.length).toBeLessThanOrEqual(10);
+      expect((prisma.chamado.findMany.mock.calls.at(-1)?.[0]?.where?.numero?.in ?? []).length).toBeLessThanOrEqual(10);
+    });
+
+    // Vuln 2: o laço é gravado checando quem ESCREVE; quem LÊ o outro chamado é outra
+    // plateia. Sem a poda, o título de um PRIVADO de outro departamento vazava.
+    it('poda o laço para chamado PRIVADO de departamento onde não atendo', () => {
+      const chamado = {
+        referenciasFeitas: [
+          { destino: { numero: 1, titulo: 'público de X', departamentoId: 'dep-x', visibilidade: 'PUBLICO' } },
+          { destino: { numero: 2, titulo: 'privado de Y', departamentoId: 'dep-y', visibilidade: 'PRIVADO' } },
+        ],
+        referenciasRecebidas: [
+          { origem: { numero: 3, titulo: 'privado de Y', departamentoId: 'dep-y', visibilidade: 'PRIVADO' } },
+        ],
+      } as any;
+
+      const podado = (core as any).podarReferencias(chamado, suporteNoDepto, 'SUPORTE');
+
+      expect(podado.referenciasFeitas.map((r: any) => r.destino.numero)).toEqual([1]);
+      expect(podado.referenciasRecebidas).toEqual([]);
+    });
+
+    it('privado do MEU departamento continua aparecendo', () => {
+      const chamado = {
+        referenciasFeitas: [
+          { destino: { numero: 9, titulo: 'privado de X', departamentoId: 'dep-x', visibilidade: 'PRIVADO' } },
+        ],
+        referenciasRecebidas: [],
+      } as any;
+      const podado = (core as any).podarReferencias(chamado, suporteNoDepto, 'SUPORTE');
+      expect(podado.referenciasFeitas).toHaveLength(1);
+    });
+  });
+
   describe('cancelar', () => {
     it('cancela chamado com sucesso', async () => {
       const chamado = baseChamado({ status: 'ABERTO' });

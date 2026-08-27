@@ -469,67 +469,8 @@ export class ChamadoCoreService {
         select: { equipeId: true },
       });
       const equipeIds = equipesAtivasUser.map((m) => m.equipeId);
-      // S12 (25/05) + refino S13a (25/05) — visão "abre por estar no depto"
-      // só faz sentido pra deptos onde o user é STAFF (ADMIN/GESTOR/SUPORTE).
-      // Pra Juliana (GESTOR/CTL + USUARIO_FINAL/TI): deptosStaff=[CTL], então
-      // ela vê todos chamados de CTL via depto + seus chamados em TI. Antes
-      // o S12 zerava o filtro inteiro pra não-staffTI — agora restringe pelos
-      // deptos onde ela é staff (mais correto: gestor CTL vê CTL completo).
-      const deptosStaff = getDeptosOndeStaff(user);
-      // Visibilidade restrita por equipe (18/06): a cláusula "vejo todos os
-      // chamados do meu depto-staff" ganha um carve-out — chamado de equipe
-      // `restritaVisibilidade` só passa por aqui se eu for GESTOR/ADMIN do
-      // depto (gestor do workspace navega todas as equipes) OU membro da
-      // equipe. SUPORTE não-membro não vê. Solicitante/técnico/colaborador
-      // (cláusulas acima) seguem vendo, restrita ou não.
-      const deptosGestor = getDeptosOndeGestor(user);
-      const deptosSuporteOnly = deptosStaff.filter((d) => !deptosGestor.includes(d));
-      const deptoStaffClauses: Record<string, unknown>[] = [];
-      if (deptosGestor.length > 0) {
-        // GESTOR/ADMIN do depto: vê tudo do depto (inclusive equipe restrita).
-        deptoStaffClauses.push({ departamentoId: { in: deptosGestor } });
-      }
-      if (deptosSuporteOnly.length > 0) {
-        // SUPORTE: vê o depto, MENOS chamados de equipe restrita de que não é membro.
-        deptoStaffClauses.push({
-          AND: [
-            { departamentoId: { in: deptosSuporteOnly } },
-            {
-              OR: [
-                { equipeAtual: { is: { restritaVisibilidade: false } } },
-                // (removido `{ equipeAtualId: null }` — equipeAtualId é NÃO-nulável;
-                //  além de inútil, o Prisma rejeitava com "Argument `equipeAtualId`
-                //  is missing" → 500 na listagem pra SUPORTE não-gestor de um depto.)
-                ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
-              ],
-            },
-          ],
-        });
-      }
-      const orVisibilidade: Record<string, unknown>[] = [
-        { solicitanteId: user.sub },
-        { tecnicoId: user.sub },
-        { colaboradores: { some: { usuarioId: user.sub } } },
-        // SAC Fase 1 (camada 5): quem está EM CÓPIA vê o chamado na LISTAGEM, não
-        // só no detalhe (findOne já liberava via isCopiado). Sem isto, o apoiador
-        // do SAC puxado por cópia não via o chamado na lista dele. Copiado é
-        // sempre não-TI → o S12 abaixo já restringe a visibilidade=PUBLICO.
-        { copias: { some: { usuarioId: user.sub } } },
-        ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
-        ...deptoStaffClauses,
-      ];
-      const andClauses: Record<string, unknown>[] = [where, { OR: orVisibilidade }];
-      // Defesa em profundidade contra qualquer caminho da Layer 1 que pule o filtro.
-      // ⭐ 26/08 — era "não é staff de T.I. → só PÚBLICO", o que escondia do Fiscal o
-      // privado DO FISCAL e mostrava ao T.I. o privado de todo mundo. Agora: público
-      // sempre; privado só nos departamentos onde eu atendo.
-      andClauses.push({
-        OR: [
-          { visibilidade: 'PUBLICO' },
-          ...(deptosStaff.length > 0 ? [{ departamentoId: { in: deptosStaff } }] : []),
-        ],
-      });
-      whereFiltrado = { AND: andClauses };
+      const { orVisibilidade, andPrivado } = this.regraDeVisibilidade(user, equipeIds);
+      whereFiltrado = { AND: [where, { OR: orVisibilidade }, andPrivado] };
     }
 
     // S15.2 — Intersect com workspace ATIVO no final (sem mexer nos Layer
@@ -550,9 +491,12 @@ export class ChamadoCoreService {
         take: pageSize,
       }),
     ]);
-    if (!searchTerm) return { items, total, page, pageSize };
+    // A listagem usa o MESMO `chamadoInclude` do detalhe, então carrega os laços — e
+    // eles precisam da mesma poda (27/08).
+    const itensPodados = items.map((c) => this.podarReferencias(c, user, role));
+    if (!searchTerm) return { items: itensPodados, total, page, pageSize };
     // Enriquecimento pos-busca: anexa a origem do match (badge + snippet).
-    const itemsComMatch = await this.anexarMatchHistorico(items, searchTerm, histVisibilidade);
+    const itemsComMatch = await this.anexarMatchHistorico(itensPodados, searchTerm, histVisibilidade);
     return { items: itemsComMatch, total, page, pageSize };
   }
 
@@ -676,7 +620,7 @@ export class ChamadoCoreService {
       chamado.historicos = chamado.historicos.filter((h) => h.publico);
     }
 
-    return chamado;
+    return this.podarReferencias(chamado, user, role);
   }
 
 
@@ -699,6 +643,7 @@ export class ChamadoCoreService {
    * um sonar: digitar números até descobrir do que trata o chamado dos outros.
    */
   private static readonly GATILHO_REFERENCIA = /#(\d{1,9})\b/g;
+  private static readonly MAX_REFERENCIAS = 10;
 
   private async criarReferencias(
     origemId: string,
@@ -707,30 +652,30 @@ export class ChamadoCoreService {
     role: string,
   ): Promise<{ numero: number; vinculado: boolean; motivo?: string }[]> {
     if (!texto) return [];
+    // Teto por requisição: a citação é para ligar um chamado a outro, não para varrer
+    // faixas de número. Sem limite, um POST sonda centenas de uma vez.
     const numeros = [...new Set(
       [...texto.matchAll(ChamadoCoreService.GATILHO_REFERENCIA)].map((m) => Number(m[1])),
-    )];
+    )].slice(0, ChamadoCoreService.MAX_REFERENCIAS);
     if (numeros.length === 0) return [];
 
     // ⚠️ "Pode citar" tem de ser exatamente "pode ver" — nem mais, nem menos. Mais
     // largo vira sonar (digitar números até descobrir o chamado dos outros); mais
-    // estreito recusa laço para chamado que a pessoa tem aberto na tela ao lado, que foi
-    // o que aconteceu no primeiro teste: o ADMIN é global por D36 e mesmo assim levava
-    // "sem acesso".
+    // estreito recusa laço para chamado que a pessoa tem aberto na tela ao lado.
+    //
+    // ⭐ 27/08 (achado do /security-review) — esta consulta reescrevia a regra por fora
+    // e ficava MAIS LARGA: usava o conjunto achatado de departamentos e perdia o
+    // carve-out da equipe `restritaVisibilidade`. Um SUPORTE do departamento (não-membro
+    // da equipe restrita) citava `#1 #2 #3 …` e recebia de volta título e id justamente
+    // dos chamados que a equipe restrita existe para esconder dele. Agora usa a MESMA
+    // regra do `findAll` — a única que existe.
     const alcanceTotal = ehAdminEmAlgumDepto(user, role) || hasCapability(user, 'OVERSIGHT_PLATAFORMA');
-    const deptosOndeAtendo = getDeptosOndeStaff(user);
+    const equipeIds = await this.equipesAtivasDo(user.sub);
+    const { orVisibilidade, andPrivado } = this.regraDeVisibilidade(user, equipeIds);
     const candidatos = await this.prisma.chamado.findMany({
       where: {
         numero: { in: numeros },
-        ...(alcanceTotal ? {} : {
-          OR: [
-            { solicitanteId: user.sub },
-            { tecnicoId: user.sub },
-            { colaboradores: { some: { usuarioId: user.sub } } },
-            { copias: { some: { usuarioId: user.sub } } },
-            ...(deptosOndeAtendo.length > 0 ? [{ departamentoId: { in: deptosOndeAtendo } }] : []),
-          ],
-        }),
+        ...(alcanceTotal ? {} : { AND: [{ OR: orVisibilidade }, andPrivado] }),
       },
       select: { id: true, numero: true },
     });
@@ -753,6 +698,115 @@ export class ChamadoCoreService {
       resultado.push({ numero, vinculado: true });
     }
     return resultado;
+  }
+
+
+  /**
+   * ⭐ 27/08 — A REGRA DE "QUEM VÊ ESTE CHAMADO", em UM lugar só.
+   *
+   * Ela vivia inline dentro do `findAll`, e quando a referência `#numero` precisou da
+   * mesma pergunta eu a reescrevi por fora — mais larga. O `/security-review` achou:
+   * a cópia esquecia o recorte de `restritaVisibilidade` (equipe cujos chamados só os
+   * MEMBROS veem; nem o staff do departamento vê), então dava para descobrir título e
+   * id desses chamados citando números em sequência. Regra duplicada é regra que
+   * diverge — a segunda cópia não nasce errada, ela envelhece errada.
+   *
+   * Devolve as duas metades que o `findAll` compõe:
+   *  - `orVisibilidade`: por que EU alcanço este chamado (sou parte, minha equipe, ou
+   *    atendo o departamento — com o carve-out da equipe restrita);
+   *  - `andPrivado`: público sempre; PRIVADO só nos departamentos onde eu atendo.
+   */
+
+  /**
+   * ⭐ 27/08 (achado do /security-review) — poda os laços `#numero` que o LEITOR não
+   * pode ver.
+   *
+   * O laço é gravado conferindo quem ESCREVE contra o chamado citado. Mas quem LÊ o
+   * chamado do outro lado é outra plateia, e ninguém a checava: bastava abrir um chamado
+   * público no T.I. citando um PRIVADO do Fiscal para o título do privado aparecer para
+   * todo o T.I. — e o mesmo pelo sentido inverso. A relação ia crua dentro do
+   * `chamadoInclude`, que serve tanto à listagem quanto ao detalhe.
+   *
+   * Poda em vez de tarjar: quem não alcança o outro chamado não tem o que fazer com a
+   * informação de que ele existe.
+   */
+  private podarReferencias<T extends {
+    referenciasFeitas?: { destino: { departamentoId: string; visibilidade: string } }[];
+    referenciasRecebidas?: { origem: { departamentoId: string; visibilidade: string } }[];
+  }>(chamado: T, user: JwtPayload, role: string): T {
+    if (ehAdminEmAlgumDepto(user, role) || hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return chamado;
+    const deptosStaff = getDeptosOndeStaff(user);
+    // Mesma pergunta do `andPrivado` da regra de visibilidade: público sempre; privado
+    // só onde eu atendo. (O `orVisibilidade` não serve aqui — ele é `where` do Prisma, e
+    // aqui o dado já veio. Ser solicitante do OUTRO chamado é caso raro, e o custo de
+    // escondê-lo é ver um laço a menos, não perder acesso a nada.)
+    const alcanco = (c: { departamentoId: string; visibilidade: string }) =>
+      c.visibilidade === Visibilidade.PUBLICO || deptosStaff.includes(c.departamentoId);
+    if (chamado.referenciasFeitas) {
+      chamado.referenciasFeitas = chamado.referenciasFeitas.filter((r) => alcanco(r.destino));
+    }
+    if (chamado.referenciasRecebidas) {
+      chamado.referenciasRecebidas = chamado.referenciasRecebidas.filter((r) => alcanco(r.origem));
+    }
+    return chamado;
+  }
+
+  private regraDeVisibilidade(user: JwtPayload, equipeIds: string[]): {
+    orVisibilidade: Prisma.ChamadoWhereInput[];
+    andPrivado: Prisma.ChamadoWhereInput;
+    deptosStaff: string[];
+  } {
+    // Visão "abre por estar no depto" só vale onde a pessoa é STAFF (S12/S13a).
+    const deptosStaff = getDeptosOndeStaff(user);
+    // Carve-out por equipe (18/06): GESTOR/ADMIN do depto navega tudo, inclusive
+    // equipe restrita; SUPORTE não-membro NÃO vê a restrita.
+    const deptosGestor = getDeptosOndeGestor(user);
+    const deptosSuporteOnly = deptosStaff.filter((d) => !deptosGestor.includes(d));
+    const deptoStaffClauses: Prisma.ChamadoWhereInput[] = [];
+    if (deptosGestor.length > 0) {
+      deptoStaffClauses.push({ departamentoId: { in: deptosGestor } });
+    }
+    if (deptosSuporteOnly.length > 0) {
+      deptoStaffClauses.push({
+        AND: [
+          { departamentoId: { in: deptosSuporteOnly } },
+          {
+            OR: [
+              { equipeAtual: { is: { restritaVisibilidade: false } } },
+              // (`equipeAtualId: null` não entra — a coluna é NÃO-nulável e o Prisma
+              //  rejeitava com "Argument `equipeAtualId` is missing" → 500.)
+              ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
+            ],
+          },
+        ],
+      });
+    }
+    const orVisibilidade: Prisma.ChamadoWhereInput[] = [
+      { solicitanteId: user.sub },
+      { tecnicoId: user.sub },
+      { colaboradores: { some: { usuarioId: user.sub } } },
+      // SAC Fase 1 (camada 5) + 26/08: quem está EM CÓPIA vê na LISTAGEM, não só no
+      // detalhe — a notificação chegava e a lista não mostrava.
+      { copias: { some: { usuarioId: user.sub } } },
+      ...(equipeIds.length > 0 ? [{ equipeAtualId: { in: equipeIds } }] : []),
+      ...deptoStaffClauses,
+    ];
+    const andPrivado: Prisma.ChamadoWhereInput = {
+      OR: [
+        { visibilidade: Visibilidade.PUBLICO },
+        ...(deptosStaff.length > 0 ? [{ departamentoId: { in: deptosStaff } }] : []),
+      ],
+    };
+    return { orVisibilidade, andPrivado, deptosStaff };
+  }
+
+  /** Equipes ATIVAS do usuário — insumo da regra acima. */
+  private async equipesAtivasDo(usuarioId: string): Promise<string[]> {
+    const membros = await this.prisma.membroEquipe.findMany({
+      where: { usuarioId, status: 'ATIVO' },
+      select: { equipeId: true },
+    });
+    return membros.map((m) => m.equipeId);
   }
 
   async create(dto: CreateChamadoDto, user: JwtPayload, role: string) {

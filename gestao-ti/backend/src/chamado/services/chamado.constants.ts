@@ -20,12 +20,22 @@ export const chamadoInclude = {
   // este chamado cita ("seguimento de #123") e quem citou ele ("#456 veio deste").
   // Sem o sentido inverso, quem atende o chamado antigo não fica sabendo que a demanda
   // continuou em outro — que é justamente o caso de quem antes reabria.
+  // ⚠️ `departamentoId` e `visibilidade` vêm no select porque o SERVIÇO precisa deles
+  // para filtrar (27/08 — achado do /security-review): sem filtro, quem vê o chamado A
+  // via número, título e status de todo chamado que cita A, ou é citado por A, de
+  // QUALQUER departamento — inclusive PRIVADO. Ver `filtrarReferenciasVisiveis`.
   referenciasFeitas: {
-    select: { id: true, criadoEm: true, destino: { select: { id: true, numero: true, titulo: true, status: true } } },
+    select: {
+      id: true, criadoEm: true,
+      destino: { select: { id: true, numero: true, titulo: true, status: true, departamentoId: true, visibilidade: true } },
+    },
     orderBy: { criadoEm: 'asc' as const },
   },
   referenciasRecebidas: {
-    select: { id: true, criadoEm: true, origem: { select: { id: true, numero: true, titulo: true, status: true } } },
+    select: {
+      id: true, criadoEm: true,
+      origem: { select: { id: true, numero: true, titulo: true, status: true, departamentoId: true, visibilidade: true } },
+    },
     orderBy: { criadoEm: 'asc' as const },
   },
 };
