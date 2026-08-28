@@ -11,6 +11,7 @@ import {
   XCircle, RotateCcw, Lock, Star, Users,
   Paperclip, Download, Trash2, FileText, Image, FileSpreadsheet, File,
   Play, Square, Edit3, Check, X, Clock, Copy, Printer, Bell, Layers, Unlink, Search, Mail,
+  ChevronRight,
 } from 'lucide-react';
 import { coreService } from '../../services/core.service';
 import { useToast } from '../../components/Toast';
@@ -541,7 +542,13 @@ export function ChamadoDetalhePage() {
                               titulo: tituloMudou ? editTitulo : undefined,
                               descricao: descricaoMudou ? editDescricao : undefined,
                             });
-                            setChamado(updated);
+                            // ⭐ 28/08 — MESCLAR, não substituir. As rotas de ação
+                            // devolvem `chamadoInclude`, que não monta a linha do tempo
+                            // (só o `findOne` traz `historicos`). Trocar o estado inteiro
+                            // pela resposta apagava o histórico da tela até o F5 — parecia
+                            // que a edição tinha zerado o chamado. O spread preserva o que
+                            // a resposta não fala a respeito.
+                            setChamado((prev) => (prev ? { ...prev, ...updated } : updated));
                             setEditingHeader(false);
                             toast('success', 'Cabecalho atualizado');
                           } catch { toast('error', 'Erro ao atualizar cabecalho'); }
@@ -1599,12 +1606,20 @@ export function ChamadoDetalhePage() {
               const cita = chamado.referenciasFeitas ?? [];
               const citadoPor = chamado.referenciasRecebidas ?? [];
               if (cita.length === 0 && citadoPor.length === 0) return null;
+              // ⭐ 28/08 — o cartão SEMPRE navegou (mesmo `<Link>` do agrupamento e da
+              // listagem), mas não PARECIA clicável: só `hover:bg-slate-50`, sem cor de
+              // link, sem sublinhado, sem afordância nenhuma. No 1º teste real a pessoa
+              // não percebeu que dava para abrir o outro chamado — e um link que ninguém
+              // vê é um link que não existe. Agora usa a mesma convenção do resto do
+              // módulo (`text-capul-600` + sublinhado no hover) e ganha um chevron.
               const linha = (c: { id: string; numero: number; titulo: string; status: StatusChamado }) => (
                 <Link key={c.id} to={`/gestao-ti/chamados/${c.id}`}
-                  className="flex items-center gap-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm hover:bg-slate-50">
-                  <span className="font-semibold text-slate-700">#{c.numero}</span>
-                  <span className="min-w-0 flex-1 truncate text-slate-600">{c.titulo}</span>
+                  title={`Abrir o chamado #${c.numero}`}
+                  className="group flex items-center gap-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-sm hover:border-capul-300 hover:bg-capul-50/60">
+                  <span className="font-semibold text-capul-600 group-hover:underline">#{c.numero}</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-600 group-hover:text-slate-800">{c.titulo}</span>
                   <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{c.status}</span>
+                  <ChevronRight className="w-4 h-4 shrink-0 text-slate-300 group-hover:text-capul-600" />
                 </Link>
               );
               return (

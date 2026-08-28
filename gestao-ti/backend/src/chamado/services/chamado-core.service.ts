@@ -21,7 +21,7 @@ import { ChamadoHelpersService } from './chamado-helpers.service.js';
 import { ChamadoAgrupamentoService } from './chamado-agrupamento.service.js';
 import { ChamadoTempoService } from './chamado-tempo.service.js';
 import { ProtheusService } from '../../protheus/protheus.service.js';
-import { chamadoInclude, UPLOADS_DIR } from './chamado.constants.js';
+import { chamadoInclude, chamadoIncludeDetalhe, UPLOADS_DIR } from './chamado.constants.js';
 import { isGestor, isTI, getDeptosOndeStaff, getDeptosOndeGestor, getRoleNoDepto, ehStaffNoDepto, ehGestorNoDepto, ehAdminEmAlgumDepto } from '../../common/constants/roles.constant.js';
 import { hasCapability } from '../../common/helpers/capability.helper.js';
 import { Prisma, StatusChamado, Visibilidade } from '@prisma/client';
@@ -491,12 +491,14 @@ export class ChamadoCoreService {
         take: pageSize,
       }),
     ]);
-    // A listagem usa o MESMO `chamadoInclude` do detalhe, então carrega os laços — e
-    // eles precisam da mesma poda (27/08).
-    const itensPodados = items.map((c) => this.podarReferencias(c, user, role));
-    if (!searchTerm) return { items: itensPodados, total, page, pageSize };
+    // ⭐ 28/08 — a listagem não carrega mais os laços `#numero` (eles saíram para o
+    // `chamadoIncludeDetalhe`), então aqui não há o que podar. Em 27/08 a poda foi
+    // adicionada aqui e no `findOne` porque o include era um só; os outros 12 pontos
+    // que devolvem o include ficaram de fora e seguiam vazando. Quem não precisa do
+    // dado não o carrega — trava melhor que lembrar de podar em 14 lugares.
+    if (!searchTerm) return { items, total, page, pageSize };
     // Enriquecimento pos-busca: anexa a origem do match (badge + snippet).
-    const itemsComMatch = await this.anexarMatchHistorico(itensPodados, searchTerm, histVisibilidade);
+    const itemsComMatch = await this.anexarMatchHistorico(items, searchTerm, histVisibilidade);
     return { items: itemsComMatch, total, page, pageSize };
   }
 
@@ -547,7 +549,7 @@ export class ChamadoCoreService {
     const chamado = await this.prisma.chamado.findUnique({
       where: { id },
       include: {
-        ...chamadoInclude,
+        ...chamadoIncludeDetalhe,
         historicos: {
           include: {
             usuario: { select: { id: true, nome: true, username: true } },

@@ -10,6 +10,17 @@ chamado anterior? Escreva # e o número dele"*, o `#1340` foi digitado no campo 
 | 1 | **A citação seguia a regra da FILA, não a de LEITURA.** Quem *abre* o chamado não conseguia *citá-lo*. `clenio` é GESTOR do **T.I.**; o #1340 é PÚBLICO do **Fiscal** — fora da fila dele, dentro da leitura dele. | `1e0765f5` |
 | 2 | **A recusa era muda.** O backend mandava o motivo desde 26/08, mas `criar()` era tipado `Promise<Chamado>` e o TypeScript apagava o campo — a tela nunca teve como avisar. | `409f76d5` |
 
+> **✅ Executado no Chrome em 28/08 — bateria completa, tudo passou** (chamados 2094–2103,
+> já removidos). Duas observações vieram da execução e **as duas foram corrigidas**:
+> o cartão de "Chamados relacionados" **não parecia clicável** (era `<Link>` desde
+> sempre, sem cor nem sublinhado — link que ninguém vê é link que não existe), e o
+> **histórico sumia da tela até o F5** ao salvar uma edição de cabeçalho. Investigar a
+> segunda descobriu um vazamento maior, fechado no mesmo commit — ver
+> [§9](#9-o-que-a-execução-de-2808-encontrou-alem-dos-casos).
+>
+> ⚠️ **A senha do `clenio` não é mais `Cl123456`** — foi trocada durante a sessão de
+> testes. Use a atual.
+
 > ⚠️ **Este roteiro é para o DEV desta máquina.** Os dois commits **não estão pushados**
 > — a HLG roda `fba71ad8` e **não tem nenhum dos dois**. Testar isto na HLG hoje
 > reproduz o defeito antigo, não a correção. Ver [§0.3](#03-se-o-alvo-for-a-hlg).
@@ -74,7 +85,7 @@ Ela **não tem** os fixes. Para levar:
 
 | usuário | senha | papel no Workspace | por que serve |
 |---|---|---|---|
-| `clenio` | `Cl123456` | **GESTOR** no depto **T.I.** | é a conta que produziu o defeito: atende T.I., **não** atende Fiscal |
+| `clenio` | ⚠️ *trocada em 28/08* | **GESTOR** no depto **T.I.** | é a conta que produziu o defeito: atende T.I., **não** atende Fiscal |
 | `admin` | `admin123` | **ADMIN** no Workspace | alcance total (D36) — serve de contraste e para montar o caso 5 |
 
 ⚠️ O `OVERSIGHT_PLATAFORMA` do `clenio` está **revogado** (`ativo=f`, sobra do teste de
@@ -250,3 +261,55 @@ Não repita na mão o que a suíte cobre (`gestao-ti/backend`, 153 testes):
 O que a suíte **não** cobre e só a tela mostra: as faixas do modal (casos 1 e 2), o bloco
 "Chamados relacionados" nos dois sentidos (casos 1 e 3) e o comentário "Seguimento de
 #…" na linha do tempo.
+
+---
+
+## 9 · O que a execução de 28/08 encontrou além dos casos
+
+### 9.1 ⭐ O cartão navegava, mas não parecia clicável — corrigido
+
+`<Link to={/gestao-ti/chamados/${c.id}}>` desde sempre, mesma convenção do agrupamento e
+da listagem (sem `basename`, rota correta). Só que a única afordância era
+`hover:bg-slate-50`: sem cor de link, sem sublinhado, sem chevron. Quem executou o
+roteiro **não percebeu que dava para abrir o outro chamado**.
+
+Agora o número vai em `text-capul-600` com sublinhado no hover, mais um chevron à
+direita e `title="Abrir o chamado #N"`.
+
+### 9.2 🔒 A poda existia em 2 saídas, e havia 14 — corrigido
+
+Investigar o "histórico some até o F5" levou a isto: `chamadoInclude` carregava os laços
+e é devolvido por **14 pontos**. A poda que o `/security-review` pediu em 27/08 tinha
+sido posta em **dois** (`findAll` e `findOne`). Os outros doze — `create`, `assumir`,
+`resolver`, `fechar`, `reabrir`, `cancelar`, `avaliar`, `transferirEquipe`,
+`transferirTecnico`, `updateHeader`, `atualizarDadosClienteSac` — devolviam número e
+título de chamado PRIVADO de departamento que o leitor não atende.
+
+Corrigido pela estrutura, não pelas 12 chamadas: os laços saíram para
+`chamadoIncludeDetalhe`, usado **só** onde a tela desenha "Chamados relacionados". Quem
+não precisa do dado não o carrega. Mais um **teste de invariante que varre o fonte**
+(`chamado-referencia-invariante.spec.ts`) — validado por mutação: reintroduzir o include
+em `updateHeader` faz a suíte falhar **nomeando o método**.
+
+### 9.3 O histórico sumia até o F5 — corrigido
+
+As rotas de ação devolvem `chamadoInclude`, que não monta a linha do tempo (só o
+`findOne` traz `historicos`). A tela fazia `setChamado(updated)` — trocava o estado
+inteiro pela resposta e apagava o histórico. Agora mescla.
+
+### 9.4 O número privado aparece no comentário automático — **deixado como está**
+
+Observação correta da execução: no caso 5.3 a poda esconde o cartão do `#P`, mas o
+comentário "Seguimento de #P" segue visível.
+
+**Não vale fechar**, e é importante entender por quê: o número **já está na descrição**
+que o autor digitou, e essa descrição é exibida por inteiro. Esconder o comentário daria
+a sensação de ter fechado algo que continua aberto dois parágrafos acima — e fechar de
+verdade exigiria varrer `#\d+` no texto livre do usuário e re-checar cada um, que é
+exatamente a fragilidade que a tabela estruturada existe para evitar.
+
+A única diferença real: o comentário é gerado pelo sistema, então **confirma** que o
+número existe e que o autor o alcançava. O texto digitado não confirma nada. É um oráculo
+de existência — sem título, sem departamento, sem conteúdo. Risco aceito, registrado
+aqui para não ser "descoberto" de novo como se fosse novo.
+
