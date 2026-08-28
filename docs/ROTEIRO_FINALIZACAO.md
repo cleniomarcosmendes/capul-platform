@@ -104,6 +104,27 @@ git status    # Deve estar limpo
 git log -5    # Verificar commits recentes
 ```
 
+### 1.4.1 ⭐ Script novo tem de entrar EXECUTAVEL (`.sh` = 100755)
+
+```bash
+# Tem de voltar VAZIO. Qualquer linha aqui e um .sh que vai chegar sem +x no servidor.
+git ls-files --stage -- '*.sh' | grep 100644
+
+# Corrigir (funciona mesmo com core.fileMode=false):
+git update-index --chmod=+x <arquivo.sh>
+```
+
+⚠️ **Este clone tem `core.fileMode=false`** — obrigatorio em `/mnt/c` (o drvfs reporta
+modo falso e sem isso TODO arquivo aparece modificado). O efeito colateral e que o git
+daqui **e cego para o bit de execucao**: um `.sh` novo entra como `100644` e nada acusa.
+
+**O estrago aparece longe, no deploy** (28/08, relatado pelo Douglas na HLG): o
+`scripts/build-com-versao.sh` chegou sem `+x`, ele precisou dar `chmod +x`, isso marcou o
+arquivo como **alterado**, a arvore ficou **suja** — e o proprio script carimba o sufixo
+**`-sujo`** no commit gravado na imagem. Resultado: o `/health` passou a responder
+`<commit>-sujo` e o roteiro de deploy manda investigar exatamente isso. Um bit de
+permissao virou "a build esta errada?" no meio da janela de manutencao.
+
 ### 1.5 NUNCA fazer automaticamente
 - Push para remoto sem aprovacao
 - Commits sem verificar alteracoes
