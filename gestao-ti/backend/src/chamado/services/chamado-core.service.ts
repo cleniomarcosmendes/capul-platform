@@ -2153,6 +2153,30 @@ export class ChamadoCoreService {
       throw new BadRequestException('Somente chamados com status ABERTO podem ser excluidos');
     }
 
+    // ⭐ 28/08 — a FK do agrupamento é ON DELETE SET NULL: apagar um AGRUPADOR deixaria
+    // os filhos com `chamadoAgrupadorId` nulo mas status AGRUPADO, `slaPausadoEm`
+    // preenchido e o SLA congelado PARA SEMPRE. Só `desagrupar()` sabe restaurar o
+    // status anterior e empurrar o `dataLimiteSla` pelo tempo pausado — o banco não sabe.
+    //
+    // ⚠️ HOJE ISTO É INALCANÇÁVEL, e o guard fica assim mesmo. O que impede o caso é uma
+    // corrente de TRÊS regras em serviços diferentes, nenhuma delas escrita para proteger
+    // isto aqui: `agrupar` exige agrupador COM TÉCNICO; assumir/transferir sempre põem
+    // EM_ATENDIMENTO; e nada no módulo devolve um chamado para ABERTO. Logo um agrupador
+    // nunca está ABERTO, e `excluir` só aceita ABERTO. Mexer em QUALQUER uma das três
+    // reabre o buraco em silêncio — e o buraco corrompe SLA, que ninguém percebe olhando.
+    // Guard barato que torna a intenção explícita vale mais que uma coincidência de três
+    // regras. (Até 28/08 nem se chegava aqui: `excluir` dava 500 em 100% dos casos.)
+    //
+    // Recusar em vez de desagrupar sozinho: desagrupar mexe no status e no SLA de N
+    // outros chamados, e quem clicou "excluir" não pediu isso. A recusa ENSINA a saída.
+    const agrupados = await this.prisma.chamado.count({ where: { chamadoAgrupadorId: id } });
+    if (agrupados > 0) {
+      throw new BadRequestException(
+        `Este chamado agrupa ${agrupados} chamado(s). Desagrupe-os antes de excluir — ` +
+        'senão eles ficam com o SLA parado e sem agrupador.',
+      );
+    }
+
     // Remover anexos do disco
     const anexos = await this.prisma.anexoChamado.findMany({ where: { chamadoId: id } });
     const uploadsDir = path.join(process.cwd(), 'uploads', 'chamados');
@@ -2163,7 +2187,11 @@ export class ChamadoCoreService {
       }
     }
 
-    // Deletar registros dependentes e o chamado (cascade cuida de historicos, anexos, colaboradores, registros tempo)
+    // Cascade cuida de histórico, anexos, colaboradores, cópias, registros de tempo,
+    // laços `#numero` e vínculos com OS/Parada. ⚠️ Até 28/08 este comentário estava
+    // errado quanto ao HISTÓRICO — a FK era RESTRICT e derrubava toda exclusão. Se for
+    // acrescentar relação nova apontando para Chamado, decida a regra de exclusão na
+    // hora: um `@relation` sem `onDelete` vira RESTRICT e quebra isto de novo.
     await this.prisma.chamado.delete({ where: { id } });
 
     return { deleted: true, numero: chamado.numero };

@@ -558,6 +558,60 @@ describe('ChamadoService', () => {
     });
   });
 
+  // ⭐ 28/08 — `excluir` dava 500 em 100% dos casos até hoje (FK do histórico em
+  // RESTRICT + histórico 'ABERTURA' criado em todo chamado). Consertar a FK destravou
+  // o caminho — e destravou junto a exclusão de um AGRUPADOR, que o banco resolveria
+  // com SET NULL deixando os filhos com SLA congelado.
+  describe('excluir', () => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const staff = {
+      sub: 'u-1', filialId: 'f1',
+      modulos: [{ codigo: 'WORKSPACE', role: 'GESTOR', departamentos: [{ id: 'dep-1', nome: 'X', role: 'GESTOR', isTI: true }] }],
+    } as any;
+    const alvo = () => baseChamado({ status: 'ABERTO', departamentoId: 'dep-1' });
+
+    it('exclui chamado ABERTO — o caminho que nunca chegou a rodar', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(alvo());
+      prisma.chamado.count.mockResolvedValue(0); // não agrupa ninguém
+      prisma.anexoChamado.findMany.mockResolvedValue([]);
+      prisma.chamado.delete.mockResolvedValue({});
+
+      const r = await (core as any).excluir('ch-1', staff, 'GESTOR');
+
+      expect(r).toEqual({ deleted: true, numero: 1 });
+      expect(prisma.chamado.delete).toHaveBeenCalledWith({ where: { id: 'ch-1' } });
+    });
+
+    // ⚠️ Cenário hoje INALCANÇÁVEL pela API (agrupador sempre tem técnico → nunca fica
+    // ABERTO → `excluir` não o aceita). O teste existe porque o que fecha o caso é uma
+    // corrente de três regras em serviços diferentes, e não uma decisão — se alguma
+    // mudar, o SLA dos filhos congela em silêncio.
+    it('RECUSA excluir um agrupador — e diz quantos filhos travariam', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(alvo());
+      prisma.chamado.count.mockResolvedValue(3);
+
+      await expect((core as any).excluir('ch-1', staff, 'GESTOR')).rejects.toThrow(/agrupa 3 chamado/i);
+      expect(prisma.chamado.delete).not.toHaveBeenCalled();
+    });
+
+    it('o guard do agrupador conta pelo AGRUPADOR, não pelo próprio id', async () => {
+      // Se contar errado (ex.: `id`), o guard nunca dispara e volta o SLA congelado.
+      prisma.chamado.findUnique.mockResolvedValue(alvo());
+      prisma.chamado.count.mockResolvedValue(0);
+      prisma.anexoChamado.findMany.mockResolvedValue([]);
+      prisma.chamado.delete.mockResolvedValue({});
+
+      await (core as any).excluir('ch-1', staff, 'GESTOR');
+
+      expect(prisma.chamado.count).toHaveBeenCalledWith({ where: { chamadoAgrupadorId: 'ch-1' } });
+    });
+
+    it('só chamado ABERTO pode ser excluído', async () => {
+      prisma.chamado.findUnique.mockResolvedValue(baseChamado({ status: 'EM_ATENDIMENTO', departamentoId: 'dep-1' }));
+      await expect((core as any).excluir('ch-1', staff, 'GESTOR')).rejects.toThrow(/ABERTO/);
+    });
+  });
+
   describe('cancelar', () => {
     it('cancela chamado com sucesso', async () => {
       const chamado = baseChamado({ status: 'ABERTO' });
