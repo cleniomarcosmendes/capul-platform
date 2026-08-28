@@ -604,7 +604,7 @@ export class ChamadoCoreService {
     // Fiscal CRIAR um privado no Fiscal (a criação virou por departamento em 25/08) e
     // NÃO CONSEGUIR ABRIR depois. Quem esconde e quem lê é quem atende NAQUELE
     // departamento.
-    if (chamado.visibilidade === 'PRIVADO' && !ehStaffNoDepto(user, chamado.departamentoId, role)) {
+    if (!this.podeLerChamado(user, role, chamado)) {
       throw new ForbiddenException('Chamado privado — restrito a quem atende este departamento');
     }
 
@@ -663,23 +663,27 @@ export class ChamadoCoreService {
     // largo vira sonar (digitar números até descobrir o chamado dos outros); mais
     // estreito recusa laço para chamado que a pessoa tem aberto na tela ao lado.
     //
-    // ⭐ 27/08 (achado do /security-review) — esta consulta reescrevia a regra por fora
-    // e ficava MAIS LARGA: usava o conjunto achatado de departamentos e perdia o
-    // carve-out da equipe `restritaVisibilidade`. Um SUPORTE do departamento (não-membro
-    // da equipe restrita) citava `#1 #2 #3 …` e recebia de volta título e id justamente
-    // dos chamados que a equipe restrita existe para esconder dele. Agora usa a MESMA
-    // regra do `findAll` — a única que existe.
+    // ⭐ 28/08 — e "ver" é o gate do `findOne` (`podeLerChamado`), NÃO a regra da
+    // listagem. Entre 27 e 28/08 isto apontava para `regraDeVisibilidade`, que responde
+    // "o que aparece na MINHA fila" — pergunta mais estreita. O resultado apareceu no 1º
+    // teste em HLG: um GESTOR do T.I. abria o #1340 do Fiscal (público, HTTP 200) e
+    // recebia "sem acesso" ao citá-lo. Quem lê pelo detalhe tem de conseguir citar.
+    //
+    // O carve-out da equipe `restritaVisibilidade` não se perde nisso: ele protege a
+    // FILA, e a fila continua com ele. Chamado de equipe restrita que seja PRIVADO
+    // segue exigindo staff no departamento aqui; sendo PÚBLICO, o `findOne` já o
+    // entregava a qualquer um pelo detalhe — recusar a citação não escondia nada,
+    // só quebrava o laço.
     const alcanceTotal = ehAdminEmAlgumDepto(user, role) || hasCapability(user, 'OVERSIGHT_PLATAFORMA');
-    const equipeIds = await this.equipesAtivasDo(user.sub);
-    const { orVisibilidade, andPrivado } = this.regraDeVisibilidade(user, equipeIds);
     const candidatos = await this.prisma.chamado.findMany({
-      where: {
-        numero: { in: numeros },
-        ...(alcanceTotal ? {} : { AND: [{ OR: orVisibilidade }, andPrivado] }),
-      },
-      select: { id: true, numero: true },
+      where: { numero: { in: numeros } },
+      select: { id: true, numero: true, departamentoId: true, visibilidade: true },
     });
-    const porNumero = new Map(candidatos.map((c) => [c.numero, c.id]));
+    const porNumero = new Map(
+      candidatos
+        .filter((c) => alcanceTotal || this.podeLerChamado(user, role, c))
+        .map((c) => [c.numero, c.id]),
+    );
 
     const resultado: { numero: number; vinculado: boolean; motivo?: string }[] = [];
     for (const numero of numeros) {
@@ -718,6 +722,30 @@ export class ChamadoCoreService {
    */
 
   /**
+   * ⭐ 28/08 — O GATE DE LEITURA de um chamado, em UM lugar só: "eu posso VER este
+   * chamado?". PÚBLICO sempre; PRIVADO só onde eu atendo. É exatamente o que o
+   * `findOne` sempre aplicou — quem abre o chamado pelo detalhe passa por aqui.
+   *
+   * ⚠️ NÃO é `regraDeVisibilidade`. Aquela é a regra da LISTAGEM — "o que aparece na
+   * MINHA fila" (sou parte, minha equipe, meu departamento) — e é MAIS ESTREITA que a
+   * leitura. São duas perguntas diferentes sobre o mesmo chamado.
+   *
+   * Trocar uma pela outra foi o defeito do 1º teste em HLG: a citação `#numero` era
+   * conferida contra a FILA, então um GESTOR do T.I. ABRIA o #1340 do Fiscal (público,
+   * HTTP 200) e levava "não encontrado ou sem acesso" ao citá-lo. A regra escrita da
+   * funcionalidade é "pode citar == pode ver, nem mais nem menos" — e "ver" é isto
+   * aqui, não a fila.
+   */
+  private podeLerChamado(
+    user: JwtPayload,
+    role: string,
+    chamado: { departamentoId: string; visibilidade: string },
+  ): boolean {
+    if (chamado.visibilidade === Visibilidade.PUBLICO) return true;
+    return ehStaffNoDepto(user, chamado.departamentoId, role);
+  }
+
+  /**
    * ⭐ 27/08 (achado do /security-review) — poda os laços `#numero` que o LEITOR não
    * pode ver.
    *
@@ -735,13 +763,11 @@ export class ChamadoCoreService {
     referenciasRecebidas?: { origem: { departamentoId: string; visibilidade: string } }[];
   }>(chamado: T, user: JwtPayload, role: string): T {
     if (ehAdminEmAlgumDepto(user, role) || hasCapability(user, 'OVERSIGHT_PLATAFORMA')) return chamado;
-    const deptosStaff = getDeptosOndeStaff(user);
-    // Mesma pergunta do `andPrivado` da regra de visibilidade: público sempre; privado
-    // só onde eu atendo. (O `orVisibilidade` não serve aqui — ele é `where` do Prisma, e
-    // aqui o dado já veio. Ser solicitante do OUTRO chamado é caso raro, e o custo de
-    // escondê-lo é ver um laço a menos, não perder acesso a nada.)
+    // ⭐ 28/08 — a MESMA pergunta que a citação faz do outro lado (`podeLerChamado`):
+    // quem ESCREVE o laço e quem LÊ o laço passam pelo mesmo gate. Enquanto cada lado
+    // tinha a sua cópia da regra, um deles envelhecia errado.
     const alcanco = (c: { departamentoId: string; visibilidade: string }) =>
-      c.visibilidade === Visibilidade.PUBLICO || deptosStaff.includes(c.departamentoId);
+      this.podeLerChamado(user, role, c);
     if (chamado.referenciasFeitas) {
       chamado.referenciasFeitas = chamado.referenciasFeitas.filter((r) => alcanco(r.destino));
     }

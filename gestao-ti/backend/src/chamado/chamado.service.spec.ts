@@ -21,6 +21,9 @@ function baseChamado(overrides = {}) {
     numero: 1,
     titulo: 'Chamado Teste',
     status: 'ABERTO',
+    // A coluna é NOT NULL com default PUBLICO — chamado sem visibilidade não existe no
+    // banco, e a fixture omiti-la escondia o gate de leitura (28/08).
+    visibilidade: 'PUBLICO',
     solicitanteId: 'solicitante-1',
     tecnicoId: null,
     equipeAtualId: 'eq-1',
@@ -472,21 +475,49 @@ describe('ChamadoService', () => {
       modulos: [{ codigo: 'WORKSPACE', role: 'SUPORTE', departamentos: [{ id: 'dep-x', nome: 'X', role: 'SUPORTE', isTI: false }] }],
     } as any;
 
-    // Vuln 1: a consulta de citação reescrevia a regra e perdia o carve-out da equipe
-    // `restritaVisibilidade` — o SUPORTE não-membro citava e recebia título e id.
-    it('citar usa a MESMA regra da listagem (inclui o carve-out de equipe restrita)', async () => {
-      prisma.membroEquipe.findMany.mockResolvedValue([]);
-      prisma.chamado.findMany.mockResolvedValue([]);
+    // ⭐ 28/08 — "pode citar == pode ver", e VER é o gate do `findOne`, não a fila.
+    //
+    // Em 27/08 esta checagem passou a usar a regra da LISTAGEM. Ficou mais estreita que
+    // a leitura, e o 1º teste em HLG bateu nisso: um GESTOR do T.I. ABRIA o #1340 do
+    // Fiscal (público, HTTP 200) e recebia "não encontrado ou sem acesso" ao citá-lo.
+    // Este é o teste da regressão.
+    it('PÚBLICO de outro departamento: quem consegue ABRIR consegue CITAR', async () => {
+      prisma.chamado.findMany.mockResolvedValue([
+        { id: 'ch-10', numero: 10, departamentoId: 'dep-y', visibilidade: 'PUBLICO' },
+      ]);
+      prisma.chamadoReferencia.upsert.mockResolvedValue({});
 
-      await (core as any).criarReferencias('origem-1', 'olha o #10', suporteNoDepto, 'SUPORTE');
+      const r = await (core as any).criarReferencias('origem-1', 'olha o #10', suporteNoDepto, 'SUPORTE');
 
-      const where = JSON.stringify(prisma.chamado.findMany.mock.calls.at(-1)?.[0]?.where ?? {});
-      expect(where).toContain('restritaVisibilidade');
-      expect(where).toContain('PUBLICO');
+      expect(r).toEqual([{ numero: 10, vinculado: true }]);
+      expect(prisma.chamadoReferencia.upsert).toHaveBeenCalled();
+    });
+
+    // O outro lado da mesma regra: PRIVADO segue exigindo staff NO departamento — é
+    // exatamente o que o `findOne` recusa, e recusar aqui esconde algo de verdade.
+    it('PRIVADO de departamento onde não atendo: recusa, com motivo', async () => {
+      prisma.chamado.findMany.mockResolvedValue([
+        { id: 'ch-11', numero: 11, departamentoId: 'dep-y', visibilidade: 'PRIVADO' },
+      ]);
+
+      const r = await (core as any).criarReferencias('origem-1', 'olha o #11', suporteNoDepto, 'SUPORTE');
+
+      expect(r).toEqual([{ numero: 11, vinculado: false, motivo: 'não encontrado ou sem acesso' }]);
+      expect(prisma.chamadoReferencia.upsert).not.toHaveBeenCalled();
+    });
+
+    it('PRIVADO do MEU departamento: cita', async () => {
+      prisma.chamado.findMany.mockResolvedValue([
+        { id: 'ch-12', numero: 12, departamentoId: 'dep-x', visibilidade: 'PRIVADO' },
+      ]);
+      prisma.chamadoReferencia.upsert.mockResolvedValue({});
+
+      const r = await (core as any).criarReferencias('origem-1', 'olha o #12', suporteNoDepto, 'SUPORTE');
+
+      expect(r).toEqual([{ numero: 12, vinculado: true }]);
     });
 
     it('teto de números por requisição (citação não é varredura)', async () => {
-      prisma.membroEquipe.findMany.mockResolvedValue([]);
       prisma.chamado.findMany.mockResolvedValue([]);
       const texto = Array.from({ length: 40 }, (_, i) => `#${i + 1}`).join(' ');
 
