@@ -16,7 +16,7 @@ import { ativoService } from '../../services/ativo.service';
 import { coreService } from '../../services/core.service';
 import { ArrowLeft, FolderKanban, Paperclip, X, CheckCircle, Users2 } from 'lucide-react';
 import PasswordInput from '../../components/PasswordInput';
-import type { Equipe, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore } from '../../types';
+import type { Equipe, CatalogoServico, Visibilidade, Prioridade, Software, SoftwareModulo, Projeto, Departamento, Ativo, UsuarioCore, ReferenciaCitada } from '../../types';
 import { maskTelefone } from '../../lib/telefone';
 
 export function ChamadoCreatePage() {
@@ -91,6 +91,11 @@ export function ChamadoCreatePage() {
   const { ConfirmDialog, guardedNavigate } = useUnsavedChanges(dirty);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successRedirectUrl, setSuccessRedirectUrl] = useState('');
+  // ⭐ 28/08 — destino das citações `#numero`. O backend já devolvia isso com o motivo
+  // de cada recusa; a tela descartava a resposta inteira e mostrava o mesmo "Chamado
+  // Registrado!" tanto para o laço que existiu quanto para o que foi recusado. Citação
+  // engolida em silêncio faz a pessoa ir embora achando que vinculou.
+  const [referencias, setReferencias] = useState<ReferenciaCitada[]>([]);
 
   const [erroValidacao, setErroValidacao] = useState(''); // senha/matricula invalida
   const [mensagemFallback, setMensagemFallback] = useState('');
@@ -419,6 +424,7 @@ export function ChamadoCreatePage() {
       }
 
       setDirty(false);
+      setReferencias(chamado.referencias ?? []);
       setSuccessRedirectUrl(paradaIdParam ? `/gestao-ti/paradas/${paradaIdParam}` : osIdParam ? `/gestao-ti/ordens-servico` : `/gestao-ti/chamados/${chamado.id}`);
       setShowSuccessModal(true);
     } catch (err: unknown) {
@@ -441,9 +447,35 @@ export function ChamadoCreatePage() {
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
             <h3 className="text-lg font-semibold text-slate-800 mb-2">Chamado Registrado!</h3>
-            <p className="text-sm text-slate-600 mb-6">
+            <p className="text-sm text-slate-600 mb-4">
               Seu chamado foi registrado com sucesso! A equipe responsavel sera notificada e atendera sua solicitacao assim que possivel.
             </p>
+
+            {/* ⭐ 28/08 — o destino de cada `#numero` citado. Os dois lados precisam
+                aparecer: o laço que existiu (para a pessoa saber que funcionou) e o
+                que NÃO existiu, com o motivo. Antes a resposta era descartada, então
+                citar um chamado que a pessoa não alcança dava exatamente a mesma tela
+                de sucesso — e ela só descobria (ou não) abrindo o chamado depois. */}
+            {referencias.length > 0 && (
+              <div className="mb-6 text-left">
+                {referencias.some((r) => r.vinculado) && (
+                  <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+                    Ligado a {referencias.filter((r) => r.vinculado).map((r) => `#${r.numero}`).join(', ')}.
+                  </div>
+                )}
+                {referencias.some((r) => !r.vinculado) && (
+                  <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <p className="font-medium">
+                      Nao foi possivel ligar a {referencias.filter((r) => !r.vinculado).map((r) => `#${r.numero}`).join(', ')}.
+                    </p>
+                    <p className="mt-1">
+                      O numero nao existe ou o chamado nao esta ao seu alcance — so da para citar
+                      chamado que voce mesmo consegue abrir. O seu chamado foi registrado normalmente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             <button
               onClick={() => navigate(successRedirectUrl)}
               className="bg-capul-600 text-white px-8 py-2.5 rounded-lg text-sm font-medium hover:bg-capul-700 transition-colors"

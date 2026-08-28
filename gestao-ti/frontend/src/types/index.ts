@@ -321,6 +321,28 @@ export interface Chamado {
   chamadosAgrupados?: ChamadoAgrupadoResumo[];
 }
 
+/**
+ * ⭐ 28/08 — o que o `POST /chamados` devolve ALÉM do chamado: o destino de cada
+ * `#numero` citado no detalhamento.
+ *
+ * O backend manda isso desde 26/08, com o motivo de cada recusa, justamente "para a
+ * tela avisar" — mas `criar()` era tipado como `Chamado` puro, então o campo chegava
+ * na resposta e o TypeScript o escondia. Resultado: citação recusada (o número não
+ * existe, ou quem citou não alcança aquele chamado) saía em SILÊNCIO e a pessoa ia
+ * embora achando que tinha vinculado.
+ */
+export interface ReferenciaCitada {
+  numero: number;
+  vinculado: boolean;
+  /** Só quando `vinculado` é false. Ex.: "não encontrado ou sem acesso". */
+  motivo?: string;
+}
+
+/** Resposta do POST /chamados: o chamado criado + o destino das citações `#numero`. */
+export interface ChamadoCriado extends Chamado {
+  referencias?: ReferenciaCitada[];
+}
+
 export interface ChamadoAgrupadoResumo {
   id: string;
   numero: number;

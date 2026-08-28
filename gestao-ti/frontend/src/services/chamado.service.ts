@@ -1,6 +1,6 @@
 import { gestaoApi } from './api';
 import { withCharsetUtf8 } from '../utils/blob';
-import type { Chamado, HistoricoChamado, AnexoChamado, StatusChamado, Visibilidade, ChamadoColaborador, RegistroTempoChamado } from '../types';
+import type { Chamado, ChamadoCriado, HistoricoChamado, AnexoChamado, StatusChamado, Visibilidade, ChamadoColaborador, RegistroTempoChamado } from '../types';
 
 interface ListFilters {
   status?: StatusChamado;
@@ -122,7 +122,10 @@ export const chamadoService = {
     return data;
   },
 
-  async criar(payload: CreateChamadoPayload): Promise<Chamado> {
+  // ⭐ 28/08 — devolve `ChamadoCriado`, não `Chamado`: a resposta traz `referencias`
+  // (o destino de cada `#numero` citado, com o motivo de quem não virou laço) e o tipo
+  // antigo apagava esse campo do contrato — a tela nunca teve como avisar.
+  async criar(payload: CreateChamadoPayload): Promise<ChamadoCriado> {
     const { data } = await gestaoApi.post('/chamados', payload);
     return data;
   },
