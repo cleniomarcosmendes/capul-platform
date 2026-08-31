@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Truck, ShieldAlert, ShieldCheck, RefreshCw, Sparkles, Database } from 'lucide-react';
+import { Truck, ShieldAlert, ShieldCheck, RefreshCw, Sparkles, Database, KeyRound } from 'lucide-react';
 import { fiscalApi } from '../../../services/api';
 import { Badge } from '../../../components/Badge';
 import { Button } from '../../../components/Button';
@@ -22,14 +22,20 @@ interface AmbienteStatus {
   cteProtheusGravaAlteradoPor: string | null;
 }
 
+interface ReprocessoResultado {
+  examinados: number;
+  corrigidos: number;
+  aindaSemChave: Array<{ id: number; schema: string; motivo: string }>;
+}
+
 /**
  * Aba "CT-e Distribuição" de /operacao/controle.
  *
  * Centraliza todo controle do serviço CT-e Distribuição num só lugar:
  *   - Switch ATIVO/INATIVO (ADMIN_TI) — substitui env var operacional
  *   - PROD/HOM próprio do CT-e (ADMIN_TI) — independente do global NF-e
- *   - Ações de manutenção (GESTOR_FISCAL): forçar sincronização de filiais
- *     e enriquecimento de pendentes
+ *   - Ações de manutenção (ADMIN_TI): forçar sincronização de filiais,
+ *     enriquecimento de pendentes e reprocessamento de metadados
  *   - Auditoria visível: quem alterou, quando
  *
  * Antes desta aba (até 05/05/2026):
@@ -41,11 +47,14 @@ export function CteDistribuicaoTab() {
   const [status, setStatus] = useState<AmbienteStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  // Resultado do ultimo reprocessamento de metadados. Fica NA TELA (nao so no
+  // toast) porque o que interessa nessa acao e justamente QUEM RESISTIU e por
+  // que — um toast de 6s nao serve pra anotar id/schema/motivo.
+  const [reprocesso, setReprocesso] = useState<ReprocessoResultado | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
   const { fiscalRole } = useAuth();
   const isAdmin = fiscalRole === 'ADMIN_TI';
-  const isGestor = fiscalRole === 'GESTOR_FISCAL' || fiscalRole === 'ADMIN_TI';
 
   async function load() {
     try {
@@ -189,6 +198,48 @@ export function CteDistribuicaoTab() {
   }
 
 
+  /**
+   * Repassa os metadados dos documentos que estao com `chave = NULL`.
+   *
+   * Chave/modelo/dhEmi sao extraidos NA INGESTAO, uma vez — entao corrigir o
+   * parser vale para o PROXIMO documento: o que entrou torto ANTES do deploy
+   * continua torto ate este repasse. Foi o caso do CT-e Simplificado da
+   * Distribuidora Carvalho (1950 em 19/08 e 1989 em 24/08): XML integro na
+   * base, `chave` nula, invisivel para a busca da tela.
+   *
+   * Nao consulta SEFAZ — trabalha so sobre o XML ja guardado (deliberado: o
+   * certificado da CAPUL ja levou um 656). Idempotente.
+   */
+  async function handleReprocessarMetadados() {
+    setActing(true);
+    try {
+      const r = await fiscalApi.post<ReprocessoResultado>(
+        '/cte/distribuicao/reprocessar-metadados?limite=500',
+      );
+      const { examinados, corrigidos, aindaSemChave } = r.data;
+      setReprocesso(r.data);
+      if (examinados === 0) {
+        toast.info('Nada a reprocessar', 'Nenhum documento com chave em branco.');
+      } else if (aindaSemChave.length === 0) {
+        toast.success(
+          'Reprocessamento concluído',
+          `${corrigidos} de ${examinados} documento(s) ganharam chave.`,
+        );
+      } else {
+        // Resistente nao e sucesso parcial silencioso: e variante que o parser
+        // ainda nao le. Avisa em amarelo e deixa a lista na tela.
+        toast.warning(
+          `${aindaSemChave.length} documento(s) seguem sem chave`,
+          `${corrigidos} corrigido(s) de ${examinados}. Veja a lista abaixo do botão.`,
+        );
+      }
+    } catch (err) {
+      toast.error('Falha ao reprocessar metadados', extractApiError(err) ?? undefined);
+    } finally {
+      setActing(false);
+    }
+  }
+
   if (loading) return <div className="text-slate-500">Carregando…</div>;
   if (!status) return <div className="text-red-600">Falha ao carregar configuração CT-e.</div>;
 
@@ -330,8 +381,11 @@ export function CteDistribuicaoTab() {
         </div>
       </div>
 
-      {/* Card 4 — Ações de manutenção (GESTOR_FISCAL+) */}
-      {isGestor && (
+      {/* Card 4 — Ações de manutenção. ADMIN_TI, não GESTOR_FISCAL: as TRÊS
+          rotas daqui são @RoleMinima('ADMIN_TI'). Enquanto o card era gateado
+          por GESTOR_FISCAL, o gestor via os botões e tomava 403 ao clicar —
+          botão visível que nega é pior que botão ausente. (31/08) */}
+      {isAdmin && (
         <div className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Manutenção</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -366,6 +420,53 @@ export function CteDistribuicaoTab() {
                   Forçar enriquecimento
                 </Button>
               </span>
+            </div>
+            <div className="rounded border border-slate-200 p-3 flex flex-col">
+              <div className="flex items-center gap-2 mb-1">
+                <KeyRound size={14} className="text-slate-500" />
+                <span className="text-sm font-medium">Reprocessar metadados</span>
+              </div>
+              <p className="text-xs text-slate-500 flex-1 mb-2">
+                Reextrai <code>chave</code>/<code>modelo</code>/<code>dhEmi</code> do XML já
+                guardado dos documentos com <code>chave IS NULL</code> — os que entraram
+                antes de uma correção de parser e ficaram <strong>invisíveis</strong> na busca.
+                Rodar após todo deploy que mexa no parser.
+              </p>
+              <span title="Varre cte_documento com chave IS NULL (ate 500 por execucao) e reextrai os metadados do XML ja guardado. NAO consulta SEFAZ — deliberado, o certificado da CAPUL ja levou um 656. Idempotente: a 2a execucao processa zero. Necessario porque a chave e extraida na INGESTAO, uma vez: documento gravado antes da correcao do parser continua sem chave ate este repasse.">
+                <Button variant="ghost" size="sm" onClick={handleReprocessarMetadados} loading={acting}>
+                  Reprocessar metadados
+                </Button>
+              </span>
+              {reprocesso && (
+                <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-xs">
+                  <p className="text-slate-600">
+                    {reprocesso.examinados} examinado(s) ·{' '}
+                    <strong className="text-emerald-700">{reprocesso.corrigidos} corrigido(s)</strong>
+                    {reprocesso.aindaSemChave.length > 0 && (
+                      <>
+                        {' '}·{' '}
+                        <strong className="text-amber-700">
+                          {reprocesso.aindaSemChave.length} sem chave
+                        </strong>
+                      </>
+                    )}
+                  </p>
+                  {reprocesso.aindaSemChave.length > 0 && (
+                    <>
+                      <p className="mt-1 text-slate-500">
+                        Variante que o parser ainda não lê — o motivo diz qual raiz o XML traz:
+                      </p>
+                      <ul className="mt-1 max-h-32 overflow-y-auto space-y-0.5">
+                        {reprocesso.aindaSemChave.map((d) => (
+                          <li key={d.id} className="text-slate-600">
+                            <code>#{d.id}</code> <span className="text-slate-400">{d.schema}</span> — {d.motivo}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <p className="mt-3 text-xs text-slate-500">
