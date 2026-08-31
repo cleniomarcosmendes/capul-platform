@@ -277,6 +277,37 @@ export function ChamadoCreatePage() {
     }
   }, [isUsuarioFinal, usuario]);
 
+  // Pre-selecao do destino (31/08): o formulario abre ja apontando para a
+  // PRIMEIRA equipe da qual o usuario e MEMBRO ATIVO — e o depto destino vem
+  // junto, derivado dela (sem depto o select de equipe fica desabilitado).
+  // `GET /equipes/abertura` ja traz `membros` ativos e vem ordenado por
+  // `ordem`, entao nao custa requisicao extra.
+  //
+  // Nao e membro de nenhuma? Fica VAZIO como antes — chutar a 1a da lista
+  // rotearia o chamado para a fila errada em silencio (F12 para quem e de F01).
+  // Equipe `apoioSac` fica de fora: e catalogo de apoiadores e o backend a
+  // recusa na criacao (guard "roster nao roteavel", chamado-core.service.ts),
+  // entao pre-seleciona-la abriria o formulario condenado a falhar no submit.
+  const preSelecaoDestinoRef = useRef(false);
+  useEffect(() => {
+    // Age UMA vez e so sobre campo vazio: quem duplica chamado ou ja escolheu
+    // a mao manda. `duplicarDe` preenche os mesmos dois campos de forma async.
+    if (preSelecaoDestinoRef.current || duplicarDeParam) return;
+    if (!usuario || equipes.length === 0) return;
+    if (equipeAtualId || deptoDestinoId) return;
+
+    const minhaEquipe = equipes.find(
+      (e) =>
+        !e.apoioSac &&
+        e.membros?.some((m) => m.usuarioId === usuario.id && m.status === 'ATIVO'),
+    );
+    if (!minhaEquipe) return;
+
+    preSelecaoDestinoRef.current = true;
+    setDeptoDestinoId(minhaEquipe.departamento?.id ?? '__sem__');
+    setEquipeAtualId(minhaEquipe.id);
+  }, [equipes, usuario, duplicarDeParam, equipeAtualId, deptoDestinoId]);
+
   // Duplicar chamado: carregar dados do chamado original
   useEffect(() => {
     if (!duplicarDeParam) return;
