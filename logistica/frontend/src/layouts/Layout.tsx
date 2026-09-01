@@ -19,7 +19,17 @@ const FROTA_OP = ['OPERADOR_ENTREGA', 'GESTOR_ENTREGA', 'GESTOR_FROTA', 'SUPERVI
 // obrigava a pegar o celular para registrar uma saída que o computador ao lado resolve.
 // Lista PRÓPRIA (não estendi FROTA_OP) porque o Monitor da Frota — que também usa
 // FROTA_OP — responde 403 para eles: item de menu a mais abre tela vazia.
-const FROTA_SAIDA = [...FROTA_OP, 'SUPERVISOR', 'COORDENADOR'];
+// REGISTRADOR_FROTA e PORTARIA entraram em 01/09: as duas roles existem para
+// operar ESTA tela e não tinham item de menu nenhum — logavam e viam só "Início".
+// O backend já as autorizava (frota.controller: a classe inclui REGISTRADOR_FROTA;
+// PORTARIA tem fluxo próprio em POST /frota/viagens/portaria + retorno-portaria +
+// condutores/busca) e a FrotaPage já tem o modo PORTARIA embutido. Faltava só o
+// caminho até lá — não há deep link, então esconder do menu é esconder a tela.
+// A PORTARIA fica com ESTE item e mais nenhum, de propósito: o porteiro só aponta
+// entrada/saída no portão. Os demais itens da seção FROTA usam listas próprias
+// (FROTA_OP/FROTA_GESTAO/FROTA_GESTORES) e continuam fora para as duas — o backend
+// as barra lá (ex.: GET /frota/painel não inclui REGISTRADOR_FROTA).
+const FROTA_SAIDA = [...FROTA_OP, 'SUPERVISOR', 'COORDENADOR', 'REGISTRADOR_FROTA', 'PORTARIA'];
 // Telas de gestão de ENTREGAS (Painel, Indicadores, Análise). Espelha o
 // @Roles do painel.controller. GESTOR_FROTA fica de FORA: via os itens e tomava
 // 403 em todos (a frota dele está na seção FROTA + "Análise da Frota").
