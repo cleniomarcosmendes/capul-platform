@@ -37,11 +37,19 @@ export interface ProductImportStats {
   errors: string[];
 }
 
+/** Por que o armazém falhou, em linguagem de operador (backend, 02/09/2026). */
+export interface ErroArmazem {
+  armazem: string;
+  motivo: string;
+}
+
 export interface ProductImportResult {
   success: boolean;
   message: string;
   armazens_processados: string[];
   armazens_com_erro: string[];
+  /** Ausente em respostas antigas do backend — a tela trata como vazio. */
+  erros_detalhe?: ErroArmazem[];
   stats: ProductImportStats;
 }
 

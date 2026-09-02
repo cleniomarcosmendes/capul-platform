@@ -513,11 +513,32 @@ function TabProdutos() {
           details.push(`Armazens importados: ${result.armazens_processados.join(', ')}`);
         }
         if (hasErrors) {
-          details.push(`Armazens com ERRO: ${result.armazens_com_erro.join(', ')}`);
+          // O MOTIVO vem do backend desde 02/09. Antes a tela so dizia QUAIS
+          // armazens falharam e mandava "reimportar" — o que nao ajuda quando a
+          // causa e o Protheus devolvendo 500: reimportar da o mesmo erro. Sem o
+          // motivo, o operador ia procurar produto faltando no ERP.
+          if (result.erros_detalhe?.length) {
+            details.push('Por que falhou:');
+            result.erros_detalhe.forEach((e) => {
+              details.push(`  Armazem ${e.armazem}: ${e.motivo}`);
+            });
+          } else {
+            details.push(`Armazens com ERRO: ${result.armazens_com_erro.join(', ')}`);
+          }
           details.push('');
           details.push('IMPORTANTE: Os armazens com erro NAO foram atualizados.');
           details.push('Os dados desses armazens podem estar desatualizados.');
-          details.push('Recomenda-se reimportar os armazens que falharam.');
+          // "Reimportar" so faz sentido para falha PASSAGEIRA (timeout, queda). Se o
+          // Protheus devolveu erro proprio, repetir devolve o mesmo — e o proximo
+          // passo e acionar quem cuida do ERP, nao insistir no botao.
+          const soErroDoErp = result.erros_detalhe?.length
+            ? result.erros_detalhe.every((e) => e.motivo.includes('erro 5'))
+            : false;
+          details.push(
+            soErroDoErp
+              ? 'Reimportar tende a repetir o mesmo erro — acionar a equipe do Protheus.'
+              : 'Recomenda-se reimportar os armazens que falharam.',
+          );
         }
         if (result.stats?.total_produtos > 0) {
           details.push(`Total de produtos processados: ${result.stats.total_produtos.toLocaleString('pt-BR')}`);

@@ -30,6 +30,41 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _motivo_falha(exc: BaseException) -> str:
+    """
+    Traduz a excecao da chamada ao Protheus em uma frase que o OPERADOR entende.
+
+    Por que existe (02/09/2026): a tela dizia so "Nenhum produto encontrado" quando
+    na verdade o Protheus tinha devolvido **HTTP 500**. O texto mandava procurar
+    produto faltando no ERP — e o problema era a integracao. O erro real ja existia
+    aqui (ia para o log) e era DESCARTADO na resposta; o operador nao tem acesso ao
+    log do container. Agora sobe junto.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        codigo = exc.response.status_code
+        if codigo >= 500:
+            return (
+                f"o Protheus respondeu erro {codigo} (falha interna no ERP). "
+                "A consulta chegou la e nao foi concluida — acionar a equipe do Protheus."
+            )
+        if codigo in (401, 403):
+            return f"o Protheus recusou a credencial (HTTP {codigo}) — conferir a integracao no Configurador."
+        return f"o Protheus respondeu HTTP {codigo}."
+    if isinstance(exc, (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout)):
+        return (
+            "o Protheus nao respondeu dentro do tempo limite. Costuma ser volume: "
+            "tentar um armazem por vez, ou pedir aumento do timeout do endpoint."
+        )
+    if isinstance(exc, httpx.ConnectTimeout):
+        return "nao foi possivel conectar ao Protheus dentro do tempo limite (servico fora do ar ou rede)."
+    if isinstance(exc, httpx.ConnectError):
+        return "conexao recusada pelo Protheus — o servico pode estar parado."
+    if isinstance(exc, json.JSONDecodeError):
+        return "o Protheus respondeu algo que nao e JSON valido."
+    return f"{type(exc).__name__}: {exc}"
+
+
+
 @router.post("/import-produtos")
 async def import_produtos_protheus(
     filial: str = Query(..., description="Código da filial (ex: 01)"),
@@ -115,11 +150,13 @@ async def import_produtos_protheus(
             tasks = [_fetch_armazem(client, arm, idx) for idx, arm in enumerate(armazem, 1)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        erros_detalhe = []  # [{armazem, motivo}] — sobe na resposta (02/09/2026)
         for idx, result in enumerate(results):
             arm = armazem[idx]
             if isinstance(result, Exception):
                 logger.error(f"❌ [API] Erro no armazém {arm}: {str(result)}")
                 armazens_com_erro.append(arm)
+                erros_detalhe.append({"armazem": arm, "motivo": _motivo_falha(result)})
             else:
                 arm_code, produtos_armazem = result
                 todos_produtos.extend(produtos_armazem)
@@ -129,15 +166,28 @@ async def import_produtos_protheus(
         logger.info(f"📊 [RESUMO API] Total de {total_produtos} produtos de {len(armazens_processados)} armazéns (erros: {len(armazens_com_erro)})")
 
         if total_produtos == 0:
-            mensagem_erro = "Nenhum produto encontrado"
+            # ⭐ Dois casos MUITO diferentes que ate 02/09 diziam a mesma coisa:
+            #   (a) a chamada FALHOU (excecao) — problema de integracao;
+            #   (b) a chamada deu certo e veio lista VAZIA — nao ha produto mesmo.
+            # "Nenhum produto encontrado" para o caso (a) manda o operador procurar
+            # produto faltando no Protheus, quando o que quebrou foi a comunicacao.
             if armazens_com_erro:
-                mensagem_erro += f". Armazéns com erro: {', '.join(armazens_com_erro)}"
+                motivos = "; ".join(
+                    f"armazém {e['armazem']}: {e['motivo']}" for e in erros_detalhe
+                )
+                mensagem_erro = f"A consulta ao Protheus falhou — {motivos}"
+            else:
+                mensagem_erro = (
+                    "O Protheus respondeu, mas não há produtos nos armazéns "
+                    f"selecionados ({', '.join(armazens_processados)})."
+                )
 
             return {
                 "success": False,
                 "message": mensagem_erro,
                 "armazens_processados": armazens_processados,
                 "armazens_com_erro": armazens_com_erro,
+                "erros_detalhe": erros_detalhe,
                 "stats": {
                     "total_produtos": 0,
                     "sb1_inserted": 0,
@@ -335,6 +385,9 @@ async def import_produtos_protheus(
             "message": mensagem,
             "armazens_processados": armazens_processados,
             "armazens_com_erro": armazens_com_erro,
+            # Sucesso PARCIAL tambem precisa dizer por que os outros falharam —
+            # senao quem importou 9 de 10 armazens nao sabe o que fazer com o 10o.
+            "erros_detalhe": erros_detalhe,
             "stats": stats
         }
 
