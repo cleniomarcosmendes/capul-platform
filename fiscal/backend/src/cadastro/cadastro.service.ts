@@ -21,7 +21,6 @@ import { parseDateSafe } from '../common/helpers/date.helper.js';
 import type {
   CadastroContribuinte,
   SituacaoCadastral,
-  TipoCadastroProtheus,
 } from '@prisma/client';
 
 /**

@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { Queue, QueueEvents } from 'bullmq';
+import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { QueueMonitorService } from './queue-monitor.service.js';
 import {

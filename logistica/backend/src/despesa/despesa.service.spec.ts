@@ -3,7 +3,6 @@ import { createPrismaMock } from '../common/testing/prisma-mock';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const dep = () => ({}) as any;
-const sup = (sub = 'u1') => ({ sub, filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role: 'SUPERVISOR_FROTA' }] }) as any;
 
 // ⭐ Vazamento pego no teste E2E por API (12/07): GET /despesas?veiculoId=<fora do
 // escopo> sobrepunha o filtro de escopo e retornava despesa de outro departamento.

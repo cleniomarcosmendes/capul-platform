@@ -6,7 +6,7 @@ import type {
   CruzamentoIeProtheusSefaz,
 } from '../cadastro.service.js';
 import type { ReceitaFederalData } from '../receita.client.js';
-import { formatCpfCnpj, isValidCpfLength, isValidCnpjLength, onlyDigits } from '../../common/helpers/cnpj.helper.js';
+import { formatCpfCnpj, isValidCpfLength, isValidCnpjLength } from '../../common/helpers/cnpj.helper.js';
 
 /**
  * Geração do "Comprovante CCC — Inscrição Estadual" — relatório textual

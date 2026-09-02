@@ -625,7 +625,7 @@ export class DacteGeneratorService {
       .text('RESERVADO AO FISCO', x + 4, y0 + 2);
   }
 
-  private renderFooter(doc: PDFKit.PDFDocument, parsed: CteParsed): void {
+  private renderFooter(doc: PDFKit.PDFDocument, _parsed: CteParsed): void {
     const yFooter = this.PAGE_H - this.MARGIN - 8;
     doc.font(this.F_ITALIC).fontSize(6).fillColor('#666')
       .text(

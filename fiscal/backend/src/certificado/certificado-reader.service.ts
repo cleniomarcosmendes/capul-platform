@@ -58,7 +58,7 @@ export class CertificadoReaderService {
     let buffer: Buffer;
     try {
       buffer = await readFile(path);
-    } catch (err) {
+    } catch {
       this.logger.error(
         `Binário do certificado ${meta.id} não encontrado em ${path}. Arquivo pode ter sido removido manualmente do volume. Refazer upload via CertificadoController.`,
       );

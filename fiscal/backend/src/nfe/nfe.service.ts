@@ -1135,7 +1135,6 @@ export class NfeService {
     let fallbacksCarregados = false;
     let ultimoErroSefaz: SefazConsultaError | null = null;
     let ultimoErroTecnico: Error | null = null;
-    let primeiroErroFoi641 = false; // marcador pra mensagem final mais clara
     // Consulente da ultima tentativa — usado no mapeamento de cStat=641 pra
     // distinguir "emitente exato" / "mesma raiz CNPJ" / "sem interesse" e
     // gerar mensagem precisa em vez do label "(a propria empresa)" hard-coded.
@@ -1193,9 +1192,6 @@ export class NfeService {
             // fluxo normal (filial do usuario + fallbacks).
             if (err.cStat === '641' && !tentarTodasFiliais && tent.cnpj !== cnpjDestinoSped) {
               throw err;
-            }
-            if (err.cStat === '641' && !tent.isFallback) {
-              primeiroErroFoi641 = true;
             }
             ultimoErroSefaz = err;
             if (tent.isFallback) {

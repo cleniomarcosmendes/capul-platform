@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { CteDistribuicaoClient, type CteDocZip } from '../../sefaz/cte-distribuicao.client.js';
 import { SefazConsultaError } from '../../sefaz/nfe-distribuicao.client.js';
 import { LimiteDiarioService } from '../../limite-diario/limite-diario.service.js';

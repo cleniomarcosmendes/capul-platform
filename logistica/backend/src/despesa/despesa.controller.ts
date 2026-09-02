@@ -1,8 +1,8 @@
 import {
   Body, Controller, Delete, Get, Header, Headers, Param, Patch, Post, Query,
-  StreamableFile, UploadedFile, UploadedFiles, UseInterceptors,
+  StreamableFile, UploadedFiles, UseInterceptors,
 } from '@nestjs/common';
-import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { mesAnoDoFiltro } from '../common/mes-ano.js';
@@ -15,9 +15,6 @@ import {
   MarcarAnormalidadeDto, RatearDespesaDto,
 } from './dto.js';
 
-/** Converte o arquivo do multer no binário do recibo (ou undefined). */
-const reciboDe = (f?: Express.Multer.File): ReciboBinario | undefined =>
-  f ? { buffer: f.buffer, mimetype: f.mimetype, size: f.size } : undefined;
 /** Vários arquivos → binários (AnyFiles pega 'comprovante' legado OU 'comprovantes[]'). */
 const recibosDe = (fs?: Express.Multer.File[]): ReciboBinario[] =>
   (fs ?? []).map((f) => ({ buffer: f.buffer, mimetype: f.mimetype, size: f.size }));

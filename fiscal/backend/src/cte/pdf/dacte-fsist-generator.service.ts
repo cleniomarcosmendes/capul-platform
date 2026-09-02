@@ -61,6 +61,11 @@ export class DacteFsistGeneratorService {
     y = this.renderDocumentosOriginarios(doc, parsed, y);
     y = this.renderObservacoes(doc, parsed, y);
     y = this.renderDadosRodoviario(doc, parsed, y);
+    // Última atribuição da cadeia: `y` não é lido depois, mas manter o `y =`
+    // faz a PRÓXIMA seção acrescentada aqui herdar o offset certo. Sem ele,
+    // quem adicionar um render depois parte de um `y` velho e a seção sai
+    // sobreposta — por isso a regra é dispensada em vez de a linha ser "limpa".
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     y = this.renderUsoEmissorReservadoFisco(doc, y);
     this.renderRodape(doc);
 

@@ -1,10 +1,8 @@
 import {
   IsBoolean,
-  IsInt,
   IsOptional,
   IsString,
   MaxLength,
-  Min,
   MinLength,
 } from 'class-validator';
 

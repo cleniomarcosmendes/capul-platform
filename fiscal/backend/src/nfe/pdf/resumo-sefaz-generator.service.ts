@@ -135,6 +135,11 @@ export class ResumoSefazGeneratorService {
     if (parsed.dadosGerais.digestValue) {
       y += 4;
       y = this.renderH2(doc, 'Digest Value', y);
+      // Última atribuição da cadeia: `y` não é lido depois, mas manter o `y =`
+      // faz a PRÓXIMA seção acrescentada aqui herdar o offset certo. Sem ele,
+      // quem adicionar um render depois parte de um `y` velho e a seção sai
+      // sobreposta — por isso a regra é dispensada em vez de a linha ser "limpa".
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       y = this.renderLinhaCampos(doc, y, [
         {
           label: 'Digest Value da NF-e',

@@ -43,20 +43,28 @@ export class SchedulerService implements OnApplicationBootstrap {
       this.MEIO_DIA_JOB,
       cfg.cronMovimentoMeioDia,
       'MOVIMENTO_MEIO_DIA',
-      () =>
-        this.execucao
+      () => {
+        // `void` explicito: `iniciar()` devolve Promise<string> e o parametro e
+        // `() => void`. O erro JA e tratado no `.catch` logo abaixo — o que se
+        // descarta aqui e o VALOR de retorno, nao a falha.
+        void this.execucao
           .iniciar('MOVIMENTO_MEIO_DIA', 'sistema:scheduler')
-          .catch((err) => this.logger.warn(`MOVIMENTO_MEIO_DIA falhou: ${(err as Error).message}`)),
+          .catch((err) => this.logger.warn(`MOVIMENTO_MEIO_DIA falhou: ${(err as Error).message}`));
+      },
     );
 
     this.registrarCronSePresente(
       this.MANHA_SEGUINTE_JOB,
       cfg.cronMovimentoManhaSeguinte,
       'MOVIMENTO_MANHA_SEGUINTE',
-      () =>
-        this.execucao
+      () => {
+        // `void` explicito: `iniciar()` devolve Promise<string> e o parametro e
+        // `() => void`. O erro JA e tratado no `.catch` logo abaixo — o que se
+        // descarta aqui e o VALOR de retorno, nao a falha.
+        void this.execucao
           .iniciar('MOVIMENTO_MANHA_SEGUINTE', 'sistema:scheduler')
-          .catch((err) => this.logger.warn(`MOVIMENTO_MANHA_SEGUINTE falhou: ${(err as Error).message}`)),
+          .catch((err) => this.logger.warn(`MOVIMENTO_MANHA_SEGUINTE falhou: ${(err as Error).message}`));
+      },
     );
   }
 

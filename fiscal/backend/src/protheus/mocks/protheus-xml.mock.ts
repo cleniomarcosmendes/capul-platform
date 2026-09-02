@@ -170,7 +170,6 @@ export class ProtheusXmlMock {
 
   async exists(chave: string): Promise<XmlFiscalExistsResponse> {
     this.assertChave(chave);
-    const key = this.key(chave);
     const found = this.findByChave(chave);
     if (!found) {
       return { existe: false, chave };
