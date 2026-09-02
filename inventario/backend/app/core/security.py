@@ -264,7 +264,7 @@ def _get_current_user_unified(payload: Dict[str, Any], db: Session) -> UserSessi
     Constroi UserSession a partir do JWT do Auth Gateway.
     JWT payload: {sub, username, email, filialId, filialCodigo, modulos[{codigo, role}]}
     """
-    from app.models.core_models import CoreUsuario
+    from app.models.core_models import CoreUsuario, CoreFilial
 
     user_id = payload.get("sub")
     if not user_id:
@@ -305,6 +305,40 @@ def _get_current_user_unified(payload: Dict[str, Any], db: Session) -> UserSessi
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User inactive"
         )
+
+    # ⭐ A FILIAL VEM DO BANCO, NAO DO JWT (02/09/2026).
+    #
+    # O access token vale 60 MINUTOS e carrega `filialId` congelado no momento
+    # da emissao. Trocar a filial do usuario no Configurador nao invalida o
+    # token: ate ele renovar, o modulo continuava trabalhando com a filial
+    # ANTIGA — e `_espelhar_identidade` logo abaixo gravava esse valor velho em
+    # `inventario.users.store_id`, que e a fonte de `/warehouses/simple`.
+    #
+    # O estrago era uma tela que MENTE: o campo "Filial" da Importacao de
+    # Produtos le `filialAtual` do `/me` (banco, atualizado na hora) enquanto a
+    # lista de armazens vinha do espelho (JWT, ate 1h atrasado). Dava "Filial 02
+    # - SUPERMERCADO" com os armazens da filial 01 - AGROVETERINARIA, sem aviso
+    # nenhum: o operador marcava "01 - AGROVET BLOQUEADO" e o que ia para o
+    # Protheus era o armazem 01 da filial 02, que se chama "SUPERMERCADO - UNAI".
+    # Nomes de uma filial, dados de outra. (Relatado pelo Clenio em 02/09.)
+    #
+    # `usuario` ja foi lido do core acima, entao a filial correta sai de graca —
+    # sem consulta nova. Cai no valor do JWT so se o core nao tiver filial
+    # principal, para nao inventar uma resposta onde nao ha dado.
+    if usuario.filial_principal_id and usuario.filial_principal_id != filial_id:
+        filial_banco = (
+            db.query(CoreFilial)
+            .filter(CoreFilial.id == usuario.filial_principal_id)
+            .first()
+        )
+        if filial_banco:
+            logger.info(
+                f"Filial do usuario {usuario.username} mudou desde a emissao do token: "
+                f"JWT={filial_codigo or filial_id} -> banco={filial_banco.codigo}. "
+                f"Usando a do BANCO (o token so refletiria em ate 60min)."
+            )
+            filial_id = usuario.filial_principal_id
+            filial_codigo = filial_banco.codigo or filial_codigo
 
     sessao = UserSession(
         id=user_id,
