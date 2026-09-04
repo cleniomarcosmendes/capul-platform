@@ -111,43 +111,152 @@ async def import_produtos_protheus(
             "Content-Type": "application/json"
         }
 
-        todos_produtos = []
         armazens_processados = []
         armazens_com_erro = []
 
+        # ⭐ 04/09/2026 — os lotes são preenchidos DURANTE a busca, página a página.
+        # Antes a lista inteira de produtos ficava em memória até o fim da coleta,
+        # e a filial 02 traz 77.175 produtos com seis sub-arrays cada: o container
+        # tem 512 MB e morreria por OOM no meio da importação. É o mesmo defeito
+        # que apontamos no ERP — acumular tudo — e não faria sentido repeti-lo aqui.
+        # Agora cada página é convertida em tuplas e DESCARTADA em seguida.
+        sb1_batch, sb2_batch, sb8_batch, sbz_batch, slk_batch = [], [], [], [], []
+        # Só os CÓDIGOS sobrevivem à página: é o que a limpeza de descontinuados
+        # precisa no fim, e um set de 77 mil strings custa ~1 MB.
+        produtos_importados_set = set()
+        total_produtos = 0
+        erros_preparo = []
+
+        # Teto do contrato do Protheus (04/09/2026). Pedir mais nao e erro — o ERP
+        # normaliza —, mas pedir o teto e o que rende menos ida e volta.
+        _POR_PAGINA = 1000
+        # Freio contra pagina que nunca acaba: 78 paginas cobrem a filial 02
+        # (77.175 produtos). Se passar MUITO disso, algo esta errado no `temMais`
+        # e e melhor parar com erro do que girar para sempre contra o ERP.
+        _MAX_PAGINAS = 500
+
+        def _preparar_pagina(pagina_produtos: List[Dict[str, Any]]) -> None:
+            """
+            Converte uma página em tuplas de INSERT e descarta os dicts.
+
+            Roda DENTRO do laço de páginas para que a resposta do Protheus não
+            sobreviva à iteração: é o que mantém o pico de memória constante,
+            independente de a filial ter 800 ou 77.000 produtos.
+            """
+            nonlocal total_produtos
+            for produto in pagina_produtos:
+                try:
+                    sb1_batch.append(_prepare_sb1010(produto))
+                    for armazem_data in produto.get("armazens", []):
+                        sb2_batch.append(_prepare_sb2010(produto, armazem_data, filial))
+                    for lote_data in produto.get("lotes", []):
+                        sb8_batch.append(_prepare_sb8010(produto, lote_data, filial))
+                    for indicador_data in produto.get("indicadores", []):
+                        sbz_batch.append(_prepare_sbz010(produto, indicador_data, filial))
+                    for codigo_barras_data in produto.get("codigosBarras", []):
+                        slk_batch.append(_prepare_slk010(produto, codigo_barras_data))
+
+                    cod = (produto.get("b1_cod") or "").strip()
+                    if cod:
+                        produtos_importados_set.add(cod)
+                    total_produtos += 1
+                except Exception as e:  # noqa: BLE001 — um produto ruim não derruba a importação
+                    msg = f"Erro ao preparar produto {produto.get('b1_cod', 'UNKNOWN')}: {str(e)}"
+                    logger.error(f"❌ {msg}")
+                    erros_preparo.append(msg)
+
+            if total_produtos and total_produtos % 5000 < len(pagina_produtos):
+                logger.info(f"📦 [PREP] {total_produtos} produtos convertidos até aqui")
+
         async def _fetch_armazem(client: httpx.AsyncClient, arm: str, idx: int):
-            """Busca produtos de um armazém específico"""
-            logger.info(f"📡 [API {idx}/{len(armazem)}] Processando armazém {arm}...")
-            payload = {"filial": filial, "armazem": [{"codigo": arm}]}
-            logger.info(f"📦 [PAYLOAD {idx}] {json.dumps(payload)}")
+            """
+            Busca TODOS os produtos de um armazém, pagina a pagina.
 
-            api_start = time.time()
-            response = await client.post(_PROTHEUS_PRODUTOS_URL, json=payload, headers=headers)
-            api_duration = time.time() - api_start
-            response.raise_for_status()
+            ⭐ 04/09/2026 — o endpoint do Protheus passou a ser SEMPRE paginado
+            (envelope `{pagina, porPagina, total, temMais, produtos[]}`). Antes uma
+            unica chamada trazia tudo, e era exatamente isso que estourava na filial
+            02: 77.175 produtos numa resposta so, HTTP 500 depois de 29-57s.
 
-            logger.info(f"⏱️ [API {idx}] Tempo de resposta armazém {arm}: {api_duration:.2f}s")
+            As paginas vao em SEQUENCIA, nunca em paralelo. Em 02/09 uma chamada
+            pesada precedeu a queda do servico do ERP; disparar 78 de uma vez seria
+            repetir o erro com outro nome.
 
-            try:
-                text_content = response.content.decode('utf-8')
-                data = json.loads(text_content)
-            except UnicodeDecodeError:
-                logger.warning(f"⚠️ [API {idx}] Erro UTF-8, tentando ISO-8859-1...")
-                text_content = response.content.decode('iso-8859-1')
-                data = json.loads(text_content)
+            Para por `temMais`, como o contrato manda — nao por contagem de
+            registros. Pagina alem do fim responde 200 com lista vazia.
+            """
+            recebidos_no_armazem = 0
+            pagina = 1
+            total_informado = None
 
-            produtos_armazem = data.get("produtos", [])
-            logger.info(f"✅ [API {idx}] Armazém {arm}: {len(produtos_armazem)} produtos recebidos")
+            while True:
+                payload = {
+                    "filial": filial,
+                    "armazem": [{"codigo": arm}],
+                    "pagina": pagina,
+                    "porPagina": _POR_PAGINA,
+                }
+                if pagina == 1:
+                    logger.info(f"📡 [API {idx}/{len(armazem)}] Armazém {arm} — iniciando (paginado)")
+                    logger.info(f"📦 [PAYLOAD {idx}] {json.dumps(payload)}")
 
-            if len(produtos_armazem) == 0:
+                api_start = time.time()
+                response = await client.post(_PROTHEUS_PRODUTOS_URL, json=payload, headers=headers)
+                api_duration = time.time() - api_start
+                response.raise_for_status()
+
+                try:
+                    data = json.loads(response.content.decode('utf-8'))
+                except UnicodeDecodeError:
+                    # O Protheus responde ISO-8859-1; sem este fallback o parse estoura.
+                    logger.warning(f"⚠️ [API {idx}] Erro UTF-8, tentando ISO-8859-1...")
+                    data = json.loads(response.content.decode('iso-8859-1'))
+
+                pagina_produtos = data.get("produtos", []) or []
+                # Converte AGORA e esquece a página — ver a nota dos lotes acima.
+                _preparar_pagina(pagina_produtos)
+                recebidos_no_armazem += len(pagina_produtos)
+
+                # `total` só vem na página 1 — é o que dimensiona o progresso.
+                if pagina == 1:
+                    total_informado = data.get("total")
+
+                alvo = f"/{total_informado}" if total_informado else ""
+                logger.info(
+                    f"📄 [API {idx}] Armazém {arm} pág {pagina}: "
+                    f"+{len(pagina_produtos)} (acum {recebidos_no_armazem}{alvo}) em {api_duration:.2f}s"
+                )
+
+                if not data.get("temMais"):
+                    break
+
+                pagina += 1
+                if pagina > _MAX_PAGINAS:
+                    raise RuntimeError(
+                        f"armazém {arm}: passou de {_MAX_PAGINAS} páginas sem `temMais` virar false — "
+                        f"interrompido para não girar indefinidamente contra o Protheus."
+                    )
+
+            logger.info(
+                f"✅ [API {idx}] Armazém {arm}: {recebidos_no_armazem} produtos "
+                f"em {pagina} página(s)"
+            )
+            if recebidos_no_armazem == 0:
                 logger.warning(f"⚠️ [API {idx}] Armazém {arm} retornou 0 produtos")
 
-            return arm, produtos_armazem
+            return arm, recebidos_no_armazem
 
-        # ✅ v2.19.55: Processar armazéns EM PARALELO (asyncio.gather)
+        # Armazéns seguem em paralelo (como antes), mas com TETO de simultaneidade:
+        # cada um agora sustenta uma sequência de páginas, e 17 armazéns livres
+        # manteriam 17 conexões abertas contra o ERP do começo ao fim.
         import asyncio
+        _sem = asyncio.Semaphore(4)
+
+        async def _fetch_com_limite(client, arm, idx):
+            async with _sem:
+                return await _fetch_armazem(client, arm, idx)
+
         async with httpx.AsyncClient(verify=SSL_VERIFY, timeout=float(_PROTHEUS_TIMEOUT)) as client:
-            tasks = [_fetch_armazem(client, arm, idx) for idx, arm in enumerate(armazem, 1)]
+            tasks = [_fetch_com_limite(client, arm, idx) for idx, arm in enumerate(armazem, 1)]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
         erros_detalhe = []  # [{armazem, motivo}] — sobe na resposta (02/09/2026)
@@ -158,11 +267,9 @@ async def import_produtos_protheus(
                 armazens_com_erro.append(arm)
                 erros_detalhe.append({"armazem": arm, "motivo": _motivo_falha(result)})
             else:
-                arm_code, produtos_armazem = result
-                todos_produtos.extend(produtos_armazem)
+                arm_code, _recebidos = result
                 armazens_processados.append(arm_code)
 
-        total_produtos = len(todos_produtos)
         logger.info(f"📊 [RESUMO API] Total de {total_produtos} produtos de {len(armazens_processados)} armazéns (erros: {len(armazens_com_erro)})")
 
         if total_produtos == 0:
@@ -224,42 +331,15 @@ async def import_produtos_protheus(
             "errors": []
         }
 
-        # Preparar lotes de dados em memória
-        sb1_batch = []
-        sb2_batch = []
-        sb8_batch = []
-        sbz_batch = []
-        slk_batch = []
-
-        for idx, produto in enumerate(todos_produtos, 1):
-            try:
-                # Log progresso a cada 1000 produtos
-                if idx % 1000 == 0:
-                    logger.info(f"📦 [PREP] Preparando lote {idx}/{total_produtos}")
-
-                # Preparar dados SB1010
-                sb1_batch.append(_prepare_sb1010(produto))
-
-                # ✅ v2.15.3: Preparar dados SB2010 (tabela EXCLUSIVA - passa código da filial)
-                for armazem_data in produto.get("armazens", []):
-                    sb2_batch.append(_prepare_sb2010(produto, armazem_data, filial))
-
-                # ✅ v2.15.3: Preparar dados SB8010 (tabela EXCLUSIVA - passa código da filial)
-                for lote_data in produto.get("lotes", []):
-                    sb8_batch.append(_prepare_sb8010(produto, lote_data, filial))
-
-                # ✅ v2.15.3: Preparar dados SBZ010 (tabela EXCLUSIVA - passa código da filial)
-                for indicador_data in produto.get("indicadores", []):
-                    sbz_batch.append(_prepare_sbz010(produto, indicador_data, filial))
-
-                # Preparar dados SLK010
-                for codigo_barras_data in produto.get("codigosBarras", []):
-                    slk_batch.append(_prepare_slk010(produto, codigo_barras_data))
-
-            except Exception as e:
-                error_msg = f"Erro ao preparar produto {produto.get('b1_cod', 'UNKNOWN')}: {str(e)}"
-                logger.error(f"❌ {error_msg}")
-                stats["errors"].append(error_msg)
+        # Os lotes JÁ foram preenchidos durante a busca (`_preparar_pagina`), para
+        # que a lista completa de produtos nunca exista em memória — ver a nota na
+        # declaração deles. Aqui só se herda o que deu errado na conversão.
+        stats["errors"].extend(erros_preparo)
+        logger.info(
+            f"📦 [PREP] {total_produtos} produtos convertidos · "
+            f"SB1 {len(sb1_batch)} · SB2 {len(sb2_batch)} · SB8 {len(sb8_batch)} · "
+            f"SBZ {len(sbz_batch)} · SLK {len(slk_batch)}"
+        )
 
         # ========================================
         # 3. LIMPEZA DE PRODUTOS DESCONTINUADOS (v2.17.1)
@@ -268,7 +348,7 @@ async def import_produtos_protheus(
         # Isso evita "produtos fantasmas" que geram divergências falsas
 
         # Extrair lista de códigos de produtos importados
-        produtos_importados = list(set([p.get("b1_cod", "").strip() for p in todos_produtos]))
+        produtos_importados = list(produtos_importados_set)
         stats["sb2_deleted"] = 0
         stats["sb8_deleted"] = 0
 
