@@ -5,12 +5,34 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { assertMesmaFilial, resolverFilialLeitura } from '../common/filial-scope.js';
 import { EntregaService, type ProvaBinaria } from './entrega.service.js';
+import { CoreLookupService } from '../core/core-lookup.service.js';
 import { BaixarEntregaDto, CancelarEntregaDto, CreateEntregaDto, UpdateEntregaDto, ValidarOperadorDto } from './dto.js';
 
 @Controller('entregas')
 @Roles('OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
 export class EntregaController {
-  constructor(private readonly entregas: EntregaService) {}
+  constructor(
+    private readonly entregas: EntregaService,
+    private readonly core: CoreLookupService,
+  ) {}
+
+  /**
+   * A filial do usuário lida do BANCO, com o token como último recurso.
+   *
+   * ⭐ 04/09/2026 — o access token vale **60 minutos** e congela `filialId` na
+   * emissão. Trocar a filial no Configurador não invalida o token, então as
+   * guardas de escopo abaixo comparavam contra a filial ANTIGA e devolviam 403.
+   *
+   * O sintoma é 403 INTERMITENTE: o Clenio trocou o admin para a filial 02, tomou
+   * "Entrega de outra filial" ao cancelar, e a MESMA ação funcionou depois que o
+   * token renovou. Erro que some sozinho não chega a ser investigado — some com o
+   * usuário achando que o sistema é instável.
+   *
+   * Sem filial principal no core, cai no token: não inventa resposta onde não há dado.
+   */
+  private async filialEfetiva(user: JwtPayload): Promise<string | undefined> {
+    return (await this.core.filialAtualDoUsuario(user.sub)) ?? user.filialId;
+  }
 
   // REGISTRADOR_ENTREGA (caixa) entra aqui — só incluir/alterar. O @Roles do
   // método sobrepõe o da classe.
@@ -81,8 +103,8 @@ export class EntregaController {
   /** Edição (grid): só PENDENTE fora de viagem. REGISTRADOR_ENTREGA (caixa) inclui. */
   @Patch(':id')
   @Roles('REGISTRADOR_ENTREGA', 'OPERADOR_ENTREGA', 'GESTOR_ENTREGA')
-  atualizar(@Param('id') id: string, @Body() dto: UpdateEntregaDto, @CurrentUser() user: JwtPayload) {
-    return this.entregas.update(id, dto, user.filialId);
+  async atualizar(@Param('id') id: string, @Body() dto: UpdateEntregaDto, @CurrentUser() user: JwtPayload) {
+    return this.entregas.update(id, dto, await this.filialEfetiva(user));
   }
 
   /** Identificação do operador (login PADRAO): matrícula+senha do portal RH.
@@ -95,18 +117,18 @@ export class EntregaController {
 
   /** Nova tentativa: NÃO ENTREGUE volta pra fila (PENDENTE) p/ nova viagem. */
   @Post(':id/nova-tentativa')
-  novaTentativa(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.entregas.novaTentativa(id, user.filialId);
+  async novaTentativa(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.entregas.novaTentativa(id, await this.filialEfetiva(user));
   }
 
   /** Cancelamento local (só PENDENTE). */
   @Post(':id/cancelar')
-  cancelar(
+  async cancelar(
     @Param('id') id: string,
     @Body() dto: CancelarEntregaDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.entregas.cancelar(id, dto.motivo, user.sub, user.filialId);
+    return this.entregas.cancelar(id, dto.motivo, user.sub, await this.filialEfetiva(user));
   }
 
   /**

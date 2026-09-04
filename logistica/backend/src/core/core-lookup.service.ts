@@ -137,6 +137,29 @@ export class CoreLookupService {
   }
 
   /**
+   * A filial ATUAL do usuário, lida do BANCO — não do token.
+   *
+   * ⭐ 04/09/2026 — o access token vale **60 minutos** e carrega `filialId`
+   * congelado no momento da emissão. Trocar a filial do usuário no Configurador
+   * NÃO invalida o token: até renovar, as guardas de escopo comparam contra a
+   * filial ANTIGA e devolvem 403.
+   *
+   * O sintoma é 403 intermitente — "não consegui, tentei mais tarde e consegui" —
+   * que parece defeito aleatório e some antes de ser investigado. Relatado pelo
+   * Clenio: trocou o admin para a filial 02, tomou "Entrega de outra filial" ao
+   * cancelar, e uma hora depois a mesma ação funcionou.
+   *
+   * Devolve `null` se o usuário não tiver filial principal — aí quem chama
+   * mantém o valor do token, em vez de inventar resposta onde não há dado.
+   */
+  async filialAtualDoUsuario(userId: string): Promise<string | null> {
+    if (!userId) return null;
+    const rows = await this.prisma.$queryRaw<{ filial_principal_id: string | null }[]>(Prisma.sql`
+      SELECT filial_principal_id FROM "core"."usuarios" WHERE id = ${userId} LIMIT 1`);
+    return rows[0]?.filial_principal_id ?? null;
+  }
+
+  /**
    * MOTORISTAS elegíveis à rota de entrega: usuários ATIVOS, da FILIAL informada
    * (filial principal), com permissão ATIVA no módulo LOGISTICA **e papel
    * ENTREGADOR** (o papel do motorista). Antes listava qualquer papel de

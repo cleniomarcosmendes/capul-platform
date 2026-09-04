@@ -441,7 +441,15 @@ export class EntregaService {
     });
     if (!e) throw new NotFoundException('Entrega não encontrada.');
     if (userFilialId && e.filialId !== userFilialId) {
-      throw new ForbiddenException('Entrega de outra filial — operação não permitida.');
+      // A mensagem precisa dizer o que FAZER. A anterior — "operação não
+      // permitida" e ponto — levou o Clenio a concluir que o sistema estava
+      // quebrado, quando bastava sair e entrar (04/09). As duas causas possíveis
+      // estão aqui, e a primeira é a que o usuário resolve sozinho.
+      throw new ForbiddenException(
+        'Esta entrega é de outra filial. Se a sua filial foi alterada há pouco, ' +
+        'saia e entre no sistema para atualizar seu acesso. Se não foi, a entrega ' +
+        'pertence mesmo a outra filial e precisa ser tratada por lá.',
+      );
     }
     if (e.status !== StatusEntrega.PENDENTE) {
       throw new BadRequestException(`Só entrega PENDENTE pode ser editada (status atual: ${e.status}).`);
@@ -517,7 +525,15 @@ export class EntregaService {
     });
     if (!e) throw new NotFoundException('Entrega não encontrada.');
     if (userFilialId && e.filialId !== userFilialId) {
-      throw new ForbiddenException('Entrega de outra filial — operação não permitida.');
+      // A mensagem precisa dizer o que FAZER. A anterior — "operação não
+      // permitida" e ponto — levou o Clenio a concluir que o sistema estava
+      // quebrado, quando bastava sair e entrar (04/09). As duas causas possíveis
+      // estão aqui, e a primeira é a que o usuário resolve sozinho.
+      throw new ForbiddenException(
+        'Esta entrega é de outra filial. Se a sua filial foi alterada há pouco, ' +
+        'saia e entre no sistema para atualizar seu acesso. Se não foi, a entrega ' +
+        'pertence mesmo a outra filial e precisa ser tratada por lá.',
+      );
     }
     if (e.status !== StatusEntrega.NAO_ENTREGUE) {
       throw new BadRequestException(
@@ -581,7 +597,15 @@ export class EntregaService {
     });
     if (!e) throw new NotFoundException('Entrega não encontrada.');
     if (userFilialId && e.filialId !== userFilialId) {
-      throw new ForbiddenException('Entrega de outra filial — operação não permitida.');
+      // A mensagem precisa dizer o que FAZER. A anterior — "operação não
+      // permitida" e ponto — levou o Clenio a concluir que o sistema estava
+      // quebrado, quando bastava sair e entrar (04/09). As duas causas possíveis
+      // estão aqui, e a primeira é a que o usuário resolve sozinho.
+      throw new ForbiddenException(
+        'Esta entrega é de outra filial. Se a sua filial foi alterada há pouco, ' +
+        'saia e entre no sistema para atualizar seu acesso. Se não foi, a entrega ' +
+        'pertence mesmo a outra filial e precisa ser tratada por lá.',
+      );
     }
     if (e.status !== StatusEntrega.PENDENTE) {
       throw new BadRequestException(
