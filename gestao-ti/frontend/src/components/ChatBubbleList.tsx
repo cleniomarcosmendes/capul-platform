@@ -390,6 +390,13 @@ const TIPOS_COM_DESCRICAO_RELEVANTE = new Set([
   'CANCELADO',
   'REABERTO',
   'AVALIADO',
+  // ⭐ 04/09/2026 — as TRANSFERÊNCIAS faltavam aqui, e o motivo digitado pelo
+  // técnico nunca chegava a ninguém: o backend gravava (`descricao: dto.motivo`,
+  // `publico: true`) e a timeline descartava. Relatado pelo Marco Antonio.
+  // É o MESMO defeito de 29/04 com o "Finalizar Chamado" — corrigido na ocasião
+  // só para os tipos de encerramento, deixando as transferências de fora.
+  'TRANSFERENCIA_EQUIPE',
+  'TRANSFERENCIA_TECNICO',
 ]);
 
 // Descrições "default" geradas pelo backend quando o usuário não digita nada.
@@ -403,7 +410,27 @@ const DESCRICOES_AUTOGERADAS = new Set([
   'Chamado assumido',
   'Chamado criado',
   'Avaliação registrada',
+  // Defaults da transferência de EQUIPE (chamado-core.service.ts): o segundo sai
+  // quando o técnico destino é indicado junto. Sem eles na lista, transferir sem
+  // motivo passaria a repetir o rótulo logo abaixo dele.
+  'Chamado transferido para outra equipe',
+  'Chamado transferido para outra equipe com tecnico indicado',
 ]);
+
+/**
+ * O default da transferência de TÉCNICO carrega o NOME (`Chamado transferido para
+ * Fulano`), então não cabe num Set fixo. Como o evento traz `tecnicoDestino.nome`,
+ * dá para reconstruir o texto exato que o backend geraria — sem heurística de
+ * prefixo, que esconderia um motivo real começando com as mesmas palavras.
+ */
+function ehDescricaoAutogerada(ev: ChatEvent): boolean {
+  const desc = (ev.descricao ?? '').trim();
+  if (DESCRICOES_AUTOGERADAS.has(desc)) return true;
+  if (ev.tipo === 'TRANSFERENCIA_TECNICO' && ev.tecnicoDestino?.nome) {
+    return desc === `Chamado transferido para ${ev.tecnicoDestino.nome}`;
+  }
+  return false;
+}
 
 function SystemDivider({ ev, fmtDataHora, labels }: { ev: ChatEvent; fmtDataHora: (s: string) => string; labels: Record<string, string> }) {
   const label = labels[ev.tipo] ?? ev.tipo;
@@ -419,7 +446,7 @@ function SystemDivider({ ev, fmtDataHora, labels }: { ev: ChatEvent; fmtDataHora
     TIPOS_COM_DESCRICAO_RELEVANTE.has(ev.tipo) &&
     ev.descricao &&
     ev.descricao.trim().length > 0 &&
-    !DESCRICOES_AUTOGERADAS.has(ev.descricao.trim());
+    !ehDescricaoAutogerada(ev);
 
   return (
     <div className="flex flex-col items-center gap-1.5">
