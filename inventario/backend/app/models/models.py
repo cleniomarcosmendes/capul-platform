@@ -1086,6 +1086,9 @@ class CountingList(Base):
     # Visibilidade de C1/C2 ao contador (decisão do supervisor no ato do Liberar)
     # Default false = contagem cega real. Resetada a cada release.
     show_previous_counts = Column(Boolean, default=False, nullable=False)
+    # Saldo do sistema visível ao contador — decisão da LISTA, não do papel
+    # (migration 022, 04/09/2026). Default False = contagem cega para qualquer papel.
+    show_system_balance = Column(Boolean, default=False, nullable=False)
 
     # Ordem em que os produtos aparecem para o contador (decisão do supervisor no Liberar).
     # Migration 013. Valores: ORIGINAL, PRODUCT_CODE, PRODUCT_DESCRIPTION, LOCAL1, LOCAL2, LOCAL3.

@@ -69,6 +69,7 @@ export const countingListService = {
         list_id: inner?.list_id ?? inner?.list_info?.list_id ?? '',
         list_name: inner?.list_name ?? inner?.list_info?.list_name ?? '',
         show_previous_counts: Boolean(inner?.show_previous_counts),
+        show_system_balance: Boolean(inner?.show_system_balance),
       },
     };
   },
@@ -86,6 +87,8 @@ export const countingListService = {
       list_status: string;
       sort_order: string;
       show_previous_counts: boolean;
+      /** Saldo do sistema liberado ao contador — decisão da LISTA (04/09). */
+      show_system_balance: boolean;
       inventory_id: string;
       inventory_name: string;
       warehouse: string;
@@ -112,9 +115,13 @@ export const countingListService = {
     listId: string,
     showPreviousCounts = false,
     sortOrder: 'ORIGINAL' | 'PRODUCT_CODE' | 'PRODUCT_DESCRIPTION' | 'LOCAL1' | 'LOCAL2' | 'LOCAL3' = 'ORIGINAL',
+    // Saldo e histórico são decisões SEPARADAS (04/09): liberar C1/C2 para
+    // resolver divergência não obriga a revelar o esperado.
+    showSystemBalance = false,
   ): Promise<unknown> {
     const { data } = await inventarioApi.post(`/counting-lists/${listId}/release`, {
       show_previous_counts: showPreviousCounts,
+      show_system_balance: showSystemBalance,
       sort_order: sortOrder,
     });
     return data;

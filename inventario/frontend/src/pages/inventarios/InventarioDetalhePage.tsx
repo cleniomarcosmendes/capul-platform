@@ -908,6 +908,8 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
   // Modal "Liberar Lista" com escolha de visibilidade e ordenação
   const [liberarDialog, setLiberarDialog] = useState<CountingList | null>(null);
   const [liberarShowPrev, setLiberarShowPrev] = useState(false);
+  // Saldo do sistema — decisão SEPARADA do histórico (migration 022, 04/09).
+  const [liberarShowSaldo, setLiberarShowSaldo] = useState(false);
   type SortOrder = 'ORIGINAL' | 'PRODUCT_CODE' | 'PRODUCT_DESCRIPTION' | 'LOCAL1' | 'LOCAL2' | 'LOCAL3';
   const [liberarSortOrder, setLiberarSortOrder] = useState<SortOrder>('ORIGINAL');
 
@@ -953,7 +955,7 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
     setLiberarDialog(null);
     setActionLoading(listId);
     try {
-      await countingListService.liberar(listId, liberarShowPrev, liberarSortOrder);
+      await countingListService.liberar(listId, liberarShowPrev, liberarSortOrder, liberarShowSaldo);
       onReload();
       toast.success('Lista liberada para contagem.');
     } catch (err: unknown) {
@@ -1552,7 +1554,37 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
               <div><span className="text-slate-500">Itens:</span> <strong className="text-slate-800">{liberarDialog.total_items ?? 0}</strong></div>
             </div>
 
-            {/* Checkbox visibilidade — controla saldo do sistema + contagens anteriores */}
+            {/* SALDO DO SISTEMA — a decisão mais forte, por isso vem primeiro.
+                Até 04/09 isto não era escolha: o saldo sumia para quem não fosse
+                ADMIN/SUPERVISOR, por PAPEL. Como `counter_cycle_*` aceita qualquer
+                usuário, um SUPERVISOR escalado para contar via o saldo de uma lista
+                cega — e ninguém era avisado. Agora quem decide é o supervisor aqui,
+                e vale para qualquer papel, inclusive ele mesmo. */}
+            <label className="flex items-start gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={liberarShowSaldo}
+                onChange={(e) => setLiberarShowSaldo(e.target.checked)}
+                className="mt-0.5"
+              />
+              <div className="flex-1 text-sm">
+                <p className="font-medium text-slate-800">Permitir ao contador ver o saldo do sistema</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Por padrao a contagem e <strong>cega</strong>, para qualquer papel — inclusive
+                  supervisor, quando e ele quem conta. Marque so em contagem-piloto ou
+                  conferencia acompanhada.
+                </p>
+              </div>
+            </label>
+
+            {/* Visibilidade dos CICLOS ANTERIORES — e só isso (03/09/2026).
+                O rótulo dizia "ver o saldo do sistema e contagens anteriores", mas a
+                flag NUNCA governou o saldo: `system_qty` some para OPERATOR sempre,
+                por papel, no backend (`aplicar_contagem_cega`). O supervisor desmarcava
+                achando que tornava a contagem cega — quando para o contador ela já era.
+                Pior: a tela de produto sem lote escondia o saldo seguindo a flag e a de
+                LOTE não, porque decide pela ausência do campo. Dava a impressão de que
+                o lote "furava" a regra. Ninguém furava: o rótulo é que mentia. */}
             <label className="flex items-start gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
               <input
                 type="checkbox"
@@ -1561,10 +1593,12 @@ function TabListas({ listas, inventoryId, inventoryStatus, onReload }: {
                 className="mt-0.5"
               />
               <div className="flex-1 text-sm">
-                <p className="font-medium text-slate-800">Permitir ao contador ver o saldo do sistema e contagens anteriores</p>
+                <p className="font-medium text-slate-800">Permitir ao contador ver as contagens anteriores</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Por padrao a contagem e cega. Marque apenas se for necessario (ex: contagem-piloto,
-                  validacao rapida pelo supervisor{liberarDialog.current_cycle >= 2 ? `, resolucao de divergencias C1${liberarDialog.current_cycle === 3 ? '/C2' : ''}` : ''}).
+                  <strong>O saldo do sistema nunca aparece para o contador</strong> — isso independe
+                  desta opcao. Aqui voce decide apenas se ele enxerga o que ja foi contado
+                  {liberarDialog.current_cycle >= 2 ? ` nos ciclos anteriores (C1${liberarDialog.current_cycle === 3 ? '/C2' : ''})` : ' em ciclos anteriores'}.
+                  Por padrao nao enxerga{liberarDialog.current_cycle >= 2 ? '; marque para resolver divergencias' : ''}.
                 </p>
               </div>
             </label>

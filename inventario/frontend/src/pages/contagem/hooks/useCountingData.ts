@@ -64,6 +64,8 @@ export function useCountingData(inventoryId: string, listIdHint?: string) {
   const [currentListName, setCurrentListName] = useState<string>('');
   const [currentCycle, setCurrentCycle] = useState(1);
   const [showPreviousCounts, setShowPreviousCounts] = useState(false);
+  // Saldo do sistema — decisão SEPARADA da lista (migration 022, 04/09).
+  const [showSystemBalance, setShowSystemBalance] = useState(false);
   // Lease do app (Fase 0 / item 0.5) — a lista pode estar baixada num aparelho.
   // Vem da listagem de listas, que o backend já devolve com o estado do lease.
   const [lease, setLease] = useState<{
@@ -184,6 +186,7 @@ export function useCountingData(inventoryId: string, listIdHint?: string) {
           setCurrentListName(res.data.list_name);
         }
         setShowPreviousCounts(Boolean(res.data?.show_previous_counts));
+        setShowSystemBalance(Boolean(res.data?.show_system_balance));
         setLease({
           ativo: Boolean(activeList.lease_ativo),
           deviceId: activeList.lease_device_id ?? null,
@@ -311,6 +314,7 @@ export function useCountingData(inventoryId: string, listIdHint?: string) {
     assignedLists,
     counterNames,
     showPreviousCounts,
+    showSystemBalance,
     lease,
   };
 }

@@ -19,6 +19,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { HistoricoContagemModal } from './components/HistoricoContagemModal';
 import type { CountingListProduct, LotCount } from '../../types';
 import { getExpectedQty, hasAnyEntregasPosterior } from '../../utils/cycles';
+import { rotuloVisibilidade, descricaoVisibilidade } from './rotuloVisibilidade';
 
 const filterOptions: { key: CountingFilter; label: string }[] = [
   { key: 'all', label: 'Todos' },
@@ -61,7 +62,7 @@ export function ContagemDesktopPage() {
     inventario, products, allProducts, loading, filter, setFilter, stats,
     currentListId, currentCycle, currentListName, getCountedQty, countCycleKey, updateProduct, reload,
     noAssignedList, listNotReleased, notCounterOfRequested, partialReviewMode,
-    allLists, assignedLists, counterNames, showPreviousCounts, lease,
+    allLists, assignedLists, counterNames, showPreviousCounts, showSystemBalance, lease,
   } = useCountingData(inventoryId!, listIdHint);
   const toast = useToast();
   // Carimba lista+ciclo na contagem e trata o conflito de dispositivo (Fase 0).
@@ -391,13 +392,18 @@ export function ContagemDesktopPage() {
             )}
             <span
               className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                showPreviousCounts ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                showSystemBalance
+                  ? 'bg-amber-100 text-amber-700'
+                  : showPreviousCounts
+                    ? 'bg-sky-100 text-sky-700'
+                    : 'bg-slate-100 text-slate-600'
               }`}
-              title={showPreviousCounts
-                ? 'Modo aberto: contador ve saldo do sistema e contagens anteriores'
-                : 'Modo cego: contador NAO ve saldo do sistema'}
+              /* 04/09 — saldo e historico viraram decisoes SEPARADAS (migration 022).
+                 Ambar so quando o SALDO esta liberado: e o que de fato tira o cego
+                 da contagem. Historico sozinho e informacao de apoio, nao alarme. */
+              title={descricaoVisibilidade(showSystemBalance, showPreviousCounts)}
             >
-              {showPreviousCounts ? 'Modo aberto' : 'Modo cego'}
+              {rotuloVisibilidade(showSystemBalance, showPreviousCounts).replace('· ', '')}
             </span>
             <span className="text-slate-500">Armazem: <strong className="text-slate-700">{inventario?.warehouse || '—'}</strong></span>
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${cycleColors[currentCycle] || cycleColors[1]}`}>

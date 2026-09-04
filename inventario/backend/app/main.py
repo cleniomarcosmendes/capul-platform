@@ -5610,7 +5610,10 @@ async def search_product_for_counting(
             # ⚠️ `balance` é o saldo do sistema POR LOTE (SB8010.b8_saldo): somando
             # os lotes o operador reconstruiria o esperado que a máscara acima acabou
             # de tirar. O `lot_number` fica — ele precisa saber QUAL lote conta.
-            mascarar_saldo_dos_lotes(lots, current_user, campo="balance")
+            # 04/09: a LISTA decide (`show_system_balance`), não o papel.
+            from app.api.v1.endpoints.counting_lists import lista_do_item
+            mascarar_saldo_dos_lotes(lots, current_user, campo="balance",
+                                     counting_list=lista_do_item(db, item.id))
         
         return {
             "found": True,
@@ -10257,7 +10260,7 @@ async def get_list_products(
                 raise ValueError("ID de lista inválido")
 
         # Buscar info da lista para o response wrapper
-        _list_info_q = text("SELECT list_name, current_cycle, show_previous_counts FROM inventario.counting_lists WHERE id = :lid LIMIT 1")
+        _list_info_q = text("SELECT list_name, current_cycle, show_previous_counts, show_system_balance FROM inventario.counting_lists WHERE id = :lid LIMIT 1")
         _list_info = db.execute(_list_info_q, {"lid": str(list_uuid)}).fetchone()
         _list_name = _list_info.list_name if _list_info else ""
         _current_cycle = _list_info.current_cycle if _list_info else 1
@@ -10592,6 +10595,8 @@ async def get_list_products(
                 "list_id": str(list_uuid),
                 "list_name": _list_name,
                 "show_previous_counts": _show_previous_counts,
+                # Decisão SEPARADA do histórico (04/09): a tela usa esta para o saldo.
+                "show_system_balance": bool(getattr(_list_info, "show_system_balance", False)) if _list_info else False,
             }
         }
 

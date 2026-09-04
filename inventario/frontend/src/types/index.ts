@@ -145,6 +145,8 @@ export interface CountingList {
   counted_items?: number;
   pending_items?: number;
   show_previous_counts?: boolean;
+  /** Saldo do sistema liberado ao contador (migration 022). */
+  show_system_balance?: boolean;
   // Sort order definido no Liberar (migration 013) — define ordem dos produtos para o contador
   sort_order?: 'ORIGINAL' | 'PRODUCT_CODE' | 'PRODUCT_DESCRIPTION' | 'LOCAL1' | 'LOCAL2' | 'LOCAL3';
   // Fase 1.5 — quem decide se a lista cabe no app é o SERVIDOR (o teto é
@@ -392,6 +394,7 @@ export interface CountingListProductsResponse {
     list_name: string;
     products: CountingListProduct[];
     show_previous_counts?: boolean;
+    show_system_balance?: boolean;
   };
 }
 

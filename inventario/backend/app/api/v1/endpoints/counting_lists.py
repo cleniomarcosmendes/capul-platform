@@ -82,10 +82,44 @@ def _contar_itens_da_lista(db: Session, list_id) -> int:
 
 def _is_staff(user) -> bool:
     """ADMIN/SUPERVISOR. Aceita Enum ou string — o campo role aparece das duas
-    formas dependendo de como o usuário foi carregado (UNIFIED_AUTH x tabela)."""
+    formas dependendo de como o usuário foi carregado (UNIFIED_AUTH x tabela).
+
+    ⚠️ Para decidir quem vê o SALDO use `ve_saldo_do_sistema()`, não esta função:
+    desde 04/09 quem decide é a LISTA, não o papel. Ver a docstring de lá.
+    """
     role = getattr(user, "role", None)
     role = getattr(role, "value", role)
     return str(role).upper() in ("ADMIN", "SUPERVISOR")
+
+
+def ve_saldo_do_sistema(user, counting_list) -> bool:
+    """
+    O usuário pode ver o SALDO DO SISTEMA nesta lista?
+
+    ⭐ 04/09/2026 — quem decide é a LISTA, não o PAPEL.
+
+    Antes bastava ser ADMIN/SUPERVISOR. O pressuposto era "staff supervisiona, não
+    conta" — mas `counter_cycle_1/2/3` aceita QUALQUER usuário, e duas listas
+    liberadas como CEGAS foram contadas por um SUPERVISOR que viu o saldo do começo
+    ao fim. A lista seguia marcada como cega e ninguém era avisado: a contagem
+    deixava de ser cega em silêncio, que é o pior jeito de deixar de ser.
+
+    Agora o supervisor decide ao liberar (`show_system_balance`, default FALSE) e a
+    decisão vale para qualquer papel — inclusive para ele mesmo, se for o contador.
+
+    ADMIN mantém o bypass: é quem dá suporte e precisa enxergar o dado para explicar
+    divergência. SUPERVISOR não, justamente porque é quem costuma ser escalado para
+    contar.
+
+    Distinta de `show_previous_counts`, que libera as contagens de ciclos ANTERIORES
+    — no 3º ciclo é legítimo liberar C1/C2 para resolver divergência sem revelar o
+    esperado.
+    """
+    role = getattr(user, "role", None)
+    role = getattr(role, "value", role)
+    if str(role).upper() == "ADMIN":
+        return True
+    return bool(getattr(counting_list, "show_system_balance", False))
 
 
 # Campos que revelam o saldo do sistema. Nomes variam entre os endpoints, por
@@ -114,7 +148,33 @@ _LISTAS_DE_LOTE = (
 )
 
 
-def mascarar_saldo_dos_lotes(lots: list, user, campo: str = "system_qty") -> list:
+def lista_do_item(db, inventory_item_id):
+    """
+    A lista de contagem à qual este item pertence — para decidir se o saldo aparece.
+
+    Existe porque endpoints que devolvem lote (`/inventory/.../lots`, busca de
+    produto) recebem só o `inventory_item_id` e precisam da lista para consultar
+    `show_system_balance`. Sem ela, `ve_saldo_do_sistema` esconde o saldo por
+    precaução — correto como padrão, mas esconderia também do supervisor legítimo.
+
+    Devolve None se o item não estiver em lista nenhuma: aí o saldo some, que é o
+    lado seguro de errar.
+    """
+    from sqlalchemy import text as _text
+    try:
+        row = db.execute(_text("""
+            SELECT cl.show_system_balance, cl.show_previous_counts, cl.current_cycle
+            FROM inventario.counting_list_items cli
+            JOIN inventario.counting_lists cl ON cl.id = cli.counting_list_id
+            WHERE cli.inventory_item_id = :item_id
+            LIMIT 1
+        """), {"item_id": str(inventory_item_id)}).fetchone()
+        return row
+    except Exception:  # noqa: BLE001 — sem a lista, o saldo some; não derruba a request
+        return None
+
+
+def mascarar_saldo_dos_lotes(lots: list, user, campo: str = "system_qty", counting_list=None) -> list:
     """
     Mesma projeção da contagem cega, para endpoints que devolvem SÓ lotes.
 
@@ -129,11 +189,14 @@ def mascarar_saldo_dos_lotes(lots: list, user, campo: str = "system_qty") -> lis
     rotas espalhadas entre `main.py` e `api/v1/endpoints/`. Endpoint novo que
     devolva saldo por lote precisa passar por aqui.
 
-    Não recebe `counting_list`: `system_qty` é saldo do sistema e some para
-    OPERATOR sempre, independente de `show_previous_counts` — aquilo governa
-    ciclos anteriores, não o esperado.
+    ⭐ 04/09/2026 — passou a RECEBER `counting_list`. Antes decidia por papel
+    (`_is_staff`), e um SUPERVISOR escalado como contador via o saldo por lote de
+    uma lista cega. Quem decide agora é a lista (`ve_saldo_do_sistema`).
+
+    `counting_list=None` mantém o comportamento seguro — sem a lista não há
+    autorização, então o saldo some. Chamada nova deve passar a lista.
     """
-    if _is_staff(user):
+    if ve_saldo_do_sistema(user, counting_list):
         return lots
 
     for lote in lots or []:
@@ -146,10 +209,15 @@ def aplicar_contagem_cega(product_data: dict, user, counting_list) -> dict:
     """
     Fase 0 / item 0.2 — projeção server-side da CONTAGEM CEGA.
 
-    Contagem cega só é cega se o OPERATOR não chega ao saldo por nenhum caminho.
+    Contagem cega só é cega se QUEM CONTA não chega ao saldo por nenhum caminho.
     Até aqui quem escondia era o frontend, o que quer dizer que qualquer cliente
     com o JWT do OPERATOR lia o saldo. Com o app offline isso pioraria: o payload
     passaria a ficar PERSISTIDO no aparelho do operador.
+
+    ⭐ 04/09/2026 — o critério deixou de ser o PAPEL e passou a ser a LISTA
+    (`ve_saldo_do_sistema`). O texto abaixo fala em "OPERATOR" por ser o caso mais
+    comum, mas a regra vale para qualquer contador: um SUPERVISOR escalado como
+    contador de lista cega também não vê o saldo.
 
     ⚠️ Isto NÃO é `require_staff_role` no endpoint. Existe nota antiga dizendo
     para não bloquear estes endpoints server-side — e está certa: o OPERATOR
@@ -180,7 +248,7 @@ def aplicar_contagem_cega(product_data: dict, user, counting_list) -> dict:
     do operador, que é exatamente o cenário que esta função foi criada para
     evitar. Fechado antes de implementar o lote no app.
     """
-    if _is_staff(user):
+    if ve_saldo_do_sistema(user, counting_list):
         return product_data
 
     for campo in _CAMPOS_SALDO:
@@ -345,6 +413,7 @@ async def get_inventory_counting_lists(
             "created_by": str(cl.created_by) if cl.created_by else None,
             "updated_at": cl.updated_at.isoformat() if cl.updated_at else None,
             "show_previous_counts": bool(cl.show_previous_counts),
+            "show_system_balance": bool(cl.show_system_balance),
             # Fase 1.5 — quem responde se a lista cabe no app é o SERVIDOR, não a
             # tela: o teto é configurável e a comparação tem que morar num lugar
             # só. Sem isto o aviso só existiria no momento de montar a lista e
@@ -381,6 +450,7 @@ async def my_counting_lists(
         SELECT
             cl.id, cl.list_name, cl.current_cycle, cl.list_status, cl.sort_order,
             cl.show_previous_counts,
+            cl.show_system_balance,
             -- Item 0.5: estado do lease já na listagem, para o contador ver que
             -- a lista está baixada num aparelho ANTES de abrir e começar.
             cl.lease_token, cl.lease_device_id, cl.lease_user_id, cl.lease_at,
@@ -427,6 +497,7 @@ async def my_counting_lists(
             "list_status": row.list_status,
             "sort_order": row.sort_order or 'ORIGINAL',
             "show_previous_counts": bool(row.show_previous_counts),
+            "show_system_balance": bool(row.show_system_balance),
             "inventory_id": str(row.inventory_id),
             "inventory_name": row.inventory_name,
             "warehouse": row.warehouse,
@@ -771,8 +842,13 @@ async def release_counting_list(
     Liberar uma lista de contagem para início das contagens.
 
     Body opcional:
+    - show_system_balance (bool): permite ao contador ver o SALDO do sistema.
+      Default false (contagem cega). Vale para QUALQUER papel — inclusive o
+      supervisor, quando é ele o contador. Sempre resetado a cada release.
     - show_previous_counts (bool): permite ao contador ver C1/C2 anteriores.
       Default false (contagem cega). Sempre resetado a cada release.
+      Decisão SEPARADA do saldo: no 3º ciclo é legítimo liberar C1/C2 para
+      resolver divergência sem revelar o esperado.
     - sort_order (str): ordem em que os produtos aparecem para o contador.
       Valores: ORIGINAL, PRODUCT_CODE, PRODUCT_DESCRIPTION, LOCAL1, LOCAL2, LOCAL3.
       Default ORIGINAL. Imutável até a próxima liberação (devolver+liberar pra mudar).
@@ -819,9 +895,13 @@ async def release_counting_list(
     counting_list.released_at = func.now()
     counting_list.released_by = current_user.id
 
-    # Visibilidade de C1/C2 — sempre resetada na liberação (default false = cega)
+    # Visibilidade — as DUAS resetadas na liberação (default false = cega).
+    # Decisões separadas de propósito: liberar o histórico de C1/C2 para resolver
+    # divergência não obriga a revelar o saldo do sistema.
     show_prev = bool((payload or {}).get('show_previous_counts', False))
     counting_list.show_previous_counts = show_prev
+    show_saldo = bool((payload or {}).get('show_system_balance', False))
+    counting_list.show_system_balance = show_saldo
 
     # Ordem dos produtos — definida no Liberar, imutável até próxima liberação
     valid_sort_orders = {'ORIGINAL', 'PRODUCT_CODE', 'PRODUCT_DESCRIPTION', 'LOCAL1', 'LOCAL2', 'LOCAL3'}

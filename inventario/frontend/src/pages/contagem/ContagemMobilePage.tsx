@@ -13,6 +13,7 @@ import { extractApiError } from '../../utils/errors';
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, Loader2, Layers, CheckCircle2, Send } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import type { LotCount } from '../../types';
+import { rotuloVisibilidade } from './rotuloVisibilidade';
 
 const cycleColors = ['', 'bg-green-600', 'bg-amber-600', 'bg-red-600'];
 
@@ -25,7 +26,7 @@ export function ContagemMobilePage() {
     inventario, products, loading, stats,
     currentListId, currentCycle, currentListName, getCountedQty, countCycleKey, updateProduct,
     noAssignedList, listNotReleased, notCounterOfRequested, partialReviewMode,
-    allLists, assignedLists, counterNames, showPreviousCounts, reload, lease,
+    allLists, assignedLists, counterNames, showPreviousCounts, showSystemBalance, reload, lease,
   } = useCountingData(inventoryId!, listIdHint);
   const toast = useToast();
   // Carimba lista+ciclo na contagem e trata o conflito de dispositivo (Fase 0).
@@ -398,7 +399,9 @@ export function ContagemMobilePage() {
           </div>
           {currentListName && (
             <div className="text-[11px] opacity-90 truncate">
-              {currentListName} {showPreviousCounts ? '· aberto' : '· cego'}
+              {/* "aberto" sugeria que o contador enxerga tudo — o saldo nunca chega
+                  a ele. A flag libera so o historico de ciclos anteriores (03/09). */}
+              {currentListName} {rotuloVisibilidade(showSystemBalance, showPreviousCounts)}
             </div>
           )}
         </div>
@@ -530,7 +533,9 @@ export function ContagemMobilePage() {
                 </div>
               )}
               {/* Saldo sistema só visível quando lista foi liberada com permissão (não-cega) */}
-              {showPreviousCounts && (
+              {/* 04/09: o SALDO segue `showSystemBalance`; `showPreviousCounts`
+                  governa só o histórico de C1/C2 logo abaixo. */}
+              {showSystemBalance && (
                 <div>
                   <p className="text-xs text-slate-400">Saldo sistema</p>
                   <p className="text-sm font-medium tabular-nums text-slate-700">

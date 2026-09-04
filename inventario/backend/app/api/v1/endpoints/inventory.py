@@ -986,8 +986,10 @@ async def get_item_lots_snapshot(
     # máscara do `/counting-lists/{id}/products` tinha acabado de remover. É o
     # segundo endpoint da mesma classe — o primeiro foi fechado horas antes, e
     # este passou porque a rota vive em outro arquivo.
-    from app.api.v1.endpoints.counting_lists import mascarar_saldo_dos_lotes
-    mascarar_saldo_dos_lotes(lots_data, current_user)
+    from app.api.v1.endpoints.counting_lists import mascarar_saldo_dos_lotes, lista_do_item
+    # 04/09: passa a LISTA — quem decide se o saldo aparece é ela
+    # (`show_system_balance`), não mais o papel de quem pede.
+    mascarar_saldo_dos_lotes(lots_data, current_user, counting_list=lista_do_item(db, item_id))
 
     logger.info(f"✅ {len(lots_data)} lote(s) encontrado(s) no snapshot para item {item_id}")
 
