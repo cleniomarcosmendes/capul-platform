@@ -205,7 +205,7 @@ model Criterio {
   nome          String
   descricao     String?
   origem        OrigemValorCriterio
-  tipoValor     TipoValorCriterio
+  tipoValor     TipoValorCriterio   @map("tipo_valor")
   /// Só para CALCULADO. Deve casar com um resolver registrado no backend —
   /// validar na publicação do modelo, senão o critério retorna vazio para
   /// todo mundo em silêncio.

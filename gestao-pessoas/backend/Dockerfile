@@ -27,6 +27,12 @@ COPY --from=builder --chown=appuser:appgroup /app/package*.json ./
 COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
 COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
 COPY --from=builder --chown=appuser:appgroup /app/prisma ./prisma
+# O seed roda por `npx prisma db seed` DENTRO do container (padrao da casa) e e
+# TypeScript: precisa dos tsconfig e do `src`, porque prisma/seed.ts importa
+# src/modelo/distribuir-peso. Sem isto o seed falha so na hora de semear, que e
+# tarde — descoberto subindo no DEV em 05/09/2026.
+COPY --from=builder --chown=appuser:appgroup /app/tsconfig.json /app/tsconfig.seed.json ./
+COPY --from=builder --chown=appuser:appgroup /app/src ./src
 USER appuser
 ENV NODE_ENV=production
 ENV TZ=America/Sao_Paulo

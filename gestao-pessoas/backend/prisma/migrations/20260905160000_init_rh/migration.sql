@@ -120,7 +120,7 @@ CREATE TABLE "rh"."criterio" (
     "nome" TEXT NOT NULL,
     "descricao" TEXT,
     "origem" "rh"."OrigemValorCriterio" NOT NULL,
-    "tipoValor" "rh"."TipoValorCriterio" NOT NULL,
+    "tipo_valor" "rh"."TipoValorCriterio" NOT NULL,
     "codigo_calculo" VARCHAR(40),
     "unidade" VARCHAR(20),
     "ativo" BOOLEAN NOT NULL DEFAULT true,
