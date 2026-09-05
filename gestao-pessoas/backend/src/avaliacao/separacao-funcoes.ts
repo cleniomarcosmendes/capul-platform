@@ -93,6 +93,36 @@ export function marcarRestricoes<T extends { avaliadoId: string }>(
 }
 
 /**
+ * ⭐ ESCOPO DA REAPURAÇÃO EM MASSA.
+ *
+ * Com a separação entre avaliar e apurar, mudar um peso deixou de exigir
+ * reabertura: reapura-se e pronto. Mas reapuração é ato de CICLO, rodado pelo
+ * RH_ADMIN — que é a gestora, que está dentro do ciclo. Bloqueá-la pela regra do
+ * §1 faria a linha dela ficar desatualizada e o total não fechar; então a
+ * reapuração processa todo mundo, inclusive ela.
+ *
+ * ⚠️ O que fecha a porta dos fundos: **a reapuração não aceita filtro que a
+ * reduza a uma pessoa.** Ou é o ciclo inteiro, ou é uma aplicação — nunca por
+ * colaborador. Sem isto, bastaria escolher o filtro que isola a própria linha
+ * para contornar a separação de funções por um caminho legítimo.
+ *
+ * "Recalcular ESTA avaliação", apontando para um registro, continua sendo ato
+ * individual e passa por `assertNaoEhProprioAvaliado` — 403 no próprio.
+ */
+export type EscopoReapuracao =
+  | { tipo: 'CICLO'; cicloId: string }
+  | { tipo: 'APLICACAO'; aplicacaoId: string };
+
+export function assertEscopoReapuracaoValido(escopo: EscopoReapuracao): void {
+  if (escopo.tipo === 'CICLO' && escopo.cicloId) return;
+  if (escopo.tipo === 'APLICACAO' && escopo.aplicacaoId) return;
+  throw new ForbiddenException(
+    'A reapuração só pode ser feita por ciclo inteiro ou por aplicação. ' +
+      'Recortar por colaborador contornaria a separação de funções.',
+  );
+}
+
+/**
  * Conflito mais fraco: o AVALIADO é uma das pessoas que montaram e ponderaram o
  * instrumento pelo qual está sendo avaliado.
  *

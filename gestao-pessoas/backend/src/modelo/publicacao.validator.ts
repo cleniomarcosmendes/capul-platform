@@ -1,41 +1,37 @@
 /**
  * VALIDAÇÃO DE PUBLICAÇÃO DO MODELO (§4.6).
  *
- * Publicar é o ponto sem volta: a versão publicada é imutável, e a partir dela
- * saem notas com consequência de mérito. Tudo que puder ser conferido, é
- * conferido aqui — e a mensagem tem de dizer **qual grupo** e **o que fazer**,
- * porque quem lê é o RH, não quem escreveu o código.
+ * Publicar é o ponto sem volta: a versão publicada é imutável, e dela saem notas
+ * com consequência de mérito. Tudo que puder ser conferido é conferido aqui, e a
+ * mensagem tem de dizer QUAL grupo, QUAL pergunta e o que fazer — quem lê é o
+ * RH, não quem escreveu o código.
  *
- * A checagem central é a do `codigoCalculo`. Desde que `TipoCriterio` virou
- * catálogo (`rh.criterio`), o vínculo entre a linha que o RH administra e o
- * código que calcula é uma STRING — e string errada não quebra nada: o critério
- * devolve vazio, em silêncio, para todas as pessoas do ciclo. O grupo vira
- * `semDado`, sai da renormalização (§4.3) e a nota final de todo mundo muda sem
- * um erro sequer. É barato de causar (um caractere no cadastro) e caro de achar
- * depois, com as notas já fechadas.
+ * ⚠️ Desde a reestruturação de 05/09/2026 o modelo é **só o questionário**:
+ *   • **Grupo não tem peso** — é organização visual (título + ordem). Todo o
+ *     peso está em `Pergunta.peso`. Peso em dois níveis tornava impossível
+ *     prever o efeito de mudar um número.
+ *   • **Critérios cadastrais não estão aqui.** Escolaridade, tempo de casa e
+ *     cursos vivem na APLICAÇÃO (`AplicacaoCriterio`), e quem os valida é
+ *     `ciclo/abertura.validator.ts`. Por isso este arquivo não fala em critério.
  *
- * Validador PURO: sem Prisma e sem Nest, para o service poder chamá-lo em
- * qualquer ponto e para o teste não precisar de banco.
+ * A tela de montagem deve mostrar o **somatório de pesos por grupo**, para o RH
+ * enxergar o balanço sem calcular na mão — `somatorioPorGrupo()` abaixo serve
+ * a tela e o teste com o mesmo código.
  */
-import { codigosRegistrados, resolverRegistrado } from '../calculo/resolvers/registry.js';
 
-export type OrigemGrupo = 'MANUAL' | 'AUTOMATICO';
-export type OrigemValorCriterio = 'CALCULADO' | 'INFORMADO';
-
-/** O recorte de `rh.criterio` de que a validação precisa. */
-export interface CriterioDoGrupo {
-  codigo: string;
-  nome: string;
-  origem: OrigemValorCriterio;
-  codigoCalculo?: string | null;
-  ativo: boolean;
+export interface AlternativaParaPublicacao {
+  valor: number;
 }
 
-/** O recorte de `rh.grupo` de que a validação precisa. */
+export interface PerguntaParaPublicacao {
+  enunciado: string;
+  peso: number;
+  alternativas: readonly AlternativaParaPublicacao[];
+}
+
 export interface GrupoParaPublicacao {
   titulo: string;
-  origem: OrigemGrupo;
-  criterio?: CriterioDoGrupo | null;
+  perguntas: readonly PerguntaParaPublicacao[];
 }
 
 export class ModeloNaoPublicavelError extends Error {
@@ -46,68 +42,88 @@ export class ModeloNaoPublicavelError extends Error {
 }
 
 /**
- * Devolve a lista de problemas — vazia quando o modelo pode ser publicado.
- * Junta TODOS os problemas em vez de parar no primeiro: quem está cadastrando
- * corrige de uma vez, em vez de descobrir um erro por tentativa.
+ * Denominador da nota do questionário:
+ *   Σ (maior valor de alternativa da pergunta × peso da pergunta)
+ *
+ * É o que grava `ModeloVersao.pontuacaoMaxima` na publicação — **calculado,
+ * nunca constante**. O modelo antigo dividia por 18 fixo: acrescentar uma
+ * pergunta fazia a nota passar de 100 sem acusar erro.
  */
-export function validarCriteriosDoModelo(grupos: readonly GrupoParaPublicacao[]): string[] {
+export function pontuacaoMaxima(grupos: readonly GrupoParaPublicacao[]): number {
+  return grupos
+    .flatMap((g) => g.perguntas)
+    .reduce((total, p) => total + maiorValor(p) * p.peso, 0);
+}
+
+/** Somatório de pesos por grupo — o balanço que a tela de montagem exibe. */
+export function somatorioPorGrupo(
+  grupos: readonly GrupoParaPublicacao[],
+): { titulo: string; pesoTotal: number; percentual: number }[] {
+  const geral = grupos.flatMap((g) => g.perguntas).reduce((s, p) => s + p.peso, 0);
+  return grupos.map((g) => {
+    const pesoTotal = g.perguntas.reduce((s, p) => s + p.peso, 0);
+    return {
+      titulo: g.titulo,
+      pesoTotal,
+      percentual: geral > 0 ? (pesoTotal / geral) * 100 : 0,
+    };
+  });
+}
+
+function maiorValor(p: PerguntaParaPublicacao): number {
+  return p.alternativas.length ? Math.max(...p.alternativas.map((a) => a.valor)) : 0;
+}
+
+/**
+ * Devolve a lista de problemas — vazia quando o modelo pode ser publicado.
+ * Junta TODOS em vez de parar no primeiro: quem está cadastrando corrige de uma
+ * vez, em vez de descobrir um erro por tentativa.
+ */
+export function validarModeloParaPublicacao(grupos: readonly GrupoParaPublicacao[]): string[] {
   const problemas: string[] = [];
 
-  if (grupos.length === 0) {
-    problemas.push('O modelo não tem nenhum grupo.');
-  }
+  if (grupos.length === 0) problemas.push('O modelo não tem nenhum grupo.');
 
   for (const grupo of grupos) {
     const onde = `Grupo "${grupo.titulo}"`;
-
-    if (grupo.origem === 'MANUAL') {
-      // Grupo manual é respondido pelo avaliador; um critério pendurado nele
-      // seria ignorado no cálculo — silêncio de novo, com outro disfarce.
-      if (grupo.criterio) {
-        problemas.push(
-          `${onde}: é MANUAL (respondido pelo avaliador) mas está vinculado ao critério ` +
-            `"${grupo.criterio.nome}". Remova o vínculo ou mude a origem para AUTOMÁTICO.`,
-        );
-      }
+    if (grupo.perguntas.length === 0) {
+      problemas.push(`${onde}: não tem nenhuma pergunta. Remova o grupo ou acrescente perguntas.`);
       continue;
     }
 
-    const criterio = grupo.criterio;
-    if (!criterio) {
-      problemas.push(`${onde}: é AUTOMÁTICO e não aponta para nenhum critério do catálogo.`);
-      continue;
-    }
+    for (const pergunta of grupo.perguntas) {
+      const qual = `${onde}, pergunta "${pergunta.enunciado}"`;
 
-    if (!criterio.ativo) {
-      problemas.push(
-        `${onde}: usa o critério "${criterio.nome}" (${criterio.codigo}), que está INATIVO no catálogo.`,
-      );
-    }
-
-    if (criterio.origem === 'CALCULADO') {
-      const codigo = (criterio.codigoCalculo ?? '').trim();
-      if (!codigo) {
+      if (pergunta.alternativas.length < 2) {
         problemas.push(
-          `${onde}: o critério "${criterio.nome}" é CALCULADO e está sem código de cálculo. ` +
-            `Códigos disponíveis: ${codigosRegistrados().join(', ')}.`,
-        );
-      } else if (!resolverRegistrado(codigo)) {
-        problemas.push(
-          `${onde}: o critério "${criterio.nome}" aponta para o código de cálculo "${codigo}", ` +
-            `que não existe no sistema. Sem isso o critério ficaria em branco para todos os ` +
-            `avaliados, sem acusar erro. Códigos disponíveis: ${codigosRegistrados().join(', ')}.`,
+          `${qual}: tem ${pergunta.alternativas.length} alternativa(s). ` +
+            'Uma pergunta com menos de duas não mede nada.',
         );
       }
-    } else if ((criterio.codigoCalculo ?? '').trim()) {
-      // INFORMADO com codigoCalculo preenchido: alguém trocou a origem depois de
-      // cadastrar e o campo ficou para trás. O valor virá da importação e o
-      // código seria ignorado — melhor recusar do que fingir que os dois valem.
-      problemas.push(
-        `${onde}: o critério "${criterio.nome}" é INFORMADO (valor importado ou digitado) ` +
-          `mas tem código de cálculo "${criterio.codigoCalculo}". Limpe o código de cálculo ` +
-          `ou mude a origem do critério para CALCULADO.`,
-      );
+      if (!(pergunta.peso > 0)) {
+        // Peso 0 numa pergunta obrigatória é o pior dos dois mundos: o avaliador
+        // é obrigado a responder e a resposta não conta para nada.
+        problemas.push(
+          `${qual}: peso ${pergunta.peso}. Toda pergunta é obrigatória de responder, ` +
+            'então peso zero ou negativo faria o avaliador trabalhar à toa.',
+        );
+      }
+      if (pergunta.alternativas.length > 0 && !(maiorValor(pergunta) > 0)) {
+        problemas.push(
+          `${qual}: todas as alternativas valem zero — não há como pontuar esta pergunta.`,
+        );
+      }
     }
+  }
+
+  // Guarda final contra divisão por zero na nota do questionário — só quando
+  // nada mais foi apontado. Um grupo vazio já zera a pontuação máxima, e
+  // acrescentar "a pontuação máxima é zero" ao lado de "o grupo não tem
+  // pergunta" só empilha ruído sobre a causa real, para quem lê consertar.
+  if (problemas.length === 0 && grupos.length > 0 && !(pontuacaoMaxima(grupos) > 0)) {
+    problemas.push(
+      'A pontuação máxima do modelo é zero — com este modelo nenhuma nota poderia ser calculada.',
+    );
   }
 
   return problemas;
@@ -115,6 +131,6 @@ export function validarCriteriosDoModelo(grupos: readonly GrupoParaPublicacao[])
 
 /** Mesma validação, em forma de guarda. Use na publicação. */
 export function assertModeloPublicavel(grupos: readonly GrupoParaPublicacao[]): void {
-  const problemas = validarCriteriosDoModelo(grupos);
+  const problemas = validarModeloParaPublicacao(grupos);
   if (problemas.length > 0) throw new ModeloNaoPublicavelError(problemas);
 }

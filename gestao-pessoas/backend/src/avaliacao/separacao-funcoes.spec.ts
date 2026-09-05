@@ -1,5 +1,6 @@
 import {
   MOTIVO_ACESSO_RESTRITO,
+  assertEscopoReapuracaoValido,
   assertNaoEhProprioAvaliado,
   conflitoDeInstrumento,
   ehProprioAvaliado,
@@ -72,5 +73,28 @@ describe('conflitoDeInstrumento', () => {
     // Por isso a função não recebe o usuário logado: o conflito é o mesmo para o
     // avaliador, para o RH e no relatório.
     expect(conflitoDeInstrumento.length).toBe(2);
+  });
+});
+
+describe('⭐ escopo da reapuração em massa', () => {
+  it('aceita ciclo inteiro', () => {
+    expect(() => assertEscopoReapuracaoValido({ tipo: 'CICLO', cicloId: 'c1' })).not.toThrow();
+  });
+
+  it('aceita uma aplicação', () => {
+    expect(() => assertEscopoReapuracaoValido({ tipo: 'APLICACAO', aplicacaoId: 'a1' })).not.toThrow();
+  });
+
+  it('recusa escopo sem alvo — seria "reapurar o quê?"', () => {
+    expect(() => assertEscopoReapuracaoValido({ tipo: 'CICLO', cicloId: '' })).toThrow(/ciclo inteiro/);
+    expect(() => assertEscopoReapuracaoValido({ tipo: 'APLICACAO', aplicacaoId: '' })).toThrow();
+  });
+
+  it('a mensagem diz por que não existe recorte por colaborador', () => {
+    // A porta dos fundos: escolher o filtro que isola a própria linha
+    // contornaria a separação de funções por um caminho legítimo.
+    expect(() => assertEscopoReapuracaoValido({ tipo: 'CICLO', cicloId: '' })).toThrow(
+      /separação de funções/,
+    );
   });
 });
