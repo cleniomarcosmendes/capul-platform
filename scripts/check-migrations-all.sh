@@ -14,7 +14,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-declare -a BACKENDS=("auth-gateway" "fiscal/backend" "gestao-ti/backend" "logistica/backend")
+declare -a BACKENDS=("auth-gateway" "fiscal/backend" "gestao-ti/backend" "logistica/backend" "gestao-pessoas/backend")
 declare -a FAILED=()
 
 for backend in "${BACKENDS[@]}"; do

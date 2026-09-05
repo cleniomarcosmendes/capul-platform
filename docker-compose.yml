@@ -739,6 +739,49 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # ============================================================
+  # Módulo Gestão de Pessoas (Avaliação de Desempenho) — scaffold.
+  # Schema próprio `rh` (aditivo, isolado). Porta 3004.
+  # Sem frontend ainda: o módulo nasce INATIVO em core.modulos_sistema, então
+  # não aparece como card no Hub. O backend sobe só com /health — o que importa
+  # nesta fase é o init job aplicar a migration do schema `rh`.
+  # ============================================================
+  gestao-pessoas-migrate:
+    build: ./gestao-pessoas/backend
+    container_name: capul-gestao-pessoas-migrate
+    command: ["sh", "-c", "npx prisma migrate deploy"]
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
+  gestao-pessoas-backend:
+    build:
+      context: ./gestao-pessoas/backend
+      args:
+        APP_COMMIT: ${APP_COMMIT:-desconhecido}
+        APP_BUILD_TIME: ${APP_BUILD_TIME:-}
+    container_name: capul-gestao-pessoas-api
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
+      JWT_SECRET: ${JWT_SECRET}
+      NODE_ENV: production
+      PORT: 3004
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      gestao-pessoas-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 0.5
+
   # ──────────────────────────────────────────────────────────────────────────
   # OSRM — distância REAL de rua p/ a sugestão de ordem (Logística Fase 1c pt2).
   # OPT-IN: não sobe no `up` padrão (tem profile). Antes de ligar, rodar UMA vez

@@ -5,6 +5,7 @@ import {
   Package,
   Monitor,
   Settings,
+  Users,
   LogOut,
   User,
   Building2,
@@ -16,6 +17,7 @@ const ICONE_MAP: Record<string, typeof Package> = {
   package: Package,
   monitor: Monitor,
   settings: Settings,
+  users: Users,
 };
 
 function ModuloCard({ modulo }: { modulo: ModuloUsuario }) {

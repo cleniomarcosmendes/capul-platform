@@ -40,6 +40,7 @@ Plataforma corporativa modular com microservicos independentes:
 | **Inventario Backend** | FastAPI + Python 3.11 | 8000 | `inventario` |
 | **Inventario Frontend** | React 19 + Vite 7 + Tailwind v4 | 5174 | - |
 | **Logistica Backend** | NestJS 11 + Prisma 6 | 3003 | `logistica` (+ `core` RO) |
+| **Gestao Pessoas Backend** | NestJS 11 + Prisma 6 | 3004 | `rh` (+ `core` RO) |
 | **Logistica Frontend** | React 19 + Vite 7 + Tailwind v4 | 5177 | - |
 | **PostgreSQL** | PostgreSQL 16 | 5432 | Multi-schema |
 | **Redis** | Redis 7 | 6379 | Cache/sessoes |
@@ -182,6 +183,35 @@ Plataforma corporativa modular com microservicos independentes:
 - Suite Jest + logging pino + auditoria de migrations (hardening da Fase 1a)
 - **Fase 1b** (app entregador + prova de entrega/cofre + device-sessions): plano em `C:\Arquivos-de-projeto\clenio\Sistema de Rota\007_Fase1b_Plano_PRs.md`. PR 1b.1 (device-sessions no auth-gateway) feito em branch `feat/device-sessions`
 - Docs/decisoes: `C:\Arquivos-de-projeto\clenio\Sistema de Rota\` (002 spec, 003 adendo, 004 Fase1a, 007 Fase1b) + `memory/project_modulo_entregas_proximo.md`
+
+### 8. Gestao de Pessoas (`/gestao-pessoas`) *(em desenvolvimento — Set/2026 — piloto 15/09)*
+- Avaliacao de desempenho: ciclos, questionario **por perfil de centro de custo**
+  (a melhoria pedida — o modelo antigo aplicava as mesmas 15 perguntas a ~1.000 pessoas),
+  grupos ponderados, motor de calculo com renormalizacao.
+- Backend NestJS 11 + Prisma 6 (schema `rh` + `core` read-only via `$queryRaw`), porta 3004,
+  prefixo `/api/v1/gestao-pessoas`. **Sem frontend ainda** — o modulo nasce INATIVO em
+  `core.modulos_sistema` e nao aparece no Hub.
+- **⭐ Colaborador mora em `rh`, nao em `core`** (ADR-RH-01, `docs/ADR-RH-01-*.md`), com
+  gatilho de revisao: quando um 2o modulo precisar de colaborador, reabre. Nenhum outro
+  modulo consulta `rh.colaborador` direto — so pelo service do gestao-pessoas.
+- **⭐⭐ Separacao de funcoes**: ninguem abre, edita, reabre ou recalcula a avaliacao em que
+  e o AVALIADO — nem RH_ADMIN, nem ADMIN. Verificacao por REGISTRO
+  (`colaboradorId === avaliadoId`), nunca por papel. Decorre disso que **RH_ADMIN precisa
+  ser dado a duas pessoas**: a gestora tambem e avaliada, e com um so ninguem corrigiria a
+  avaliacao dela. Lista de designacao e relatorio **mostram a linha marcada, nunca filtram
+  em silencio** — filtrar faria o total nao fechar.
+- **⭐ "Ativo" tem UMA definicao** (`src/common/elegibilidade.ts`): `RA_DEMISSA = ' '` e
+  `RA_SITFOLH <> 'D'`, que inclui **ferias (98) e afastados (47)**. `situacao = 'ATIVO'`
+  derrubaria 145 das 1.036 pessoas de todas as listas, calado.
+- **⭐ Tempo na funcao vem da TROCA de `R7_FUNCAO`**, nunca da ultima linha do SR7010: o
+  dissidio coletivo grava a folha inteira todo 1o de novembro. Ver
+  `src/sincronizacao/data-ultima-funcao.ts` — e a peca mais fragil do sync.
+- **⭐ Criterio calculado exige resolver registrado** (`src/calculo/resolvers/registry.ts`);
+  a publicacao do modelo recusa `codigoCalculo` sem par. Sem isso o criterio devolve vazio
+  em silencio para o ciclo inteiro.
+- Roles: `RH_ADMIN` / `RH_MODELO` / `RH_CICLO` / `AVALIADOR` (ADMIN sempre). MODELO e CICLO
+  separadas ate o RH confirmar o que a gestora delega.
+- Docs: `docs/06_especificacao_gestao_pessoas.md`, `docs/DECISAO_RH_ESCOLARIDADE.md`
 
 ---
 
@@ -355,4 +385,4 @@ Este arquivo serve como ponto de entrada para o Claude Code entender a estrutura
 
 ---
 
-*Ultima atualizacao: 23/08/2026 (revisao pre-HLG)*
+*Ultima atualizacao: 05/09/2026 (modulo Gestao de Pessoas)*
