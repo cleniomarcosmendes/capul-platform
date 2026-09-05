@@ -60,7 +60,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('Falha ao subir Gestao de Pessoas Backend:', err);
   process.exit(1);
 });

@@ -1,0 +1,3 @@
+# Amostras de regressao contem dado pessoal (matricula, admissao, escolaridade).
+# Geradas sob demanda pelo SQL de docs/REGRESSAO_PROTHEUS_GESTAO_PESSOAS.md.
+scripts/_regressao-*.csv
