@@ -6,7 +6,7 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
   // Só `rh`. O schema `core` (usuarios/filiais/departamentos) é lido por SQL
-  // cru no CoreLookupService, como fazem Logística e Fiscal — declarar `core`
+  // cru no IdentidadeService, como fazem Logística e Fiscal — declarar `core`
   // aqui faria o `prisma migrate diff` querer dropar as tabelas do auth-gateway
   // (incidente documentado em docs/INVESTIGACAO_DRIFT_DEV_23MAI.md).
   schemas  = ["rh"]
@@ -170,30 +170,22 @@ model ModeloVersao {
 /// Grupo com peso. origem = MANUAL (questões respondidas pelo avaliador)
 /// ou AUTOMATICO (critério calculado sobre dado cadastral — doc 04).
 /// C2: pesos livres, normalizados no cálculo.
+/// Grupo é APENAS ORGANIZAÇÃO — agrupa questões na tela e no relatório.
+/// NÃO tem peso: todo o peso está na Pergunta. Peso em dois níveis torna
+/// impossível prever o efeito de mudar um número na montagem.
+/// A tela de montagem deve exibir o somatório de pesos por grupo, para o RH
+/// enxergar o balanço sem precisar calcular.
 model Grupo {
   id             String       @id @default(uuid())
   modeloVersaoId String       @map("modelo_versao_id")
   titulo         String
   ordem          Int
-  peso           Decimal      @db.Decimal(10, 4)
-  origem         OrigemGrupo  @default(MANUAL)
-  /// Obrigatório quando origem = AUTOMATICO. Aponta para o catálogo.
-  criterioId     String?      @map("criterio_id")
 
   modeloVersao   ModeloVersao @relation(fields: [modeloVersaoId], references: [id])
-  criterio       Criterio?    @relation(fields: [criterioId], references: [id])
   perguntas      Pergunta[]
-  faixas         CriterioFaixa[]
 
   @@index([modeloVersaoId, ordem])
   @@map("grupo")
-  @@schema("rh")
-}
-
-enum OrigemGrupo {
-  MANUAL
-  AUTOMATICO
-
   @@schema("rh")
 }
 
@@ -223,7 +215,9 @@ model Criterio {
   criadoEm      DateTime            @default(now()) @map("criado_em")
   atualizadoEm  DateTime            @updatedAt @map("atualizado_em")
 
-  grupos        Grupo[]
+  // (sem relação com Grupo: critérios saíram do modelo)
+  faixas        CriterioFaixa[]
+  aplicacoes    AplicacaoCriterio[]
   valores       CriterioValorInformado[]
 
   @@map("criterio")
@@ -305,11 +299,12 @@ model PerguntaAlternativa {
   @@schema("rh")
 }
 
-/// Faixas do critério automático — substitui os CASE WHEN do select.
-/// C8: iguais para todos os centros de custo (mas variáveis por versão).
+/// Faixas de pontuação do critério — substitui os CASE WHEN do select antigo.
+/// Vivem no CATÁLOGO porque são iguais para todos os centros de custo (C8).
+/// O que varia por perfil é o PESO, que fica em AplicacaoCriterio.
 model CriterioFaixa {
   id             String    @id @default(uuid())
-  grupoId        String    @map("grupo_id")
+  criterioId     String    @map("criterio_id")
   tipo           TipoFaixa
   limiteInferior Decimal?  @map("limite_inferior") @db.Decimal(12, 4)
   limiteSuperior Decimal?  @map("limite_superior") @db.Decimal(12, 4)
@@ -320,9 +315,9 @@ model CriterioFaixa {
   rotulo         String?
   ordem          Int
 
-  grupo          Grupo     @relation(fields: [grupoId], references: [id])
+  criterio       Criterio  @relation(fields: [criterioId], references: [id])
 
-  @@index([grupoId, ordem])
+  @@index([criterioId, ordem])
   @@map("criterio_faixa")
   @@schema("rh")
 }
@@ -402,15 +397,38 @@ model Aplicacao {
   modeloVersaoId String       @map("modelo_versao_id")
   nome           String
   ordem          Int          @default(0)
+  /// Peso da nota do QUESTIONÁRIO na composição do resultado final.
+  /// Os pesos dos critérios cadastrais estão em AplicacaoCriterio.
+  /// Todos são livres e normalizados na apuração (C2).
+  pesoAvaliacao  Decimal      @map("peso_avaliacao") @db.Decimal(10, 4)
   criadoEm       DateTime     @default(now()) @map("criado_em")
 
   ciclo          Ciclo        @relation(fields: [cicloId], references: [id])
   modeloVersao   ModeloVersao @relation(fields: [modeloVersaoId], references: [id])
   centrosCusto   AplicacaoCentroCusto[]
+  criterios      AplicacaoCriterio[]
   avaliacoes     Avaliacao[]
 
   @@index([cicloId])
   @@map("aplicacao")
+  @@schema("rh")
+}
+
+/// Quais critérios cadastrais entram no resultado deste perfil, e com que peso.
+/// É aqui que "escolaridade pesa mais no administrativo que na fábrica" acontece.
+/// Critério não listado simplesmente não entra na apuração daquele perfil.
+model AplicacaoCriterio {
+  id          String    @id @default(uuid())
+  aplicacaoId String    @map("aplicacao_id")
+  criterioId  String    @map("criterio_id")
+  peso        Decimal   @db.Decimal(10, 4)
+  ordem       Int       @default(0)
+
+  aplicacao   Aplicacao @relation(fields: [aplicacaoId], references: [id])
+  criterio    Criterio  @relation(fields: [criterioId], references: [id])
+
+  @@unique([aplicacaoId, criterioId])
+  @@map("aplicacao_criterio")
   @@schema("rh")
 }
 
@@ -472,6 +490,12 @@ model Avaliacao {
   devolutivaEm        DateTime?   @map("devolutiva_em")
   devolutivaPorId     String?     @map("devolutiva_por_id")
 
+  /// Nota do QUESTIONÁRIO, 0 a 100, calculada no envio.
+  /// É a nota da avaliação propriamente dita — isolada, sem critérios
+  /// cadastrais. O avaliador não vê escolaridade nem tempo de casa enquanto
+  /// responde, para não ancorar o julgamento.
+  notaAvaliacao   Decimal?        @map("nota_avaliacao") @db.Decimal(6, 2)
+
   criadoEm        DateTime        @default(now()) @map("criado_em")
   atualizadoEm    DateTime        @updatedAt @map("atualizado_em")
 
@@ -525,16 +549,23 @@ model Resposta {
 // SCHEMA rh — resultado materializado (ADR-07)
 // ---------------------------------------------------------------------------
 
-/// Calculado no fechamento e GRAVADO. Relatório apenas lê.
+/// APURAÇÃO — combina a nota da avaliação com os critérios cadastrais,
+/// usando os pesos da Aplicação. Calculado no fechamento e GRAVADO.
+/// Recalcular é ação explícita, registrada em rh.auditoria.
 model ResultadoAvaliacao {
   id              String     @id @default(uuid())
   cicloId         String     @map("ciclo_id")
   avaliacaoId     String     @unique @map("avaliacao_id")
   colaboradorId   String     @map("colaborador_id")
 
-  notaManual      Decimal?   @map("nota_manual") @db.Decimal(6, 2)
-  notaAutomatica  Decimal?   @map("nota_automatica") @db.Decimal(6, 2)
+  /// Cópia da nota do questionário no momento da apuração.
+  notaAvaliacao   Decimal    @map("nota_avaliacao") @db.Decimal(6, 2)
+  pesoAvaliacao   Decimal    @map("peso_avaliacao") @db.Decimal(10, 4)
+  /// Média ponderada apenas dos critérios cadastrais, para leitura separada.
+  notaCriterios   Decimal?   @map("nota_criterios") @db.Decimal(6, 2)
+  /// Resultado final: avaliação + critérios, ponderados e normalizados.
   notaFinal       Decimal    @map("nota_final") @db.Decimal(6, 2)
+
   conceitoId      String?    @map("conceito_id")
   conceitoDescricao String?  @map("conceito_descricao")
 
@@ -551,21 +582,20 @@ model ResultadoAvaliacao {
   @@schema("rh")
 }
 
-/// Memória de cálculo por grupo — para auditoria e para explicar a nota.
+/// Memória de cálculo por critério — para auditoria e para explicar a nota.
 model ResultadoCriterio {
-  id           String             @id @default(uuid())
-  resultadoId  String             @map("resultado_id")
-  grupoId      String             @map("grupo_id")
-  grupoTitulo  String             @map("grupo_titulo")
-  origem       OrigemGrupo
-  valorBruto   Decimal?           @map("valor_bruto") @db.Decimal(12, 4)
-  valorTexto   String?            @map("valor_texto")
-  faixaId      String?            @map("faixa_id")
-  pontuacao    Decimal?           @db.Decimal(6, 2)
-  pesoAplicado Decimal            @map("peso_aplicado") @db.Decimal(10, 4)
-  semDado      Boolean            @default(false) @map("sem_dado")
+  id            String             @id @default(uuid())
+  resultadoId   String             @map("resultado_id")
+  criterioId    String             @map("criterio_id")
+  criterioNome  String             @map("criterio_nome")
+  valorBruto    Decimal?           @map("valor_bruto") @db.Decimal(12, 4)
+  valorTexto    String?            @map("valor_texto")
+  faixaId       String?            @map("faixa_id")
+  pontuacao     Decimal?           @db.Decimal(6, 2)
+  pesoAplicado  Decimal            @map("peso_aplicado") @db.Decimal(10, 4)
+  semDado       Boolean            @default(false) @map("sem_dado")
 
-  resultado    ResultadoAvaliacao @relation(fields: [resultadoId], references: [id])
+  resultado     ResultadoAvaliacao @relation(fields: [resultadoId], references: [id])
 
   @@index([resultadoId])
   @@map("resultado_criterio")

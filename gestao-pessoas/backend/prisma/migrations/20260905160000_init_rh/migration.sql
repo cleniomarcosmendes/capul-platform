@@ -8,9 +8,6 @@ CREATE TYPE "rh"."SituacaoColaborador" AS ENUM ('ATIVO', 'AFASTADO', 'FERIAS', '
 CREATE TYPE "rh"."FinalidadeModelo" AS ENUM ('PRODUCAO', 'DEMONSTRACAO');
 
 -- CreateEnum
-CREATE TYPE "rh"."OrigemGrupo" AS ENUM ('MANUAL', 'AUTOMATICO');
-
--- CreateEnum
 CREATE TYPE "rh"."OrigemValorCriterio" AS ENUM ('CALCULADO', 'INFORMADO');
 
 -- CreateEnum
@@ -112,9 +109,6 @@ CREATE TABLE "rh"."grupo" (
     "modelo_versao_id" TEXT NOT NULL,
     "titulo" TEXT NOT NULL,
     "ordem" INTEGER NOT NULL,
-    "peso" DECIMAL(10,4) NOT NULL,
-    "origem" "rh"."OrigemGrupo" NOT NULL DEFAULT 'MANUAL',
-    "criterio_id" TEXT,
 
     CONSTRAINT "grupo_pkey" PRIMARY KEY ("id")
 );
@@ -178,7 +172,7 @@ CREATE TABLE "rh"."pergunta_alternativa" (
 -- CreateTable
 CREATE TABLE "rh"."criterio_faixa" (
     "id" TEXT NOT NULL,
-    "grupo_id" TEXT NOT NULL,
+    "criterio_id" TEXT NOT NULL,
     "tipo" "rh"."TipoFaixa" NOT NULL,
     "limite_inferior" DECIMAL(12,4),
     "limite_superior" DECIMAL(12,4),
@@ -230,9 +224,21 @@ CREATE TABLE "rh"."aplicacao" (
     "modelo_versao_id" TEXT NOT NULL,
     "nome" TEXT NOT NULL,
     "ordem" INTEGER NOT NULL DEFAULT 0,
+    "peso_avaliacao" DECIMAL(10,4) NOT NULL,
     "criado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "aplicacao_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "rh"."aplicacao_criterio" (
+    "id" TEXT NOT NULL,
+    "aplicacao_id" TEXT NOT NULL,
+    "criterio_id" TEXT NOT NULL,
+    "peso" DECIMAL(10,4) NOT NULL,
+    "ordem" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "aplicacao_criterio_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -264,6 +270,7 @@ CREATE TABLE "rh"."avaliacao" (
     "observacao_avaliador" TEXT,
     "devolutiva_em" TIMESTAMP(3),
     "devolutiva_por_id" TEXT,
+    "nota_avaliacao" DECIMAL(6,2),
     "criado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "atualizado_em" TIMESTAMP(3) NOT NULL,
 
@@ -288,8 +295,9 @@ CREATE TABLE "rh"."resultado_avaliacao" (
     "ciclo_id" TEXT NOT NULL,
     "avaliacao_id" TEXT NOT NULL,
     "colaborador_id" TEXT NOT NULL,
-    "nota_manual" DECIMAL(6,2),
-    "nota_automatica" DECIMAL(6,2),
+    "nota_avaliacao" DECIMAL(6,2) NOT NULL,
+    "peso_avaliacao" DECIMAL(10,4) NOT NULL,
+    "nota_criterios" DECIMAL(6,2),
     "nota_final" DECIMAL(6,2) NOT NULL,
     "conceito_id" TEXT,
     "conceito_descricao" TEXT,
@@ -303,9 +311,8 @@ CREATE TABLE "rh"."resultado_avaliacao" (
 CREATE TABLE "rh"."resultado_criterio" (
     "id" TEXT NOT NULL,
     "resultado_id" TEXT NOT NULL,
-    "grupo_id" TEXT NOT NULL,
-    "grupo_titulo" TEXT NOT NULL,
-    "origem" "rh"."OrigemGrupo" NOT NULL,
+    "criterio_id" TEXT NOT NULL,
+    "criterio_nome" TEXT NOT NULL,
     "valor_bruto" DECIMAL(12,4),
     "valor_texto" TEXT,
     "faixa_id" TEXT,
@@ -372,7 +379,7 @@ CREATE INDEX "pergunta_grupo_id_ordem_idx" ON "rh"."pergunta"("grupo_id", "ordem
 CREATE INDEX "pergunta_alternativa_pergunta_id_ordem_idx" ON "rh"."pergunta_alternativa"("pergunta_id", "ordem");
 
 -- CreateIndex
-CREATE INDEX "criterio_faixa_grupo_id_ordem_idx" ON "rh"."criterio_faixa"("grupo_id", "ordem");
+CREATE INDEX "criterio_faixa_criterio_id_ordem_idx" ON "rh"."criterio_faixa"("criterio_id", "ordem");
 
 -- CreateIndex
 CREATE INDEX "conceito_faixa_ciclo_id_ordem_idx" ON "rh"."conceito_faixa"("ciclo_id", "ordem");
@@ -382,6 +389,9 @@ CREATE INDEX "ciclo_status_idx" ON "rh"."ciclo"("status");
 
 -- CreateIndex
 CREATE INDEX "aplicacao_ciclo_id_idx" ON "rh"."aplicacao"("ciclo_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "aplicacao_criterio_aplicacao_id_criterio_id_key" ON "rh"."aplicacao_criterio"("aplicacao_id", "criterio_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "aplicacao_centro_custo_aplicacao_id_filial_centro_custo_key" ON "rh"."aplicacao_centro_custo"("aplicacao_id", "filial", "centro_custo");
@@ -426,9 +436,6 @@ ALTER TABLE "rh"."modelo_versao" ADD CONSTRAINT "modelo_versao_modelo_id_fkey" F
 ALTER TABLE "rh"."grupo" ADD CONSTRAINT "grupo_modelo_versao_id_fkey" FOREIGN KEY ("modelo_versao_id") REFERENCES "rh"."modelo_versao"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "rh"."grupo" ADD CONSTRAINT "grupo_criterio_id_fkey" FOREIGN KEY ("criterio_id") REFERENCES "rh"."criterio"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "rh"."criterio_valor_informado" ADD CONSTRAINT "criterio_valor_informado_criterio_id_fkey" FOREIGN KEY ("criterio_id") REFERENCES "rh"."criterio"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -438,7 +445,7 @@ ALTER TABLE "rh"."pergunta" ADD CONSTRAINT "pergunta_grupo_id_fkey" FOREIGN KEY 
 ALTER TABLE "rh"."pergunta_alternativa" ADD CONSTRAINT "pergunta_alternativa_pergunta_id_fkey" FOREIGN KEY ("pergunta_id") REFERENCES "rh"."pergunta"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "rh"."criterio_faixa" ADD CONSTRAINT "criterio_faixa_grupo_id_fkey" FOREIGN KEY ("grupo_id") REFERENCES "rh"."grupo"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "rh"."criterio_faixa" ADD CONSTRAINT "criterio_faixa_criterio_id_fkey" FOREIGN KEY ("criterio_id") REFERENCES "rh"."criterio"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "rh"."conceito_faixa" ADD CONSTRAINT "conceito_faixa_ciclo_id_fkey" FOREIGN KEY ("ciclo_id") REFERENCES "rh"."ciclo"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -448,6 +455,12 @@ ALTER TABLE "rh"."aplicacao" ADD CONSTRAINT "aplicacao_ciclo_id_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "rh"."aplicacao" ADD CONSTRAINT "aplicacao_modelo_versao_id_fkey" FOREIGN KEY ("modelo_versao_id") REFERENCES "rh"."modelo_versao"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "rh"."aplicacao_criterio" ADD CONSTRAINT "aplicacao_criterio_aplicacao_id_fkey" FOREIGN KEY ("aplicacao_id") REFERENCES "rh"."aplicacao"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "rh"."aplicacao_criterio" ADD CONSTRAINT "aplicacao_criterio_criterio_id_fkey" FOREIGN KEY ("criterio_id") REFERENCES "rh"."criterio"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "rh"."aplicacao_centro_custo" ADD CONSTRAINT "aplicacao_centro_custo_aplicacao_id_fkey" FOREIGN KEY ("aplicacao_id") REFERENCES "rh"."aplicacao"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
