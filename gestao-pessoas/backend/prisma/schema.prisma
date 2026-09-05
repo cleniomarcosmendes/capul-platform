@@ -1,0 +1,597 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Só `rh`. O schema `core` (usuarios/filiais/departamentos) é lido por SQL
+  // cru no CoreLookupService, como fazem Logística e Fiscal — declarar `core`
+  // aqui faria o `prisma migrate diff` querer dropar as tabelas do auth-gateway
+  // (incidente documentado em docs/INVESTIGACAO_DRIFT_DEV_23MAI.md).
+  schemas  = ["rh"]
+}
+
+// ============================================================================
+// Módulo RH — Avaliação de Desempenho · Capul Platform
+// Baseado nas decisões de escopo (A–H) e no modelo real extraído do Protheus
+// (RD8010 modelo 000004 / SQP010 / RDB010 comitê 000001 tipo 000007)
+//
+// Convenções seguidas: @@schema obrigatório, @map snake_case, PK uuid,
+// criadoEm/atualizadoEm em toda tabela transacional.
+// ============================================================================
+
+// ---------------------------------------------------------------------------
+// SCHEMA rh — fundação de pessoas
+//
+// ⚠️ ESTAS TRÊS TABELAS ESTAVAM EM `core` na especificação. Decisão de 05/09/2026
+// (ADR-RH-01, em docs/ADR-RH-01-colaborador-no-schema-rh.md): ficam em `rh`.
+// Motivo curto: `core` é do auth-gateway e read-only para os módulos, e um
+// módulo que declara `core` no datasource faz o gerador de migration propor
+// DROP do que ele não conhece. Nomes seguem NEUTROS (`colaborador`, não
+// `avaliacao_colaborador`) porque a intenção de fundação de pessoas continua
+// de pé — só o dono mudou.
+// 🔒 Nenhum outro módulo consulta estas tabelas direto: acesso só pelo service
+// do gestao-pessoas. GATILHO DE REVISÃO: quando um segundo módulo precisar de
+// colaborador, o ADR é reaberto.
+// ---------------------------------------------------------------------------
+
+/// Colaborador sincronizado do Protheus (SRA010).
+/// CHAVE COMPOSTA filial + matricula — confirmado no capulmig (G2).
+/// usuarioId é OPCIONAL: existir como colaborador não exige ter login.
+model Colaborador {
+  id                     String    @id @default(uuid())
+  filial                 String    @db.VarChar(10)
+  matricula              String    @db.VarChar(10)
+  nome                   String
+  cpf                    String?   @db.VarChar(14)
+  centroCusto            String?   @map("centro_custo") @db.VarChar(20)
+  centroCustoDescricao   String?   @map("centro_custo_descricao")
+  cargoId                String?   @map("cargo_id")
+  cargoDescricao         String?   @map("cargo_descricao")
+  dataAdmissao           DateTime  @map("data_admissao") @db.Date
+  dataDemissao           DateTime? @map("data_demissao") @db.Date
+  situacao               SituacaoColaborador @default(ATIVO)
+
+  // --- alimentam os critérios automáticos (doc 04)
+  grauInstrucaoCodigo    String?   @map("grau_instrucao_codigo") @db.VarChar(10)
+  grauInstrucaoDescricao String?   @map("grau_instrucao_descricao")
+  /// SR7010 tratado. Quando não há registro de alteração funcional,
+  /// recebe a data de admissão (decisão C9) — nunca fica nulo.
+  dataUltimaFuncao       DateTime? @map("data_ultima_funcao") @db.Date
+  descricaoFuncao        String?   @map("descricao_funcao")
+
+  usuarioId              String?   @unique @map("usuario_id")
+  sincronizadoEm         DateTime? @map("sincronizado_em")
+  criadoEm               DateTime  @default(now()) @map("criado_em")
+  atualizadoEm           DateTime  @updatedAt @map("atualizado_em")
+
+  cargo                  Cargo?    @relation(fields: [cargoId], references: [id])
+  treinamentos           ColaboradorTreinamento[]
+
+  @@unique([filial, matricula])
+  @@index([centroCusto, situacao])
+  @@index([situacao])
+  @@map("colaborador")
+  @@schema("rh")
+}
+
+enum SituacaoColaborador {
+  ATIVO
+  AFASTADO
+  FERIAS
+  DEMITIDO
+
+  @@schema("rh")
+}
+
+model Cargo {
+  id           String        @id @default(uuid())
+  codigo       String        @unique @db.VarChar(20)
+  nome         String
+  nivel        Int?
+  ativo        Boolean       @default(true)
+  criadoEm     DateTime      @default(now()) @map("criado_em")
+  colaboradores Colaborador[]
+
+  @@map("cargo")
+  @@schema("rh")
+}
+
+/// Migrado do RA4010. Alimenta o critério de quantidade de cursos
+/// e é a base do futuro módulo de T&D (doc 05).
+model ColaboradorTreinamento {
+  id            String      @id @default(uuid())
+  colaboradorId String      @map("colaborador_id")
+  descricao     String
+  dataInicio    DateTime    @map("data_inicio") @db.Date
+  dataFim       DateTime?   @map("data_fim") @db.Date
+  cargaHoraria  Decimal?    @map("carga_horaria") @db.Decimal(6, 2)
+  origem        String      @default("PROTHEUS_RA4")
+  criadoEm      DateTime    @default(now()) @map("criado_em")
+
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id])
+
+  @@index([colaboradorId, dataFim])
+  @@map("colaborador_treinamento")
+  @@schema("rh")
+}
+
+// ---------------------------------------------------------------------------
+// SCHEMA rh — modelo do instrumento (versionado, imutável após publicar)
+// ---------------------------------------------------------------------------
+
+/// D1/D3: o modelo é livre e reutilizável. NÃO tem centro de custo.
+/// O público é definido no ciclo.
+model Modelo {
+  id          String          @id @default(uuid())
+  nome        String
+  descricao   String?
+  /// Protege o piloto: modelo DEMONSTRACAO não abre ciclo válido.
+  finalidade  FinalidadeModelo @default(PRODUCAO)
+  ativo       Boolean         @default(true)
+  criadoEm    DateTime        @default(now()) @map("criado_em")
+  atualizadoEm DateTime       @updatedAt @map("atualizado_em")
+
+  versoes     ModeloVersao[]
+
+  @@map("modelo")
+  @@schema("rh")
+}
+
+enum FinalidadeModelo {
+  PRODUCAO
+  DEMONSTRACAO
+
+  @@schema("rh")
+}
+
+/// D2: publicada = IMUTÁVEL. Para alterar, clona nova versão.
+/// pontuacaoMaxima é calculada e gravada na publicação — nunca constante
+/// no código (corrige o /18 fixo do select antigo).
+model ModeloVersao {
+  id               String    @id @default(uuid())
+  modeloId         String    @map("modelo_id")
+  versao           Int
+  publicadoEm      DateTime? @map("publicado_em")
+  publicadoPorId   String?   @map("publicado_por_id")
+  pontuacaoMaxima  Decimal?  @map("pontuacao_maxima") @db.Decimal(10, 4)
+  criadoEm         DateTime  @default(now()) @map("criado_em")
+
+  modelo           Modelo    @relation(fields: [modeloId], references: [id])
+  grupos           Grupo[]
+  aplicacoes       Aplicacao[]
+
+  @@unique([modeloId, versao])
+  @@map("modelo_versao")
+  @@schema("rh")
+}
+
+/// Grupo com peso. origem = MANUAL (questões respondidas pelo avaliador)
+/// ou AUTOMATICO (critério calculado sobre dado cadastral — doc 04).
+/// C2: pesos livres, normalizados no cálculo.
+model Grupo {
+  id             String       @id @default(uuid())
+  modeloVersaoId String       @map("modelo_versao_id")
+  titulo         String
+  ordem          Int
+  peso           Decimal      @db.Decimal(10, 4)
+  origem         OrigemGrupo  @default(MANUAL)
+  /// Obrigatório quando origem = AUTOMATICO. Aponta para o catálogo.
+  criterioId     String?      @map("criterio_id")
+
+  modeloVersao   ModeloVersao @relation(fields: [modeloVersaoId], references: [id])
+  criterio       Criterio?    @relation(fields: [criterioId], references: [id])
+  perguntas      Pergunta[]
+  faixas         CriterioFaixa[]
+
+  @@index([modeloVersaoId, ordem])
+  @@map("grupo")
+  @@schema("rh")
+}
+
+enum OrigemGrupo {
+  MANUAL
+  AUTOMATICO
+
+  @@schema("rh")
+}
+
+/// CATÁLOGO DE CRITÉRIOS — substitui o antigo enum TipoCriterio.
+/// Permite ao RH manter os critérios sem depender de deploy.
+///
+/// origem = CALCULADO  -> o valor vem de um resolver implementado no backend,
+///                        identificado por codigoCalculo. O RH edita nome,
+///                        faixas e peso, mas NÃO cria critérios novos deste
+///                        tipo: exige código.
+/// origem = INFORMADO  -> o valor é digitado ou importado por ciclo
+///                        (CriterioValorInformado). Este tipo o RH cria
+///                        sozinho, de ponta a ponta.
+model Criterio {
+  id            String              @id @default(uuid())
+  codigo        String              @unique @db.VarChar(40)
+  nome          String
+  descricao     String?
+  origem        OrigemValorCriterio
+  tipoValor     TipoValorCriterio
+  /// Só para CALCULADO. Deve casar com um resolver registrado no backend —
+  /// validar na publicação do modelo, senão o critério retorna vazio para
+  /// todo mundo em silêncio.
+  codigoCalculo String?             @map("codigo_calculo") @db.VarChar(40)
+  unidade       String?             @db.VarChar(20)
+  ativo         Boolean             @default(true)
+  criadoEm      DateTime            @default(now()) @map("criado_em")
+  atualizadoEm  DateTime            @updatedAt @map("atualizado_em")
+
+  grupos        Grupo[]
+  valores       CriterioValorInformado[]
+
+  @@map("criterio")
+  @@schema("rh")
+}
+
+enum OrigemValorCriterio {
+  CALCULADO
+  INFORMADO
+
+  @@schema("rh")
+}
+
+enum TipoValorCriterio {
+  NUMERICO
+  DOMINIO
+
+  @@schema("rh")
+}
+
+/// Valor de critério INFORMADO, por ciclo e colaborador.
+/// Importado por planilha ou digitado pelo RH.
+model CriterioValorInformado {
+  id            String   @id @default(uuid())
+  cicloId       String   @map("ciclo_id")
+  criterioId    String   @map("criterio_id")
+  colaboradorId String   @map("colaborador_id")
+  valorNumerico Decimal? @map("valor_numerico") @db.Decimal(12, 4)
+  valorTexto    String?  @map("valor_texto")
+  origemRegistro String  @default("IMPORTACAO") @map("origem_registro")
+  informadoPorId String? @map("informado_por_id")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  criterio      Criterio @relation(fields: [criterioId], references: [id])
+
+  @@unique([cicloId, criterioId, colaboradorId])
+  @@index([cicloId, criterioId])
+  @@map("criterio_valor_informado")
+  @@schema("rh")
+}
+
+/// IMPORTANTE — o instrumento real do Protheus NÃO usa escala compartilhada.
+/// Cada questão tem suas próprias 4 alternativas com texto âncora específico
+/// (ver rd8.xlsx). Por isso as alternativas vivem na PERGUNTA, não numa
+/// tabela Escala global. Uma escala uniforme continua possível: basta as
+/// alternativas repetirem o mesmo texto.
+model Pergunta {
+  id            String     @id @default(uuid())
+  grupoId       String     @map("grupo_id")
+  enunciado     String
+  ordem         Int
+  peso          Decimal    @default(1) @db.Decimal(10, 4)
+  /// Código original no SQP010, para rastrear a migração.
+  codigoOrigem  String?    @map("codigo_origem") @db.VarChar(10)
+
+  grupo         Grupo      @relation(fields: [grupoId], references: [id])
+  alternativas  PerguntaAlternativa[]
+  respostas     Resposta[]
+
+  @@index([grupoId, ordem])
+  @@map("pergunta")
+  @@schema("rh")
+}
+
+/// Alternativa âncora. valor = pontos (0,3 / 0,6 / 0,9 / 1,2 no modelo atual).
+model PerguntaAlternativa {
+  id            String     @id @default(uuid())
+  perguntaId    String     @map("pergunta_id")
+  descricao     String
+  valor         Decimal    @db.Decimal(10, 4)
+  ordem         Int
+  codigoOrigem  String?    @map("codigo_origem") @db.VarChar(10)
+
+  pergunta      Pergunta   @relation(fields: [perguntaId], references: [id])
+  respostas     Resposta[]
+
+  @@index([perguntaId, ordem])
+  @@map("pergunta_alternativa")
+  @@schema("rh")
+}
+
+/// Faixas do critério automático — substitui os CASE WHEN do select.
+/// C8: iguais para todos os centros de custo (mas variáveis por versão).
+model CriterioFaixa {
+  id             String    @id @default(uuid())
+  grupoId        String    @map("grupo_id")
+  tipo           TipoFaixa
+  limiteInferior Decimal?  @map("limite_inferior") @db.Decimal(12, 4)
+  limiteSuperior Decimal?  @map("limite_superior") @db.Decimal(12, 4)
+  inclusivoInf   Boolean   @default(false) @map("inclusivo_inf")
+  inclusivoSup   Boolean   @default(true)  @map("inclusivo_sup")
+  valorDominio   String?   @map("valor_dominio") @db.VarChar(20)
+  pontuacao      Decimal   @db.Decimal(6, 2)
+  rotulo         String?
+  ordem          Int
+
+  grupo          Grupo     @relation(fields: [grupoId], references: [id])
+
+  @@index([grupoId, ordem])
+  @@map("criterio_faixa")
+  @@schema("rh")
+}
+
+enum TipoFaixa {
+  NUMERICA
+  DOMINIO
+
+  @@schema("rh")
+}
+
+/// C3: faixas de conceito sobre a nota final (0–100), no nível do CICLO.
+/// Validar na abertura: cobrem 0–100 sem buraco nem sobreposição.
+model ConceitoFaixa {
+  id             String   @id @default(uuid())
+  cicloId        String   @map("ciclo_id")
+  descricao      String
+  limiteInferior Decimal  @map("limite_inferior") @db.Decimal(6, 2)
+  limiteSuperior Decimal  @map("limite_superior") @db.Decimal(6, 2)
+  cor            String?  @db.VarChar(10)
+  ordem          Int
+
+  ciclo          Ciclo    @relation(fields: [cicloId], references: [id])
+
+  @@index([cicloId, ordem])
+  @@map("conceito_faixa")
+  @@schema("rh")
+}
+
+// ---------------------------------------------------------------------------
+// SCHEMA rh — ciclo, designação e execução
+// ---------------------------------------------------------------------------
+
+/// O ciclo é o CONTÊINER: período, público e política.
+/// O questionário NÃO vive aqui — vive nas Aplicacoes, permitindo
+/// modelos diferentes por perfil de centro de custo dentro do mesmo ciclo.
+/// dataBase congela o cálculo dos critérios temporais — corrige o
+/// current_date do select antigo.
+model Ciclo {
+  id                String       @id @default(uuid())
+  nome              String
+  periodoInicio     DateTime     @map("periodo_inicio") @db.Date
+  periodoFim        DateTime     @map("periodo_fim") @db.Date
+  /// Data de referência de TODO cálculo temporal do ciclo.
+  dataBase          DateTime     @map("data_base") @db.Date
+  /// C10: janela de contagem de treinamentos. Padrão 12 meses antes da dataBase.
+  janelaTreinamentoMeses Int     @default(12) @map("janela_treinamento_meses")
+  status            StatusCiclo  @default(RASCUNHO)
+  /// Piloto não vale para mérito.
+  valeParaMerito    Boolean      @default(false) @map("vale_para_merito")
+  abertoEm          DateTime?    @map("aberto_em")
+  encerradoEm       DateTime?    @map("encerrado_em")
+  criadoEm          DateTime     @default(now()) @map("criado_em")
+  atualizadoEm      DateTime     @updatedAt @map("atualizado_em")
+
+  aplicacoes        Aplicacao[]
+  avaliacoes        Avaliacao[]
+  resultados        ResultadoAvaliacao[]
+  /// Conceitos ficam no CICLO, não no modelo: garante que "Supera" signifique
+  /// a mesma coisa no supermercado e na fábrica, mesmo com questionários
+  /// diferentes.
+  conceitos         ConceitoFaixa[]
+
+  @@index([status])
+  @@map("ciclo")
+  @@schema("rh")
+}
+
+/// A PEÇA QUE PERMITE QUESTIONÁRIO POR PERFIL DE CENTRO DE CUSTO.
+/// Um ciclo tem N aplicações; cada uma casa um modelo com um público.
+/// Ex.: "Operação de Loja" -> modelo A, CCs 101/102/103
+///      "Fábrica"          -> modelo B, CCs 201/202
+///      "Administrativo"   -> modelo C, CCs 301
+model Aplicacao {
+  id             String       @id @default(uuid())
+  cicloId        String       @map("ciclo_id")
+  modeloVersaoId String       @map("modelo_versao_id")
+  nome           String
+  ordem          Int          @default(0)
+  criadoEm       DateTime     @default(now()) @map("criado_em")
+
+  ciclo          Ciclo        @relation(fields: [cicloId], references: [id])
+  modeloVersao   ModeloVersao @relation(fields: [modeloVersaoId], references: [id])
+  centrosCusto   AplicacaoCentroCusto[]
+  avaliacoes     Avaliacao[]
+
+  @@index([cicloId])
+  @@map("aplicacao")
+  @@schema("rh")
+}
+
+/// Regra de sugestão automática do público (E1 = 3).
+/// A Arielly filtra por CC, o sistema traz a lista, ela desmarca quem quiser.
+/// Quem entra fora dessa regra fica com origemDesignacao = MANUAL na Avaliacao.
+model AplicacaoCentroCusto {
+  id          String    @id @default(uuid())
+  aplicacaoId String    @map("aplicacao_id")
+  filial      String?   @db.VarChar(10)
+  centroCusto String    @map("centro_custo") @db.VarChar(20)
+
+  aplicacao   Aplicacao @relation(fields: [aplicacaoId], references: [id])
+
+  @@unique([aplicacaoId, filial, centroCusto])
+  @@map("aplicacao_centro_custo")
+  @@schema("rh")
+}
+
+enum StatusCiclo {
+  RASCUNHO
+  ABERTO
+  EM_APURACAO
+  ENCERRADO
+  CANCELADO
+
+  @@schema("rh")
+}
+
+/// A2 = 1: exatamente UM avaliador por avaliado por ciclo — garantido
+/// pelo @@unique([cicloId, avaliadoId]).
+/// E1 = 3: origem SUGERIDA pelo centro de custo, ajustável manualmente.
+/// E2 = 1: o avaliador só enxerga as avaliações onde é avaliadorId.
+model Avaliacao {
+  id              String          @id @default(uuid())
+  cicloId         String          @map("ciclo_id")
+  /// Define QUAL questionário esta pessoa responde. O @@unique abaixo
+  /// garante que ninguém caia em duas aplicações do mesmo ciclo.
+  aplicacaoId     String          @map("aplicacao_id")
+  avaliadoId      String          @map("avaliado_id")
+  avaliadorId     String          @map("avaliador_id")
+  origemDesignacao OrigemDesignacao @default(CENTRO_CUSTO) @map("origem_designacao")
+
+  // --- snapshot no momento da designação: o resultado histórico não se move
+  // --- se a pessoa mudar de área depois.
+  filialSnapshot       String?    @map("filial_snapshot") @db.VarChar(10)
+  centroCustoSnapshot  String?    @map("centro_custo_snapshot") @db.VarChar(20)
+  cargoSnapshot        String?    @map("cargo_snapshot")
+
+  status          StatusAvaliacao @default(PENDENTE)
+  enviadaEm       DateTime?       @map("enviada_em")
+  reabertaEm      DateTime?       @map("reaberta_em")
+  reabertaPorId   String?         @map("reaberta_por_id")
+  motivoReabertura String?        @map("motivo_reabertura")
+
+  /// Mitigações recomendadas (F2/F3 = "não"). Opcionais, não bloqueiam o fluxo,
+  /// mas registram evidência de devolutiva e contexto da nota.
+  observacaoAvaliador String?     @map("observacao_avaliador")
+  devolutivaEm        DateTime?   @map("devolutiva_em")
+  devolutivaPorId     String?     @map("devolutiva_por_id")
+
+  criadoEm        DateTime        @default(now()) @map("criado_em")
+  atualizadoEm    DateTime        @updatedAt @map("atualizado_em")
+
+  ciclo           Ciclo           @relation(fields: [cicloId], references: [id])
+  aplicacao       Aplicacao       @relation(fields: [aplicacaoId], references: [id])
+  respostas       Resposta[]
+  resultado       ResultadoAvaliacao?
+
+  @@unique([cicloId, avaliadoId])
+  @@index([cicloId, avaliadorId, status])
+  @@index([aplicacaoId, status])
+  @@map("avaliacao")
+  @@schema("rh")
+}
+
+enum OrigemDesignacao {
+  CENTRO_CUSTO
+  MANUAL
+
+  @@schema("rh")
+}
+
+enum StatusAvaliacao {
+  PENDENTE
+  EM_ANDAMENTO
+  ENVIADA
+  CANCELADA
+
+  @@schema("rh")
+}
+
+/// B4 = 2: não existe "não se aplica" — toda pergunta é obrigatória.
+model Resposta {
+  id            String              @id @default(uuid())
+  avaliacaoId   String              @map("avaliacao_id")
+  perguntaId    String              @map("pergunta_id")
+  alternativaId String              @map("alternativa_id")
+  valor         Decimal             @db.Decimal(10, 4)
+  criadoEm      DateTime            @default(now()) @map("criado_em")
+
+  avaliacao     Avaliacao           @relation(fields: [avaliacaoId], references: [id])
+  pergunta      Pergunta            @relation(fields: [perguntaId], references: [id])
+  alternativa   PerguntaAlternativa @relation(fields: [alternativaId], references: [id])
+
+  @@unique([avaliacaoId, perguntaId])
+  @@map("resposta")
+  @@schema("rh")
+}
+
+// ---------------------------------------------------------------------------
+// SCHEMA rh — resultado materializado (ADR-07)
+// ---------------------------------------------------------------------------
+
+/// Calculado no fechamento e GRAVADO. Relatório apenas lê.
+model ResultadoAvaliacao {
+  id              String     @id @default(uuid())
+  cicloId         String     @map("ciclo_id")
+  avaliacaoId     String     @unique @map("avaliacao_id")
+  colaboradorId   String     @map("colaborador_id")
+
+  notaManual      Decimal?   @map("nota_manual") @db.Decimal(6, 2)
+  notaAutomatica  Decimal?   @map("nota_automatica") @db.Decimal(6, 2)
+  notaFinal       Decimal    @map("nota_final") @db.Decimal(6, 2)
+  conceitoId      String?    @map("conceito_id")
+  conceitoDescricao String?  @map("conceito_descricao")
+
+  /// true quando algum critério ficou sem dado e houve renormalização (C9).
+  houveRenormalizacao Boolean @default(false) @map("houve_renormalizacao")
+  calculadoEm     DateTime   @default(now()) @map("calculado_em")
+
+  ciclo           Ciclo      @relation(fields: [cicloId], references: [id])
+  avaliacao       Avaliacao  @relation(fields: [avaliacaoId], references: [id])
+  criterios       ResultadoCriterio[]
+
+  @@index([cicloId, colaboradorId])
+  @@map("resultado_avaliacao")
+  @@schema("rh")
+}
+
+/// Memória de cálculo por grupo — para auditoria e para explicar a nota.
+model ResultadoCriterio {
+  id           String             @id @default(uuid())
+  resultadoId  String             @map("resultado_id")
+  grupoId      String             @map("grupo_id")
+  grupoTitulo  String             @map("grupo_titulo")
+  origem       OrigemGrupo
+  valorBruto   Decimal?           @map("valor_bruto") @db.Decimal(12, 4)
+  valorTexto   String?            @map("valor_texto")
+  faixaId      String?            @map("faixa_id")
+  pontuacao    Decimal?           @db.Decimal(6, 2)
+  pesoAplicado Decimal            @map("peso_aplicado") @db.Decimal(10, 4)
+  semDado      Boolean            @default(false) @map("sem_dado")
+
+  resultado    ResultadoAvaliacao @relation(fields: [resultadoId], references: [id])
+
+  @@index([resultadoId])
+  @@map("resultado_criterio")
+  @@schema("rh")
+}
+
+// ---------------------------------------------------------------------------
+// SCHEMA rh — auditoria (ADR-08)
+// ---------------------------------------------------------------------------
+
+/// Gravação obrigatória em: alteração de nota, reabertura, exclusão,
+/// publicação de modelo e acesso a resultado individual por terceiros.
+model Auditoria {
+  id           String   @id @default(uuid())
+  entidade     String   @db.VarChar(60)
+  entidadeId   String   @map("entidade_id")
+  acao         String   @db.VarChar(40)
+  usuarioId    String   @map("usuario_id")
+  valorAnterior Json?   @map("valor_anterior")
+  valorNovo    Json?    @map("valor_novo")
+  justificativa String?
+  ip           String?  @db.VarChar(45)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+
+  @@index([entidade, entidadeId])
+  @@index([usuarioId, criadoEm])
+  @@map("auditoria")
+  @@schema("rh")
+}
