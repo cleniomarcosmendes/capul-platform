@@ -206,12 +206,29 @@ Plataforma corporativa modular com microservicos independentes:
 - **⭐ Tempo na funcao vem da TROCA de `R7_FUNCAO`**, nunca da ultima linha do SR7010: o
   dissidio coletivo grava a folha inteira todo 1o de novembro. Ver
   `src/sincronizacao/data-ultima-funcao.ts` — e a peca mais fragil do sync.
-- **⭐ Criterio calculado exige resolver registrado** (`src/calculo/resolvers/registry.ts`);
-  a publicacao do modelo recusa `codigoCalculo` sem par. Sem isso o criterio devolve vazio
-  em silencio para o ciclo inteiro.
+- **⭐ Criterio calculado exige resolver registrado** (`src/calculo/resolvers/registry.ts`),
+  validado em **TRES momentos** — ao salvar no catalogo, ao montar a Aplicacao e na abertura
+  do ciclo (mesma funcao, 3 chamadas). Sem isso o criterio devolve vazio em silencio para o
+  ciclo inteiro. O momento mais barato de recusar e o do cadastro: fala com quem errou.
+- **⭐ Modelo e SO o questionario** (05/09): grupo e organizacao visual e **nao tem peso** —
+  todo o peso esta na Pergunta. Os criterios cadastrais saem do modelo e viram
+  `AplicacaoCriterio` (criterio + peso por perfil), com `Aplicacao.pesoAvaliacao` dizendo
+  quanto o questionario vale. O avaliador nao pode ver "Tempo de Empresa: 75" ao lado das
+  perguntas — ancora o julgamento. **`pesoAvaliacao > 0` e obrigatorio**: com ele, "todos os
+  criterios sem dado -> nota final = nota da avaliacao" cai da formula, sem caso especial.
+- **⭐ Avaliar != apurar**: `Avaliacao.notaAvaliacao` sai no ENVIO (so questionario);
+  `ResultadoAvaliacao` combina com os criterios na apuracao. Mudar peso vira **reapuracao**,
+  sem reabrir avaliacao. ⚠️ A reapuracao em massa **nao aceita recorte por colaborador** (so
+  ciclo ou aplicacao) — senao alguem contorna a separacao de funcoes escolhendo o filtro.
+- **⭐ Faixas de conceito CONTIGUAS** (0-25-50-75-90-100), inferior inclusivo e superior
+  exclusivo (a ultima inclui 100). A validacao checa CONTINUIDADE, nao cobertura ponto a
+  ponto — elimina o buraco de 24,5 em qualquer precisao decimal.
+- **⭐ Nota por grupo e CALCULADA na leitura, nunca materializada** (ADR-RH-02). Grupo nao
+  entra em conta nenhuma; gravar criaria uma segunda verdade para manter em sincronia.
 - Roles: `RH_ADMIN` / `RH_MODELO` / `RH_CICLO` / `AVALIADOR` (ADMIN sempre). MODELO e CICLO
   separadas ate o RH confirmar o que a gestora delega.
-- Docs: `docs/06_especificacao_gestao_pessoas.md`, `docs/DECISAO_RH_ESCOLARIDADE.md`
+- Docs: `docs/06_especificacao_gestao_pessoas.md` · `docs/DECISAO_RH_ESCOLARIDADE.md` ·
+  `docs/ADR-RH-01-colaborador-no-schema-rh.md` · `docs/ADR-RH-02-memoria-por-grupo-calculada.md`
 
 ---
 

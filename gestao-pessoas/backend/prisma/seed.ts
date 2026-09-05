@@ -7,22 +7,35 @@
 // 15 questões · 4 alternativas cada · valores 0,3 / 0,6 / 0,9 / 1,2
 // Soma dos máximos = 18,0 (confere com o /18 do select antigo)
 //
+// ESTRUTURA (reestruturação de 05/09/2026):
+//   • O MODELO é só o questionário. Grupo é organização visual e NÃO tem peso —
+//     todo o peso está na Pergunta. Peso em dois níveis tornava impossível
+//     prever o efeito de mudar um número.
+//   • Os CRITÉRIOS CADASTRAIS (escolaridade, tempo de casa, cursos) saíram do
+//     modelo: ficam no catálogo, e o peso de cada um é por perfil, em
+//     AplicacaoCriterio. O avaliador não pode ver "Tempo de Empresa: 75 pontos"
+//     ao lado das perguntas que vai responder — ancora o julgamento.
+//   • Por isso o seed cria o CATÁLOGO e os MODELOS, e nenhuma Aplicação: ela
+//     só existe dentro de um ciclo, montada pelo RH.
+//
 // ATENÇÃO — o que aqui é DECISÃO DA GESTORA DE RH e está apenas pré-preenchido:
 //   1. Títulos das questões: derivados do texto das alternativas (o Protheus
 //      não exporta o enunciado). Conferir.
 //   2. Agrupamento das questões.
-//   3. PESOS dos grupos: sugestão inicial. Hoje no Protheus tudo pesa igual
-//      e a avaliação vale só 20% da nota. Aqui está 60% desempenho /
-//      40% critérios cadastrais — número para discutir, não para aceitar.
-//   4. Faixas de conceito: sugestão em degraus de 25, alinhada à escala.
+//   3. PESOS: os números vieram dos pesos que eram por grupo e foram
+//      redistribuídos entre as perguntas preservando o total. Ponto de partida
+//      para ajustar, não recomendação fechada.
 //
 // JÁ CONFERIDO CONTRA O PROTHEUS (05/09/2026, capulmig — 1.036 colaboradores):
 //   • Faixas de escolaridade: rótulos agora são a descrição REAL do SX5 tabela
 //     26, código a código (antes estavam deslocados uma casa). A PONTUAÇÃO é a
 //     do select original e não se mexe sem decisão do RH —
 //     ver docs/DECISAO_RH_ESCOLARIDADE.md.
-//   • Grupos de treinamento nascem com PESO 0: o registro no Protheus parou em
-//     14/11/2025 e zero curso hoje significa "não registrado", não "não fez".
+//   • O critério de treinamento nasce INATIVO no catálogo: o registro no
+//     Protheus parou em 14/11/2025 e zero curso hoje significa "não
+//     registrado", não "não fez".
+//   • Faixas de conceito contíguas (0–25–50–75–90–100), inferior inclusivo e
+//     superior exclusivo — elimina o buraco em 24,5.
 //
 // Este arquivo é a ÚNICA versão viva do seed. `docs/seed-rh.ts` foi o insumo e
 // está superado — não editar lá.
@@ -32,6 +45,7 @@
 // ============================================================================
 
 import { PrismaClient } from '@prisma/client';
+import { distribuirPeso } from '../src/modelo/distribuir-peso';
 
 const prisma = new PrismaClient();
 
@@ -196,7 +210,8 @@ const QUESTOES: Record<string, Questao> = {
 };
 
 // ---------------------------------------------------------------------------
-// Agrupamento — núcleo comum + blocos específicos por perfil
+// Agrupamento — núcleo comum + blocos específicos por perfil.
+// Grupo é ORGANIZAÇÃO VISUAL: não tem peso. O peso mora na Pergunta.
 // ---------------------------------------------------------------------------
 
 const GRUPOS = {
@@ -211,9 +226,11 @@ const GRUPOS = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Critérios automáticos — faixas extraídas dos CASE WHEN do select antigo
-// C7: faixas mantidas · C8: iguais para todos os centros de custo
-// C9: SEM faixa "else 0" — ausência de dado vira semDado + renormalização
+// FAIXAS DOS CRITÉRIOS — extraídas dos CASE WHEN do select antigo.
+// Vivem no CATÁLOGO (rh.criterio_faixa -> rh.criterio), porque são IGUAIS para
+// todos os centros de custo (C8). O que varia por perfil é o PESO, que fica em
+// AplicacaoCriterio. C9: sem faixa "else 0" — ausência de dado vira semDado e
+// o critério sai do numerador E do denominador.
 // ---------------------------------------------------------------------------
 
 // RÓTULO = descrição REAL do SX5 tabela 26, código a código, verbatim do ERP
@@ -230,22 +247,21 @@ const GRUPOS = {
 // Se ela mudar, é UPDATE em rh.criterio_faixa — não mexe em código.
 //
 // Uma faixa por código: cobre os 13 valores do domínio, sem buraco nem
-// sobreposição (validação §4.6). Entre parênteses, a população em 05/09/2026.
+// sobreposição. Entre parênteses, a população em 05/09/2026.
 const FAIXAS_ESCOLARIDADE = [
-  // valorDominio = x5_chave da tabela 26 do SX5
-  { dominio: ['10'], pontuacao: 25,  rotulo: 'ANALFABETO' },                                       // 3
-  { dominio: ['20'], pontuacao: 25,  rotulo: 'ATE 4ª SERIE INCOMPLETA (PRIMARIO INCOMPLETO)' },    // 9
-  { dominio: ['25'], pontuacao: 25,  rotulo: 'COM 4ª SERIE COMPLETA DO 1º GRAU (PRIMARIO COMPLETO)' }, // 27
-  { dominio: ['30'], pontuacao: 25,  rotulo: 'PRIMEIRO GRAU (GINASIO) INCOMPLETO' },               // 95
-  { dominio: ['35'], pontuacao: 25,  rotulo: 'PRIMEIRO GRAU (GINASIO) COMPLETO' },                 // 68
-  { dominio: ['40'], pontuacao: 25,  rotulo: 'SEGUNDO GRAU (COLEGIAL) INCOMPLETO' },               // 138
-  { dominio: ['45'], pontuacao: 25,  rotulo: 'SEGUNDO GRAU (COLEGIAL) COMPLETO' },                 // 480
-  { dominio: ['50'], pontuacao: 50,  rotulo: 'SUPERIOR INCOMPLETO' },                              // 74
-  { dominio: ['55'], pontuacao: 75,  rotulo: 'SUPERIOR COMPLETO' },                                // 107
-  { dominio: ['65'], pontuacao: 100, rotulo: 'MESTRADO COMPLETO' },                                // 1
-  { dominio: ['75'], pontuacao: 100, rotulo: 'DOUTORADO COMPLETO' },                               // 0
-  { dominio: ['85'], pontuacao: 100, rotulo: 'POS-GRADUACAO/ESPECIALIZACAO' },                     // 33
-  { dominio: ['95'], pontuacao: 100, rotulo: 'POS-DOUTORADO' },                                    // 1
+  { dominio: '10', pontuacao: 25,  rotulo: 'ANALFABETO' },                                          // 3
+  { dominio: '20', pontuacao: 25,  rotulo: 'ATE 4ª SERIE INCOMPLETA (PRIMARIO INCOMPLETO)' },       // 9
+  { dominio: '25', pontuacao: 25,  rotulo: 'COM 4ª SERIE COMPLETA DO 1º GRAU (PRIMARIO COMPLETO)' },// 27
+  { dominio: '30', pontuacao: 25,  rotulo: 'PRIMEIRO GRAU (GINASIO) INCOMPLETO' },                  // 95
+  { dominio: '35', pontuacao: 25,  rotulo: 'PRIMEIRO GRAU (GINASIO) COMPLETO' },                    // 68
+  { dominio: '40', pontuacao: 25,  rotulo: 'SEGUNDO GRAU (COLEGIAL) INCOMPLETO' },                  // 138
+  { dominio: '45', pontuacao: 25,  rotulo: 'SEGUNDO GRAU (COLEGIAL) COMPLETO' },                    // 480
+  { dominio: '50', pontuacao: 50,  rotulo: 'SUPERIOR INCOMPLETO' },                                 // 74
+  { dominio: '55', pontuacao: 75,  rotulo: 'SUPERIOR COMPLETO' },                                   // 107
+  { dominio: '65', pontuacao: 100, rotulo: 'MESTRADO COMPLETO' },                                   // 1
+  { dominio: '75', pontuacao: 100, rotulo: 'DOUTORADO COMPLETO' },                                  // 0
+  { dominio: '85', pontuacao: 100, rotulo: 'POS-GRADUACAO/ESPECIALIZACAO' },                        // 33
+  { dominio: '95', pontuacao: 100, rotulo: 'POS-DOUTORADO' },                                       // 1
 ];
 
 const FAIXAS_TEMPO_EMPRESA = [
@@ -273,95 +289,108 @@ const FAIXAS_TREINAMENTO = [
 ];
 
 // ---------------------------------------------------------------------------
-// Modelos — três perfis. Pesos SUGERIDOS (somam 100, mas C2 permite livres).
-// Desempenho 60 / Critérios cadastrais 40.
+// CATÁLOGO DE CRITÉRIOS (rh.criterio + rh.criterio_faixa).
 //
-// ⚠️ TREINAMENTO NASCE COM PESO 0 (decisão de 05/09/2026, provisória).
-// O registro em RA4010 PAROU: 896 pessoas com curso em 2023, 817 em 2024, 34 em
-// 2025 e nada depois de 14/11/2025 — queda GERAL, em todas as filiais, não
-// concentrada em nenhuma. Zero curso hoje não significa "não se capacitou",
-// significa "deixou-se de registrar" — é ausência de dado, e o modelo trataria
-// como valor legítimo, jogando ~99% das pessoas na faixa mínima de um grupo com
-// 10–13% de peso. Peso 0 tira o grupo do numerador E do denominador (§4.3) sem
-// apagar a estrutura. Reativar = UPDATE em rh.grupo, sem tocar em código.
-// Pendente com o RH: por que o registro parou. Ver docs/DECISAO_RH_ESCOLARIDADE.md §4.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// CATÁLOGO DE CRITÉRIOS (rh.criterio) — substitui o antigo enum TipoCriterio.
-//
-// Estes quatro são CALCULADOS: o valor vem de um resolver no backend, ligado
-// pelo `codigoCalculo`. O RH administra nome, unidade, faixas e peso; criar um
-// critério calculado NOVO exige código, e por isso não é tela.
+// Os quatro são CALCULADOS: o valor sai de um resolver do backend, ligado pelo
+// `codigoCalculo`. O RH administra nome, unidade e faixas; criar um critério
+// calculado NOVO exige código, e por isso não é tela.
 //
 // ⚠️ `codigoCalculo` tem de casar com uma chave de
-// `src/calculo/resolvers/registry.ts`. A publicação do modelo valida isso e
-// recusa o que não casar — sem essa guarda, um código errado faria o critério
-// devolver vazio em silêncio para todos os avaliados do ciclo.
+// src/calculo/resolvers/registry.ts. Isso é validado em TRÊS momentos — ao
+// salvar o critério, ao montar a Aplicação e na abertura do ciclo — porque um
+// código errado não quebra: o critério devolve vazio em silêncio para o ciclo
+// inteiro.
 //
-// Critério INFORMADO (valor importado ou digitado por ciclo) não entra aqui:
-// é cadastro que o RH faz sozinho, e a tela dele fica para depois do piloto.
+// ⚠️ CRITÉRIO NÃO TEM PESO AQUI. O peso é por perfil e vive em
+// AplicacaoCriterio, montada pelo RH quando houver ciclo. Critério que não for
+// listado na Aplicação simplesmente não entra na apuração daquele perfil.
 // ---------------------------------------------------------------------------
 
-const CRITERIOS_CALCULADOS = [
+const CRITERIOS = [
   {
     codigo: 'ESCOLARIDADE',
     nome: 'Escolaridade',
     descricao: 'Grau de instrução do cadastro do Protheus (RA_GRINRAI / SX5 tabela 26).',
-    tipoValor: 'DOMINIO',
+    tipoValor: 'DOMINIO' as const,
     codigoCalculo: 'ESCOLARIDADE',
     unidade: null,
+    ativo: true,
+    faixas: FAIXAS_ESCOLARIDADE,
   },
   {
     codigo: 'TEMPO_EMPRESA',
     nome: 'Tempo de Empresa',
     descricao: 'Anos entre a admissão e a data-base do ciclo. Preservado na transferência de filial.',
-    tipoValor: 'NUMERICO',
+    tipoValor: 'NUMERICO' as const,
     codigoCalculo: 'TEMPO_EMPRESA',
     unidade: 'anos',
+    ativo: true,
+    faixas: FAIXAS_TEMPO_EMPRESA,
   },
   {
     codigo: 'TEMPO_FUNCAO',
     nome: 'Tempo na Função',
     descricao:
       'Anos desde a última TROCA de função (SR7010). Dissídio anual não conta como troca — ver src/sincronizacao/data-ultima-funcao.ts.',
-    tipoValor: 'NUMERICO',
+    tipoValor: 'NUMERICO' as const,
     codigoCalculo: 'TEMPO_FUNCAO',
     unidade: 'anos',
+    ativo: true,
+    faixas: FAIXAS_TEMPO_FUNCAO,
   },
   {
+    // ⚠️ NASCE INATIVO. O registro de treinamento no Protheus PAROU: 896 pessoas
+    // com curso em 2023, 817 em 2024, 34 em 2025 e nada depois de 14/11/2025 —
+    // queda GERAL, em todas as filiais. Zero curso hoje significa "deixou-se de
+    // registrar", não "não fez", e o critério trata zero como valor legítimo:
+    // com a janela de 12 meses, 6 pessoas de 1.036 pontuariam e o resto ficaria
+    // na faixa mínima.
+    //
+    // Inativo (e não peso zero) porque agora o peso é por Aplicação: peso zero
+    // teria de ser lembrado em toda aplicação nova, e a primeira que esquecesse
+    // ligaria o critério sem querer. Inativo, ele nem é oferecido na montagem —
+    // e as três validações recusam critério inativo em uso.
+    //
+    // Reativar é um clique quando o RH explicar por que o registro parou.
+    // Ver docs/DECISAO_RH_ESCOLARIDADE.md §4.
     codigo: 'QTDE_TREINAMENTO',
     nome: 'Treinamentos no Período',
-    descricao: 'Cursos concluídos na janela do ciclo (RA4010). Zero é valor legítimo, não ausência.',
-    tipoValor: 'NUMERICO',
+    descricao:
+      'Cursos concluídos na janela do ciclo (RA4010). Zero é valor legítimo, não ausência. INATIVO até o RH esclarecer por que o registro parou em 14/11/2025.',
+    tipoValor: 'NUMERICO' as const,
     codigoCalculo: 'QTDE_TREINAMENTO',
     unidade: 'cursos',
+    ativo: false,
+    faixas: FAIXAS_TREINAMENTO,
   },
-] as const;
-
-type DefGrupoManual = { chave: keyof typeof GRUPOS; peso: number };
-type DefGrupoAuto = {
-  titulo: string;
-  /// Código no catálogo `rh.criterio` (antes era o enum TipoCriterio).
-  criterioCodigo: (typeof CRITERIOS_CALCULADOS)[number]['codigo'];
-  peso: number;
-  faixas: unknown[];
-  faixaTipo: 'NUMERICA' | 'DOMINIO';
-};
-
-const AUTOMATICOS = (pesos: [number, number, number, number]): DefGrupoAuto[] => [
-  { titulo: 'Escolaridade',           criterioCodigo: 'ESCOLARIDADE',     peso: pesos[0], faixas: FAIXAS_ESCOLARIDADE, faixaTipo: 'DOMINIO'  },
-  { titulo: 'Tempo de Empresa',       criterioCodigo: 'TEMPO_EMPRESA',    peso: pesos[1], faixas: FAIXAS_TEMPO_EMPRESA, faixaTipo: 'NUMERICA' },
-  { titulo: 'Tempo na Função',        criterioCodigo: 'TEMPO_FUNCAO',     peso: pesos[2], faixas: FAIXAS_TEMPO_FUNCAO,  faixaTipo: 'NUMERICA' },
-  { titulo: 'Treinamentos no Período',criterioCodigo: 'QTDE_TREINAMENTO', peso: pesos[3], faixas: FAIXAS_TREINAMENTO,   faixaTipo: 'NUMERICA' },
 ];
 
-const MODELOS = [
+// ---------------------------------------------------------------------------
+// MODELOS — agora SÓ o questionário.
+//
+// Os números abaixo são os pesos que antes ficavam no GRUPO; o seed os
+// redistribui entre as perguntas de cada grupo, preservando o total (ver
+// src/modelo/distribuir-peso.ts). São ponto de partida para a gestora de RH
+// ajustar, não recomendação fechada — e a tela de montagem mostra o somatório
+// por grupo para ela enxergar o balanço.
+//
+// O quanto o questionário vale FRENTE aos critérios cadastrais não está mais
+// aqui: é `Aplicacao.pesoAvaliacao`, definido quando o ciclo é montado.
+// ---------------------------------------------------------------------------
+
+type PesoDeGrupo = { chave: keyof typeof GRUPOS; peso: number };
+
+const MODELOS: {
+  nome: string;
+  descricao: string;
+  finalidade: 'PRODUCAO' | 'DEMONSTRACAO';
+  grupos: PesoDeGrupo[];
+}[] = [
   {
     nome: 'Operação de Loja',
     descricao: 'Supermercados, postos e agroveterinária — foco em atendimento.',
-    finalidade: 'PRODUCAO' as const,
-    manuais: [
+    finalidade: 'PRODUCAO',
+    grupos: [
       { chave: 'ASSIDUIDADE',    peso:  9 },
       { chave: 'RELACIONAMENTO', peso: 10 },
       { chave: 'INICIATIVA',     peso:  9 },
@@ -369,14 +398,13 @@ const MODELOS = [
       { chave: 'ATENDIMENTO',    peso: 13 },
       { chave: 'RESULTADOS',     peso:  5 },
       { chave: 'APRESENTACAO',   peso:  5 },
-    ] as DefGrupoManual[],
-    automaticos: AUTOMATICOS([8, 10, 10, 0]),
+    ],
   },
   {
     nome: 'Produção e Indústria',
     descricao: 'Laticínio e fábrica de ração — foco em técnica e qualidade.',
-    finalidade: 'PRODUCAO' as const,
-    manuais: [
+    finalidade: 'PRODUCAO',
+    grupos: [
       { chave: 'ASSIDUIDADE',    peso: 10 },
       { chave: 'RELACIONAMENTO', peso:  9 },
       { chave: 'INICIATIVA',     peso:  9 },
@@ -384,58 +412,59 @@ const MODELOS = [
       { chave: 'TECNICO',        peso: 12 },
       { chave: 'RESULTADOS',     peso:  5 },
       { chave: 'APRESENTACAO',   peso:  3 },
-    ] as DefGrupoManual[],
-    automaticos: AUTOMATICOS([6, 10, 12, 0]),
+    ],
   },
   {
     nome: 'Administrativo',
     descricao: 'Escritórios e apoio — apenas o núcleo comum.',
-    finalidade: 'PRODUCAO' as const,
-    manuais: [
+    finalidade: 'PRODUCAO',
+    grupos: [
       { chave: 'ASSIDUIDADE',    peso: 12 },
       { chave: 'RELACIONAMENTO', peso: 16 },
       { chave: 'INICIATIVA',     peso: 16 },
       { chave: 'QUALIDADE',      peso: 16 },
-    ] as DefGrupoManual[],
-    automaticos: AUTOMATICOS([12, 9, 9, 0]),
+    ],
   },
   {
     nome: '[DEMO] Modelo de Treinamento',
-    descricao: 'Para a Arielly explorar o sistema sem risco. Não abre ciclo válido.',
-    finalidade: 'DEMONSTRACAO' as const,
-    manuais: [
+    descricao: 'Para a gestora de RH explorar o sistema sem risco. Não abre ciclo válido.',
+    finalidade: 'DEMONSTRACAO',
+    grupos: [
       { chave: 'ASSIDUIDADE',    peso: 25 },
       { chave: 'RELACIONAMENTO', peso: 25 },
-    ] as DefGrupoManual[],
-    automaticos: AUTOMATICOS([12, 13, 12, 0]),
+    ],
   },
 ];
 
 // ---------------------------------------------------------------------------
 // Conceitos padrão — aplicados ao CICLO na abertura, não ao modelo.
+//
+// ⭐ CONTÍGUAS POR CONSTRUÇÃO (decisão de 05/09/2026): limite inferior
+// inclusivo, superior exclusivo, exceto a última, que inclui o 100. As faixas
+// anteriores (0–24, 25–49, …) deixavam nota 24,5 sem conceito nenhum, e
+// `notaFinal` é Decimal(6,2). A validação de abertura confere CONTINUIDADE — o
+// fim de uma é o início da próxima — em vez de cobertura ponto a ponto.
 // Exportado para a tela de criação de ciclo usar como default.
 // ---------------------------------------------------------------------------
 
 export const CONCEITOS_PADRAO = [
-  { descricao: 'Insuficiente',        limiteInferior:  0, limiteSuperior: 24,  cor: '#C0392B', ordem: 1 },
-  { descricao: 'Abaixo do esperado',  limiteInferior: 25, limiteSuperior: 49,  cor: '#E67E22', ordem: 2 },
-  { descricao: 'Atende',              limiteInferior: 50, limiteSuperior: 74,  cor: '#F1C40F', ordem: 3 },
-  { descricao: 'Supera',              limiteInferior: 75, limiteSuperior: 89,  cor: '#72BF44', ordem: 4 },
-  { descricao: 'Excelente',           limiteInferior: 90, limiteSuperior: 100, cor: '#006838', ordem: 5 },
+  { descricao: 'Insuficiente',       limiteInferior:  0, limiteSuperior:  25, cor: '#C0392B', ordem: 1 },
+  { descricao: 'Abaixo do esperado', limiteInferior: 25, limiteSuperior:  50, cor: '#E67E22', ordem: 2 },
+  { descricao: 'Atende',             limiteInferior: 50, limiteSuperior:  75, cor: '#F1C40F', ordem: 3 },
+  { descricao: 'Supera',             limiteInferior: 75, limiteSuperior:  90, cor: '#72BF44', ordem: 4 },
+  { descricao: 'Excelente',          limiteInferior: 90, limiteSuperior: 100, cor: '#006838', ordem: 5 },
 ];
 
 // ---------------------------------------------------------------------------
 // Execução
 // ---------------------------------------------------------------------------
 
-async function main() {
-  // --- catálogo de critérios (idempotente por `codigo`)
-  const catalogo = new Map<string, { id: string }>();
-  for (const c of CRITERIOS_CALCULADOS) {
+async function semearCatalogo() {
+  for (const c of CRITERIOS) {
     const criterio = await prisma.criterio.upsert({
       where: { codigo: c.codigo },
-      // O `update` NÃO toca em `ativo` nem nas faixas: o RH pode ter desligado
-      // ou reordenado, e reexecutar o seed não pode desfazer decisão dele.
+      // O `update` NÃO toca em `ativo`: o RH pode ter ligado ou desligado o
+      // critério, e reexecutar o seed não pode desfazer decisão dele.
       update: {
         nome: c.nome,
         descricao: c.descricao,
@@ -452,21 +481,57 @@ async function main() {
         tipoValor: c.tipoValor,
         codigoCalculo: c.codigoCalculo,
         unidade: c.unidade,
+        ativo: c.ativo,
       },
     });
-    catalogo.set(c.codigo, criterio);
-    console.log(`  critério: ${c.codigo} -> resolver ${c.codigoCalculo}`);
-  }
 
+    // Faixas: só na primeira vez. Reescrever apagaria ajuste de pontuação feito
+    // pelo RH — que é exatamente o que a revisão da escolaridade pode trazer.
+    const jaTem = await prisma.criterioFaixa.count({ where: { criterioId: criterio.id } });
+    if (jaTem > 0) {
+      console.log(`  critério ${c.codigo}: ${jaTem} faixas já existem, mantidas`);
+      continue;
+    }
+
+    let ordem = 0;
+    for (const f of c.faixas as Record<string, unknown>[]) {
+      await prisma.criterioFaixa.create({
+        data:
+          c.tipoValor === 'DOMINIO'
+            ? {
+                criterioId: criterio.id,
+                tipo: 'DOMINIO',
+                valorDominio: f.dominio as string,
+                pontuacao: f.pontuacao as number,
+                rotulo: f.rotulo as string,
+                ordem: ordem++,
+              }
+            : {
+                criterioId: criterio.id,
+                tipo: 'NUMERICA',
+                limiteInferior: f.inf as number,
+                limiteSuperior: f.sup as number | null,
+                inclusivoInf: f.incInf as boolean,
+                inclusivoSup: f.incSup as boolean,
+                pontuacao: f.pontuacao as number,
+                rotulo: f.rotulo as string,
+                ordem: ordem++,
+              },
+      });
+    }
+    console.log(
+      `  critério ${c.codigo} (${c.ativo ? 'ativo' : 'INATIVO'}) -> resolver ${c.codigoCalculo}, ${ordem} faixas`,
+    );
+  }
+}
+
+async function semearModelos() {
   for (const def of MODELOS) {
     const existente = await prisma.modelo.findFirst({ where: { nome: def.nome } });
     if (existente) {
       console.log(`  já existe, ignorando: ${def.nome}`);
       continue;
     }
-
-    let pontuacaoMaxima = 0;
-    let ordem = 0;
 
     const modelo = await prisma.modelo.create({
       data: {
@@ -479,89 +544,47 @@ async function main() {
     });
     const versaoId = modelo.versoes[0].id;
 
-    // --- grupos manuais, com as questões reais
-    for (const g of def.manuais) {
+    let pontuacaoMaxima = 0;
+    let ordemGrupo = 0;
+
+    for (const g of def.grupos) {
       const meta = GRUPOS[g.chave];
       const grupo = await prisma.grupo.create({
-        data: {
-          modeloVersaoId: versaoId,
-          titulo: meta.titulo,
-          ordem: ordem++,
-          peso: g.peso,
-          origem: 'MANUAL',
-        },
+        data: { modeloVersaoId: versaoId, titulo: meta.titulo, ordem: ordemGrupo++ },
       });
 
+      // O peso que era do grupo se reparte entre as perguntas dele, somando
+      // exatamente o total (sem dízima na tela).
+      const pesos = distribuirPeso(g.peso, meta.questoes.length);
+
       let ordemQ = 0;
-      for (const codigo of meta.questoes) {
+      for (const [i, codigo] of meta.questoes.entries()) {
         const q = QUESTOES[codigo];
+        const peso = pesos[i];
         const pergunta = await prisma.pergunta.create({
           data: {
             grupoId: grupo.id,
             enunciado: q.titulo,
             ordem: ordemQ++,
-            peso: 1,
+            peso,
             codigoOrigem: q.codigo,
           },
         });
-        for (const [i, a] of q.alternativas.entries()) {
+        for (const [j, a] of q.alternativas.entries()) {
           await prisma.perguntaAlternativa.create({
             data: {
               perguntaId: pergunta.id,
               descricao: a.descricao,
               valor: a.valor,
-              ordem: i,
+              ordem: j,
               codigoOrigem: a.codigo,
             },
           });
         }
-        pontuacaoMaxima += Math.max(...q.alternativas.map((a) => a.valor));
-      }
-    }
-
-    // --- grupos automáticos, com as faixas
-    for (const a of def.automaticos) {
-      const grupo = await prisma.grupo.create({
-        data: {
-          modeloVersaoId: versaoId,
-          titulo: a.titulo,
-          ordem: ordem++,
-          peso: a.peso,
-          origem: 'AUTOMATICO',
-          criterioId: catalogo.get(a.criterioCodigo)!.id,
-        },
-      });
-
-      let ordemF = 0;
-      for (const f of a.faixas as any[]) {
-        if (a.faixaTipo === 'DOMINIO') {
-          for (const d of f.dominio as string[]) {
-            await prisma.criterioFaixa.create({
-              data: {
-                grupoId: grupo.id,
-                tipo: 'DOMINIO',
-                valorDominio: d,
-                pontuacao: f.pontuacao,
-                rotulo: f.rotulo,
-                ordem: ordemF++,
-              },
-            });
-          }
-        } else {
-          await prisma.criterioFaixa.create({
-            data: {
-              grupoId: grupo.id,
-              tipo: 'NUMERICA',
-              limiteInferior: f.inf,
-              limiteSuperior: f.sup,
-              inclusivoInf: f.incInf,
-              inclusivoSup: f.incSup,
-              pontuacao: f.pontuacao,
-              rotulo: f.rotulo,
-              ordem: ordemF++,
-            },
-          });
-        }
+        // Denominador da nota do questionário: Σ (maior valor × peso da pergunta).
+        // Calculado, nunca constante — o modelo antigo dividia por 18 fixo e
+        // acrescentar uma pergunta fazia a nota passar de 100 sem acusar erro.
+        pontuacaoMaxima += Math.max(...q.alternativas.map((a) => a.valor)) * peso;
       }
     }
 
@@ -570,8 +593,42 @@ async function main() {
       data: { pontuacaoMaxima, publicadoEm: new Date() },
     });
 
-    console.log(`  criado: ${def.nome} — pontuação máxima manual ${pontuacaoMaxima.toFixed(1)}`);
+    const somaPesos = def.grupos.reduce((s, g) => s + g.peso, 0);
+    console.log(
+      `  criado: ${def.nome} — soma dos pesos ${somaPesos}, pontuação máxima ${pontuacaoMaxima.toFixed(4)}`,
+    );
   }
+}
+
+/**
+ * CHECKSUM contra o Protheus. Com TODAS as perguntas pesando 1, a pontuação
+ * máxima do questionário completo é a soma dos maiores valores das 15 questões
+ * reais = 18,0 — o mesmo /18 do select antigo. É o que prova que as questões e
+ * as alternativas continuam sendo as do RD8010, e não pode se perder na conta
+ * ponderada nova.
+ */
+function conferirChecksum(): void {
+  const todas = Object.values(GRUPOS).flatMap((g) => g.questoes);
+  const total = todas.reduce(
+    (soma, codigo) => soma + Math.max(...QUESTOES[codigo].alternativas.map((a) => a.valor)) * 1,
+    0,
+  );
+  const arredondado = Number(total.toFixed(4));
+  if (arredondado !== 18) {
+    throw new Error(
+      `Checksum do instrumento falhou: com pesos 1 a pontuação máxima deveria ser 18,0 e deu ${arredondado}. ` +
+        'As questões ou as alternativas divergem do RD8010 — conferir antes de semear.',
+    );
+  }
+  console.log(`  checksum ok: ${todas.length} questões, pontuação máxima 18,0 com pesos iguais`);
+}
+
+async function main() {
+  conferirChecksum();
+  console.log('catálogo de critérios:');
+  await semearCatalogo();
+  console.log('modelos:');
+  await semearModelos();
 }
 
 main()
