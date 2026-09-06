@@ -51,9 +51,13 @@ ciclo 000006 do Protheus — a nota do questionário bate **108/108** (ver
 
 ### Pela metade
 
-- **Ciclo e aplicação não têm edição.** Dá para criar, abrir e encerrar o ciclo; criar a
-  aplicação. Não há `PATCH` nem `DELETE` de nenhum dos dois — errou, cria outro. Aceitável
-  enquanto o ciclo é RASCUNHO, incômodo depois.
+- **Ciclo e aplicação quase não têm edição.** Dá para criar, abrir e encerrar o ciclo; criar
+  a aplicação. O único `PATCH` que existe é `ciclos/:id/periodo`, **de propósito estreito**:
+  período é rótulo e não entra em conta nenhuma, enquanto `dataBase` e a janela de
+  treinamento ancoram todo cálculo temporal — mudá-las num ciclo em andamento moveria a nota
+  de quem já respondeu, em silêncio. Quem precisa de outra data-base cria outro ciclo, que é
+  a decisão que isso realmente é. Ciclo `ENCERRADO` não aceita nem o período. Fora disso não
+  há edição: errou, cria outro.
 - **Reabertura de avaliação** existe na API (`POST /avaliacoes/:id/reabrir`, com motivo
   obrigatório e auditoria) e **não tem botão em tela nenhuma**.
 - **Sincronização** existe na API (`POST /sincronizacao`, RH_ADMIN) e **não tem tela nem

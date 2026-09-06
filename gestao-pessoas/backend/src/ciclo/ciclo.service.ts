@@ -150,6 +150,59 @@ export class CicloService {
     return encerrado;
   }
 
+  /**
+   * ⭐ AJUSTAR O PERÍODO — e SÓ o período.
+   *
+   * `periodoInicio`/`periodoFim` são **rótulo**: dizem de que intervalo o ciclo
+   * fala, aparecem no painel e viram o prazo na fila do avaliador. Nenhuma
+   * conta os usa — quem ancora todo cálculo temporal é a `dataBase`, e ela
+   * NÃO se mexe aqui, de propósito. Mudar a data-base de um ciclo em andamento
+   * moveria a nota de quem já respondeu, em silêncio; é a mesma família do
+   * `current_date` que o select antigo usava e que a §4.2 da spec proibiu.
+   *
+   * Por isso este método é estreito: quem quiser outra data-base cria outro
+   * ciclo, que é a decisão que ela realmente é.
+   *
+   * ⚠️ Ciclo ENCERRADO não muda: o resultado já foi materializado e a memória
+   * de cálculo dele fala de um período que ficaria diferente do gravado.
+   */
+  async ajustarPeriodo(
+    cicloId: string,
+    periodoInicio: Date,
+    periodoFim: Date,
+    usuarioId: string,
+  ) {
+    const ciclo = await this.prisma.ciclo.findUnique({ where: { id: cicloId } });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+    if (ciclo.status === 'ENCERRADO') {
+      throw new BadRequestException(
+        'O ciclo está ENCERRADO — o período dele descreve resultados já materializados e não muda.',
+      );
+    }
+
+    this.validarPeriodo({
+      periodoInicio,
+      periodoFim,
+      dataBase: ciclo.dataBase,
+      janelaTreinamentoMeses: ciclo.janelaTreinamentoMeses,
+    });
+
+    const atualizado = await this.prisma.ciclo.update({
+      where: { id: cicloId },
+      data: { periodoInicio, periodoFim },
+    });
+
+    await this.auditoria.registrar({
+      entidade: 'Ciclo',
+      entidadeId: cicloId,
+      acao: 'AJUSTAR_PERIODO',
+      usuarioId,
+      valorAnterior: { periodoInicio: ciclo.periodoInicio, periodoFim: ciclo.periodoFim },
+      valorNovo: { periodoInicio, periodoFim },
+    });
+    return atualizado;
+  }
+
   listar() {
     return this.prisma.ciclo.findMany({
       orderBy: { periodoInicio: 'desc' },
@@ -181,7 +234,9 @@ export class CicloService {
     return ciclo;
   }
 
-  private validarPeriodo(dados: DadosCiclo) {
+  /** Só as datas: é o que a regra olha, e pedir o ciclo inteiro obrigaria quem
+   *  ajusta o período a fabricar campos que não têm nada a ver com ela. */
+  private validarPeriodo(dados: Pick<DadosCiclo, 'periodoInicio' | 'periodoFim' | 'dataBase' | 'janelaTreinamentoMeses'>) {
     const problemas: string[] = [];
     if (dados.periodoFim < dados.periodoInicio) {
       problemas.push('O fim do período é anterior ao início.');

@@ -78,8 +78,13 @@ async function main() {
   const ciclo = await prisma.ciclo.create({
     data: {
       nome: NOME_DO_CICLO,
-      periodoInicio: new Date('2026-01-01'),
-      periodoFim: new Date('2026-12-31'),
+      // ⚠️ Setembro, não o ano inteiro. O período é RÓTULO e não entra em conta
+      // nenhuma — mas ele vira o PRAZO na fila do avaliador, e "responda até
+      // 31/12" num piloto que roda em 15/09 é a tela mentindo. Além disso, um
+      // ciclo de 12 meses se sobrepõe a QUALQUER outro do mesmo ano, o que
+      // fabricava sozinho o cenário de pessoa em dois ciclos (§3.10 do ESTADO).
+      periodoInicio: new Date('2026-09-01'),
+      periodoFim: new Date('2026-09-30'),
       dataBase: new Date('2026-09-15'),
       janelaTreinamentoMeses: 12,
       status: 'RASCUNHO',
