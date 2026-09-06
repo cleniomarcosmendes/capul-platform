@@ -26,6 +26,8 @@ export interface ModuloDoToken {
 
 export interface UsuarioDoToken {
   sub: string;
+  /** ⚠️ O JWT traz `username`, não `nome` — o nome vem de `/auth/me`. */
+  username?: string;
   nome?: string;
   email?: string;
   modulos?: ModuloDoToken[];

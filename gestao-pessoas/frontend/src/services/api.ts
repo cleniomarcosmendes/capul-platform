@@ -85,6 +85,10 @@ export interface Questionario {
   id: string;
   status: StatusAvaliacao;
   observacaoAvaliador: string | null;
+  /** ⚠️ De QUAL ciclo é esta avaliação, e até quando. Com dois ciclos abertos a
+   *  mesma pessoa aparece duas vezes na fila, com cartões idênticos. */
+  ciclo: { id: string; nome: string; prazo: string };
+  aplicacao: string;
   avaliado: { nome: string; matricula: string; cargo: string | null };
   perguntasTotal: number;
   perguntasRespondidas: number;
@@ -653,4 +657,20 @@ export const publicoDaAplicacao = {
       .then((r) => r.data),
   remover: (aplicacaoId: string, colaboradorId: string) =>
     rhApi.delete(`/aplicacoes/${aplicacaoId}/publico/${colaboradorId}`).then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// Quem está logado. O JWT traz `username` e `filialCodigo`, mas NÃO o nome nem
+// o nome da filial — o Hub os pega aqui, e o módulo precisa mostrar o mesmo.
+// ---------------------------------------------------------------------------
+
+export interface UsuarioLogado {
+  id: string;
+  username: string;
+  nome: string;
+  filialAtual: { id: string; codigo: string; nome: string } | null;
+}
+
+export const usuarioLogado = {
+  carregar: () => authApi.get<UsuarioLogado>('/me').then((r) => r.data),
 };

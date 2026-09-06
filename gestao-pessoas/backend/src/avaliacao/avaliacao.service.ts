@@ -100,6 +100,12 @@ export class AvaliacaoService {
     const completa = await this.prisma.avaliacao.findUniqueOrThrow({
       where: { id: avaliacao.id },
       include: {
+        // ⚠️ O CICLO vem junto. Quem abre um questionário de 14 perguntas
+        // precisa saber SOBRE QUAL CICLO está respondendo e até quando: com dois
+        // ciclos abertos, a mesma pessoa aparece duas vezes na fila com cartões
+        // idênticos, e sem isto o avaliador responde as 14 sem nunca saber qual
+        // das duas abriu.
+        ciclo: { select: { id: true, nome: true, periodoFim: true } },
         aplicacao: {
           include: {
             modeloVersao: {
@@ -132,6 +138,12 @@ export class AvaliacaoService {
       id: completa.id,
       status: completa.status,
       observacaoAvaliador: completa.observacaoAvaliador,
+      ciclo: {
+        id: completa.ciclo.id,
+        nome: completa.ciclo.nome,
+        prazo: completa.ciclo.periodoFim,
+      },
+      aplicacao: completa.aplicacao.nome,
       avaliado: {
         nome: avaliado?.nome ?? '',
         matricula: avaliado?.matricula ?? '',

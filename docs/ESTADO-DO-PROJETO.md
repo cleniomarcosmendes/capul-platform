@@ -280,6 +280,14 @@ lista é agrupada por ciclo, com **nome e prazo** no cabeçalho do bloco
 defeito não era filtro faltando — era falta de rótulo, e esconder um dos ciclos teria
 consertado o sintoma errado.
 
+⭐ **E o rótulo tem de estar no CARTÃO e dentro da avaliação aberta, não só no cabeçalho do
+bloco.** O roteiro de tela de 06/09 mostrou o pior caso: os dois cartões da mesma pessoa são
+visualmente idênticos — mesmo nome, cargo, matrícula, "14 perguntas", mesma cor — e o único
+distintivo era uma pílula de 12px no topo do bloco, que sai de vista depois de 14 cartões. E
+a avaliação aberta não tinha **nenhuma** ocorrência de ciclo ou prazo: o avaliador respondia
+as 14 perguntas sem nunca saber qual das duas tinha aberto. Cabeçalho *sticky* ajuda quem
+rola e **não substitui** o rótulo onde a pessoa toca.
+
 #### ⚠️ Pergunta aberta: a mesma pessoa em dois ciclos abertos
 
 `@@unique([cicloId, avaliadoId])` impede duplicata **dentro** de um ciclo, não **entre**

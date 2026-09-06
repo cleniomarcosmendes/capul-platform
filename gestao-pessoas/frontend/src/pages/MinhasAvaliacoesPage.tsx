@@ -8,8 +8,14 @@ import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from 
  *
  * Pensada para um supervisor com 30 liderados, no celular, entre uma tarefa e
  * outra. Por isso, nesta ordem:
- *   • o PROGRESSO GERAL no topo ("4 de 22 respondidas") — sem isso ele não sabe
+ *   • o PROGRESSO GERAL no topo ("4 de 22 enviadas") — sem isso ele não sabe
  *     se está no começo ou no fim;
+ *
+ * ⚠️ "ENVIADAS" no topo, "PERGUNTAS RESPONDIDAS" no cartão. A palavra
+ * "respondidas" significava as duas coisas na mesma tela — 6 de 22 eram
+ * avaliações enviadas, 3 de 14 eram perguntas marcadas — e é a mesma família do
+ * "Faltam 18 / 18%": dois números com a mesma palavra medindo coisas
+ * diferentes, na mesma dobra da tela.
  *   • o CICLO e o PRAZO de cada bloco — sem prazo, "quando" não tem resposta
  *     em lugar nenhum da tela;
  *   • o progresso DE CADA UM na linha ("7 de 15 respondidas") — é o que
@@ -140,8 +146,11 @@ function CabecalhoDoCiclo({ ciclo, mostrarNome }: { ciclo: ItemDaFila['ciclo']; 
   const dias = Math.ceil((prazo.getTime() - Date.now()) / 86_400_000);
   const urgente = dias <= 7;
 
+  // Sticky ajuda quem rola, mas NÃO substitui o rótulo no cartão: o cabeçalho
+  // some atrás de qualquer coisa que abra por cima, e a informação que decide
+  // precisa estar onde a pessoa toca.
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-slate-100 px-3 py-2">
+    <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 bg-slate-100/95 px-3 py-2 backdrop-blur">
       {mostrarNome && (
         <span className="truncate text-sm font-semibold text-slate-700">{ciclo.nome}</span>
       )}
@@ -180,7 +189,7 @@ function ProgressoGeral({ total, concluidas }: { total: number; concluidas: numb
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-lg font-semibold text-slate-800">
-          {concluidas === total ? 'Tudo enviado' : `${concluidas} de ${total} respondidas`}
+          {concluidas === total ? 'Tudo enviado' : `${concluidas} de ${total} enviadas`}
         </p>
         <span className="text-sm tabular-nums text-slate-500">{percentual}%</span>
       </div>
@@ -210,6 +219,12 @@ function Cartao({ item }: { item: ItemDaFila }) {
         <p className="mt-0.5 truncate text-sm text-slate-500">
           {item.cargo ?? 'Sem cargo cadastrado'} · {item.matricula}
         </p>
+        {/* ⭐ O CICLO NO PRÓPRIO CARTÃO. Com dois ciclos abertos, a mesma pessoa
+            aparece DUAS VEZES na fila com cartões idênticos — mesmo nome, cargo,
+            matrícula e "14 perguntas". O cabeçalho do bloco não basta: com 14
+            cartões no bloco de cima, quem rola até o de baixo já perdeu o
+            cabeçalho de vista e responde sem saber qual dos dois abriu. */}
+        <p className="mt-1 truncate text-xs font-medium text-capul-700">{item.ciclo.nome}</p>
         <div className="mt-2">
           {item.restrita ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
@@ -288,7 +303,7 @@ function ProgressoDoItem({ respondidas, total }: { respondidas: number; total: n
         />
       </div>
       <span className="text-xs tabular-nums text-slate-500">
-        {respondidas} de {total} respondidas
+        {respondidas} de {total} perguntas respondidas
       </span>
     </div>
   );

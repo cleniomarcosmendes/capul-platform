@@ -1722,3 +1722,38 @@ uma pessoa — o que a §3.1 do ESTADO já exige que sejam **duas**, o que torna
 concreta e não hipotética.
 
 **Quem decide:** Clenio + Gestora de RH. Nada foi alterado.
+
+---
+
+## [Gestão de Pessoas] Não há como descartar um rascunho de avaliação — 06/09/2026
+
+Achado no roteiro de tela de 06/09. **Nada foi alterado**, a pedido do Clenio: o rascunho
+que existe hoje no DEV é o único caso vivo de "iniciada e não enviada" e serve de cenário.
+
+**O estado:** avaliação `…b34b13ec` (Ana Claudia Gomes Rodrigues, ciclo Piloto 15/09/2026)
+tem **3 respostas gravadas** e não foi enviada. `status = EM_ANDAMENTO`.
+
+**O que falta:** não existe caminho, nem em tela nem na API, para **descartar as respostas
+sem enviar**. Quem começou a responder a pessoa errada — o que a fila torna fácil, com dois
+cartões idênticos da mesma pessoa em ciclos diferentes — fica com as respostas gravadas e
+sem saída:
+
+- **enviar** não serve: congela uma nota que ninguém quis dar, e o envio é irreversível
+  para o avaliador (só o RH reabre);
+- **reabrir** (`POST /avaliacoes/:id/reabrir`) é do RH_ADMIN e só age em avaliação
+  **ENVIADA** — não apaga resposta de rascunho;
+- **trocar as respostas** uma a uma funciona, mas exige responder as 14 de novo para depois
+  não enviar, e deixa `EM_ANDAMENTO` de qualquer jeito.
+
+**Por que importa além do incômodo:** `EM_ANDAMENTO` com respostas parciais é um estado que
+o painel conta como pendente para sempre, e a guarda de troca de aplicação
+(`assertPodeTrocarDeAplicacao`) recusa mover essa pessoa **justamente por causa das
+respostas** — que ela não quer manter. Um rascunho abandonado trava três coisas ao mesmo
+tempo.
+
+**Forma provável:** `DELETE /avaliacoes/:id/respostas` para o próprio avaliador, permitido
+só enquanto `status !== 'ENVIADA'`, apagando as `Resposta` e devolvendo o status a
+`PENDENTE`, com registro em `rh.auditoria`. Passa pelo `AvaliacaoAcessoService` como todo o
+resto — descartar a própria avaliação continua barrado pela separação de funções.
+
+**Quem decide:** Clenio.

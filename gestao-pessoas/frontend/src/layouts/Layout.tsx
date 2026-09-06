@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { ClipboardList, LogOut, UserCheck, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { usuarioLogado, type UsuarioLogado } from '../services/api';
 import { ROLES } from '../lib/roles';
 
 /**
@@ -16,6 +18,21 @@ import { ROLES } from '../lib/roles';
  */
 export default function Layout() {
   const { usuario, tem, logout } = useAuth();
+
+  /**
+   * ⚠️ O JWT tem `username` e `filialCodigo`, mas NÃO o nome da pessoa nem o
+   * nome da filial — por isso o cabeçalho aparecia vazio enquanto o Hub
+   * mostrava os dois. `/auth/me` é de onde o Hub os tira, e o módulo passa a
+   * tirar do mesmo lugar. Falhar aqui não pode derrubar a tela: sem o nome, o
+   * cabeçalho cai no `username` do token, que sempre existe.
+   */
+  const [euSou, setEuSou] = useState<UsuarioLogado | null>(null);
+  useEffect(() => {
+    usuarioLogado.carregar().then(setEuSou).catch(() => setEuSou(null));
+  }, []);
+
+  const nome = euSou?.nome ?? usuario?.nome ?? usuario?.username ?? null;
+  const filial = euSou?.filialAtual;
   const doRh = tem(ROLES.RH_ADMIN, ROLES.RH_CICLO, ROLES.RH_MODELO);
 
   /**
@@ -41,17 +58,29 @@ export default function Layout() {
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
           <Users size={18} className="text-white/80" aria-hidden />
           <h1 className="flex-1 truncate font-semibold text-white">Avaliação de Desempenho</h1>
-          {usuario?.nome && <span className="truncate text-sm text-white/80">{usuario.nome}</span>}
-          {/* Sair existe em todos os outros módulos da plataforma; sem ele, quem
-              entra por link direto fica sem caminho de volta ao Hub. */}
+          {nome && (
+            <div className="min-w-0 text-right">
+              <p className="truncate text-sm leading-tight text-white">{nome}</p>
+              {filial && (
+                <p className="truncate text-xs leading-tight text-white/70">
+                  {filial.codigo} · {filial.nome}
+                </p>
+              )}
+            </div>
+          )}
+          {/* Sair existe em todos os outros módulos; sem ele, quem entra por link
+              direto fica sem caminho de volta ao Hub. ⚠️ COM RÓTULO: ícone
+              sozinho, encostado no nome de quem está logado, é o lugar onde um
+              toque errado derruba a sessão — e aqui derruba a da plataforma
+              inteira, não só a deste módulo. */}
           <button
             type="button"
             onClick={logout}
-            title="Sair"
-            aria-label="Sair"
-            className="alvo-toque shrink-0 rounded-lg px-2 text-white/80 transition hover:bg-white/10 hover:text-white"
+            title="Sair da plataforma"
+            className="alvo-toque flex shrink-0 items-center gap-1.5 rounded-lg border border-white/25 px-2.5 text-sm font-medium text-white/90 transition hover:bg-white/10 hover:text-white"
           >
-            <LogOut size={17} aria-hidden />
+            <LogOut size={15} aria-hidden />
+            Sair
           </button>
         </div>
 

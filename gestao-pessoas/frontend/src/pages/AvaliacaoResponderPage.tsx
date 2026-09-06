@@ -122,6 +122,7 @@ export default function AvaliacaoResponderPage() {
   return (
     <div className="min-h-dvh bg-slate-50 pb-32">
       <CabecalhoFixo
+        ciclo={questionario.ciclo}
         nome={questionario.avaliado.nome}
         cargo={questionario.avaliado.cargo}
         respondidas={respondidas}
@@ -190,19 +191,30 @@ export default function AvaliacaoResponderPage() {
   );
 }
 
+/**
+ * ⭐ O CICLO E O PRAZO ficam AQUI DENTRO, não só na lista.
+ *
+ * Com dois ciclos abertos, a mesma pessoa aparece duas vezes na fila com
+ * cartões idênticos. Sem o ciclo neste cabeçalho, o avaliador responde as 14
+ * perguntas sem nunca saber qual das duas ele abriu — e não tem como descobrir
+ * sem voltar. A página não tinha nenhuma ocorrência de "ciclo" nem de prazo.
+ */
 function CabecalhoFixo({
   nome,
   cargo,
+  ciclo,
   respondidas,
   total,
   aoVoltar,
 }: {
   nome: string;
   cargo: string | null;
+  ciclo: { nome: string; prazo: string };
   respondidas: number;
   total: number;
   aoVoltar: () => void;
 }) {
+  const prazo = new Date(ciclo.prazo);
   const percentual = total > 0 ? (respondidas / total) * 100 : 0;
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -218,6 +230,9 @@ function CabecalhoFixo({
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-slate-800">{nome}</p>
           <p className="truncate text-xs text-slate-500">{cargo ?? 'Sem cargo cadastrado'}</p>
+          <p className="truncate text-xs font-medium text-capul-700">
+            {ciclo.nome} · até {prazo.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+          </p>
         </div>
         <span className="shrink-0 text-sm font-medium tabular-nums text-slate-600">
           {respondidas}/{total}
