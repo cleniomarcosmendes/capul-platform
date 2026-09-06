@@ -324,34 +324,63 @@ git rev-parse HEAD
 - `not possible to fast-forward` → working tree do servidor sujo. **PARE**, rode `git status` e investigue antes de qualquer reset.
 - 0 commits listados → você já aplicou. Pule pra validação.
 
-### PASSO 2 — Aplicar migrations Prisma
+### PASSO 2 — Aplicar migrations Prisma (pelos jobs `*-migrate`)
 
-(Para CADA migration nova, comando + esperado + possíveis falhas. Não consolidar — explícito é mais seguro.)
+> ⛔ **REBUILD DA IMAGEM DO JOB DE MIGRATE É OBRIGATÓRIO, NÃO OPCIONAL.**
+> O job `*-migrate` tem **build próprio** — `docker compose up -d <backend>` **não**
+> reconstrói a imagem dele. Com imagem velha, o `prisma migrate deploy` imprime
+> **`No pending migrations to apply.`** e sai **0**: a mensagem está correta para as
+> migrations que a imagem contém, e o banco fica sem a migration nova. Foi o que
+> aconteceu em **05/09/2026** com o `capul-auth-migrate` — deploy verde, módulo quebrado.
 
-#### 2.1 `{{nome_migration_1}}`
+**Ordem obrigatória:** rebuildar o job → rodar o job → só depois rebuildar os backends.
 
 ```bash
-docker compose exec auth-gateway npx prisma migrate deploy --schema=./prisma/schema.prisma
+# 1. Rebuild dos jobs de migration afetados (SEM cache de camada de código)
+docker compose build {{lista_jobs_migrate}}
+
+# 2. Rodar cada job e LER a última linha
+docker compose up {{lista_jobs_migrate}}
 ```
 
-**Esperado:**
+**Esperado — a linha que vale é a da GUARDA, não a do Prisma:**
 ```
 Applying migration `{{nome_migration_1}}`
-The following migration(s) have been applied:
-  └─ {{nome_migration_1}}/
-    └─ migration.sql
 All migrations have been successfully applied.
+GUARDA: ok — as {{N}} migrations de /prisma-fonte/migrations estao aplicadas em "public"._prisma_migrations.
 ```
+
+⚠️ **`No pending migrations to apply.` sozinho NÃO é sucesso.** Sem a linha `GUARDA: ok`,
+o job não confirmou nada. Desde 05/09/2026 cada job roda `scripts/migrate-guarda/`, que
+depois do `migrate deploy` confere **toda migration da árvore do repositório** contra
+`_prisma_migrations` e **sai 1** se faltar alguma. Como os backends dependem do job com
+`service_completed_successfully`, o backend **não sobe** — o deploy falha alto, em vez de
+ficar verde com o módulo quebrado.
+
+> A referência da guarda é a **árvore do repositório** (bind mount read-only de
+> `prisma/`), não o diretório de migrations da imagem. Conferir a imagem contra o banco
+> não pegaria o incidente de 05/09: imagem velha tem poucas migrations, todas aplicadas,
+> e a conferência fecharia. Quem sabe o que **deveria** estar aplicado é o código que o
+> `git pull` do PASSO 1 acabou de trazer.
 
 **Validar** (conectar ao banco: `docker compose exec postgres psql -U capul_user -d capul_platform`):
 ```sql
--- {{descrição da validação}}
+-- {{descrição da validação de negócio da migration}}
 SELECT ... FROM ...;
 ```
 
 **Possíveis falhas:**
-- `relation "X" already exists` → migration já aplicada antes (manualmente ou por engano). Verificar `_prisma_migrations` e `prisma migrate resolve`.
-- `permission denied for schema X` → user `capul_user` sem grant. **PARE** e ajuste GRANTs antes de tentar de novo.
+- `GUARDA: ... (nem existe na imagem)` → **a imagem do job está velha.** Rebuild com
+  `docker compose build <servico>-migrate` e rodar de novo. Não contornar aplicando SQL na mão.
+- `GUARDA: a imagem tem a migration, mas o migrate deploy nao a aplicou` → conferir a
+  `DATABASE_URL` do job (banco/schema certos?) e o log do Prisma logo acima.
+- `GUARDA: o diretorio de referencia ... nao existe` → o bind mount
+  `./<modulo>/prisma:/prisma-fonte:ro` sumiu do `docker-compose.yml`. **PARE** — sem
+  referência a guarda aborta de propósito, em vez de fingir sucesso.
+- `relation "X" already exists` → migration já aplicada antes (manualmente ou por engano).
+  Verificar `_prisma_migrations` e `prisma migrate resolve`.
+- `permission denied for schema X` → user `capul_user` sem grant. **PARE** e ajuste os
+  GRANTs antes de tentar de novo.
 
 ### PASSO 3 — Rebuild dos containers afetados
 
@@ -502,6 +531,10 @@ Marcar **todos** antes de enviar:
 - [ ] Pré-requisitos novos (chaves cripto, env vars, etc.) listados na Seção 3 com comandos prontos
 - [ ] Saídas anômalas comuns documentadas em cada passo (não só caso feliz)
 - [ ] Containers afetados estão na sequência de rebuild (Seção 6 PASSO 3)
+- [ ] **Se há migration nova: o job `*-migrate` do módulo está na lista de `docker compose build`**
+      do PASSO 2 — ele tem build próprio e `up -d <backend>` não o reconstrói
+      (`inventario-migrate` é a exceção: roda `postgres:16-alpine` com as migrations
+      vindas de bind mount, então nunca fica velho)
 - [ ] **Todo bloco de validação SQL é precedido do comando de conexão** `docker compose exec postgres psql -U capul_user -d capul_platform` (feedback Douglas 21/05/2026)
 - [ ] **App entregador:** Seção 2.10 preenchida (mesmo que seja só "app não afetado")
 - [ ] **App entregador:** os endpoints que o app consome continuam retrocompatíveis com o bundle **já instalado** nos aparelhos (entregador offline roda o antigo por dias)

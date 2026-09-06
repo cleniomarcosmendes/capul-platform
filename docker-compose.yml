@@ -215,9 +215,15 @@ services:
   auth-migrate:
     build: ./auth-gateway
     container_name: capul-auth-migrate
-    command: ["sh", "-c", "npx prisma migrate deploy"]
+    command: ["sh", "-c", "sh /guarda/entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=core&connection_limit=10
+    volumes:
+      # A guarda confere contra a ARVORE DO REPO, nao contra a imagem:
+      # imagem velha tem poucas migrations e todas aplicadas — a conferencia
+      # fecharia justamente no caso que derrubou o deploy de 05/09.
+      - ./scripts/migrate-guarda:/guarda:ro
+      - ./auth-gateway/prisma:/prisma-fonte:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -423,11 +429,17 @@ services:
   gestao-ti-migrate:
     build: ./gestao-ti/backend
     container_name: capul-gestao-ti-migrate
-    command: ["sh", "-c", "npx prisma migrate deploy"]
+    command: ["sh", "-c", "sh /guarda/entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
       DB_SCHEMA: gestao_ti
       CORE_SCHEMA: core
+    volumes:
+      # A guarda confere contra a ARVORE DO REPO, nao contra a imagem:
+      # imagem velha tem poucas migrations e todas aplicadas — a conferencia
+      # fecharia justamente no caso que derrubou o deploy de 05/09.
+      - ./scripts/migrate-guarda:/guarda:ro
+      - ./gestao-ti/backend/prisma:/prisma-fonte:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -513,11 +525,17 @@ services:
   fiscal-migrate:
     build: ./fiscal/backend
     container_name: capul-fiscal-migrate
-    command: ["sh", "-c", "npx prisma migrate deploy"]
+    command: ["sh", "-c", "sh /guarda/entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
       DB_SCHEMA: fiscal
       CORE_SCHEMA: core
+    volumes:
+      # A guarda confere contra a ARVORE DO REPO, nao contra a imagem:
+      # imagem velha tem poucas migrations e todas aplicadas — a conferencia
+      # fecharia justamente no caso que derrubou o deploy de 05/09.
+      - ./scripts/migrate-guarda:/guarda:ro
+      - ./fiscal/backend/prisma:/prisma-fonte:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -680,9 +698,15 @@ services:
   logistica-migrate:
     build: ./logistica/backend
     container_name: capul-logistica-migrate
-    command: ["sh", "-c", "npx prisma migrate deploy"]
+    command: ["sh", "-c", "sh /guarda/entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
+    volumes:
+      # A guarda confere contra a ARVORE DO REPO, nao contra a imagem:
+      # imagem velha tem poucas migrations e todas aplicadas — a conferencia
+      # fecharia justamente no caso que derrubou o deploy de 05/09.
+      - ./scripts/migrate-guarda:/guarda:ro
+      - ./logistica/backend/prisma:/prisma-fonte:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -693,9 +717,17 @@ services:
   logistica-cofre-migrate:
     build: ./logistica/backend
     container_name: capul-logistica-cofre-migrate
-    command: ["sh", "-c", "npx prisma migrate deploy --schema=prisma/cofre/schema.prisma"]
+    command: ["sh", "-c", "sh /guarda/entrypoint.sh"]
     environment:
+      PRISMA_SCHEMA: prisma/cofre/schema.prisma
+      PRISMA_URL_VAR: COFRE_DATABASE_URL
       COFRE_DATABASE_URL: postgresql://${COFRE_DB_USER:-${DB_USER}}:${COFRE_DB_PASSWORD:-${DB_PASSWORD}}@postgres-cofre:5432/${COFRE_DB_NAME:-capul_cofre}?schema=cofre&connection_limit=5
+    volumes:
+      # A guarda confere contra a ARVORE DO REPO, nao contra a imagem:
+      # imagem velha tem poucas migrations e todas aplicadas — a conferencia
+      # fecharia justamente no caso que derrubou o deploy de 05/09.
+      - ./scripts/migrate-guarda:/guarda:ro
+      - ./logistica/backend/prisma/cofre:/prisma-fonte:ro
     depends_on:
       postgres-cofre:
         condition: service_healthy
@@ -757,9 +789,15 @@ services:
   gestao-pessoas-migrate:
     build: ./gestao-pessoas/backend
     container_name: capul-gestao-pessoas-migrate
-    command: ["sh", "-c", "npx prisma migrate deploy"]
+    command: ["sh", "-c", "sh /guarda/entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/capul_platform?schema=public&connection_limit=10
+    volumes:
+      # A guarda confere contra a ARVORE DO REPO, nao contra a imagem:
+      # imagem velha tem poucas migrations e todas aplicadas — a conferencia
+      # fecharia justamente no caso que derrubou o deploy de 05/09.
+      - ./scripts/migrate-guarda:/guarda:ro
+      - ./gestao-pessoas/backend/prisma:/prisma-fonte:ro
     depends_on:
       postgres:
         condition: service_healthy
