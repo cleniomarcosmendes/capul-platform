@@ -119,6 +119,10 @@ async function main() {
       // O recorte não é CC nem filial: é o cargo. `origemReferencia` guarda o
       // filtro usado, para a tela poder explicar de onde a lista saiu.
       origemReferencia: 'cargo contém APRENDIZ',
+      // NÃO é provisório: os aprendizes com aplicação própria são decisão
+      // registrada (docs/OBSERVACAO_RH_APRENDIZES.md), e o recorte por cargo é
+      // o único caminho que os isola.
+      provisorio: false,
     })),
   });
 
@@ -168,7 +172,11 @@ async function main() {
         cicloId: ciclo.id,
         colaboradorId: c.id,
         origem: 'CENTRO_CUSTO' as const,
-        origemReferencia: `PROVISORIO: prefixo ${perfil.prefixos.join('/')}`,
+        origemReferencia: `prefixo de centro de custo ${perfil.prefixos.join('/')}`,
+        // ⭐ PROVISÓRIO na coluna, não numa palavra dentro do texto: a tarja da
+        // tela vem daqui, e um recorte montado pela tela (que escreve só
+        // "02|21010101") continuaria marcado corretamente.
+        provisorio: true,
       })),
     });
     console.log(`   aplicacao "${nova.nome}": ${publico.length} pessoas (recorte PROVISORIO)`);

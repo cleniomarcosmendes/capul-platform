@@ -222,7 +222,7 @@ export interface AplicacaoDoCiclo {
   /** O público NOMINAL, com a quebra de onde cada pedaço veio. */
   publico: {
     total: number;
-    origens: { origem: string; referencia: string | null; pessoas: number }[];
+    origens: { origem: string; referencia: string | null; provisorio: boolean; pessoas: number }[];
     /** true quando alguma referência se declara provisória. */
     provisorio: boolean;
   };
@@ -596,4 +596,59 @@ export const copiaDoCadastro = {
         substituirManuais,
       })
       .then((r) => r.data),
+};
+
+// ---------------------------------------------------------------------------
+// O público NOMINAL da aplicação. Centro de custo e filial são ATALHOS de
+// preenchimento: escolhe, traz as pessoas, ajusta, salva a lista resultante.
+// ---------------------------------------------------------------------------
+
+export interface PessoaDoPublico {
+  id: string;
+  colaboradorId: string;
+  nome: string;
+  matricula: string;
+  filial: string;
+  cargo: string | null;
+  centroCusto: string | null;
+  area: string | null;
+  situacao: string | null;
+  origem: string;
+  origemReferencia: string | null;
+  provisorio: boolean;
+}
+
+export interface AlvoDoPublico {
+  origem: 'CENTRO_CUSTO' | 'FILIAL' | 'MANUAL';
+  referencia?: string;
+  centrosCusto?: { filial?: string | null; centroCusto: string }[];
+  filiais?: string[];
+  colaboradorIds?: string[];
+  provisorio?: boolean;
+}
+
+export interface PreviaDoPublico {
+  aplicacaoId: string;
+  aplicacaoNome: string;
+  encontradas: number;
+  adicionar: number;
+  jaNesta: number;
+  /** ⭐ Ninguém em duas aplicações do mesmo ciclo — o aviso vem ANTES de salvar. */
+  emOutraAplicacao: { colaboradorId: string; nome: string; matricula: string; aplicacao: string }[];
+  amostra: { nome: string; matricula: string; area: string | null }[];
+}
+
+export const publicoDaAplicacao = {
+  listar: (aplicacaoId: string) =>
+    rhApi.get<PessoaDoPublico[]>(`/aplicacoes/${aplicacaoId}/publico`).then((r) => r.data),
+  previa: (aplicacaoId: string, alvo: AlvoDoPublico) =>
+    rhApi
+      .post<PreviaDoPublico>(`/aplicacoes/${aplicacaoId}/publico/previa`, alvo)
+      .then((r) => r.data),
+  adicionar: (aplicacaoId: string, alvo: AlvoDoPublico) =>
+    rhApi
+      .post<PreviaDoPublico & { adicionadas: number }>(`/aplicacoes/${aplicacaoId}/publico`, alvo)
+      .then((r) => r.data),
+  remover: (aplicacaoId: string, colaboradorId: string) =>
+    rhApi.delete(`/aplicacoes/${aplicacaoId}/publico/${colaboradorId}`).then((r) => r.data),
 };

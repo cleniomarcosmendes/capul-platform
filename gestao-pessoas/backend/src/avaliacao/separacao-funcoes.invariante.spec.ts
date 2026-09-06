@@ -41,6 +41,10 @@ const DISPENSADOS: Record<string, string> = {
     'só CONTA — groupBy por status e por avaliador, e groupBy de avaliadoId para saber quem ainda ' +
     'não foi designado. Mesma frase do ciclo.service: agregado, não lê o conteúdo de ninguém. ' +
     'A separação de funções não tem o que proteger num total.',
+  'aplicacao/aplicacao.service.ts':
+    'só CONTA avaliações antes de tirar alguém do público da aplicação — para não deixar a ' +
+    'Avaliacao órfã do recorte que a originou. Mesma frase do ciclo.service e do ' +
+    'painel.service: agregado, não lê o conteúdo de ninguém.',
   'apuracao/apuracao.service.ts':
     'apuração em LOTE, por ciclo ou aplicação — a exceção já acordada, com escopo guardado por ' +
     'assertEscopoReapuracaoValido (nunca por colaborador)',

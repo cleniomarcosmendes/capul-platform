@@ -9,10 +9,14 @@ import {
   aplicacoes as apiAplicacoes,
   catalogo,
   mensagemDoErro,
+  publicoDaAplicacao,
+  type AlvoDoPublico,
   type AplicacaoDoCiclo,
   type CentroCustoDoCatalogo,
   type CriterioDoCatalogo,
   type ModeloDoCatalogo,
+  type PessoaDoPublico,
+  type PreviaDoPublico,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
 
@@ -92,7 +96,7 @@ export default function AplicacoesPage() {
         <ul className="space-y-3">
           {lista.map((a) => (
             <li key={a.id}>
-              <CartaoDeAplicacao aplicacao={a} />
+              <CartaoDeAplicacao aplicacao={a} aoMudarPublico={carregar} />
             </li>
           ))}
         </ul>
@@ -122,7 +126,14 @@ function repartir(pesoAvaliacao: number, criterios: { nome: string; peso: number
   ];
 }
 
-function CartaoDeAplicacao({ aplicacao }: { aplicacao: AplicacaoDoCiclo }) {
+function CartaoDeAplicacao({
+  aplicacao,
+  aoMudarPublico,
+}: {
+  aplicacao: AplicacaoDoCiclo;
+  aoMudarPublico: () => Promise<void> | void;
+}) {
+  const [editandoPublico, setEditandoPublico] = useState(false);
   const fatias = repartir(
     Number(aplicacao.pesoAvaliacao),
     aplicacao.criterios.map((c) => ({ nome: c.criterio.nome, peso: Number(c.peso) })),
@@ -174,8 +185,8 @@ function CartaoDeAplicacao({ aplicacao }: { aplicacao: AplicacaoDoCiclo }) {
               </p>
               {aplicacao.publico.provisorio && (
                 <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
-                  ⚠️ RECORTE PROVISÓRIO — montado por script para teste. Não é decisão do RH:
-                  refaça o público antes de abrir o ciclo.
+                  ⚠️ RECORTE PROVISÓRIO — recorte de trabalho, não decisão do RH.
+                  Precisa da confirmação dele antes da produção.
                 </p>
               )}
               <ul className="text-xs text-slate-500">
@@ -188,8 +199,272 @@ function CartaoDeAplicacao({ aplicacao }: { aplicacao: AplicacaoDoCiclo }) {
               </ul>
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setEditandoPublico((v) => !v)}
+            aria-expanded={editandoPublico}
+            className="alvo-toque mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700"
+          >
+            <Users size={14} aria-hidden />
+            {editandoPublico ? 'Fechar' : 'Montar público'}
+          </button>
         </div>
       </div>
+
+      {editandoPublico && (
+        <EditorDePublico aplicacao={aplicacao} aoMudar={aoMudarPublico} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * ⭐ CENTRO DE CUSTO E FILIAL SÃO ATALHOS DE PREENCHIMENTO.
+ *
+ * Escolhe o recorte → o sistema traz as pessoas → ajusta → salva a lista
+ * resultante. O que fica gravado é sempre nominal; o recorte sobrevive em
+ * `origem` + `origemReferencia`, para o painel explicar de onde a linha veio.
+ *
+ * ⚠️ A prévia vem antes do salvar por causa de `@@unique([ciclo, colaborador])`:
+ * ninguém fica em duas aplicações do mesmo ciclo. Sem ela, escolher um centro
+ * de custo que se sobrepõe a outro público falharia no INSERT, com o erro do
+ * banco e sem dizer de quem se trata.
+ */
+function EditorDePublico({
+  aplicacao,
+  aoMudar,
+}: {
+  aplicacao: AplicacaoDoCiclo;
+  aoMudar: () => Promise<void> | void;
+}) {
+  const [centros, setCentros] = useState<CentroCustoDoCatalogo[] | null>(null);
+  const [escolhidos, setEscolhidos] = useState<Set<string>>(new Set());
+  const [busca, setBusca] = useState('');
+  const [previa, setPrevia] = useState<PreviaDoPublico | null>(null);
+  const [pessoas, setPessoas] = useState<PessoaDoPublico[] | null>(null);
+  const [provisorio, setProvisorio] = useState(true);
+  const [ocupado, setOcupado] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    catalogo.centrosCusto().then(setCentros).catch(() => setCentros([]));
+    void recarregarPessoas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aplicacao.id]);
+
+  async function recarregarPessoas() {
+    setPessoas(await publicoDaAplicacao.listar(aplicacao.id));
+  }
+
+  const alvo = (): AlvoDoPublico => {
+    const lista = [...escolhidos].map((chave) => {
+      const [filial, centroCusto] = chave.split('|');
+      return { filial, centroCusto };
+    });
+    return {
+      origem: 'CENTRO_CUSTO',
+      referencia: lista.length === 1 ? `${lista[0].filial}|${lista[0].centroCusto}` : `${lista.length} centros de custo`,
+      centrosCusto: lista,
+      provisorio,
+    };
+  };
+
+  async function verPrevia() {
+    setOcupado(true); setErro(null); setMsg(null);
+    try {
+      setPrevia(await publicoDaAplicacao.previa(aplicacao.id, alvo()));
+    } catch (e) {
+      setPrevia(null);
+      setErro(mensagemDoErro(e, 'Não foi possível calcular.'));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function adicionar() {
+    setOcupado(true); setErro(null);
+    try {
+      const r = await publicoDaAplicacao.adicionar(aplicacao.id, alvo());
+      setMsg(`${r.adicionadas} pessoa(s) adicionadas ao público.`);
+      setPrevia(null);
+      setEscolhidos(new Set());
+      await recarregarPessoas();
+      await aoMudar();
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível adicionar.'));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function remover(colaboradorId: string, nome: string) {
+    setOcupado(true); setErro(null);
+    try {
+      await publicoDaAplicacao.remover(aplicacao.id, colaboradorId);
+      setMsg(`${nome} saiu do público.`);
+      await recarregarPessoas();
+      await aoMudar();
+    } catch (e) {
+      setErro(mensagemDoErro(e));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  const filtrados = (centros ?? []).filter((c) => {
+    const alvoTexto = `${c.centroCusto} ${c.descricao ?? ''} ${c.filial}`.toLowerCase();
+    return busca.trim() === '' || alvoTexto.includes(busca.trim().toLowerCase());
+  });
+
+  return (
+    <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+      <div>
+        <p className="text-sm font-medium text-slate-700">Trazer pessoas por centro de custo</p>
+        <p className="text-xs text-slate-500">
+          O recorte é um <strong>atalho</strong>: o que fica gravado é a lista de pessoas, e
+          você pode tirar quem não deveria entrar.
+        </p>
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Filtrar centro de custo"
+          aria-label="Filtrar centro de custo"
+          className="alvo-toque mt-2 w-full rounded-xl border border-slate-300 px-3 text-slate-800"
+        />
+        <div className="mt-2 max-h-52 overflow-y-auto rounded-xl border border-slate-200">
+          {centros === null ? (
+            <p className="p-3 text-sm text-slate-500">Carregando…</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {filtrados.map((c) => {
+                const chave = `${c.filial}|${c.centroCusto}`;
+                return (
+                  <li key={chave}>
+                    <label className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-slate-50">
+                      <input
+                        type="checkbox"
+                        checked={escolhidos.has(chave)}
+                        onChange={() =>
+                          setEscolhidos((s) => {
+                            const n = new Set(s);
+                            if (n.has(chave)) n.delete(chave);
+                            else n.add(chave);
+                            return n;
+                          })
+                        }
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        <strong className="font-medium">{c.centroCusto}</strong>{' '}
+                        <span className="text-slate-500">{c.descricao ?? ''}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-slate-400">
+                        filial {c.filial} · {c.pessoas}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          checked={provisorio}
+          disabled={ocupado}
+          onChange={(e) => setProvisorio(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          Recorte provisório
+          <span className="block text-xs text-slate-500">
+            Marcado, o público entra como recorte de trabalho e o cartão avisa. Desmarque só
+            quando este for o público que o RH confirmou.
+          </span>
+        </span>
+      </label>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={ocupado || escolhidos.size === 0}
+          onClick={() => void verPrevia()}
+          className="alvo-toque rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 disabled:opacity-50"
+        >
+          Ver o que vai entrar ({escolhidos.size})
+        </button>
+      </div>
+
+      {erro && <Erro mensagem={erro} />}
+      {msg && (
+        <p className="rounded-xl border border-capul-200 bg-capul-50 px-3 py-2 text-sm text-capul-900">
+          {msg}
+        </p>
+      )}
+
+      {previa && (
+        <div className="space-y-2 rounded-xl border-2 border-capul-300 p-3">
+          <p className="text-sm text-slate-700">
+            <strong className="tabular-nums text-lg text-capul-700">{previa.adicionar}</strong>{' '}
+            pessoa(s) entram · {previa.jaNesta} já estão aqui · {previa.encontradas} no recorte
+          </p>
+          {previa.emOutraAplicacao.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              <p className="font-medium">
+                ⚠️ {previa.emOutraAplicacao.length} já estão em OUTRA aplicação e não entram —
+                ninguém responde dois questionários no mesmo ciclo:
+              </p>
+              <ul className="mt-1">
+                {previa.emOutraAplicacao.slice(0, 8).map((p) => (
+                  <li key={p.colaboradorId}>
+                    {p.nome} ({p.matricula}) — está em <strong>{p.aplicacao}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <button
+            type="button"
+            disabled={ocupado || previa.adicionar === 0}
+            onClick={() => void adicionar()}
+            className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {previa.adicionar === 0
+              ? 'Nada a adicionar'
+              : `Adicionar ${previa.adicionar} ao público`}
+          </button>
+        </div>
+      )}
+
+      {pessoas && pessoas.length > 0 && (
+        <details className="rounded-xl border border-slate-200 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+            Quem está no público ({pessoas.length})
+          </summary>
+          <ul className="mt-2 max-h-72 divide-y divide-slate-100 overflow-y-auto">
+            {pessoas.map((p) => (
+              <li key={p.id} className="flex items-center gap-2 py-1.5 text-sm">
+                <span className="min-w-0 flex-1 truncate">
+                  {p.nome} <span className="text-slate-400">· {p.matricula}</span>
+                  {p.area && <span className="text-slate-500"> · {p.area}</span>}
+                </span>
+                {p.provisorio && <Etiqueta tom="ambar">provisório</Etiqueta>}
+                <button
+                  type="button"
+                  disabled={ocupado}
+                  onClick={() => void remover(p.colaboradorId, p.nome)}
+                  className="alvo-toque shrink-0 rounded-lg px-2 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-red-700 disabled:opacity-50"
+                >
+                  Tirar
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { validarAplicacao } from '../ciclo/abertura.validator.js';
+import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 
 export interface DadosAplicacao {
   cicloId: string;
@@ -22,6 +23,16 @@ export interface DadosAplicacao {
   ordem?: number;
   criterios?: { criterioId: string; peso: number; ordem?: number }[];
   centrosCusto?: { filial?: string | null; centroCusto: string }[];
+}
+
+/** O atalho que a tela usou para montar o público. */
+export interface AlvoDoPublico {
+  origem: 'CENTRO_CUSTO' | 'FILIAL' | 'MANUAL';
+  /** O texto que explica o recorte — o CC, a filial, ou o critério usado. */
+  referencia?: string | null;
+  centrosCusto?: { filial?: string | null; centroCusto: string }[];
+  filiais?: string[];
+  colaboradorIds?: string[];
 }
 
 @Injectable()
@@ -130,7 +141,7 @@ export class AplicacaoService {
     });
 
     const origens = await this.prisma.aplicacaoPublico.groupBy({
-      by: ['aplicacaoId', 'origem', 'origemReferencia'],
+      by: ['aplicacaoId', 'origem', 'origemReferencia', 'provisorio'],
       where: { cicloId },
       _count: { _all: true },
     });
@@ -145,11 +156,11 @@ export class AplicacaoService {
             .map((o) => ({
               origem: o.origem as string,
               referencia: o.origemReferencia,
+              provisorio: o.provisorio,
               pessoas: o._count._all,
             }))
             .sort((x, y) => y.pessoas - x.pessoas),
-          /** A palavra vem do próprio dado — quem escreveu a referência a marcou. */
-          provisorio: doPublico.some((o) => (o.origemReferencia ?? '').toUpperCase().includes('PROVISORIO')),
+          provisorio: doPublico.some((o) => o.provisorio),
         },
       };
     });
@@ -166,5 +177,187 @@ export class AplicacaoService {
       if (!criterio) throw new NotFoundException(`Critério ${i.criterioId} não encontrado.`);
       return { peso: i.peso, criterio };
     });
+  }
+
+  // ── O PÚBLICO NOMINAL DA APLICAÇÃO ────────────────────────────────────────
+
+  /**
+   * ⭐ CENTRO DE CUSTO E FILIAL SÃO ATALHOS DE PREENCHIMENTO, não a regra.
+   *
+   * A tela escolhe um recorte, o sistema traz as pessoas, ela ajusta e salva a
+   * LISTA RESULTANTE. O recorte fica em `origem` + `origemReferencia`, para o
+   * painel explicar de onde a linha veio — mas quem manda é a lista.
+   *
+   * ⚠️ `previa` existe porque `@@unique([cicloId, colaboradorId])` recusa quem
+   * já está em outra aplicação do mesmo ciclo. Sem prévia, escolher um centro
+   * de custo que se sobrepõe a outro público falharia no INSERT, com o erro do
+   * banco e sem dizer de quem se trata. A tela precisa AVISAR antes.
+   */
+  async publicoDe(aplicacaoId: string) {
+    const linhas = await this.prisma.aplicacaoPublico.findMany({
+      where: { aplicacaoId },
+      select: {
+        id: true, colaboradorId: true, origem: true, origemReferencia: true, provisorio: true,
+      },
+    });
+    if (linhas.length === 0) return [];
+
+    const pessoas = await this.prisma.colaborador.findMany({
+      where: { id: { in: linhas.map((l) => l.colaboradorId) } },
+      select: {
+        id: true, nome: true, matricula: true, filial: true,
+        cargoDescricao: true, centroCusto: true, centroCustoDescricao: true, situacao: true,
+      },
+    });
+    const porId = new Map(pessoas.map((c) => [c.id, c]));
+
+    return linhas
+      .map((l) => ({
+        id: l.id,
+        colaboradorId: l.colaboradorId,
+        nome: porId.get(l.colaboradorId)?.nome ?? '(colaborador não encontrado)',
+        matricula: porId.get(l.colaboradorId)?.matricula ?? '',
+        filial: porId.get(l.colaboradorId)?.filial ?? '',
+        cargo: porId.get(l.colaboradorId)?.cargoDescricao ?? null,
+        centroCusto: porId.get(l.colaboradorId)?.centroCusto ?? null,
+        area: porId.get(l.colaboradorId)?.centroCustoDescricao ?? null,
+        situacao: porId.get(l.colaboradorId)?.situacao ?? null,
+        origem: l.origem as string,
+        origemReferencia: l.origemReferencia,
+        provisorio: l.provisorio,
+      }))
+      .sort((a, b) => a.filial.localeCompare(b.filial) || a.nome.localeCompare(b.nome, 'pt-BR'));
+  }
+
+  async previaDoPublico(aplicacaoId: string, alvo: AlvoDoPublico) {
+    const { aplicacao, candidatos, noCiclo } = await this.resolverAlvo(aplicacaoId, alvo);
+
+    const jaNesta: string[] = [];
+    const emOutra: { colaboradorId: string; nome: string; matricula: string; aplicacao: string }[] = [];
+    const adicionar: typeof candidatos = [];
+
+    for (const c of candidatos) {
+      const existente = noCiclo.get(c.id);
+      if (!existente) adicionar.push(c);
+      else if (existente.aplicacaoId === aplicacaoId) jaNesta.push(c.id);
+      else {
+        emOutra.push({
+          colaboradorId: c.id, nome: c.nome, matricula: c.matricula,
+          aplicacao: existente.nome,
+        });
+      }
+    }
+
+    return {
+      aplicacaoId,
+      aplicacaoNome: aplicacao.nome,
+      encontradas: candidatos.length,
+      adicionar: adicionar.length,
+      jaNesta: jaNesta.length,
+      /** ⭐ O aviso. Ninguém em duas aplicações do mesmo ciclo. */
+      emOutraAplicacao: emOutra.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+      amostra: adicionar
+        .slice(0, 10)
+        .map((c) => ({ nome: c.nome, matricula: c.matricula, area: c.centroCustoDescricao })),
+    };
+  }
+
+  async adicionarAoPublico(
+    aplicacaoId: string,
+    alvo: AlvoDoPublico,
+    provisorio: boolean,
+    usuarioId: string,
+  ) {
+    const { aplicacao, candidatos, noCiclo } = await this.resolverAlvo(aplicacaoId, alvo);
+    const novos = candidatos.filter((c) => !noCiclo.has(c.id));
+
+    if (novos.length > 0) {
+      await this.prisma.aplicacaoPublico.createMany({
+        data: novos.map((c) => ({
+          aplicacaoId,
+          cicloId: aplicacao.cicloId,
+          colaboradorId: c.id,
+          origem: alvo.origem,
+          origemReferencia: alvo.referencia ?? null,
+          provisorio,
+          registradoPorId: usuarioId,
+        })),
+      });
+      await this.auditoria.registrar({
+        entidade: 'Aplicacao', entidadeId: aplicacaoId, acao: 'PUBLICO_ADICIONAR', usuarioId,
+        valorNovo: {
+          adicionadas: novos.length, origem: alvo.origem,
+          referencia: alvo.referencia, provisorio,
+        },
+      });
+    }
+    // Devolve a prévia recalculada: o que sobrou é o que continua em conflito,
+    // e a tela mostra sem precisar de uma segunda chamada.
+    return { adicionadas: novos.length, ...(await this.previaDoPublico(aplicacaoId, alvo)) };
+  }
+
+  async removerDoPublico(aplicacaoId: string, colaboradorId: string, usuarioId: string) {
+    const linha = await this.prisma.aplicacaoPublico.findFirst({
+      where: { aplicacaoId, colaboradorId },
+    });
+    if (!linha) throw new NotFoundException('Esta pessoa não está no público desta aplicação.');
+
+    const avaliacao = await this.prisma.avaliacao.count({
+      where: { aplicacaoId, avaliadoId: colaboradorId },
+    });
+    if (avaliacao > 0) {
+      // Tirar do público quem já tem avaliação deixaria a `Avaliacao` órfã do
+      // recorte que a originou — e ela sumiria da contagem sem sumir do banco.
+      throw new BadRequestException(
+        'Esta pessoa já tem avaliação nesta aplicação. Cancele a avaliação antes de tirá-la do público.',
+      );
+    }
+
+    await this.prisma.aplicacaoPublico.delete({ where: { id: linha.id } });
+    await this.auditoria.registrar({
+      entidade: 'Aplicacao', entidadeId: aplicacaoId, acao: 'PUBLICO_REMOVER', usuarioId,
+      valorAnterior: { colaboradorId, origem: linha.origem },
+    });
+    return { removida: true };
+  }
+
+  /** Resolve o atalho em pessoas, e diz quem já está em alguma aplicação do ciclo. */
+  private async resolverAlvo(aplicacaoId: string, alvo: AlvoDoPublico) {
+    const aplicacao = await this.prisma.aplicacao.findUnique({
+      where: { id: aplicacaoId },
+      select: { id: true, nome: true, cicloId: true },
+    });
+    if (!aplicacao) throw new NotFoundException('Aplicação não encontrada.');
+
+    const filtros: object[] = [];
+    for (const cc of alvo.centrosCusto ?? []) {
+      filtros.push({ centroCusto: cc.centroCusto, ...(cc.filial ? { filial: cc.filial } : {}) });
+    }
+    if (alvo.filiais?.length) filtros.push({ filial: { in: alvo.filiais } });
+    if (alvo.colaboradorIds?.length) filtros.push({ id: { in: alvo.colaboradorIds } });
+    if (filtros.length === 0) {
+      throw new BadRequestException(
+        'Escolha ao menos um centro de custo, uma filial ou uma pessoa — sem recorte, o público seria a empresa inteira.',
+      );
+    }
+
+    const candidatos = await this.prisma.colaborador.findMany({
+      where: { situacao: { in: SITUACOES_ELEGIVEIS as never[] }, OR: filtros },
+      select: {
+        id: true, nome: true, matricula: true, filial: true,
+        centroCusto: true, centroCustoDescricao: true,
+      },
+      orderBy: [{ filial: 'asc' }, { nome: 'asc' }],
+    });
+
+    const ocupados = await this.prisma.aplicacaoPublico.findMany({
+      where: { cicloId: aplicacao.cicloId, colaboradorId: { in: candidatos.map((c) => c.id) } },
+      select: { colaboradorId: true, aplicacaoId: true, aplicacao: { select: { nome: true } } },
+    });
+    const noCiclo = new Map(
+      ocupados.map((o) => [o.colaboradorId, { aplicacaoId: o.aplicacaoId, nome: o.aplicacao.nome }]),
+    );
+
+    return { aplicacao, candidatos, noCiclo };
   }
 }

@@ -30,10 +30,10 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 
 | | |
 |---|---|
-| Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **37 endpoints** em 9 controllers. |
+| Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **42 endpoints** em 9 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
-| Banco | 7 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **341 testes, 25 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Banco | 8 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
+| Testes | **352 testes, 26 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -60,9 +60,8 @@ ciclo 000006 do Protheus — a nota do questionário bate **108/108** (ver
   cron**. Hoje se dispara por `curl`, e os três CSVs precisam ser extraídos do Protheus à
   mão e colocados em `RH_CSV_DIR` (padrão `/app/carga`, que não existe no container — é
   preciso criar e copiar). Ver `SYNC_GESTAO_PESSOAS_CSV.md`.
-- **`rh.aplicacao_publico` é lida, mas quem a preenche é script.** A tela de Aplicações
-  ainda escolhe centros de custo; os atalhos de preenchimento por CC e por filial descritos
-  na §3.7 não existem nela.
+- **Editor de questionário e cadastro de critérios continuam inexistentes** — os dois itens
+  da lista "Não existe" abaixo são o que sobra de estrutural.
 - **Critério `INFORMADO`** é suportado pelo motor e pelo schema
   (`rh.criterio_valor_informado`), mas não há por onde informar o valor. Os quatro critérios
   do catálogo são todos `CALCULADO`, então isto ainda não dói.
@@ -203,7 +202,11 @@ Então **duas listas nominais**, e são duas tabelas porque têm tempos de vida 
   Aplicação: divergir é impossível pelo banco, não por disciplina.
 
 **Centro de custo e filial viram atalhos de PREENCHIMENTO** na tela — escolhe, traz as
-pessoas, ajusta, salva — e sobrevivem apenas como `origem` + `origemReferencia`. **Não há
+pessoas, ajusta, salva — e sobrevivem apenas como `origem` + `origemReferencia`. Os dois
+atalhos existem: o do público em "Montar público" na tela de Aplicações, e o dos avaliadores
+na importação da planilha. ⚠️ A prévia do público vem antes de salvar porque
+`@@unique([cicloId, colaboradorId])` recusa quem já está em outra aplicação do ciclo —
+sem ela, um recorte que se sobrepõe falharia no INSERT sem dizer de quem se trata. **Não há
 precedência entre níveis porque só existe um nível**; "parte da equipe" se resolve
 removendo linhas. `DIVISAO_AUTOMATICA` marca a linha que a importação **arbitrou** (um CC
 repartido entre N responsáveis em ordem alfabética): ninguém decidiu aquela linha, e
@@ -392,6 +395,9 @@ O que sobra é decisão humana, e é isso que precisa acontecer antes de 15/09:
 3. **Revisar as 457 linhas de divisão automática.** ⚠️ São **61 confirmações, não 457**: o
    botão "Conferi, está certo" é por avaliador, e confirma a lista inteira dele.
 
+⚠️ Os itens 1 e 2 seguem sendo do RH — mas **deixaram de travar o desenvolvimento**: a T.I.
+preenche os dois provisoriamente e pela tela (§11), e tudo o que entra assim fica marcado.
+
 Depois disso: os atalhos de preenchimento na tela de Aplicações (hoje ela ainda escolhe
 centros de custo), e então o roteiro abaixo.
 
@@ -550,8 +556,11 @@ Três coisas garantem que ninguém confunda uma com a outra:
 
 1. **`provisorio = true` é o padrão da importação**, no backend e na tela. Desmarcar exige
    um ato — e é uma afirmação de que a lista foi confirmada pelo RH, não um default.
-2. **A tela avisa** enquanto houver qualquer linha provisória, e o recorte de público que se
-   declara provisório na `origem_referencia` ganha tarja na tela de Aplicações.
+2. **A tela avisa** enquanto houver qualquer linha provisória. ⚠️ `aplicacao_publico` ganhou
+   coluna `provisorio` (migration `20260906190000`): a tarja vinha de procurar a palavra
+   "PROVISORIO" dentro de `origem_referencia`, o que funcionava enquanto quem escrevia a
+   referência era um script nosso e **quebraria em silêncio** no primeiro recorte montado
+   pela tela, que escreve só `02|21010101`. Tarja que some sozinha é pior que tarja nenhuma.
 3. **O CSV da Arielly continua valendo e não foi substituído.**
    `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` é o dela, por centro de custo;
    `PREENCHER_AVALIADORES_82_PARES.csv` é o da T.I., por par filial × CC. São arquivos

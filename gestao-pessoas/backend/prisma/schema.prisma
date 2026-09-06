@@ -931,6 +931,12 @@ model AplicacaoPublico {
   colaboradorId    String        @map("colaborador_id")
   origem           OrigemVinculo
   origemReferencia String?       @map("origem_referencia")
+  /// Recorte de trabalho, ainda não confirmado pelo RH. A tela de Aplicações
+  /// põe tarja enquanto houver qualquer linha marcada.
+  /// ⚠️ Coluna, e não texto dentro de `origemReferencia`: a detecção por
+  /// substring funcionava enquanto quem escrevia a referência era um script
+  /// nosso, e quebraria em silêncio no primeiro recorte montado pela tela.
+  provisorio       Boolean       @default(false)
   registradoPorId  String?       @map("registrado_por_id")
   criadoEm         DateTime      @default(now()) @map("criado_em")
 
