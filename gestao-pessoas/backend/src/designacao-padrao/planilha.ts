@@ -62,10 +62,38 @@ export function conferenciaDe(conteudo: string): string {
   return createHash('sha256').update(conteudo.replace(/\r\n/g, '\n').trimEnd(), 'utf8').digest('hex');
 }
 
-/** Matrícula do Protheus tem 6 posições com zeros à esquerda; o Excel come os zeros. */
+/**
+ * ⚠️ O EXCEL COME O ZERO À ESQUERDA, e come em TODA coluna numérica.
+ *
+ * Matrícula do Protheus tem 6 posições, filial tem 2, e as duas são texto no
+ * banco. Aberta e salva no Excel, a planilha volta com `3113` e `2` — e uma
+ * filial `2` não casa com nenhuma pessoa, o que faria a linha ser recusada
+ * como "centro de custo sem pessoas". A mensagem estaria errada e a gestora
+ * iria conferir o código do centro de custo, que está certo.
+ */
 export function normalizarMatricula(valor: string): string {
   const limpo = valor.trim();
   return /^\d+$/.test(limpo) ? limpo.padStart(6, '0') : limpo;
+}
+
+export function normalizarFilial(valor: string): string {
+  const limpo = valor.trim();
+  return /^\d+$/.test(limpo) ? limpo.padStart(2, '0') : limpo;
+}
+
+/**
+ * Vários responsáveis na MESMA célula, separados por `|`.
+ *
+ * O modelo diz "repita a linha", mas a coluna de sugestões ao lado usa `|`
+ * entre os candidatos — e foi assim que a planilha voltou preenchida. Aceitar
+ * é melhor do que recusar: a intenção é inequívoca, e recusar devolveria um
+ * erro por uma convenção que a própria planilha ensinou ao contrário.
+ */
+export function separarMatriculas(valor: string): string[] {
+  return valor
+    .split('|')
+    .map((m) => normalizarMatricula(m))
+    .filter((m) => m.length > 0);
 }
 
 export function lerPlanilhaDeAvaliadores(conteudo: string): LeituraDaPlanilha {
@@ -97,12 +125,16 @@ export function lerPlanilhaDeAvaliadores(conteudo: string): LeituraDaPlanilha {
       });
       return;
     }
-    linhas.push({
-      numero,
-      centroCusto,
-      filial: filial || null,
-      avaliadorMatricula: normalizarMatricula(avaliador),
-    });
+    // Uma linha com N matrículas na mesma célula vira N linhas aqui — é o
+    // mesmo que repetir a linha na planilha, que é o outro jeito de dizer isto.
+    for (const avaliadorMatricula of separarMatriculas(avaliador)) {
+      linhas.push({
+        numero,
+        centroCusto,
+        filial: filial ? normalizarFilial(filial) : null,
+        avaliadorMatricula,
+      });
+    }
   });
 
   return {

@@ -234,3 +234,40 @@ describe('a prévia conta o que a tela precisa mostrar', () => {
     expect(p.recusas).toHaveLength(1);
   });
 });
+
+describe('⚠️ o que o Excel faz com a planilha', () => {
+  it('⭐ come o zero da FILIAL também, não só o da matrícula', () => {
+    // `filial: 2` não casa com ninguém, e a linha seria recusada como "centro
+    // de custo sem pessoas" — mensagem errada, mandando conferir o código do CC,
+    // que está certo.
+    const l = lerPlanilhaDeAvaliadores(`${CABECALHO};filial\n21010101;S;02;5;000010;;2`);
+    expect(l.linhas[0].filial).toBe('02');
+  });
+
+  it('filial não numérica passa intacta', () => {
+    const l = lerPlanilhaDeAvaliadores(`${CABECALHO};filial\n21010101;S;02;5;000010;;MATRIZ`);
+    expect(l.linhas[0].filial).toBe('MATRIZ');
+  });
+
+  it('⭐ vários responsáveis na MESMA célula, separados por "|"', () => {
+    // O modelo diz "repita a linha", mas a coluna de sugestões ao lado usa "|"
+    // entre os candidatos — e foi assim que a planilha voltou preenchida.
+    const l = lerPlanilhaDeAvaliadores(`${CABECALHO}\n21010101;S;02;5;000010|000011;`);
+    expect(l.linhas).toHaveLength(2);
+    expect(l.linhas.map((x) => x.avaliadorMatricula)).toEqual(['000010', '000011']);
+    expect(l.linhas.every((x) => x.centroCusto === '21010101')).toBe(true);
+  });
+
+  it('a célula com "|" divide igual a linha repetida — mesmo resultado', () => {
+    const juntas = previa({ csv: `${CABECALHO}\n21010101;S;02;5;000010|000011;` });
+    const repetidas = previa({
+      csv: `${CABECALHO}\n21010101;S;02;5;000010;\n21010101;S;02;5;000011;`,
+    });
+    expect(juntas.aGravar).toEqual(repetidas.aGravar);
+  });
+
+  it('espaço e zero à esquerda na célula com "|" não atrapalham', () => {
+    const l = lerPlanilhaDeAvaliadores(`${CABECALHO}\n21010101;S;02;5; 10 | 000011 ;`);
+    expect(l.linhas.map((x) => x.avaliadorMatricula)).toEqual(['000010', '000011']);
+  });
+});
