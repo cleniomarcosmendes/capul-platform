@@ -20,6 +20,7 @@ import {
   type CandidatoDesignacao,
   type MotivoExclusao,
 } from './elegibilidade-ciclo.js';
+import { MOTIVO_ACESSO_RESTRITO } from '../avaliacao/separacao-funcoes.js';
 import {
   decidirTrocaDeAplicacao,
   mensagemDaRecusa,
@@ -47,6 +48,14 @@ export interface LinhaDaLista {
   avaliadorId: string | null;
   avaliadorNome: string | null;
   avaliacaoStatus: string | null;
+  /**
+   * ⭐ A linha de quem está OLHANDO a lista, marcada. A §3.1 manda "mostrar a
+   * linha marcada, nunca filtrar em silêncio", e esta lista mostra, por pessoa,
+   * QUEM a avalia e o status da avaliação dela — a gestora se vê aqui com
+   * "Avalia: CLAUDIMAR · PENDENTE". Resultados já marcava; esta não marcava.
+   */
+  restrita?: boolean;
+  motivoRestricao?: string;
 }
 
 interface DesignacaoVigente {
@@ -121,7 +130,7 @@ export class DesignacaoService {
    * caía num `where` sem filtro e trazia as 1.036 pessoas — "ainda não
    * configurei" e "todo mundo" eram o mesmo estado.
    */
-  async listar(aplicacaoId: string): Promise<LinhaDaLista[]> {
+  async listar(aplicacaoId: string, colaboradorId?: string | null): Promise<LinhaDaLista[]> {
     const aplicacao = await this.prisma.aplicacao.findUnique({
       where: { id: aplicacaoId },
       include: { ciclo: true },
@@ -181,7 +190,7 @@ export class DesignacaoService {
     ];
 
     // A decisão manual SOBREPÕE a régua, nos dois sentidos.
-    return linhas.map((linha) => {
+    const comDecisao = linhas.map((linha) => {
       const designada = designadas.get(linha.colaboradorId);
       const comDesignacao = {
         ...linha,
@@ -200,6 +209,15 @@ export class DesignacaoService {
         decididoManualmente: decisao.motivo === 'MANUAL_RH',
       };
     });
+
+    // Marca, nunca filtra: filtrar faria o total não fechar, e o total é o
+    // número que alguém vai conferir contra a folha.
+    if (!colaboradorId) return comDecisao;
+    return comDecisao.map((l) =>
+      l.colaboradorId === colaboradorId
+        ? { ...l, restrita: true, motivoRestricao: MOTIVO_ACESSO_RESTRITO }
+        : { ...l, restrita: false },
+    );
   }
 
   /**

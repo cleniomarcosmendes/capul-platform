@@ -275,6 +275,9 @@ export interface LinhaDaDesignacao {
   avaliadorId: string | null;
   avaliadorNome: string | null;
   avaliacaoStatus: StatusAvaliacao | null;
+  /** A linha de quem está olhando — marcada, nunca filtrada (§3.1). */
+  restrita?: boolean;
+  motivoRestricao?: string;
 }
 
 export const designacao = {

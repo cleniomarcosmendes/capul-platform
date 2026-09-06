@@ -339,7 +339,18 @@ function LinhaDaLista({
         className="mt-1 size-4 shrink-0 accent-capul-600 disabled:opacity-40"
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-slate-800">{linha.nome}</p>
+        <p className="truncate font-medium text-slate-800">
+          {linha.nome}
+          {/* ⭐ A própria linha vem MARCADA, nunca filtrada: filtrar faria o
+              total não fechar, e o total é o número que alguém confere contra a
+              folha. Aqui a gestora se vê com "Avalia: CLAUDIMAR · PENDENTE" — é
+              informação sobre ela, e ela precisa saber que está olhando para si. */}
+          {linha.restrita && (
+            <span className="ml-2 rounded-full bg-sky-100 px-2 py-0.5 align-middle text-xs font-medium text-sky-800">
+              você
+            </span>
+          )}
+        </p>
         <p className="truncate text-sm text-slate-500">
           {linha.matricula} · CC {linha.centroCusto ?? '—'} · filial {linha.filial}
         </p>

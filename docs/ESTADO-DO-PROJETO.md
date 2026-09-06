@@ -129,22 +129,44 @@ não é o avaliador designado"* — a frase só faz sentido se esse acesso for p
 existe para isso: `observacaoAvaliador` foi desenhado como *"evidência de devolutiva e
 contexto da nota"*, ou seja, para alguém ler depois.
 
-⚠️ **O que faltava era o rastro, e ele foi implementado em 06/09**: `LER_RESULTADO_INDIVIDUAL`
-grava quem leu, de quem, se era o próprio, e se havia observação. Quem é o avaliador designado
-lê sem rastro — é o trabalho dele.
+#### ✅ RASTRO — resolvido em 06/09
 
-#### Três pontos que continuam abertos, e são de decisão
+`LER_RESULTADO_INDIVIDUAL` grava quem leu, de quem, se era o próprio e se havia observação.
+Quem é o avaliador designado lê sem rastro — é o trabalho dele.
 
-1. **O avaliador sabe que o RH lê o que ele escreve?** Se não souber, o campo colhe uma
-   franqueza que ele não consentiu; se souber, o texto muda. Nenhuma tela avisa.
-2. **`/resultados` não marca a linha de quem está logado.** A §3.1 manda *"mostrar a linha
-   marcada, nunca filtrar em silêncio"*, e é o que a designação faz — a lista de resultados,
-   não. Hoje não vaza porque a avaliação da gestora ainda não foi enviada; **no dia em que for,
-   a nota e a observação dela entram na mesma lista que ela abre.** Risco estrutural, não
-   vazamento observado. Merece teste dirigido antes da produção.
-3. **Grupo pequeno reaproxima a resposta.** "Assiduidade e Pontualidade" tem 2 perguntas de 4
-   alternativas; um percentual de grupo aí reduz o espaço de combinações a um punhado. Quanto
-   menor o grupo, mais o "agregado" vira resposta.
+⚠️ **Isto resolve "quem leu" e mais nada.** Os pontos abaixo continuam abertos e não são
+endereçados por auditoria nenhuma.
+
+#### 🔴 CONSENTIMENTO — em aberto, e é decisão do RH
+
+**O avaliador não sabe que o RH lê o que ele escreve.** Nenhuma tela avisa. Se ele não sabe, o
+campo colhe uma franqueza que ele não consentiu; se souber, o texto muda. É pendência própria
+na §5 — **não pode chegar ambíguo à produção**, porque o primeiro ciclo real já colhe texto sob
+o entendimento errado.
+
+#### ✅ MARCAR A PRÓPRIA LINHA — corrigido, e o diagnóstico era o inverso
+
+Teste dirigido de 06/09. **`/resultados` SEMPRE marcou** — o service chama `marcarRestricoes`
+e a tela mostra a etiqueta "você". A marca nunca apareceu porque a gestora **não tem
+resultado**: a avaliação dela ainda não foi enviada, então não há linha para marcar. Regra
+cumprida, dado que não a exercita.
+
+**Quem não marcava era a DESIGNAÇÃO** — 142 linhas sem o campo, e a linha da própria gestora
+aparecendo com *"Avalia: CLAUDIMAR · PENDENTE"*. Corrigido: `listar()` recebe o colaborador e
+marca, e a tela mostra "você". Conferido: 142 linhas, 1 marcada.
+
+⚠️ **Quatro listas continuam sem marcar**, e é decisão se devem: pendências do cadastro
+(`/designacao-padrao/pendencias`), a lista de um avaliador
+(`/designacao-padrao/avaliadores/:id`), o público da aplicação (`/aplicacoes/:id/publico`) e
+`foraDeTodasAsAplicacoes` no painel. Nenhuma mostra nota nem quem avalia quem — só "esta
+pessoa está/não está em tal recorte" —, então não é o mesmo risco. Fica registrado por ser a
+mesma família.
+
+#### ⚠️ Grupo pequeno reaproxima a resposta — em aberto
+
+"Assiduidade e Pontualidade" tem 2 perguntas de 4 alternativas; um percentual de grupo aí
+reduz o espaço de combinações a um punhado. Quanto menor o grupo, mais o "agregado" vira
+resposta.
 
 ### 3.2. Avaliar ≠ apurar
 
@@ -441,6 +463,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Aprendizes (31 pessoas) entram no ciclo com aplicação própria, sem critérios cadastrais — confirmar | Gestora de RH |
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
+| 🔴 **O avaliador é avisado de que o RH lê a observação dele?** `observacaoAvaliador` é texto livre sobre a pessoa avaliada e aparece inteiro no modal de Resultados, para qualquer RH_ADMIN. Nenhuma tela avisa quem escreve. **Ou o rótulo do campo passa a dizer que será lida pelo RH, ou muda o entendimento do que o campo colhe** — não pode chegar ambíguo à produção, porque o primeiro ciclo real já colhe texto sob o entendimento errado. Ver §3.1.1 | Gestora de RH |
 | 🔴 **A ordem da fila do avaliador** — é indiferente, ou há prioridade (cargo, prazo, unidade)? Hoje é acidental: vem de `Aplicacao.ordem`, um campo de tela do RH, e numa fila de 95 decide a ordem em que 95 pessoas são avaliadas. Ver §3.11 | Gestora de RH |
 | 🔴 **A mesma pessoa em dois ciclos abertos** — 9 no DEV, com períodos sobrepostos, duas notas cada. Ondas de unidade (§9) são legítimas; sobreposição de PESSOAS talvez não. Ver §3.10 | Gestora de RH |
 | 🔴 **Quem avalia os ~52 AVALIADORES** — hoje 46 deles caem no Diretor Executivo pela regra provisória de hierarquia. ⚠️ A planilha de avaliadores **não tem como responder isto**: ela diz "quem responde pelo centro de custo X", e o responsável está DENTRO do CC que lidera — ele fica de fora da própria lista, porque autoavaliação não existe. É pergunta separada, e é de estrutura | Diretoria + Gestora de RH |

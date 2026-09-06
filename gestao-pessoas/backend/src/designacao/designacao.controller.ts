@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
@@ -38,8 +39,11 @@ export class DesignacaoController {
 
   /** Lista da aplicação: incluídos E excluídos, com motivo. Nada é filtrado. */
   @Get('aplicacao/:aplicacaoId')
-  listar(@Param('aplicacaoId') aplicacaoId: string) {
-    return this.designacao.listar(aplicacaoId);
+  listar(
+    @Param('aplicacaoId') aplicacaoId: string,
+    @ColaboradorAtual('id') colaboradorId?: string,
+  ) {
+    return this.designacao.listar(aplicacaoId, colaboradorId ?? null);
   }
 
   @Post('ciclo/:cicloId/decisao') @HttpCode(200)
