@@ -149,28 +149,112 @@ o entendimento errado.
 Teste dirigido de 06/09. **`/resultados` SEMPRE marcou** — o service chama `marcarRestricoes`
 e a tela mostra a etiqueta "você".
 
-⚠️ **Mas `/resultados` segue NÃO TESTADO para este caso.** A marca não apareceu porque a
-gestora **não tem resultado** — a avaliação do Diretor Executivo sobre ela nunca foi enviada
-—, **não porque funcione**. Regra cumprida, dado que não a exercita. Vale um teste dirigido de
-verdade antes da produção: enviar a avaliação dela, apurar, e conferir que a linha aparece
-marcada em vez de simplesmente aparecer.
+✅ **TESTE DIRIGIDO EXECUTADO — 06/09, noite.** Antes disto a regra estava cumprida e o dado
+não a exercitava: a gestora não tinha resultado porque a avaliação do Diretor Executivo sobre
+ela nunca fora enviada. O caminho inteiro foi percorrido com as contas reais:
+
+1. conta de DEV para o avaliador designado (`claudimaroliveira`, matrícula 001079 — o
+   Diretor Executivo **não tinha conta**, e sem ela ninguém consegue enviar a avaliação dela);
+2. as 11 perguntas respondidas e a avaliação **enviada por ele** (nota 72,49), com observação
+   escrita — de propósito, para exercitar também o campo do consentimento;
+3. **apuração por CICLO** pela própria gestora (é a exceção estrutural 1: lote, nunca recorte
+   por pessoa) — 3 avaliações apuradas;
+4. `GET /resultados/ciclo/:id` com o token dela: **3 linhas, a dela em primeiro lugar**
+   (73,33) com `restrita: true` e o motivo *"Sua própria avaliação — acesso restrito"*;
+5. a tela renderizada em Chromium mostra a etiqueta **"você"** ao lado do nome dela, e a
+   média das 3 inclui a linha dela — o total fecha, que é a razão de marcar em vez de filtrar.
+
+Também conferido, no mesmo teste: a **memória de cálculo da própria linha ABRE** (§3.1 — ler o
+próprio resultado não é ato sobre ele) e a leitura gravou
+`LER_RESULTADO_INDIVIDUAL {proprioResultado: true, leuObservacaoDoAvaliador: true}`.
+
+⚠️ O modal da memória **não carrega a marca**: `restrita`/`proprio` não vêm no payload do
+`GET /resultados/:id`. Quem abre a própria linha só sabe que é sua pelo nome. Custo baixo, mas
+é a mesma família — a lista marca, o registro não.
 
 **Quem não marcava era a DESIGNAÇÃO** — 142 linhas sem o campo, e a linha da própria gestora
 aparecendo com *"Avalia: CLAUDIMAR · PENDENTE"*. Corrigido: `listar()` recebe o colaborador e
 marca, e a tela mostra "você". Conferido: 142 linhas, 1 marcada.
 
-⚠️ **Quatro listas continuam sem marcar**, e é decisão se devem: pendências do cadastro
-(`/designacao-padrao/pendencias`), a lista de um avaliador
-(`/designacao-padrao/avaliadores/:id`), o público da aplicação (`/aplicacoes/:id/publico`) e
-`foraDeTodasAsAplicacoes` no painel. Nenhuma mostra nota nem quem avalia quem — só "esta
-pessoa está/não está em tal recorte" —, então não é o mesmo risco. Fica registrado por ser a
-mesma família.
+⚠️ **As outras listas continuam sem marcar** — e agora está MEDIDO com o token da gestora,
+não deduzido do código (06/09, noite):
+
+| Lista | A linha dela | Marca? |
+|---|---|---|
+| `/designacao/aplicacao/:id` — a que foi corrigida | aparece entre 142 | ✅ `restrita: true` |
+| `/resultados/ciclo/:id` | aparece entre 3 | ✅ `restrita: true` |
+| `/avaliacoes/minhas` | não aparece (ninguém se avalia) | ✅ marca quando aparecer |
+| `/aplicacoes/:id/publico` | **aparece entre 142** | ❌ sem o campo |
+| `/designacao-padrao/avaliadores/:avaliadorId` | **aparece entre os 45 do Claudimar** | ❌ sem o campo |
+| `/catalogo/colaboradores?busca=` | **aparece** (é a busca de montar público) | ❌ sem o campo |
+| `/designacao-padrao/pendencias` | não aparece hoje — ela TEM avaliador no cadastro | ❌ sem o campo |
+| painel → `foraDeTodasAsAplicacoes` | não aparece hoje — está em aplicação (total 0 no Piloto) | ❌ sem o campo |
+
+Nenhuma das quatro de baixo mostra nota nem quem avalia quem — só "esta pessoa está/não está
+em tal recorte" —, então não é o mesmo risco, **e é decisão se devem marcar**. Fica registrado
+por ser a mesma família: as duas últimas não aparecem por acaso do dado de hoje, não por
+desenho — basta a gestora ficar sem avaliador no cadastro para a linha dela entrar sem marca.
 
 #### ⚠️ Grupo pequeno reaproxima a resposta — em aberto
 
 "Assiduidade e Pontualidade" tem 2 perguntas de 4 alternativas; um percentual de grupo aí
 reduz o espaço de combinações a um punhado. Quanto menor o grupo, mais o "agregado" vira
 resposta.
+
+### 3.1.2. 🔴 Abrir, responder e ENVIAR não verificam a DESIGNAÇÃO — achado de 06/09
+
+A regra está escrita em `common/roles-rh.ts`: *"AVALIADOR responde as avaliações que lhe foram
+designadas, **e só essas**"* (decisão E2, repetida no comentário da fila).
+
+**A fila cumpre. O registro individual não.** `minhasAvaliacoes` filtra por
+`avaliadorId = colaborador logado`; `AvaliacaoAcessoService.carregarParaAcao` — por onde passam
+`abrir`, `responder` e `enviar` — só barra o **próprio avaliado** e, quando o solicitante não é
+o avaliador designado, **grava `ACESSO_TERCEIRO` e deixa passar**.
+
+Medido em 06/09 com conta real: logado como `wandersonnascimento` (AVALIADOR simples),
+`GET /avaliacoes/d2a25e36…` — a avaliação da gestora, designada ao Diretor Executivo —
+responde **HTTP 200 com o questionário inteiro**. Pelo código, `POST /respostas` e
+`POST /enviar` aceitam o mesmo id: a nota é congelada em nome do avaliador designado e nada no
+registro diz que foi outra pessoa que respondeu — só a linha de auditoria `ACESSO_TERCEIRO:editar`.
+
+⚠️ É a **mesma família do achado da §8**: regra escrita, cumprida por um caminho e não por
+outro. E é invisível justamente porque a fila filtra — nenhuma tela oferece o id de outro
+avaliador, então não há sintoma; basta ter o id.
+
+**Ler de terceiro é decisão tomada** (§3.1.1: o RH lê, com rastro). **Escrever de terceiro
+não está decidido em lugar nenhum.** Correção proposta, ainda NÃO aplicada: `carregarParaAcao`
+já recebe a ação — exigir a designação nas de escrita (`responder`/`enviar`/`abrir para
+responder`), mantendo a leitura do RH como está e a reabertura com o RH_ADMIN. O teste de
+invariante que varre o fonte já obriga todo mundo a passar por lá.
+
+### 3.13. Ser avaliador é fato do DADO — o que a correção alcançou, medido
+
+A correção de 06/09 (RH_ADMIN entra na fila; o item de menu sem condição de papel) nasceu de um
+caso: a gestora avalia 13 pessoas e tem só `RH_ADMIN`. **Conferido depois se pegou todo mundo**
+— e o recorte é este, no DEV de 06/09:
+
+| | |
+|---|---|
+| Avaliadores do ciclo Piloto (pelo dado) | **53** |
+| …com conta na plataforma (matrícula casada) | **7** |
+| …com permissão no módulo GESTAO_PESSOAS | **4** |
+| …que de fato abrem a própria fila (HTTP 200) | **4** — 13 · 84 · 6 · 22 avaliações |
+
+Os **46 sem conta** são esperados: o piloto ainda não distribuiu acesso. Os **3 com conta e sem
+permissão** não são — `supdept01` (matrícula 001047, **13 avaliações**), `rodrigoleao` (4) e
+`lidyanerocha` (1) fazem parte do dado como avaliadores e recebem `403 Sem acesso ao módulo`.
+
+⚠️ **Sobra um degrau, e é o mesmo do caso da gestora, uma role adiante:** o menu mostra
+*"Minhas avaliações"* a **quem tiver qualquer papel no módulo** (de propósito — ser avaliador é
+fato do dado), mas o controller da fila é `@Roles(AVALIADOR, RH_ADMIN)`. Quem tiver só
+`RH_MODELO` ou `RH_CICLO` **vê o item e leva 403**. Hoje ninguém tem essas duas roles, então
+não há sintoma — é exatamente a situação em que a gestora estava antes de alguém reparar.
+
+⚠️ **A identidade é a MATRÍCULA, e ela não pergunta quem é a conta.** `supdept01` é conta de
+TESTE da Logística e carrega a matrícula **001047**, que é a de uma pessoa real (Clenio Marcos
+Mendes, avaliador de 13). Dar GESTAO_PESSOAS a essa conta é dar a fila dele a quem usar a
+conta. Não é defeito do módulo — é consequência de resolver identidade por matrícula, que é o
+desenho certo — mas é motivo para não haver conta de teste com matrícula de gente de verdade.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
@@ -190,6 +274,25 @@ Só nomear os números faria alguém supor a subtração. Então o painel **most
 - e uma linha dizendo que os universos não se contêm.
 
 E `/avaliadores` passa a dizer `sem avaliador no cadastro`, com "elegíveis de TODA a empresa".
+
+**Os três números, lidos ao vivo em 06/09 (noite) — cada um responde uma pergunta diferente:**
+
+| Nº | O que é | Rota | Onde aparece |
+|---|---|---|---|
+| **108** | elegíveis de **TODA a empresa** (1.036) que **não têm avaliador no CADASTRO** — 928 têm. Não depende de ciclo nenhum | `/designacao-padrao/pendencias` → `semAvaliador.total` | tela **Avaliadores**, em 26 grupos filial × CC, **com os nomes** |
+| **95** | pessoas do **público do ciclo Piloto** que ninguém designou **naquele ciclo** (894 designadas) | painel do Piloto → `semDesignacao` | aba **Painel** do Piloto |
+| **84** | a mesma conta, no **outro ciclo aberto** (Avaliação Geral 2026, público antigo de 93, 9 designadas) | painel do Geral → `semDesignacao` | aba **Painel** do Geral |
+
+Eles não se conciliam porque **os universos são três**: a empresa inteira, o público de um
+ciclo e o público do outro. Hoje 95 + 13 = 108 por coincidência do dado, e o painel diz isso
+sem deixar ninguém supor a subtração: `semDesignacaoPorOrigem` do Piloto é
+`{jaTemNoCadastro: 0, nemNoCadastro: 95}` — **os 95 também não têm no cadastro** —, enquanto o
+do Geral é `{jaTemNoCadastro: 84, nemNoCadastro: 0}`, isto é, **os 84 se resolvem com um clique
+em "Designar pelo cadastro"** e os 95 não: exigem antes a lista do RH.
+
+⚠️ **Nenhuma tela mostra os três juntos, e nenhuma deveria:** o 108 mora no cadastro (que não
+tem ciclo) e os outros dois no painel, que mostra um ciclo por vez. Quem os viu lado a lado foi
+quem abriu três telas — e é aí, fora do sistema, que a subtração parece existir.
 
 ⚠️ **Achado de tabela:** `foraDeTodasAsAplicacoes` existia no backend desde 06/09 e **não era
 renderizado** — o contrato do cliente não tinha o campo, então a contagem chegava e era
@@ -492,7 +595,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Aprendizes (31 pessoas) entram no ciclo com aplicação própria, sem critérios cadastrais — confirmar | Gestora de RH |
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
-| 🔴 **O avaliador é avisado de que o RH lê a observação dele?** `observacaoAvaliador` é texto livre sobre a pessoa avaliada e aparece inteiro no modal de Resultados, para qualquer RH_ADMIN. Nenhuma tela avisa quem escreve. **Ou o rótulo do campo passa a dizer que será lida pelo RH, ou muda o entendimento do que o campo colhe** — não pode chegar ambíguo à produção, porque o primeiro ciclo real já colhe texto sob o entendimento errado. Ver §3.1.1 | Gestora de RH |
+| 🔴 **O avaliador é avisado de que o RH lê a observação dele?** — **decisão da gestora, não nossa.** `observacaoAvaliador` é texto livre sobre a pessoa avaliada e aparece **inteiro** no modal de Resultados para qualquer `RH_ADMIN`; **nenhuma tela avisa quem escreve**. Verificado ao vivo em 06/09: a observação escrita no envio foi lida no modal pela conta da gestora. **São dois caminhos e ela escolhe um: (A)** o rótulo do campo passa a dizer, na tela de quem escreve, que o texto **será lido pelo RH** — o campo continua o que é e quem escreve sabe; **(B)** muda o entendimento do que o campo colhe (devolutiva ao avaliado, ou observação que o RH não lê) e a tela de Resultados deixa de exibi-lo. **Não pode chegar ambíguo à produção:** o primeiro ciclo real já colhe texto sob o entendimento errado, e texto colhido não se recolhe. ⚠️ O **rastro** desse acesso está RESOLVIDO (§3.1.1); isto aqui é **consentimento**, e continua EM ABERTO — auditoria diz quem leu, não autoriza a leitura. Ver §3.1.1 | Gestora de RH (Arielly) |
 | 🔴 **A ordem da fila do avaliador** — é indiferente, ou há prioridade (cargo, prazo, unidade)? Hoje é acidental: vem de `Aplicacao.ordem`, um campo de tela do RH, e numa fila de 95 decide a ordem em que 95 pessoas são avaliadas. Ver §3.11 | Gestora de RH |
 | 🔴 **A mesma pessoa em dois ciclos abertos** — 9 no DEV, com períodos sobrepostos, duas notas cada. Ondas de unidade (§9) são legítimas; sobreposição de PESSOAS talvez não. Ver §3.10 | Gestora de RH |
 | 🔴 **Quem avalia os ~52 AVALIADORES** — hoje 46 deles caem no Diretor Executivo pela regra provisória de hierarquia. ⚠️ A planilha de avaliadores **não tem como responder isto**: ela diz "quem responde pelo centro de custo X", e o responsável está DENTRO do CC que lidera — ele fica de fora da própria lista, porque autoavaliação não existe. É pergunta separada, e é de estrutura | Diretoria + Gestora de RH |
@@ -552,6 +655,11 @@ porque só o `AvaliacaoService` recebe o `ContextoAcesso` com o IP; os demais se
 recebem apenas o `usuarioId`. **O autor e o horário estão sempre lá e resolvem para o
 username**; o que falta é de onde a pessoa agiu. Numa contestação isso raramente decide
 algo, mas é bom não descobrir na hora.
+
+⚠️ **E quando grava, grava o IP errado.** As linhas de 06/09 saíram com
+`::ffff:172.19.0.20` — o **container do nginx**, não o cliente. O backend lê `req.ip` sem
+`trust proxy` nem `X-Forwarded-For`, então todo mundo tem o mesmo endereço e o campo não
+distingue ninguém. Pior que vazio: um IP que parece resposta.
 
 
 Cada uma destas já custou tempo de alguém.
@@ -615,13 +723,24 @@ docker run --rm -t -v $PWD/gestao-pessoas/backend:/app -v /app/node_modules -w /
 
 ### Contas de teste no DEV
 
-`ariellypereira` / `Temp2026` → RH_ADMIN.  `wandersonnascimento` / `Temp2026` → AVALIADOR.
+Todas com senha `Temp2026`. Login é pelo campo **`login`** (não `username`): 
+`POST /api/v1/auth/login {"login":"...","senha":"..."}`.
+
+| Conta | Papel no módulo | Fila | Observação |
+|---|---|---|---|
+| `ariellypereira` | RH_ADMIN | 13 | a gestora; também é AVALIADA (é o caso da separação de funções) |
+| `adrianacaetano` | AVALIADOR | 84 | Gerente Supermercado — a maior fila depois do Diretor |
+| `vanialucia` | AVALIADOR | 6 | ⚠️ o username é `vanialucia`, **não** `vaniacosta` |
+| `wandersonnascimento` | AVALIADOR | 22 | 14 do Piloto + 8 do Geral — a fila **soma os dois ciclos** (§3.10) |
+| `claudimaroliveira` | AVALIADOR | 44 | **conta de TESTE criada em 06/09** para o teste dirigido da §3.1.1 (Diretor Executivo, matrícula 001079). Sem ela não havia como enviar a avaliação da gestora |
+| `rodrigoleao` | — | 403 | é avaliador de 4 pessoas no dado, mas **a permissão GESTAO_PESSOAS não foi salva** (em 06/09 só o FISCAL dele mudou). Refazer no Configurador e ver se erra ao salvar — mesmo sintoma já visto com o INVENTARIO do `wandersonnascimento` |
 
 ⚠️ **Testar com ADMIN nunca pega defeito de RBAC** — ADMIN tem bypass no `RolesGuard`. Logue
 com a role real.
 
-⚠️ Há **3 avaliações enviadas de verdade** no ciclo do DEV (uma delas com respostas
-variadas, nota 54,65) e 3 resultados apurados. São o único dado real de uso — não apagar.
+⚠️ Dado de uso real no DEV — **não apagar**: 4 avaliações enviadas e 3 resultados no
+"Avaliação Geral 2026"; no "Piloto 15/09/2026", **3 enviadas e 3 resultados** (a terceira é a
+da gestora, criada no teste dirigido de 06/09) e 2 em andamento.
 
 ---
 
@@ -647,6 +766,11 @@ O que sobra é decisão humana, e é isso que precisa acontecer antes de 15/09:
 
 ⚠️ Os itens 1 e 2 seguem sendo do RH — mas **deixaram de travar o desenvolvimento**: a T.I.
 preenche os dois provisoriamente e pela tela (§11), e tudo o que entra assim fica marcado.
+
+🔴 **E um que não depende do RH:** `abrir`/`responder`/`enviar` **não verificam a designação**
+(§3.1.2) — qualquer conta com papel no módulo responde a avaliação de outro avaliador se tiver
+o id. Achado em 06/09 e ainda **não corrigido**; é decisão de aplicar, não de esperar resposta
+de ninguém.
 
 Depois disso: os atalhos de preenchimento na tela de Aplicações (hoje ela ainda escolhe
 centros de custo), e então o roteiro abaixo.
@@ -705,13 +829,19 @@ Os quatro cenários que o piloto precisava exercitar, conferidos no banco:
 aberta da Diretoria, e deixá-la visível vale mais do que inventar uma resposta. Onde há
 mais de um gerente, a cascata **não escolhe**: sobe para o Diretor Executivo.
 
-**Ciclo `Piloto 15/09/2026`**, RASCUNHO, `valeParaMerito = false`, ao lado do "Avaliação
-Geral 2026" ABERTO — ⚠️ as **3 avaliações enviadas de verdade** vivem no ciclo antigo e não
-se tocam. Aplicação **"Aprendizes"**: 31 pessoas em 15 pares, sem critérios cadastrais,
+**Ciclo `Piloto 15/09/2026`**, hoje **ABERTO** (aberto em 06/09, 16:12), `valeParaMerito =
+false`, ao lado do "Avaliação Geral 2026" também ABERTO — são os **dois ciclos abertos ao mesmo
+tempo** da §3.10, e é por isso que a fila do `wandersonnascimento` traz 22 e não 14.
+⚠️ As **4 avaliações enviadas de verdade** do ciclo antigo não se tocam; o Piloto tem 3
+enviadas (uma delas a da gestora, do teste dirigido de 06/09 — §3.1.1) e 2 em andamento. Aplicação **"Aprendizes"**: 31 pessoas em 15 pares, sem critérios cadastrais,
 `pesoAvaliacao = 100`. Era impossível de montar com recorte por centro de custo.
 
 Painel conferido ao vivo: `foraDeTodasAsAplicacoes = 959`, e a conta fecha — 1.036 menos
 47 afastados (o ciclo não os inclui) = 989 elegíveis, menos os 30 aprendizes ativos.
+
+⚠️ Esse 959 é de antes das 4 aplicações cobrirem o quadro: relido em 06/09 à noite, o Piloto
+está com **894 designados · 95 sem designação · `foraDeTodasAsAplicacoes = 0`**. Ver §3.12 para
+o que cada número desses é — e para os 84 do outro ciclo, que **não** são um recorte destes.
 
 ---
 
