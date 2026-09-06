@@ -69,6 +69,7 @@ model Colaborador {
   cargo                  Cargo?    @relation(fields: [cargoId], references: [id])
   treinamentos           ColaboradorTreinamento[]
   funcaoHistorico        ColaboradorFuncaoHistorico[]
+  elegibilidadeCiclos    CicloElegibilidade[]
 
   @@unique([filial, matricula])
   @@index([centroCusto, situacao])
@@ -434,6 +435,11 @@ model Ciclo {
   status            StatusCiclo  @default(RASCUNHO)
   /// Piloto não vale para mérito.
   valeParaMerito    Boolean      @default(false) @map("vale_para_merito")
+  /// Afastados entram no ciclo? Resolvido pela situação na DATA-BASE, não na
+  /// data em que a lista é montada. Padrão do RH: não incluir.
+  /// ⚠️ Férias NÃO é afastamento e entra sempre — são 98 pessoas, e confundir
+  /// os dois tiraria gente do ciclo sem ninguém ter decidido.
+  incluirAfastados  Boolean      @default(false) @map("incluir_afastados")
   abertoEm          DateTime?    @map("aberto_em")
   encerradoEm       DateTime?    @map("encerrado_em")
   criadoEm          DateTime     @default(now()) @map("criado_em")
@@ -446,6 +452,7 @@ model Ciclo {
   /// a mesma coisa no supermercado e na fábrica, mesmo com questionários
   /// diferentes.
   conceitos         ConceitoFaixa[]
+  elegibilidade     CicloElegibilidade[]
 
   @@index([status])
   @@map("ciclo")
@@ -511,6 +518,69 @@ model AplicacaoCentroCusto {
 
   @@unique([aplicacaoId, filial, centroCusto])
   @@map("aplicacao_centro_custo")
+  @@schema("rh")
+}
+
+enum DecisaoElegibilidade {
+  INCLUIR
+  EXCLUIR
+
+  @@schema("rh")
+}
+
+enum MotivoElegibilidade {
+  /// Cargo que a empresa não avalia (Presidente/Vice). Regra fixa.
+  CARGO_INELEGIVEL
+  /// Política do ciclo — hoje, "não incluir afastados".
+  REGRA_CICLO
+  /// O RH decidiu na designação, contrariando ou complementando a régua.
+  MANUAL_RH
+
+  @@schema("rh")
+}
+
+/// REGISTRO DAS DECISÕES DE ELEGIBILIDADE DO CICLO — nos DOIS sentidos.
+///
+/// Não é só quem saiu. O aprendiz que a gestora resolver INCLUIR contrariando a
+/// régua também precisa de rastro: sem isso, a decisão dela sumiria igual à
+/// exclusão sumia. A régua (`designacao/elegibilidade-ciclo.ts`) monta a lista
+/// inicial; esta tabela guarda o que foi decidido sobre cada pessoa e por quem.
+///
+/// ⚠️ REVERSÍVEL SEM APAGAR. Excluir alguém por engano e reincluir não pode
+/// fazer a linha desaparecer — o histórico tem de mostrar "excluído, depois
+/// reincluído por fulano". Por isso a decisão revertida ganha `removidoEm` e
+/// `removidoPorId` e CONTINUA na tabela; a decisão nova entra como linha nova.
+/// É o tipo de coisa que aparece em contestação, meses depois.
+///
+/// ⚠️ Sem unique em (ciclo, colaborador): há várias linhas por pessoa ao longo
+/// do tempo, e "uma decisão vigente por pessoa" é invariante de aplicação —
+/// Postgres só a garantiria com índice único parcial (`WHERE removido_em IS
+/// NULL`), que o Prisma não gera a partir do schema. O service é quem garante,
+/// e o índice abaixo é o que a consulta usa.
+model CicloElegibilidade {
+  id             String   @id @default(uuid())
+  cicloId        String   @map("ciclo_id")
+  colaboradorId  String   @map("colaborador_id")
+  decisao        DecisaoElegibilidade
+  motivo         MotivoElegibilidade
+  /// Frase em português, para a tela e para quem ler meses depois.
+  justificativa  String
+  /// Quem decidiu. Nulo quando foi a régua do ciclo, não uma pessoa.
+  registradoPorId String? @map("registrado_por_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  /// Preenchidos quando a decisão é revertida. A linha PERMANECE.
+  removidoEm     DateTime? @map("removido_em")
+  removidoPorId  String?   @map("removido_por_id")
+
+  ciclo          Ciclo    @relation(fields: [cicloId], references: [id])
+  colaborador    Colaborador @relation(fields: [colaboradorId], references: [id])
+
+  /// A consulta da designação: decisões vigentes do ciclo.
+  @@index([cicloId, removidoEm])
+  /// O histórico de uma pessoa no ciclo, em ordem.
+  @@index([cicloId, colaboradorId, criadoEm])
+  @@map("ciclo_elegibilidade")
   @@schema("rh")
 }
 

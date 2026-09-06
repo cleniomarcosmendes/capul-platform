@@ -61,5 +61,25 @@ ser julgamento.
    depende de onde ele está alocado.)
 2. Aprendiz avaliado por quem — o supervisor da área, ou quem acompanha o programa?
 3. A nota do aprendiz entra na mesma régua de conceitos (0–25–50–75–90–100) ou é lida
-   separadamente? Como o denominador é diferente, comparar a nota dele com a de um
-   efetivo compara duas coisas diferentes.
+   separadamente?
+
+---
+
+## Sobre a régua de conceitos — decisão tomada em 05/09
+
+O ponto acima é real: **sem critérios cadastrais o denominador é outro**, então um 80 de
+aprendiz e um 80 de mensalista não medem a mesma coisa. O do aprendiz é 80 de
+questionário puro; o do mensalista mistura questionário e critérios cadastrais em pesos
+diferentes.
+
+**Não se mudou nada no cálculo** — mudar a régua de conceitos por aplicação criaria duas
+escalas de "Supera" na mesma empresa, que é exatamente o que os conceitos no CICLO (e não
+no modelo) existem para evitar.
+
+O que se faz é **tornar a diferença visível**: o relatório mostra a **APLICAÇÃO ao lado da
+nota**, sempre. Assim, ao comparar duas linhas, fica evidente que vieram de réguas
+distintas — em vez de a diferença ficar escondida atrás de dois números do mesmo tamanho.
+
+Fica como observação para a gestora: ao ler o consolidado, **comparar dentro da mesma
+aplicação**. Comparar aprendiz com mensalista pela nota final é comparar duas medidas
+diferentes, mesmo quando o número é igual.
