@@ -32,6 +32,22 @@ export interface LinhaDaLista {
   justificativa: string | null;
   /** true quando a decisão veio de uma pessoa, não da régua. */
   decididoManualmente: boolean;
+  /**
+   * ⭐ Quem avalia esta pessoa — null quando ninguém foi designado ainda.
+   *
+   * Sem isto a tela não tem como dizer o que FALTA: elegível sem avaliador não
+   * gera `Avaliacao`, some de toda contagem e fica de fora do ciclo sem erro
+   * nenhum. É a mesma pendência que o painel conta como `semDesignacao`.
+   */
+  avaliadorId: string | null;
+  avaliadorNome: string | null;
+  avaliacaoStatus: string | null;
+}
+
+interface DesignacaoVigente {
+  avaliadorId: string;
+  avaliadorNome: string;
+  status: string;
 }
 
 @Injectable()
@@ -79,10 +95,13 @@ export class DesignacaoService {
     });
 
     const decisoes = await this.decisoesVigentes(aplicacao.cicloId);
+    const designadas = await this.designacoesVigentes(aplicacao.cicloId);
 
+    const semDesignacao = { avaliadorId: null, avaliadorNome: null, avaliacaoStatus: null };
     const linhas: LinhaDaLista[] = [
       ...incluidos.map((c) => ({
         ...this.paraLinha(c),
+        ...semDesignacao,
         elegivel: true,
         motivo: null,
         justificativa: null,
@@ -90,6 +109,7 @@ export class DesignacaoService {
       })),
       ...excluidos.map((c) => ({
         ...this.paraLinha(c),
+        ...semDesignacao,
         elegivel: false,
         motivo: c.motivo as MotivoExclusao | null,
         justificativa: c.justificativa as string | null,
@@ -99,10 +119,18 @@ export class DesignacaoService {
 
     // A decisão manual SOBREPÕE a régua, nos dois sentidos.
     return linhas.map((linha) => {
-      const decisao = decisoes.get(linha.colaboradorId);
-      if (!decisao) return { ...linha, decididoManualmente: false };
-      return {
+      const designada = designadas.get(linha.colaboradorId);
+      const comDesignacao = {
         ...linha,
+        avaliadorId: designada?.avaliadorId ?? null,
+        avaliadorNome: designada?.avaliadorNome ?? null,
+        avaliacaoStatus: designada?.status ?? null,
+      };
+
+      const decisao = decisoes.get(linha.colaboradorId);
+      if (!decisao) return { ...comDesignacao, decididoManualmente: false };
+      return {
+        ...comDesignacao,
         elegivel: decisao.decisao === 'INCLUIR',
         motivo: decisao.motivo,
         justificativa: decisao.justificativa,
@@ -209,6 +237,32 @@ export class DesignacaoService {
       valorNovo: { avaliadoId, avaliadorId, origem },
     });
     return avaliacao;
+  }
+
+  /** Quem já tem avaliador designado no ciclo, com o nome de quem avalia. */
+  private async designacoesVigentes(cicloId: string) {
+    const avaliacoes = await this.prisma.avaliacao.findMany({
+      where: { cicloId },
+      select: { avaliadoId: true, avaliadorId: true, status: true },
+    });
+    if (avaliacoes.length === 0) return new Map<string, DesignacaoVigente>();
+
+    const avaliadores = await this.prisma.colaborador.findMany({
+      where: { id: { in: [...new Set(avaliacoes.map((a) => a.avaliadorId))] } },
+      select: { id: true, nome: true },
+    });
+    const nomePorId = new Map(avaliadores.map((c) => [c.id, c.nome]));
+
+    return new Map<string, DesignacaoVigente>(
+      avaliacoes.map((a) => [
+        a.avaliadoId,
+        {
+          avaliadorId: a.avaliadorId,
+          avaliadorNome: nomePorId.get(a.avaliadorId) ?? '(colaborador não encontrado)',
+          status: a.status as string,
+        },
+      ]),
+    );
   }
 
   private async decisoesVigentes(cicloId: string) {

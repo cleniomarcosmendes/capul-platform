@@ -97,3 +97,292 @@ export const avaliacoes = {
   enviar: (id: string, observacao?: string) =>
     rhApi.post<{ notaAvaliacao: number }>(`/avaliacoes/${id}/enviar`, { observacao }).then((r) => r.data),
 };
+
+// ---------------------------------------------------------------------------
+// Telas do RH — ciclos, aplicações, designação, painel e resultados.
+// ---------------------------------------------------------------------------
+
+export type StatusCiclo = 'RASCUNHO' | 'ABERTO' | 'EM_APURACAO' | 'ENCERRADO' | 'CANCELADO';
+
+export interface Conceito {
+  id: string;
+  descricao: string;
+  limiteInferior: string | number;
+  limiteSuperior: string | number;
+  cor: string | null;
+  ordem: number;
+}
+
+export interface CicloDaLista {
+  id: string;
+  nome: string;
+  status: StatusCiclo;
+  periodoInicio: string;
+  periodoFim: string;
+  dataBase: string;
+  janelaTreinamentoMeses: number;
+  incluirAfastados: boolean;
+  valeParaMerito: boolean;
+  _count: { aplicacoes: number; avaliacoes: number };
+}
+
+export interface CicloDetalhado extends Omit<CicloDaLista, '_count'> {
+  conceitos: Conceito[];
+  aplicacoes: {
+    id: string;
+    nome: string;
+    pesoAvaliacao: string | number;
+    modeloVersao: { versao: number; modelo: { nome: string; finalidade: string } };
+    criterios: { criterioId: string; peso: string | number; criterio: { nome: string; codigo: string } }[];
+    centrosCusto: { id: string; filial: string | null; centroCusto: string }[];
+  }[];
+}
+
+export interface NovoCiclo {
+  nome: string;
+  periodoInicio: string;
+  periodoFim: string;
+  dataBase: string;
+  janelaTreinamentoMeses?: number;
+  incluirAfastados?: boolean;
+  valeParaMerito?: boolean;
+  conceitos: { descricao: string; limiteInferior: number; limiteSuperior: number; cor?: string; ordem: number }[];
+}
+
+export const ciclos = {
+  listar: () => rhApi.get<CicloDaLista[]>('/ciclos').then((r) => r.data),
+  obter: (id: string) => rhApi.get<CicloDetalhado>(`/ciclos/${id}`).then((r) => r.data),
+  criar: (dados: NovoCiclo) => rhApi.post<CicloDaLista>('/ciclos', dados).then((r) => r.data),
+  abrir: (id: string) => rhApi.post(`/ciclos/${id}/abrir`).then((r) => r.data),
+  encerrar: (id: string) => rhApi.post(`/ciclos/${id}/encerrar`).then((r) => r.data),
+};
+
+export interface VersaoDeModelo {
+  id: string;
+  versao: number;
+  publicadoEm: string | null;
+  pontuacaoMaxima: number | null;
+  grupos: number;
+  perguntas: number;
+}
+export interface ModeloDoCatalogo {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  finalidade: 'PRODUCAO' | 'DEMONSTRACAO';
+  ativo: boolean;
+  versoes: VersaoDeModelo[];
+}
+export interface CriterioDoCatalogo {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao: string | null;
+  origem: 'CALCULADO' | 'INFORMADO';
+  tipoValor: string;
+  codigoCalculo: string | null;
+  unidade: string | null;
+  ativo: boolean;
+  faixas: number;
+  utilizavel: boolean;
+  motivoIndisponivel: string | null;
+}
+export interface CentroCustoDoCatalogo {
+  filial: string;
+  centroCusto: string;
+  descricao: string | null;
+  pessoas: number;
+}
+export interface ColaboradorDaBusca {
+  id: string;
+  matricula: string;
+  nome: string;
+  filial: string;
+  centroCusto: string | null;
+  centroCustoDescricao: string | null;
+  cargoDescricao: string | null;
+}
+
+export const catalogo = {
+  modelos: () => rhApi.get<ModeloDoCatalogo[]>('/catalogo/modelos').then((r) => r.data),
+  criterios: () => rhApi.get<CriterioDoCatalogo[]>('/catalogo/criterios').then((r) => r.data),
+  centrosCusto: () => rhApi.get<CentroCustoDoCatalogo[]>('/catalogo/centros-custo').then((r) => r.data),
+  colaboradores: (busca?: string) =>
+    rhApi.get<ColaboradorDaBusca[]>('/catalogo/colaboradores', { params: { busca } }).then((r) => r.data),
+};
+
+export interface AplicacaoDoCiclo {
+  id: string;
+  nome: string;
+  ordem: number;
+  pesoAvaliacao: string | number;
+  criterios: { criterioId: string; peso: string | number; criterio: CriterioDoCatalogo }[];
+  centrosCusto: { id: string; filial: string | null; centroCusto: string }[];
+  _count: { avaliacoes: number };
+}
+
+export interface NovaAplicacao {
+  cicloId: string;
+  modeloVersaoId: string;
+  nome: string;
+  pesoAvaliacao: number;
+  ordem?: number;
+  criterios?: { criterioId: string; peso: number; ordem?: number }[];
+  centrosCusto?: { filial?: string | null; centroCusto: string }[];
+}
+
+export const aplicacoes = {
+  doCiclo: (cicloId: string) =>
+    rhApi.get<AplicacaoDoCiclo[]>(`/aplicacoes/ciclo/${cicloId}`).then((r) => r.data),
+  criar: (dados: NovaAplicacao) => rhApi.post('/aplicacoes', dados).then((r) => r.data),
+};
+
+export type MotivoExclusao =
+  | 'DESLIGADO'
+  | 'AFASTADO'
+  | 'CARGO_SEM_AVALIADOR'
+  | 'MANUAL_RH'
+  | 'FORA_DO_CENTRO_CUSTO'
+  | string;
+
+export interface LinhaDaDesignacao {
+  colaboradorId: string;
+  matricula: string;
+  nome: string;
+  centroCusto: string | null;
+  filial: string;
+  elegivel: boolean;
+  motivo: MotivoExclusao | null;
+  justificativa: string | null;
+  decididoManualmente: boolean;
+  /** null = ninguém designado — a pendência que faz a pessoa sumir do ciclo. */
+  avaliadorId: string | null;
+  avaliadorNome: string | null;
+  avaliacaoStatus: StatusAvaliacao | null;
+}
+
+export const designacao = {
+  listar: (aplicacaoId: string) =>
+    rhApi.get<LinhaDaDesignacao[]>(`/designacao/aplicacao/${aplicacaoId}`).then((r) => r.data),
+  decidir: (cicloId: string, colaboradorId: string, decisao: 'INCLUIR' | 'EXCLUIR', justificativa: string) =>
+    rhApi
+      .post(`/designacao/ciclo/${cicloId}/decisao`, { colaboradorId, decisao, justificativa })
+      .then((r) => r.data),
+  // O backend grava origem MANUAL — não existe designação automática por
+  // centro de custo hoje, porque o cadastro não tem quem é o superior de quem.
+  designar: (aplicacaoId: string, avaliadoId: string, avaliadorId: string) =>
+    rhApi
+      .post(`/designacao/aplicacao/${aplicacaoId}/designar`, { avaliadoId, avaliadorId })
+      .then((r) => r.data),
+};
+
+export interface ProgressoDaAplicacao {
+  aplicacaoId: string;
+  nome: string;
+  designados: number;
+  enviadas: number;
+  emAndamento: number;
+  pendentes: number;
+  canceladas: number;
+  semDesignacao: number;
+}
+export interface FilaDoAvaliador {
+  avaliadorId: string;
+  nome: string;
+  matricula: string;
+  total: number;
+  enviadas: number;
+  aFazer: number;
+}
+export interface PainelDoCiclo {
+  ciclo: { id: string; nome: string; status: StatusCiclo; periodoInicio: string; periodoFim: string; dataBase: string };
+  designados: number;
+  enviadas: number;
+  aFazer: number;
+  semDesignacao: number;
+  aplicacoes: ProgressoDaAplicacao[];
+  avaliadores: FilaDoAvaliador[];
+}
+
+export interface AlertaAgregado {
+  criterioCodigo: string;
+  criterioNome: string;
+  motivo: 'SEM_FAIXA' | 'SEM_VALOR_INFORMADO' | 'SEM_DADO_CADASTRAL';
+  escopo: 'CONFIGURACAO' | 'INDIVIDUAL';
+  pessoas: number;
+  valores: string[];
+  resumo: string;
+}
+export interface Conferencia {
+  avaliacoesApuradas: number;
+  semNotaDeAvaliacao: number;
+  alertas: AlertaAgregado[];
+}
+
+export const painel = {
+  doCiclo: (cicloId: string) => rhApi.get<PainelDoCiclo>(`/painel/ciclo/${cicloId}`).then((r) => r.data),
+  pendencias: (cicloId: string) =>
+    rhApi.get<Conferencia>(`/painel/ciclo/${cicloId}/pendencias`).then((r) => r.data),
+};
+
+export interface LinhaDeResultado {
+  id: string;
+  avaliacaoId: string;
+  avaliadoId: string;
+  nome: string;
+  matricula: string;
+  cargo: string | null;
+  centroCusto: string | null;
+  filial: string | null;
+  aplicacao: string;
+  notaAvaliacao: number;
+  notaCriterios: number | null;
+  notaFinal: number;
+  conceito: string | null;
+  houveRenormalizacao: boolean;
+  calculadoEm: string;
+  restrita?: boolean;
+  motivoRestricao?: string;
+}
+
+export interface MemoriaDeCalculo {
+  id: string;
+  ciclo: { nome: string; dataBase: string };
+  aplicacao: string;
+  avaliado: { nome: string; matricula: string; cargo: string | null; centroCusto: string | null };
+  avaliador: { nome: string; matricula: string };
+  enviadaEm: string | null;
+  observacaoAvaliador: string | null;
+  notaAvaliacao: number;
+  pesoAvaliacao: number;
+  notaCriterios: number | null;
+  notaFinal: number;
+  conceito: string | null;
+  houveRenormalizacao: boolean;
+  calculadoEm: string;
+  porGrupo: { grupoId: string; titulo: string; nota: number; peso: number; ordem: number }[];
+  criterios: {
+    criterioId: string;
+    nome: string;
+    valorBruto: number | null;
+    valorTexto: string | null;
+    /** Texto da faixa em que o valor caiu — o RÓTULO, separado da pontuação. */
+    faixaRotulo: string | null;
+    unidade: string | null;
+    tipoValor: string | null;
+    pontuacao: number | null;
+    peso: number;
+    semDado: boolean;
+  }[];
+}
+
+export const resultados = {
+  doCiclo: (cicloId: string) =>
+    rhApi.get<LinhaDeResultado[]>(`/resultados/ciclo/${cicloId}`).then((r) => r.data),
+  memoria: (id: string) => rhApi.get<MemoriaDeCalculo>(`/resultados/${id}`).then((r) => r.data),
+};
+
+export const apuracao = {
+  doCiclo: (cicloId: string) =>
+    rhApi.post<Conferencia>('/apuracao', { tipo: 'CICLO', cicloId }).then((r) => r.data),
+};

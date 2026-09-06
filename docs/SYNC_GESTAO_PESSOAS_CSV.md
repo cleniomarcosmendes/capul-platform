@@ -26,7 +26,14 @@ de largura fixa e vêm com espaço à direita — o leitor faz `trim` em tudo.
 ```sql
 -- colaboradores.csv
 select trim(RA_FILIAL) filial, trim(RA_MAT) matricula, trim(RA_NOME) nome, trim(RA_CIC) cpf,
-       trim(RA_CC) centro_custo, ' ' centro_custo_descricao,
+       trim(RA_CC) centro_custo,
+       -- ⚠️ Mesma armadilha do cargo: a descricao do centro de custo vive no
+       -- CTT010, nao no SRA010. Com o ' ' fixo que estava aqui, a tela de
+       -- Aplicacoes pedia para a gestora escolher o publico entre 82 codigos
+       -- numericos sem nome. Conferido em 06/09/2026: o CTT010 descreve
+       -- 74 de 74 centros com gente ativa.
+       trim(nvl((select max(t.CTT_DESC01) from CTT010 t
+                 where t.D_E_L_E_T_=' ' and trim(t.CTT_CUSTO)=trim(a.RA_CC)),' ')) centro_custo_descricao,
        trim(a.RA_CODFUNC) cargo_codigo,
        -- ⚠️ A descricao do cargo vem do SQ3010, nao do SRA010. Sem este join a
        -- tela do avaliador mostra "Sem cargo cadastrado" para todo mundo, e o

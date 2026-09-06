@@ -1,14 +1,18 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ROLES, rolesDoModulo, type UsuarioDoToken as Usuario } from '../lib/roles';
 
-interface Usuario {
-  sub: string;
-  nome?: string;
-  email?: string;
+interface Contexto {
+  usuario: Usuario | null;
+  carregando: boolean;
+  roles: string[];
+  tem: (...alvos: string[]) => boolean;
 }
 
-const AuthContext = createContext<{ usuario: Usuario | null; carregando: boolean }>({
+const AuthContext = createContext<Contexto>({
   usuario: null,
   carregando: true,
+  roles: [],
+  tem: () => false,
 });
 
 /** Lê o payload do JWT que o Hub guardou. Sem validar: quem valida é o backend. */
@@ -37,7 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCarregando(false);
   }, []);
 
-  const valor = useMemo(() => ({ usuario, carregando }), [usuario, carregando]);
+  const valor = useMemo<Contexto>(() => {
+    const roles = rolesDoModulo(usuario);
+    return {
+      usuario,
+      carregando,
+      roles,
+      // ADMIN é bypass de plataforma, como no RolesGuard do backend.
+      tem: (...alvos) => roles.includes(ROLES.ADMIN) || alvos.some((a) => roles.includes(a)),
+    };
+  }, [usuario, carregando]);
+
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
 }
 

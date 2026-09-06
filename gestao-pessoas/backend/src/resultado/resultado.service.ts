@@ -125,6 +125,24 @@ export class ResultadoService {
     });
     if (!r) throw new NotFoundException('Resultado não encontrado.');
 
+    // ⭐ RÓTULO ao lado do código. `valorBruto = 45` é o código de grau de
+    // instrução do Protheus, e 0.5914 é ano em decimal: nenhum dos dois se
+    // defende numa conversa com o avaliado. A faixa em que o valor caiu já foi
+    // gravada (`faixaId`) — falta só trazer o texto dela e a unidade do
+    // critério, que é o que separa RÓTULO de PONTUAÇÃO.
+    const [criteriosDoCatalogo, faixas] = await Promise.all([
+      this.prisma.criterio.findMany({
+        where: { id: { in: r.criterios.map((c) => c.criterioId) } },
+        select: { id: true, unidade: true, tipoValor: true },
+      }),
+      this.prisma.criterioFaixa.findMany({
+        where: { id: { in: r.criterios.map((c) => c.faixaId).filter((x): x is string => !!x) } },
+        select: { id: true, rotulo: true },
+      }),
+    ]);
+    const catalogoPorId = new Map(criteriosDoCatalogo.map((c) => [c.id, c]));
+    const rotuloPorFaixa = new Map(faixas.map((f) => [f.id, f.rotulo]));
+
     const [avaliado, avaliador] = await Promise.all([
       this.prisma.colaborador.findUnique({
         where: { id: r.colaboradorId },
@@ -163,6 +181,10 @@ export class ResultadoService {
         nome: c.criterioNome,
         valorBruto: c.valorBruto === null ? null : Number(c.valorBruto),
         valorTexto: c.valorTexto,
+        /** Texto da faixa — "Superior completo", "de 5 a 10 anos". */
+        faixaRotulo: c.faixaId ? (rotuloPorFaixa.get(c.faixaId) ?? null) : null,
+        unidade: catalogoPorId.get(c.criterioId)?.unidade ?? null,
+        tipoValor: catalogoPorId.get(c.criterioId)?.tipoValor ?? null,
         pontuacao: c.pontuacao === null ? null : Number(c.pontuacao),
         peso: Number(c.pesoAplicado),
         semDado: c.semDado,
