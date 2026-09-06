@@ -36,7 +36,32 @@ export class ApuracaoService {
     private readonly auditoria: AuditoriaService,
   ) {}
 
-  async apurar(escopo: EscopoReapuracao, usuarioId: string): Promise<ResultadoDaApuracao> {
+  /** Apura de verdade: calcula, GRAVA o resultado e registra em auditoria. */
+  apurar(escopo: EscopoReapuracao, usuarioId: string): Promise<ResultadoDaApuracao> {
+    return this.executar(escopo, usuarioId, true);
+  }
+
+  /**
+   * CONFERIR — a mesma conta, sem gravar nada.
+   *
+   * É o que alimenta a tela de pendências cadastrais: as faixas que faltam e os
+   * dados que não existem aparecem para o RH resolver ANTES de o ciclo fechar,
+   * e não como efeito colateral de ter apurado. Roda o motor idêntico de
+   * propósito — pendência descoberta por uma segunda implementação seria
+   * pendência que a apuração real talvez não tenha.
+   *
+   * Diferente de `apurar`, ciclo sem nenhuma avaliação enviada NÃO é erro aqui:
+   * é o começo do ciclo, e a tela precisa abrir mesmo assim.
+   */
+  conferir(escopo: EscopoReapuracao): Promise<ResultadoDaApuracao> {
+    return this.executar(escopo, null, false);
+  }
+
+  private async executar(
+    escopo: EscopoReapuracao,
+    usuarioId: string | null,
+    gravar: boolean,
+  ): Promise<ResultadoDaApuracao> {
     assertEscopoReapuracaoValido(escopo);
 
     const avaliacoes = await this.prisma.avaliacao.findMany({
@@ -49,7 +74,7 @@ export class ApuracaoService {
         aplicacao: { include: { criterios: { include: { criterio: { include: { faixas: true } } } } } },
       },
     });
-    if (avaliacoes.length === 0) {
+    if (avaliacoes.length === 0 && gravar) {
       throw new BadRequestException('Nenhuma avaliação enviada neste escopo — nada a apurar.');
     }
 
@@ -98,6 +123,11 @@ export class ApuracaoService {
         })),
         resultado.notaFinal,
       );
+
+      if (!gravar) {
+        apuradas++;
+        continue;
+      }
 
       await this.prisma.$transaction(async (tx) => {
         const anterior = await tx.resultadoAvaliacao.findUnique({
@@ -148,11 +178,13 @@ export class ApuracaoService {
       alertas: agregarAlertas(todosAlertas),
     };
 
+    if (!gravar) return relatorio;
+
     await this.auditoria.registrar({
       entidade: escopo.tipo === 'CICLO' ? 'Ciclo' : 'Aplicacao',
       entidadeId: escopo.tipo === 'CICLO' ? escopo.cicloId : escopo.aplicacaoId,
       acao: 'APURAR',
-      usuarioId,
+      usuarioId: usuarioId as string,
       valorNovo: {
         avaliacoesApuradas: apuradas,
         semNotaDeAvaliacao: semNota,

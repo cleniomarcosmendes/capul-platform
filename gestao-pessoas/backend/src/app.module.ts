@@ -17,6 +17,9 @@ import { CicloModule } from './ciclo/ciclo.module.js';
 import { AplicacaoModule } from './aplicacao/aplicacao.module.js';
 import { DesignacaoModule } from './designacao/designacao.module.js';
 import { ApuracaoModule } from './apuracao/apuracao.module.js';
+import { CatalogoModule } from './catalogo/catalogo.module.js';
+import { PainelModule } from './painel/painel.module.js';
+import { ResultadoModule } from './resultado/resultado.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { IdentidadeGuard } from './common/guards/identidade.guard.js';
@@ -66,6 +69,9 @@ import { IdentidadeGuard } from './common/guards/identidade.guard.js';
     AplicacaoModule,
     DesignacaoModule,
     ApuracaoModule,
+    CatalogoModule,
+    PainelModule,
+    ResultadoModule,
   ],
   providers: [
     // Ordem: rate-limit → autenticação (JWT) → autorização (papel) → IDENTIDADE.

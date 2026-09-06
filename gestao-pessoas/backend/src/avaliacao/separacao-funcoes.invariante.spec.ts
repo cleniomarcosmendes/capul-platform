@@ -37,6 +37,10 @@ const DISPENSADOS: Record<string, string> = {
   'designacao/designacao.service.ts':
     'CRIA a designação. Ser designado não é mexer na própria avaliação: a gestora precisa ser designada ' +
     'para o superior dela receber a tarefa. Designar a si mesma como AVALIADORA é barrado no service.',
+  'painel/painel.service.ts':
+    'só CONTA — groupBy por status e por avaliador, e groupBy de avaliadoId para saber quem ainda ' +
+    'não foi designado. Mesma frase do ciclo.service: agregado, não lê o conteúdo de ninguém. ' +
+    'A separação de funções não tem o que proteger num total.',
   'apuracao/apuracao.service.ts':
     'apuração em LOTE, por ciclo ou aplicação — a exceção já acordada, com escopo guardado por ' +
     'assertEscopoReapuracaoValido (nunca por colaborador)',

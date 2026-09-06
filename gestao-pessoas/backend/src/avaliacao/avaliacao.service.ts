@@ -243,6 +243,34 @@ export class AvaliacaoService {
     return reaberta;
   }
 
+  /**
+   * Nota por GRUPO — calculada na leitura, nunca materializada (ADR-RH-02).
+   *
+   * Público porque a memória de cálculo do resultado mostra a mesma quebra: uma
+   * segunda implementação dela divergiria da nota do envio no primeiro peso que
+   * mudasse, e a tela diria dois números diferentes para a mesma avaliação.
+   */
+  async notaPorGrupoDa(avaliacaoId: string) {
+    const itens = await this.itensRespondidos(avaliacaoId);
+    const notas = notaPorGrupo(itens as ItemRespondido[]);
+
+    // O título vem junto: "Grupo 3f2a-..." não é memória de cálculo, é um id
+    // impresso na tela de quem precisa explicar a nota para o avaliado.
+    const grupos = await this.prisma.grupo.findMany({
+      where: { id: { in: notas.map((n) => n.grupoId) } },
+      select: { id: true, titulo: true, ordem: true },
+    });
+    const porId = new Map(grupos.map((g) => [g.id, g]));
+
+    return notas
+      .map((n) => ({
+        ...n,
+        titulo: porId.get(n.grupoId)?.titulo ?? '(sem grupo)',
+        ordem: porId.get(n.grupoId)?.ordem ?? 0,
+      }))
+      .sort((a, b) => a.ordem - b.ordem);
+  }
+
   /** Perguntas do modelo + a resposta de cada uma (null quando não respondida). */
   private async itensRespondidos(avaliacaoId: string) {
     const avaliacao = await this.prisma.avaliacao.findUniqueOrThrow({
