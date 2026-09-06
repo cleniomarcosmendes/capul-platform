@@ -68,11 +68,77 @@ model Colaborador {
 
   cargo                  Cargo?    @relation(fields: [cargoId], references: [id])
   treinamentos           ColaboradorTreinamento[]
+  funcaoHistorico        ColaboradorFuncaoHistorico[]
 
   @@unique([filial, matricula])
   @@index([centroCusto, situacao])
   @@index([situacao])
   @@map("colaborador")
+  @@schema("rh")
+}
+
+enum OrigemMovimentoFuncional {
+  /// Alteração individual: admissão, promoção, mérito, mudança de função.
+  MOVIMENTO
+  /// Lançamento em massa — na Capul, o dissídio coletivo de 1º de novembro,
+  /// que atinge a folha inteira e NÃO muda a função de ninguém.
+  CARGA
+
+  @@schema("rh")
+}
+
+/// Histórico funcional do Protheus (SR7010), gravado pelo sync.
+///
+/// ⭐ Existe para que a nota de um ciclo FECHADO continue dando o mesmo número
+/// meses depois. A regra da última troca de função precisa enxergar o histórico
+/// COMO ELE ERA na data-base do ciclo; com só a data corrente gravada no
+/// colaborador, reapurar um ciclo antigo (por correção de peso, ou por bug no
+/// motor) daria resultado diferente do original e ninguém saberia qual está
+/// certo. E a nota tem consequência de mérito: contestação meses depois exige
+/// poder reconstruir como o cálculo chegou ao número.
+///
+/// ⚠️ **Grava TUDO o que o sync lê, inclusive o que não entra no cálculo.**
+/// O Protheus replica o histórico em cada filial por onde a pessoa passou, e a
+/// cópia da filial ANTIGA continua recebendo lançamentos desatualizados (caso
+/// real: matrícula 004540). Só a filial atual alimenta o cálculo — mas o
+/// descartado fica gravado e MARCADO, com o motivo. Descarte silencioso é
+/// exatamente o que este módulo vem eliminando.
+///
+/// ⚠️ `origem` e `tipo` são DESCRITIVOS: servem para auditoria e para a tela
+/// explicar a nota. A regra continua sendo a troca de `funcaoCodigo`, e não
+/// pode passar a depender deles — foi por depender do tipo/da data que o select
+/// antigo errou. A classificação de CARGA é heurística; a regra, não.
+model ColaboradorFuncaoHistorico {
+  id               String   @id @default(uuid())
+  colaboradorId    String   @map("colaborador_id")
+  /// Filial da LINHA no SR7010, que pode não ser a filial atual da pessoa.
+  filial           String   @db.VarChar(10)
+  /// `R7_DATA`.
+  data             DateTime @db.Date
+  /// `R7_SEQ` — desempata dois lançamentos no mesmo dia.
+  sequencia        String   @db.VarChar(10)
+  /// `R7_FUNCAO`. O CÓDIGO, nunca a descrição: o texto é reescrito sem a função mudar.
+  funcaoCodigo     String   @map("funcao_codigo") @db.VarChar(20)
+  /// `R7_DESCFUN` — só para a tela explicar a nota em português.
+  funcaoDescricao  String?  @map("funcao_descricao")
+  /// `R7_TIPO` ("Tipo Aumento"): 001 admissão, 003 dissídio, 005 promoção…
+  tipo             String?  @db.VarChar(10)
+  origem           OrigemMovimentoFuncional @default(MOVIMENTO)
+  /// true = é da filial atual e alimenta o cálculo. false = gravado para
+  /// rastreio, com o porquê em `motivoDescarte`.
+  consideradoNoCalculo Boolean @default(true) @map("considerado_no_calculo")
+  motivoDescarte   String?  @map("motivo_descarte")
+  /// `R_E_C_N_O_` da linha no SR7010 — o fio de volta até a origem.
+  recnoOrigem      Int?     @map("recno_origem")
+  sincronizadoEm   DateTime @default(now()) @map("sincronizado_em")
+
+  colaborador      Colaborador @relation(fields: [colaboradorId], references: [id])
+
+  /// Idempotência do sync: a mesma linha do SR7010 não entra duas vezes.
+  @@unique([colaboradorId, filial, data, sequencia])
+  /// A consulta do cálculo: histórico da pessoa, considerado, até a data-base.
+  @@index([colaboradorId, consideradoNoCalculo, data])
+  @@map("colaborador_funcao_historico")
   @@schema("rh")
 }
 
