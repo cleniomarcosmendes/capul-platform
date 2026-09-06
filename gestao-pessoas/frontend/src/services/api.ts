@@ -527,3 +527,62 @@ export const cadastroAvaliadores = {
       )
       .then((r) => r.data),
 };
+
+// ---------------------------------------------------------------------------
+// Copiar o cadastro da plataforma para a designação do ciclo.
+// ---------------------------------------------------------------------------
+
+export type MotivoNaoAplicada =
+  | 'SEM_AVALIADOR_NO_CADASTRO'
+  | 'AJUSTE_MANUAL_DO_CICLO'
+  | 'JA_RESPONDIDA'
+  | 'TROCA_DE_APLICACAO';
+
+export interface RelatorioDaCopia {
+  cicloId: string;
+  /** false = prévia; nada foi gravado. */
+  aplicado: boolean;
+  substituirManuais: boolean;
+  criar: number;
+  atualizar: number;
+  jaIguais: number;
+  deDivisaoNaoRevisada: number;
+  naoAplicadas: {
+    colaboradorId: string;
+    nome: string;
+    matricula: string;
+    centroCusto: string | null;
+    motivo: MotivoNaoAplicada;
+    detalhe: string;
+  }[];
+  porMotivo: Partial<Record<MotivoNaoAplicada, number>>;
+  porAplicacao: {
+    aplicacaoId: string;
+    nome: string;
+    publico: number;
+    criar: number;
+    atualizar: number;
+    jaIguais: number;
+    semAvaliador: number;
+    naoAplicadas: number;
+  }[];
+  avisos: string[];
+  duracaoMs?: number;
+}
+
+export const copiaDoCadastro = {
+  previa: (cicloId: string, substituirManuais: boolean) =>
+    rhApi
+      .post<RelatorioDaCopia>(`/designacao/ciclo/${cicloId}/copiar-do-cadastro`, {
+        aplicar: false,
+        substituirManuais,
+      })
+      .then((r) => r.data),
+  aplicar: (cicloId: string, substituirManuais: boolean) =>
+    rhApi
+      .post<RelatorioDaCopia>(`/designacao/ciclo/${cicloId}/copiar-do-cadastro`, {
+        aplicar: true,
+        substituirManuais,
+      })
+      .then((r) => r.data),
+};

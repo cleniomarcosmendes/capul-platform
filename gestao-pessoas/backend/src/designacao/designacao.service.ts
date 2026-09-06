@@ -20,6 +20,11 @@ import {
   type CandidatoDesignacao,
   type MotivoExclusao,
 } from './elegibilidade-ciclo.js';
+import {
+  decidirTrocaDeAplicacao,
+  mensagemDaRecusa,
+  type MotivoDaRecusa,
+} from './troca-de-aplicacao.js';
 
 export interface LinhaDaLista {
   colaboradorId: string;
@@ -48,6 +53,50 @@ interface DesignacaoVigente {
   avaliadorId: string;
   avaliadorNome: string;
   status: string;
+}
+
+
+export type MotivoNaoAplicada =
+  | 'SEM_AVALIADOR_NO_CADASTRO'
+  | 'AJUSTE_MANUAL_DO_CICLO'
+  | 'JA_RESPONDIDA'
+  | 'TROCA_DE_APLICACAO';
+
+export interface LinhaNaoAplicada {
+  colaboradorId: string;
+  nome: string;
+  matricula: string;
+  centroCusto: string | null;
+  motivo: MotivoNaoAplicada;
+  detalhe: string;
+}
+
+/** O que a cópia do cadastro VAI fazer (prévia) ou FEZ (aplicação). */
+export interface RelatorioDaCopia {
+  cicloId: string;
+  /** false = prévia; nada foi gravado. */
+  aplicado: boolean;
+  substituirManuais: boolean;
+  criar: number;
+  atualizar: number;
+  jaIguais: number;
+  /** Das que serão gravadas, quantas vêm de divisão automática NÃO revisada. */
+  deDivisaoNaoRevisada: number;
+  naoAplicadas: LinhaNaoAplicada[];
+  porMotivo: Partial<Record<MotivoNaoAplicada, number>>;
+  porAplicacao: {
+    aplicacaoId: string;
+    nome: string;
+    publico: number;
+    criar: number;
+    atualizar: number;
+    jaIguais: number;
+    semAvaliador: number;
+    naoAplicadas: number;
+  }[];
+  avisos: string[];
+  /** Só na aplicação — quanto o lote levou, para medir a viabilidade do piloto. */
+  duracaoMs?: number;
 }
 
 @Injectable()
@@ -309,26 +358,250 @@ export class DesignacaoService {
         select: { nome: true },
       }),
     ]);
-    const de = origem?.nome ?? 'outra aplicação';
 
-    if (existente.status === 'ENVIADA') {
+    // A DECISÃO é da função pura, compartilhada com a cópia do cadastro. Aqui
+    // só se escolhe o que fazer com ela: uma por vez, recusa é exceção.
+    const decisao = decidirTrocaDeAplicacao({ status: existente.status, respostas });
+    if (decisao.permitida) return;
+
+    throw new BadRequestException(
+      mensagemDaRecusa(decisao.motivo as MotivoDaRecusa, {
+        nomeDoAvaliado,
+        aplicacaoAtual: origem?.nome ?? 'outra aplicação',
+        respostas,
+      }),
+    );
+  }
+
+  // ── COPIAR O CADASTRO PARA O CICLO ────────────────────────────────────────
+
+  /**
+   * ⭐ O BOTÃO QUE TROCA ~1.000 OPERAÇÕES POR UMA.
+   *
+   * `rh.designacao_padrao` diz quem avalia quem na PLATAFORMA. Isto copia para
+   * o ciclo, criando a `Avaliacao` de cada pessoa do público de cada aplicação.
+   *
+   * ⚠️ `aplicar = false` é PRÉVIA: calcula tudo e não grava nada. É o mesmo
+   * padrão da importação da planilha, pela mesma razão — mil linhas conferidas
+   * depois de gravadas não são conferidas.
+   *
+   * Quatro coisas que o lote NÃO faz, e cada uma vira linha do relatório:
+   *
+   *   SEM_AVALIADOR_NO_CADASTRO  a pessoa não está na lista de ninguém. Não é
+   *                              erro do lote: é a pendência do cadastro, e
+   *                              some quando alguém a resolver lá.
+   *   AJUSTE_MANUAL_DO_CICLO     o RH já designou esta pessoa à mão DENTRO do
+   *                              ciclo. Copiar por cima apagaria a decisão
+   *                              dela; só passa com `substituirManuais`.
+   *   JA_RESPONDIDA              tem resposta gravada ou foi enviada. Trocar o
+   *                              avaliador agora atribuiria o julgamento de
+   *                              alguém a outra pessoa.
+   *   TROCA_DE_APLICACAO         a mesma regra do `designar()`, pela MESMA
+   *                              função (`decidirTrocaDeAplicacao`) — só que
+   *                              aqui a recusa não aborta o lote: ela conta e
+   *                              o resto segue. Abortar por causa de uma
+   *                              pessoa deixaria as outras 999 sem designação
+   *                              e sem explicação.
+   *
+   * ⚠️ REEXECUTÁVEL de propósito. O cadastro vai mudar quando a lista do RH
+   * chegar; rodar de novo atualiza o que mudou, não duplica (`jaIguais` sai
+   * sem escrita) e não toca no que já foi respondido.
+   */
+  async copiarDoCadastro(
+    cicloId: string,
+    opcoes: { aplicar: boolean; substituirManuais: boolean },
+    usuarioId: string,
+  ): Promise<RelatorioDaCopia> {
+    const ciclo = await this.prisma.ciclo.findUnique({
+      where: { id: cicloId },
+      include: { aplicacoes: { orderBy: { ordem: 'asc' }, select: { id: true, nome: true } } },
+    });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+    if (ciclo.aplicacoes.length === 0) {
       throw new BadRequestException(
-        `${nomeDoAvaliado} já teve a avaliação ENVIADA na aplicação "${de}", e a nota do ` +
-          'questionário está congelada nela. Mudar de aplicação agora faria a apuração ' +
-          'combinar essa nota com os pesos e critérios de outro questionário, e o resultado ' +
-          'sairia errado sem acusar erro. Para mudar de aplicação, peça a reabertura ao RH e ' +
-          'apague as respostas antes.',
+        'O ciclo não tem nenhuma aplicação. Monte as aplicações e o público antes de designar.',
       );
     }
 
-    if (respostas > 0) {
-      throw new BadRequestException(
-        `${nomeDoAvaliado} já tem ${respostas} resposta(s) gravada(s) na aplicação "${de}". ` +
-          'As respostas pertencem às perguntas daquele questionário e não têm equivalente no ' +
-          'outro — trocar a aplicação as deixaria órfãs e a nota sairia errada. Apague as ' +
-          'respostas antes de mudar de aplicação.',
+    const relatorio: RelatorioDaCopia = {
+      cicloId,
+      aplicado: opcoes.aplicar,
+      substituirManuais: opcoes.substituirManuais,
+      criar: 0,
+      atualizar: 0,
+      jaIguais: 0,
+      deDivisaoNaoRevisada: 0,
+      naoAplicadas: [],
+      porMotivo: {},
+      porAplicacao: [],
+      avisos: [],
+    };
+
+    // A régua da elegibilidade é a MESMA da tela de designação, de propósito:
+    // duas contas de "quem deveria estar no ciclo" divergem no primeiro ajuste
+    // manual, e o lote passaria a designar gente que a tela já tinha excluído.
+    const elegiveisPorAplicacao = new Map<string, LinhaDaLista[]>();
+    for (const a of ciclo.aplicacoes) {
+      elegiveisPorAplicacao.set(a.id, (await this.listar(a.id)).filter((l) => l.elegivel));
+    }
+    const todosIds = [...elegiveisPorAplicacao.values()].flat().map((l) => l.colaboradorId);
+
+    const [cadastro, avaliacoes, aplicacoesPorId] = await Promise.all([
+      this.prisma.designacaoPadrao.findMany({
+        where: { avaliadoId: { in: todosIds }, vigenciaFim: null },
+        select: { avaliadoId: true, avaliadorId: true, origem: true },
+      }),
+      this.prisma.avaliacao.findMany({
+        where: { cicloId },
+        select: {
+          id: true, avaliadoId: true, avaliadorId: true, aplicacaoId: true,
+          status: true, origemDesignacao: true, _count: { select: { respostas: true } },
+        },
+      }),
+      Promise.resolve(new Map(ciclo.aplicacoes.map((a) => [a.id, a.nome]))),
+    ]);
+
+    const doCadastro = new Map(cadastro.map((c) => [c.avaliadoId, c]));
+    const avaliacaoDe = new Map(avaliacoes.map((a) => [a.avaliadoId, a]));
+    const aExecutar: { aplicacaoId: string; avaliadoId: string; avaliadorId: string }[] = [];
+
+    const recusar = (linha: LinhaDaLista, motivo: MotivoNaoAplicada, detalhe: string) => {
+      relatorio.naoAplicadas.push({
+        colaboradorId: linha.colaboradorId, nome: linha.nome, matricula: linha.matricula,
+        centroCusto: linha.centroCusto, motivo, detalhe,
+      });
+      relatorio.porMotivo[motivo] = (relatorio.porMotivo[motivo] ?? 0) + 1;
+    };
+
+    for (const aplicacao of ciclo.aplicacoes) {
+      const linhas = elegiveisPorAplicacao.get(aplicacao.id) ?? [];
+      const contadores = { criar: 0, atualizar: 0, jaIguais: 0, semAvaliador: 0, naoAplicadas: 0 };
+
+      for (const linha of linhas) {
+        const noCadastro = doCadastro.get(linha.colaboradorId);
+        if (!noCadastro) {
+          contadores.semAvaliador++;
+          contadores.naoAplicadas++;
+          recusar(
+            linha,
+            'SEM_AVALIADOR_NO_CADASTRO',
+            'Não está na lista de nenhum avaliador. Resolva no cadastro de avaliadores — ' +
+              'enquanto isso, esta pessoa fica de fora do ciclo sem gerar avaliação.',
+          );
+          continue;
+        }
+
+        const existente = avaliacaoDe.get(linha.colaboradorId);
+        if (existente && existente.avaliadorId === noCadastro.avaliadorId
+            && existente.aplicacaoId === aplicacao.id) {
+          contadores.jaIguais++;
+          relatorio.jaIguais++;
+          continue;
+        }
+
+        if (existente) {
+          const respondida = existente.status === 'ENVIADA' || existente._count.respostas > 0;
+          if (respondida) {
+            contadores.naoAplicadas++;
+            recusar(
+              linha,
+              'JA_RESPONDIDA',
+              `A avaliação está ${existente.status} com ${existente._count.respostas} resposta(s). ` +
+                'Trocar o avaliador agora atribuiria o julgamento de uma pessoa a outra.',
+            );
+            continue;
+          }
+          if (existente.origemDesignacao === 'MANUAL' && !opcoes.substituirManuais) {
+            contadores.naoAplicadas++;
+            recusar(
+              linha,
+              'AJUSTE_MANUAL_DO_CICLO',
+              'Alguém já designou esta pessoa à mão dentro do ciclo. Copiar o cadastro por cima ' +
+                'apagaria essa decisão — marque "substituir os ajustes manuais" se o cadastro é ' +
+                'que está certo.',
+            );
+            continue;
+          }
+          if (existente.aplicacaoId !== aplicacao.id) {
+            // MESMA função do designar(). O que muda é o que se faz com a
+            // recusa: aqui ela conta e o lote segue.
+            const decisao = decidirTrocaDeAplicacao({
+              status: existente.status,
+              respostas: existente._count.respostas,
+            });
+            if (!decisao.permitida) {
+              contadores.naoAplicadas++;
+              recusar(
+                linha,
+                'TROCA_DE_APLICACAO',
+                mensagemDaRecusa(decisao.motivo as MotivoDaRecusa, {
+                  nomeDoAvaliado: linha.nome,
+                  aplicacaoAtual: aplicacoesPorId.get(existente.aplicacaoId) ?? 'outra aplicação',
+                  respostas: existente._count.respostas,
+                }),
+              );
+              continue;
+            }
+          }
+        }
+
+        if (noCadastro.origem === 'DIVISAO_AUTOMATICA') relatorio.deDivisaoNaoRevisada++;
+        if (existente) {
+          contadores.atualizar++;
+          relatorio.atualizar++;
+        } else {
+          contadores.criar++;
+          relatorio.criar++;
+        }
+        aExecutar.push({
+          aplicacaoId: aplicacao.id,
+          avaliadoId: linha.colaboradorId,
+          avaliadorId: noCadastro.avaliadorId,
+        });
+      }
+
+      relatorio.porAplicacao.push({
+        aplicacaoId: aplicacao.id,
+        nome: aplicacao.nome,
+        publico: linhas.length,
+        ...contadores,
+      });
+    }
+
+    if (relatorio.deDivisaoNaoRevisada > 0) {
+      relatorio.avisos.push(
+        `${relatorio.deDivisaoNaoRevisada} designação(ões) vêm de linhas que a importação dividiu ` +
+          'em ordem alfabética e ninguém revisou. A ordem é arbitrária e não diz quem trabalha com ' +
+          'quem — se este ciclo valer mérito, revise no cadastro de avaliadores antes de aplicar.',
       );
     }
+    if (relatorio.porMotivo.SEM_AVALIADOR_NO_CADASTRO) {
+      relatorio.avisos.push(
+        `${relatorio.porMotivo.SEM_AVALIADOR_NO_CADASTRO} pessoa(s) não estão na lista de ninguém e ` +
+          'ficarão de fora do ciclo. Elas aparecem como pendência do cadastro e no painel.',
+      );
+    }
+
+    if (!opcoes.aplicar) return relatorio;
+
+    // Uma por vez, pelo mesmo caminho da designação individual: o snapshot, a
+    // auditoria e a guarda são os do `designar()`, não uma segunda versão deles.
+    const inicio = Date.now();
+    for (const item of aExecutar) {
+      await this.designar(item.aplicacaoId, item.avaliadoId, item.avaliadorId, usuarioId, 'CENTRO_CUSTO');
+    }
+    relatorio.duracaoMs = Date.now() - inicio;
+
+    await this.auditoria.registrar({
+      entidade: 'Ciclo', entidadeId: cicloId, acao: 'COPIAR_DESIGNACAO_DO_CADASTRO', usuarioId,
+      valorNovo: {
+        criadas: relatorio.criar, atualizadas: relatorio.atualizar, jaIguais: relatorio.jaIguais,
+        naoAplicadas: relatorio.naoAplicadas.length, porMotivo: relatorio.porMotivo,
+        deDivisaoNaoRevisada: relatorio.deDivisaoNaoRevisada,
+        substituirManuais: opcoes.substituirManuais, duracaoMs: relatorio.duracaoMs,
+      },
+    });
+    return relatorio;
   }
 
   /** Quem já tem avaliador designado no ciclo, com o nome de quem avalia. */

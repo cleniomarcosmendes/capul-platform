@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Check, Search, UserCheck, UserPlus, X } from 'lucide-react';
+import { AlertTriangle, Check, Search, UserCheck, UserPlus, Wand2, X } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import {
   aplicacoes as apiAplicacoes,
   catalogo,
+  copiaDoCadastro,
   designacao,
   mensagemDoErro,
   type AplicacaoDoCiclo,
   type ColaboradorDaBusca,
   type LinhaDaDesignacao,
+  type RelatorioDaCopia,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
 
@@ -37,6 +39,34 @@ export default function DesignacaoPage() {
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
   const [decidindo, setDecidindo] = useState<LinhaDaDesignacao | null>(null);
   const [designando, setDesignando] = useState(false);
+  const [copia, setCopia] = useState<RelatorioDaCopia | null>(null);
+  const [copiando, setCopiando] = useState(false);
+  const [substituirManuais, setSubstituirManuais] = useState(false);
+
+  async function previaDaCopia(comSubstituicao = substituirManuais) {
+    setCopiando(true);
+    setErro(null);
+    try {
+      setCopia(await copiaDoCadastro.previa(ciclo.id, comSubstituicao));
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível calcular a cópia.'));
+    } finally {
+      setCopiando(false);
+    }
+  }
+
+  async function aplicarCopia() {
+    setCopiando(true);
+    setErro(null);
+    try {
+      setCopia(await copiaDoCadastro.aplicar(ciclo.id, substituirManuais));
+      await carregar();
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível aplicar a cópia.'));
+    } finally {
+      setCopiando(false);
+    }
+  }
 
   useEffect(() => {
     apiAplicacoes
@@ -125,7 +155,30 @@ export default function DesignacaoPage() {
             className="alvo-toque w-full rounded-xl border border-slate-300 pl-9 pr-3 text-slate-800"
           />
         </div>
+        <button
+          type="button"
+          disabled={copiando}
+          onClick={() => void previaDaCopia()}
+          className="alvo-toque inline-flex items-center gap-2 rounded-xl bg-capul-600 px-4 font-medium text-white disabled:opacity-50"
+        >
+          <Wand2 size={16} aria-hidden />
+          {copiando && !copia ? 'Calculando…' : 'Designar pelo cadastro'}
+        </button>
       </div>
+
+      {copia && (
+        <PainelDaCopia
+          copia={copia}
+          copiando={copiando}
+          substituirManuais={substituirManuais}
+          aoTrocarSubstituicao={(v) => {
+            setSubstituirManuais(v);
+            void previaDaCopia(v);
+          }}
+          aoAplicar={aplicarCopia}
+          aoFechar={() => setCopia(null)}
+        />
+      )}
 
       {linhas && (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -553,6 +606,166 @@ function Modal({
         <h3 className="text-lg font-semibold text-slate-800">{titulo}</h3>
         <div className="mt-3">{children}</div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * ⭐ A PRÉVIA DA CÓPIA — o que VAI acontecer, antes de gravar.
+ *
+ * Mesmo padrão da importação da planilha, pela mesma razão: mil designações
+ * conferidas depois de gravadas não são conferidas. O botão só grava depois de
+ * a gestora ver os números, e o que fica de fora aparece com nome e motivo.
+ */
+function PainelDaCopia({
+  copia, copiando, substituirManuais, aoTrocarSubstituicao, aoAplicar, aoFechar,
+}: {
+  copia: RelatorioDaCopia;
+  copiando: boolean;
+  substituirManuais: boolean;
+  aoTrocarSubstituicao: (v: boolean) => void;
+  aoAplicar: () => Promise<void>;
+  aoFechar: () => void;
+}) {
+  const aGravar = copia.criar + copia.atualizar;
+  const rotulo: Record<string, string> = {
+    SEM_AVALIADOR_NO_CADASTRO: 'sem avaliador no cadastro',
+    AJUSTE_MANUAL_DO_CICLO: 'ajustadas à mão neste ciclo',
+    JA_RESPONDIDA: 'já respondidas',
+    TROCA_DE_APLICACAO: 'trocariam de aplicação',
+  };
+
+  return (
+    <section className="mt-4 space-y-3 rounded-2xl border-2 border-capul-300 bg-white p-4">
+      <div className="flex items-start gap-2">
+        <Wand2 size={18} className="mt-0.5 shrink-0 text-capul-700" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-slate-800">
+            {copia.aplicado ? 'Designação aplicada' : 'O que vai acontecer'}
+          </h3>
+          <p className="text-sm text-slate-500">
+            {copia.aplicado
+              ? `Concluída em ${((copia.duracaoMs ?? 0) / 1000).toFixed(1)}s.`
+              : 'Nada foi gravado ainda.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={aoFechar}
+          aria-label="Fechar"
+          className="alvo-toque shrink-0 rounded-lg px-2 text-slate-400 hover:bg-slate-100"
+        >
+          <X size={18} aria-hidden />
+        </button>
+      </div>
+
+      <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <NumeroDaCopia rotulo={copia.aplicado ? 'criadas' : 'a criar'} valor={copia.criar} destaque />
+        <NumeroDaCopia rotulo={copia.aplicado ? 'atualizadas' : 'a atualizar'} valor={copia.atualizar} />
+        <NumeroDaCopia rotulo="já iguais (não mexe)" valor={copia.jaIguais} />
+        <NumeroDaCopia
+          rotulo="de divisão não revisada"
+          valor={copia.deDivisaoNaoRevisada}
+          tom={copia.deDivisaoNaoRevisada > 0 ? 'ambar' : undefined}
+        />
+      </dl>
+
+      {copia.avisos.map((a, i) => (
+        <p key={i} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <AlertTriangle size={15} className="mr-1.5 inline align-text-top" aria-hidden />
+          {a}
+        </p>
+      ))}
+
+      {Object.keys(copia.porMotivo).length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p className="font-medium text-slate-700">
+            {copia.naoAplicadas.length} pessoa(s) ficam de fora:
+          </p>
+          <ul className="mt-1 space-y-0.5 text-slate-600">
+            {Object.entries(copia.porMotivo).map(([motivo, n]) => (
+              <li key={motivo}>
+                <strong className="tabular-nums">{n}</strong> {rotulo[motivo] ?? motivo}
+              </li>
+            ))}
+          </ul>
+          {/* Os nomes, e não só o total: quem vai resolver precisa saber de quem
+              se trata — menos os "sem avaliador", que se resolvem em lote no
+              cadastro e encheriam a tela com centenas de linhas. */}
+          <ul className="mt-2 space-y-0.5 text-xs text-slate-500">
+            {copia.naoAplicadas
+              .filter((l) => l.motivo !== 'SEM_AVALIADOR_NO_CADASTRO')
+              .slice(0, 12)
+              .map((l) => (
+                <li key={l.colaboradorId}>
+                  <strong>{l.nome}</strong> ({l.matricula}) — {rotulo[l.motivo]}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+
+      <details className="rounded-xl border border-slate-200 p-3 text-sm">
+        <summary className="cursor-pointer font-medium text-slate-700">Por aplicação</summary>
+        <ul className="mt-2 space-y-1 text-slate-600">
+          {copia.porAplicacao.map((a) => (
+            <li key={a.aplicacaoId}>
+              <strong>{a.nome}</strong>: {a.publico} no público · {a.criar} a criar ·{' '}
+              {a.jaIguais} já iguais · {a.semAvaliador} sem avaliador
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      {!copia.aplicado && (
+        <>
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={substituirManuais}
+              disabled={copiando}
+              onChange={(e) => aoTrocarSubstituicao(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Substituir os ajustes manuais deste ciclo
+              <span className="block text-xs text-slate-500">
+                Sem isto, quem o RH já designou à mão dentro do ciclo fica como está — a
+                decisão dele vale mais que o cadastro.
+              </span>
+            </span>
+          </label>
+          <button
+            type="button"
+            disabled={copiando || aGravar === 0}
+            onClick={() => void aoAplicar()}
+            className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2.5 font-medium text-white disabled:opacity-50"
+          >
+            {copiando
+              ? 'Aplicando…'
+              : aGravar === 0
+                ? 'Nada a fazer — a designação já reflete o cadastro'
+                : `Confirmar e designar ${aGravar} pessoa(s)`}
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
+function NumeroDaCopia({
+  rotulo, valor, destaque, tom,
+}: { rotulo: string; valor: number; destaque?: boolean; tom?: 'ambar' }) {
+  return (
+    <div
+      className={`rounded-xl border px-3 py-2 ${
+        tom === 'ambar' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'
+      }`}
+    >
+      <dd className={`tabular-nums font-semibold ${destaque ? 'text-2xl text-capul-700' : 'text-xl text-slate-800'}`}>
+        {valor}
+      </dd>
+      <dt className="text-xs text-slate-600">{rotulo}</dt>
     </div>
   );
 }

@@ -19,9 +19,11 @@
  * com `pesoAvaliacao = 100`: sobrando só o questionário, a conta vira
  * `nota × 100 / 100` — nenhum caso especial.
  *
- * ⚠️ Só esta aplicação é montada. As outras duas do piloto dependem de o RH
- * escolher os centros de custo de cada público, que é decisão dele e se faz na
- * tela. A dos aprendizes é a única cujo recorte já está definido — por cargo.
+ * ⚠️ As outras duas aplicações saem daqui com um recorte PROVISÓRIO pelo prefixo
+ * do centro de custo (11 = administrativo · 21 = comercial e lojas · 31/41 =
+ * indústria). Isso é decisão do RH e ele vai refazer na tela; existe aqui só
+ * para o ciclo ter a população inteira e dar para MEDIR quanto tempo leva a
+ * designação completa — que é o número que responde se 15/09 é viável.
  *
  * ⚠️ O questionário usado é o "Administrativo" publicado pelo seed, por ser o
  * mais curto. NÃO é o questionário dos aprendizes, que ainda não existe: não há
@@ -124,6 +126,56 @@ async function main() {
   console.log(`-- ciclo "${ciclo.nome}" (${ciclo.status}, vale_para_merito=${ciclo.valeParaMerito})`);
   console.log(`   aplicacao "${aplicacao.nome}": ${aprendizes.length} pessoas`);
   console.log(`   espalhadas por ${pares.size} pares filial x centro de custo`);
+
+  // ── As outras duas, com recorte PROVISORIO por prefixo de centro de custo.
+  const criterios = await prisma.criterio.findMany({ where: { ativo: true }, select: { id: true } });
+  const jaNoPublico = new Set(aprendizes.map((a) => a.id));
+  const restante = (
+    await prisma.colaborador.findMany({
+      where: { situacao: { in: ['ATIVO', 'AFASTADO', 'FERIAS'] as never }, centroCusto: { not: null } },
+      select: { id: true, centroCusto: true },
+    })
+  ).filter((c) => !jaNoPublico.has(c.id));
+
+  const PERFIS = [
+    { nome: 'Administrativo', modelo: 'Administrativo', prefixos: ['11'], ordem: 2 },
+    { nome: 'Operação de Loja', modelo: 'Operação de Loja', prefixos: ['21'], ordem: 3 },
+    { nome: 'Produção e Indústria', modelo: 'Produção e Indústria', prefixos: ['31', '41'], ordem: 4 },
+  ];
+
+  for (const perfil of PERFIS) {
+    const versaoDoPerfil = await prisma.modeloVersao.findFirst({
+      where: { modelo: { nome: perfil.modelo, finalidade: 'PRODUCAO' }, publicadoEm: { not: null } },
+    });
+    if (!versaoDoPerfil) throw new Error(`Sem versao publicada do modelo "${perfil.modelo}".`);
+
+    const publico = restante.filter((c) => perfil.prefixos.includes((c.centroCusto ?? '').slice(0, 2)));
+    if (publico.length === 0) continue;
+
+    const nova = await prisma.aplicacao.create({
+      data: {
+        cicloId: ciclo.id,
+        modeloVersaoId: versaoDoPerfil.id,
+        nome: perfil.nome,
+        ordem: perfil.ordem,
+        pesoAvaliacao: 60,
+        criterios: { create: criterios.map((c, i) => ({ criterioId: c.id, peso: 10, ordem: i })) },
+      },
+    });
+    await prisma.aplicacaoPublico.createMany({
+      data: publico.map((c) => ({
+        aplicacaoId: nova.id,
+        cicloId: ciclo.id,
+        colaboradorId: c.id,
+        origem: 'CENTRO_CUSTO' as const,
+        origemReferencia: `PROVISORIO: prefixo ${perfil.prefixos.join('/')}`,
+      })),
+    });
+    console.log(`   aplicacao "${nova.nome}": ${publico.length} pessoas (recorte PROVISORIO)`);
+  }
+
+  const total = await prisma.aplicacaoPublico.count({ where: { cicloId: ciclo.id } });
+  console.log(`   TOTAL no publico do ciclo: ${total}`);
 }
 
 main()

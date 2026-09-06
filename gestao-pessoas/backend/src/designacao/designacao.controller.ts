@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { IsIn, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
@@ -15,6 +15,20 @@ export class DecidirDto {
 export class DesignarDto {
   @IsString() avaliadoId!: string;
   @IsString() avaliadorId!: string;
+}
+
+export class CopiarDoCadastroDto {
+  /**
+   * false (padrão) = PRÉVIA: calcula tudo e não grava nada. Mesmo padrão da
+   * importação da planilha — mil linhas conferidas depois de gravadas não são
+   * conferidas.
+   */
+  @IsOptional() @IsBoolean() aplicar?: boolean;
+  /**
+   * Sem isto, quem o RH já designou À MÃO dentro do ciclo não é tocado: a linha
+   * vira `AJUSTE_MANUAL_DO_CICLO` no relatório, com nome. O padrão PRESERVA.
+   */
+  @IsOptional() @IsBoolean() substituirManuais?: boolean;
 }
 
 @Controller('designacao')
@@ -36,5 +50,22 @@ export class DesignacaoController {
   @Post('aplicacao/:aplicacaoId/designar') @HttpCode(200)
   designar(@Param('aplicacaoId') id: string, @Body() dto: DesignarDto, @CurrentUser() user: JwtPayload) {
     return this.designacao.designar(id, dto.avaliadoId, dto.avaliadorId, user.sub, 'MANUAL');
+  }
+
+  /**
+   * Copia o cadastro da plataforma para a designação do ciclo. `aplicar: false`
+   * (o padrão) é a prévia — a tela mostra o que VAI acontecer e só então grava.
+   */
+  @Post('ciclo/:cicloId/copiar-do-cadastro') @HttpCode(200)
+  copiarDoCadastro(
+    @Param('cicloId') cicloId: string,
+    @Body() dto: CopiarDoCadastroDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.designacao.copiarDoCadastro(
+      cicloId,
+      { aplicar: dto.aplicar ?? false, substituirManuais: dto.substituirManuais ?? false },
+      user.sub,
+    );
   }
 }
