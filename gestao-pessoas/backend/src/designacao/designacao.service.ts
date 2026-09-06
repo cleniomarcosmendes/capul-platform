@@ -193,6 +193,11 @@ export class DesignacaoService {
    * Designa avaliador. `@@unique([cicloId, avaliadoId])` garante um avaliador por
    * avaliado — e o snapshot congela filial, centro de custo e cargo, para o
    * resultado histórico não se mover se a pessoa mudar de área depois.
+   *
+   * ⚠️ Quando a pessoa JÁ tem avaliação neste ciclo e a designação a manda para
+   * OUTRA aplicação, a troca passa por `assertPodeTrocarDeAplicacao` antes de
+   * qualquer escrita. Ver o comentário lá: é o defeito silencioso que nasceu
+   * dentro deste método.
    */
   async designar(
     aplicacaoId: string,
@@ -214,6 +219,15 @@ export class DesignacaoService {
       throw new BadRequestException('Ninguém pode ser o avaliador da própria avaliação.');
     }
 
+    const existente = await this.prisma.avaliacao.findUnique({
+      where: { cicloId_avaliadoId: { cicloId: aplicacao.cicloId, avaliadoId } },
+      select: { id: true, aplicacaoId: true, avaliadorId: true, status: true },
+    });
+    const trocaDeAplicacao = existente !== null && existente.aplicacaoId !== aplicacaoId;
+    if (trocaDeAplicacao) {
+      await this.assertPodeTrocarDeAplicacao(existente, avaliado.nome);
+    }
+
     const avaliacao = await this.prisma.avaliacao.upsert({
       where: { cicloId_avaliadoId: { cicloId: aplicacao.cicloId, avaliadoId } },
       update: { avaliadorId, aplicacaoId, origemDesignacao: origem },
@@ -232,11 +246,75 @@ export class DesignacaoService {
     await this.auditoria.registrar({
       entidade: 'Avaliacao',
       entidadeId: avaliacao.id,
-      acao: 'DESIGNAR',
+      // A troca de aplicação é ato distinto de designar pela primeira vez: muda
+      // QUAL questionário a pessoa responde, e quem for reconstruir o ciclo
+      // meses depois precisa achar isso sem ler o diff de dois campos.
+      acao: trocaDeAplicacao ? 'DESIGNAR_TROCA_APLICACAO' : 'DESIGNAR',
       usuarioId,
-      valorNovo: { avaliadoId, avaliadorId, origem },
+      valorAnterior: existente
+        ? { aplicacaoId: existente.aplicacaoId, avaliadorId: existente.avaliadorId, status: existente.status }
+        : undefined,
+      valorNovo: { avaliadoId, avaliadorId, aplicacaoId, origem },
     });
     return avaliacao;
+  }
+
+  /**
+   * ⭐ TROCAR A APLICAÇÃO DE QUEM JÁ RESPONDEU PRODUZ NOTA ERRADA, SEM ERRO.
+   *
+   * `Resposta` aponta para perguntas de um modelo; `Avaliacao.aplicacaoId` é
+   * quem decide de qual `ModeloVersao` as perguntas são lidas
+   * (`avaliacao.service.ts`, `itensRespondidos`). Trocar a aplicação deixa as
+   * respostas órfãs — e, se a avaliação já foi enviada, a apuração combina a
+   * `notaAvaliacao` CONGELADA do modelo antigo com o `pesoAvaliacao` e os
+   * `AplicacaoCriterio` da aplicação nova (`apuracao.service.ts`). Sai um
+   * número diferente, e nada acusa: não há exceção, não há alerta, e a memória
+   * de cálculo fica consistente consigo mesma.
+   *
+   * É a família de defeito que este módulo existe para eliminar — o antigo
+   * dividia por 18 fixo, o `NVL` fora da soma dava média zero — e ela nasceu
+   * aqui dentro, num `upsert` que atualizava `aplicacaoId` de passagem.
+   *
+   * A regra é uma só: **nada de valor se perde numa troca.**
+   *
+   *   - ENVIADA           → recusa sempre. A nota é o valor, mesmo sem resposta.
+   *   - com N respostas   → recusa DIZENDO N, para a tela poder perguntar.
+   *   - sem nada gravado  → passa, e a troca vai para a auditoria.
+   *
+   * ⚠️ Trocar só o AVALIADOR, dentro da mesma aplicação, NÃO passa por aqui:
+   * não há modelo diferente envolvido e nenhuma resposta muda de instrumento.
+   */
+  private async assertPodeTrocarDeAplicacao(
+    existente: { id: string; aplicacaoId: string; status: string },
+    nomeDoAvaliado: string,
+  ) {
+    const [respostas, origem] = await Promise.all([
+      this.prisma.resposta.count({ where: { avaliacaoId: existente.id } }),
+      this.prisma.aplicacao.findUnique({
+        where: { id: existente.aplicacaoId },
+        select: { nome: true },
+      }),
+    ]);
+    const de = origem?.nome ?? 'outra aplicação';
+
+    if (existente.status === 'ENVIADA') {
+      throw new BadRequestException(
+        `${nomeDoAvaliado} já teve a avaliação ENVIADA na aplicação "${de}", e a nota do ` +
+          'questionário está congelada nela. Mudar de aplicação agora faria a apuração ' +
+          'combinar essa nota com os pesos e critérios de outro questionário, e o resultado ' +
+          'sairia errado sem acusar erro. Para mudar de aplicação, peça a reabertura ao RH e ' +
+          'apague as respostas antes.',
+      );
+    }
+
+    if (respostas > 0) {
+      throw new BadRequestException(
+        `${nomeDoAvaliado} já tem ${respostas} resposta(s) gravada(s) na aplicação "${de}". ` +
+          'As respostas pertencem às perguntas daquele questionário e não têm equivalente no ' +
+          'outro — trocar a aplicação as deixaria órfãs e a nota sairia errada. Apague as ' +
+          'respostas antes de mudar de aplicação.',
+      );
+    }
   }
 
   /** Quem já tem avaliador designado no ciclo, com o nome de quem avalia. */
