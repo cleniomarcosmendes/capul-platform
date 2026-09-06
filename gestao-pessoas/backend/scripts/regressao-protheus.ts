@@ -25,7 +25,7 @@ import { calcularNotaAvaliacao } from '../src/calculo/nota-avaliacao';
 import { localizarFaixa, type Faixa } from '../src/calculo/faixa';
 import { anosEntre } from '../src/calculo/resolvers/resolver.types';
 
-const DATA_BASE = '20251031';   // fim do ciclo 000006
+const DATA_BASE = process.argv[3] ?? '20251130'; // fim do ciclo (RDU010 000014: 01/10 a 30/11/2025)
 const HOJE = '20260905';        // o que o current_date do select antigo veria hoje
 
 const linhas = fs.readFileSync(process.argv[2], 'utf8').trim().split('\n')

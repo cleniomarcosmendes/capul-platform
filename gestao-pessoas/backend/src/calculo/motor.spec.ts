@@ -1,4 +1,9 @@
-import { apurarColaborador, type CriterioConfigurado } from './motor.js';
+import {
+  agregarAlertas,
+  apurarColaborador,
+  type AlertaApuracao,
+  type CriterioConfigurado,
+} from './motor.js';
 import type { Faixa } from './faixa.js';
 import type { ContextoCiclo, DadosColaborador } from './resolvers/resolver.types.js';
 
@@ -144,5 +149,79 @@ describe('motor — resolver → faixa → apuração', () => {
         colaborador: pessoa(), ciclo,
       }),
     ).toThrow(/sem resolver/);
+  });
+});
+
+describe('⭐ agregação de alertas — configuração × individual', () => {
+  const alerta = (over: Partial<AlertaApuracao> = {}): AlertaApuracao => ({
+    criterioCodigo: 'ESCOLARIDADE',
+    criterioNome: 'Escolaridade',
+    motivo: 'SEM_FAIXA',
+    escopo: 'CONFIGURACAO',
+    valor: '85',
+    detalhe: '',
+    ...over,
+  });
+
+  it('conta as pessoas afetadas por critério e motivo', () => {
+    const agregados = agregarAlertas([alerta(), alerta({ valor: '85' }), alerta({ valor: '95' })]);
+    expect(agregados).toHaveLength(1);
+    expect(agregados[0]).toMatchObject({ pessoas: 3, valores: ['85', '95'] });
+  });
+
+  it('o resumo é a frase que a tela de fechamento mostra', () => {
+    const [a] = agregarAlertas([alerta(), alerta()]);
+    expect(a.resumo).toContain('2 pessoas');
+    expect(a.resumo).toContain('fora de faixa');
+    expect(a.resumo).toContain('85');
+    expect(a.resumo).toContain('Cadastre a faixa');
+  });
+
+  it('⭐ CONFIGURAÇÃO vem antes de INDIVIDUAL — é a que se resolve de uma vez', () => {
+    const agregados = agregarAlertas([
+      ...Array.from({ length: 50 }, () =>
+        alerta({ motivo: 'SEM_DADO_CADASTRAL', escopo: 'INDIVIDUAL', valor: null }),
+      ),
+      alerta(),
+    ]);
+    // Mesmo afetando MENOS gente, a de configuração vem primeiro: uma faixa
+    // cadastrada resolve todas as linhas; 50 cadastros individuais, não.
+    expect(agregados[0].escopo).toBe('CONFIGURACAO');
+    expect(agregados[1].pessoas).toBe(50);
+  });
+
+  it('dentro do mesmo escopo, ordena pelo que afeta mais gente', () => {
+    const agregados = agregarAlertas([
+      alerta({ criterioCodigo: 'A', criterioNome: 'A' }),
+      alerta({ criterioCodigo: 'B', criterioNome: 'B' }),
+      alerta({ criterioCodigo: 'B', criterioNome: 'B' }),
+    ]);
+    expect(agregados.map((a) => a.criterioCodigo)).toEqual(['B', 'A']);
+  });
+
+  it('separa motivos diferentes do mesmo critério', () => {
+    const agregados = agregarAlertas([
+      alerta(),
+      alerta({ motivo: 'SEM_DADO_CADASTRAL', escopo: 'INDIVIDUAL', valor: null }),
+    ]);
+    expect(agregados).toHaveLength(2);
+  });
+
+  it('lista vazia não vira alerta nenhum', () => {
+    expect(agregarAlertas([])).toEqual([]);
+  });
+
+  it('o motor classifica o escopo automaticamente', () => {
+    const { alertas } = apurarColaborador({
+      notaAvaliacao: 80, pesoAvaliacao: 60,
+      criterios: [ESCOLARIDADE], colaborador: pessoa({ grauInstrucaoCodigo: '85' }), ciclo,
+    });
+    expect(alertas[0]).toMatchObject({ escopo: 'CONFIGURACAO', valor: '85', criterioNome: 'Escolaridade' });
+
+    const { alertas: individuais } = apurarColaborador({
+      notaAvaliacao: 80, pesoAvaliacao: 60,
+      criterios: [ESCOLARIDADE], colaborador: pessoa({ grauInstrucaoCodigo: null }), ciclo,
+    });
+    expect(individuais[0]).toMatchObject({ escopo: 'INDIVIDUAL', valor: null });
   });
 });

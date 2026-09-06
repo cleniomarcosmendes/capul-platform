@@ -103,6 +103,45 @@ describe('TEMPO_FUNCAO', () => {
   it('falha alto se o sync não resolveu a data (deveria ter usado a admissão — C9)', () => {
     expect(() => tempoFuncao(pessoa({ dataUltimaFuncao: null }), ciclo)).toThrow(/C9/);
   });
+
+  describe('⭐ recorte pela data-base', () => {
+    // Matrícula 001174: 03156 -> 03153 em 20231101 (troca real), e uma promoção
+    // hipotética em 2026. A função ANTERIOR precisa estar no histórico, senão o
+    // primeiro registro não conta como troca e o resultado cai na admissão.
+    const historico = [
+      { data: '20220830', sequencia: '1', funcaoCodigo: '03156' },
+      { data: '20231101', sequencia: '1', funcaoCodigo: '03153' },
+      { data: '20260301', sequencia: '1', funcaoCodigo: '09999' },
+    ];
+
+    it('com histórico, ignora a promoção posterior ao ciclo', () => {
+      const r = tempoFuncao(pessoa({ historicoFuncao: historico }), { ...ciclo, dataBase: '20251130' });
+      // 20231101 -> 20251130 = 2,08 anos. Sem recorte pegaria 20260301 e daria negativo.
+      expect(r.valorNumerico).toBeCloseTo(2.08, 2);
+      expect(r.semDado).toBe(false);
+    });
+
+    it('o histórico tem precedência sobre a dataUltimaFuncao gravada', () => {
+      const r = tempoFuncao(
+        pessoa({ historicoFuncao: historico, dataUltimaFuncao: '20260301' }),
+        { ...ciclo, dataBase: '20251130' },
+      );
+      expect(r.valorNumerico).toBeCloseTo(2.08, 2);
+    });
+
+    it('sem histórico e com data POSTERIOR ao ciclo, devolve semDado em vez de inventar', () => {
+      // Não há resposta honesta: a data descreve um fato que o ciclo não pode
+      // conhecer, e o histórico não está aqui para dizer qual era a anterior.
+      // Chutar a admissão exageraria o tempo de função em silêncio.
+      const r = tempoFuncao(pessoa({ dataUltimaFuncao: '20260301' }), { ...ciclo, dataBase: '20251130' });
+      expect(r).toEqual({ valorNumerico: null, valorTexto: null, semDado: true });
+    });
+
+    it('sem histórico e com data anterior ao ciclo, usa a data gravada', () => {
+      const r = tempoFuncao(pessoa({ dataUltimaFuncao: '20231101' }), { ...ciclo, dataBase: '20251130' });
+      expect(r.valorNumerico).toBeCloseTo(2.08, 2);
+    });
+  });
 });
 
 describe('QTDE_TREINAMENTO', () => {

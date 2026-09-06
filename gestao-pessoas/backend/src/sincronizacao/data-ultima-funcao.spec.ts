@@ -185,3 +185,49 @@ describe('resolverDataUltimaFuncao', () => {
     });
   });
 });
+
+describe('⭐ recorte pela data-base — fato posterior ao ciclo não conta', () => {
+  // Matrícula 001174, real: virou 03153 em 20231101 e levou um lançamento em
+  // 20260226. Apurando o ciclo de 2025, o de 2026 não pode existir.
+  const historico = [
+    mov('20220830', '03156'), mov('20221101', '03156'),
+    mov('20231101', '03153'), mov('20251101', '03153'), mov('20260226', '03153'),
+  ];
+
+  it('ignora lançamento posterior à data-base', () => {
+    const semRecorte = resolverDataUltimaFuncao(historico, '20000522');
+    const comRecorte = resolverDataUltimaFuncao(historico, '20000522', { ate: '20251130' });
+    expect(semRecorte.data).toBe('20231101');
+    expect(comRecorte.data).toBe('20231101');
+  });
+
+  it('⭐ a TROCA posterior ao ciclo não antecipa a promoção', () => {
+    // Promovido em 2026: apurando o ciclo de 2025, ainda está na função antiga.
+    const comPromocao2026 = [...historico, mov('20260301', '09999')];
+    expect(resolverDataUltimaFuncao(comPromocao2026, '20000522').data).toBe('20260301');
+    expect(
+      resolverDataUltimaFuncao(comPromocao2026, '20000522', { ate: '20251130' }).data,
+    ).toBe('20231101');
+  });
+
+  it('reapurar o mesmo ciclo em datas diferentes dá o MESMO resultado', () => {
+    // É a razão de existir do recorte: sem ele, o resultado de um ciclo fechado
+    // muda conforme o tempo passa — o current_date de volta com outra roupa.
+    const emDezembro2025 = resolverDataUltimaFuncao(historico, '20000522', { ate: '20251130' });
+    const hoje = resolverDataUltimaFuncao([...historico, mov('20260901', '03153')], '20000522', {
+      ate: '20251130',
+    });
+    expect(hoje).toEqual(emDezembro2025);
+  });
+
+  it('recorte anterior a TODO o histórico cai na admissão', () => {
+    expect(resolverDataUltimaFuncao(historico, '20000522', { ate: '20100101' })).toMatchObject({
+      origem: 'ADMISSAO_SEM_HISTORICO',
+    });
+  });
+
+  it('sem recorte, continua considerando tudo (é o que o sync faz)', () => {
+    const comPromocao2026 = [...historico, mov('20260301', '09999')];
+    expect(resolverDataUltimaFuncao(comPromocao2026, '20000522').data).toBe('20260301');
+  });
+});

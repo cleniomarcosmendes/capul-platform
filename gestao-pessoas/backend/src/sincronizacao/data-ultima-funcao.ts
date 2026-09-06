@@ -89,10 +89,17 @@ export interface ResultadoDataFuncao {
  * @param dataAdmissao `RA_ADMISSA` (AAAAMMDD). Obrigatória: sem ela não há
  *   resposta possível para as bordas (a) e (b). O sync recusa a linha antes de
  *   chegar aqui — nas 1.036 pessoas ativas não há uma sequer sem admissão.
+ * @param opcoes.ate ⭐ RECORTE: ignora lançamentos POSTERIORES a esta data —
+ *   normalmente `ciclo.dataBase`. Sem ele, reapurar um ciclo antigo dá resultado
+ *   diferente conforme o tempo passa, que é o `current_date` de volta com outra
+ *   roupa. Medido: o ciclo de 2025 reapurado hoje enxerga lançamentos de 2026 e
+ *   chega a produzir tempo de função NEGATIVO. Omitido = considera tudo (é o que
+ *   o sync faz para gravar o valor corrente).
  */
 export function resolverDataUltimaFuncao(
   movimentos: readonly MovimentoFuncional[],
   dataAdmissao: string,
+  opcoes: { ate?: string } = {},
 ): ResultadoDataFuncao {
   if (!dataAdmissao) {
     throw new Error(
@@ -106,6 +113,9 @@ export function resolverDataUltimaFuncao(
   const unicos = new Map<string, MovimentoFuncional>();
   for (const m of movimentos) {
     if (!m?.data || !m.funcaoCodigo) continue; // linha inutilizável: sem data ou sem função
+    // Recorte pela data-base: fato posterior ao ciclo não pode influenciar a
+    // nota daquele ciclo. AAAAMMDD compara como string na ordem do calendário.
+    if (opcoes.ate && m.data > opcoes.ate) continue;
     unicos.set(`${m.data}|${m.sequencia}|${m.funcaoCodigo}`, m);
   }
 

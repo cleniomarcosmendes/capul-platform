@@ -12,6 +12,8 @@
  * usava `current_date` e a nota mudava conforme o dia em que o relatório rodava.
  */
 
+import type { MovimentoFuncional } from '../../sincronizacao/data-ultima-funcao.js';
+
 /** Datas trafegam como AAAAMMDD: é o formato do Protheus e ordena como string. */
 export type DataAAAAMMDD = string;
 
@@ -29,8 +31,18 @@ export interface DadosColaborador {
   grauInstrucaoCodigo?: string | null;
   /** Nunca nula: linha sem admissão é recusada no sync. */
   dataAdmissao: DataAAAAMMDD;
-  /** Resolvida por `resolverDataUltimaFuncao`. Nunca nula depois do sync (decisão C9). */
+  /**
+   * Resolvida por `resolverDataUltimaFuncao` no sync, com o valor CORRENTE.
+   * Só é usada quando `historicoFuncao` não vem — e, nesse caso, apenas se não
+   * for posterior à `dataBase` (ver tempo-funcao.resolver.ts).
+   */
   dataUltimaFuncao?: DataAAAAMMDD | null;
+  /**
+   * ⭐ Histórico funcional (SR7010) da FILIAL ATUAL. Quando presente, o resolver
+   * recalcula a data com recorte em `ciclo.dataBase` — é o que permite reapurar
+   * um ciclo antigo e obter o mesmo número de sempre.
+   */
+  historicoFuncao?: readonly MovimentoFuncional[];
   /** `dataFim` dos treinamentos concluídos. Lista vazia é resposta legítima. */
   treinamentosConcluidos: readonly DataAAAAMMDD[];
 }

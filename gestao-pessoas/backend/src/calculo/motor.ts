@@ -39,14 +39,101 @@ export interface ValorInformado {
 }
 
 /**
- * Situação que não impede a apuração mas precisa chegar ao RH. Nada aqui é
- * silencioso: a pessoa não é punida (o critério sai da conta) e o alerta diz o
- * que cadastrar para reapurar.
+ * ⭐ DOIS ESCOPOS DE ALERTA, e a diferença não é cosmética:
+ *
+ *   INDIVIDUAL   — falta o dado DAQUELA pessoa (escolaridade em branco, valor
+ *                  informado não importado). Afeta uma linha; resolve-se no
+ *                  cadastro dela; é o resíduo que a renormalização absorve.
+ *
+ *   CONFIGURACAO — o valor existe e NENHUMA faixa o cobre. Não é problema da
+ *                  pessoa: é do critério, e atinge TODO MUNDO que tiver aquele
+ *                  valor. Um código de escolaridade novo no SX5 sem faixa
+ *                  cadastrada tira o critério da conta de dezenas de pessoas de
+ *                  uma vez — e, listado pessoa a pessoa, se perde no meio das
+ *                  ausências individuais.
+ *
+ * Por isso os de CONFIGURACAO são AGREGADOS (`agregarAlertas`) e mostrados antes
+ * do fechamento do ciclo: "12 pessoas com escolaridade fora de faixa" é uma
+ * pendência de cadastro que alguém resolve em minutos; 12 linhas soltas num log
+ * não são.
  */
+export type MotivoAlerta = 'SEM_FAIXA' | 'SEM_VALOR_INFORMADO' | 'SEM_DADO_CADASTRAL';
+export type EscopoAlerta = 'INDIVIDUAL' | 'CONFIGURACAO';
+
+export const ESCOPO_DO_MOTIVO: Readonly<Record<MotivoAlerta, EscopoAlerta>> = Object.freeze({
+  SEM_FAIXA: 'CONFIGURACAO',
+  SEM_VALOR_INFORMADO: 'INDIVIDUAL',
+  SEM_DADO_CADASTRAL: 'INDIVIDUAL',
+});
+
 export interface AlertaApuracao {
   criterioCodigo: string;
-  motivo: 'SEM_FAIXA' | 'SEM_VALOR_INFORMADO' | 'SEM_DADO_CADASTRAL';
+  criterioNome: string;
+  motivo: MotivoAlerta;
+  escopo: EscopoAlerta;
+  /** O valor que provocou o alerta — é o que o RH precisa para cadastrar a faixa. */
+  valor: string | null;
   detalhe: string;
+}
+
+/** Uma pendência agregada, do jeito que a tela de fechamento do ciclo mostra. */
+export interface AlertaAgregado {
+  criterioCodigo: string;
+  criterioNome: string;
+  motivo: MotivoAlerta;
+  escopo: EscopoAlerta;
+  pessoas: number;
+  /** Valores distintos que provocaram o alerta (ex.: os códigos sem faixa). */
+  valores: string[];
+  resumo: string;
+}
+
+/**
+ * Junta os alertas de todas as pessoas do ciclo por critério + motivo + valor.
+ * Os de CONFIGURACAO vêm primeiro, e dentro de cada escopo os que afetam mais
+ * gente — é a ordem em que se resolve.
+ */
+export function agregarAlertas(alertas: readonly AlertaApuracao[]): AlertaAgregado[] {
+  const porChave = new Map<string, { alerta: AlertaApuracao; pessoas: number; valores: Set<string> }>();
+
+  for (const a of alertas) {
+    const chave = `${a.criterioCodigo}|${a.motivo}`;
+    const atual = porChave.get(chave) ?? { alerta: a, pessoas: 0, valores: new Set<string>() };
+    atual.pessoas += 1;
+    if (a.valor) atual.valores.add(a.valor);
+    porChave.set(chave, atual);
+  }
+
+  return [...porChave.values()]
+    .map(({ alerta, pessoas, valores }) => ({
+      criterioCodigo: alerta.criterioCodigo,
+      criterioNome: alerta.criterioNome,
+      motivo: alerta.motivo,
+      escopo: alerta.escopo,
+      pessoas,
+      valores: [...valores].sort(),
+      resumo: resumir(alerta, pessoas, [...valores].sort()),
+    }))
+    .sort(
+      (a, b) =>
+        (a.escopo === b.escopo ? 0 : a.escopo === 'CONFIGURACAO' ? -1 : 1) || b.pessoas - a.pessoas,
+    );
+}
+
+function resumir(alerta: AlertaApuracao, pessoas: number, valores: string[]): string {
+  const gente = `${pessoas} pessoa${pessoas > 1 ? 's' : ''}`;
+  switch (alerta.motivo) {
+    case 'SEM_FAIXA':
+      return (
+        `${gente} com ${alerta.criterioNome.toLowerCase()} fora de faixa ` +
+        `(${valores.join(', ')}). Cadastre a faixa no critério e reapure — enquanto isso, ` +
+        'o critério fica fora da nota dessas pessoas.'
+      );
+    case 'SEM_VALOR_INFORMADO':
+      return `${gente} sem valor informado para "${alerta.criterioNome}" neste ciclo.`;
+    default:
+      return `${gente} sem dado cadastral para "${alerta.criterioNome}".`;
+  }
 }
 
 export function apurarColaborador(entrada: {
@@ -68,12 +155,16 @@ export function apurarColaborador(entrada: {
       // colaborador. Pontuar zero puniria a pessoa por configuração errada;
       // travar a apuração inteira puniria as outras 1.035. Sai da conta e o RH
       // recebe o alerta para cadastrar a faixa e reapurar.
+      const bruto = valor.valorTexto ?? String(valor.valorNumerico);
       alertas.push({
         criterioCodigo: config.codigo,
+        criterioNome: config.nome,
         motivo: 'SEM_FAIXA',
+        escopo: ESCOPO_DO_MOTIVO.SEM_FAIXA,
+        valor: bruto,
         detalhe:
-          `O valor ${valor.valorTexto ?? valor.valorNumerico} não está em nenhuma faixa do ` +
-          `critério "${config.nome}". Cadastre a faixa e reapure.`,
+          `O valor ${bruto} não está em nenhuma faixa do critério "${config.nome}". ` +
+          'Cadastre a faixa e reapure.',
       });
     }
 
@@ -115,7 +206,10 @@ function obterValor(
     if (valor.semDado) {
       alertas.push({
         criterioCodigo: config.codigo,
+        criterioNome: config.nome,
         motivo: 'SEM_DADO_CADASTRAL',
+        escopo: ESCOPO_DO_MOTIVO.SEM_DADO_CADASTRAL,
+        valor: null,
         detalhe: `Sem dado cadastral para "${config.nome}". O critério sai da conta e os pesos se renormalizam.`,
       });
     }
@@ -126,7 +220,10 @@ function obterValor(
   if (!informado || (informado.valorNumerico === null && informado.valorTexto === null)) {
     alertas.push({
       criterioCodigo: config.codigo,
+      criterioNome: config.nome,
       motivo: 'SEM_VALOR_INFORMADO',
+      escopo: ESCOPO_DO_MOTIVO.SEM_VALOR_INFORMADO,
+      valor: null,
       detalhe: `Nenhum valor importado ou digitado para "${config.nome}" neste ciclo.`,
     });
     return { valorNumerico: null, valorTexto: null, semDado: true };
