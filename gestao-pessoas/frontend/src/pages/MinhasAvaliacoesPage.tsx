@@ -29,6 +29,9 @@ import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from 
  * com ciclo nenhum e a pessoa não sabe até quando responder cada um. Por isso a
  * lista é AGRUPADA POR CICLO, com o prazo no cabeçalho do grupo.
  */
+/** Estado da ABA, não do usuário: morre junto com ela. */
+const CHAVE_ROLAGEM = 'gestao-pessoas:rolagem:minhas-avaliacoes';
+
 export default function MinhasAvaliacoesPage() {
   const [itens, setItens] = useState<ItemDaFila[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -37,6 +40,28 @@ export default function MinhasAvaliacoesPage() {
   useEffect(() => {
     void carregar();
   }, []);
+
+  /**
+   * ⭐ RESTAURAR A ROLAGEM ao voltar de uma avaliação.
+   *
+   * A tela de responder é outra rota, fora do Layout, então esta lista
+   * DESMONTA — e voltar jogava a pessoa no topo. Numa fila de 95, quem abriu o
+   * quadragésimo cartão volta e tem de rolar tudo de novo para achar o
+   * quadragésimo primeiro; na prática, ou ela responde em ordem ou desiste.
+   *
+   * Guardado em `sessionStorage` de propósito: é estado da aba, morre com ela, e
+   * não faz sentido sobreviver a um login de outra pessoa no mesmo navegador.
+   */
+  useEffect(() => {
+    if (!itens) return;
+    const salvo = Number(sessionStorage.getItem(CHAVE_ROLAGEM) ?? '0');
+    if (salvo > 0) {
+      // Depois da pintura: antes disso a lista ainda não tem altura e o
+      // scrollTo não vai a lugar nenhum.
+      requestAnimationFrame(() => window.scrollTo(0, salvo));
+    }
+    return () => sessionStorage.setItem(CHAVE_ROLAGEM, String(window.scrollY));
+  }, [itens]);
 
   async function carregar() {
     setErro(null);
@@ -77,23 +102,39 @@ export default function MinhasAvaliacoesPage() {
 
 interface GrupoDeCiclo {
   ciclo: ItemDaFila['ciclo'];
-  pendentes: ItemDaFila[];
+  /** Começadas e não enviadas — inclui a respondida por inteiro que falta enviar. */
+  emAndamento: ItemDaFila[];
+  aResponder: ItemDaFila[];
   enviadas: ItemDaFila[];
 }
 
-/** Um bloco por ciclo, o de prazo mais curto primeiro — é o que vence antes. */
+/**
+ * Um bloco por ciclo, o de prazo mais curto primeiro — é o que vence antes.
+ *
+ * ⭐ Dentro do ciclo, TRÊS seções: "Em andamento", "A responder", "Enviadas".
+ *
+ * O que estava começado antes subia para o topo de "A responder" por uma
+ * ordenação implícita — e isso reorganizava a lista SOB O DEDO a cada avaliação
+ * iniciada: abrir uma pessoa e voltar mudava o lugar de todas as outras. Seção
+ * própria entrega o "continue de onde parou" sem mexer na posição de ninguém.
+ *
+ * ⚠️ A ordem DENTRO de "A responder" não é decidida aqui, de propósito — ela vem
+ * do backend (`criadoEm asc`) e é pergunta aberta para o RH. Ver ESTADO §3.11.
+ */
 function agruparPorCiclo(itens: ItemDaFila[]): GrupoDeCiclo[] {
   const mapa = new Map<string, GrupoDeCiclo>();
   for (const item of itens) {
-    const g = mapa.get(item.ciclo.id) ?? { ciclo: item.ciclo, pendentes: [], enviadas: [] };
+    const g =
+      mapa.get(item.ciclo.id) ?? { ciclo: item.ciclo, emAndamento: [], aResponder: [], enviadas: [] };
     if (item.status === 'ENVIADA') g.enviadas.push(item);
-    else g.pendentes.push(item);
+    else if (item.perguntasRespondidas > 0) g.emAndamento.push(item);
+    else g.aResponder.push(item);
     mapa.set(item.ciclo.id, g);
   }
   for (const g of mapa.values()) {
-    // Ordem do trabalho: o que só falta enviar vem primeiro (é um toque), depois
-    // o que está começado (retomar é mais barato que começar), depois o resto.
-    g.pendentes.sort((a, b) => prioridade(b) - prioridade(a));
+    // Só DENTRO de "Em andamento": o que já está inteiro e só falta enviar vem
+    // primeiro, porque é um toque. As outras seções ficam na ordem do backend.
+    g.emAndamento.sort((a, b) => prioridade(b) - prioridade(a));
   }
   return [...mapa.values()].sort((a, b) => a.ciclo.prazo.localeCompare(b.ciclo.prazo));
 }
@@ -103,17 +144,32 @@ function BlocoDoCiclo({ grupo }: { grupo: GrupoDeCiclo }) {
     <section className="mt-6">
       <CabecalhoDoCiclo
         ciclo={grupo.ciclo}
-        aResponder={grupo.pendentes.length}
-        total={grupo.pendentes.length + grupo.enviadas.length}
+        aResponder={grupo.emAndamento.length + grupo.aResponder.length}
+        total={grupo.emAndamento.length + grupo.aResponder.length + grupo.enviadas.length}
       />
 
-      {grupo.pendentes.length > 0 && (
+      {grupo.emAndamento.length > 0 && (
         <>
-          <h3 className="mb-2 mt-3 px-1 text-sm font-semibold text-slate-500">
-            A responder ({grupo.pendentes.length})
+          <h3 className="mb-2 mt-3 px-1 text-sm font-semibold text-amber-800">
+            Em andamento ({grupo.emAndamento.length})
           </h3>
           <ul className="space-y-2">
-            {grupo.pendentes.map((item) => (
+            {grupo.emAndamento.map((item) => (
+              <li key={item.id}>
+                <Cartao item={item} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {grupo.aResponder.length > 0 && (
+        <>
+          <h3 className="mb-2 mt-6 px-1 text-sm font-semibold text-slate-500">
+            A responder ({grupo.aResponder.length})
+          </h3>
+          <ul className="space-y-2">
+            {grupo.aResponder.map((item) => (
               <li key={item.id}>
                 <Cartao item={item} />
               </li>

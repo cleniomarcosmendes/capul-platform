@@ -306,6 +306,38 @@ prevê ondas simultâneas, e ondas por unidade normalmente não se sobrepõem em
 quebraria o caso legítimo. O aviso listaria quem já está em outro ciclo aberto de período
 sobreposto, e o RH decide.
 
+### 3.11. ⚠️ A ORDEM DA FILA DO AVALIADOR não foi decidida por ninguém
+
+`minhasAvaliacoes` ordena por **`Avaliacao.criadoEm asc`** — a ordem em que as designações
+foram criadas. E a cópia do cadastro percorre as aplicações por **`Aplicacao.ordem`**, que é
+um campo de organização de tela do RH. Resultado medido no DEV: as designações da aplicação
+"Aprendizes" nasceram **2 segundos antes** das de "Operação de Loja", e por isso as duas
+aprendizes aparecem fixadas antes de todo mundo na fila do Wanderson.
+
+**Ninguém decidiu isso.** Um campo que existe para o RH ordenar cartões numa tela de
+configuração está afirmando, para quem avalia, *"avalie os aprendizes antes dos
+supervisores"*. Na fila de 95 da gerente do Supermercado Unaí, essa camada acidental decide a
+ordem em que 95 pessoas são avaliadas.
+
+#### Pergunta aberta para o RH
+
+**A ordem da fila do avaliador é indiferente, ou há prioridade?** Por cargo, por prazo, por
+unidade? ⚠️ **Enquanto não houver resposta, não se inventa critério** — qualquer ordenação
+escolhida por nós vira uma afirmação sobre prioridade que ninguém fez.
+
+#### O que já foi feito, e é só UX
+
+**"Em andamento (N)" virou seção própria**, acima de "A responder", como "Enviadas" já era.
+Antes o que estava começado subia para o topo de "A responder" por ordenação implícita — e a
+lista **se reorganizava sob o dedo** a cada avaliação iniciada. A seção entrega o "continue
+de onde parou" sem mexer no lugar de ninguém. **Dentro de "A responder" nada mudou.**
+
+#### O que resolve fila grande e NÃO é ordenação
+
+Com 95 cartões, nenhuma ordem resolve — a pessoa está procurando **alguém específico**. Falta
+**busca por nome** e **filtro por aplicação**. Isso não depende da resposta do RH e pode ser
+feito antes dela.
+
 ## 4. As duas exceções estruturais
 
 São **duas**, e a contagem importa: uma terceira significa que o desenho precisa de
@@ -339,6 +371,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Aprendizes (31 pessoas) entram no ciclo com aplicação própria, sem critérios cadastrais — confirmar | Gestora de RH |
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
+| 🔴 **A ordem da fila do avaliador** — é indiferente, ou há prioridade (cargo, prazo, unidade)? Hoje é acidental: vem de `Aplicacao.ordem`, um campo de tela do RH, e numa fila de 95 decide a ordem em que 95 pessoas são avaliadas. Ver §3.11 | Gestora de RH |
 | 🔴 **A mesma pessoa em dois ciclos abertos** — 9 no DEV, com períodos sobrepostos, duas notas cada. Ondas de unidade (§9) são legítimas; sobreposição de PESSOAS talvez não. Ver §3.10 | Gestora de RH |
 | 🔴 **Quem avalia os ~52 AVALIADORES** — hoje 46 deles caem no Diretor Executivo pela regra provisória de hierarquia. ⚠️ A planilha de avaliadores **não tem como responder isto**: ela diz "quem responde pelo centro de custo X", e o responsável está DENTRO do CC que lidera — ele fica de fora da própria lista, porque autoavaliação não existe. É pergunta separada, e é de estrutura | Diretoria + Gestora de RH |
 | 🔴 **Quem é o avaliador de cada centro de custo** — o CSV modelo (74 CCs, nº de pessoas, candidatos por cargo como sugestão) está em `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` e **continua valendo**. ⚠️ A T.I. preencheu uma lista para destravar o desenvolvimento (§11): ela é **provisória** e **não substitui esta pendência** — quem responde por "quem avalia quem" é o RH | Gestora de RH |
