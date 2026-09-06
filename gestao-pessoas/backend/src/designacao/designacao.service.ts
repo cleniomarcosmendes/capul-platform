@@ -58,21 +58,35 @@ export class DesignacaoService {
   ) {}
 
   /**
-   * Lista da aplicação: colaboradores dos centros de custo dela, com a régua
-   * aplicada e as decisões manuais já sobrepostas.
+   * Lista da aplicação: o PÚBLICO NOMINAL dela, com a régua aplicada e as
+   * decisões manuais já sobrepostas.
+   *
+   * ⭐ O público vem de `rh.aplicacao_publico`, uma linha por pessoa — não mais
+   * do recorte por centro de custo. A estrutura de gestão não coincide com a
+   * contábil: a equipe de limpeza são 46 pessoas em 19 pares filial × CC, e os
+   * 31 aprendizes estão em 15 pares, todos compartilhados com gente efetiva.
+   * Centro de custo e filial continuam existindo como ATALHO de preenchimento
+   * na tela, e ficam registrados em `origem` + `origemReferencia`.
+   *
+   * ⚠️ Público vazio devolve lista vazia. Antes, aplicação sem centro de custo
+   * caía num `where` sem filtro e trazia as 1.036 pessoas — "ainda não
+   * configurei" e "todo mundo" eram o mesmo estado.
    */
   async listar(aplicacaoId: string): Promise<LinhaDaLista[]> {
     const aplicacao = await this.prisma.aplicacao.findUnique({
       where: { id: aplicacaoId },
-      include: { centrosCusto: true, ciclo: true },
+      include: { ciclo: true },
     });
     if (!aplicacao) throw new NotFoundException('Aplicação não encontrada.');
 
-    const centros = aplicacao.centrosCusto.map((c) => c.centroCusto);
+    const noPublico = await this.prisma.aplicacaoPublico.findMany({
+      where: { aplicacaoId },
+      select: { colaboradorId: true },
+    });
     const colaboradores = await this.prisma.colaborador.findMany({
       where: {
+        id: { in: noPublico.map((p) => p.colaboradorId) },
         situacao: { in: SITUACOES_ELEGIVEIS as never[] },
-        ...(centros.length ? { centroCusto: { in: centros } } : {}),
       },
       orderBy: [{ filial: 'asc' }, { nome: 'asc' }],
     });

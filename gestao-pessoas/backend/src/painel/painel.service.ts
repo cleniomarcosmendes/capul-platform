@@ -9,15 +9,31 @@
  *   2. QUEM está segurando — a fila por avaliador, do mais atrasado ao menos,
  *      porque quem cobra precisa de nome, não de percentual;
  *   3. quem é elegível e ficou SEM designação — a única pendência que não
- *      aparece em lugar nenhum e faz a pessoa sumir do ciclo em silêncio.
+ *      aparece em lugar nenhum e faz a pessoa sumir do ciclo em silêncio;
+ *   4. quem ficou FORA DE TODAS as aplicações.
  *
- * ⭐ O item 3 é a razão de o painel existir cedo. `Avaliacao` só nasce na
- * designação: quem a régua incluiu e ninguém designou não tem linha, não tem
- * status, e não entra em nenhuma contagem — ficaria de fora sem erro nenhum.
+ * ⭐ Os itens 3 e 4 são a razão de o painel existir cedo, e são pendências
+ * DIFERENTES, uma dentro da outra:
+ *
+ *   sem designação  — está no público de uma aplicação e ninguém disse quem
+ *                     avalia. `Avaliacao` só nasce na designação, então a
+ *                     pessoa não tem linha, não tem status e não entra em
+ *                     contagem nenhuma.
+ *   fora de todas   — não está no público de aplicação alguma. Nem sequer
+ *                     chega a ser contada como "sem designação", porque o
+ *                     item 3 é calculado POR APLICAÇÃO e ela não pertence a
+ *                     nenhuma. É a pessoa que o ciclo inteiro não enxerga.
+ *
+ * ⚠️ Enquanto o público vinha do recorte por centro de custo, o item 4 era
+ * invisível do mesmo jeito: um CC fora de todas as aplicações simplesmente não
+ * aparecia. Com público nominal a conta passou a ser possível — e ela é de
+ * nível de CICLO, não de aplicação.
  */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DesignacaoService } from '../designacao/designacao.service.js';
+import { montarListaInicial } from '../designacao/elegibilidade-ciclo.js';
+import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 
 export interface ProgressoDaAplicacao {
   aplicacaoId: string;
@@ -40,6 +56,16 @@ export interface FilaDoAvaliador {
   aFazer: number;
 }
 
+/** Uma pessoa que o ciclo não enxerga: elegível e fora de toda aplicação. */
+export interface PessoaForaDoCiclo {
+  colaboradorId: string;
+  matricula: string;
+  nome: string;
+  filial: string;
+  centroCusto: string | null;
+  centroCustoDescricao: string | null;
+}
+
 export interface PainelDoCiclo {
   ciclo: {
     id: string;
@@ -53,6 +79,12 @@ export interface PainelDoCiclo {
   enviadas: number;
   aFazer: number;
   semDesignacao: number;
+  /**
+   * Elegíveis do ciclo que não estão no público de NENHUMA aplicação. Vem com
+   * os nomes, não só o total: quem vai resolver precisa saber de quem se trata,
+   * e "17 pessoas fora" não diz a ninguém o que fazer em seguida.
+   */
+  foraDeTodasAsAplicacoes: { total: number; pessoas: PessoaForaDoCiclo[] };
   aplicacoes: ProgressoDaAplicacao[];
   avaliadores: FilaDoAvaliador[];
 }
@@ -124,9 +156,88 @@ export class PainelService {
       enviadas: aplicacoes.reduce((t, a) => t + a.enviadas, 0),
       aFazer: aplicacoes.reduce((t, a) => t + a.pendentes + a.emAndamento, 0),
       semDesignacao: aplicacoes.reduce((t, a) => t + a.semDesignacao, 0),
+      foraDeTodasAsAplicacoes: await this.foraDeTodasAsAplicacoes(ciclo),
       aplicacoes,
       avaliadores: await this.filaPorAvaliador(cicloId),
     };
+  }
+
+  /**
+   * QUEM O CICLO NÃO ENXERGA — elegível e fora do público de toda aplicação.
+   *
+   * A conta é de nível de CICLO de propósito: `semDesignacao` percorre as
+   * aplicações uma a uma e, por construção, não tem como enxergar quem não
+   * pertence a nenhuma delas. Era o buraco que sobrava depois de o público
+   * virar nominal — e é a mesma pergunta que o cadastro de avaliadores responde
+   * do outro lado ("quem não está na lista de ninguém").
+   *
+   * ⚠️ A régua de elegibilidade é a MESMA da tela de designação
+   * (`elegibilidade-ciclo.ts`), pela razão de sempre: duas contas de "quem
+   * deveria estar no ciclo" divergem no primeiro ajuste manual. Aqui ela roda
+   * sobre o cadastro inteiro, porque a pergunta é justamente sobre quem ficou
+   * fora de todo recorte.
+   */
+  private async foraDeTodasAsAplicacoes(ciclo: { id: string; incluirAfastados: boolean }) {
+    const [candidatos, noPublico, decisoes] = await Promise.all([
+      this.prisma.colaborador.findMany({
+        where: { situacao: { in: SITUACOES_ELEGIVEIS as never[] } },
+        select: {
+          id: true,
+          matricula: true,
+          nome: true,
+          filial: true,
+          centroCusto: true,
+          centroCustoDescricao: true,
+          situacao: true,
+        },
+        orderBy: [{ filial: 'asc' }, { centroCusto: 'asc' }, { nome: 'asc' }],
+      }),
+      this.prisma.aplicacaoPublico.findMany({
+        where: { cicloId: ciclo.id },
+        select: { colaboradorId: true },
+      }),
+      this.prisma.cicloElegibilidade.findMany({
+        where: { cicloId: ciclo.id, removidoEm: null },
+        select: { colaboradorId: true, decisao: true },
+      }),
+    ]);
+
+    const jaTemAplicacao = new Set(noPublico.map((p) => p.colaboradorId));
+    // O RH pode ter EXCLUÍDO alguém do ciclo de propósito. Contar essa pessoa
+    // como pendência transformaria uma decisão registrada em cobrança eterna.
+    const excluidos = new Set(
+      decisoes.filter((d) => d.decisao === 'EXCLUIR').map((d) => d.colaboradorId),
+    );
+
+    const { incluidos } = montarListaInicial(
+      candidatos.map((c) => ({
+        colaboradorId: c.id,
+        matricula: c.matricula,
+        nome: c.nome,
+        // Mesma nota da tela de designação: categoria funcional não é coluna do
+        // nosso cadastro; Presidente e Vice saem por decisão registrada.
+        categoriaFuncional: null,
+        situacaoNaDataBase: c.situacao,
+      })),
+      { incluirAfastados: ciclo.incluirAfastados },
+    );
+
+    const porId = new Map(candidatos.map((c) => [c.id, c]));
+    const pessoas: PessoaForaDoCiclo[] = incluidos
+      .filter((i) => !jaTemAplicacao.has(i.colaboradorId) && !excluidos.has(i.colaboradorId))
+      .map((i) => {
+        const c = porId.get(i.colaboradorId)!;
+        return {
+          colaboradorId: c.id,
+          matricula: c.matricula,
+          nome: c.nome,
+          filial: c.filial,
+          centroCusto: c.centroCusto,
+          centroCustoDescricao: c.centroCustoDescricao,
+        };
+      });
+
+    return { total: pessoas.length, pessoas };
   }
 
   /**
