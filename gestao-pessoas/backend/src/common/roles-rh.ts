@@ -45,6 +45,29 @@ export const ROLES = {
 export type RoleRh = (typeof ROLES)[keyof typeof ROLES];
 
 /**
+ * ⭐ "Basta ter acesso ao módulo" — para as rotas em que **quem decide é o DADO**,
+ * não o papel.
+ *
+ * A fila do avaliador é a primeira: ser avaliador é fato do dado (a pessoa está
+ * designada), e a gestora de RH avalia 13 pessoas tendo só `RH_ADMIN`. O menu já
+ * mostra "Minhas avaliações" a qualquer papel do módulo por essa razão; enquanto
+ * o controller exigia `AVALIADOR` ou `RH_ADMIN`, quem tivesse só `RH_MODELO` ou
+ * `RH_CICLO` **veria o item e levaria 403** — o mesmo defeito da gestora, uma
+ * role adiante.
+ *
+ * ⚠️ Não é o mesmo que remover o `@Roles`: sem ele o `RolesGuard` não checa
+ * NADA e quem não tem o módulo entra. Aqui a exigência continua sendo "tem
+ * permissão no módulo"; o que decide o acesso ao registro é a designação
+ * (`avaliacao/separacao-funcoes.ts`).
+ */
+export const QUALQUER_PAPEL_DO_MODULO = [
+  ROLES.RH_ADMIN,
+  ROLES.RH_MODELO,
+  ROLES.RH_CICLO,
+  ROLES.AVALIADOR,
+] as const;
+
+/**
  * Papéis do usuário neste módulo.
  *
  * A permissão da plataforma é (usuário × módulo × DEPARTAMENTO × role), então a

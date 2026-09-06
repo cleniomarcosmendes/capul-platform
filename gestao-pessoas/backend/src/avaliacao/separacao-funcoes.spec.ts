@@ -1,10 +1,15 @@
 import {
+  EXIGENCIA_POR_ACAO,
   MOTIVO_ACESSO_RESTRITO,
+  type AcaoAvaliacao,
   assertEscopoReapuracaoValido,
   assertNaoEhProprioAvaliado,
+  assertPodeAgirSobreAvaliacaoDeOutro,
   conflitoDeInstrumento,
+  ehAvaliadorDesignado,
   ehProprioAvaliado,
   marcarRestricoes,
+  motivoParaRecusarDeTerceiro,
 } from './separacao-funcoes.js';
 
 describe('ehProprioAvaliado', () => {
@@ -96,5 +101,67 @@ describe('⭐ escopo da reapuração em massa', () => {
     expect(() => assertEscopoReapuracaoValido({ tipo: 'CICLO', cicloId: '' })).toThrow(
       /separação de funções/,
     );
+  });
+});
+
+/**
+ * ⭐⭐ DESIGNAÇÃO — "esta avaliação é MINHA PARA FAZER?".
+ *
+ * Pergunta diferente da separação de funções ("é SOBRE MIM?"), e é por isso que
+ * são funções diferentes. Trocar uma pela outra é o erro que se repete.
+ */
+describe('designação — quem escreve é o avaliador designado', () => {
+  it('reconhece o avaliador designado, e só ele', () => {
+    expect(ehAvaliadorDesignado('c1', 'c1')).toBe(true);
+    expect(ehAvaliadorDesignado('c1', 'c2')).toBe(false);
+  });
+
+  it('sem id resolvido não afirma que é o designado', () => {
+    expect(ehAvaliadorDesignado(null, 'c1')).toBe(false);
+    expect(ehAvaliadorDesignado('c1', undefined)).toBe(false);
+  });
+
+  it.each(['responder', 'editar'] as const)(
+    'recusa %s de terceiro mesmo com o papel de leitura do RH',
+    (acao) => {
+      expect(motivoParaRecusarDeTerceiro(acao, true)).toMatch(/Só o avaliador designado/);
+      expect(motivoParaRecusarDeTerceiro(acao, false)).toMatch(/Só o avaliador designado/);
+    },
+  );
+
+  it('abrir de terceiro: passa para o RH, recusa para os demais', () => {
+    expect(motivoParaRecusarDeTerceiro('abrir', true)).toBeNull();
+    expect(motivoParaRecusarDeTerceiro('abrir', false)).toMatch(/designada a outra pessoa/);
+  });
+
+  it.each(['reabrir', 'recalcular'] as const)(
+    '%s é ato DO RH sobre avaliação alheia — a designação não se aplica',
+    (acao) => {
+      expect(motivoParaRecusarDeTerceiro(acao, true)).toBeNull();
+      expect(motivoParaRecusarDeTerceiro(acao, false)).toBeNull();
+    },
+  );
+
+  /**
+   * ⚠️ INVARIANTE: toda ação da união tem exigência declarada. O `Record` já
+   * quebra a COMPILAÇÃO se faltar uma — este teste cobre o caso de alguém
+   * "resolver" o erro de tipo com um valor qualquer.
+   */
+  it('nenhuma ação fica sem exigência declarada', () => {
+    const acoes: AcaoAvaliacao[] = ['abrir', 'editar', 'reabrir', 'recalcular', 'responder'];
+    for (const acao of acoes) {
+      expect(EXIGENCIA_POR_ACAO[acao]).toMatch(/^(DESIGNADO|DESIGNADO_OU_LEITOR_RH|ATO_DO_RH)$/);
+    }
+    expect(Object.keys(EXIGENCIA_POR_ACAO).sort()).toEqual([...acoes].sort());
+  });
+
+  it('a mensagem da escrita diz que nem o RH responde no lugar do avaliador', () => {
+    expect(() => assertPodeAgirSobreAvaliacaoDeOutro('editar', true)).toThrow(/nem o RH responde/);
+  });
+
+  it('ação desconhecida falha FECHADO — recusa, não passa por omissão', () => {
+    // Não é hipótese: `responder` e `editar` existiram sem exigência nenhuma até
+    // 06/09. O default de quem não sabe tem de ser recusar.
+    expect(() => assertPodeAgirSobreAvaliacaoDeOutro('acao-nova' as never, true)).toThrow();
   });
 });

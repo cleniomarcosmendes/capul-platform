@@ -28,6 +28,13 @@ describe('AvaliacaoAcessoService — separação de funções', () => {
     ip: '10.0.0.9',
   };
 
+  /**
+   * O MESMO usuário, com o papel que autoriza LER avaliação de terceiro
+   * (`podeVerResultados`: RH_ADMIN ou ADMIN). É a única coisa por papel aqui — e
+   * governa só leitura.
+   */
+  const doRh: ContextoAcesso = { ...contexto, podeLerDeTerceiro: true };
+
   beforeEach(() => {
     prisma = createPrismaMock();
     auditoria = { registrar: jest.fn().mockResolvedValue(undefined) };
@@ -93,9 +100,74 @@ describe('AvaliacaoAcessoService — separação de funções', () => {
 
     it('deixa passar o RH, mas deixa rastro: leu resultado de quem não avalia (§8)', async () => {
       avaliacaoDe(OUTRA_PESSOA, 'colab-terceiro');
-      await service.carregarParaAcao(contexto, 'aval-1', 'abrir');
+      await service.carregarParaAcao(doRh, 'aval-1', 'abrir');
       expect(auditoria.registrar).toHaveBeenCalledWith(
         expect.objectContaining({ acao: 'ACESSO_TERCEIRO:abrir' }),
+      );
+    });
+  });
+
+  /**
+   * ⭐⭐ DESIGNAÇÃO — "é minha para fazer?", que não é "é sobre mim?".
+   *
+   * O buraco que estes testes fecham: até 06/09/2026 bastava ter o id para
+   * abrir, responder e ENVIAR a avaliação designada a outro avaliador. A fila
+   * filtrava; o registro não verificava nada.
+   */
+  describe('avaliação designada a OUTRO avaliador', () => {
+    const contextoSemPapelDeLeitura = contexto;             // AVALIADOR comum
+    const contextoDoRh = doRh;                              // RH_ADMIN / ADMIN
+
+    it.each(['responder', 'editar'] as const)(
+      'recusa %s mesmo para o RH — escrever no lugar do avaliador não é de ninguém',
+      async (acao) => {
+        avaliacaoDe(OUTRA_PESSOA, 'colab-terceiro');
+        await expect(service.carregarParaAcao(contextoDoRh, 'aval-1', acao)).rejects.toBeInstanceOf(
+          ForbiddenException,
+        );
+      },
+    );
+
+    it('recusa abrir para quem não é o avaliador nem tem o papel de leitura', async () => {
+      avaliacaoDe(OUTRA_PESSOA, 'colab-terceiro');
+      await expect(
+        service.carregarParaAcao(contextoSemPapelDeLeitura, 'aval-1', 'abrir'),
+      ).rejects.toThrow(/designada a outra pessoa/);
+    });
+
+    it('registra a tentativa de ESCRITA antes de recusar', async () => {
+      avaliacaoDe(OUTRA_PESSOA, 'colab-terceiro');
+      await service.carregarParaAcao(contextoDoRh, 'aval-1', 'editar').catch(() => undefined);
+      expect(auditoria.registrar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          acao: 'ACESSO_NEGADO_NAO_DESIGNADO:editar',
+          usuarioId: 'user-gestora',
+          ip: '10.0.0.9',
+        }),
+      );
+    });
+
+    it('o avaliador designado escreve normalmente, e sem poluir a auditoria', async () => {
+      avaliacaoDe(OUTRA_PESSOA, GESTORA);
+      await expect(
+        service.carregarParaAcao(contexto, 'aval-1', 'editar'),
+      ).resolves.toMatchObject({ avaliadorId: GESTORA });
+      expect(auditoria.registrar).not.toHaveBeenCalled();
+    });
+
+    it('reabrir continua sendo ato do RH sobre avaliação alheia — passa e deixa rastro', async () => {
+      avaliacaoDe(OUTRA_PESSOA, 'colab-terceiro');
+      await expect(service.carregarParaAcao(contextoDoRh, 'aval-1', 'reabrir')).resolves.toBeTruthy();
+      expect(auditoria.registrar).toHaveBeenCalledWith(
+        expect.objectContaining({ acao: 'ACESSO_TERCEIRO:reabrir' }),
+      );
+    });
+
+    it('contexto sem o campo falha FECHADO: não saber se pode ler não é poder', async () => {
+      avaliacaoDe(OUTRA_PESSOA, 'colab-terceiro');
+      const semCampo: ContextoAcesso = { usuarioId: 'u', colaboradorId: GESTORA };
+      await expect(service.carregarParaAcao(semCampo, 'aval-1', 'abrir')).rejects.toBeInstanceOf(
+        ForbiddenException,
       );
     });
   });

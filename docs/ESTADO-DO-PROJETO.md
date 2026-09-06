@@ -33,7 +33,7 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 | Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **42 endpoints** em 9 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
 | Banco | 8 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **352 testes, 26 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Testes | **381 testes, 27 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -201,7 +201,7 @@ desenho — basta a gestora ficar sem avaliador no cadastro para a linha dela en
 reduz o espaço de combinações a um punhado. Quanto menor o grupo, mais o "agregado" vira
 resposta.
 
-### 3.1.2. 🔴 Abrir, responder e ENVIAR não verificam a DESIGNAÇÃO — achado de 06/09
+### 3.1.2. ✅ Abrir, responder e ENVIAR agora verificam a DESIGNAÇÃO — 06/09
 
 A regra está escrita em `common/roles-rh.ts`: *"AVALIADOR responde as avaliações que lhe foram
 designadas, **e só essas**"* (decisão E2, repetida no comentário da fila).
@@ -221,11 +221,72 @@ registro diz que foi outra pessoa que respondeu — só a linha de auditoria `AC
 outro. E é invisível justamente porque a fila filtra — nenhuma tela oferece o id de outro
 avaliador, então não há sintoma; basta ter o id.
 
-**Ler de terceiro é decisão tomada** (§3.1.1: o RH lê, com rastro). **Escrever de terceiro
-não está decidido em lugar nenhum.** Correção proposta, ainda NÃO aplicada: `carregarParaAcao`
-já recebe a ação — exigir a designação nas de escrita (`responder`/`enviar`/`abrir para
-responder`), mantendo a leitura do RH como está e a reabertura com o RH_ADMIN. O teste de
-invariante que varre o fonte já obriga todo mundo a passar por lá.
+**Ler de terceiro é decisão tomada** (§3.1.1: o RH lê, com rastro, e a spec §8 pressupõe esse
+acesso). **Escrever de terceiro não estava decidido em lugar nenhum** — e não é pergunta a
+fazer: ninguém responde "sim, o avaliador pode enviar avaliação designada a outro". Era
+**ausência de regra**, não permissão frouxa. Corrigido em 06/09 sem esperar o RH.
+
+#### ✅ Como ficou
+
+A porta de acesso passou a fazer **duas perguntas, nesta ordem**, e é por isso que são funções
+diferentes — trocar uma pela outra é o erro que se repete:
+
+1. **"é SOBRE MIM?"** → separação de funções, 403 sempre (não mudou);
+2. **"é MINHA PARA FAZER?"** → designação.
+
+| Ação | Quem não é o avaliador designado |
+|---|---|
+| `abrir` (GET do questionário) | **RH lê** (`podeVerResultados` — RH_ADMIN/ADMIN), com `ACESSO_TERCEIRO` na trilha. Os demais: **403** |
+| `responder` · `editar` (enviar) | **403 para todos, RH inclusive** — e a tentativa fica gravada como `ACESSO_NEGADO_NAO_DESIGNADO:<ação>` |
+| `reabrir` · `recalcular` | passam: são atos **do RH sobre avaliação alheia**, é para isso que existem (o papel já é exigido no controller) |
+
+⭐ A exigência de cada ação está num **`Record<AcaoAvaliacao, …>`**, não numa lista: ação nova
+na união **não compila** enquanto ninguém disser o que ela exige. Uma lista aceitaria a omissão
+em silêncio — que é exatamente como `responder` e `editar` passaram a existir sem verificação.
+E o `default` de ação desconhecida é **recusar**, com teste.
+
+⚠️ `podeLerDeTerceiro` é a **única coisa por papel** que entrou aqui, e ela governa só leitura.
+Sai de `podeVerResultados`, a mesma função que decide quem vê resultado alheio — duas
+definições de "o RH pode ler" seriam duas para manter em sincronia. Contexto montado sem o
+campo **falha fechado**: não saber se pode não é poder.
+
+#### Teste dirigido — o mesmo par que foi medido antes da correção
+
+| Chamada | Antes | Agora |
+|---|---|---|
+| `wandersonnascimento` **GET** a avaliação designada ao Claudimar | 200 com o questionário | **403** *"Esta avaliação foi designada a outra pessoa…"* |
+| `wandersonnascimento` **POST** `/respostas` nela | aceitava | **403** *"Só o avaliador designado responde e envia…"* |
+| `wandersonnascimento` **POST** `/enviar` nela | aceitava | **403** |
+| `ariellypereira` (RH_ADMIN) **GET** avaliação de terceiro | 200 + `ACESSO_TERCEIRO` | **200 + `ACESSO_TERCEIRO`** (não mudou) |
+| `ariellypereira` **POST** `/respostas` em terceiro | aceitava | **403** |
+| `claudimaroliveira` (o designado) na dele · `wandersonnascimento` na fila dele | 200 | **200** |
+
+Trilha das mesmas chamadas em `rh.auditoria`: 3 × `ACESSO_NEGADO_NAO_DESIGNADO:{abrir,responder,editar}`
+do Wanderson, 1 × `ACESSO_TERCEIRO:abrir` da Arielly e 1 × `ACESSO_NEGADO_NAO_DESIGNADO:responder`
+dela. **Leitura grava; escrita recusa.**
+
+#### ✅ Nada disso chegou a acontecer no banco — verificado antes de corrigir
+
+Cruzamento de `rh.auditoria` (ações que não são `DESIGNAR`) com `core.usuarios` → matrícula →
+`rh.colaborador`, comparando quem agiu com `avaliacao.avaliador_id`:
+
+- **9 `ENVIAR` por pessoa identificada, todos pelo avaliador designado** (`era_o_designado = t`);
+- **1 `ENVIAR` do usuário `smoke-004100`** — id de script de smoke, que nunca existiu em
+  `core.usuarios`, sobre uma avaliação que **não existe mais** no banco;
+- **1 único `ACESSO_TERCEIRO` na história do módulo**: a sonda de leitura de 06/09, feita para
+  medir o furo.
+
+A consulta fica registrada porque é a que se repete se a pergunta voltar:
+
+```sql
+SELECT a.acao, u.username, (col.id = av.avaliador_id) AS era_o_designado, a.criado_em
+FROM rh.auditoria a
+LEFT JOIN core.usuarios u   ON u.id = a.usuario_id
+LEFT JOIN rh.colaborador col ON trim(col.matricula) = trim(u.matricula)
+LEFT JOIN rh.avaliacao av    ON av.id = a.entidade_id
+WHERE a.entidade = 'Avaliacao' AND a.acao <> 'DESIGNAR'
+ORDER BY a.criado_em;
+```
 
 ### 3.13. Ser avaliador é fato do DADO — o que a correção alcançou, medido
 
@@ -244,11 +305,22 @@ Os **46 sem conta** são esperados: o piloto ainda não distribuiu acesso. Os **
 permissão** não são — `supdept01` (matrícula 001047, **13 avaliações**), `rodrigoleao` (4) e
 `lidyanerocha` (1) fazem parte do dado como avaliadores e recebem `403 Sem acesso ao módulo`.
 
-⚠️ **Sobra um degrau, e é o mesmo do caso da gestora, uma role adiante:** o menu mostra
-*"Minhas avaliações"* a **quem tiver qualquer papel no módulo** (de propósito — ser avaliador é
-fato do dado), mas o controller da fila é `@Roles(AVALIADOR, RH_ADMIN)`. Quem tiver só
-`RH_MODELO` ou `RH_CICLO` **vê o item e leva 403**. Hoje ninguém tem essas duas roles, então
-não há sintoma — é exatamente a situação em que a gestora estava antes de alguém reparar.
+✅ **O degrau que sobrava foi fechado em 06/09.** O menu mostra *"Minhas avaliações"* a quem
+tiver **qualquer papel no módulo** (de propósito — ser avaliador é fato do dado), e o controller
+exigia `AVALIADOR` ou `RH_ADMIN`: quem tivesse só `RH_MODELO` ou `RH_CICLO` **veria o item e
+levaria 403** — o mesmo defeito da gestora, uma role adiante, e sem sintoma porque ninguém tem
+essas roles hoje. Agora é `@Roles(...QUALQUER_PAPEL_DO_MODULO)`.
+
+⚠️ **Não é o mesmo que remover o `@Roles`:** sem ele o `RolesGuard` não checa nada e quem não
+tem o módulo entra. A exigência continua sendo "tem permissão no módulo"; **quem decide o
+acesso ao registro é a designação**.
+
+Conferido ao vivo, com a mesma pessoa e o papel trocado no Configurador:
+
+| Conta `claudimaroliveira` com papel… | `GET /avaliacoes/minhas` | `POST /apuracao` (só RH_ADMIN) |
+|---|---|---|
+| `RH_CICLO` | **200 · 44 avaliações** — a fila vem do DADO, não do papel | **403**, como deve |
+| `AVALIADOR` (restaurado) | 200 · 44 | — |
 
 ⚠️ **A identidade é a MATRÍCULA, e ela não pergunta quem é a conta.** `supdept01` é conta de
 TESTE da Logística e carrega a matrícula **001047**, que é a de uma pessoa real (Clenio Marcos
@@ -732,7 +804,7 @@ Todas com senha `Temp2026`. Login é pelo campo **`login`** (não `username`):
 | `adrianacaetano` | AVALIADOR | 84 | Gerente Supermercado — a maior fila depois do Diretor |
 | `vanialucia` | AVALIADOR | 6 | ⚠️ o username é `vanialucia`, **não** `vaniacosta` |
 | `wandersonnascimento` | AVALIADOR | 22 | 14 do Piloto + 8 do Geral — a fila **soma os dois ciclos** (§3.10) |
-| `claudimaroliveira` | AVALIADOR | 44 | **conta de TESTE criada em 06/09** para o teste dirigido da §3.1.1 (Diretor Executivo, matrícula 001079). Sem ela não havia como enviar a avaliação da gestora |
+| `claudimaroliveira` | AVALIADOR | 44 | ⚠️ **conta de TESTE criada por nós no DEV em 06/09/2026** (Claudimar Dias de Oliveira, Diretor Executivo, matrícula 001079, departamento Diretoria). **Por quê:** o Diretor Executivo não tinha conta e é o avaliador designado da gestora — sem ele não havia como enviar a avaliação dela e provar a marcação da §3.1.1. **Mantida de propósito:** ele tem **44 avaliados** e é a única forma de exercitar *"quem avalia os avaliadores"* (§11) e a carga da cauda (§9). O nome traz "(TESTE DEV)" no cadastro. **Não existe em produção e não deve ser criada por script** — quando o RH definir o acesso real, esta some |
 | `rodrigoleao` | — | 403 | é avaliador de 4 pessoas no dado, mas **a permissão GESTAO_PESSOAS não foi salva** (em 06/09 só o FISCAL dele mudou). Refazer no Configurador e ver se erra ao salvar — mesmo sintoma já visto com o INVENTARIO do `wandersonnascimento` |
 
 ⚠️ **Testar com ADMIN nunca pega defeito de RBAC** — ADMIN tem bypass no `RolesGuard`. Logue
@@ -767,10 +839,10 @@ O que sobra é decisão humana, e é isso que precisa acontecer antes de 15/09:
 ⚠️ Os itens 1 e 2 seguem sendo do RH — mas **deixaram de travar o desenvolvimento**: a T.I.
 preenche os dois provisoriamente e pela tela (§11), e tudo o que entra assim fica marcado.
 
-🔴 **E um que não depende do RH:** `abrir`/`responder`/`enviar` **não verificam a designação**
-(§3.1.2) — qualquer conta com papel no módulo responde a avaliação de outro avaliador se tiver
-o id. Achado em 06/09 e ainda **não corrigido**; é decisão de aplicar, não de esperar resposta
-de ninguém.
+✅ **Um que não dependia do RH, e por isso não esperou:** `abrir`/`responder`/`enviar` não
+verificavam a designação (§3.1.2). Achado e **corrigido em 06/09** — escrever na avaliação de
+outro avaliador nunca foi decisão de ninguém, era ausência de regra. Verificado antes de
+corrigir que **nenhuma escrita de terceiro havia acontecido** no banco.
 
 Depois disso: os atalhos de preenchimento na tela de Aplicações (hoje ela ainda escolhe
 centros de custo), e então o roteiro abaixo.

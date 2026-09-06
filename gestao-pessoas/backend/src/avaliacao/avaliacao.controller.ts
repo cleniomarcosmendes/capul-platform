@@ -3,7 +3,7 @@ import { IsOptional, IsString, MinLength } from 'class-validator';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
-import { ROLES } from '../common/roles-rh.js';
+import { QUALQUER_PAPEL_DO_MODULO, ROLES, podeVerResultados } from '../common/roles-rh.js';
 import { AvaliacaoService } from './avaliacao.service.js';
 import type { ContextoAcesso } from './avaliacao-acesso.service.js';
 
@@ -18,8 +18,13 @@ export class ReabrirDto {
   @IsString() @MinLength(3) motivo!: string;
 }
 
+/**
+ * ⚠️ `QUALQUER_PAPEL_DO_MODULO`, e não `AVALIADOR, RH_ADMIN`: ser avaliador é
+ * FATO DO DADO. Quem abre, responde e envia é decidido pela DESIGNAÇÃO, dentro
+ * do `AvaliacaoAcessoService` — o papel aqui só responde "tem acesso ao módulo?".
+ */
 @Controller('avaliacoes')
-@Roles(ROLES.AVALIADOR, ROLES.RH_ADMIN)
+@Roles(...QUALQUER_PAPEL_DO_MODULO)
 export class AvaliacaoController {
   constructor(private readonly avaliacoes: AvaliacaoService) {}
 
@@ -78,7 +83,17 @@ export class AvaliacaoController {
     return this.avaliacoes.reabrir(this.contexto(user, colaboradorId, req), id, dto.motivo);
   }
 
+  /**
+   * ⚠️ `podeLerDeTerceiro` sai de `podeVerResultados` — a MESMA função que
+   * governa quem vê resultado alheio. Duas definições de "o RH pode ler" seriam
+   * duas para manter em sincronia, e a segunda envelheceria errada.
+   */
   private contexto(user: JwtPayload, colaboradorId: string, req: { ip?: string }): ContextoAcesso {
-    return { usuarioId: user.sub, colaboradorId, ip: req.ip };
+    return {
+      usuarioId: user.sub,
+      colaboradorId,
+      ip: req.ip,
+      podeLerDeTerceiro: podeVerResultados(user),
+    };
   }
 }

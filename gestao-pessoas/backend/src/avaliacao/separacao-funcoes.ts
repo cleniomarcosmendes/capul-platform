@@ -69,6 +69,91 @@ export function assertNaoEhProprioAvaliado(
   );
 }
 
+/**
+ * ⭐⭐ DESIGNAÇÃO — quem ESCREVE na avaliação é o avaliador designado, e mais ninguém.
+ *
+ * Regra escrita em `common/roles-rh.ts` desde o primeiro dia ("AVALIADOR responde
+ * as avaliações que lhe foram designadas, **e só essas**") e cumprida por um
+ * caminho só: a FILA filtra por `avaliadorId`. O registro individual não
+ * verificava nada — bastava ter o id para abrir, responder e ENVIAR a avaliação
+ * de outro avaliador, com a nota congelada em nome dele. Achado em 06/09/2026
+ * com conta real; nada disso chegou a acontecer no banco.
+ *
+ * ⚠️ **Não confunda com a separação de funções.** Aquela pergunta "esta
+ * avaliação é SOBRE MIM?"; esta pergunta "esta avaliação é MINHA PARA FAZER?".
+ * São perguntas diferentes sobre a mesma linha, e é por isso que estão em
+ * funções diferentes: trocar uma pela outra é o erro que se repete.
+ *
+ * ── Por que LER é diferente de ESCREVER ─────────────────────────────────────
+ * Ler de terceiro é decisão de produto, e está na spec §8, que exige registro em
+ * `rh.auditoria` para "acesso a resultado individual por quem não é o avaliador
+ * designado" — a frase só faz sentido se esse acesso for permitido. Escrever de
+ * terceiro não está decidido em lugar nenhum: é ausência de regra, não permissão.
+ * Então a leitura de terceiro segue passando e deixando rastro; a escrita recusa.
+ *
+ * `reabrir` e `recalcular` são atos DO RH sobre avaliação alheia — é para isso
+ * que existem. Não exigem designação (o papel já é exigido no controller), e
+ * continuam barrados na própria avaliação pela separação de funções.
+ */
+type ExigenciaDeDesignacao = 'DESIGNADO' | 'DESIGNADO_OU_LEITOR_RH' | 'ATO_DO_RH';
+
+/**
+ * ⚠️ `Record` de propósito, e não uma lista: ação nova na união `AcaoAvaliacao`
+ * **não compila** enquanto ninguém disser o que ela exige. Uma lista aceitaria a
+ * omissão em silêncio — que é exatamente como `responder` e `editar` passaram a
+ * existir sem verificação nenhuma.
+ */
+export const EXIGENCIA_POR_ACAO: Record<AcaoAvaliacao, ExigenciaDeDesignacao> = {
+  abrir: 'DESIGNADO_OU_LEITOR_RH',
+  responder: 'DESIGNADO',
+  editar: 'DESIGNADO',
+  reabrir: 'ATO_DO_RH',
+  recalcular: 'ATO_DO_RH',
+};
+
+export function ehAvaliadorDesignado(
+  colaboradorIdDoUsuario: string | null | undefined,
+  avaliadorId: string | null | undefined,
+): boolean {
+  if (!colaboradorIdDoUsuario || !avaliadorId) return false;
+  return colaboradorIdDoUsuario === avaliadorId;
+}
+
+/**
+ * Decide o que fazer quando quem age NÃO é o avaliador designado.
+ *
+ * Devolve `null` quando pode seguir (e aí o chamador grava `ACESSO_TERCEIRO`),
+ * ou o motivo da recusa — mesmo texto para a tela e para a auditoria, como no
+ * `MOTIVO_ACESSO_RESTRITO`.
+ */
+export function motivoParaRecusarDeTerceiro(
+  acao: AcaoAvaliacao,
+  podeLerDeTerceiro: boolean,
+): string | null {
+  const exigencia = EXIGENCIA_POR_ACAO[acao];
+  if (exigencia === 'ATO_DO_RH') return null;
+  if (exigencia === 'DESIGNADO_OU_LEITOR_RH' && podeLerDeTerceiro) return null;
+  if (exigencia === 'DESIGNADO_OU_LEITOR_RH') {
+    return (
+      'Esta avaliação foi designada a outra pessoa. Se a designação está errada, ' +
+      'quem corrige é o RH, na tela de Designação.'
+    );
+  }
+  return (
+    'Só o avaliador designado responde e envia esta avaliação — nem o RH responde ' +
+    'no lugar dele. Se a designação está errada, o RH a corrige na tela de Designação.'
+  );
+}
+
+/** Guarda da designação. Lança 403 com o motivo, ou passa. */
+export function assertPodeAgirSobreAvaliacaoDeOutro(
+  acao: AcaoAvaliacao,
+  podeLerDeTerceiro: boolean,
+): void {
+  const motivo = motivoParaRecusarDeTerceiro(acao, podeLerDeTerceiro);
+  if (motivo) throw new ForbiddenException(motivo);
+}
+
 export interface Restricao {
   /** true quando a linha é do próprio usuário. A tela mostra o rótulo e desabilita o clique. */
   restrita: boolean;

@@ -8,21 +8,33 @@
  * diferentes. Por isso todos passam por aqui, e há um teste de invariante que
  * varre o fonte cobrando isso (`separacao-funcoes.invariante.spec.ts`).
  */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   MOTIVO_ACESSO_RESTRITO,
   type AcaoAvaliacao,
   assertNaoEhProprioAvaliado,
+  ehAvaliadorDesignado,
   ehProprioAvaliado,
   marcarRestricoes,
+  motivoParaRecusarDeTerceiro,
 } from './separacao-funcoes.js';
 
 export interface ContextoAcesso {
   usuarioId: string;
   colaboradorId: string;
   ip?: string;
+  /**
+   * Quem pode LER a avaliação de terceiro — RH_ADMIN e o ADMIN da plataforma
+   * (`podeVerResultados`, em `common/roles-rh.ts`). É a única coisa aqui que
+   * depende de PAPEL, e só governa leitura: escrever de terceiro não é
+   * permitido a papel nenhum.
+   *
+   * Ausente = false. Falhar fechado é a escolha certa: contexto montado sem o
+   * campo é contexto que não sabe se pode, e não saber não é poder.
+   */
+  podeLerDeTerceiro?: boolean;
 }
 
 @Injectable()
@@ -33,8 +45,11 @@ export class AvaliacaoAcessoService {
   ) {}
 
   /**
-   * Comportamento 1: registro individual. 403 quando o usuário é o avaliado —
-   * qualquer papel, RH_ADMIN e ADMIN inclusive.
+   * Comportamento 1: registro individual. Duas perguntas, nesta ordem:
+   *
+   *   1. **é SOBRE MIM?** → 403 sempre, qualquer papel (separação de funções);
+   *   2. **é MINHA PARA FAZER?** → quem não é o avaliador designado LÊ (se for
+   *      do RH, com rastro) e **não ESCREVE** — ver `separacao-funcoes.ts`.
    *
    * A negativa vai para `rh.auditoria` ANTES de lançar: tentativa de acesso ao
    * próprio resultado é exatamente o que a trilha existe para mostrar, e ela
@@ -63,9 +78,27 @@ export class AvaliacaoAcessoService {
     }
     assertNaoEhProprioAvaliado(contexto.colaboradorId, avaliacao.avaliadoId, acao);
 
-    // Acesso de terceiro (nem avaliado, nem o avaliador designado) é legítimo
-    // para o RH, mas §8 manda deixar rastro de quem leu resultado de quem.
-    if (avaliacao.avaliadorId !== contexto.colaboradorId) {
+    // Acesso de terceiro (nem avaliado, nem o avaliador designado). LER é
+    // legítimo para o RH — §8 manda deixar rastro de quem leu resultado de quem
+    // — mas ESCREVER não é de ninguém: quem responde e envia é o designado.
+    if (!ehAvaliadorDesignado(contexto.colaboradorId, avaliacao.avaliadorId)) {
+      const motivo = motivoParaRecusarDeTerceiro(acao, contexto.podeLerDeTerceiro === true);
+
+      if (motivo) {
+        // Registra ANTES de recusar, como na separação de funções: tentativa de
+        // escrever na avaliação de outro avaliador é exatamente o que a trilha
+        // existe para mostrar, e ela some se só registrarmos o que deu certo.
+        await this.auditoria.registrar({
+          entidade: 'Avaliacao',
+          entidadeId: avaliacao.id,
+          acao: `ACESSO_NEGADO_NAO_DESIGNADO:${acao}`,
+          usuarioId: contexto.usuarioId,
+          justificativa: motivo,
+          ip: contexto.ip,
+        });
+        throw new ForbiddenException(motivo);
+      }
+
       await this.auditoria.registrar({
         entidade: 'Avaliacao',
         entidadeId: avaliacao.id,
