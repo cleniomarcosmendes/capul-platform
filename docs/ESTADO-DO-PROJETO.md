@@ -30,14 +30,16 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 
 | | |
 |---|---|
-| Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **26 endpoints** em 8 controllers. |
-| Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **7 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
-| Banco | 6 migrations em `rh` (25 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **291 testes, 22 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **36 endpoints** em 9 controllers. |
+| Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
+| Banco | 7 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
+| Testes | **326 testes, 24 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
-**As sete telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
-designação · painel (com pendências cadastrais) · resultados (com memória de cálculo).
+**As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
+designação · painel (com pendências cadastrais) · resultados (com memória de cálculo) ·
+**cadastro de avaliadores** (`/avaliadores` — pendência reversa, lista por avaliador e
+importação da planilha).
 
 **Motor de cálculo** completo, com renormalização, e validado por regressão contra o
 ciclo 000006 do Protheus — a nota do questionário bate **108/108** (ver
@@ -58,13 +60,13 @@ ciclo 000006 do Protheus — a nota do questionário bate **108/108** (ver
   cron**. Hoje se dispara por `curl`, e os três CSVs precisam ser extraídos do Protheus à
   mão e colocados em `RH_CSV_DIR` (padrão `/app/carga`, que não existe no container — é
   preciso criar e copiar). Ver `SYNC_GESTAO_PESSOAS_CSV.md`.
-- **O cadastro de avaliadores tem DADO, não tem TELA.** `rh.designacao_padrao` existe e
-  está populada no DEV com 848 linhas provisórias (§9). Faltam a tela, a importação por CSV
-  e os endpoints — sem eles o RH não mexe nela, e a designação segue manual, uma pessoa por
-  vez. **É o gargalo do piloto.**
+- **A designação do ciclo ainda não bebe do cadastro de avaliadores.** O cadastro existe e
+  funciona (§3.9), com 848 linhas provisórias no DEV (§8) — mas a tela de Designação
+  continua pedindo o avaliador de cada pessoa, uma a uma. Falta o botão "designar pelo
+  cadastro", que transforma ~1.000 operações em uma. **É o gargalo do piloto.**
 - **`rh.aplicacao_publico` é lida, mas quem a preenche é script.** A tela de Aplicações
   ainda escolhe centros de custo; os atalhos de preenchimento por CC e por filial descritos
-  na §3.7 não existem em tela nenhuma.
+  na §3.7 não existem nela.
 - **Critério `INFORMADO`** é suportado pelo motor e pelo schema
   (`rh.criterio_valor_informado`), mas não há por onde informar o valor. Os quatro critérios
   do catálogo são todos `CALCULADO`, então isto ainda não dói.
@@ -227,6 +229,38 @@ ENVIADA recusa sempre; com N respostas recusa **dizendo N**; sem nada gravado pa
 troca na auditoria como `DESIGNAR_TROCA_APLICACAO`. Trocar só o **avaliador**, na mesma
 aplicação, não passa pela guarda.
 
+### 3.9. As quatro regras da importação da planilha
+
+82 linhas viram ~1.000 pares. Disso decorre tudo o que segue, e nada aqui é polimento.
+
+1. **A pendência reversa é a tela**, não a segunda aba: quem abre o cadastro vê **quem não
+   está na lista de ninguém**, agrupado por filial × centro de custo, maior primeiro. É a
+   única pendência que some sozinha — sem avaliador não há `Avaliacao`, não há status e não
+   há contagem. A lista por avaliador é a segunda visão.
+2. **Pré-visualização obrigatória.** A prévia devolve pares a gravar, já iguais,
+   substituições, divisão automática, conflitos com nome e as duas pontas, e recusas linha a
+   linha. Gravar exige devolver a **`conferencia`** (SHA-256) que a prévia deu: arquivo
+   trocado entre o "veja" e o "pode gravar" é recusado. O hash normaliza CRLF — senão salvar
+   no Excel do Windows daria "o arquivo mudou" sem nada ter mudado.
+3. **Idempotente e reversível.** Par igual não vira linha nova, e a linha existente fica
+   **intacta mesmo que a origem mude** — reescrever uma já revisada como
+   `DIVISAO_AUTOMATICA` apagaria em silêncio o trabalho de quem conferiu. Ajuste `MANUAL`
+   nunca é sobrescrito sem `substituirAjustesManuais`. Desfazer **encerra a vigência do lote
+   inteiro** (`rh.importacao_designacao`) e diz quantas linhas já tinham sido revisadas à
+   mão, porque é o trabalho que se perde.
+4. **`DIVISAO_AUTOMATICA` É "ninguém olhou ainda"** — sem coluna extra. Confirmar a linha a
+   torna `MANUAL`, que é a verdade: agora uma pessoa decidiu. `origemReferencia` continua
+   guardando o centro de custo, então nada se perde.
+
+⚠️ Linha com o avaliador **em branco não é erro** — é "ainda não decidi", e sai contada à
+parte. O modelo que a gestora recebe tem os 74 centros de custo com a coluna vazia; tratar
+como recusa encheria a tela de vermelho e esconderia os erros de verdade.
+
+⚠️ **O menu mudou junto.** Ele exigia ser do RH **e** avaliador, o que bastava enquanto o RH
+tinha uma tela só. A gestora, que não avalia ninguém, ficaria com a tela pronta, a rota
+funcionando e nenhum caminho até ela — não há deep link aqui. Agora o menu se monta do que a
+pessoa pode abrir e aparece com mais de um destino.
+
 ## 4. As duas exceções estruturais
 
 São **duas**, e a contagem importa: uma terceira significa que o desenho precisa de
@@ -343,14 +377,14 @@ variadas, nota 54,65) e 3 resultados apurados. São o único dado real de uso �
 
 ## 7. Próximo passo (revisado em 06/09, tarde)
 
-**Construir o cadastro de avaliadores: endpoints, tela e importação por CSV.** O dado já
-existe e está populado; o RH não tem como tocá-lo. A tela é **por avaliador** (um cartão
-com a lista de cada um, mais os atalhos de preenchimento), não uma grade de mil linhas, e
-precisa da **pendência reversa** — quem não está na lista de ninguém, hoje 188 pessoas.
+**Ligar a designação do ciclo ao cadastro.** ✅ O cadastro existe (§3.9); a tela de
+Designação ainda não o usa — continua pedindo o avaliador de cada pessoa, uma a uma. Falta
+o botão que copia o cadastro para o ciclo: é o que transforma ~1.000 operações em uma, e é
+a resposta para "quanto tempo custa a designação".
 
-A importação recebe a planilha da Arielly no formato "CC → avaliador" e **expande** para
-linhas nominais. Onde o CC tem mais de um responsável ela **divide igualmente**, de forma
-determinística, marca `DIVISAO_AUTOMATICA` e **diz no relatório o que fez**.
+Ao copiar valem as regras já escritas: quem não tem avaliador no cadastro aparece como
+`semDesignacao` no painel, o snapshot da `Avaliacao` congela quem foi designado, e a
+`origemDesignacao` guarda de onde veio.
 
 Depois disso: os atalhos de preenchimento na tela de Aplicações (hoje ela ainda escolhe
 centros de custo), e então o roteiro abaixo.
