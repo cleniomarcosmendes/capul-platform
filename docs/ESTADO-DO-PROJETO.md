@@ -590,6 +590,34 @@ Os outros dois continuam disponíveis quando alguém decidir: ajustar à mão na
 operações em "Avaliadores → designar"), ou uma segunda planilha no formato "esta pessoa é
 avaliada por aquela".
 
+### O DEV valida o PROCESSO, não o organograma (decisão de 06/09)
+
+Ficaram 34 pares sem avaliador e **assim continuam**. A atribuição real é do RH e só vale em
+produção; aqui o que precisa ser exercitável é o caminho. Sortear avaliadores para os 34 foi
+descartado por duas razões: apagaria o cenário da pendência (abaixo) e produziria dado que
+*parece* decisão — a gerente de Buritis avaliando a Segurança Patrimonial de Unaí.
+
+**O bloqueio real não era a lista, era o acesso.** Das 894 avaliações do ciclo, só 27
+estavam com alguém que consegue entrar no sistema — e a conta que tem o papel `AVALIADOR`
+(`wandersonnascimento`) tinha **zero**. `prisma/popular-dev-fila-do-avaliador.ts` resolve
+isso com o recorte mínimo: 12 do próprio centro de custo dele + 3 aprendizes, tudo
+`provisorio = true`. A fila tem gente de **duas aplicações** de propósito — é o que prova a
+melhoria que originou o módulo, o mesmo avaliador abrindo um questionário de 14 perguntas
+para o repositor e um de 11 para o aprendiz.
+
+**Processo validado de ponta a ponta em 06/09**, no ciclo do piloto (ABERTO):
+
+| Passo | Resultado |
+|---|---|
+| Fila do avaliador | 14 pendentes — 11 Operação de Loja (14 perguntas) + 3 Aprendizes (11) |
+| Enviar incompleto | recusado: *"Faltam 11 pergunta(s)"* |
+| Responder + enviar | nota do questionário **58,6**, com a quebra por grupo |
+| Apurar | 1 avaliação · nenhum alerta |
+| Resultado | nota final **58,6** · conceito **Atende** · sem renormalização |
+
+⭐ O resultado confirma a §3.5 no dado real: aplicação **sem critérios** e `pesoAvaliacao =
+100` faz `notaFinal = notaAvaliacao` **pela fórmula**, sem caso especial.
+
 ⭐ **As 108 pessoas sem avaliador não são uma falha da carga — são um cenário que vale
 manter.** Elas mantêm vivo no DEV o caminho "elegível que ninguém designou", que é a única
 pendência do módulo que some sozinha, e que precisa aparecer no painel e na pendência
