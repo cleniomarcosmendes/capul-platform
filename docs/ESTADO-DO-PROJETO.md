@@ -319,6 +319,25 @@ configuração está afirmando, para quem avalia, *"avalie os aprendizes antes d
 supervisores"*. Na fila de 95 da gerente do Supermercado Unaí, essa camada acidental decide a
 ordem em que 95 pessoas são avaliadas.
 
+#### ⚠️ O acoplamento é LATENTE, e a formulação óbvia dele está errada
+
+A frase natural — *"a Arielly reordena as aplicações e a fila de todo mundo se reorganiza"* —
+**não é verdade hoje**, e foi medida antes de ser escrita:
+
+1. **`Avaliacao.criadoEm` não muda em reexecução.** A cópia do cadastro faz `upsert`; para
+   quem já existe ela dá UPDATE, e o `criadoEm` fica. Conferido no DEV: "Operação de Loja"
+   tem linhas de `13:22:12` e de `15:52:23` convivendo, de duas execuções diferentes.
+2. **Hoje ninguém consegue reordenar.** `Aplicacao.ordem` é gravado na criação e **não há
+   `PATCH` de aplicação** (§2). O acoplamento existe e está adormecido.
+3. **O que acontece de verdade é pior de um jeito diferente:** quem é designado depois entra
+   no FIM da fila, seja qual for a aplicação. O mesmo ciclo acumula ordens de lotes
+   diferentes, e **reexecutar a cópia não normaliza** — a ordem não é reproduzível.
+
+⚠️ **Para quem for construir a edição de aplicação** (já listada como lacuna): mexer em
+`ordem` mudará silenciosamente a ordem de trabalho de todo avaliador designado dali em
+diante, e ninguém vai relacionar as duas coisas. Se a edição vier antes da resposta do RH
+abaixo, ela precisa no mínimo avisar isso na tela.
+
 #### Pergunta aberta para o RH
 
 **A ordem da fila do avaliador é indiferente, ou há prioridade?** Por cargo, por prazo, por
@@ -334,9 +353,21 @@ de onde parou" sem mexer no lugar de ninguém. **Dentro de "A responder" nada mu
 
 #### O que resolve fila grande e NÃO é ordenação
 
-Com 95 cartões, nenhuma ordem resolve — a pessoa está procurando **alguém específico**. Falta
-**busca por nome** e **filtro por aplicação**. Isso não depende da resposta do RH e pode ser
-feito antes dela.
+Com 95 cartões nenhuma ordem resolve — a pessoa está procurando **alguém específico**.
+
+✅ **Busca por nome e matrícula** (06/09): local, sem ir ao servidor (a fila já está em
+memória, e ir à rede a cada tecla quebraria a busca justamente no corredor da loja, com
+sinal ruim), sem acento e sem caixa, e **filtrando antes do agrupamento** — buscar "ana"
+devolve a Ana de "Em andamento" **e** a de "A responder", cada uma na sua seção. Lista
+achatada esconderia que uma delas já estava começada, que é o que a pessoa precisa saber
+antes de abrir. Mostra "6 de 22 avaliações" e, sem resultado, "Nenhum resultado — sua fila
+tem 22": sem esse número, a tela filtrada e a fila vazia são visualmente a mesma coisa.
+
+⏸️ **Filtro por aplicação: NÃO feito, de propósito.** "Aplicação" é vocabulário do RH — quem
+avalia pensa em cargo, setor, tipo de gente. Filtrar por um conceito que só existe na tela de
+configuração é a mesma família do defeito desta seção: estrutura interna vazando para quem
+executa. Se o filtro fizer falta, o rótulo certo provavelmente é outro, e ele não se descobre
+numa fila de 22 — a de 95 não existe em lugar nenhum para desenhar contra.
 
 ## 4. As duas exceções estruturais
 
@@ -394,10 +425,21 @@ print — foi assim que se pegou o título do módulo virando "Aval…" no cabe�
 ⚠️ Ponha o token no `localStorage` com `context.addInitScript` **antes** do primeiro
 `goto`: sem token o `AuthProvider` redireciona para o Hub e a navegação é interrompida.
 
-⚠️ E confira o bundle depois de `docker compose build`: no WSL a granularidade de timestamp
-faz o Docker reaproveitar a camada e o `dist/` sai velho **sem erro nenhum**. Aconteceu aqui:
-duas rodadas de print mostraram a tela antiga. `grep` por uma classe nova dentro do
-`assets/*.js` resolve; `--no-cache` conserta.
+⚠️ **E confira o bundle SERVIDO depois de `docker compose build` — inclusive com
+`--no-cache`.** No WSL o contexto de build lê o filesystem do Windows e pode entregar fonte
+VELHO: em 06/09 uma imagem construída havia 2 minutos servia código de duas edições atrás,
+sem erro nenhum. Três rodadas de print mostraram a tela antiga.
+
+O teste que vale é `grep` de uma string nova dentro de
+`/usr/share/nginx/html/assets/*.js` **no container** — data de imagem e `--no-cache` não
+provam nada. Se divergir, rodar `npm run build` pelo container com bind mount (que **enxerga
+o fonte fresco**) e rebuildar: escrever no `dist/` invalida o contexto e o build passa a ver
+a versão certa.
+
+⚠️ `gestao-pessoas/frontend` e `fiscal/frontend` estavam **sem `.dockerignore`**, então
+`node_modules` e `dist` iam inteiros para o contexto — o que deixa o build lento e torna essa
+armadilha mais provável. O do gestao-pessoas foi copiado do hub em 06/09; **o do fiscal
+continua faltando**.
 
 ### ⚠️ A auditoria grava o autor, mas quase nunca o IP
 

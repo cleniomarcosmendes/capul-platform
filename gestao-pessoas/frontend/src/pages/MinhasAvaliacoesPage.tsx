@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, Lock, RefreshCw, Send } from 'lucide-react';
+import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, Lock, RefreshCw, Search, Send, X } from 'lucide-react';
 import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from '../services/api';
 
 /**
@@ -34,6 +34,7 @@ const CHAVE_ROLAGEM = 'gestao-pessoas:rolagem:minhas-avaliacoes';
 
 export default function MinhasAvaliacoesPage() {
   const [itens, setItens] = useState<ItemDaFila[] | null>(null);
+  const [busca, setBusca] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [semPermissao, setSemPermissao] = useState(false);
 
@@ -87,15 +88,130 @@ export default function MinhasAvaliacoesPage() {
   if (!itens) return <Carregando />;
   if (itens.length === 0) return <Vazio />;
 
-  const porCiclo = agruparPorCiclo(itens);
+  const filtrados = filtrar(itens, busca);
+  const buscando = busca.trim().length > 0;
+  const porCiclo = agruparPorCiclo(filtrados);
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-24 pt-4 sm:pt-6">
       <ProgressoGeral total={itens.length} concluidas={itens.filter((i) => i.status === 'ENVIADA').length} />
 
+      <Busca
+        valor={busca}
+        aoMudar={setBusca}
+        resultados={buscando ? filtrados.length : null}
+        total={itens.length}
+      />
+
       {porCiclo.map((grupo) => (
         <BlocoDoCiclo key={grupo.ciclo.id} grupo={grupo} />
       ))}
+
+      {buscando && filtrados.length === 0 && <NadaEncontrado termo={busca} total={itens.length} />}
+    </div>
+  );
+}
+
+/** Sem acento e sem caixa: quem procura "ana" tem de achar "ANA CLÁUDIA". */
+function normalizar(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+}
+
+/**
+ * ⭐ BUSCA LOCAL, por nome e matrícula.
+ *
+ * A fila inteira já está em memória — ir ao servidor a cada tecla adicionaria
+ * espera para filtrar uma lista que já está aqui, e quebraria a busca justamente
+ * onde ela mais serve: no corredor da loja, com sinal ruim.
+ *
+ * ⚠️ Filtra ANTES do agrupamento, de propósito. Buscar "ana" tem de devolver a
+ * Ana de "Em andamento" E a de "A responder", **cada uma na sua seção** — uma
+ * lista achatada faria a pessoa perder a informação de que uma delas já estava
+ * começada, que é justamente o que ela precisa saber antes de abrir.
+ */
+function filtrar(itens: ItemDaFila[], termo: string): ItemDaFila[] {
+  const alvo = normalizar(termo.trim());
+  if (alvo === '') return itens;
+  return itens.filter(
+    (i) => normalizar(i.nome).includes(alvo) || normalizar(i.matricula).includes(alvo),
+  );
+}
+
+function Busca({
+  valor,
+  aoMudar,
+  resultados,
+  total,
+}: {
+  valor: string;
+  aoMudar: (v: string) => void;
+  /** null = não está buscando. */
+  resultados: number | null;
+  total: number;
+}) {
+  return (
+    <div className="mt-3">
+      <div className="relative">
+        <Search
+          size={16}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          aria-hidden
+        />
+        {/* ⚠️ `type="text"`, NÃO `type="search"`. O `search` desenha um "limpar"
+            PRÓPRIO no WebKit, que aparecia colado ao nosso — dois X na mesma
+            caixa a 360px. Escondê-lo por CSS não funciona aqui: a regra com
+            `::-webkit-search-cancel-button` é descartada no build (o Lightning
+            CSS do Tailwind v4 remove o pseudo-elemento com prefixo), e ela
+            sumia em silêncio. `inputMode` + `enterKeyHint` dão o mesmo teclado
+            no celular sem trazer o widget nativo junto. */}
+        <input
+          type="text"
+          inputMode="search"
+          enterKeyHint="search"
+          value={valor}
+          onChange={(e) => aoMudar(e.target.value)}
+          placeholder="Procurar por nome ou matrícula"
+          aria-label="Procurar por nome ou matrícula"
+          className="alvo-toque w-full rounded-xl border border-slate-300 bg-white pl-9 pr-10 text-slate-800"
+        />
+        {valor && (
+          <button
+            type="button"
+            onClick={() => aoMudar('')}
+            aria-label="Limpar busca"
+            className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 active:bg-slate-100"
+          >
+            <X size={16} aria-hidden />
+          </button>
+        )}
+      </div>
+      {/* ⚠️ O número de resultados é o que separa "não achei ninguém" de "minha
+          fila está vazia" — sem ele, a tela filtrada e a tela sem trabalho são
+          visualmente a mesma coisa. `aria-live` para quem usa leitor de tela
+          ouvir a contagem mudar enquanto digita. */}
+      {resultados !== null && (
+        <p className="mt-1.5 px-1 text-xs text-slate-500" aria-live="polite">
+          {resultados === 0
+            ? `Nenhum resultado — sua fila tem ${total}`
+            : `${resultados} de ${total} ${resultados === 1 ? 'avaliação' : 'avaliações'}`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function NadaEncontrado({ termo, total }: { termo: string; total: number }) {
+  return (
+    <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center">
+      <Search size={28} className="mx-auto text-slate-300" aria-hidden />
+      <p className="mt-3 font-medium text-slate-700">Ninguém com “{termo.trim()}”</p>
+      <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+        Sua fila tem {total} {total === 1 ? 'avaliação' : 'avaliações'} — limpe a busca para
+        ver todas. A procura é por nome ou matrícula.
+      </p>
     </div>
   );
 }
