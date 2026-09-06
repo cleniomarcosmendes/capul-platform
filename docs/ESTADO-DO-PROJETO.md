@@ -1,7 +1,7 @@
 # Gestão de Pessoas — estado do projeto
 
 > Ponto de entrada para quem vai mexer no módulo. Diz onde estamos, o que não se
-> discute mais e onde ler o resto. Última revisão: **06/09/2026**.
+> discute mais e onde ler o resto. Última revisão: **06/09/2026** (tarde).
 >
 > Piloto previsto para **15/09/2026**.
 
@@ -32,8 +32,8 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 |---|---|
 | Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **26 endpoints** em 8 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **7 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
-| Banco | 4 migrations em `rh` (23 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **269 testes, 19 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Banco | 6 migrations em `rh` (25 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
+| Testes | **291 testes, 22 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As sete telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -58,10 +58,13 @@ ciclo 000006 do Protheus — a nota do questionário bate **108/108** (ver
   cron**. Hoje se dispara por `curl`, e os três CSVs precisam ser extraídos do Protheus à
   mão e colocados em `RH_CSV_DIR` (padrão `/app/carga`, que não existe no container — é
   preciso criar e copiar). Ver `SYNC_GESTAO_PESSOAS_CSV.md`.
-- **Designação é sempre manual.** O cadastro do Protheus não diz quem é o superior de
-  quem, então não existe designação automática por centro de custo — a tela faz seleção
-  múltipla + um avaliador para o lote, o que transforma ~1.000 designações em ~74 (uma por
-  centro de custo), desde que o RH diga quem avalia cada centro. **É o gargalo do piloto.**
+- **O cadastro de avaliadores tem DADO, não tem TELA.** `rh.designacao_padrao` existe e
+  está populada no DEV com 848 linhas provisórias (§9). Faltam a tela, a importação por CSV
+  e os endpoints — sem eles o RH não mexe nela, e a designação segue manual, uma pessoa por
+  vez. **É o gargalo do piloto.**
+- **`rh.aplicacao_publico` é lida, mas quem a preenche é script.** A tela de Aplicações
+  ainda escolhe centros de custo; os atalhos de preenchimento por CC e por filial descritos
+  na §3.7 não existem em tela nenhuma.
 - **Critério `INFORMADO`** é suportado pelo motor e pelo schema
   (`rh.criterio_valor_informado`), mas não há por onde informar o valor. Os quatro critérios
   do catálogo são todos `CALCULADO`, então isto ainda não dói.
@@ -175,6 +178,55 @@ final = nota da avaliação" cai da fórmula, sem caso especial.
 
 ---
 
+### 3.7. O que se persiste é uma LISTA NOMINAL
+
+A estrutura de **gestão** não coincide com a **contábil**, e por isso o recorte por centro
+de custo não bastava. Medido no cadastro real em 06/09:
+
+| Grupo | Pessoas | Pares filial × CC |
+|---|---|---|
+| Limpeza | 46 | 19 (o CC "LIMPEZA" tem 14 delas) |
+| Transporte | 46 | 18 |
+| Segurança | 28 | 9 |
+| Manutenção | 16 | 5 |
+| **Aprendizes** | **31** | **15**, todos compartilhados com gente efetiva |
+
+Então **duas listas nominais**, e são duas tabelas porque têm tempos de vida diferentes:
+
+- **`rh.designacao_padrao`** — quem avalia quem. Da **plataforma**, perene, é o que cada
+  ciclo copia. Índice único **parcial** em `avaliado_id WHERE vigencia_fim IS NULL`: é o
+  `@@unique([cicloId, avaliadoId])` da `Avaliacao` uma etapa antes, recusando o conflito no
+  cadastro, que fala com quem errou. `vigencia_fim IS NULL` é a **única** definição de
+  vigente — não há coluna `ativo`.
+- **`rh.aplicacao_publico`** — qual questionário a pessoa responde. Do **ciclo**, morre com
+  ele. **Não cabe dentro da `Avaliacao`**: lá o `avaliadorId` é obrigatório, e "está no
+  público e ainda sem avaliador" — o `semDesignacao` do painel — não teria onde existir. O
+  `ciclo_id` é denormalizado com **FK composta** contra `@@unique([id, cicloId])` da
+  Aplicação: divergir é impossível pelo banco, não por disciplina.
+
+**Centro de custo e filial viram atalhos de PREENCHIMENTO** na tela — escolhe, traz as
+pessoas, ajusta, salva — e sobrevivem apenas como `origem` + `origemReferencia`. **Não há
+precedência entre níveis porque só existe um nível**; "parte da equipe" se resolve
+removendo linhas. `DIVISAO_AUTOMATICA` marca a linha que a importação **arbitrou** (um CC
+repartido entre N responsáveis em ordem alfabética): ninguém decidiu aquela linha, e
+confirmá-la a torna `MANUAL`.
+
+`aplicacao_centro_custo` **não foi apagada**: deixou de decidir o público e ficou como
+registro do atalho usado.
+
+### 3.8. Trocar a aplicação de quem já respondeu é recusado
+
+`Resposta` aponta para as perguntas de um modelo; `Avaliacao.aplicacaoId` decide de qual
+`ModeloVersao` elas são lidas. Trocar a aplicação deixava as respostas órfãs e fazia a
+apuração combinar a `notaAvaliacao` **congelada do questionário antigo** com o
+`pesoAvaliacao` e os critérios da aplicação nova — número diferente, sem exceção, sem
+alerta e internamente coerente.
+
+`assertPodeTrocarDeAplicacao` impõe uma regra só, **nada de valor se perde numa troca**:
+ENVIADA recusa sempre; com N respostas recusa **dizendo N**; sem nada gravado passa, com a
+troca na auditoria como `DESIGNAR_TROCA_APLICACAO`. Trocar só o **avaliador**, na mesma
+aplicação, não passa pela guarda.
+
 ## 4. As duas exceções estruturais
 
 São **duas**, e a contagem importa: uma terceira significa que o desenho precisa de
@@ -208,7 +260,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Aprendizes (31 pessoas) entram no ciclo com aplicação própria, sem critérios cadastrais — confirmar | Gestora de RH |
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
-| **Quem é o avaliador de cada centro de custo** — sem isso a designação não sai do lugar | Gestora de RH |
+| **Quem é o avaliador de cada centro de custo** — o CSV modelo (74 CCs, nº de pessoas, candidatos por cargo como sugestão) já está em `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv`, para ela receber algo quase pronto em vez de folha vazia | Gestora de RH |
 | Por que o registro de treinamento parou em 14/11/2025 | RH / Protheus |
 | Quem dispara o sync: RH ou T.I.? Enquanto não se decide, **não** existe cron | Gestora de RH + T.I. |
 | Confirmar os enunciados das perguntas — o export do Protheus trouxe o texto das alternativas, não o enunciado; os títulos do seed foram **derivados** | Gestora de RH |
@@ -289,17 +341,32 @@ variadas, nota 54,65) e 3 resultados apurados. São o único dado real de uso �
 
 ---
 
-## 7. Próximo passo
+## 7. Próximo passo (revisado em 06/09, tarde)
+
+**Construir o cadastro de avaliadores: endpoints, tela e importação por CSV.** O dado já
+existe e está populado; o RH não tem como tocá-lo. A tela é **por avaliador** (um cartão
+com a lista de cada um, mais os atalhos de preenchimento), não uma grade de mil linhas, e
+precisa da **pendência reversa** — quem não está na lista de ninguém, hoje 188 pessoas.
+
+A importação recebe a planilha da Arielly no formato "CC → avaliador" e **expande** para
+linhas nominais. Onde o CC tem mais de um responsável ela **divide igualmente**, de forma
+determinística, marca `DIVISAO_AUTOMATICA` e **diz no relatório o que fez**.
+
+Depois disso: os atalhos de preenchimento na tela de Aplicações (hoje ela ainda escolhe
+centros de custo), e então o roteiro abaixo.
+
+### O roteiro original, ainda válido
 
 **Montar o ciclo do piloto de ponta a ponta com dado real, e descobrir quanto tempo leva a
 designação.**
 
 O caminho está inteiro e nada disso precisa de código novo:
 
-1. Criar o ciclo do piloto (nasce RASCUNHO, `valeParaMerito = false`).
-2. Montar **três aplicações** — é o que prova a melhoria pedida. Os três modelos de
-   produção já estão publicados pelo seed; falta escolher os centros de custo de cada
-   público (a tela mostra quantas pessoas há em cada um).
+1. ✅ Criar o ciclo do piloto (nasce RASCUNHO, `valeParaMerito = false`) — feito em 06/09,
+   ver §8.
+2. Montar **três aplicações** — é o que prova a melhoria pedida. A de **Aprendizes** já
+   existe (§8); faltam duas, e para elas falta o RH escolher o público — decisão dele, não
+   derivável do cadastro.
 3. Designar. **É aqui que se descobre se o piloto é viável.** Sem a lista de "quem avalia
    cada centro de custo" (pendência do RH), não há como sair do lugar; com ela, a tela faz
    por lote e são ~74 operações em vez de ~1.000.
@@ -313,7 +380,46 @@ cadastrar uma faixa e não existe tela), **botão de reabertura**, **tela do syn
 
 ---
 
-## 8. Onde ler mais
+## 8. O que está populado no DEV (06/09, tarde) — tudo provisório
+
+Dois scripts, em `prisma/popular-dev-*.ts`. **Não são seed de produção**, e tudo o que
+gravam em `designacao_padrao` sai com `provisorio = true`.
+
+**848 linhas** de designação, eleitas pelo **cargo** (Supervisor · Coordenador · Gerente ·
+Encarregado no próprio par filial × CC) enquanto a lista real do RH não vem. Dos 82 pares,
+**46 com responsável e 36 sem**.
+
+⚠️ **"Coordenador" não elege ninguém** — nenhum cargo da Capul contém a palavra. O critério
+é de três termos na prática.
+
+⚠️ A chave **filial + CC** custa 8 pares a mais sem responsável do que a chave só por CC:
+em `02|21010109` AGROVETERINARIA as 4 pessoas da filial 02 ficam sem, porque os 7 líderes
+estão todos na 01.
+
+Os quatro cenários que o piloto precisava exercitar, conferidos no banco:
+
+| # | Cenário | Como está |
+|---|---|---|
+| 1 | CC grande com vários avaliadores | Supermercado Unaí: 87 pessoas entre os **11** responsáveis — dez com 8, um com 7, marcados `DIVISAO_AUTOMATICA` |
+| 2 | Um avaliador em mais de um CC | Diovane (Gerente Oficina) cobre `08\|21010601`, `602` e `603` — o critério do cargo nunca produz isso sozinho |
+| 3 | Quem não está na lista de ninguém | **188 pessoas**, lideradas por `41010145` RACAO SISTEMA DE ENSAQUE (61 pessoas, nenhum cargo de chefia) |
+| 4 | Avaliador que também é avaliado | **86 pessoas**. A gestora de RH avalia 3 e é avaliada pelo Diretor Executivo |
+
+**Presidente, Vice e Diretor Executivo ficam sem avaliador de propósito** — é a pendência
+aberta da Diretoria, e deixá-la visível vale mais do que inventar uma resposta. Onde há
+mais de um gerente, a cascata **não escolhe**: sobe para o Diretor Executivo.
+
+**Ciclo `Piloto 15/09/2026`**, RASCUNHO, `valeParaMerito = false`, ao lado do "Avaliação
+Geral 2026" ABERTO — ⚠️ as **3 avaliações enviadas de verdade** vivem no ciclo antigo e não
+se tocam. Aplicação **"Aprendizes"**: 31 pessoas em 15 pares, sem critérios cadastrais,
+`pesoAvaliacao = 100`. Era impossível de montar com recorte por centro de custo.
+
+Painel conferido ao vivo: `foraDeTodasAsAplicacoes = 959`, e a conta fecha — 1.036 menos
+47 afastados (o ciclo não os inclui) = 989 elegíveis, menos os 30 aprendizes ativos.
+
+---
+
+## 9. Onde ler mais
 
 | Documento | O que tem lá |
 |---|---|
@@ -323,6 +429,7 @@ cadastrar uma faixa e não existe tela), **botão de reabertura**, **tela do syn
 | `DECISAO_RH_ESCOLARIDADE.md` | Para a gestora. A distribuição real das 1.036 pessoas por código, três alternativas e o efeito medido de cada uma (média 34,5 → 50,4 na opção B) |
 | `OBSERVACAO_RH_APRENDIZES.md` | Os aprendizes e por que a aplicação deles não tem critérios cadastrais |
 | `REGRESSAO_PROTHEUS_GESTAO_PESSOAS.md` | A regressão contra o ciclo 000006: o que bateu (questionário, 108/108) e o que não bateu, e por quê |
+| `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` | Para a gestora de RH: os 74 centros de custo, filiais, nº de pessoas, coluna de avaliador **em branco** e os candidatos por cargo como sugestão. `;` e UTF-8 com BOM, abre direto no Excel pt-BR |
 | `SYNC_GESTAO_PESSOAS_CSV.md` | O SQL de extração dos três CSVs, o formato, os números da carga real e os achados sobre os dados |
 | `select-original-protheus.sql` | O select do sistema antigo, versionado como registro histórico. **Não é o select em uso** — o de hoje está no doc do sync |
 | `arquitetura-para-modulo-rh.md` | O levantamento da plataforma feito antes de escrever a primeira linha. Leia antes de reexplorar o repositório |
