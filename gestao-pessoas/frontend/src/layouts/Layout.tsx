@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { ClipboardList, Users } from 'lucide-react';
+import { ClipboardList, UserCheck, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 
@@ -17,9 +17,23 @@ import { ROLES } from '../lib/roles';
 export default function Layout() {
   const { usuario, tem } = useAuth();
   const doRh = tem(ROLES.RH_ADMIN, ROLES.RH_CICLO, ROLES.RH_MODELO);
-  const avaliador = tem(ROLES.AVALIADOR);
+
+  /**
+   * ⚠️ O menu se monta a partir do que a pessoa PODE abrir, e aparece quando há
+   * mais de um destino. Antes ele exigia ser do RH **e** avaliador, e isso
+   * bastava enquanto o RH tinha uma tela só; com o cadastro de avaliadores, a
+   * gestora que não avalia ninguém ficaria sem caminho até ele — tela existente,
+   * rota funcionando, e nenhum jeito de chegar lá. Não há deep link aqui:
+   * esconder do menu é esconder a tela.
+   */
+  const itens = [
+    tem(ROLES.AVALIADOR) && { para: '/', icone: <ClipboardList size={15} />, rotulo: 'Minhas avaliações' },
+    doRh && { para: '/ciclos', icone: <Users size={15} />, rotulo: 'Ciclos' },
+    tem(ROLES.RH_ADMIN) && { para: '/avaliadores', icone: <UserCheck size={15} />, rotulo: 'Avaliadores' },
+  ].filter(Boolean) as { para: string; icone: React.ReactNode; rotulo: string }[];
+
   // Uma opção só não é navegação — é um rótulo repetindo o cabeçalho.
-  const mostrarMenu = doRh && avaliador;
+  const mostrarMenu = itens.length > 1;
 
   return (
     <div className="min-h-dvh bg-slate-50">
@@ -32,8 +46,9 @@ export default function Layout() {
 
         {mostrarMenu && (
           <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-2 pb-1" aria-label="Seções">
-            <Item para="/" icone={<ClipboardList size={15} />} rotulo="Minhas avaliações" />
-            <Item para="/ciclos" icone={<Users size={15} />} rotulo="Ciclos" />
+            {itens.map((i) => (
+              <Item key={i.para} para={i.para} icone={i.icone} rotulo={i.rotulo} />
+            ))}
           </nav>
         )}
       </header>

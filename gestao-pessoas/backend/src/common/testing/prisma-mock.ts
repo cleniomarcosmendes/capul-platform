@@ -39,6 +39,7 @@ export function createPrismaMock(): Record<string, any> {
     aplicacaoPublico: modelMock(),
     designacaoPadrao: modelMock(),
     cicloElegibilidade: modelMock(),
+    importacaoDesignacao: modelMock(),
     avaliacao: modelMock(),
     resposta: modelMock(),
     resultadoAvaliacao: modelMock(),

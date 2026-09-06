@@ -8,6 +8,7 @@ import CiclosPage from './pages/CiclosPage';
 import CicloPage from './pages/CicloPage';
 import AplicacoesPage from './pages/AplicacoesPage';
 import DesignacaoPage from './pages/DesignacaoPage';
+import CadastroAvaliadoresPage from './pages/CadastroAvaliadoresPage';
 import PainelPage from './pages/PainelPage';
 import ResultadosPage from './pages/ResultadosPage';
 
@@ -44,6 +45,10 @@ export default function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<Inicio />} />
             <Route path="/ciclos" element={<CiclosPage />} />
+            {/* Fora de `/ciclos/:id` de propósito: o cadastro de quem avalia
+                quem é da PLATAFORMA, não do ciclo — cada ciclo copia dele. Pendurá-lo
+                numa aba do ciclo faria parecer que se remonta a cada ano. */}
+            <Route path="/avaliadores" element={<CadastroAvaliadoresPage />} />
             {/* As quatro telas do RH são ETAPAS do mesmo ciclo, não seções
                 soltas — por isso são rotas filhas, e o ciclo escolhido não se
                 perde ao trocar de aba. */}

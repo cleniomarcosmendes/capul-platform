@@ -386,3 +386,144 @@ export const apuracao = {
   doCiclo: (cicloId: string) =>
     rhApi.post<Conferencia>('/apuracao', { tipo: 'CICLO', cicloId }).then((r) => r.data),
 };
+
+// ---------------------------------------------------------------------------
+// CADASTRO DE QUEM AVALIA QUEM — `rh.designacao_padrao`.
+// Da PLATAFORMA, não do ciclo: cada ciclo copia daqui.
+// ---------------------------------------------------------------------------
+
+export interface PessoaSemAvaliador {
+  colaboradorId: string;
+  matricula: string;
+  nome: string;
+  filial: string;
+  centroCusto: string | null;
+  centroCustoDescricao: string | null;
+  cargo: string | null;
+}
+
+export interface PendenciasDoCadastro {
+  semAvaliador: {
+    total: number;
+    grupos: { chave: string; descricao: string | null; pessoas: PessoaSemAvaliador[] }[];
+  };
+  naoRevisadas: {
+    total: number;
+    avaliadores: { avaliadorId: string; nome: string; quantos: number }[];
+  };
+  totais: { elegiveis: number; comAvaliador: number; avaliadores: number; provisorias: number };
+}
+
+export interface CartaoDeAvaliador {
+  avaliadorId: string;
+  nome: string;
+  matricula: string;
+  filial: string;
+  cargo: string | null;
+  area: string | null;
+  total: number;
+  naoRevisadas: number;
+  provisorias: number;
+}
+
+export interface LinhaDaLista {
+  id: string;
+  colaboradorId: string;
+  nome: string;
+  matricula: string;
+  filial: string;
+  cargo: string | null;
+  area: string | null;
+  origem: string;
+  origemReferencia: string | null;
+  naoRevisada: boolean;
+  provisorio: boolean;
+  observacao: string | null;
+  vigenciaInicio: string;
+  importacaoId: string | null;
+}
+
+export interface PreviaDaImportacao {
+  conferencia: string;
+  linhasNoArquivo: number;
+  linhasSemAvaliador: number;
+  centrosCusto: {
+    chave: string;
+    descricao: string | null;
+    pessoas: number;
+    divisao: { avaliador: string; matricula: string; quantos: number }[];
+    porDivisaoAutomatica: boolean;
+  }[];
+  pares: {
+    total: number;
+    novos: number;
+    inalterados: number;
+    substituira: number;
+    porDivisaoAutomatica: number;
+  };
+  conflitosComAjusteManual: {
+    matricula: string;
+    nome: string;
+    avaliadorAtual: string;
+    avaliadorDaPlanilha: string;
+    centroCusto: string;
+  }[];
+  recusas: { numero: number; motivo: string; detalhe: string }[];
+  avisos: string[];
+}
+
+export interface LoteDeImportacao {
+  id: string;
+  arquivoNome: string;
+  linhasNoArquivo: number;
+  paresGravados: number;
+  criadoEm: string;
+  desfeitoEm: string | null;
+}
+
+export const cadastroAvaliadores = {
+  pendencias: () =>
+    rhApi.get<PendenciasDoCadastro>('/designacao-padrao/pendencias').then((r) => r.data),
+  avaliadores: () =>
+    rhApi.get<CartaoDeAvaliador[]>('/designacao-padrao/avaliadores').then((r) => r.data),
+  listaDe: (avaliadorId: string) =>
+    rhApi.get<LinhaDaLista[]>(`/designacao-padrao/avaliadores/${avaliadorId}`).then((r) => r.data),
+  designar: (avaliadorId: string, avaliadoId: string, observacao?: string) =>
+    rhApi.post('/designacao-padrao', { avaliadorId, avaliadoId, observacao }).then((r) => r.data),
+  remover: (id: string) => rhApi.delete(`/designacao-padrao/${id}`).then((r) => r.data),
+  revisar: (ids: string[]) =>
+    rhApi
+      .post<{ revisadas: number; pedidas: number }>('/designacao-padrao/revisar', { ids })
+      .then((r) => r.data),
+  /** Prévia OBRIGATÓRIA — não grava nada e devolve a conferência do arquivo. */
+  previa: (conteudo: string, substituirAjustesManuais: boolean) =>
+    rhApi
+      .post<PreviaDaImportacao>('/designacao-padrao/importacao/previa', {
+        conteudo,
+        substituirAjustesManuais,
+      })
+      .then((r) => r.data),
+  importar: (
+    conteudo: string,
+    arquivoNome: string,
+    conferencia: string,
+    substituirAjustesManuais: boolean,
+  ) =>
+    rhApi
+      .post<PreviaDaImportacao & { importacaoId: string }>('/designacao-padrao/importacao', {
+        conteudo,
+        arquivoNome,
+        conferencia,
+        substituirAjustesManuais,
+      })
+      .then((r) => r.data),
+  importacoes: () =>
+    rhApi.get<LoteDeImportacao[]>('/designacao-padrao/importacoes').then((r) => r.data),
+  desfazer: (id: string) =>
+    rhApi
+      .post<{ encerradas: number; revisadasAMao: number; aviso: string }>(
+        `/designacao-padrao/importacoes/${id}/desfazer`,
+        {},
+      )
+      .then((r) => r.data),
+};

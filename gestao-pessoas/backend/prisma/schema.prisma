@@ -851,16 +851,61 @@ model DesignacaoPadrao {
   vigenciaInicio   DateTime      @map("vigencia_inicio") @db.Date
   vigenciaFim      DateTime?     @map("vigencia_fim") @db.Date
   registradoPorId  String?       @map("registrado_por_id")
+  /// O lote de importação que criou a linha, quando veio de um. É o que permite
+  /// DESFAZER uma importação inteira encerrando a vigência do lote — nunca
+  /// apagando linha.
+  importacaoId     String?       @map("importacao_id")
   criadoEm         DateTime      @default(now()) @map("criado_em")
   atualizadoEm     DateTime      @updatedAt @map("atualizado_em")
 
-  avaliador Colaborador @relation("DesignacaoPadraoAvaliador", fields: [avaliadorId], references: [id])
-  avaliado  Colaborador @relation("DesignacaoPadraoAvaliado", fields: [avaliadoId], references: [id])
+  avaliador  Colaborador           @relation("DesignacaoPadraoAvaliador", fields: [avaliadorId], references: [id])
+  avaliado   Colaborador           @relation("DesignacaoPadraoAvaliado", fields: [avaliadoId], references: [id])
+  importacao ImportacaoDesignacao? @relation(fields: [importacaoId], references: [id])
 
   @@index([avaliadorId, vigenciaFim])
   @@index([avaliadoId, vigenciaFim])
   @@index([origem, origemReferencia])
+  @@index([importacaoId, vigenciaFim])
   @@map("designacao_padrao")
+  @@schema("rh")
+}
+
+/// UM LOTE DE IMPORTAÇÃO DA PLANILHA DO RH.
+///
+/// ⭐ Existe por causa de três exigências que a importação tem de cumprir:
+///
+///   PRÉ-VISUALIZAR  82 linhas de planilha viram ~1.000 pares. Importar e avisar
+///                   depois seria pedir para a gestora conferir mil linhas
+///                   gravadas. `conferencia` é o SHA-256 do conteúdo que ela
+///                   VIU: gravar exige mandar o mesmo arquivo de volta, e um
+///                   arquivo trocado entre a prévia e o OK é recusado.
+///   REIMPORTAR      ela vai importar várias vezes, corrigindo. O par que já
+///                   existe igual não vira linha nova; o que muda encerra a
+///                   vigência do anterior e cria a nova; e ajuste MANUAL nunca
+///                   é sobrescrito sem ela mandar.
+///   DESFAZER        `desfeitoEm` encerra a vigência de todas as linhas do lote
+///                   de uma vez. Encerrar, nunca apagar: o histórico tem de
+///                   mostrar "importado, depois desfeito por fulano".
+///
+/// `resumo` guarda o relatório que ela confirmou, para a pergunta "o que essa
+/// importação fez?" ter resposta meses depois sem recontar nada.
+model ImportacaoDesignacao {
+  id             String    @id @default(uuid())
+  arquivoNome    String    @map("arquivo_nome")
+  /// SHA-256 do conteúdo importado — o mesmo que a prévia devolveu.
+  conferencia    String    @db.VarChar(64)
+  linhasNoArquivo Int      @map("linhas_no_arquivo")
+  paresGravados  Int       @map("pares_gravados")
+  resumo         Json
+  importadoPorId String?   @map("importado_por_id")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+  desfeitoEm     DateTime? @map("desfeito_em")
+  desfeitoPorId  String?   @map("desfeito_por_id")
+
+  linhas DesignacaoPadrao[]
+
+  @@index([criadoEm])
+  @@map("importacao_designacao")
   @@schema("rh")
 }
 
