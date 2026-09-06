@@ -55,6 +55,8 @@ export interface ItemDaFila {
   cargo: string | null;
   centroCusto: string | null;
   aplicacao: string;
+  /** A fila NÃO é de um ciclo só — podem existir dois abertos ao mesmo tempo. */
+  ciclo: { id: string; nome: string; prazo: string; status: string };
   status: StatusAvaliacao;
   enviadaEm: string | null;
   perguntasTotal: number;

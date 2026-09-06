@@ -13,6 +13,7 @@
   --color-capul-700: #004d2a;
   --color-capul-800: #003d1f;
   --color-capul-900: #002914;
+  --font-sans: 'PT Sans', system-ui, -apple-system, sans-serif;
 }
 
 /* Alvo de toque mínimo de 44px (recomendação de acessibilidade da Apple e da
@@ -20,6 +21,10 @@
    corredor da loja — alternativa pequena aqui vira erro de resposta. */
 @layer components {
   .alvo-toque { min-height: 2.75rem; }
+}
+
+body {
+  font-family: 'PT Sans', system-ui, -apple-system, sans-serif;
 }
 
 /* Respeita quem pediu menos animação no sistema. */

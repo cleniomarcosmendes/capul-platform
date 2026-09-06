@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, ChevronRight, Lock, RefreshCw, Send } from 'lucide-react';
+import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, Lock, RefreshCw, Send } from 'lucide-react';
 import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from '../services/api';
 
 /**
@@ -8,12 +8,20 @@ import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from 
  *
  * Pensada para um supervisor com 30 liderados, no celular, entre uma tarefa e
  * outra. Por isso, nesta ordem:
- *   • o PROGRESSO GERAL no topo ("faltam 12 de 30") — sem isso ele não sabe
+ *   • o PROGRESSO GERAL no topo ("4 de 22 respondidas") — sem isso ele não sabe
  *     se está no começo ou no fim;
+ *   • o CICLO e o PRAZO de cada bloco — sem prazo, "quando" não tem resposta
+ *     em lugar nenhum da tela;
  *   • o progresso DE CADA UM na linha ("7 de 15 respondidas") — é o que
  *     transforma "recomeçar" em "retomar";
  *   • as pendentes primeiro, as enviadas depois, porque o trabalho é o que
  *     falta.
+ *
+ * ⚠️ A FILA NÃO É DE UM CICLO SÓ. Podem existir dois abertos ao mesmo tempo — a
+ * produção abre por ondas de unidade — e foi o que aconteceu no DEV: 22 na
+ * fila, 14 num ciclo e 8 no outro. Misturados e sem rótulo, o total não bate
+ * com ciclo nenhum e a pessoa não sabe até quando responder cada um. Por isso a
+ * lista é AGRUPADA POR CICLO, com o prazo no cabeçalho do grupo.
  */
 export default function MinhasAvaliacoesPage() {
   const [itens, setItens] = useState<ItemDaFila[] | null>(null);
@@ -48,46 +56,104 @@ export default function MinhasAvaliacoesPage() {
   if (!itens) return <Carregando />;
   if (itens.length === 0) return <Vazio />;
 
-  // Ordem do trabalho: o que só falta enviar vem primeiro (é um toque), depois
-  // o que está começado (retomar é mais barato que começar), depois o resto.
-  const pendentes = itens
-    .filter((i) => i.status !== 'ENVIADA')
-    .sort((a, b) => prioridade(b) - prioridade(a));
-  const enviadas = itens.filter((i) => i.status === 'ENVIADA');
+  const porCiclo = agruparPorCiclo(itens);
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-24 pt-4 sm:pt-6">
-      <ProgressoGeral total={itens.length} concluidas={enviadas.length} />
+      <ProgressoGeral total={itens.length} concluidas={itens.filter((i) => i.status === 'ENVIADA').length} />
 
-      {pendentes.length > 0 && (
-        <section className="mt-6">
-          <h2 className="mb-2 px-1 text-sm font-semibold text-slate-500">
-            A responder ({pendentes.length})
-          </h2>
+      {porCiclo.map((grupo) => (
+        <BlocoDoCiclo key={grupo.ciclo.id} grupo={grupo} mostrarNome={porCiclo.length > 1} />
+      ))}
+    </div>
+  );
+}
+
+interface GrupoDeCiclo {
+  ciclo: ItemDaFila['ciclo'];
+  pendentes: ItemDaFila[];
+  enviadas: ItemDaFila[];
+}
+
+/** Um bloco por ciclo, o de prazo mais curto primeiro — é o que vence antes. */
+function agruparPorCiclo(itens: ItemDaFila[]): GrupoDeCiclo[] {
+  const mapa = new Map<string, GrupoDeCiclo>();
+  for (const item of itens) {
+    const g = mapa.get(item.ciclo.id) ?? { ciclo: item.ciclo, pendentes: [], enviadas: [] };
+    if (item.status === 'ENVIADA') g.enviadas.push(item);
+    else g.pendentes.push(item);
+    mapa.set(item.ciclo.id, g);
+  }
+  for (const g of mapa.values()) {
+    // Ordem do trabalho: o que só falta enviar vem primeiro (é um toque), depois
+    // o que está começado (retomar é mais barato que começar), depois o resto.
+    g.pendentes.sort((a, b) => prioridade(b) - prioridade(a));
+  }
+  return [...mapa.values()].sort((a, b) => a.ciclo.prazo.localeCompare(b.ciclo.prazo));
+}
+
+function BlocoDoCiclo({ grupo, mostrarNome }: { grupo: GrupoDeCiclo; mostrarNome: boolean }) {
+  return (
+    <section className="mt-6">
+      <CabecalhoDoCiclo ciclo={grupo.ciclo} mostrarNome={mostrarNome} />
+
+      {grupo.pendentes.length > 0 && (
+        <>
+          <h3 className="mb-2 mt-3 px-1 text-sm font-semibold text-slate-500">
+            A responder ({grupo.pendentes.length})
+          </h3>
           <ul className="space-y-2">
-            {pendentes.map((item) => (
+            {grupo.pendentes.map((item) => (
               <li key={item.id}>
                 <Cartao item={item} />
               </li>
             ))}
           </ul>
-        </section>
+        </>
       )}
 
-      {enviadas.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-2 px-1 text-sm font-semibold text-slate-500">
-            Enviadas ({enviadas.length})
-          </h2>
+      {grupo.enviadas.length > 0 && (
+        <>
+          <h3 className="mb-2 mt-6 px-1 text-sm font-semibold text-slate-500">
+            Enviadas ({grupo.enviadas.length})
+          </h3>
           <ul className="space-y-2">
-            {enviadas.map((item) => (
+            {grupo.enviadas.map((item) => (
               <li key={item.id}>
                 <Cartao item={item} />
               </li>
             ))}
           </ul>
-        </section>
+        </>
       )}
+    </section>
+  );
+}
+
+/**
+ * ⭐ O PRAZO. Sem ele a tela não respondia "até quando posso responder" em lugar
+ * nenhum — e quem responde no corredor da loja não vai procurar essa informação
+ * fora do sistema.
+ */
+function CabecalhoDoCiclo({ ciclo, mostrarNome }: { ciclo: ItemDaFila['ciclo']; mostrarNome: boolean }) {
+  const prazo = new Date(ciclo.prazo);
+  const dias = Math.ceil((prazo.getTime() - Date.now()) / 86_400_000);
+  const urgente = dias <= 7;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-slate-100 px-3 py-2">
+      {mostrarNome && (
+        <span className="truncate text-sm font-semibold text-slate-700">{ciclo.nome}</span>
+      )}
+      <span
+        className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+          urgente ? 'text-amber-800' : 'text-slate-600'
+        }`}
+      >
+        <CalendarClock size={13} aria-hidden />
+        Responda até {prazo.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+        {dias >= 0 ? ` · ${dias} dia${dias === 1 ? '' : 's'}` : ' · prazo vencido'}
+      </span>
     </div>
   );
 }
@@ -98,15 +164,23 @@ function prioridade(item: ItemDaFila): number {
   return item.perguntasRespondidas > 0 ? 1 : 0;
 }
 
+/**
+ * ⚠️ TUDO AQUI CONTA NA MESMA DIREÇÃO — o que já foi feito.
+ *
+ * Antes o título dizia o que FALTAVA ("Faltam 18 de 22") e o percentual ao lado
+ * dizia o que estava CONCLUÍDO (18%). Dois números com o mesmo valor
+ * significando coisas opostas, um do lado do outro, e a barra enchendo na
+ * direção do segundo. Com 22 avaliações e 4 enviadas os dois davam 18, o que é
+ * a pior coincidência possível: parecia confirmação em vez de contradição.
+ */
 function ProgressoGeral({ total, concluidas }: { total: number; concluidas: number }) {
-  const faltam = total - concluidas;
   const percentual = total > 0 ? Math.round((concluidas / total) * 100) : 0;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-lg font-semibold text-slate-800">
-          {faltam === 0 ? 'Tudo enviado' : `Faltam ${faltam} de ${total}`}
+          {concluidas === total ? 'Tudo enviado' : `${concluidas} de ${total} respondidas`}
         </p>
         <span className="text-sm tabular-nums text-slate-500">{percentual}%</span>
       </div>
@@ -198,6 +272,13 @@ function ProgressoDoItem({ respondidas, total }: { respondidas: number; total: n
     );
   }
 
+  // ⚠️ Sem nenhuma resposta, a barra fica vazia em TODOS os cartões — um
+  // elemento cinza que nunca muda não informa nada e ainda sugere defeito. Ela
+  // só aparece quando tem o que mostrar; antes disso basta o tamanho da tarefa.
+  if (!comecou) {
+    return <span className="text-xs tabular-nums text-slate-500">{total} perguntas</span>;
+  }
+
   return (
     <div className="flex items-center gap-2">
       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
@@ -207,7 +288,7 @@ function ProgressoDoItem({ respondidas, total }: { respondidas: number; total: n
         />
       </div>
       <span className="text-xs tabular-nums text-slate-500">
-        {comecou ? `${respondidas} de ${total} respondidas` : `${total} perguntas`}
+        {respondidas} de {total} respondidas
       </span>
     </div>
   );

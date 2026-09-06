@@ -6,6 +6,8 @@ interface Contexto {
   carregando: boolean;
   roles: string[];
   tem: (...alvos: string[]) => boolean;
+  /** Sai da plataforma inteira — o token é compartilhado com o Hub. */
+  logout: () => void;
 }
 
 const AuthContext = createContext<Contexto>({
@@ -13,6 +15,7 @@ const AuthContext = createContext<Contexto>({
   carregando: true,
   roles: [],
   tem: () => false,
+  logout: () => {},
 });
 
 /** Lê o payload do JWT que o Hub guardou. Sem validar: quem valida é o backend. */
@@ -49,6 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles,
       // ADMIN é bypass de plataforma, como no RolesGuard do backend.
       tem: (...alvos) => roles.includes(ROLES.ADMIN) || alvos.some((a) => roles.includes(a)),
+      // O token é da PLATAFORMA, guardado pelo Hub e compartilhado por origem:
+      // sair aqui é sair de tudo, e o destino é o Hub, como nos outros módulos.
+      logout: () => {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        window.location.href = '/';
+      },
     };
   }, [usuario, carregando]);
 

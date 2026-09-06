@@ -45,6 +45,11 @@ export class AvaliacaoService {
         enviadaEm: true,
         centroCustoSnapshot: true,
         cargoSnapshot: true,
+        // ⚠️ O CICLO vem junto porque a fila NÃO é de um ciclo só: podem existir
+        // dois abertos ao mesmo tempo (a produção abre por ondas de unidade), e
+        // sem dizer de qual é cada linha a pessoa vê um total que não bate com
+        // nenhum ciclo — e não tem como saber até quando responder.
+        ciclo: { select: { id: true, nome: true, periodoFim: true, status: true } },
         aplicacao: {
           select: {
             nome: true,
@@ -72,6 +77,12 @@ export class AvaliacaoService {
         cargo: l.cargoSnapshot ?? avaliado?.cargoDescricao ?? null,
         centroCusto: l.centroCustoSnapshot,
         aplicacao: l.aplicacao.nome,
+        ciclo: {
+          id: l.ciclo.id,
+          nome: l.ciclo.nome,
+          prazo: l.ciclo.periodoFim,
+          status: l.ciclo.status as string,
+        },
         status: l.status,
         enviadaEm: l.enviadaEm,
         perguntasTotal: total,

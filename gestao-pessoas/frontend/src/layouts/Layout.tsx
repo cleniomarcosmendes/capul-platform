@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { ClipboardList, UserCheck, Users } from 'lucide-react';
+import { ClipboardList, LogOut, UserCheck, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 
@@ -15,7 +15,7 @@ import { ROLES } from '../lib/roles';
  * Logística.
  */
 export default function Layout() {
-  const { usuario, tem } = useAuth();
+  const { usuario, tem, logout } = useAuth();
   const doRh = tem(ROLES.RH_ADMIN, ROLES.RH_CICLO, ROLES.RH_MODELO);
 
   /**
@@ -42,6 +42,17 @@ export default function Layout() {
           <Users size={18} className="text-white/80" aria-hidden />
           <h1 className="flex-1 truncate font-semibold text-white">Avaliação de Desempenho</h1>
           {usuario?.nome && <span className="truncate text-sm text-white/80">{usuario.nome}</span>}
+          {/* Sair existe em todos os outros módulos da plataforma; sem ele, quem
+              entra por link direto fica sem caminho de volta ao Hub. */}
+          <button
+            type="button"
+            onClick={logout}
+            title="Sair"
+            aria-label="Sair"
+            className="alvo-toque shrink-0 rounded-lg px-2 text-white/80 transition hover:bg-white/10 hover:text-white"
+          >
+            <LogOut size={17} aria-hidden />
+          </button>
         </div>
 
         {mostrarMenu && (
