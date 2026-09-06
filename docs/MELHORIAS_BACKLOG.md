@@ -1600,3 +1600,42 @@ e os dois `diag_*` convivem com o código da aplicação. Avaliar mover para `sc
 `test_smoke.py` na raiz é justamente o que faz `pytest` dentro do container não sair
 vazio — se ele for para `scripts/`, decidir conscientemente se a imagem passa a não ter
 teste nenhum ou se `tests/` sai do `.dockerignore`.
+
+---
+
+## [Logística] Logout não revoga o refresh token no servidor — 06/09/2026
+
+**Achado de raspão**, enquanto se conferia a identidade visual do módulo Gestão de Pessoas
+contra os outros. Não foi investigado a fundo e **nada foi alterado na Logística**.
+
+`logistica/frontend/src/contexts/AuthContext.tsx` (linhas ~106-108) sai assim:
+
+```ts
+localStorage.removeItem('accessToken');
+localStorage.removeItem('refreshToken');
+window.location.href = '/';
+```
+
+Só limpa o navegador. Workspace, Inventário e Fiscal fazem, antes disso,
+`authApi.post('/logout', { refreshToken })` — e é essa rota que, no auth-gateway
+(`auth.service.ts:278`), faz `refreshToken.updateMany({ revoked: true })` e grava `LOGOUT`
+na auditoria.
+
+**Duas consequências:**
+
+1. **O refresh token continua VÁLIDO no servidor depois de "Sair".** Quem tiver uma cópia
+   dele (outro navegador, um backup de perfil, um log) consegue renovar a sessão de alguém
+   que acredita ter saído. O access token expira em 60 min; o refresh dura 7 dias.
+2. **O logout não entra na auditoria.** Numa investigação de "quem estava logado quando",
+   a saída simplesmente não existe.
+
+⚠️ **Não é só cosmético para a Logística**, que é o módulo com mais gente em campo e com
+app: sessão que não morre no servidor é o oposto do que se quer num aparelho compartilhado
+ou perdido.
+
+**Correção:** três linhas, igual às dos outros três módulos. O padrão a copiar está em
+`gestao-pessoas/frontend/src/contexts/AuthContext.tsx`, que foi corrigido em 06/09 — inclusive
+o `.catch(() => {})`, porque travar a saída num erro de rede prende a pessoa numa sessão que
+ela quer encerrar.
+
+**Quem decide:** Clenio. Registrado a pedido dele; nada foi tocado na Logística.

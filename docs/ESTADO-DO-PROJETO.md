@@ -260,6 +260,37 @@ tinha uma tela só. A gestora, que não avalia ninguém, ficaria com a tela pron
 funcionando e nenhum caminho até ela — não há deep link aqui. Agora o menu se monta do que a
 pessoa pode abrir e aparece com mais de um destino.
 
+### 3.10. Dois ciclos abertos ao mesmo tempo é PREVISTO — e a fila soma os dois
+
+A spec §9 manda abrir a produção **por ondas de unidade**, então mais de um ciclo `ABERTO`
+não é acidente. A consequência aparece na tela do avaliador: **a fila não é de um ciclo só**.
+No DEV foram 22 na fila com 14 num ciclo e 8 no outro — misturados e sem rótulo, o total não
+bate com ciclo nenhum e a pessoa não tem como saber até quando responder cada um. Por isso a
+lista é agrupada por ciclo, com **nome e prazo** no cabeçalho do bloco
+(`MinhasAvaliacoesPage`), e `minhasAvaliacoes` devolve `ciclo {id, nome, prazo, status}`.
+
+⚠️ **O endpoint sempre soube filtrar** (`?cicloId`); quem não passava filtro era a tela. O
+defeito não era filtro faltando — era falta de rótulo, e esconder um dos ciclos teria
+consertado o sintoma errado.
+
+#### ⚠️ Pergunta aberta: a mesma pessoa em dois ciclos abertos
+
+`@@unique([cicloId, avaliadoId])` impede duplicata **dentro** de um ciclo, não **entre**
+ciclos. Nada hoje impede que dois ciclos com períodos **sobrepostos** incluam a mesma
+pessoa — e ela sai com **duas notas finais** sobre o mesmo período, sem erro nenhum.
+
+No DEV são **9 pessoas**, todas do Supermercado Unaí, e **já não é hipótese**: duas delas
+(Alexandre Rodrigues e Aneuso Brandão) já têm avaliação enviada em um dos ciclos.
+
+⚠️ **Wanderson (002749) é uma das 9 — e é o avaliador do teste.** Isso liga esta pergunta à
+pendência da §5 sobre **quem avalia os avaliadores**: quem avalia alguém e é avaliado em dois
+ciclos ao mesmo tempo acumula as duas ambiguidades na mesma pessoa.
+
+**Proposta registrada, não implementada: AVISO na abertura do ciclo, nunca bloqueio.** A §9
+prevê ondas simultâneas, e ondas por unidade normalmente não se sobrepõem em pessoas — barrar
+quebraria o caso legítimo. O aviso listaria quem já está em outro ciclo aberto de período
+sobreposto, e o RH decide.
+
 ## 4. As duas exceções estruturais
 
 São **duas**, e a contagem importa: uma terceira significa que o desenho precisa de
@@ -293,6 +324,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Aprendizes (31 pessoas) entram no ciclo com aplicação própria, sem critérios cadastrais — confirmar | Gestora de RH |
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
+| 🔴 **A mesma pessoa em dois ciclos abertos** — 9 no DEV, com períodos sobrepostos, duas notas cada. Ondas de unidade (§9) são legítimas; sobreposição de PESSOAS talvez não. Ver §3.10 | Gestora de RH |
 | 🔴 **Quem avalia os ~52 AVALIADORES** — hoje 46 deles caem no Diretor Executivo pela regra provisória de hierarquia. ⚠️ A planilha de avaliadores **não tem como responder isto**: ela diz "quem responde pelo centro de custo X", e o responsável está DENTRO do CC que lidera — ele fica de fora da própria lista, porque autoavaliação não existe. É pergunta separada, e é de estrutura | Diretoria + Gestora de RH |
 | 🔴 **Quem é o avaliador de cada centro de custo** — o CSV modelo (74 CCs, nº de pessoas, candidatos por cargo como sugestão) está em `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` e **continua valendo**. ⚠️ A T.I. preencheu uma lista para destravar o desenvolvimento (§11): ela é **provisória** e **não substitui esta pendência** — quem responde por "quem avalia quem" é o RH | Gestora de RH |
 | 🔴 **O público de cada aplicação** — quais centros de custo respondem qual questionário. A T.I. também vai definir um recorte provisório para destravar (§11); ele fica **marcado como provisório na tela** e **não substitui esta pendência** | Gestora de RH |

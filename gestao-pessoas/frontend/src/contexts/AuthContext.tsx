@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ROLES, rolesDoModulo, type UsuarioDoToken as Usuario } from '../lib/roles';
+import { authApi } from '../services/api';
 
 interface Contexto {
   usuario: Usuario | null;
@@ -52,11 +53,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles,
       // ADMIN é bypass de plataforma, como no RolesGuard do backend.
       tem: (...alvos) => roles.includes(ROLES.ADMIN) || alvos.some((a) => roles.includes(a)),
-      // O token é da PLATAFORMA, guardado pelo Hub e compartilhado por origem:
-      // sair aqui é sair de tudo, e o destino é o Hub, como nos outros módulos.
+      /**
+       * ⚠️ SAIR AQUI É SAIR DE TUDO. Todos os módulos são servidos da mesma
+       * origem (`https://<host>/...`), então dividem o mesmo `localStorage`:
+       * limpar o token derruba Hub, Workspace, Inventário, Fiscal e Logística
+       * junto. É o comportamento de todos eles, não uma particularidade daqui.
+       *
+       * ⚠️ E limpar o navegador NÃO BASTA: sem `POST /auth/logout` o refresh
+       * token continua VÁLIDO no servidor (o auth-gateway só o revoga nessa
+       * rota) e o logout não entra na auditoria. Workspace, Inventário e Fiscal
+       * chamam; a Logística não — e é defeito dela, registrado no backlog.
+       *
+       * A chamada é best-effort de propósito: se ela falhar, sair localmente
+       * ainda é o que a pessoa pediu, e travar a saída num erro de rede seria
+       * prendê-la numa sessão que ela quer encerrar.
+       */
       logout: () => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) authApi.post('/logout', { refreshToken }).catch(() => {});
+        localStorage.clear();
         window.location.href = '/';
       },
     };
