@@ -189,8 +189,16 @@ Plataforma corporativa modular com microservicos independentes:
   (a melhoria pedida — o modelo antigo aplicava as mesmas 15 perguntas a ~1.000 pessoas),
   grupos ponderados, motor de calculo com renormalizacao.
 - Backend NestJS 11 + Prisma 6 (schema `rh` + `core` read-only via `$queryRaw`), porta 3004,
-  prefixo `/api/v1/gestao-pessoas`. **Sem frontend ainda** — o modulo nasce INATIVO em
-  `core.modulos_sistema` e nao aparece no Hub.
+  prefixo `/api/v1/gestao-pessoas`.
+- **⭐⭐ O modulo so vira ATIVO quando as SETE telas existirem** (decisao 05/09). Card no Hub
+  com cinco rotas por construir e pior que modulo ausente: o usuario clica, chega em tela
+  vazia e conclui que o sistema esta quebrado. Ate la `core.modulos_sistema.status` fica
+  **INATIVO**, e a virada para ATIVO e uma **migration do commit que entrega a setima tela** —
+  nao um UPDATE de ambiente. ⚠️ O `status` **nao filtrava nada** ate 05/09 (coluna decorativa,
+  embora o comentario do compose ja afirmasse o contrario); agora
+  `build-modulos-response.ts` filtra e ha spec para isso. De proposito o **JWT NAO filtra**:
+  INATIVO e "nao anunciar", nao kill switch — quem sabe a URL segue testando, e cortar acesso
+  de alguem continua sendo revogar a PERMISSAO, que e por pessoa.
 - **⭐ Colaborador mora em `rh`, nao em `core`** (ADR-RH-01, `docs/ADR-RH-01-*.md`), com
   gatilho de revisao: quando um 2o modulo precisar de colaborador, reabre. Nenhum outro
   modulo consulta `rh.colaborador` direto — so pelo service do gestao-pessoas.

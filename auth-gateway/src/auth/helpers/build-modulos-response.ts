@@ -39,7 +39,16 @@ export async function buildModulosResponse(
   usuarioId: string,
 ): Promise<ModuloResponse[]> {
   const permissoes = await prisma.permissaoModulo.findMany({
-    where: { usuarioId, status: 'ATIVO' },
+    // ⭐ `modulo.status` decide se o CARD aparece no Hub — e sem este filtro ele
+    // não decidia nada. O módulo INATIVO é o que ainda não está pronto para o
+    // usuário (Gestão de Pessoas nasceu assim, e o comentário do
+    // docker-compose já afirmava este comportamento antes de o código ter).
+    //
+    // ⚠️ De propósito, o mesmo filtro NÃO existe em `build-modulos-payload`: o
+    // JWT continua carregando o módulo, então quem sabe a URL (nós, testando)
+    // segue com a API aberta. INATIVO é "não anunciar", não é kill switch —
+    // desligar o acesso é ato de revogar a PERMISSÃO, que é por pessoa.
+    where: { usuarioId, status: 'ATIVO', modulo: { status: 'ATIVO' } },
     include: {
       modulo: { select: { codigo: true, nome: true, icone: true, cor: true, urlFrontend: true } },
       roleModulo: { select: { codigo: true, nome: true } },
