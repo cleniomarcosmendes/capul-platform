@@ -58,8 +58,11 @@ ciclo 000006 do Protheus — a nota do questionário bate **108/108** (ver
   de quem já respondeu, em silêncio. Quem precisa de outra data-base cria outro ciclo, que é
   a decisão que isso realmente é. Ciclo `ENCERRADO` não aceita nem o período. Fora disso não
   há edição: errou, cria outro.
-- **Reabertura de avaliação** existe na API (`POST /avaliacoes/:id/reabrir`, com motivo
-  obrigatório e auditoria) e **não tem botão em tela nenhuma**.
+- **Duas capacidades existem SÓ NA API, sem botão em tela nenhuma** — quem precisar delas em
+  homologação consegue por `curl`, e é bom saber que dá:
+  `POST /avaliacoes/:id/reabrir` (RH_ADMIN, motivo obrigatório) desfaz um envio, e
+  `PATCH /ciclos/:id/periodo` (RH_ADMIN) corrige as datas do ciclo. As duas gravam em
+  `rh.auditoria` com o valor anterior.
 - **Sincronização** existe na API (`POST /sincronizacao`, RH_ADMIN) e **não tem tela nem
   cron**. Hoje se dispara por `curl`, e os três CSVs precisam ser extraídos do Protheus à
   mão e colocados em `RH_CSV_DIR` (padrão `/app/carga`, que não existe no container — é
