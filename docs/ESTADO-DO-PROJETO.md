@@ -341,6 +341,16 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 
 ## 6. Armadilhas do ambiente
 
+### ⚠️ A auditoria grava o autor, mas quase nunca o IP
+
+`rh.auditoria` tem coluna `ip` e **só `ENVIAR` a preenche** (7 de 7). Todas as outras ações
+— `ABRIR`, `APURAR`, `DESIGNAR`, `IMPORTAR`, `AJUSTAR_PERIODO`, `REVISAR` — gravam `NULL`,
+porque só o `AvaliacaoService` recebe o `ContextoAcesso` com o IP; os demais services
+recebem apenas o `usuarioId`. **O autor e o horário estão sempre lá e resolvem para o
+username**; o que falta é de onde a pessoa agiu. Numa contestação isso raramente decide
+algo, mas é bom não descobrir na hora.
+
+
 Cada uma destas já custou tempo de alguém.
 
 ### O job de migration que mente
