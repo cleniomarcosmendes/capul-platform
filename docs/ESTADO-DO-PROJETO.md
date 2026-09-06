@@ -319,19 +319,30 @@ configuração está afirmando, para quem avalia, *"avalie os aprendizes antes d
 supervisores"*. Na fila de 95 da gerente do Supermercado Unaí, essa camada acidental decide a
 ordem em que 95 pessoas são avaliadas.
 
-#### ⚠️ O acoplamento é LATENTE, e a formulação óbvia dele está errada
+#### 🔴 FATO DE HOJE: a ordem da fila NÃO é reproduzível
+
+Não é risco futuro nem depende de alguém mexer em nada. **Já é assim, agora, no DEV e em
+qualquer ambiente:**
+
+- A fila ordena por `Avaliacao.criadoEm` — **quando a linha foi criada**, e isso nunca mais
+  muda.
+- Quem é designado num lote posterior entra no **fim da fila**, seja qual for a aplicação.
+  Uma pessoa acrescentada à aplicação dos Aprendizes depois aparece **atrás** de todos os de
+  Operação de Loja.
+- **Reexecutar a cópia do cadastro não normaliza nada:** o `upsert` dá UPDATE em quem já
+  existe e o `criadoEm` fica. Conferido no DEV — "Operação de Loja" tem linhas de `13:22:12`
+  e de `15:52:23` convivendo, de duas execuções diferentes.
+
+Consequência: **dois avaliadores do mesmo ciclo podem ter ordens diferentes pelo mesmo
+motivo, e não há como pôr a fila numa ordem conhecida.** Nem apagando e refazendo — só
+recriando as avaliações do zero, o que apaga respostas.
+
+#### ⚠️ E o acoplamento com `Aplicacao.ordem` é LATENTE
 
 A frase natural — *"a Arielly reordena as aplicações e a fila de todo mundo se reorganiza"* —
-**não é verdade hoje**, e foi medida antes de ser escrita:
-
-1. **`Avaliacao.criadoEm` não muda em reexecução.** A cópia do cadastro faz `upsert`; para
-   quem já existe ela dá UPDATE, e o `criadoEm` fica. Conferido no DEV: "Operação de Loja"
-   tem linhas de `13:22:12` e de `15:52:23` convivendo, de duas execuções diferentes.
-2. **Hoje ninguém consegue reordenar.** `Aplicacao.ordem` é gravado na criação e **não há
-   `PATCH` de aplicação** (§2). O acoplamento existe e está adormecido.
-3. **O que acontece de verdade é pior de um jeito diferente:** quem é designado depois entra
-   no FIM da fila, seja qual for a aplicação. O mesmo ciclo acumula ordens de lotes
-   diferentes, e **reexecutar a cópia não normaliza** — a ordem não é reproduzível.
+**não é verdade hoje**, e foi medida antes de ser escrita: `criadoEm` não muda em reexecução
+(acima), e **ninguém consegue reordenar**, porque `Aplicacao.ordem` é gravado na criação e
+**não há `PATCH` de aplicação** (§2). O acoplamento existe e está adormecido.
 
 ⚠️ **Para quem for construir a edição de aplicação** (já listada como lacuna): mexer em
 `ordem` mudará silenciosamente a ordem de trabalho de todo avaliador designado dali em
@@ -425,8 +436,20 @@ print — foi assim que se pegou o título do módulo virando "Aval…" no cabe�
 ⚠️ Ponha o token no `localStorage` com `context.addInitScript` **antes** do primeiro
 `goto`: sem token o `AuthProvider` redireciona para o Hub e a navegação é interrompida.
 
-⚠️ **E confira o bundle SERVIDO depois de `docker compose build` — inclusive com
-`--no-cache`.** No WSL o contexto de build lê o filesystem do Windows e pode entregar fonte
+### 🔴 A armadilha mais perigosa daqui: build de frontend com fonte velho
+
+> **Depois de TODO build de frontend: `grep` de uma string nova no bundle DENTRO do
+> container. Data de imagem e `--no-cache` não provam nada.**
+>
+> ```bash
+> docker compose exec -T <mod>-frontend sh -c "grep -c 'string que você acabou de escrever' /usr/share/nginx/html/assets/*.js"
+> ```
+
+É a mais perigosa porque **o sintoma é tela certa com código errado, sem erro nenhum** — não
+há log, não há 502, não há nada que denuncie. Você olha, conclui que a correção não funcionou,
+e vai depurar código que nem está rodando.
+
+⚠️ **Vale também para o backend**, com a mesma checagem no `dist/` do container. No WSL o contexto de build lê o filesystem do Windows e pode entregar fonte
 VELHO: em 06/09 uma imagem construída havia 2 minutos servia código de duas edições atrás,
 sem erro nenhum. Três rodadas de print mostraram a tela antiga.
 
@@ -710,6 +733,12 @@ script provisório, não de decisão de ninguém.
 | Sem avaliador no cadastro | 188 | **108** |
 | Linhas de divisão automática | 457 | **169** |
 | Avaliadores | 87 | **52** |
+
+⚠️ Estes números são do momento da importação. Depois dela, o script
+`popular-dev-fila-do-avaliador.ts` reatribuiu 15 pessoas para a conta de teste do AVALIADOR
+(§ abaixo), e o estado corrente é **928 linhas vigentes · 108 sem avaliador · 159 não
+revisadas · 53 avaliadores**. Confira no banco antes de citar — número de documento
+envelhece.
 | Média / mediana / maior | 9,4 / 9 / 58 | **17,2 / 11,5 / 95** |
 
 ⚠️ **A lista real CONCENTRA em vez de espalhar, e isso é informação para o RH.** O critério
@@ -745,7 +774,15 @@ descartado por duas razões: apagaria o cenário da pendência (abaixo) e produz
 
 **O bloqueio real não era a lista, era o acesso.** Das 894 avaliações do ciclo, só 27
 estavam com alguém que consegue entrar no sistema — e a conta que tem o papel `AVALIADOR`
-(`wandersonnascimento`) tinha **zero**. `prisma/popular-dev-fila-do-avaliador.ts` resolve
+(`wandersonnascimento`) tinha **zero**.
+
+🔴 **E o acesso continua sendo o gargalo do piloto: só 2 contas têm permissão no módulo.**
+`core.permissoes_modulo` para `GESTAO_PESSOAS` tem exatamente duas linhas —
+`ariellypereira` (RH_ADMIN) e `wandersonnascimento` (AVALIADOR). Todas as outras contas com
+matrícula, inclusive `supdept01` (Clenio, com **13 avaliações designadas**), **não abrem o
+módulo**: caem em "Peça ao RH que lhe conceda acesso". Conceder acesso é ato do Configurador,
+por pessoa, e não sai de nenhuma migration — em 15/09 isso precisa estar feito para cada
+avaliador real, ou a fila existe e ninguém alcança. `prisma/popular-dev-fila-do-avaliador.ts` resolve
 isso com o recorte mínimo: 12 do próprio centro de custo dele + 3 aprendizes, tudo
 `provisorio = true`. A fila tem gente de **duas aplicações** de propósito — é o que prova a
 melhoria que originou o módulo, o mesmo avaliador abrindo um questionário de 14 perguntas
