@@ -122,6 +122,42 @@ describe('AplicacaoService — público nominal', () => {
     });
   });
 
+  /**
+   * ⭐ A linha do próprio usuário no público — decisão de 06/09/2026. O público
+   * diz por qual questionário a pessoa é avaliada, e a linha traz "Tirar".
+   */
+  describe('marca a própria linha, nunca filtra', () => {
+    const montarPublico = () => {
+      prisma.aplicacaoPublico.findMany.mockResolvedValue(
+        PESSOAS.map((c, i) => ({
+          id: `p${i}`, colaboradorId: c.id, origem: 'CENTRO_CUSTO',
+          origemReferencia: null, provisorio: true,
+        })),
+      );
+      prisma.colaborador.findMany.mockResolvedValue(
+        PESSOAS.map((c) => ({ ...c, cargoDescricao: null, situacao: 'ATIVO' })),
+      );
+    };
+
+    it('mantém as 3 linhas e marca só a de quem está logado', async () => {
+      montarPublico();
+      const lista = await service.publicoDe(APP, 'c2');
+      expect(lista).toHaveLength(3);
+      expect(lista.filter((l) => l.restrita)).toHaveLength(1);
+      expect(lista.find((l) => l.colaboradorId === 'c2')).toMatchObject({
+        restrita: true,
+        motivoRestricao: expect.stringContaining('própria avaliação'),
+      });
+    });
+
+    it('sem colaborador resolvido, ninguém fica marcado — e a lista sai inteira', async () => {
+      montarPublico();
+      const lista = await service.publicoDe(APP, null);
+      expect(lista).toHaveLength(3);
+      expect(lista.every((l) => !l.restrita)).toBe(true);
+    });
+  });
+
   describe('remover', () => {
     it('⚠️ quem já tem avaliação não sai do público', async () => {
       // A `Avaliacao` ficaria órfã do recorte que a originou e sumiria da

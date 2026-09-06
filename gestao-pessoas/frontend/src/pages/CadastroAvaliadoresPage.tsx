@@ -335,6 +335,10 @@ function ListaDoAvaliador({
               <span className="text-slate-400"> · {l.matricula}</span>
               {l.cargo && <span className="text-slate-500"> · {l.cargo}</span>}
             </div>
+            {/* Quem abre a lista de um avaliador pode ser uma das linhas dela —
+                é o caso da gestora, avaliada pelo Diretor Executivo. Marca,
+                nunca filtra: o total da lista tem de fechar. */}
+            {l.restrita && <Etiqueta tom="azul">você</Etiqueta>}
             {l.naoRevisada && <Etiqueta tom="ambar">não revisada</Etiqueta>}
             {l.provisorio && <Etiqueta tom="azul">provisória</Etiqueta>}
             <button

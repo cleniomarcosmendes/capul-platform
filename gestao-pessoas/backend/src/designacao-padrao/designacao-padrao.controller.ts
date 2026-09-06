@@ -4,6 +4,7 @@
  * mérito. RH_ADMIN, e só.
  */
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { ArrayNotEmpty, IsArray, IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -59,8 +60,11 @@ export class DesignacaoPadraoController {
   }
 
   @Get('avaliadores/:avaliadorId')
-  listaDe(@Param('avaliadorId') avaliadorId: string) {
-    return this.servico.listaDe(avaliadorId);
+  listaDe(
+    @Param('avaliadorId') avaliadorId: string,
+    @ColaboradorAtual('id') colaboradorId: string,
+  ) {
+    return this.servico.listaDe(avaliadorId, colaboradorId);
   }
 
   @Post() @HttpCode(200)

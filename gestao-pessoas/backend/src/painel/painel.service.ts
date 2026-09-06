@@ -210,6 +210,20 @@ export class PainelService {
    * sobre o cadastro inteiro, porque a pergunta é justamente sobre quem ficou
    * fora de todo recorte.
    */
+  /**
+   * ⚠️ NÃO MARCA a linha do próprio usuário — decisão de 06/09/2026, com prazo
+   * de validade.
+   *
+   * A linha aqui só diz "esta pessoa ficaria fora do ciclo": pendência de
+   * montagem, sem avaliação, avaliador nem nota. E a marca seria quase sempre
+   * invisível — medido no DEV, o ciclo "Avaliação Geral 2026" tem **896 pessoas
+   * nesta lista e a tela renderiza 6 nomes**; a gestora está na posição 35.
+   *
+   * 🔴 **Quem implementar o "ver todos" desta lista precisa revisitar isto.** A
+   * decisão é inócua enquanto a tela mostra 6 de 896 — deixa de ser no dia em
+   * que ela mostrar a lista inteira, com busca. Marcar é uma linha:
+   * `marcarRestricoesPor(pessoas, colaboradorId, (p) => p.colaboradorId)`.
+   */
   private async foraDeTodasAsAplicacoes(ciclo: { id: string; incluirAfastados: boolean }) {
     const [candidatos, noPublico, decisoes] = await Promise.all([
       this.prisma.colaborador.findMany({

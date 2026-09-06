@@ -26,6 +26,7 @@ import {
   PlanilhaInvalidaError,
 } from './planilha.js';
 import { montarPrevia, type ParaGravar, type Previa } from './distribuicao.js';
+import { marcarRestricoesPor } from '../avaliacao/separacao-funcoes.js';
 
 /** Origem que significa "ninguém decidiu esta linha ainda". */
 const NAO_REVISADA = 'DIVISAO_AUTOMATICA';
@@ -168,7 +169,13 @@ export class DesignacaoPadraoService {
   }
 
   /** A lista nominal de um avaliador. */
-  async listaDe(avaliadorId: string) {
+  /**
+   * ⚠️ Recebe o colaborador logado para MARCAR a linha dele. Esta lista revela o
+   * mesmo fato que a Designação — **quem avalia quem** —, e a linha traz
+   * "Tirar", além de entrar no "Conferi, está certo" do bloco inteiro. Quem
+   * abre a lista do próprio avaliador tem de ver que uma das linhas é ela.
+   */
+  async listaDe(avaliadorId: string, colaboradorId?: string | null) {
     const linhas = await this.prisma.designacaoPadrao.findMany({
       where: { avaliadorId, ...this.vigente },
       select: {
@@ -182,7 +189,7 @@ export class DesignacaoPadraoService {
     });
     const porId = new Map(pessoas.map((c) => [c.id, c]));
 
-    return linhas
+    const lista = linhas
       .map((l) => ({
         id: l.id,
         colaboradorId: l.avaliadoId,
@@ -200,6 +207,8 @@ export class DesignacaoPadraoService {
         importacaoId: l.importacaoId,
       }))
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    return marcarRestricoesPor(lista, colaboradorId, (l) => l.colaboradorId);
   }
 
   /** Designa à mão. `MANUAL` é a origem mais forte: a importação não a sobrescreve. */

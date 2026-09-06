@@ -9,6 +9,7 @@ import {
   ehAvaliadorDesignado,
   ehProprioAvaliado,
   marcarRestricoes,
+  marcarRestricoesPor,
   motivoParaRecusarDeTerceiro,
 } from './separacao-funcoes.js';
 
@@ -163,5 +164,37 @@ describe('designação — quem escreve é o avaliador designado', () => {
     // Não é hipótese: `responder` e `editar` existiram sem exigência nenhuma até
     // 06/09. O default de quem não sabe tem de ser recusar.
     expect(() => assertPodeAgirSobreAvaliacaoDeOutro('acao-nova' as never, true)).toThrow();
+  });
+});
+
+
+/**
+ * ⭐ O extrator existe porque a MESMA pergunta ("esta linha sou eu?") é
+ * respondida por campos diferentes: `avaliadoId` numa lista de avaliações,
+ * `colaboradorId` no público e no cadastro de avaliadores.
+ */
+describe('marcarRestricoesPor — a mesma marca, com a chave da lista', () => {
+  const linhas = [{ colaboradorId: 'c1' }, { colaboradorId: 'c2' }, { colaboradorId: 'c3' }];
+
+  it('marca pela chave que a lista tiver, sem filtrar nada', () => {
+    const m = marcarRestricoesPor(linhas, 'c2', (l) => l.colaboradorId);
+    expect(m).toHaveLength(3);
+    expect(m.filter((l) => l.restrita)).toHaveLength(1);
+    expect(m.find((l) => l.colaboradorId === 'c2')).toMatchObject({
+      restrita: true,
+      motivoRestricao: MOTIVO_ACESSO_RESTRITO,
+    });
+  });
+
+  it('marcarRestricoes é o mesmo com a chave `avaliadoId` — uma implementação só', () => {
+    const porAvaliado = [{ avaliadoId: 'c1' }, { avaliadoId: 'c2' }];
+    expect(marcarRestricoes(porAvaliado, 'c2')).toEqual(
+      marcarRestricoesPor(porAvaliado, 'c2', (l) => l.avaliadoId),
+    );
+  });
+
+  it('chave ausente na linha não marca nada — e não quebra', () => {
+    const m = marcarRestricoesPor([{ colaboradorId: undefined }], 'c2', (l) => l.colaboradorId);
+    expect(m[0].restrita).toBe(false);
   });
 });

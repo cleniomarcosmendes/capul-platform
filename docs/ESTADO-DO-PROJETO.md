@@ -33,7 +33,7 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 | Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **42 endpoints** em 9 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
 | Banco | 8 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **381 testes, 27 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Testes | **388 testes, 27 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -176,24 +176,49 @@ próprio resultado não é ato sobre ele) e a leitura gravou
 aparecendo com *"Avalia: CLAUDIMAR · PENDENTE"*. Corrigido: `listar()` recebe o colaborador e
 marca, e a tela mostra "você". Conferido: 142 linhas, 1 marcada.
 
-⚠️ **As outras listas continuam sem marcar** — e agora está MEDIDO com o token da gestora,
-não deduzido do código (06/09, noite):
+✅ **Decidido em 06/09 (noite), com cada lista medida com o token da gestora — não deduzida do
+código.** Marcam as listas que carregam uma avaliação ou o vínculo que a origina:
 
 | Lista | A linha dela | Marca? |
 |---|---|---|
-| `/designacao/aplicacao/:id` — a que foi corrigida | aparece entre 142 | ✅ `restrita: true` |
-| `/resultados/ciclo/:id` | aparece entre 3 | ✅ `restrita: true` |
 | `/avaliacoes/minhas` | não aparece (ninguém se avalia) | ✅ marca quando aparecer |
-| `/aplicacoes/:id/publico` | **aparece entre 142** | ❌ sem o campo |
-| `/designacao-padrao/avaliadores/:avaliadorId` | **aparece entre os 45 do Claudimar** | ❌ sem o campo |
-| `/catalogo/colaboradores?busca=` | **aparece** (é a busca de montar público) | ❌ sem o campo |
-| `/designacao-padrao/pendencias` | não aparece hoje — ela TEM avaliador no cadastro | ❌ sem o campo |
-| painel → `foraDeTodasAsAplicacoes` | não aparece hoje — está em aplicação (total 0 no Piloto) | ❌ sem o campo |
+| `/resultados/ciclo/:id` | aparece entre 3 | ✅ |
+| `/designacao/aplicacao/:id` | aparece entre 142 | ✅ |
+| `/aplicacoes/:id/publico` | aparece entre 142 | ✅ **novo** |
+| `/designacao-padrao/avaliadores/:avaliadorId` | aparece entre os 45 do Claudimar | ✅ **novo** |
+| `/catalogo/colaboradores?busca=` | aparece | ❌ **decidido que não** |
+| painel → `foraDeTodasAsAplicacoes` | 0 no Piloto; **896 no Geral, ela é a 35ª** | ❌ **decidido que não, com prazo** |
+| `/designacao-padrao/pendencias` | não aparece hoje — ela TEM avaliador no cadastro | ❌ (mesma família do catálogo: é lista de pessoa, não de avaliação) |
 
-Nenhuma das quatro de baixo mostra nota nem quem avalia quem — só "esta pessoa está/não está
-em tal recorte" —, então não é o mesmo risco, **e é decisão se devem marcar**. Fica registrado
-por ser a mesma família: as duas últimas não aparecem por acaso do dado de hoje, não por
-desenho — basta a gestora ficar sem avaliador no cadastro para a linha dela entrar sem marca.
+⭐ A regra da marca saiu de quatro cópias para **uma** (`marcarRestricoesPor`, em
+`separacao-funcoes.ts`). A pergunta é sempre "esta linha sou eu?"; o que muda entre as listas é
+o CAMPO que responde — `avaliadoId` numa lista de avaliações, `colaboradorId` num recorte de
+pessoas —, então o extrator vem de fora. A versão inline que nasceu na Designação em 06/09 foi
+substituída pela função comum no mesmo dia: cópia de regra de visibilidade envelhece errada, e
+neste repositório isso já custou um achado de segurança.
+
+**🚫 O catálogo NÃO marca, e o motivo está escrito em `catalogo.service.ts` para ninguém
+"corrigir" a ausência depois:** `restrita` quer dizer *"esta AVALIAÇÃO é sua"*, e ali a linha é
+uma PESSOA — não há avaliação, avaliador, status nem nota sobre o que a marca falasse. Pior: a
+mesma busca serve, na Designação, para **escolher quem avalia**, e a gestora se escolher ali é
+legítimo — ela avalia 13. Um "você" naquela linha sinalizaria como suspeito um ato normal.
+
+**🚫 `foraDeTodasAsAplicacoes` NÃO marca — e esta decisão tem prazo de validade.** A linha só
+diz "esta pessoa ficaria fora do ciclo", e a marca seria quase invisível: são **896 pessoas no
+payload e 6 nomes na tela**; a gestora está na posição 35. 🔴 **Quem implementar o "ver todos"
+dessa lista precisa revisitar isto** — o aviso está no código, junto da linha que faria a
+marcação.
+
+#### 🔴 Marcar não responde à pergunta cara — e ela virou pendência (§5)
+
+Nas duas listas que passaram a marcar, **a linha dela não é só visível: é OPERÁVEL**. O print
+de 06/09 mostra a tensão em uma linha só:
+
+> `ARIELLY APARECIDA JOSE PEREIRA · 002448 · GERENTE DE RH PLENO 4B` **| você | provisória | Tirar**
+
+A tela agora diz "esta é você" **ao lado de um botão que ela pode clicar**. Os três atos são
+`PUBLICO_REMOVER`, `ENCERRAR` e `REVISAR` — todos auditados, e **rastro diz quem fez, não
+decide se podia** (a mesma frase que vale para o consentimento, acima). Decisão do RH, na §5.
 
 #### ⚠️ Grupo pequeno reaproxima a resposta — em aberto
 
@@ -288,7 +313,7 @@ WHERE a.entidade = 'Avaliacao' AND a.acao <> 'DESIGNAR'
 ORDER BY a.criado_em;
 ```
 
-### 3.13. Ser avaliador é fato do DADO — o que a correção alcançou, medido
+### 3.1.3. Ser avaliador é fato do DADO — o que a correção alcançou, medido
 
 A correção de 06/09 (RH_ADMIN entra na fila; o item de menu sem condição de papel) nasceu de um
 caso: a gestora avalia 13 pessoas e tem só `RH_ADMIN`. **Conferido depois se pegou todo mundo**
@@ -327,6 +352,39 @@ TESTE da Logística e carrega a matrícula **001047**, que é a de uma pessoa re
 Mendes, avaliador de 13). Dar GESTAO_PESSOAS a essa conta é dar a fila dele a quem usar a
 conta. Não é defeito do módulo — é consequência de resolver identidade por matrícula, que é o
 desenho certo — mas é motivo para não haver conta de teste com matrícula de gente de verdade.
+
+### 3.1.4. ⭐⭐ O VÃO: a separação de funções guarda a AVALIAÇÃO — e há atos ANTES dela
+
+Achado estrutural de 06/09/2026, e não detalhe de duas telas.
+
+`separacao-funcoes.ts` protege o registro `Avaliacao`: ninguém abre, edita, reabre, responde ou
+recalcula aquela em que é o avaliado, e o teste de invariante varre o fonte cobrando que todo
+acesso a `prisma.avaliacao` passe pela porta. Isso cobre **a vida da avaliação**.
+
+**Só que a avaliação é o FIM de uma cadeia**, e cada elo antes dela também decide o resultado —
+sem tocar em `prisma.avaliacao`, e portanto sem passar por guarda nenhuma:
+
+| Elo | Tabela | O que decide | Guardado? |
+|---|---|---|---|
+| público da aplicação | `aplicacao_publico` | **se a pessoa é avaliada** neste ciclo, e por qual questionário | ❌ |
+| cadastro de quem avalia quem | `designacao_padrao` | **quem a avalia** | ❌ |
+| revisão da lista arbitrada | `designacao_padrao.origem` | confirmar a escolha acima | ❌ |
+| elegibilidade do ciclo | `ciclo_elegibilidade` | incluir/excluir alguém do ciclo por decisão manual | ❌ |
+| a avaliação | `avaliacao` | a nota | ✅ separação de funções |
+
+Concretamente: um `RH_ADMIN` que também é avaliado pode **tirar-se do público** (enquanto não
+houver avaliação — depois o backend recusa), **encerrar a designação de quem o avalia** e
+**confirmar a lista que o inclui**. Nada disso é 403 hoje, e nada disso é bug de tela: é o
+alcance da regra, que foi escrita sobre o registro final.
+
+⚠️ **Não conserte isso "por simetria".** Ao contrário da escrita de terceiro (§3.1.2), aqui
+**existe pergunta legítima a fazer**: o RH monta o ciclo, e montar inclui a própria linha —
+tirar de alguém a capacidade de montar pode ser pior do que o risco que ela cria, ainda mais
+com um `RH_ADMIN` só (§5). Por isso virou **pendência do RH**, e não correção nossa.
+
+⭐ O que já ampara, se a resposta demorar: os três atos são auditados (`PUBLICO_REMOVER`,
+`ENCERRAR`, `REVISAR` — este com todos os ids no `valorNovo`), a linha agora **aparece marcada**
+nas duas listas, e a regra do **segundo `RH_ADMIN`** existe exatamente para haver quem desfaça.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
@@ -650,6 +708,10 @@ carga não existe nenhum, e exigir vínculo impediria o módulo de sair do zero.
 um decorator que **exige um motivo escrito**, e um teste de invariante garante que nenhuma
 rota que toca avaliação a use.
 
+⚠️ **O vão da §3.1.4 não é uma terceira exceção** — é o ALCANCE da regra: aqueles atos não
+tocam `prisma.avaliacao` porque acontecem antes de a avaliação existir. Não some com esta
+contagem.
+
 > Consultas **agregadas** (`count`, `groupBy`) não são exceção: não leem o conteúdo de
 > ninguém, e a separação de funções não tem o que proteger num total. `ciclo.service` e
 > `painel.service` estão dispensados por essa frase — que é também por que o painel usa
@@ -668,6 +730,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
 | 🔴 **O avaliador é avisado de que o RH lê a observação dele?** — **decisão da gestora, não nossa.** `observacaoAvaliador` é texto livre sobre a pessoa avaliada e aparece **inteiro** no modal de Resultados para qualquer `RH_ADMIN`; **nenhuma tela avisa quem escreve**. Verificado ao vivo em 06/09: a observação escrita no envio foi lida no modal pela conta da gestora. **São dois caminhos e ela escolhe um: (A)** o rótulo do campo passa a dizer, na tela de quem escreve, que o texto **será lido pelo RH** — o campo continua o que é e quem escreve sabe; **(B)** muda o entendimento do que o campo colhe (devolutiva ao avaliado, ou observação que o RH não lê) e a tela de Resultados deixa de exibi-lo. **Não pode chegar ambíguo à produção:** o primeiro ciclo real já colhe texto sob o entendimento errado, e texto colhido não se recolhe. ⚠️ O **rastro** desse acesso está RESOLVIDO (§3.1.1); isto aqui é **consentimento**, e continua EM ABERTO — auditoria diz quem leu, não autoriza a leitura. Ver §3.1.1 | Gestora de RH (Arielly) |
+| 🔴 **O `RH_ADMIN` pode operar a PRÓPRIA linha?** — decisão dela, não nossa. Quem monta o ciclo é também avaliada, e três botões agem sobre a linha dela: **"Tirar" no público** (decide se ela é avaliada neste ciclo — só antes de existir avaliação; depois o sistema recusa), **"Tirar" na lista de um avaliador** (encerra a designação de quem a avalia) e **"Conferi, está certo"** (confirma a lista que a inclui). Desde 06/09 a linha aparece **marcada** nas duas listas — então a tela diz *"esta é você"* ao lado de um botão que ela pode clicar, e **marcar sem decidir isto é pior que antes**. Os três atos são auditados (`PUBLICO_REMOVER`, `ENCERRAR`, `REVISAR`), mas **rastro diz quem fez, não decide se podia** — a mesma frase da observação, acima. ⚠️ Não é o mesmo caso da escrita de terceiro (§3.1.2), que corrigimos sem perguntar: ali não havia pergunta; aqui há, porque montar o ciclo é o trabalho dela. Ver §3.1.4 | Gestora de RH (Arielly) |
 | 🔴 **A ordem da fila do avaliador** — é indiferente, ou há prioridade (cargo, prazo, unidade)? Hoje é acidental: vem de `Aplicacao.ordem`, um campo de tela do RH, e numa fila de 95 decide a ordem em que 95 pessoas são avaliadas. Ver §3.11 | Gestora de RH |
 | 🔴 **A mesma pessoa em dois ciclos abertos** — 9 no DEV, com períodos sobrepostos, duas notas cada. Ondas de unidade (§9) são legítimas; sobreposição de PESSOAS talvez não. Ver §3.10 | Gestora de RH |
 | 🔴 **Quem avalia os ~52 AVALIADORES** — hoje 46 deles caem no Diretor Executivo pela regra provisória de hierarquia. ⚠️ A planilha de avaliadores **não tem como responder isto**: ela diz "quem responde pelo centro de custo X", e o responsável está DENTRO do CC que lidera — ele fica de fora da própria lista, porque autoavaliação não existe. É pergunta separada, e é de estrutura | Diretoria + Gestora de RH |

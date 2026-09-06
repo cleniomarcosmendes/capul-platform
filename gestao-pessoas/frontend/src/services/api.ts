@@ -477,6 +477,13 @@ export interface LinhaDaLista {
   observacao: string | null;
   vigenciaInicio: string;
   importacaoId: string | null;
+  /**
+   * ⚠️ A linha do próprio usuário vem MARCADA, nunca filtrada. Aqui ela diz
+   * "quem avalia você" — e traz o botão "Tirar". O campo é opcional só por
+   * retrocompatibilidade de contrato; o backend sempre manda.
+   */
+  restrita?: boolean;
+  motivoRestricao?: string;
 }
 
 export interface PreviaDaImportacao {
@@ -644,6 +651,9 @@ export interface PessoaDoPublico {
   origem: string;
   origemReferencia: string | null;
   provisorio: boolean;
+  /** Marca, nunca filtra — a linha do próprio usuário no público da aplicação. */
+  restrita?: boolean;
+  motivoRestricao?: string;
 }
 
 export interface AlvoDoPublico {

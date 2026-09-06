@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
@@ -61,8 +62,11 @@ export class AplicacaoController {
 
   /** O público NOMINAL da aplicação — uma linha por pessoa. */
   @Get(':aplicacaoId/publico')
-  publico(@Param('aplicacaoId') aplicacaoId: string) {
-    return this.aplicacoes.publicoDe(aplicacaoId);
+  publico(
+    @Param('aplicacaoId') aplicacaoId: string,
+    @ColaboradorAtual('id') colaboradorId: string,
+  ) {
+    return this.aplicacoes.publicoDe(aplicacaoId, colaboradorId);
   }
 
   /**

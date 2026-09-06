@@ -149,6 +149,24 @@ export class CatalogoService {
    * Busca de colaborador — é assim que a gestora escolhe um avaliador que a
    * régua de centro de custo não encontrou. Limite fixo: uma lista de 1.036
    * nomes num `<select>` não é escolha, é rolagem.
+   *
+   * ⭐⭐ ESTA LISTA NÃO MARCA A PRÓPRIA LINHA, e é decisão registrada
+   * (06/09/2026) — não esquecimento. Não "corrija" a ausência.
+   *
+   * Duas razões, e a segunda é a que decide:
+   *
+   * 1. `restrita` quer dizer **"esta AVALIAÇÃO é sua"**. Aqui a linha é uma
+   *    PESSOA: não há avaliação, avaliador, status nem nota sobre o que a marca
+   *    pudesse falar. Marcar seria responder uma pergunta que ninguém fez.
+   *
+   * 2. Esta busca é usada na Designação para **escolher QUEM AVALIA** — e a
+   *    gestora se escolher ali é legítimo: ela avalia 13 pessoas. Um "você" na
+   *    linha dela sinalizaria como suspeito um ato inteiramente normal, que é o
+   *    oposto do que a marca existe para fazer.
+   *
+   * As listas que marcam são as que carregam uma avaliação ou o vínculo que a
+   * origina: `/resultados`, a fila, a Designação, o público da aplicação e a
+   * lista de um avaliador. Ver `avaliacao/separacao-funcoes.ts`.
    */
   async colaboradores(busca: string | undefined) {
     const termo = (busca ?? '').trim();

@@ -151,6 +151,34 @@ describe('DesignacaoPadraoService', () => {
     });
   });
 
+  /**
+   * ⭐ A lista de um avaliador revela **quem avalia quem** — o mesmo fato da
+   * Designação — e quem a abre pode ser uma das linhas: a gestora é avaliada
+   * pelo Diretor Executivo. Decisão de 06/09/2026: marca, nunca filtra.
+   */
+  describe('lista de um avaliador — marca a própria linha', () => {
+    const montarLista = () =>
+      prisma.designacaoPadrao.findMany.mockResolvedValue([
+        { id: 'd1', avaliadoId: 'c-a', origem: 'MANUAL', origemReferencia: null, provisorio: false, observacao: null, vigenciaInicio: new Date(), importacaoId: null },
+        { id: 'd2', avaliadoId: 'c-chefe', origem: 'MANUAL', origemReferencia: null, provisorio: false, observacao: null, vigenciaInicio: new Date(), importacaoId: null },
+      ]);
+
+    it('marca a linha de quem está logado e mantém as demais', async () => {
+      montarLista();
+      const lista = await service.listaDe('c-diretor', 'c-chefe');
+      expect(lista).toHaveLength(2);
+      expect(lista.find((l) => l.colaboradorId === 'c-chefe')?.restrita).toBe(true);
+      expect(lista.find((l) => l.colaboradorId === 'c-a')?.restrita).toBe(false);
+    });
+
+    it('sem colaborador resolvido, a lista sai inteira e sem marca', async () => {
+      montarLista();
+      const lista = await service.listaDe('c-diretor');
+      expect(lista).toHaveLength(2);
+      expect(lista.every((l) => !l.restrita)).toBe(true);
+    });
+  });
+
   describe('remover', () => {
     it('encerra a vigência e nunca apaga', async () => {
       prisma.designacaoPadrao.findUnique.mockResolvedValue({

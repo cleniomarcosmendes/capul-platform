@@ -20,7 +20,7 @@ import {
   type CandidatoDesignacao,
   type MotivoExclusao,
 } from './elegibilidade-ciclo.js';
-import { MOTIVO_ACESSO_RESTRITO } from '../avaliacao/separacao-funcoes.js';
+import { marcarRestricoesPor } from '../avaliacao/separacao-funcoes.js';
 import {
   decidirTrocaDeAplicacao,
   mensagemDaRecusa,
@@ -212,12 +212,12 @@ export class DesignacaoService {
 
     // Marca, nunca filtra: filtrar faria o total não fechar, e o total é o
     // número que alguém vai conferir contra a folha.
-    if (!colaboradorId) return comDecisao;
-    return comDecisao.map((l) =>
-      l.colaboradorId === colaboradorId
-        ? { ...l, restrita: true, motivoRestricao: MOTIVO_ACESSO_RESTRITO }
-        : { ...l, restrita: false },
-    );
+    //
+    // ⚠️ Esta regra nasceu INLINE aqui em 06/09 e virou a 1ª de quatro listas.
+    // Agora sai do mesmo lugar que as outras (`marcarRestricoesPor`): cópia de
+    // regra de visibilidade envelhece errada — já custou um achado de segurança
+    // neste repositório.
+    return marcarRestricoesPor(comDecisao, colaboradorId, (l) => l.colaboradorId);
   }
 
   /**

@@ -14,6 +14,7 @@ import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { validarAplicacao } from '../ciclo/abertura.validator.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
+import { marcarRestricoesPor } from '../avaliacao/separacao-funcoes.js';
 
 export interface DadosAplicacao {
   cicloId: string;
@@ -193,7 +194,13 @@ export class AplicacaoService {
    * de custo que se sobrepõe a outro público falharia no INSERT, com o erro do
    * banco e sem dizer de quem se trata. A tela precisa AVISAR antes.
    */
-  async publicoDe(aplicacaoId: string) {
+  /**
+   * ⚠️ Recebe o colaborador logado para MARCAR a linha dele — decisão de
+   * 06/09/2026, a mesma da Designação. O público diz **por qual questionário a
+   * pessoa é avaliada**, e a linha traz o botão "Tirar": quem opera a lista
+   * precisa ver quando a linha é a própria. Como sempre: marca, não filtra.
+   */
+  async publicoDe(aplicacaoId: string, colaboradorId?: string | null) {
     const linhas = await this.prisma.aplicacaoPublico.findMany({
       where: { aplicacaoId },
       select: {
@@ -211,7 +218,7 @@ export class AplicacaoService {
     });
     const porId = new Map(pessoas.map((c) => [c.id, c]));
 
-    return linhas
+    const publico = linhas
       .map((l) => ({
         id: l.id,
         colaboradorId: l.colaboradorId,
@@ -227,6 +234,8 @@ export class AplicacaoService {
         provisorio: l.provisorio,
       }))
       .sort((a, b) => a.filial.localeCompare(b.filial) || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    return marcarRestricoesPor(publico, colaboradorId, (l) => l.colaboradorId);
   }
 
   async previaDoPublico(aplicacaoId: string, alvo: AlvoDoPublico) {

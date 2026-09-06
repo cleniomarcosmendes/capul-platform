@@ -458,6 +458,9 @@ function EditorDePublico({
                   {p.nome} <span className="text-slate-400">· {p.matricula}</span>
                   {p.area && <span className="text-slate-500"> · {p.area}</span>}
                 </span>
+                {/* A própria linha aparece marcada, nunca some: sumir faria o
+                    total do público não bater com o da designação. */}
+                {p.restrita && <Etiqueta tom="azul">você</Etiqueta>}
                 {p.provisorio && <Etiqueta tom="ambar">provisório</Etiqueta>}
                 <button
                   type="button"

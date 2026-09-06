@@ -170,8 +170,31 @@ export function marcarRestricoes<T extends { avaliadoId: string }>(
   linhas: readonly T[],
   colaboradorIdDoUsuario: string | null | undefined,
 ): (T & Restricao)[] {
+  return marcarRestricoesPor(linhas, colaboradorIdDoUsuario, (l) => l.avaliadoId);
+}
+
+/**
+ * ⭐ A MESMA marcação, para listas cuja linha **é a pessoa** e não a avaliação.
+ *
+ * A pergunta é uma só ("esta linha sou eu?"), mas o campo que a responde muda
+ * com a lista: `avaliadoId` numa lista de avaliações, `colaboradorId` no público
+ * da aplicação e no cadastro de quem avalia quem. Por isso o extrator vem de
+ * fora — e por isso ele existe: sem ele a regra nasceu inline na Designação, em
+ * 06/09/2026, e três listas depois seriam três cópias para envelhecerem
+ * separadas. A segunda cópia de uma regra de visibilidade já custou um achado
+ * de segurança neste repositório.
+ *
+ * ⚠️ Não marque lista de PESSOA solta (a busca do catálogo). Ver o comentário em
+ * `catalogo.service.ts`: `restrita` quer dizer "esta AVALIAÇÃO é sua", e onde
+ * não há avaliação a marca vira acusação sobre um ato normal.
+ */
+export function marcarRestricoesPor<T>(
+  linhas: readonly T[],
+  colaboradorIdDoUsuario: string | null | undefined,
+  pessoaDaLinha: (linha: T) => string | null | undefined,
+): (T & Restricao)[] {
   return linhas.map((linha) =>
-    ehProprioAvaliado(colaboradorIdDoUsuario, linha.avaliadoId)
+    ehProprioAvaliado(colaboradorIdDoUsuario, pessoaDaLinha(linha))
       ? { ...linha, restrita: true, motivoRestricao: MOTIVO_ACESSO_RESTRITO }
       : { ...linha, restrita: false },
   );
