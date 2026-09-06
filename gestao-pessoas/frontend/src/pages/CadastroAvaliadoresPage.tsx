@@ -365,6 +365,7 @@ function Importacao({ aoImportar }: { aoImportar: () => Promise<void> }) {
   const [conteudo, setConteudo] = useState<string | null>(null);
   const [nome, setNome] = useState('');
   const [substituir, setSubstituir] = useState(false);
+  const [provisorio, setProvisorio] = useState(true);
   const [previa, setPrevia] = useState<PreviaDaImportacao | null>(null);
   const [lotes, setLotes] = useState<LoteDeImportacao[]>([]);
   const [ocupado, setOcupado] = useState(false);
@@ -401,7 +402,7 @@ function Importacao({ aoImportar }: { aoImportar: () => Promise<void> }) {
     if (!conteudo || !previa) return;
     setOcupado(true); setErro(null);
     try {
-      const r = await cadastroAvaliadores.importar(conteudo, nome, previa.conferencia, substituir);
+      const r = await cadastroAvaliadores.importar(conteudo, nome, previa.conferencia, substituir, provisorio);
       setMsg(`Importação gravada: ${r.pares.total} par(es).`);
       setPrevia(null); setConteudo(null); setNome('');
       if (input.current) input.current.value = '';
@@ -450,6 +451,27 @@ function Importacao({ aoImportar }: { aoImportar: () => Promise<void> }) {
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void escolher(f); }}
           className="mt-3 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-capul-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
         />
+        {/* ⭐ O padrão é PROVISÓRIO, e o padrão é o seguro: uma lista preenchida
+            por quem conhece a estrutura não é a decisão do RH sobre quem avalia
+            quem, e a nota tem consequência de mérito. Desmarcar é uma afirmação
+            de alguém, não um default. */}
+        <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={provisorio}
+            disabled={ocupado}
+            onChange={(e) => setProvisorio(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Lista provisória
+            <span className="block text-xs text-slate-500">
+              Marcada, as linhas entram como <strong>provisórias</strong> e a tela avisa que
+              há dado a confirmar. Desmarque só quando esta for a lista que o RH confirmou —
+              quem responde por &quot;quem avalia quem&quot; é o RH.
+            </span>
+          </span>
+        </label>
         <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
           <input
             type="checkbox"

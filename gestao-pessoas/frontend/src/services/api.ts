@@ -516,6 +516,8 @@ export const cadastroAvaliadores = {
     arquivoNome: string,
     conferencia: string,
     substituirAjustesManuais: boolean,
+    /** Padrão true: lista de quem conhece a estrutura ≠ decisão do RH. */
+    provisorio: boolean,
   ) =>
     rhApi
       .post<PreviaDaImportacao & { importacaoId: string }>('/designacao-padrao/importacao', {
@@ -523,6 +525,7 @@ export const cadastroAvaliadores = {
         arquivoNome,
         conferencia,
         substituirAjustesManuais,
+        provisorio,
       })
       .then((r) => r.data),
   importacoes: () =>

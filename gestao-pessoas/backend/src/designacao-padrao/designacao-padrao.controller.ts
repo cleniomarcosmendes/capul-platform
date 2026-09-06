@@ -35,6 +35,11 @@ export class PlanilhaDto {
 export class ImportarDto extends PlanilhaDto {
   /** A conferência que a PRÉVIA devolveu. Sem ela não grava. */
   @IsString() conferencia!: string;
+  /**
+   * Padrão `true`. Passar `false` é afirmar que esta lista é a decisão do RH
+   * sobre quem avalia quem — não o palpite de quem conhece a estrutura.
+   */
+  @IsOptional() @IsBoolean() provisorio?: boolean;
 }
 
 @Controller('designacao-padrao')
@@ -87,6 +92,7 @@ export class DesignacaoPadraoController {
       dto.conferencia,
       dto.substituirAjustesManuais ?? false,
       user.sub,
+      dto.provisorio ?? true,
     );
   }
 

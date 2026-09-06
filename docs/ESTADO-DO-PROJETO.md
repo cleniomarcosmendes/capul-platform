@@ -290,8 +290,8 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Aprendizes (31 pessoas) entram no ciclo com aplicação própria, sem critérios cadastrais — confirmar | Gestora de RH |
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
-| 🔴 **Quem é o avaliador de cada centro de custo** — o CSV modelo (74 CCs, nº de pessoas, candidatos por cargo como sugestão) já está em `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv`. **Sem ela, 174 pessoas ficam de fora do ciclo** e a carga se concentra em quem sobrou (§9) | Gestora de RH |
-| 🔴 **O público de cada aplicação** — quais centros de custo respondem qual questionário. É a outra metade do mesmo bloqueio: hoje 3 das 4 aplicações do DEV estão com recorte PROVISÓRIO por prefixo de centro de custo, feito por script só para medir. **Ninguém do RH decidiu esse recorte**, e ele está marcado como provisório na tela | Gestora de RH |
+| 🔴 **Quem é o avaliador de cada centro de custo** — o CSV modelo (74 CCs, nº de pessoas, candidatos por cargo como sugestão) está em `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` e **continua valendo**. ⚠️ A T.I. preencheu uma lista para destravar o desenvolvimento (§11): ela é **provisória** e **não substitui esta pendência** — quem responde por "quem avalia quem" é o RH | Gestora de RH |
+| 🔴 **O público de cada aplicação** — quais centros de custo respondem qual questionário. A T.I. também vai definir um recorte provisório para destravar (§11); ele fica **marcado como provisório na tela** e **não substitui esta pendência** | Gestora de RH |
 | Por que o registro de treinamento parou em 14/11/2025 | RH / Protheus |
 | Quem dispara o sync: RH ou T.I.? Enquanto não se decide, **não** existe cron | Gestora de RH + T.I. |
 | Confirmar os enunciados das perguntas — o export do Protheus trouxe o texto das alternativas, não o enunciado; os títulos do seed foram **derivados** | Gestora de RH |
@@ -518,6 +518,7 @@ explica por que o item 3 da §7 não é opcional.
 | `DECISAO_RH_ESCOLARIDADE.md` | Para a gestora. A distribuição real das 1.036 pessoas por código, três alternativas e o efeito medido de cada uma (média 34,5 → 50,4 na opção B) |
 | `OBSERVACAO_RH_APRENDIZES.md` | Os aprendizes e por que a aplicação deles não tem critérios cadastrais |
 | `REGRESSAO_PROTHEUS_GESTAO_PESSOAS.md` | A regressão contra o ciclo 000006: o que bateu (questionário, 108/108) e o que não bateu, e por quê |
+| `PREENCHER_AVALIADORES_82_PARES.csv` | O da **T.I.** (§11): 82 pares filial × CC ordenados por nº de pessoas, com os candidatos por cargo já na coluna de sugestão e os **36 pares sem nenhuma chefia** marcados `SEM CHEFIA - RESOLVER`. Importa direto pela tela |
 | `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` | Para a gestora de RH: os 74 centros de custo, filiais, nº de pessoas, coluna de avaliador **em branco** e os candidatos por cargo como sugestão. `;` e UTF-8 com BOM, abre direto no Excel pt-BR |
 | `SYNC_GESTAO_PESSOAS_CSV.md` | O SQL de extração dos três CSVs, o formato, os números da carga real e os achados sobre os dados |
 | `select-original-protheus.sql` | O select do sistema antigo, versionado como registro histórico. **Não é o select em uso** — o de hoje está no doc do sync |
@@ -530,3 +531,28 @@ explica por que o item 3 da §7 não é opcional.
 `src/sincronizacao/data-ultima-funcao.ts` e `src/calculo/motor.ts`. As marcas `A2`, `C9`,
 `E2` que aparecem em comentários são referências à rodada de decisões que originou a
 especificação; o conteúdo de cada uma está na §3 deste documento ou na §7 da spec.
+
+---
+
+## 11. A lista provisória da T.I. — o que ela é e o que ela NÃO é
+
+Decisão de 06/09: **não esperar o RH para destravar o desenvolvimento.** A T.I. preenche a
+lista de avaliadores e o público das aplicações com o que sabe da estrutura, para o piloto
+poder ser exercitado inteiro.
+
+**O que isso é:** dado de trabalho, para as telas serem usadas de verdade e os defeitos que
+só aparecem com uso aparecerem antes de 15/09.
+
+**O que isso NÃO é:** a decisão sobre quem avalia quem. Essa é do RH, tem consequência de
+mérito, e continua pendente na §5. As duas linhas de lá **não saem** por causa disto.
+
+Três coisas garantem que ninguém confunda uma com a outra:
+
+1. **`provisorio = true` é o padrão da importação**, no backend e na tela. Desmarcar exige
+   um ato — e é uma afirmação de que a lista foi confirmada pelo RH, não um default.
+2. **A tela avisa** enquanto houver qualquer linha provisória, e o recorte de público que se
+   declara provisório na `origem_referencia` ganha tarja na tela de Aplicações.
+3. **O CSV da Arielly continua valendo e não foi substituído.**
+   `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` é o dela, por centro de custo;
+   `PREENCHER_AVALIADORES_82_PARES.csv` é o da T.I., por par filial × CC. São arquivos
+   diferentes, com públicos diferentes.

@@ -304,6 +304,14 @@ export class DesignacaoPadraoService {
     conferenciaConfirmada: string,
     substituirAjustesManuais: boolean,
     usuarioId: string,
+    /**
+     * ⭐ Marca as linhas como DADO PROVISÓRIO. Padrão `true`, e o padrão é o
+     * seguro: uma lista preenchida pela T.I. com conhecimento da estrutura não
+     * é a mesma coisa que a decisão do RH sobre quem avalia quem, e a nota tem
+     * consequência de mérito. Só quem souber que a lista foi confirmada pelo RH
+     * passa `false` — e aí é uma afirmação de alguém, não um padrão.
+     */
+    provisorio = true,
   ) {
     const conferencia = conferenciaDe(conteudo);
     if (conferencia !== conferenciaConfirmada) {
@@ -338,7 +346,7 @@ export class DesignacaoPadraoService {
           data: aGravar.map((p: ParaGravar) => ({
             avaliadorId: p.avaliadorId, avaliadoId: p.avaliadoId,
             origem: p.origem, origemReferencia: p.origemReferencia,
-            provisorio: false, vigenciaInicio: new Date(),
+            provisorio, vigenciaInicio: new Date(),
             registradoPorId: usuarioId, importacaoId: lote.id,
           })),
         });
@@ -349,7 +357,7 @@ export class DesignacaoPadraoService {
     await this.auditoria.registrar({
       entidade: 'ImportacaoDesignacao', entidadeId: importacao.id, acao: 'IMPORTAR', usuarioId,
       valorNovo: {
-        arquivo: arquivoNome, pares: aGravar.length,
+        arquivo: arquivoNome, pares: aGravar.length, provisorio,
         substituira: previa.pares.substituira, inalterados: previa.pares.inalterados,
         conflitos: previa.conflitosComAjusteManual.length, recusas: previa.recusas.length,
       },
