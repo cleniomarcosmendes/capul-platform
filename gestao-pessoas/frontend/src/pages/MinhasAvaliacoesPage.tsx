@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, ChevronRight, Lock, RefreshCw, Send } from 'lucide-react';
-import { avaliacoes, mensagemDoErro, type ItemDaFila } from '../services/api';
+import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from '../services/api';
 
 /**
  * A FILA DO AVALIADOR — a primeira tela de quem vai avaliar.
@@ -18,6 +18,7 @@ import { avaliacoes, mensagemDoErro, type ItemDaFila } from '../services/api';
 export default function MinhasAvaliacoesPage() {
   const [itens, setItens] = useState<ItemDaFila[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [semPermissao, setSemPermissao] = useState(false);
 
   useEffect(() => {
     void carregar();
@@ -28,11 +29,22 @@ export default function MinhasAvaliacoesPage() {
     try {
       setItens(await avaliacoes.minhas());
     } catch (e) {
+      setSemPermissao(ehFaltaDePermissao(e));
       setErro(mensagemDoErro(e, 'Não foi possível carregar suas avaliações.'));
     }
   }
 
-  if (erro) return <Erro mensagem={erro} aoTentarDeNovo={carregar} />;
+  if (erro) {
+    return (
+      <Erro
+        mensagem={erro}
+        // Falta de permissão não se resolve tentando de novo — oferecer o botão
+        // faz a pessoa insistir num caminho que nunca vai abrir.
+        aoTentarDeNovo={semPermissao ? undefined : carregar}
+        dica={semPermissao ? 'Peça ao RH que lhe conceda acesso ao módulo.' : undefined}
+      />
+    );
+  }
   if (!itens) return <Carregando />;
   if (itens.length === 0) return <Vazio />;
 
@@ -226,18 +238,29 @@ function Vazio() {
   );
 }
 
-function Erro({ mensagem, aoTentarDeNovo }: { mensagem: string; aoTentarDeNovo: () => void }) {
+function Erro({
+  mensagem,
+  aoTentarDeNovo,
+  dica,
+}: {
+  mensagem: string;
+  aoTentarDeNovo?: () => void;
+  dica?: string;
+}) {
   return (
     <div className="mx-auto max-w-2xl px-4 pt-10 text-center">
       <AlertCircle size={36} className="mx-auto text-red-400" aria-hidden />
       <p className="mt-3 font-medium text-slate-800">{mensagem}</p>
-      <button
-        type="button"
-        onClick={aoTentarDeNovo}
-        className="alvo-toque mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700"
-      >
-        <RefreshCw size={16} aria-hidden /> Tentar de novo
-      </button>
+      {dica && <p className="mt-1 text-sm text-slate-500">{dica}</p>}
+      {aoTentarDeNovo && (
+        <button
+          type="button"
+          onClick={aoTentarDeNovo}
+          className="alvo-toque mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700"
+        >
+          <RefreshCw size={16} aria-hidden /> Tentar de novo
+        </button>
+      )}
     </div>
   );
 }

@@ -27,6 +27,11 @@ for (const instancia of [authApi, coreApi, rhApi]) {
   );
 }
 
+/** true quando o backend recusou por PERMISSÃO — repetir não resolve. */
+export function ehFaltaDePermissao(erro: unknown): boolean {
+  return (erro as { response?: { status?: number } }).response?.status === 403;
+}
+
 /** Mensagem que o backend mandou — nunca "erro desconhecido" quando há texto. */
 export function mensagemDoErro(erro: unknown, padrao = 'Não foi possível concluir.'): string {
   const resposta = (erro as { response?: { data?: { message?: string | string[] } } }).response;

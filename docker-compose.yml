@@ -23,12 +23,20 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
+      # ⚠️ TODOS os upstreams do nginx.conf precisam existir: o nginx resolve os
+      # nomes no START e morre com "host not found in upstream" se faltar um.
+      # Logistica e Gestao de Pessoas estavam de fora, entao `up -d nginx` sozinho
+      # quebrava — descoberto subindo o ambiente em 06/09/2026.
       - hub
       - auth-gateway
       - configurador
       - gestao-ti-frontend
       - inventario-frontend
       - fiscal-frontend
+      - logistica-frontend
+      - logistica-backend
+      - gestao-pessoas-frontend
+      - gestao-pessoas-backend
     restart: unless-stopped
     logging: *default-logging
     # Limites de recursos — auditoria 25/04/2026 #5 (proxy reverso, todo tráfego passa)
