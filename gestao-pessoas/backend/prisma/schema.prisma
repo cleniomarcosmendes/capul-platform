@@ -129,14 +129,22 @@ model ColaboradorFuncaoHistorico {
   /// rastreio, com o porquê em `motivoDescarte`.
   consideradoNoCalculo Boolean @default(true) @map("considerado_no_calculo")
   motivoDescarte   String?  @map("motivo_descarte")
-  /// `R_E_C_N_O_` da linha no SR7010 — o fio de volta até a origem.
-  recnoOrigem      Int?     @map("recno_origem")
+  /// `R_E_C_N_O_` da linha no SR7010 — o fio de volta até a origem, e parte da
+  /// chave natural. Zero quando a fonte não informa.
+  recnoOrigem      Int      @default(0) @map("recno_origem")
   sincronizadoEm   DateTime @default(now()) @map("sincronizado_em")
 
   colaborador      Colaborador @relation(fields: [colaboradorId], references: [id])
 
   /// Idempotência do sync: a mesma linha do SR7010 não entra duas vezes.
-  @@unique([colaboradorId, filial, data, sequencia])
+  ///
+  /// ⚠️ `recnoOrigem` FAZ PARTE da chave porque (filial, matrícula, data,
+  /// sequência) **não é única na origem**: o SR7010 da Capul tem 312 chaves
+  /// repetidas, e as linhas repetidas trazem funções DIFERENTES — no mesmo dia e
+  /// sequência, uma diz 00400 e a outra 00190. Sem o recno, o upsert gravava uma
+  /// e perdia a outra em silêncio, que é exatamente o que este módulo existe
+  /// para não fazer.
+  @@unique([colaboradorId, filial, data, sequencia, recnoOrigem])
   /// A consulta do cálculo: histórico da pessoa, considerado, até a data-base.
   @@index([colaboradorId, consideradoNoCalculo, data])
   @@map("colaborador_funcao_historico")

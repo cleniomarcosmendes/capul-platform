@@ -4,6 +4,7 @@ import {
   marcarConsideradas,
   paraMovimentos,
   prepararHistorico,
+  separarUtilizaveis,
   type LinhaHistorico,
 } from './historico-funcional.js';
 import { resolverDataUltimaFuncao } from './data-ultima-funcao.js';
@@ -119,5 +120,42 @@ describe('prepararHistorico — as duas etapas na ordem', () => {
     );
     expect(preparadas.find((l) => l.filial === '99')?.consideradoNoCalculo).toBe(false);
     expect(preparadas.find((l) => l.tipo === '003')?.origem).toBe('CARGA');
+  });
+});
+
+describe('⭐ separarUtilizaveis — linha ruim não derruba o arquivo', () => {
+  it('separa o lançamento SEM DATA, sem perder os outros', () => {
+    // 99 linhas do SR7010 da Capul não têm data (98 pessoas, 79 ativas).
+    // Recusar a carga inteira por causa delas trocaria um problema pequeno por
+    // um grande; importar calado seria o descarte silencioso de novo.
+    const { utilizaveis, invalidas } = separarUtilizaveis([
+      linha({ data: '20231101' }),
+      linha({ data: '        ' }),
+      linha({ data: '20241101' }),
+    ]);
+    expect(utilizaveis).toHaveLength(2);
+    expect(invalidas).toHaveLength(1);
+    expect(invalidas[0].motivo).toBe('SEM_DATA');
+  });
+
+  it('o motivo diz de quem é a linha, para achar no Protheus', () => {
+    const { invalidas } = separarUtilizaveis([linha({ data: '', matricula: '001178', filial: '03' })]);
+    expect(invalidas[0].detalhe).toContain('001178');
+    expect(invalidas[0].detalhe).toContain('filial 03');
+    expect(invalidas[0].detalhe).toContain('as demais da pessoa valem');
+  });
+
+  it('separa também a linha sem código de função', () => {
+    expect(separarUtilizaveis([linha({ funcaoCodigo: '  ' })]).invalidas[0].motivo).toBe('SEM_FUNCAO');
+  });
+
+  it('recusa data em formato errado — não tenta adivinhar', () => {
+    expect(separarUtilizaveis([linha({ data: '2023-11-01' })]).invalidas).toHaveLength(1);
+  });
+
+  it('utilizáveis + inválidas = total lido', () => {
+    const arquivo = [linha(), linha({ data: '' }), linha({ funcaoCodigo: '' }), linha()];
+    const { utilizaveis, invalidas } = separarUtilizaveis(arquivo);
+    expect(utilizaveis.length + invalidas.length).toBe(arquivo.length);
   });
 });

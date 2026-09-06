@@ -124,6 +124,59 @@ export function marcarConsideradas(
   });
 }
 
+export type MotivoInvalida = 'SEM_DATA' | 'SEM_FUNCAO';
+
+export interface LinhaInvalida {
+  linha: LinhaHistorico;
+  motivo: MotivoInvalida;
+  detalhe: string;
+}
+
+/**
+ * Separa o que dá para gravar do que não dá.
+ *
+ * ⚠️ **Lançamento sem data existe no Protheus da Capul**: 99 linhas do SR7010,
+ * atingindo 98 pessoas — 79 delas no quadro ativo (medido em 05/09/2026). Sem
+ * data não há como ordenar o histórico nem gravá-lo (a chave natural inclui a
+ * data), então a linha fica de fora.
+ *
+ * Mas ela **não invalida as outras linhas da pessoa** e **não derruba o
+ * arquivo**: sai contada e listada no relatório do sync. Recusar a carga inteira
+ * por causa de 99 linhas de 29.881 seria trocar um problema pequeno por um
+ * grande — e importar sem avisar seria o descarte silencioso de novo.
+ */
+export function separarUtilizaveis(linhas: readonly LinhaHistorico[]): {
+  utilizaveis: LinhaHistorico[];
+  invalidas: LinhaInvalida[];
+} {
+  const utilizaveis: LinhaHistorico[] = [];
+  const invalidas: LinhaInvalida[] = [];
+
+  for (const linha of linhas) {
+    if (!/^\d{8}$/.test((linha.data ?? '').trim())) {
+      invalidas.push({
+        linha,
+        motivo: 'SEM_DATA',
+        detalhe:
+          `Lançamento sem data (matrícula ${linha.matricula}, filial ${linha.filial}). ` +
+          'Sem data não há como ordenar o histórico — a linha fica de fora, as demais da pessoa valem.',
+      });
+      continue;
+    }
+    if (!(linha.funcaoCodigo ?? '').trim()) {
+      invalidas.push({
+        linha,
+        motivo: 'SEM_FUNCAO',
+        detalhe: `Lançamento sem código de função (matrícula ${linha.matricula}).`,
+      });
+      continue;
+    }
+    utilizaveis.push(linha);
+  }
+
+  return { utilizaveis, invalidas };
+}
+
 /** As duas etapas, na ordem. É o que o sync chama. */
 export function prepararHistorico(
   linhas: readonly LinhaHistorico[],

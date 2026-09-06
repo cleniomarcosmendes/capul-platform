@@ -46,6 +46,23 @@ describe('invariante: acesso a avaliação passa pelo AvaliacaoAcessoService', (
     expect(violacoes).toEqual([]);
   });
 
+  it('⭐ nenhuma rota que toca avaliação dispensa o vínculo de colaborador', () => {
+    // `@DispensaVinculoDeColaborador` existe porque a primeira sincronização
+    // roda antes de existir colaborador algum. Se ela alcançar uma rota de
+    // avaliação, a separação de funções cai junto — `req.colaborador` fica
+    // vazio e `ehProprioAvaliado` passa a devolver false para todo mundo.
+    const comDispensa = arquivosTs(RAIZ)
+      .map((completo) => ({
+        relativo: path.relative(RAIZ, completo).split(path.sep).join('/'),
+        fonte: fs.readFileSync(completo, 'utf8'),
+      }))
+      .filter(({ fonte }) => /@DispensaVinculoDeColaborador/.test(fonte))
+      .filter(({ fonte }) => /prisma\.avaliacao\.|AvaliacaoAcessoService/.test(fonte))
+      .map(({ relativo }) => relativo);
+
+    expect(comDispensa).toEqual([]);
+  });
+
   it('a lista de dispensados não tem entrada morta', () => {
     // Dispensa que sobrou de um arquivo apagado esconde a próxima violação.
     const existentes = new Set(suspeitos.map((s) => s.relativo));
