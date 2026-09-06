@@ -70,6 +70,9 @@ model Colaborador {
   treinamentos           ColaboradorTreinamento[]
   funcaoHistorico        ColaboradorFuncaoHistorico[]
   elegibilidadeCiclos    CicloElegibilidade[]
+  avaliaNaDesignacaoPadrao DesignacaoPadrao[] @relation("DesignacaoPadraoAvaliador")
+  ehAvaliadoNaDesignacaoPadrao DesignacaoPadrao[] @relation("DesignacaoPadraoAvaliado")
+  publicoDeAplicacoes    AplicacaoPublico[]
 
   @@unique([filial, matricula])
   @@index([centroCusto, situacao])
@@ -489,8 +492,12 @@ model Aplicacao {
   centrosCusto   AplicacaoCentroCusto[]
   criterios      AplicacaoCriterio[]
   avaliacoes     Avaliacao[]
+  publico        AplicacaoPublico[]
 
   @@index([cicloId])
+  /// Alvo da FK composta de `AplicacaoPublico`. É o que impede o `ciclo_id`
+  /// denormalizado de lá divergir daqui — sem isto, seriam duas verdades.
+  @@unique([id, cicloId])
   @@map("aplicacao")
   @@schema("rh")
 }
@@ -657,6 +664,8 @@ model Avaliacao {
 
 enum OrigemDesignacao {
   CENTRO_CUSTO
+  /// Veio do atalho de FILIAL na montagem do público/da designação.
+  FILIAL
   MANUAL
 
   @@schema("rh")
@@ -767,5 +776,124 @@ model Auditoria {
   @@index([entidade, entidadeId])
   @@index([usuarioId, criadoEm])
   @@map("auditoria")
+  @@schema("rh")
+}
+
+// ---------------------------------------------------------------------------
+// AS DUAS LISTAS NOMINAIS
+//
+// ⭐ A estrutura de GESTÃO não coincide com a CONTÁBIL, e é por isso que o
+// recorte por centro de custo não bastava. Medido no cadastro real em 06/09:
+// a equipe de limpeza são 46 pessoas em 19 pares filial × CC (o CC "LIMPEZA"
+// tem 14 delas); transporte, 46 em 18; segurança, 28 em 9; e os 31 aprendizes
+// estão em 15 pares, todos compartilhados com gente efetiva — não existe CC
+// que os isole, e a aplicação própria deles era impossível de montar.
+//
+// Por isso o que se PERSISTE é sempre nominal: "este avaliador avalia estas
+// pessoas", "esta aplicação tem estas pessoas". Centro de custo e filial viram
+// ATALHOS DE PREENCHIMENTO na tela — escolhe, traz as pessoas, ajusta, salva —
+// e sobrevivem apenas como `origem` + `origemReferencia`, para o painel
+// explicar de onde a linha veio e o RH revisar o que foi mexido à mão.
+//
+// Não há precedência entre níveis porque só existe um nível. "Parte da equipe"
+// se resolve removendo linhas.
+// ---------------------------------------------------------------------------
+
+/// DE ONDE a linha veio — não o que ela vale.
+enum OrigemVinculo {
+  /// Atalho de centro de custo. `origemReferencia` = o CC (ou `filial|CC`).
+  CENTRO_CUSTO
+  /// Atalho de filial. `origemReferencia` = a filial.
+  FILIAL
+  /// Alguém escolheu, linha a linha.
+  MANUAL
+  /// ⚠️ Só em `designacao_padrao`, e é o ponto que o RH precisa revisar.
+  /// A importação da planilha repartiu um CC entre N responsáveis em ordem
+  /// alfabética do avaliado: ninguém decidiu ESTA linha, ela foi arbitrada
+  /// para não jogar fora o trabalho de quem preencheu a planilha. O painel
+  /// conta estas como "distribuído automaticamente, não revisado"; confirmar
+  /// uma delas a torna MANUAL. Um CHECK no banco impede o valor em
+  /// `aplicacao_publico`, onde ele não significaria nada.
+  DIVISAO_AUTOMATICA
+
+  @@schema("rh")
+}
+
+/// QUEM AVALIA QUEM — cadastro da PLATAFORMA, não do ciclo.
+///
+/// É a designação que cada ciclo copia, e é o que faz a distribuição de um ano
+/// ser reaproveitada no seguinte. Perene de propósito: o ciclo morre, isto não.
+///
+/// ⚠️ O invariante que importa é **um avaliador por avaliado entre os
+/// vigentes** — a mesma regra do `@@unique([cicloId, avaliadoId])` da
+/// `Avaliacao`, uma etapa antes, para o conflito ser recusado no cadastro (que
+/// fala com quem errou) e não uma pessoa por vez na designação. Postgres o
+/// garante com índice único PARCIAL (`WHERE vigencia_fim IS NULL`), que o
+/// Prisma não gera a partir do schema: está escrito à mão na migration, como
+/// já se faz em `CicloElegibilidade`.
+///
+/// ⚠️ `vigenciaFim IS NULL` é a ÚNICA definição de vigente. Não há coluna
+/// `ativo`: duas maneiras de dizer a mesma coisa divergem no primeiro update
+/// que esquecer uma delas (é o que o ADR-RH-02 recusou para a nota por grupo).
+model DesignacaoPadrao {
+  id               String        @id @default(uuid())
+  avaliadorId      String        @map("avaliador_id")
+  avaliadoId       String        @map("avaliado_id")
+  origem           OrigemVinculo
+  /// O CC ou a filial que preencheu a linha. É o que permite responder "quem
+  /// responde pelo CC 21010101" e dividir de novo entre os mesmos responsáveis
+  /// sem uma segunda tabela guardando a regra.
+  origemReferencia String?       @map("origem_referencia")
+  /// Dado de DEV, eleito por critério de cargo enquanto a lista real não vem
+  /// do RH. A tela avisa enquanto houver qualquer linha marcada.
+  provisorio       Boolean       @default(false)
+  observacao       String?
+  vigenciaInicio   DateTime      @map("vigencia_inicio") @db.Date
+  vigenciaFim      DateTime?     @map("vigencia_fim") @db.Date
+  registradoPorId  String?       @map("registrado_por_id")
+  criadoEm         DateTime      @default(now()) @map("criado_em")
+  atualizadoEm     DateTime      @updatedAt @map("atualizado_em")
+
+  avaliador Colaborador @relation("DesignacaoPadraoAvaliador", fields: [avaliadorId], references: [id])
+  avaliado  Colaborador @relation("DesignacaoPadraoAvaliado", fields: [avaliadoId], references: [id])
+
+  @@index([avaliadorId, vigenciaFim])
+  @@index([avaliadoId, vigenciaFim])
+  @@index([origem, origemReferencia])
+  @@map("designacao_padrao")
+  @@schema("rh")
+}
+
+/// QUAL QUESTIONÁRIO A PESSOA RESPONDE — público nominal da aplicação.
+///
+/// Do CICLO, e morre com ele. Tempo de vida diferente do `DesignacaoPadrao`, e
+/// é por isso que são duas tabelas: fundi-las obrigaria a reeleger o avaliador
+/// a cada ciclo, ou a manter o público de um ciclo encerrado vivo para sempre.
+///
+/// ⚠️ NÃO cabe dentro da `Avaliacao`: lá o `avaliadorId` é obrigatório, e
+/// "está no público e ainda não tem avaliador" — que é exatamente o
+/// `semDesignacao` do painel — não teria onde existir.
+///
+/// ⚠️ `cicloId` é DENORMALIZADO do `aplicacao.ciclo_id`, e a FK é COMPOSTA
+/// contra `@@unique([id, cicloId])` da Aplicação: divergir é impossível pelo
+/// banco, não por disciplina. É o que faz "ninguém em duas aplicações do mesmo
+/// ciclo" ser constraint de verdade — e o que permite a tela AVISAR antes de
+/// salvar, em vez de falhar no INSERT.
+model AplicacaoPublico {
+  id               String        @id @default(uuid())
+  aplicacaoId      String        @map("aplicacao_id")
+  cicloId          String        @map("ciclo_id")
+  colaboradorId    String        @map("colaborador_id")
+  origem           OrigemVinculo
+  origemReferencia String?       @map("origem_referencia")
+  registradoPorId  String?       @map("registrado_por_id")
+  criadoEm         DateTime      @default(now()) @map("criado_em")
+
+  aplicacao   Aplicacao   @relation(fields: [aplicacaoId, cicloId], references: [id, cicloId])
+  colaborador Colaborador @relation(fields: [colaboradorId], references: [id])
+
+  @@unique([cicloId, colaboradorId])
+  @@index([aplicacaoId])
+  @@map("aplicacao_publico")
   @@schema("rh")
 }
