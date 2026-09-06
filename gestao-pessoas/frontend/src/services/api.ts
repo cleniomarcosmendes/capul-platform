@@ -313,12 +313,29 @@ export interface FilaDoAvaliador {
   enviadas: number;
   aFazer: number;
 }
+export interface PessoaForaDoCiclo {
+  colaboradorId: string;
+  matricula: string;
+  nome: string;
+  filial: string;
+  centroCusto: string | null;
+  centroCustoDescricao: string | null;
+}
+
 export interface PainelDoCiclo {
   ciclo: { id: string; nome: string; status: StatusCiclo; periodoInicio: string; periodoFim: string; dataBase: string };
   designados: number;
   enviadas: number;
   aFazer: number;
   semDesignacao: number;
+  /** De onde vem o "sem designação" — evita a subtração errada entre as telas. */
+  semDesignacaoPorOrigem: { jaTemNoCadastro: number; nemNoCadastro: number };
+  /**
+   * ⚠️ Existe no backend desde 06/09 e NÃO era renderizado — o contrato do
+   * cliente não tinha o campo, então a contagem "quem o ciclo não enxerga"
+   * chegava e era descartada em silêncio.
+   */
+  foraDeTodasAsAplicacoes: { total: number; pessoas: PessoaForaDoCiclo[] };
   aplicacoes: ProgressoDaAplicacao[];
   avaliadores: FilaDoAvaliador[];
 }

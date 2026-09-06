@@ -80,6 +80,19 @@ export interface PainelDoCiclo {
   aFazer: number;
   semDesignacao: number;
   /**
+   * ⭐ DE ONDE VEM o "sem designação" — sem isto o número convida a uma
+   * subtração errada.
+   *
+   * O cadastro de avaliadores tem o SEU "sem avaliador" (a empresa inteira) e o
+   * painel tem o dele (este ciclo). Os dois universos **não se contêm**: fechar
+   * os 95 do ciclo não derruba 95 dos 108 do cadastro. Em vez de avisar que a
+   * conta é sutil, o painel mostra a conta:
+   *
+   *   `jaTemNoCadastro`  → basta copiar o cadastro para o ciclo (um botão);
+   *   `nemNoCadastro`    → precisa resolver no cadastro primeiro.
+   */
+  semDesignacaoPorOrigem: { jaTemNoCadastro: number; nemNoCadastro: number };
+  /**
    * Elegíveis do ciclo que não estão no público de NENHUMA aplicação. Vem com
    * os nomes, não só o total: quem vai resolver precisa saber de quem se trata,
    * e "17 pessoas fora" não diz a ninguém o que fazer em seguida.
@@ -110,6 +123,8 @@ export class PainelService {
     });
 
     const aplicacoes: ProgressoDaAplicacao[] = [];
+    /** Quem ficou sem designação, para dizer DE ONDE isso vem (ver o tipo). */
+    const semDesignacaoIds = new Set<string>();
     for (const a of ciclo.aplicacoes) {
       const linhas = porAplicacaoEStatus.filter((l) => l.aplicacaoId === a.id);
       const conta = (s: string) => linhas.find((l) => l.status === s)?._count._all ?? 0;
@@ -141,6 +156,9 @@ export class PainelService {
         canceladas: conta('CANCELADA'),
         semDesignacao: elegiveis.filter((e) => !comAvaliacao.has(e.colaboradorId)).length,
       });
+      for (const e of elegiveis) {
+        if (!comAvaliacao.has(e.colaboradorId)) semDesignacaoIds.add(e.colaboradorId);
+      }
     }
 
     return {
@@ -156,10 +174,25 @@ export class PainelService {
       enviadas: aplicacoes.reduce((t, a) => t + a.enviadas, 0),
       aFazer: aplicacoes.reduce((t, a) => t + a.pendentes + a.emAndamento, 0),
       semDesignacao: aplicacoes.reduce((t, a) => t + a.semDesignacao, 0),
+      semDesignacaoPorOrigem: await this.semDesignacaoPorOrigem(semDesignacaoIds),
       foraDeTodasAsAplicacoes: await this.foraDeTodasAsAplicacoes(ciclo),
       aplicacoes,
       avaliadores: await this.filaPorAvaliador(cicloId),
     };
+  }
+
+  /**
+   * Dos que não têm designação NESTE ciclo, quantos já têm avaliador no
+   * cadastro da plataforma — ou seja, quantos se resolvem só copiando.
+   */
+  private async semDesignacaoPorOrigem(ids: Set<string>) {
+    if (ids.size === 0) return { jaTemNoCadastro: 0, nemNoCadastro: 0 };
+    const noCadastro = await this.prisma.designacaoPadrao.findMany({
+      where: { avaliadoId: { in: [...ids] }, vigenciaFim: null },
+      select: { avaliadoId: true },
+    });
+    const jaTem = new Set(noCadastro.map((d) => d.avaliadoId)).size;
+    return { jaTemNoCadastro: jaTem, nemNoCadastro: ids.size - jaTem };
   }
 
   /**

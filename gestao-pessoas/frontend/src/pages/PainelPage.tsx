@@ -108,14 +108,59 @@ export default function PainelPage() {
         </div>
 
         {dados.semDesignacao > 0 && (
-          <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
-            <UserX size={18} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
+          <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
+            <UserX size={18} className="float-left mr-2 mt-0.5 text-amber-600" aria-hidden />
+            {/* ⚠️ "NESTE CICLO" no rótulo, e a origem logo abaixo.
+                O cadastro de avaliadores tem o SEU "sem avaliador" (a empresa
+                inteira, hoje 108) e este tem o dele (este ciclo, 95). Os dois
+                universos NÃO SE CONTÊM: fechar os 95 aqui não derruba 95 lá.
+                Só nomear os números faria alguém supor a subtração — então o
+                painel mostra a conta, com o que fazer em cada caso. */}
             <p className="text-sm text-amber-900">
               <strong className="font-semibold">
-                {dados.semDesignacao} pessoa(s) elegíveis sem avaliador.
+                {dados.semDesignacao} pessoa(s) sem avaliador neste ciclo.
               </strong>{' '}
-              Elas não têm avaliação, não aparecem em nenhum status e ficarão de fora do ciclo — resolva
-              na aba Designação.
+              Elegíveis do público deste ciclo que ninguém designou: não têm avaliação, não
+              aparecem em nenhum status e ficam de fora dele.
+            </p>
+            <ul className="mt-1.5 space-y-0.5 text-sm text-amber-900/90">
+              {dados.semDesignacaoPorOrigem.jaTemNoCadastro > 0 && (
+                <li>
+                  <strong>{dados.semDesignacaoPorOrigem.jaTemNoCadastro}</strong> já têm avaliador
+                  no cadastro — resolvem-se com <em>Designar pelo cadastro</em>, na aba Designação.
+                </li>
+              )}
+              {dados.semDesignacaoPorOrigem.nemNoCadastro > 0 && (
+                <li>
+                  <strong>{dados.semDesignacaoPorOrigem.nemNoCadastro}</strong> não têm avaliador
+                  nem no cadastro — precisam ser resolvidas antes, em <em>Avaliadores</em>.
+                </li>
+              )}
+              <li className="pt-1 text-xs opacity-80">
+                Este número é deste ciclo. O de <em>Avaliadores</em> é do cadastro inteiro, e os
+                dois universos não se contêm — fechar um não subtrai do outro.
+              </li>
+            </ul>
+          </div>
+        )}
+        {dados.foraDeTodasAsAplicacoes.total > 0 && (
+          <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3">
+            <p className="text-sm text-red-900">
+              <strong className="font-semibold">
+                {dados.foraDeTodasAsAplicacoes.total} pessoa(s) fora de TODAS as aplicações deste
+                ciclo.
+              </strong>{' '}
+              Elegíveis que não entraram em público nenhum — não aparecem sequer como &quot;sem
+              avaliador&quot;, porque essa conta é por aplicação. Monte o público que falta, em
+              Aplicações.
+            </p>
+            <p className="mt-1 text-xs text-red-900/80">
+              {dados.foraDeTodasAsAplicacoes.pessoas
+                .slice(0, 6)
+                .map((p) => `${p.nome} (${p.filial}/${p.centroCusto ?? '—'})`)
+                .join(' · ')}
+              {dados.foraDeTodasAsAplicacoes.pessoas.length > 6 &&
+                ` … e mais ${dados.foraDeTodasAsAplicacoes.pessoas.length - 6}`}
             </p>
           </div>
         )}
@@ -141,7 +186,7 @@ export default function PainelPage() {
                   {a.enviadas > 0 && <Etiqueta tom="verde">{a.enviadas} enviada(s)</Etiqueta>}
                   {a.canceladas > 0 && <Etiqueta tom="neutro">{a.canceladas} cancelada(s)</Etiqueta>}
                   {a.semDesignacao > 0 && (
-                    <Etiqueta tom="ambar">{a.semDesignacao} sem avaliador</Etiqueta>
+                    <Etiqueta tom="ambar">{a.semDesignacao} sem avaliador nesta aplicação</Etiqueta>
                   )}
                 </div>
               </li>

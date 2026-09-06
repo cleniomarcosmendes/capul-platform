@@ -147,9 +147,13 @@ o entendimento errado.
 #### ✅ MARCAR A PRÓPRIA LINHA — corrigido, e o diagnóstico era o inverso
 
 Teste dirigido de 06/09. **`/resultados` SEMPRE marcou** — o service chama `marcarRestricoes`
-e a tela mostra a etiqueta "você". A marca nunca apareceu porque a gestora **não tem
-resultado**: a avaliação dela ainda não foi enviada, então não há linha para marcar. Regra
-cumprida, dado que não a exercita.
+e a tela mostra a etiqueta "você".
+
+⚠️ **Mas `/resultados` segue NÃO TESTADO para este caso.** A marca não apareceu porque a
+gestora **não tem resultado** — a avaliação do Diretor Executivo sobre ela nunca foi enviada
+—, **não porque funcione**. Regra cumprida, dado que não a exercita. Vale um teste dirigido de
+verdade antes da produção: enviar a avaliação dela, apurar, e conferir que a linha aparece
+marcada em vez de simplesmente aparecer.
 
 **Quem não marcava era a DESIGNAÇÃO** — 142 linhas sem o campo, e a linha da própria gestora
 aparecendo com *"Avalia: CLAUDIMAR · PENDENTE"*. Corrigido: `listar()` recebe o colaborador e
@@ -167,6 +171,31 @@ mesma família.
 "Assiduidade e Pontualidade" tem 2 perguntas de 4 alternativas; um percentual de grupo aí
 reduz o espaço de combinações a um punhado. Quanto menor o grupo, mais o "agregado" vira
 resposta.
+
+### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
+
+O cadastro (`/avaliadores`) e o painel de cada ciclo contavam ambos "sem avaliador" e nenhum
+dizia de quê. Medido em 06/09: **108** no cadastro, **95** no Piloto, **84** no Geral.
+
+⚠️ **E os 95 não são um subconjunto limpo dos 108.** Hoje o recorte é 95 nos dois e 13 só no
+cadastro — mas o inverso é possível a qualquer momento (alguém no público do ciclo, sem
+designação nele, e *com* avaliador no cadastro). Fechar os 95 **não derruba 95 dos 108**.
+
+Só nomear os números faria alguém supor a subtração. Então o painel **mostra a conta**:
+
+- `95 pessoa(s) sem avaliador neste ciclo` — elegíveis do público deste ciclo que ninguém
+  designou;
+- **quantas já têm avaliador no cadastro** → resolvem-se com *Designar pelo cadastro*;
+- **quantas não têm nem no cadastro** → precisam ser resolvidas antes, em *Avaliadores*;
+- e uma linha dizendo que os universos não se contêm.
+
+E `/avaliadores` passa a dizer `sem avaliador no cadastro`, com "elegíveis de TODA a empresa".
+
+⚠️ **Achado de tabela:** `foraDeTodasAsAplicacoes` existia no backend desde 06/09 e **não era
+renderizado** — o contrato do cliente não tinha o campo, então a contagem chegava e era
+descartada em silêncio. É a falha mais barata de cometer num módulo sem geração de client: o
+backend acerta, o `tsc` não reclama de campo a mais, e o número simplesmente não existe para
+quem olha. Agora aparece, em vermelho, com os primeiros nomes.
 
 ### 3.2. Avaliar ≠ apurar
 

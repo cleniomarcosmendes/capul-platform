@@ -93,10 +93,10 @@ function Resumo({ p }: { p: PendenciasDoCadastro }) {
         tom={p.semAvaliador.total > 0 ? 'alerta' : 'ok'}
         icone={p.semAvaliador.total > 0 ? <UserX size={18} /> : <CheckCircle2 size={18} />}
         numero={p.semAvaliador.total}
-        rotulo="sem avaliador"
+        rotulo="sem avaliador no cadastro"
         detalhe={
           p.semAvaliador.total > 0
-            ? 'Não geram avaliação e somem do ciclo sem erro nenhum.'
+            ? 'Elegíveis de TODA a empresa que não estão na lista de ninguém. O painel de cada ciclo tem o número dele, e os dois universos não se contêm.'
             : 'Todo mundo elegível está na lista de alguém.'
         }
       />
