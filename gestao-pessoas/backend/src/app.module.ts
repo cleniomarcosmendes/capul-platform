@@ -13,6 +13,10 @@ import { AuthModule } from './auth/auth.module.js';
 import { HealthModule } from './health/health.module.js';
 import { AvaliacaoModule } from './avaliacao/avaliacao.module.js';
 import { SincronizacaoModule } from './sincronizacao/sincronizacao.module.js';
+import { CicloModule } from './ciclo/ciclo.module.js';
+import { AplicacaoModule } from './aplicacao/aplicacao.module.js';
+import { DesignacaoModule } from './designacao/designacao.module.js';
+import { ApuracaoModule } from './apuracao/apuracao.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { IdentidadeGuard } from './common/guards/identidade.guard.js';
@@ -58,6 +62,10 @@ import { IdentidadeGuard } from './common/guards/identidade.guard.js';
     HealthModule,
     AvaliacaoModule,
     SincronizacaoModule,
+    CicloModule,
+    AplicacaoModule,
+    DesignacaoModule,
+    ApuracaoModule,
   ],
   providers: [
     // Ordem: rate-limit → autenticação (JWT) → autorização (papel) → IDENTIDADE.

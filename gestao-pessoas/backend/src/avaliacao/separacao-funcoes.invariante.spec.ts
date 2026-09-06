@@ -15,10 +15,31 @@ import * as path from 'node:path';
 
 const RAIZ = path.join(__dirname, '..');
 
-/** Arquivo -> por que não precisa passar pela porta. */
+/**
+ * Arquivo -> por que não precisa passar pela porta.
+ *
+ * ⚠️ Toda entrada aqui precisa dizer **de qual regra ela está fora**, não só que
+ * é diferente. A separação de funções protege o ACESSO A REGISTRO INDIVIDUAL de
+ * avaliação — abrir, editar, reabrir, recalcular, responder. Contagem agregada,
+ * criação da designação e apuração em lote não são isso; e é por serem outra
+ * coisa que passam, não por serem convenientes.
+ *
+ * Se uma entrada nova não couber em nenhuma dessas frases, ela é exceção NOVA à
+ * regra — e aí o desenho é que precisa de revisão, não a lista.
+ */
 const DISPENSADOS: Record<string, string> = {
   'avaliacao/avaliacao-acesso.service.ts': 'é a própria porta',
   'common/testing/prisma-mock.ts': 'mock de teste, não acessa banco',
+  'avaliacao/avaliacao.service.ts':
+    'usa a porta em todo acesso individual; as demais consultas são do questionário, não da avaliação',
+  'ciclo/ciclo.service.ts':
+    'só CONTA avaliações pendentes antes de encerrar o ciclo — agregado, não lê o conteúdo de ninguém',
+  'designacao/designacao.service.ts':
+    'CRIA a designação. Ser designado não é mexer na própria avaliação: a gestora precisa ser designada ' +
+    'para o superior dela receber a tarefa. Designar a si mesma como AVALIADORA é barrado no service.',
+  'apuracao/apuracao.service.ts':
+    'apuração em LOTE, por ciclo ou aplicação — a exceção já acordada, com escopo guardado por ' +
+    'assertEscopoReapuracaoValido (nunca por colaborador)',
 };
 
 function arquivosTs(dir: string): string[] {
