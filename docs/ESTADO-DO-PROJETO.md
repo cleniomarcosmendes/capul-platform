@@ -8,15 +8,25 @@
 ## 🚫 NÃO DAR PUSH — 06/09/2026
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**60 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**61 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 60 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 61 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
 ⚠️ Se alguém mexer no repositório e esta nota parecer velha, confira em vez de supor:
 `git status -sb` e `git log --oneline origin/main..HEAD | wc -l`.
+
+## 👤 Quem escreve isto, e para quem
+
+Esta aplicação é implementada por **uma pessoa só — o Clenio —, com apoio do Claude Code**.
+Não há equipe, não há revisor, e não há quem lembre o contexto por você.
+
+Por isso o registro é do jeito que é: **ele existe para o próprio autor daqui a algumas
+semanas**, quando a decisão tiver sido esquecida e só o código restar. Quem escrever seção
+nova aqui **escreve o PORQUÊ, não só o quê** — o "o quê" o código já conta; o "por quê" some
+com a memória, e é ele que impede a decisão de ser refeita ao contrário meses depois.
 
 ---
 
@@ -26,12 +36,15 @@ Os 🔴 do dia nasceram espalhados por §3.1.1, §3.1.2, §3.1.4, §5 e §11. Aq
 mesmos itens em dois blocos, sem prosa. **Esta lista é um índice: quem decide o quê fica
 na seção citada.**
 
-### (A) DEPENDE DE FORA — não anda com trabalho técnico nenhum
+### (A) DEPENDE DE FORA — decisão de quem não é a T.I.
+
+**Só o que a gestora de RH e a diretoria respondem.** Nada aqui anda com trabalho técnico, e
+nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 
 | Item | Quem responde | Onde está |
 |---|---|---|
 | O avaliador é avisado de que o RH lê a `observacaoAvaliador` dele? Ou o rótulo avisa, ou muda o que o campo colhe | Gestora de RH | §5 · §3.1.1 |
-| O `RH_ADMIN` pode operar a própria linha (público, designação, revisão, elegibilidade)? Eixo: incluir × excluir | Gestora de RH | §5 · §3.1.4 |
+| O `RH_ADMIN` pode agir sobre a própria linha (público, designação, revisão, elegibilidade)? Eixo: incluir × excluir | Gestora de RH | §5 · §3.1.4 |
 | A ordem da fila do avaliador — indiferente, ou há prioridade? | Gestora de RH | §5 · §3.11 |
 | A mesma pessoa em dois ciclos abertos ao mesmo tempo | Gestora de RH | §5 · §3.10 |
 | Quem é o avaliador de cada centro de custo (a lista real) — sem ela, 174 pessoas ficam fora | Gestora de RH | §5 · §7 · §11 |
@@ -39,24 +52,30 @@ na seção citada.**
 | Quem avalia os ~53 avaliadores — 46 caem no Diretor Executivo pela regra provisória | Diretoria + RH | §5 · §11 |
 | Quem avalia Presidente e Vice | Diretoria | §5 |
 | Régua de escolaridade · aprendizes · afastados · enunciados das perguntas | Gestora de RH | §5 |
-| Quem dispara o sync (RH ou T.I.) — enquanto não se decide, não existe cron | RH + T.I. | §5 |
-| **Segundo `RH_ADMIN`** — a separação de funções exige dois, e hoje há um | RH + T.I. | §5 · §3.1 |
-| **Contas para os avaliadores** — 46 dos 53 não têm conta na plataforma | T.I. (provisionamento) | §3.1.3 |
-| `rodrigoleao` — é avaliador de 4 pessoas e a permissão GESTAO_PESSOAS não salvou | T.I. (Configurador) | §6 |
+| Quem dispara o sync — enquanto não se decide, não existe cron | Gestora de RH | §5 |
+| **Quem é o segundo `RH_ADMIN`** (a pessoa) — dar a permissão é da T.I. e está em (B) | Gestora de RH | §5 · §3.1 |
 
 ### (B) TRABALHO TÉCNICO PENDENTE — na ordem em que eu faria
 
+⭐ **Os três primeiros são provisionamento, e vão na frente por um motivo só: são os únicos
+que mexem no número que decide o piloto.** Hoje, dos **53 avaliadores do ciclo, 5 conseguem
+entrar** — e um desses cinco é a conta de TESTE do Claudimar, criada por nós (§6). Os outros
+nove itens desta lista não movem esse número em nada.
+
 | # | Item | Onde está |
 |---|---|---|
-| 1 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
-| 2 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
-| 3 | Tela do **sync** (hoje só por API) | §7 · §2 |
-| 4 | `.dockerignore` do **fiscal/frontend** — o do gestao-pessoas foi feito em 06/09 | §6 |
-| 5 | **IP na auditoria**: 13 das 14 ações gravam `NULL`, e quando grava é o IP do nginx | §6 |
-| 6 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
-| 7 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
-| 8 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
-| 9 | `RH_MODELO` vê "Ciclos" no menu e leva 403 na listagem — mesmo degrau fechado hoje na fila, uma tela adiante | §3.1.3 |
+| 1 | **Contas para os avaliadores** — 46 dos 53 não têm conta, e 3 têm conta sem permissão. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
+| 2 | **`rodrigoleao`** — é avaliador de 4 pessoas e a permissão GESTAO_PESSOAS **não salvou**. ⚠️ Segunda ocorrência do mesmo sintoma (a 1ª foi o INVENTARIO do `wandersonnascimento`): ver se a tela do Configurador erra ao salvar, porque aí é de todos os módulos | §6 |
+| 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
+| 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
+| 5 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
+| 6 | Tela do **sync** (hoje só por API) | §7 · §2 |
+| 7 | `.dockerignore` do **fiscal/frontend** — o do gestao-pessoas foi feito em 06/09 | §6 |
+| 8 | **IP na auditoria**: 13 das 14 ações gravam `NULL`, e quando grava é o IP do nginx | §6 |
+| 9 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
+| 10 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
+| 11 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
+| 12 | `RH_MODELO` vê "Ciclos" no menu e leva 403 na listagem — mesmo degrau fechado hoje na fila, uma tela adiante | §3.1.3 |
 
 ---
 
