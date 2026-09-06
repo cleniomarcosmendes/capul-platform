@@ -231,3 +231,41 @@ describe('⭐ recorte pela data-base — fato posterior ao ciclo não conta', ()
     expect(resolverDataUltimaFuncao(comPromocao2026, '20000522').data).toBe('20260301');
   });
 });
+
+describe('duplicidade na origem — ruído HOJE, não invariante', () => {
+  // O SR7010 da Capul tem 312 chaves (filial, matrícula, data, sequência)
+  // repetidas; 68 com FUNÇÕES DIFERENTES, 9 delas em pessoas ativas.
+  //
+  // Medido nas 1.036 ativas (função de janela em SQL, ordenando por recno
+  // crescente e decrescente): **em nenhuma a data resolvida muda**. Nos dados de
+  // hoje é ruído de cadastro, não critério de nota.
+  //
+  // ⚠️ Mas NÃO é invariante — e este teste existe para dizer isso. A ordem passa
+  // a importar quando um lançamento POSTERIOR repete a função de uma das
+  // duplicatas: aí uma das ordens vê uma troca a mais, mais tarde. Se um dia a
+  // conferência em SQL acusar algum caso, é preciso regra explícita de desempate
+  // (o candidato natural é o maior recno = lançamento mais recente).
+  const comDuplicata = (ordem: 'ab' | 'ba', posterior: string) => {
+    const a = mov('20101101', '00400');
+    const b = mov('20101101', '00190');
+    return [
+      mov('20090101', '00100'),
+      ...(ordem === 'ab' ? [a, b] : [b, a]),
+      mov('20151101', posterior),
+    ];
+  };
+
+  it('quando nada posterior repete a função duplicada, a ordem é indiferente', () => {
+    // É a situação de todas as 1.036 pessoas ativas hoje.
+    expect(resolverDataUltimaFuncao(comDuplicata('ab', '09999'), '20050101').data).toBe(
+      resolverDataUltimaFuncao(comDuplicata('ba', '09999'), '20050101').data,
+    );
+  });
+
+  it('⚠️ DOCUMENTA o limite: com um posterior igual a uma das duplicatas, a ordem MUDA a data', () => {
+    // 'ab': 00100 → 00400 → 00190 → 00190 (sem troca) → última troca em 20101101
+    // 'ba': 00100 → 00190 → 00400 → 00190 (TROCA)    → última troca em 20151101
+    expect(resolverDataUltimaFuncao(comDuplicata('ab', '00190'), '20050101').data).toBe('20101101');
+    expect(resolverDataUltimaFuncao(comDuplicata('ba', '00190'), '20050101').data).toBe('20151101');
+  });
+});

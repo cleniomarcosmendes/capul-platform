@@ -55,6 +55,18 @@ export interface RelatorioSincronizacao {
   };
   /** Até 50 recusas, para a tela mostrar sem virar despejo. */
   amostraDeRecusas: Recusa[];
+  /**
+   * ⭐ PENDÊNCIAS CADASTRAIS que a carga encontrou — vão para a tela de §5.4,
+   * que a gestora precisa ver antes do primeiro fechamento. Não travam o ciclo.
+   *
+   * Hoje é só o lançamento sem data (99 linhas, 79 de pessoas ativas). Fica
+   * AQUI, no relatório, porque o relatório inteiro é gravado em `rh.auditoria`
+   * a cada execução: a lista sobrevive ao fim da requisição sem exigir tabela
+   * nova. A tela lê o último relatório do sync.
+   */
+  pendenciasCadastrais: {
+    lancamentoSemData: { filial: string; matricula: string }[];
+  };
 }
 
 @Injectable()
@@ -240,6 +252,13 @@ export class SincronizacaoService {
         semDataInicio: treinamentoSemDataInicio,
       },
       amostraDeRecusas: recusados.slice(0, 50),
+      pendenciasCadastrais: {
+        // Só quem virou colaborador: pendência de quem não está no quadro não é
+        // pendência de ninguém.
+        lancamentoSemData: invalidas
+          .filter((i) => i.motivo === 'SEM_DATA' && idPorMatricula.has(i.linha.matricula))
+          .map((i) => ({ filial: i.linha.filial, matricula: i.linha.matricula })),
+      },
     };
 
     await this.auditoria.registrar({

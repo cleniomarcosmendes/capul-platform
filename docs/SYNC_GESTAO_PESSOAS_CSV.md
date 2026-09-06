@@ -81,8 +81,21 @@ e 2.268 treinamentos. Duração: ~55 s na primeira carga, ~41 s na segunda.
 
 ### 1. Duplicidade na origem — 312 chaves repetidas no `SR7010`
 
-`(filial, matrícula, data, sequência)` **não é única no Protheus**, e as linhas repetidas
-trazem **funções diferentes**:
+**A gravação estava perdendo linha; o cálculo, não — mas por sorte dos dados, não por
+construção.** Das 312 chaves repetidas, **68 trazem funções diferentes** e **9 delas
+atingem pessoas ativas**. Conferido nas 1.036 ativas, resolvendo a data com o `recno`
+crescente e decrescente: **em nenhuma a data muda**. Nos dados de hoje é ruído de
+cadastro, não critério de nota.
+
+⚠️ **Não é invariante.** A ordem passa a importar quando um lançamento POSTERIOR repete a
+função de uma das duplicatas — aí uma das ordens enxerga uma troca a mais, mais tarde. Não
+existe nenhum caso assim hoje, e por isso não há regra de desempate; se a conferência
+acusar algum, o candidato natural é o maior `recno` (lançamento mais recente). Há teste
+demonstrando os dois casos — o indiferente e o que muda — para a conclusão não ser lida
+como garantia.
+
+O problema era de GRAVAÇÃO. `(filial, matrícula, data, sequência)` não é única no
+Protheus, e as linhas repetidas trazem funções diferentes:
 
 ```
 18  001214  20101101  seq 1  função 00400  tipo 005
@@ -101,11 +114,24 @@ gravá-lo (a chave inclui a data), então a linha fica de fora — mas **não in
 linhas da pessoa** e **não derruba o arquivo**. Sai contada no relatório
 (`historicoFuncional.invalidas`) e listada no log com matrícula e filial.
 
-### 3. 15.758 lançamentos sem colaborador na base
+### 3. 15.758 lançamentos sem colaborador na base — e não é erro de join
 
-São os expurgados do `SRA010`: gente que foi avaliada em ciclos passados e cujo cadastro
-de pessoal não existe mais em nenhuma das bases (`capulmig`, `capulhlg`, `capulfis`).
-Contados no relatório; não afetam o piloto, que trabalha com o quadro atual.
+⚠️ **Correção de uma afirmação da primeira versão deste documento.** Estava escrito que
+eram "os expurgados do `SRA010`". Não são: **todos existem no `SRA010`**, e foram
+filtrados por serem demitidos ou autônomos. Conferido:
+
+| | Linhas | De pessoa ATIVA | Existe no SRA, filtrada | Matrícula inexistente |
+|---|---:|---:|---:|---:|
+| `SR7010` | 29.881 | 14.103 | 15.778 | **0** |
+| `RA4010` | 3.258 | 2.272 | 986 | **0** |
+
+Zero matrículas inexistentes nos dois arquivos — não há erro de junção. E a conta fecha
+exatamente com o que foi gravado: **14.103 − 79** (lançamentos sem data de pessoas ativas)
+**= 14.024**; **2.272 − 4** (cursos sem data de início) **= 2.268**.
+
+(Os expurgados do `SRA010` existem, mas são outra coisa: 488 dos 905 avaliados do ciclo
+de 2025, no `RDB010` — histórico de avaliação, não de folha. Ver
+docs/REGRESSAO_PROTHEUS_GESTAO_PESSOAS.md.)
 
 ---
 
