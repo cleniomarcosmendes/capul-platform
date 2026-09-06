@@ -69,7 +69,7 @@ export default function MinhasAvaliacoesPage() {
       <ProgressoGeral total={itens.length} concluidas={itens.filter((i) => i.status === 'ENVIADA').length} />
 
       {porCiclo.map((grupo) => (
-        <BlocoDoCiclo key={grupo.ciclo.id} grupo={grupo} mostrarNome={porCiclo.length > 1} />
+        <BlocoDoCiclo key={grupo.ciclo.id} grupo={grupo} />
       ))}
     </div>
   );
@@ -98,10 +98,14 @@ function agruparPorCiclo(itens: ItemDaFila[]): GrupoDeCiclo[] {
   return [...mapa.values()].sort((a, b) => a.ciclo.prazo.localeCompare(b.ciclo.prazo));
 }
 
-function BlocoDoCiclo({ grupo, mostrarNome }: { grupo: GrupoDeCiclo; mostrarNome: boolean }) {
+function BlocoDoCiclo({ grupo }: { grupo: GrupoDeCiclo }) {
   return (
     <section className="mt-6">
-      <CabecalhoDoCiclo ciclo={grupo.ciclo} mostrarNome={mostrarNome} />
+      <CabecalhoDoCiclo
+        ciclo={grupo.ciclo}
+        aResponder={grupo.pendentes.length}
+        total={grupo.pendentes.length + grupo.enviadas.length}
+      />
 
       {grupo.pendentes.length > 0 && (
         <>
@@ -137,11 +141,27 @@ function BlocoDoCiclo({ grupo, mostrarNome }: { grupo: GrupoDeCiclo; mostrarNome
 }
 
 /**
- * ⭐ O PRAZO. Sem ele a tela não respondia "até quando posso responder" em lugar
- * nenhum — e quem responde no corredor da loja não vai procurar essa informação
- * fora do sistema.
+ * ⭐ O PRAZO e a CONTAGEM DO BLOCO, juntos.
+ *
+ * Sem o prazo, a tela não respondia "até quando posso responder" em lugar
+ * nenhum — e quem responde no corredor da loja não vai procurar isso fora do
+ * sistema.
+ *
+ * ⭐ E a contagem precisa ser POR BLOCO, não só no topo. O total geral soma
+ * ciclos com urgências diferentes: 14 avaliações que vencem em 24 dias e 8 que
+ * vencem em 55 viram um "27%" só, e quem está contra o prazo do Piloto olha
+ * esse número sem saber quanto dele é urgente. O agregado esconde exatamente a
+ * informação que faz alguém agir hoje.
  */
-function CabecalhoDoCiclo({ ciclo, mostrarNome }: { ciclo: ItemDaFila['ciclo']; mostrarNome: boolean }) {
+function CabecalhoDoCiclo({
+  ciclo,
+  aResponder,
+  total,
+}: {
+  ciclo: ItemDaFila['ciclo'];
+  aResponder: number;
+  total: number;
+}) {
   const prazo = new Date(ciclo.prazo);
   const dias = Math.ceil((prazo.getTime() - Date.now()) / 86_400_000);
   const urgente = dias <= 7;
@@ -149,18 +169,26 @@ function CabecalhoDoCiclo({ ciclo, mostrarNome }: { ciclo: ItemDaFila['ciclo']; 
   // Sticky ajuda quem rola, mas NÃO substitui o rótulo no cartão: o cabeçalho
   // some atrás de qualquer coisa que abra por cima, e a informação que decide
   // precisa estar onde a pessoa toca.
+  //
+  // ⚠️ Encaixa ABAIXO do cabeçalho do módulo, que também é sticky. A altura vem
+  // de `--altura-cabecalho`, medida pelo Layout — fixar um número erraria no
+  // celular, onde nome e filial podem quebrar em duas linhas.
   return (
-    <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 bg-slate-100/95 px-3 py-2 backdrop-blur">
-      {mostrarNome && (
-        <span className="truncate text-sm font-semibold text-slate-700">{ciclo.nome}</span>
-      )}
+    <div
+      style={{ top: 'var(--altura-cabecalho, 0px)' }}
+      className="sticky z-10 -mx-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-xl border border-slate-200 bg-slate-100/95 px-3 py-2 backdrop-blur"
+    >
+      <span className="truncate text-sm font-semibold text-slate-700">{ciclo.nome}</span>
+      <span className="text-xs font-medium text-slate-600">
+        {aResponder === 0 ? `tudo enviado · ${total}` : `${aResponder} a responder de ${total}`}
+      </span>
       <span
         className={`inline-flex items-center gap-1.5 text-xs font-medium ${
           urgente ? 'text-amber-800' : 'text-slate-600'
         }`}
       >
         <CalendarClock size={13} aria-hidden />
-        Responda até {prazo.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+        até {prazo.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
         {dias >= 0 ? ` · ${dias} dia${dias === 1 ? '' : 's'}` : ' · prazo vencido'}
       </span>
     </div>

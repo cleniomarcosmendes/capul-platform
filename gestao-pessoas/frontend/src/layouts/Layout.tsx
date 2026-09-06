@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { ClipboardList, LogOut, UserCheck, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,6 +33,31 @@ export default function Layout() {
 
   const nome = euSou?.nome ?? usuario?.nome ?? usuario?.username ?? null;
   const filial = euSou?.filialAtual;
+
+  /**
+   * ⭐ O cabeçalho é STICKY, e a altura dele vira `--altura-cabecalho`.
+   *
+   * Sem isso, quem rola a fila perde nome, filial e Sair — e a tela de responder
+   * já era sticky, então o mesmo módulo se comportava de dois jeitos. E a altura
+   * precisa ser MEDIDA, não fixada: ela muda com o menu (que só aparece para
+   * quem tem mais de um destino) e muda de novo no celular, onde nome e filial
+   * podem quebrar em duas linhas. Número mágico aqui erraria justamente na tela
+   * pequena, que é onde o supervisor responde.
+   */
+  const cabecalho = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = cabecalho.current;
+    if (!el) return;
+    const medir = () =>
+      document.documentElement.style.setProperty('--altura-cabecalho', `${el.offsetHeight}px`);
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(el);
+    return () => observador.disconnect();
+    // Sem dependências de propósito: quem reage a nome, filial, menu e quebra
+    // de linha é o próprio ResizeObserver — listar estado aqui seria uma
+    // segunda lista para manter em sincronia com a primeira.
+  }, []);
   const doRh = tem(ROLES.RH_ADMIN, ROLES.RH_CICLO, ROLES.RH_MODELO);
 
   /**
@@ -52,14 +77,21 @@ export default function Layout() {
   // Uma opção só não é navegação — é um rótulo repetindo o cabeçalho.
   const mostrarMenu = itens.length > 1;
 
+
   return (
     <div className="min-h-dvh bg-slate-50">
-      <header className="border-b border-slate-200 bg-capul-600">
-        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
+      <header ref={cabecalho} className="sticky top-0 z-30 border-b border-slate-200 bg-capul-600">
+        {/* ⚠️ NO CELULAR A IDENTIDADE VAI PARA A SEGUNDA LINHA.
+            A 360px, título + nome + filial + Sair na mesma faixa espremiam
+            "Avaliação de Desempenho" até virar "Aval…" — o módulo perdia o
+            próprio nome justamente na largura em que o supervisor de loja usa.
+            `order-last w-full` joga a identidade para baixo no celular e
+            `sm:order-none sm:w-auto` a devolve para a linha no desktop. */}
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2.5">
           <Users size={18} className="text-white/80" aria-hidden />
           <h1 className="flex-1 truncate font-semibold text-white">Avaliação de Desempenho</h1>
           {nome && (
-            <div className="min-w-0 text-right">
+            <div className="order-last min-w-0 w-full text-left sm:order-none sm:w-auto sm:text-right">
               <p className="truncate text-sm leading-tight text-white">{nome}</p>
               {filial && (
                 <p className="truncate text-xs leading-tight text-white/70">

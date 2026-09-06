@@ -234,8 +234,11 @@ function CabecalhoFixo({
             {ciclo.nome} · até {prazo.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
           </p>
         </div>
+        {/* ⚠️ "2/14" era o único número da interface sem unidade — e o texto
+            certo já existia no `aria-label` da barra logo abaixo, ou seja: o
+            leitor de tela ouvia melhor do que a pessoa que enxerga lia. */}
         <span className="shrink-0 text-sm font-medium tabular-nums text-slate-600">
-          {respondidas}/{total}
+          {respondidas} de {total}
         </span>
       </div>
       <div

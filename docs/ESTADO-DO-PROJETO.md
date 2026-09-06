@@ -352,6 +352,20 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 
 ## 6. Armadilhas do ambiente
 
+### Ver a tela em largura de celular, aqui
+
+Há um Chromium do Playwright em `~/.cache/ms-playwright/chromium-1187`. Com
+`playwright-core` (só o pacote, o navegador já está lá) dá para renderizar em 360px e tirar
+print — foi assim que se pegou o título do módulo virando "Aval…" no cabeçalho.
+
+⚠️ Ponha o token no `localStorage` com `context.addInitScript` **antes** do primeiro
+`goto`: sem token o `AuthProvider` redireciona para o Hub e a navegação é interrompida.
+
+⚠️ E confira o bundle depois de `docker compose build`: no WSL a granularidade de timestamp
+faz o Docker reaproveitar a camada e o `dist/` sai velho **sem erro nenhum**. Aconteceu aqui:
+duas rodadas de print mostraram a tela antiga. `grep` por uma classe nova dentro do
+`assets/*.js` resolve; `--no-cache` conserta.
+
 ### ⚠️ A auditoria grava o autor, mas quase nunca o IP
 
 `rh.auditoria` tem coluna `ip` e **só `ENVIAR` a preenche** (7 de 7). Todas as outras ações
