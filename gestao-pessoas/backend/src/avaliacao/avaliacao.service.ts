@@ -29,6 +29,10 @@ export class AvaliacaoService {
   /**
    * A fila do avaliador: só o que lhe foi designado (decisão E2).
    * A própria avaliação dele, se estiver na lista, vem MARCADA — não filtrada.
+   *
+   * ⭐ Traz NOME e PROGRESSO de cada linha. Um supervisor com 30 liderados
+   * precisa saber onde está sem abrir uma por uma — e "3 de 15 respondidas" é a
+   * diferença entre retomar e recomeçar.
    */
   async minhasAvaliacoes(contexto: ContextoAcesso, cicloId?: string) {
     const linhas = await this.prisma.avaliacao.findMany({
@@ -41,9 +45,41 @@ export class AvaliacaoService {
         enviadaEm: true,
         centroCustoSnapshot: true,
         cargoSnapshot: true,
+        aplicacao: {
+          select: {
+            nome: true,
+            modeloVersao: { select: { grupos: { select: { _count: { select: { perguntas: true } } } } } },
+          },
+        },
+        _count: { select: { respostas: true } },
       },
     });
-    return marcarRestricoes(linhas, contexto.colaboradorId);
+
+    const avaliados = await this.prisma.colaborador.findMany({
+      where: { id: { in: linhas.map((l) => l.avaliadoId) } },
+      select: { id: true, nome: true, matricula: true, cargoDescricao: true },
+    });
+    const porId = new Map(avaliados.map((c) => [c.id, c]));
+
+    const comDados = linhas.map((l) => {
+      const total = l.aplicacao.modeloVersao.grupos.reduce((s, g) => s + g._count.perguntas, 0);
+      const avaliado = porId.get(l.avaliadoId);
+      return {
+        id: l.id,
+        avaliadoId: l.avaliadoId,
+        nome: avaliado?.nome ?? '(colaborador não encontrado)',
+        matricula: avaliado?.matricula ?? '',
+        cargo: l.cargoSnapshot ?? avaliado?.cargoDescricao ?? null,
+        centroCusto: l.centroCustoSnapshot,
+        aplicacao: l.aplicacao.nome,
+        status: l.status,
+        enviadaEm: l.enviadaEm,
+        perguntasTotal: total,
+        perguntasRespondidas: Math.min(l._count.respostas, total),
+      };
+    });
+
+    return marcarRestricoes(comDados, contexto.colaboradorId);
   }
 
   /** Abre o questionário para responder. Passa pela porta (403 no próprio). */
@@ -75,10 +111,23 @@ export class AvaliacaoService {
     });
 
     const respondido = new Map(completa.respostas.map((r) => [r.perguntaId, r.alternativaId]));
+    const total = completa.aplicacao.modeloVersao.grupos.reduce((s, g) => s + g.perguntas.length, 0);
+    const avaliado = await this.prisma.colaborador.findUnique({
+      where: { id: completa.avaliadoId },
+      select: { nome: true, matricula: true, cargoDescricao: true },
+    });
+
     return {
       id: completa.id,
       status: completa.status,
       observacaoAvaliador: completa.observacaoAvaliador,
+      avaliado: {
+        nome: avaliado?.nome ?? '',
+        matricula: avaliado?.matricula ?? '',
+        cargo: completa.cargoSnapshot ?? avaliado?.cargoDescricao ?? null,
+      },
+      perguntasTotal: total,
+      perguntasRespondidas: respondido.size,
       grupos: completa.aplicacao.modeloVersao.grupos.map((g) => ({
         id: g.id,
         titulo: g.titulo,

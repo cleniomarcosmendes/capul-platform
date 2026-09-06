@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+/* Paleta CAPUL — alinhada ao tema do Workspace (gestao-ti) para consistência
+   de marca no módulo Logística. Verde principal #006838. */
+@theme {
+  --color-capul-50: #f0fdf4;
+  --color-capul-100: #dcfce7;
+  --color-capul-200: #bbf7d0;
+  --color-capul-300: #8fce6b;
+  --color-capul-400: #72BF44;
+  --color-capul-500: #4a9e2f;
+  --color-capul-600: #006838;
+  --color-capul-700: #004d2a;
+  --color-capul-800: #003d1f;
+  --color-capul-500: #4a9e2f;
+  --color-capul-600: #006838;
+  --color-capul-700: #004d2a;
+  --color-capul-800: #003d1f;
+  --color-capul-900: #002914;
+}
+
+/* Alvo de toque mínimo de 44px (recomendação de acessibilidade da Apple e da
+   WCAG). O avaliador responde no celular, com o dedo, muitas vezes em pé no
+   corredor da loja — alternativa pequena aqui vira erro de resposta. */
+@layer components {
+  .alvo-toque { min-height: 2.75rem; }
+}
+
+/* Respeita quem pediu menos animação no sistema. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

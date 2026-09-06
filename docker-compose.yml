@@ -782,6 +782,17 @@ services:
     mem_reservation: 128m
     cpus: 0.5
 
+  gestao-pessoas-frontend:
+    build: ./gestao-pessoas/frontend
+    container_name: capul-gestao-pessoas-web
+    depends_on:
+      - gestao-pessoas-backend
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.25
+
   # ──────────────────────────────────────────────────────────────────────────
   # OSRM — distância REAL de rua p/ a sugestão de ordem (Logística Fase 1c pt2).
   # OPT-IN: não sobe no `up` padrão (tem profile). Antes de ligar, rodar UMA vez

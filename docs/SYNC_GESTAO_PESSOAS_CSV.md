@@ -14,7 +14,7 @@
 
 | Arquivo | Origem | Alimenta |
 |---|---|---|
-| `colaboradores.csv` | `SRA010` + `SX5010` (tabela 26) | `rh.colaborador` |
+| `colaboradores.csv` | `SRA010` + `SX5010` (tabela 26) + `SQ3010` (cargo) | `rh.colaborador` |
 | `historico_funcao.csv` | `SR7010` | `rh.colaborador_funcao_historico` |
 | `treinamentos.csv` | `RA4010` | `rh.colaborador_treinamento` |
 
@@ -27,14 +27,20 @@ de largura fixa e vêm com espaço à direita — o leitor faz `trim` em tudo.
 -- colaboradores.csv
 select trim(RA_FILIAL) filial, trim(RA_MAT) matricula, trim(RA_NOME) nome, trim(RA_CIC) cpf,
        trim(RA_CC) centro_custo, ' ' centro_custo_descricao,
-       trim(RA_CODFUNC) cargo_codigo, ' ' cargo_descricao,
+       trim(a.RA_CODFUNC) cargo_codigo,
+       -- ⚠️ A descricao do cargo vem do SQ3010, nao do SRA010. Sem este join a
+       -- tela do avaliador mostra "Sem cargo cadastrado" para todo mundo, e o
+       -- avaliador perde a referencia de quem esta avaliando.
+       trim(nvl((select max(q.Q3_DESCSUM) from SQ3010 q
+                 where q.D_E_L_E_T_=' ' and trim(q.Q3_CARGO)=trim(a.RA_CODFUNC)),' ')) cargo_descricao,
        trim(RA_ADMISSA) data_admissao, trim(RA_DEMISSA) data_demissao,
        trim(RA_SITFOLH) situacao_folha, trim(RA_CATFUNC) categoria_funcional,
        trim(RA_GRINRAI) grau_instrucao_codigo,
        trim(nvl((select max(x.X5_DESCRI) from SX5010 x
                  where x.D_E_L_E_T_=' ' and x.X5_TABELA='26'
                    and trim(x.X5_CHAVE)=trim(a.RA_GRINRAI)),' ')) grau_instrucao_descricao,
-       ' ' descricao_funcao
+       trim(nvl((select max(q.Q3_DESCSUM) from SQ3010 q
+                 where q.D_E_L_E_T_=' ' and trim(q.Q3_CARGO)=trim(a.RA_CODFUNC)),' ')) descricao_funcao
 from SRA010 a where a.D_E_L_E_T_=' ';
 
 -- historico_funcao.csv
