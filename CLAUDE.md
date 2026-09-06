@@ -190,11 +190,13 @@ Plataforma corporativa modular com microservicos independentes:
   grupos ponderados, motor de calculo com renormalizacao.
 - Backend NestJS 11 + Prisma 6 (schema `rh` + `core` read-only via `$queryRaw`), porta 3004,
   prefixo `/api/v1/gestao-pessoas`.
-- **⭐⭐ O modulo so vira ATIVO quando as SETE telas existirem** (decisao 05/09). Card no Hub
-  com cinco rotas por construir e pior que modulo ausente: o usuario clica, chega em tela
-  vazia e conclui que o sistema esta quebrado. Ate la `core.modulos_sistema.status` fica
-  **INATIVO**, e a virada para ATIVO e uma **migration do commit que entrega a setima tela** —
-  nao um UPDATE de ambiente. ⚠️ O `status` **nao filtrava nada** ate 05/09 (coluna decorativa,
+- **⭐⭐ O modulo so vira ATIVO quando as SETE telas existirem** (decisao 05/09; ATIVO em
+  06/09 pela migration `20260906030000_ativa_gestao_pessoas_no_hub`). Card no Hub com rota
+  por construir e pior que modulo ausente: o usuario clica, chega em tela vazia e conclui
+  que o sistema esta quebrado. A virada para ATIVO e **migration**, nunca UPDATE de
+  ambiente — a mao, o modulo fica ATIVO no DEV e INATIVO em producao sem nada registrar a
+  diferenca. As sete: fila do avaliador · responder · ciclos · aplicacoes · designacao ·
+  painel (+pendencias) · resultados (+memoria de calculo). ⚠️ O `status` **nao filtrava nada** ate 05/09 (coluna decorativa,
   embora o comentario do compose ja afirmasse o contrario); agora
   `build-modulos-response.ts` filtra e ha spec para isso. De proposito o **JWT NAO filtra**:
   INATIVO e "nao anunciar", nao kill switch — quem sabe a URL segue testando, e cortar acesso
