@@ -30,10 +30,10 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 
 | | |
 |---|---|
-| Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **36 endpoints** em 9 controllers. |
+| Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **37 endpoints** em 9 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
 | Banco | 7 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **326 testes, 24 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Testes | **341 testes, 25 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -60,10 +60,6 @@ ciclo 000006 do Protheus — a nota do questionário bate **108/108** (ver
   cron**. Hoje se dispara por `curl`, e os três CSVs precisam ser extraídos do Protheus à
   mão e colocados em `RH_CSV_DIR` (padrão `/app/carga`, que não existe no container — é
   preciso criar e copiar). Ver `SYNC_GESTAO_PESSOAS_CSV.md`.
-- **A designação do ciclo ainda não bebe do cadastro de avaliadores.** O cadastro existe e
-  funciona (§3.9), com 848 linhas provisórias no DEV (§8) — mas a tela de Designação
-  continua pedindo o avaliador de cada pessoa, uma a uma. Falta o botão "designar pelo
-  cadastro", que transforma ~1.000 operações em uma. **É o gargalo do piloto.**
 - **`rh.aplicacao_publico` é lida, mas quem a preenche é script.** A tela de Aplicações
   ainda escolhe centros de custo; os atalhos de preenchimento por CC e por filial descritos
   na §3.7 não existem nela.
@@ -377,14 +373,18 @@ variadas, nota 54,65) e 3 resultados apurados. São o único dado real de uso �
 
 ## 7. Próximo passo (revisado em 06/09, tarde)
 
-**Ligar a designação do ciclo ao cadastro.** ✅ O cadastro existe (§3.9); a tela de
-Designação ainda não o usa — continua pedindo o avaliador de cada pessoa, uma a uma. Falta
-o botão que copia o cadastro para o ciclo: é o que transforma ~1.000 operações em uma, e é
-a resposta para "quanto tempo custa a designação".
+⭐ **A pergunta "quanto tempo custa a designação" foi respondida — e a resposta muda o
+plano.** Medido no DEV com as 1.036 pessoas em 4 aplicações (§10): o botão "Designar pelo
+cadastro" leva **7,3 segundos**. **O gargalo do piloto nunca foi a máquina.**
 
-Ao copiar valem as regras já escritas: quem não tem avaliador no cadastro aparece como
-`semDesignacao` no painel, o snapshot da `Avaliacao` congela quem foi designado, e a
-`origemDesignacao` guarda de onde veio.
+O que sobra é decisão humana, e é isso que precisa acontecer antes de 15/09:
+
+1. **A lista da Arielly.** Sem ela, 174 pessoas ficam de fora — todas as dos 36 pares
+   filial × CC sem nenhuma chefia. O CSV modelo já está com ela.
+2. **Revisar as 457 linhas de divisão automática.** ⚠️ São **61 confirmações, não 457**: o
+   botão "Conferi, está certo" é por avaliador, e confirma a lista inteira dele.
+3. **O público real de cada aplicação.** Hoje três das quatro têm recorte provisório por
+   prefixo de centro de custo, feito só para a medição valer (§10).
 
 Depois disso: os atalhos de preenchimento na tela de Aplicações (hoje ela ainda escolhe
 centros de custo), e então o roteiro abaixo.
@@ -453,7 +453,34 @@ Painel conferido ao vivo: `foraDeTodasAsAplicacoes = 959`, e a conta fecha — 1
 
 ---
 
-## 9. Onde ler mais
+## 9. A medição de 06/09 — quanto custa montar a designação
+
+Ciclo `Piloto 15/09/2026` com as **1.036 pessoas** em 4 aplicações, cadastro de avaliadores
+populado com as 848 linhas provisórias.
+
+| Operação | Resultado |
+|---|---|
+| Prévia (não grava) | 815 a criar · 174 sem avaliador · 457 de divisão não revisada — **0,2s** |
+| Aplicar | **815 designações em 7,3s** (9 ms cada) |
+| Reexecutar | 0 gravações · 815 já iguais — **0,2s** |
+
+**A designação em si não é o custo.** Custam as três decisões listadas na §7 — e a maior
+delas encolhe muito quando se olha direito: as 457 linhas arbitradas são **61 confirmações**,
+porque o botão de revisão é por avaliador.
+
+⚠️ **Três das quatro aplicações têm recorte PROVISÓRIO** por prefixo de centro de custo
+(11 administrativo · 21 lojas · 31/41 indústria), criado por script só para a medição existir.
+Escolher o público é decisão do RH e se faz na tela.
+
+⚠️ **Claudimar (Diretor Executivo) ficou com 59 avaliados** — consequência direta da regra
+provisória "onde há mais de um gerente, sobe para o Diretor Executivo". É provisório, e é o
+tipo de número que a lista real do RH resolve.
+
+---
+
+---
+
+## 10. Onde ler mais
 
 | Documento | O que tem lá |
 |---|---|
