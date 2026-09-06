@@ -1,9 +1,62 @@
 # Gestão de Pessoas — estado do projeto
 
 > Ponto de entrada para quem vai mexer no módulo. Diz onde estamos, o que não se
-> discute mais e onde ler o resto. Última revisão: **06/09/2026** (tarde).
+> discute mais e onde ler o resto. Última revisão: **06/09/2026** (noite).
 >
 > Piloto previsto para **15/09/2026**.
+
+## 🚫 NÃO DAR PUSH — 06/09/2026
+
+**Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
+**60 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+
+O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
+`6855c918`**, e publicar estes 60 commits agora — que trazem um módulo inteiro, com
+migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
+e refaz o roteiro.
+
+⚠️ Se alguém mexer no repositório e esta nota parecer velha, confira em vez de supor:
+`git status -sb` e `git log --oneline origin/main..HEAD | wc -l`.
+
+---
+
+## 0. O que trava e o que anda — fechamento de 06/09/2026
+
+Os 🔴 do dia nasceram espalhados por §3.1.1, §3.1.2, §3.1.4, §5 e §11. Aqui estão os
+mesmos itens em dois blocos, sem prosa. **Esta lista é um índice: quem decide o quê fica
+na seção citada.**
+
+### (A) DEPENDE DE FORA — não anda com trabalho técnico nenhum
+
+| Item | Quem responde | Onde está |
+|---|---|---|
+| O avaliador é avisado de que o RH lê a `observacaoAvaliador` dele? Ou o rótulo avisa, ou muda o que o campo colhe | Gestora de RH | §5 · §3.1.1 |
+| O `RH_ADMIN` pode operar a própria linha (público, designação, revisão, elegibilidade)? Eixo: incluir × excluir | Gestora de RH | §5 · §3.1.4 |
+| A ordem da fila do avaliador — indiferente, ou há prioridade? | Gestora de RH | §5 · §3.11 |
+| A mesma pessoa em dois ciclos abertos ao mesmo tempo | Gestora de RH | §5 · §3.10 |
+| Quem é o avaliador de cada centro de custo (a lista real) — sem ela, 174 pessoas ficam fora | Gestora de RH | §5 · §7 · §11 |
+| O público real de cada aplicação — 3 das 4 estão com recorte provisório | Gestora de RH | §5 · §7 · §11 |
+| Quem avalia os ~53 avaliadores — 46 caem no Diretor Executivo pela regra provisória | Diretoria + RH | §5 · §11 |
+| Quem avalia Presidente e Vice | Diretoria | §5 |
+| Régua de escolaridade · aprendizes · afastados · enunciados das perguntas | Gestora de RH | §5 |
+| Quem dispara o sync (RH ou T.I.) — enquanto não se decide, não existe cron | RH + T.I. | §5 |
+| **Segundo `RH_ADMIN`** — a separação de funções exige dois, e hoje há um | RH + T.I. | §5 · §3.1 |
+| **Contas para os avaliadores** — 46 dos 53 não têm conta na plataforma | T.I. (provisionamento) | §3.1.3 |
+| `rodrigoleao` — é avaliador de 4 pessoas e a permissão GESTAO_PESSOAS não salvou | T.I. (Configurador) | §6 |
+
+### (B) TRABALHO TÉCNICO PENDENTE — na ordem em que eu faria
+
+| # | Item | Onde está |
+|---|---|---|
+| 1 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
+| 2 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
+| 3 | Tela do **sync** (hoje só por API) | §7 · §2 |
+| 4 | `.dockerignore` do **fiscal/frontend** — o do gestao-pessoas foi feito em 06/09 | §6 |
+| 5 | **IP na auditoria**: 13 das 14 ações gravam `NULL`, e quando grava é o IP do nginx | §6 |
+| 6 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
+| 7 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
+| 8 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
+| 9 | `RH_MODELO` vê "Ciclos" no menu e leva 403 na listagem — mesmo degrau fechado hoje na fila, uma tela adiante | §3.1.3 |
 
 ---
 
@@ -386,6 +439,53 @@ com um `RH_ADMIN` só (§5). Por isso virou **pendência do RH**, e não correç
 `ENCERRAR`, `REVISAR` — este com todos os ids no `valorNovo`), a linha agora **aparece marcada**
 nas duas listas, e a regra do **segundo `RH_ADMIN`** existe exatamente para haver quem desfaça.
 
+#### A cadeia elo a elo — levantada em 06/09, com a régua das quatro listas
+
+**Quem abre, nos quatro:** ninguém fora do RH. Público e elegibilidade são
+`RH_ADMIN + RH_CICLO`; cadastro de avaliadores e revisão, `RH_ADMIN` puro. **Na prática, hoje,
+é uma pessoa só** — a gestora é a única `RH_ADMIN` e ninguém tem `RH_CICLO`. É o mesmo motivo
+pelo qual o segundo `RH_ADMIN` está na §5: sem ele não existe quem desfaça.
+
+| | **1. Público** (`aplicacao_publico`) | **2. Cadastro de avaliadores** (`designacao_padrao`) | **3. Revisão** (`.origem`) | **4. Elegibilidade** (`ciclo_elegibilidade`) |
+|---|---|---|---|---|
+| **Tela** | Aplicações | Avaliadores | Avaliadores | Designação |
+| **A linha dela aparece?** | sim, entre 142 | sim, entre os 45 do Claudimar | está no lote — **o botão é do bloco, não da linha** | sim |
+| **É marcada?** | ✅ desde 06/09 | ✅ desde 06/09 | — (não há linha própria a marcar) | ✅ desde 06/09 |
+| **O ato** | decide **se ela é avaliada** e por qual questionário | decide **quem a avalia** | converte "a ordem alfabética decidiu" em "gente decidiu" | sobrepõe a régua, nos dois sentidos |
+| **Reversível? Por quem?** | sim, re-adicionando — mas é **DELETE**: a linha original não volta e a `origem` se perde | sim, e **nunca apaga**: encerra `vigenciaFim` e cria outra linha | 🔴 **não pela tela** — só desfazendo a importação inteira | sim, **versionado** (`removidoEm` + quem removeu); a decisão anterior fica |
+| **O que impede hoje** | só a trava tardia **"já tem avaliação"**; antes da designação, nada. Sem motivo | só **autoavaliação** (`avaliador ≠ avaliado`, no serviço **e** como CHECK no banco). Sem motivo | nada. Sem motivo | **motivo obrigatório** (`@MinLength(3)` no DTO e no serviço). Nada mais |
+
+**A elegibilidade, nas três perguntas que se fez a ela:**
+
+- **Incluir ≠ excluir?** No código, **não** — mesma função, mesmo guard, mesma auditoria; muda o
+  rótulo (`DECIDIR_INCLUIR`/`DECIDIR_EXCLUIR`). No efeito, **muito**: incluir-se gera trabalho
+  para outra pessoa e entra nas contagens; **excluir-se tira a avaliação do ciclo e apaga o
+  sintoma** — o painel conta "sem avaliador" só entre elegíveis, então a pessoa sai da conta *e*
+  do alerta.
+- **Motivo obrigatório?** Sim — **é o único dos quatro elos que exige**, como o reabrir.
+- **Aparece depois?** Sim, e melhor que os outros três: na tela de Designação a linha fica
+  esmaecida com `Fora: <motivo>`, etiqueta **"decisão do RH"** e a justificativa em itálico. Os
+  outros três só existem em `rh.auditoria`.
+
+#### ⚠️ HIPÓTESE (leitura de código, NÃO comprovada): dois atos combinados apagam o sintoma
+
+Lendo o fonte em 06/09, a sequência abaixo parece deixar a pessoa invisível em todas as telas —
+e cada passo é, sozinho, defensável:
+
+1. **EXCLUIR** com motivo → `copiarDoCadastro` filtra por `elegivel`, então o lote não gera
+   avaliação para ela, e o painel a tira de "sem avaliador neste ciclo";
+2. sem avaliação, **"Tirar" do público passa a ser permitido** (a trava é justamente "já tem
+   avaliação") → ela sai da lista de Designação, que é montada a partir do público, e com ela
+   somem a etiqueta "decisão do RH" e a justificativa — o único lugar onde o ato aparecia;
+3. `foraDeTodasAsAplicacoes` **não a recupera**, porque filtra quem tem decisão EXCLUIR de
+   propósito (*"contar essa pessoa transformaria uma decisão registrada em cobrança eterna"* — o
+   comentário está certo, e é o que fecha o círculo).
+
+🔴 **Isto é hipótese fundamentada, não fato verificado.** Foi deduzida de quatro trechos de
+código, **não executada**: ninguém rodou a sequência, e nenhum dado foi alterado para comprová-la.
+Não a trate como verificada — se for útil confirmar, **faça no DEV e registre o resultado aqui**,
+com data, dizendo se ela se sustentou ou caiu.
+
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
 O cadastro (`/avaliadores`) e o painel de cada ciclo contavam ambos "sem avaliador" e nenhum
@@ -730,7 +830,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
 | 🔴 **O avaliador é avisado de que o RH lê a observação dele?** — **decisão da gestora, não nossa.** `observacaoAvaliador` é texto livre sobre a pessoa avaliada e aparece **inteiro** no modal de Resultados para qualquer `RH_ADMIN`; **nenhuma tela avisa quem escreve**. Verificado ao vivo em 06/09: a observação escrita no envio foi lida no modal pela conta da gestora. **São dois caminhos e ela escolhe um: (A)** o rótulo do campo passa a dizer, na tela de quem escreve, que o texto **será lido pelo RH** — o campo continua o que é e quem escreve sabe; **(B)** muda o entendimento do que o campo colhe (devolutiva ao avaliado, ou observação que o RH não lê) e a tela de Resultados deixa de exibi-lo. **Não pode chegar ambíguo à produção:** o primeiro ciclo real já colhe texto sob o entendimento errado, e texto colhido não se recolhe. ⚠️ O **rastro** desse acesso está RESOLVIDO (§3.1.1); isto aqui é **consentimento**, e continua EM ABERTO — auditoria diz quem leu, não autoriza a leitura. Ver §3.1.1 | Gestora de RH (Arielly) |
-| 🔴 **O `RH_ADMIN` pode operar a PRÓPRIA linha?** — decisão dela, não nossa. Quem monta o ciclo é também avaliada, e três botões agem sobre a linha dela: **"Tirar" no público** (decide se ela é avaliada neste ciclo — só antes de existir avaliação; depois o sistema recusa), **"Tirar" na lista de um avaliador** (encerra a designação de quem a avalia) e **"Conferi, está certo"** (confirma a lista que a inclui). Desde 06/09 a linha aparece **marcada** nas duas listas — então a tela diz *"esta é você"* ao lado de um botão que ela pode clicar, e **marcar sem decidir isto é pior que antes**. Os três atos são auditados (`PUBLICO_REMOVER`, `ENCERRAR`, `REVISAR`), mas **rastro diz quem fez, não decide se podia** — a mesma frase da observação, acima. ⚠️ Não é o mesmo caso da escrita de terceiro (§3.1.2), que corrigimos sem perguntar: ali não havia pergunta; aqui há, porque montar o ciclo é o trabalho dela. Ver §3.1.4 | Gestora de RH (Arielly) |
+| 🔴 **O `RH_ADMIN` pode agir sobre a PRÓPRIA linha?** — **uma pergunta só, quatro exemplos.** Quem monta o ciclo é também avaliada, e quatro atos alcançam a linha dela: **(1)** "Tirar" do público — decide se ela é avaliada neste ciclo; **(2)** "Tirar" na lista de um avaliador — encerra quem a avalia; **(3)** "Conferi, está certo" — confirma a lista que a inclui; **(4)** **Incluir/Excluir** na Designação — sobrepõe a régua. ⭐ **O eixo que pode dividir a resposta é incluir × excluir:** incluir-se é pedir para ser avaliada (gera trabalho para outro e entra nas contagens); **excluir-se sai da avaliação e apaga o sintoma** — a pessoa some da conta e do alerta do painel. Se a resposta vier por esse eixo, ela serve para os quatro atos, porque em todos o que pesa é o lado do "sair". ⚠️ Não decida elo a elo: a cadeia é sequencial e **o último elo aberto basta**. Desde 06/09 a linha aparece **marcada** em (1), (2) e (4) — a tela diz *"esta é você"* ao lado de um botão que ela pode clicar, e **marcar sem decidir isto é pior que antes**. Os atos são auditados (`PUBLICO_REMOVER`, `ENCERRAR`, `REVISAR`, `DECIDIR_INCLUIR`/`DECIDIR_EXCLUIR`), mas **rastro diz quem fez, não decide se podia**. ⚠️ Não é o caso da escrita de terceiro (§3.1.2), corrigida sem perguntar: ali não havia pergunta; aqui há, porque montar o ciclo é o trabalho dela. Ver §3.1.4 | Gestora de RH (Arielly) |
 | 🔴 **A ordem da fila do avaliador** — é indiferente, ou há prioridade (cargo, prazo, unidade)? Hoje é acidental: vem de `Aplicacao.ordem`, um campo de tela do RH, e numa fila de 95 decide a ordem em que 95 pessoas são avaliadas. Ver §3.11 | Gestora de RH |
 | 🔴 **A mesma pessoa em dois ciclos abertos** — 9 no DEV, com períodos sobrepostos, duas notas cada. Ondas de unidade (§9) são legítimas; sobreposição de PESSOAS talvez não. Ver §3.10 | Gestora de RH |
 | 🔴 **Quem avalia os ~52 AVALIADORES** — hoje 46 deles caem no Diretor Executivo pela regra provisória de hierarquia. ⚠️ A planilha de avaliadores **não tem como responder isto**: ela diz "quem responde pelo centro de custo X", e o responsável está DENTRO do CC que lidera — ele fica de fora da própria lista, porque autoavaliação não existe. É pergunta separada, e é de estrutura | Diretoria + Gestora de RH |
