@@ -217,8 +217,16 @@ export interface AplicacaoDoCiclo {
   ordem: number;
   pesoAvaliacao: string | number;
   criterios: { criterioId: string; peso: string | number; criterio: CriterioDoCatalogo }[];
+  /** Registro do ATALHO usado, não o público. Quem decide é `publico`. */
   centrosCusto: { id: string; filial: string | null; centroCusto: string }[];
-  _count: { avaliacoes: number };
+  /** O público NOMINAL, com a quebra de onde cada pedaço veio. */
+  publico: {
+    total: number;
+    origens: { origem: string; referencia: string | null; pessoas: number }[];
+    /** true quando alguma referência se declara provisória. */
+    provisorio: boolean;
+  };
+  _count: { avaliacoes: number; publico: number };
 }
 
 export interface NovaAplicacao {

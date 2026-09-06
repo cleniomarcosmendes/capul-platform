@@ -105,15 +105,53 @@ export class AplicacaoService {
     return aplicacao;
   }
 
-  listarDoCiclo(cicloId: string) {
-    return this.prisma.aplicacao.findMany({
+  /**
+   * ⚠️ O PÚBLICO É NOMINAL, e a tela precisa dizer DE ONDE ele veio.
+   *
+   * `centrosCusto` continua vindo, mas ela deixou de decidir quem entra: é o
+   * registro do atalho usado. Quem decide é `rh.aplicacao_publico`, uma linha
+   * por pessoa. Mostrar só a lista de centros de custo diria a coisa errada
+   * sobre um público montado por qualquer outro caminho — o dos aprendizes,
+   * por exemplo, que é por cargo e não tem centro de custo nenhum.
+   *
+   * ⭐ Por isso vem também a QUEBRA POR ORIGEM. É o que faz um recorte
+   * provisório aparecer como provisório na tela, em vez de a gestora achar que
+   * a divisão foi decisão de alguém.
+   */
+  async listarDoCiclo(cicloId: string) {
+    const aplicacoes = await this.prisma.aplicacao.findMany({
       where: { cicloId },
       orderBy: { ordem: 'asc' },
       include: {
         criterios: { include: { criterio: true } },
         centrosCusto: true,
-        _count: { select: { avaliacoes: true } },
+        _count: { select: { avaliacoes: true, publico: true } },
       },
+    });
+
+    const origens = await this.prisma.aplicacaoPublico.groupBy({
+      by: ['aplicacaoId', 'origem', 'origemReferencia'],
+      where: { cicloId },
+      _count: { _all: true },
+    });
+
+    return aplicacoes.map((a) => {
+      const doPublico = origens.filter((o) => o.aplicacaoId === a.id);
+      return {
+        ...a,
+        publico: {
+          total: a._count.publico,
+          origens: doPublico
+            .map((o) => ({
+              origem: o.origem as string,
+              referencia: o.origemReferencia,
+              pessoas: o._count._all,
+            }))
+            .sort((x, y) => y.pessoas - x.pessoas),
+          /** A palavra vem do próprio dado — quem escreveu a referência a marcou. */
+          provisorio: doPublico.some((o) => (o.origemReferencia ?? '').toUpperCase().includes('PROVISORIO')),
+        },
+      };
     });
   }
 

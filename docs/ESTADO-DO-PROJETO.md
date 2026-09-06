@@ -290,7 +290,8 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Aprendizes (31 pessoas) entram no ciclo com aplicação própria, sem critérios cadastrais — confirmar | Gestora de RH |
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
-| **Quem é o avaliador de cada centro de custo** — o CSV modelo (74 CCs, nº de pessoas, candidatos por cargo como sugestão) já está em `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv`, para ela receber algo quase pronto em vez de folha vazia | Gestora de RH |
+| 🔴 **Quem é o avaliador de cada centro de custo** — o CSV modelo (74 CCs, nº de pessoas, candidatos por cargo como sugestão) já está em `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv`. **Sem ela, 174 pessoas ficam de fora do ciclo** e a carga se concentra em quem sobrou (§9) | Gestora de RH |
+| 🔴 **O público de cada aplicação** — quais centros de custo respondem qual questionário. É a outra metade do mesmo bloqueio: hoje 3 das 4 aplicações do DEV estão com recorte PROVISÓRIO por prefixo de centro de custo, feito por script só para medir. **Ninguém do RH decidiu esse recorte**, e ele está marcado como provisório na tela | Gestora de RH |
 | Por que o registro de treinamento parou em 14/11/2025 | RH / Protheus |
 | Quem dispara o sync: RH ou T.I.? Enquanto não se decide, **não** existe cron | Gestora de RH + T.I. |
 | Confirmar os enunciados das perguntas — o export do Protheus trouxe o texto das alternativas, não o enunciado; os títulos do seed foram **derivados** | Gestora de RH |
@@ -379,12 +380,17 @@ cadastro" leva **7,3 segundos**. **O gargalo do piloto nunca foi a máquina.**
 
 O que sobra é decisão humana, e é isso que precisa acontecer antes de 15/09:
 
-1. **A lista da Arielly.** Sem ela, 174 pessoas ficam de fora — todas as dos 36 pares
-   filial × CC sem nenhuma chefia. O CSV modelo já está com ela.
-2. **Revisar as 457 linhas de divisão automática.** ⚠️ São **61 confirmações, não 457**: o
+1. 🔴 **A lista de avaliadores da Arielly.** Sem ela, **174 pessoas ficam de fora** do ciclo
+   — as dos 36 pares filial × CC sem nenhuma chefia — e a carga se concentra em quem
+   sobrou. O CSV modelo já está com ela.
+2. 🔴 **O público real de cada aplicação.** Quais centros de custo respondem qual
+   questionário. É **o mesmo grau de bloqueio** que o item 1, e o único item do caminho que
+   nunca teve dono: hoje 3 das 4 aplicações do DEV estão com recorte **provisório** por
+   prefixo de centro de custo, montado por script para a medição existir. Ninguém do RH
+   decidiu esse recorte — a tela de Aplicações o exibe marcado, para não passar por
+   decisão nossa.
+3. **Revisar as 457 linhas de divisão automática.** ⚠️ São **61 confirmações, não 457**: o
    botão "Conferi, está certo" é por avaliador, e confirma a lista inteira dele.
-3. **O público real de cada aplicação.** Hoje três das quatro têm recorte provisório por
-   prefixo de centro de custo, feito só para a medição valer (§10).
 
 Depois disso: os atalhos de preenchimento na tela de Aplicações (hoje ela ainda escolhe
 centros de custo), e então o roteiro abaixo.
@@ -472,9 +478,31 @@ porque o botão de revisão é por avaliador.
 (11 administrativo · 21 lojas · 31/41 indústria), criado por script só para a medição existir.
 Escolher o público é decisão do RH e se faz na tela.
 
-⚠️ **Claudimar (Diretor Executivo) ficou com 59 avaliados** — consequência direta da regra
-provisória "onde há mais de um gerente, sobe para o Diretor Executivo". É provisório, e é o
-tipo de número que a lista real do RH resolve.
+### Quem fica sobrecarregado se a lista não vier
+
+A distribuição das 815 designações entre os 87 avaliadores: **média 9,4 · mediana 9 ·
+maior 58**. A cauda é o problema, e ela é curta o bastante para caber numa conversa:
+
+| Avaliador | Cargo | Avaliados |
+|---|---|---|
+| **Claudimar Dias de Oliveira** | Diretor Executivo | **58** |
+| Telismar da Cunha Silva | Supervisor de Operações | 27 |
+| Elias Correia Viana | Supervisor de Produção | 27 |
+| Luanderson Natã de J. Pereira | Supervisor Operacional | 18 |
+| Adriana Caetano Vasconcelos | Gerente Supermercado | 17 |
+
+**Claudimar sozinho responde por 58 questionários — seis vezes a mediana.** É consequência
+direta da regra provisória "onde há mais de um gerente, sobe para o Diretor Executivo", e
+some quase inteira quando o RH disser quem avalia quem.
+
+No Supermercado Unaí, onde os 11 responsáveis foram eleitos por cargo, a divisão ficou
+entre **6 e 17 avaliados** — e **para 10 dos 11, TODA a lista veio da divisão alfabética**.
+A exceção é a gerente, que recebeu os outros 10 líderes pela regra de hierarquia.
+
+⚠️ **457 das 815 designações (56%) vêm de divisão alfabética não revisada.** Se o ciclo
+valesse mérito hoje, mais da metade das avaliações teria sido atribuída por ordem de nome.
+Não vale (`valeParaMerito = false`), e é por isso que o piloto existe — mas é o número que
+explica por que o item 3 da §7 não é opcional.
 
 ---
 

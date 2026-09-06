@@ -159,14 +159,34 @@ function CartaoDeAplicacao({ aplicacao }: { aplicacao: AplicacaoDoCiclo }) {
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Público</p>
-          {aplicacao.centrosCusto.length === 0 ? (
+          {/* ⚠️ O público é NOMINAL: uma linha por pessoa em `aplicacao_publico`.
+              Mostrar a lista de centros de custo diria a coisa errada sobre um
+              público montado por outro caminho — o dos aprendizes é por cargo e
+              não tem centro de custo nenhum. Aqui vai o número e DE ONDE veio. */}
+          {aplicacao.publico.total === 0 ? (
             <p className="mt-1 text-sm text-amber-700">
-              Sem centro de custo — a lista de designação virá com todo mundo.
+              Nenhuma pessoa no público — ninguém será designado nesta aplicação.
             </p>
           ) : (
-            <p className="mt-1 text-sm text-slate-600">
-              {aplicacao.centrosCusto.map((cc) => cc.centroCusto).join(', ')}
-            </p>
+            <div className="mt-1 space-y-1">
+              <p className="text-sm text-slate-700">
+                <strong className="tabular-nums">{aplicacao.publico.total}</strong> pessoa(s)
+              </p>
+              {aplicacao.publico.provisorio && (
+                <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
+                  ⚠️ RECORTE PROVISÓRIO — montado por script para teste. Não é decisão do RH:
+                  refaça o público antes de abrir o ciclo.
+                </p>
+              )}
+              <ul className="text-xs text-slate-500">
+                {aplicacao.publico.origens.map((o, i) => (
+                  <li key={i}>
+                    {o.pessoas} por {o.origem.toLowerCase().replace('_', ' ')}
+                    {o.referencia ? ` — ${o.referencia}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       </div>
