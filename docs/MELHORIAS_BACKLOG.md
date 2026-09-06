@@ -1757,3 +1757,62 @@ só enquanto `status !== 'ENVIADA'`, apagando as `Resposta` e devolvendo o statu
 resto — descartar a própria avaliação continua barrado pela separação de funções.
 
 **Quem decide:** Clenio.
+
+---
+
+## [Gestão de Pessoas] Revisão de tela do RH_ADMIN — 06/09/2026
+
+Rodada com a conta `ariellypereira` (RH_ADMIN). **Quatro achados foram corrigidos na hora**
+(caminho para a própria fila, auditoria no acesso a resultado, `Encerrar` clicável com 892
+pendentes, painel contando ao contrário). O que segue **não foi mexido**.
+
+### Números que não se conciliam
+
+| Onde | Diz | É |
+|---|---|---|
+| `/avaliadores` | 108 sem avaliador | do **cadastro inteiro** |
+| Painel do Piloto | 95 sem avaliador | **elegíveis daquele ciclo** |
+| Painel do Geral | 84 sem avaliador | idem, outro ciclo |
+
+Os três usam a mesma expressão e nenhuma tela diz de que universo fala. Quem fechar os 95 do
+Piloto volta a `/avaliadores`, continua vendo 108 e conclui que não resolveu nada.
+
+### Pendência que não leva a lugar nenhum
+
+O aviso *"95 pessoa(s) elegíveis sem avaliador… resolva na aba Designação"* **não é clicável**
+(zero `<a>`, zero `<button>`). E não existe lista consolidada dos 95: o filtro "Sem avaliador"
+é **por aplicação**, então ver todos exige trocar o seletor quatro vezes — 4 + 25 + 50 + 16,
+em quatro listas separadas.
+
+### Não há visão por PESSOA
+
+A busca da Designação filtra **só a aplicação selecionada**: procurar `005124` com
+"Aprendizes" no seletor devolve "Nada aqui". Quem procura alguém precisa **adivinhar em que
+aplicação a pessoa caiu**. E nada atravessa ciclos: para saber que a Ana Claudia está nos
+dois, o RH abre um ciclo, busca, abre o outro e busca de novo.
+
+### Resultados: o buraco entre enviadas e apuradas não aparece
+
+Piloto: 2 enviadas, **1 apurada** — e a tela mostra `Σ 1 resultado(s) · média 58,60` sem dizer
+que falta uma. A média é dos **apurados**, não do ciclo, e some junto a informação de que há
+gente de fora. Geral: 4 enviadas, 3 apuradas.
+
+### Contradição de texto sobre a apuração
+
+O painel diz *"Apurar … grava o resultado"*; o modal diz *"Calculada agora, sobre as respostas
+gravadas — não é um número congelado"*. Ambas são verdade sobre coisas **diferentes** (a nota
+final é materializada; a quebra por grupo é calculada na leitura, ADR-RH-02) — mas lado a lado
+elas se contradizem, e a segunda sugere que alterar resposta muda a nota sem reapuração.
+
+### Menores
+
+- **`0%` para 2 de 894** — corrigido para `<1%` nesta rodada.
+- **Média de 1 resultado** apresentada como média do ciclo.
+- **`Desfazer` de 445 pares** no histórico de importação, sem confirmação aparente.
+- **"Conferi, está certo" na própria lista** — quem é RH_ADMIN e avaliadora confirma o próprio
+  "quem eu avalio". Decidir se o RH pode ser o RH de si mesmo.
+- **Avaliador sem cargo** no cadastro (`002474`) — a linha só fica mais curta, nada sinaliza.
+- **360px do lado do RH não testado** — a barra de ferramentas da Designação (select + busca +
+  botão) e a linha de chips são os pontos a olhar.
+
+**Quem decide:** Clenio.

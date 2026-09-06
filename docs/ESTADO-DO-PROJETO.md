@@ -118,6 +118,34 @@ avaliadoId`), nunca por papel.
 - Ler o **próprio resultado** não é ato sobre ele. A separação barra o que **muda** o
   registro; a linha da pessoa aparece marcada e abre.
 
+### 3.1.1. ⚠️ O que o RH_ADMIN VÊ de uma avaliação — e o que isso custa
+
+A memória de cálculo (`/resultados`, modal) mostra nota, conceito, quebra por grupo, **o nome
+de quem avaliou** e **a observação que o avaliador escreveu sobre a pessoa**. Isso não é
+agregado: é opinião redigida, legível por qualquer RH_ADMIN.
+
+**Está previsto.** A spec §8 exige `rh.auditoria` em *"acesso a resultado individual por quem
+não é o avaliador designado"* — a frase só faz sentido se esse acesso for permitido. E o campo
+existe para isso: `observacaoAvaliador` foi desenhado como *"evidência de devolutiva e
+contexto da nota"*, ou seja, para alguém ler depois.
+
+⚠️ **O que faltava era o rastro, e ele foi implementado em 06/09**: `LER_RESULTADO_INDIVIDUAL`
+grava quem leu, de quem, se era o próprio, e se havia observação. Quem é o avaliador designado
+lê sem rastro — é o trabalho dele.
+
+#### Três pontos que continuam abertos, e são de decisão
+
+1. **O avaliador sabe que o RH lê o que ele escreve?** Se não souber, o campo colhe uma
+   franqueza que ele não consentiu; se souber, o texto muda. Nenhuma tela avisa.
+2. **`/resultados` não marca a linha de quem está logado.** A §3.1 manda *"mostrar a linha
+   marcada, nunca filtrar em silêncio"*, e é o que a designação faz — a lista de resultados,
+   não. Hoje não vaza porque a avaliação da gestora ainda não foi enviada; **no dia em que for,
+   a nota e a observação dela entram na mesma lista que ela abre.** Risco estrutural, não
+   vazamento observado. Merece teste dirigido antes da produção.
+3. **Grupo pequeno reaproxima a resposta.** "Assiduidade e Pontualidade" tem 2 perguntas de 4
+   alternativas; um percentual de grupo aí reduz o espaço de combinações a um punhado. Quanto
+   menor o grupo, mais o "agregado" vira resposta.
+
 ### 3.2. Avaliar ≠ apurar
 
 `Avaliacao.notaAvaliacao` sai no **envio** e é só do questionário. `ResultadoAvaliacao`

@@ -156,7 +156,19 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
         <div className="mt-3 border-t border-slate-100 pt-3">
           <button
             type="button"
-            disabled={ocupado}
+            /**
+             * ⚠️ ENCERRAR É A AÇÃO IRREVERSÍVEL DO MÓDULO, e estava clicável com
+             * 892 de 894 avaliações por enviar — a única barreira era a frase
+             * cinza abaixo. O servidor recusa (e diz quantas faltam), mas
+             * descobrir a regra clicando no botão que fecha o ciclo é o tipo de
+             * aprendizado que só se quer ter uma vez.
+             */
+            disabled={ocupado || (ciclo.status !== 'RASCUNHO' && ciclo.avaliacoesPendentes > 0)}
+            title={
+              ciclo.status !== 'RASCUNHO' && ciclo.avaliacoesPendentes > 0
+                ? `${ciclo.avaliacoesPendentes} avaliação(ões) ainda não foram enviadas`
+                : undefined
+            }
             onClick={() => agir(ciclo.status === 'RASCUNHO' ? 'abrir' : 'encerrar')}
             className="alvo-toque inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:opacity-50"
           >
@@ -166,7 +178,9 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           <p className="mt-2 text-xs text-slate-500">
             {ciclo.status === 'RASCUNHO'
               ? 'Abrir gera as avaliações e trava a montagem: aplicações e critérios só mudam enquanto é rascunho.'
-              : 'Encerrar exige que todas as avaliações tenham sido enviadas.'}
+              : ciclo.avaliacoesPendentes > 0
+                ? `Faltam ${ciclo.avaliacoesPendentes} avaliação(ões) por enviar — encerrar só depois que todas entrarem.`
+                : 'Todas as avaliações foram enviadas: o ciclo pode ser encerrado.'}
           </p>
         </div>
       )}

@@ -69,7 +69,16 @@ export default function Layout() {
    * esconder do menu é esconder a tela.
    */
   const itens = [
-    tem(ROLES.AVALIADOR) && { para: '/', icone: <ClipboardList size={15} />, rotulo: 'Minhas avaliações' },
+    /**
+     * ⚠️ SEM CONDIÇÃO DE PAPEL, de propósito. Ser avaliador é um FATO DO DADO —
+     * a pessoa está designada — e não um papel: a gestora de RH avalia 13
+     * pessoas e tem só `RH_ADMIN`. Com a condição em `tem(AVALIADOR)`, o item
+     * sumia para ela e as 13 avaliações ficavam INALCANÇÁVEIS: apareciam como
+     * pendência dela no painel e não havia botão nenhum que as abrisse. Quem
+     * não tem fila cai no estado vazio da própria tela, que já diz o que
+     * significa.
+     */
+    { para: '/', icone: <ClipboardList size={15} />, rotulo: 'Minhas avaliações' },
     doRh && { para: '/ciclos', icone: <Users size={15} />, rotulo: 'Ciclos' },
     tem(ROLES.RH_ADMIN) && { para: '/avaliadores', icone: <UserCheck size={15} />, rotulo: 'Avaliadores' },
   ].filter(Boolean) as { para: string; icone: React.ReactNode; rotulo: string }[];

@@ -76,10 +76,17 @@ export default function AplicacoesPage() {
         )}
       </div>
 
+      {/* ⚠️ O aviso falava de CRIAR aplicação, mas ficava logo acima dos botões
+          "Montar público" — que continuam funcionando, e devem: acrescentar
+          alguém ao público de um ciclo aberto é operação legítima (a pessoa
+          entra, é designada e responde). Aviso que descreve uma proibição
+          diferente da do controle ao lado ensina a ignorar o aviso. */}
       {ciclo.status !== 'RASCUNHO' && (
         <p className="mb-4 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-600">
-          O ciclo está {ciclo.status.replace('_', ' ')} — aplicações só podem ser montadas enquanto ele é
-          RASCUNHO. Mudança de peso depois da abertura é reapuração, não remontagem.
+          O ciclo está {ciclo.status.replace('_', ' ')} — <strong>criar</strong> aplicação e mudar peso
+          só enquanto ele é RASCUNHO; mudança de peso depois da abertura é reapuração, não
+          remontagem. <strong>Montar público continua valendo:</strong> quem entrar agora precisa ser
+          designado para gerar avaliação.
         </p>
       )}
 

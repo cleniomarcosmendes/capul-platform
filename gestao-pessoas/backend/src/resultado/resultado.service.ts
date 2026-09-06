@@ -23,6 +23,7 @@
  */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { AvaliacaoService } from '../avaliacao/avaliacao.service.js';
 import { marcarRestricoes } from '../avaliacao/separacao-funcoes.js';
 
@@ -52,6 +53,7 @@ export class ResultadoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly avaliacoes: AvaliacaoService,
+    private readonly auditoria: AuditoriaService,
   ) {}
 
   async doCiclo(cicloId: string, colaboradorId: string | null): Promise<LinhaDeResultado[]> {
@@ -103,7 +105,23 @@ export class ResultadoService {
   }
 
   /** Memória de cálculo de um resultado. */
-  async memoria(resultadoId: string) {
+  /**
+   * ⭐ A memória de cálculo é o registro individual mais completo do módulo:
+   * traz a nota, o conceito, a quebra por grupo, o NOME de quem avaliou e a
+   * OBSERVAÇÃO que o avaliador escreveu sobre a pessoa.
+   *
+   * A especificação §8 já decidiu que ler isso é permitido a quem não é o
+   * avaliador designado — e, na mesma frase, que esse acesso é de **registro
+   * obrigatório em `rh.auditoria`**. Sem a trilha, a decisão vira "qualquer
+   * RH_ADMIN lê a opinião escrita sobre qualquer pessoa e não fica rastro" —
+   * que não é o que está escrito em lugar nenhum.
+   *
+   * ⚠️ Não bloqueia: ler o PRÓPRIO resultado é explicitamente permitido (§3.1 —
+   * a separação de funções barra o que MUDA o registro), e o RH precisa ler o
+   * dos outros para apurar e para responder contestação. O que faltava era o
+   * rastro, não a permissão.
+   */
+  async memoria(resultadoId: string, contexto?: { colaboradorId: string | null; usuarioId: string; ip?: string }) {
     const r = await this.prisma.resultadoAvaliacao.findUnique({
       where: { id: resultadoId },
       include: {
@@ -124,6 +142,23 @@ export class ResultadoService {
       },
     });
     if (!r) throw new NotFoundException('Resultado não encontrado.');
+
+    // Quem é o avaliador designado lê sem rastro — é o trabalho dele. Todo o
+    // resto entra na trilha, com quem leu o quê e quando.
+    if (contexto && contexto.colaboradorId !== r.avaliacao.avaliadorId) {
+      await this.auditoria.registrar({
+        entidade: 'ResultadoAvaliacao',
+        entidadeId: resultadoId,
+        acao: 'LER_RESULTADO_INDIVIDUAL',
+        usuarioId: contexto.usuarioId,
+        valorNovo: {
+          avaliadoId: r.avaliacao.avaliadoId,
+          proprioResultado: contexto.colaboradorId === r.avaliacao.avaliadoId,
+          leuObservacaoDoAvaliador: Boolean(r.avaliacao.observacaoAvaliador),
+        },
+        ip: contexto.ip,
+      });
+    }
 
     // ⭐ RÓTULO ao lado do código. `valorBruto = 45` é o código de grau de
     // instrução do Protheus, e 0.5914 é ano em decimal: nenhum dos dois se

@@ -130,6 +130,8 @@ export interface CicloDaLista {
   incluirAfastados: boolean;
   valeParaMerito: boolean;
   _count: { aplicacoes: number; avaliacoes: number };
+  /** Não enviadas — é o que `encerrar` exige que seja zero. */
+  avaliacoesPendentes: number;
 }
 
 export interface CicloDetalhado extends Omit<CicloDaLista, '_count'> {

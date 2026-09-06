@@ -70,7 +70,18 @@ export default function PainelPage() {
   if (erro) return <Erro mensagem={erro} aoTentarDeNovo={carregar} />;
   if (!dados) return <Carregando linhas={4} />;
 
-  const pct = dados.designados > 0 ? Math.round((dados.enviadas / dados.designados) * 100) : 0;
+  /**
+   * ⚠️ Conta ENVIADAS, na mesma direção da fila do avaliador e da própria barra.
+   * O painel dizia "Faltam 892 de 894" com a barra enchendo no sentido oposto e
+   * o `aria-label` dizendo "2 de 894 enviadas" — o leitor de tela recebia a
+   * contagem num sentido e o olho no outro, na mesma linha. Mesmo módulo, mesma
+   * métrica: um sentido só.
+   *
+   * E `<1%` em vez de `0%`: 2 de 894 é 0,22%, e um "0%" ao lado de "1 enviada(s)"
+   * em duas aplicações diz que nada começou, o que é falso.
+   */
+  const proporcao = dados.designados > 0 ? (dados.enviadas / dados.designados) * 100 : 0;
+  const pct = proporcao > 0 && proporcao < 1 ? '<1%' : `${Math.round(proporcao)}%`;
 
   return (
     <div className="space-y-6">
@@ -81,9 +92,9 @@ export default function PainelPage() {
               ? 'Nenhuma avaliação designada'
               : dados.aFazer === 0
                 ? 'Todas enviadas'
-                : `Faltam ${dados.aFazer} de ${dados.designados}`}
+                : `${dados.enviadas} de ${dados.designados} enviadas`}
           </p>
-          <span className="text-sm tabular-nums text-slate-500">{pct}%</span>
+          <span className="text-sm tabular-nums text-slate-500">{pct}</span>
         </div>
         <div
           className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
@@ -93,7 +104,7 @@ export default function PainelPage() {
           aria-valuemax={dados.designados}
           aria-label={`${dados.enviadas} de ${dados.designados} avaliações enviadas`}
         >
-          <div className="h-full rounded-full bg-capul-600" style={{ width: `${pct}%` }} />
+          <div className="h-full rounded-full bg-capul-600" style={{ width: `${proporcao}%` }} />
         </div>
 
         {dados.semDesignacao > 0 && (

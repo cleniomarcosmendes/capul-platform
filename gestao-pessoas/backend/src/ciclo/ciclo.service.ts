@@ -203,11 +203,28 @@ export class CicloService {
     return atualizado;
   }
 
-  listar() {
-    return this.prisma.ciclo.findMany({
-      orderBy: { periodoInicio: 'desc' },
-      include: { _count: { select: { aplicacoes: true, avaliacoes: true } } },
-    });
+  /**
+   * ⚠️ Traz também quantas avaliações ainda NÃO foram enviadas — é a condição
+   * que `encerrar` exige, e sem o número a tela só consegue escrever a regra
+   * embaixo do botão e deixar a pessoa descobrir clicando. Encerrar é a ação
+   * irreversível do módulo; ela não pode ser o caminho para conhecer a regra.
+   */
+  async listar() {
+    const [ciclos, pendentes] = await Promise.all([
+      this.prisma.ciclo.findMany({
+        orderBy: { periodoInicio: 'desc' },
+        include: { _count: { select: { aplicacoes: true, avaliacoes: true } } },
+      }),
+      // groupBy e não `_count` filtrado: o `_count` do Prisma não aceita a
+      // mesma relação duas vezes (total e filtrada) na mesma consulta.
+      this.prisma.avaliacao.groupBy({
+        by: ['cicloId'],
+        where: { status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
+        _count: { _all: true },
+      }),
+    ]);
+    const porCiclo = new Map(pendentes.map((p) => [p.cicloId, p._count._all]));
+    return ciclos.map((c) => ({ ...c, avaliacoesPendentes: porCiclo.get(c.id) ?? 0 }));
   }
 
   async obter(cicloId: string) {

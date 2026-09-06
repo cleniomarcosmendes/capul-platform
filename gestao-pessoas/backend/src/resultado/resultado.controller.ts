@@ -1,5 +1,6 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Req } from '@nestjs/common';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
+import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { ResultadoService } from './resultado.service.js';
@@ -19,7 +20,21 @@ export class ResultadoController {
     return this.resultados.doCiclo(cicloId, colaboradorId ?? null);
   }
 
-  @Get(':id') memoria(@Param('id') id: string) {
-    return this.resultados.memoria(id);
+  /**
+   * ⚠️ Passa o CONTEXTO porque a §8 da spec exige registrar em `rh.auditoria` o
+   * acesso a resultado individual por quem não é o avaliador designado — e este
+   * é o único lugar do módulo que mostra a observação escrita pelo avaliador.
+   */
+  @Get(':id') memoria(
+    @Param('id') id: string,
+    @ColaboradorAtual('id') colaboradorId: string | undefined,
+    @CurrentUser() user: JwtPayload,
+    @Req() req: { ip?: string },
+  ) {
+    return this.resultados.memoria(id, {
+      colaboradorId: colaboradorId ?? null,
+      usuarioId: user.sub,
+      ip: req.ip,
+    });
   }
 }
