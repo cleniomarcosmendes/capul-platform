@@ -293,6 +293,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Aprendizes (31 pessoas) entram no ciclo com aplicação própria, sem critérios cadastrais — confirmar | Gestora de RH |
 | Afastados (47) entram no ciclo? É opção por ciclo, medida na data-base | Gestora de RH |
 | Quem avalia Presidente e Vice | Diretoria |
+| 🔴 **Quem avalia os ~52 AVALIADORES** — hoje 46 deles caem no Diretor Executivo pela regra provisória de hierarquia. ⚠️ A planilha de avaliadores **não tem como responder isto**: ela diz "quem responde pelo centro de custo X", e o responsável está DENTRO do CC que lidera — ele fica de fora da própria lista, porque autoavaliação não existe. É pergunta separada, e é de estrutura | Diretoria + Gestora de RH |
 | 🔴 **Quem é o avaliador de cada centro de custo** — o CSV modelo (74 CCs, nº de pessoas, candidatos por cargo como sugestão) está em `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` e **continua valendo**. ⚠️ A T.I. preencheu uma lista para destravar o desenvolvimento (§11): ela é **provisória** e **não substitui esta pendência** — quem responde por "quem avalia quem" é o RH | Gestora de RH |
 | 🔴 **O público de cada aplicação** — quais centros de custo respondem qual questionário. A T.I. também vai definir um recorte provisório para destravar (§11); ele fica **marcado como provisório na tela** e **não substitui esta pendência** | Gestora de RH |
 | Por que o registro de treinamento parou em 14/11/2025 | RH / Protheus |
@@ -574,6 +575,20 @@ questionários**, o gerente comercial da Agroveterinária com 83.
 ⚠️ **Claudimar continua com 45**, todos `MANUAL` da regra provisória de hierarquia ("quem
 avalia o responsável"), espalhados por centros de custo que a planilha ainda não cobre. Cai
 junto quando os 34 pares restantes forem preenchidos.
+
+### Decisão de 06/09: quem avalia os avaliadores fica com a regra provisória
+
+**46 dos 52 avaliadores são avaliados pelo Diretor Executivo**, pela cascata provisória
+("onde há mais de um gerente, sobe"). Preencher os 82 pares da planilha **não muda isso** —
+ver a pendência nova na §5.
+
+Três caminhos foram postos, e o escolhido foi **deixar como está para o piloto**: é
+provisório, está marcado, e "quem avalia os gerentes" é decisão de estrutura que a T.I. não
+tem como tomar por palpite. Deixá-la visível no cadastro vale mais do que resolvê-la errado.
+
+Os outros dois continuam disponíveis quando alguém decidir: ajustar à mão na tela (~46
+operações em "Avaliadores → designar"), ou uma segunda planilha no formato "esta pessoa é
+avaliada por aquela".
 
 ⭐ **As 108 pessoas sem avaliador não são uma falha da carga — são um cenário que vale
 manter.** Elas mantêm vivo no DEV o caminho "elegível que ninguém designou", que é a única
