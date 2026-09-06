@@ -552,6 +552,34 @@ só aparecem com uso aparecerem antes de 15/09.
 **O que isso NÃO é:** a decisão sobre quem avalia quem. Essa é do RH, tem consequência de
 mérito, e continua pendente na §5. As duas linhas de lá **não saem** por causa disto.
 
+### Importada em 06/09 — 48 dos 82 pares
+
+O Clenio preencheu 48 pares (34 em branco, 174 pessoas). Importada pela tela, `provisorio =
+true`, com "substituir ajustes manuais" ligado — os únicos `MANUAL` existentes vinham do
+script provisório, não de decisão de ninguém.
+
+| | antes (por cargo) | depois (lista do Clenio) |
+|---|---|---|
+| Sem avaliador no cadastro | 188 | **108** |
+| Linhas de divisão automática | 457 | **169** |
+| Avaliadores | 87 | **52** |
+| Média / mediana / maior | 9,4 / 9 / 58 | **17,2 / 11,5 / 95** |
+
+⚠️ **A lista real CONCENTRA em vez de espalhar, e isso é informação para o RH.** O critério
+por cargo elegia todo mundo com cargo de chefia e repartia; a lista de quem conhece a
+estrutura aponta **um** responsável por centro de custo. O resultado é hierarquicamente mais
+limpo e operacionalmente mais pesado: a gerente do Supermercado Unaí ficaria com **95
+questionários**, o gerente comercial da Agroveterinária com 83.
+
+⚠️ **Claudimar continua com 45**, todos `MANUAL` da regra provisória de hierarquia ("quem
+avalia o responsável"), espalhados por centros de custo que a planilha ainda não cobre. Cai
+junto quando os 34 pares restantes forem preenchidos.
+
+⭐ **As 108 pessoas sem avaliador não são uma falha da carga — são um cenário que vale
+manter.** Elas mantêm vivo no DEV o caminho "elegível que ninguém designou", que é a única
+pendência do módulo que some sozinha, e que precisa aparecer no painel e na pendência
+reversa para ser testada.
+
 Três coisas garantem que ninguém confunda uma com a outra:
 
 1. **`provisorio = true` é o padrão da importação**, no backend e na tela. Desmarcar exige
