@@ -1639,3 +1639,86 @@ o `.catch(() => {})`, porque travar a saída num erro de rede prende a pessoa nu
 ela quer encerrar.
 
 **Quem decide:** Clenio. Registrado a pedido dele; nada foi tocado na Logística.
+
+---
+
+## [Gestão de Pessoas] Auditoria: IP nulo em 13 das 14 ações — 06/09/2026
+
+Achado ao conferir o rastro do `AJUSTAR_PERIODO`, que era a justificativa inteira de ter
+feito uma rota em vez de um `UPDATE` manual. O rastro existe e é legível — **autor e horário
+estão sempre lá e resolvem para o username** —, mas o `ip` quase nunca.
+
+`rh.auditoria` tem coluna `ip` e **só `ENVIAR` a preenche** (7 de 7 registros). As outras 13
+ações gravam `NULL`:
+
+| Ação | Registros sem IP |
+|---|---|
+| `DESIGNAR` | **1.270** |
+| `ENVIAR` | 0 (é a única que preenche) |
+| `CRIAR` · `ABRIR` · `APURAR` · `SINCRONIZAR_COLABORADORES` | 4 · 4 · 3 · 5 |
+| `IMPORTAR` · `COPIAR_DESIGNACAO_DO_CADASTRO` · `PUBLICO_ADICIONAR` · `PUBLICO_REMOVER` · `REVISAR` · `DESFAZER_IMPORTACAO` · `AJUSTAR_PERIODO` | 1 a 5 cada |
+
+**A causa:** só o `AvaliacaoService` recebe o `ContextoAcesso` (que carrega o IP, montado no
+controller a partir de `@Req()`). Todos os outros services recebem apenas `usuarioId: string`.
+
+### Encanamento por service × caminho único — medido
+
+**Por service (o caminho óbvio, e o errado): ~40 pontos de mudança.** São **22 assinaturas**
+de método com `usuarioId: string` e **18 chamadas** de controller que passariam `ip` adiante.
+Pior que o tamanho: a próxima rota nova esquece de novo, e o esquecimento é mudo — é a mesma
+classe de defeito que o teste de invariante da separação de funções existe para pegar.
+
+**Caminho único: existe, e é de meia hora.** `AsyncLocalStorage` (nativo do Node — **não
+precisa de dependência nova**, e a spec §2 pede para não trazer biblioteca sem necessidade):
+
+1. um middleware abre o store por requisição com `{ usuarioId, ip }`;
+2. `AuditoriaService.registrar` lê o `ip` do store **quando o chamador não passar** —
+   assinatura inalterada, e quem já passa (o `AvaliacaoService`) continua funcionando.
+
+**Zero mudança em service, zero em controller.** Uma classe de ~30 linhas e o registro no
+`app.module`. O projeto já tem meio caminho andado no mesmo espírito: o `IdentidadeGuard` já
+pendura `req.colaboradorId` para o resto da requisição ler.
+
+⚠️ Cuidado ao implementar: em execução sem requisição (um `@Cron`, quando houver) o store
+fica vazio e o `ip` sai `undefined` — que é o comportamento certo, mas precisa de teste que
+prove isso em vez de estourar.
+
+**Veredito: item de meia hora, pelo caminho único.** Fazer por encanamento seria meio dia e
+deixaria a armadilha de pé.
+
+**Quem decide:** Clenio. Nada foi alterado.
+
+---
+
+## [Gestão de Pessoas] ⚠️ A auditoria do DEV está assinada por quem emprestou o token — 06/09/2026
+
+**Observação, não defeito de código.** Registrada porque quem for reconstituir o histórico
+depois não tem como adivinhar.
+
+Tudo o que a sessão de 06/09 gravou está assinado pelas contas de teste cujos tokens foram
+usados:
+
+| Conta | Registros | Ações |
+|---|---|---|
+| `ariellypereira` | **1.276** | ABRIR, AJUSTAR_PERIODO, APURAR, COPIAR_DESIGNACAO_DO_CADASTRO, DESFAZER_IMPORTACAO, **DESIGNAR**, IMPORTAR, PUBLICO_ADICIONAR/REMOVER, REVISAR, SINCRONIZAR |
+| `wandersonnascimento` | 19 | ABRIR, CRIAR, DESIGNAR, **ENVIAR**, SINCRONIZAR |
+| *(usuário não resolve)* | 13 | registros anteriores à sessão, de contas que não existem mais em `core.usuarios` |
+
+Duas consequências, e a segunda é a que importa:
+
+**(a) No DEV, o histórico atribui à Arielly coisas que ela não fez** — inclusive os 1.270
+`DESIGNAR` e o `AJUSTAR_PERIODO`. É esperado (o token era dela, a role era a necessária), mas
+quem abrir a auditoria em três meses vai ler "a gestora de RH redesignou a empresa inteira".
+
+**(b) Em produção, token compartilhado ou de serviço torna a auditoria decorativa
+justamente quando ela importa.** Este módulo grava nota com consequência de mérito; a
+trilha existe para responder "quem decidiu isso" numa contestação. Uma conta emprestada
+responde com o nome errado — e responde com confiança, que é pior do que não responder.
+
+Não há correção de código pedida aqui. O que a entrada pede é que, **antes da produção**,
+se decida: (i) se operações em lote (sync, cópia de designação) devem ter identidade
+própria de serviço, distinguível de pessoa; e (ii) se o RH_ADMIN pode ser usado por mais de
+uma pessoa — o que a §3.1 do ESTADO já exige que sejam **duas**, o que torna a pergunta
+concreta e não hipotética.
+
+**Quem decide:** Clenio + Gestora de RH. Nada foi alterado.
