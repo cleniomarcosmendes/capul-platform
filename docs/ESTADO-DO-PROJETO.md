@@ -8,10 +8,10 @@
 ## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**62 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**63 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 62 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 63 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -76,8 +76,7 @@ nove itens desta lista não movem esse número em nada.
 | 10 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
 | 11 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
 | 12 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
-| 13 | Menu: aplicar o padrão da plataforma — **com as duas dívidas** (o menu some com um item só; falta "Voltar ao Hub") e o destino das 4 abas do ciclo | §3.1.3 · §3.1.5 |
-| 14 | `RH_MODELO` vê "Ciclos" no menu e leva 403 na listagem — mesmo degrau fechado hoje na fila, uma tela adiante | §3.1.3 |
+| 13 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
 
 ---
 
@@ -584,6 +583,60 @@ inteiro de uma vez — telas que existem, as quatro abas do ciclo e o lugar da t
 que "Designação" se esconde. As opções levantadas — virar itens de sidebar com seletor de ciclo;
 continuar abas mas anunciadas no menu; ou um item "Ciclo em foco" — mudam de peso conforme
 **dois ciclos abertos ao mesmo tempo**, que é o caso de hoje (§3.10).
+
+### 3.1.6. ✅ O MENU do módulo — decidido e aplicado em 07/09
+
+A casca era um cabeçalho verde com abas no topo; virou **sidebar**, como nos outros cinco
+módulos. O que mudou não foi só a forma:
+
+```
+   Minhas avaliações            ← sem seção, primeiro
+   ── CADASTROS ──
+   Quem avalia quem
+   ── CICLO ──
+   Ciclos
+```
+
+| Item | Rota | Ícone | Papel | A pergunta de quem procura |
+|---|---|---|---|---|
+| Minhas avaliações | `/` | `ClipboardList` | **nenhum** (§3.1.3) | *"o que eu tenho para responder?"* |
+| Quem avalia quem | `/avaliadores` | `UserCheck` | `RH_ADMIN` | *"quem é o avaliador do fulano?"* |
+| Ciclos | `/ciclos` | `CalendarRange` | `RH_ADMIN` · `RH_CICLO` | *"como está a avaliação deste ano?"* |
+
+⭐ **O nó era o par de nomes, não a profundidade.** `Quem avalia quem` (cadastro, permanente) e
+`Designação` (etapa do ciclo) respondem a mesma pergunta em voz alta. O cadastro leva **a
+pergunta como nome** — é a frase que a pessoa tem na cabeça, e ela para ali sem precisar saber
+que existe cadastro, ciclo e cópia entre os dois; a **palavra técnica fica com a etapa**, que é
+onde quem já segue o processo a procura. Foi por essa ambiguidade que a gestora não achou a
+tela em 07/09, não por ela estar funda.
+
+⭐ **As quatro etapas do ciclo continuam DENTRO do ciclo** (Aplicações · Designação · Painel ·
+Resultados), como as etapas de um inventário no módulo Inventário (`EtapaStepper`). Descartada a
+alternativa de virarem itens de menu com um seletor global de ciclo: **com dois ciclos abertos**
+— o caso de hoje — e números plausíveis um no lugar do outro (95 × 84 sem designação), o ciclo
+selecionado vira um **MODO que vaza**, e o RH lê o número do ciclo errado sem receber erro
+nenhum. O ciclo mora na URL. Bônus: a lista de Ciclos é o único lugar onde os dois aparecem
+lado a lado, que é onde a diferença entre eles é legível.
+
+✅ **As duas dívidas do menu foram junto:** a navegação **não some mais** com um item só (a
+sidebar sempre existe — antes, quem só responde avaliação navegava sem barra nenhuma) e existe
+**"Voltar ao Hub"** no rodapé (antes a única saída era o Sair, que derruba a sessão da
+plataforma inteira).
+
+⚠️ **`Sair` continua COM RÓTULO** — divergência deliberada, mantida de 06/09: no padrão é só o
+ícone, e ícone mudo encostado no nome de quem está logado é onde um toque errado derruba a
+sessão da plataforma. O que mudou foi o lugar, que passou a ser o do padrão (rodapé da sidebar).
+
+🔴 **`RH_MODELO` fica sem NENHUM item, e isso está certo** — a tela de questionários não existe
+(o modelo só se monta pela API, §2). Não se inventa item de menu para tela que não existe; antes
+ele via "Ciclos" e levava 403, porque a rota é `RH_ADMIN`+`RH_CICLO` (dívida fechada aqui).
+**Ele volta ao menu quando a tela de questionários existir** — em `CADASTROS`, com
+`RH_ADMIN` + `RH_MODELO`.
+
+Conferido ao vivo em 07/09: RH_ADMIN vê 3 itens e as 2 seções; `wandersonnascimento`
+(AVALIADOR) vê 1 item **com a sidebar inteira**; a 360px o hambúrguer abre a gaveta com backdrop.
+`--altura-cabecalho` segue MEDIDA — 0px no desktop (não há barra no topo) e 69px no celular —, e
+o cabeçalho sticky da fila continua parando no lugar certo nas duas larguras.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

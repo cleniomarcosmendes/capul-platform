@@ -16,6 +16,12 @@
   --font-sans: 'PT Sans', system-ui, -apple-system, sans-serif;
 }
 
+/* Fundo da sidebar — MESMO valor dos outros módulos (Workspace, Inventário,
+   Fiscal, Configurador), para a casca ser reconhecível ao trocar de módulo. */
+:root {
+  --bg-sidebar: #1E293B;
+}
+
 /* Alvo de toque mínimo de 44px (recomendação de acessibilidade da Apple e da
    WCAG). O avaliador responde no celular, com o dedo, muitas vezes em pé no
    corredor da loja — alternativa pequena aqui vira erro de resposta. */
