@@ -8,10 +8,10 @@
 ## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**64 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**65 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 64 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 65 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -611,6 +611,49 @@ não veria nada — o motivo ficaria enterrado no relatório. São **oito estado
 | `OUTRO_AVALIADOR` | a avaliação é com fulano; o cadastro não troca sozinho |
 | `OUTRO_AVALIADOR_MANUAL` | idem, e foi designada à mão no ciclo: o lote só substitui se mandarem |
 | `JA_RESPONDIDA` | *"nada muda: fulano já respondeu N pergunta(s). Trocar o avaliador agora atribuiria o julgamento de uma pessoa a outra"* — **a mesma frase da recusa do lote: uma voz só** |
+
+##### ✅ `JA_RESPONDIDA` verificado AO VIVO — 07/09, e rendeu três estados
+
+Par usado: **ANA CLAUDIA GOMES RODRIGUES (005124)**, o rascunho preso de **3/14** no Piloto,
+vinculada no cadastro a **CLAUDIMAR** (≠ do avaliador dela). Pelo 3º ponto de entrada
+(*Por avaliador* → cartão → **Adicionar pessoa**), a tela mostrou as duas linhas de uma vez:
+
+> ⚠ No ciclo **Avaliação Geral 2026** a avaliação de ANA é com **WANDERSON NASCIMENTO DA COSTA**,
+> e foi designada **à mão dentro do ciclo**: o lote só a substitui com "substituir os ajustes
+> manuais" marcado, em [Designar pelo cadastro].
+>
+> ⓘ No ciclo **Piloto 15/09/2026** **nada muda**: **WANDERSON NASCIMENTO DA COSTA** já respondeu
+> **3 pergunta(s)**. Trocar o avaliador agora atribuiria o julgamento de uma pessoa a outra.
+
+A ordem funcionou (o ⚠ que pede ação em cima, o ⓘ informativo embaixo) e **a linha do
+`JA_RESPONDIDA` não tem link, de propósito**: não há para onde mandar a pessoa, porque não há o
+que fazer. E o **desfazer** exercitou o terceiro estado de graça: re-vincular ao Wanderson
+devolveu `JA_REFLETE` **nos dois ciclos** — *"o ciclo já reflete este vínculo"* —, que é
+exatamente a ordem de checagem que a §3.1.5 defende.
+
+⭐ **A avaliação não foi tocada.** Mesmo `id`, `EM_ANDAMENTO`, **3 respostas**, mesmo avaliador e
+o **mesmo `atualizado_em` (06/09 17:12)** — o carimbo intacto é a prova de que nada escreveu nela.
+
+⚠️ **O resíduo que ficou, e é permanente** (previsto e aceito antes de rodar): o vínculo dela
+voltou para o Wanderson, **mas a linha agora é `MANUAL` e NÃO provisória**, onde antes era
+provisória — então **"linhas provisórias" caiu de 928 para 927**. O resto voltou: **108** sem
+avaliador, **928** com avaliador, "não revisadas" em 159. O histórico dela tem 4 linhas (2 da
+carga do DEV + 2 do teste) e `rh.auditoria` guarda `DESIGNAR_MANUAL` · `ENCERRAR` ·
+`DESIGNAR_MANUAL`. Encerra, nunca apaga.
+
+##### 🟡 PERGUNTA ABERTA — `designar()` grava sempre `provisorio: false`
+
+Não é resíduo do teste: é **comportamento**. Vínculo criado pela tela **nunca nasce provisório**,
+nem quando substitui um que era — foi assim que o 928 virou 927 acima.
+
+**Pode estar certo:** ato manual é decisão de gente, e a tarja "provisória" existe para dizer
+*"isto foi a T.I. que chutou, não o RH que decidiu"* (§11). Quem clica está decidindo, então a
+linha deixa de ser chute. **Mas ninguém decidiu isso explicitamente** — saiu por omissão do
+código, e é a mesma família da tarja que virou coluna em 06/09 para não sumir em silêncio.
+
+⚠️ **Não corrigir sem decisão.** As duas saídas são defensáveis e mudam o que o número
+"linhas provisórias" significa: (a) fica como está — clicar é decidir, a linha nasce firme; ou
+(b) herda o `provisorio` de quem substituiu, e a tarja só cai quando alguém disser que caiu.
 
 ⭐ **A ORDEM das checagens é regra:** `JA_REFLETE` vem antes de tudo. Dizer *"já tem avaliação
 com Fulano"* logo depois de vincular o Fulano é absurdo — e se ela já foi respondida, é o
