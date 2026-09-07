@@ -1122,6 +1122,9 @@ estava enviada e nunca fora apurada). Público, respostas e as 4 enviadas: **int
   `ciclo = Geral AND criado_em > '2026-09-07 14:00' AND status = 'PENDENTE'` sem nenhuma resposta
   e sem resultado. Conferido antes (84) e depois: o ciclo voltou a **9 avaliações**, público
   **98**, e as **4 enviadas com os `enviada_em` originais** de 06/09.
+- **08/09/2026** — apagados os ciclos **`ZZ TESTE — item H false/true (08/09)`**, criados para
+  medir a prévia sob as duas políticas de afastados (§3.1.21): 2 ciclos, 2 aplicações, **0 no
+  público, 0 avaliações** — só a prévia foi chamada, e ela não grava.
 - **08/09/2026** — apagado o ciclo **`ZZ TESTE — item F (08/09)`**, criado para reproduzir os
   três quadrantes do §3.1.20: 2 avaliações, **0 respostas, 0 resultados**, 3 no público. SELECT
   antes, DELETE transacional, auditoria preservada.
@@ -1634,6 +1637,70 @@ e os avisos separados: **1** que fica de fora, **1** que segue como está com a 
 para o próximo ciclo. Antes, ALLINE e WAGNER cairiam no mesmo balde, com a mesma frase falsa
 sobre ALLINE.
 
+### 3.1.21. 🟠 A prévia do público não avisava quem a régua do ciclo vai barrar (08/09)
+
+Item H: a prévia prometeu **5**, entraram **5** no público e só **4** geraram avaliação — uma
+afastada na data-base, num ciclo configurado para não incluir afastados. A informação existia e
+estava bem explicada na Designação (*"Fora: regra ciclo"*), mas **só chegava depois de gravar**,
+que é tarde para quem está montando o recorte.
+
+#### A prévia e a régua eram a mesma função? **Não — e não eram duas cópias**
+
+Essa distinção decidiu o conserto:
+
+| | O que fazia |
+|---|---|
+| **prévia** | filtrava por `SITUACOES_ELEGIVEIS` — quem **existe** no quadro (ATIVO/AFASTADO/FÉRIAS) |
+| **régua do ciclo** | `avaliarElegibilidade` — cargo inelegível (Presidente/Vice), demitido na data-base, e **afastado quando o ciclo não os inclui** |
+
+⭐ A prévia **não recalculava** a elegibilidade por conta própria: ela simplesmente **não a
+aplicava**. Não era duplicação de regra — era **omissão** de regra. E isso muda o conserto:
+não havia que escolher entre duas contas, havia que **chamar a função que já existe**. A prévia
+agora pergunta a quem decide.
+
+⚠️ E usa a **mesma aproximação** que a Designação, de propósito: `categoriaFuncional: null` (não
+é coluna do nosso cadastro — Presidente e Vice saem por decisão registrada) e a situação de hoje
+como proxy da situação na data-base. Melhorar isso **só aqui** criaria exatamente a divergência
+que o conserto evita.
+
+#### Duas perguntas, dois números
+
+O rótulo *"5 pessoa(s) entram"* estava **certo sobre o público** — e era lido como "5 vão ser
+avaliadas". São perguntas diferentes, e a prévia passou a responder as duas em vez de misturar
+numa só:
+
+> **3** pessoa(s) entram **no público** · 0 já estão aqui · 3 no recorte
+> **1** destas **geram avaliação** — 2 não gera(m), pela régua do ciclo.
+>
+> *Entram no público e NÃO geram avaliação — ficam na lista de Designação, marcadas com o motivo:*
+> *EDMAR ANTONIO TEIXEIRA BORGES (002342) — Afastado na data-base do ciclo, e este ciclo está
+> configurado para não incluir afastados.*
+
+⭐ **A justificativa é a da régua, não um texto próprio da prévia** — a mesma frase que a
+Designação mostra depois. Se o RH reescrever o texto lá, a prévia acompanha sozinha.
+
+É a mesma família do §3.1.20: **responder uma pergunta e escrever sobre a outra**. Lá era
+cadastro × ciclo; aqui é público × avaliação.
+
+#### Verificação
+
+**471 testes** (5 novos). ⚠️ Eles afirmam a **regra**, não as frases — inclusive um que compara
+a justificativa devolvida com a saída de `avaliarElegibilidade` **chamada no próprio teste**:
+se o texto da régua mudar, o teste continua válido. (Ver a nota de método na §6, escrita depois
+do tropeço do item F.)
+
+✅ **Ao vivo**, dois ciclos descartáveis com o **mesmo** público de 4 pessoas (1 afastado, 1 em
+férias, 2 ativos):
+
+| Ciclo | entram no público | geram avaliação |
+|---|---|---|
+| `incluirAfastados = false` | 4 | **3** — OSMAR barrado, com o motivo da régua |
+| `incluirAfastados = true` | 4 | **4** |
+
+Mesmo recorte, política diferente, número diferente — que é a prova de que quem decide é a régua
+do ciclo, e não uma conta da prévia. E **férias não é barrada**, como a régua já dizia.
+Conferido também na tela, num centro de custo real com 2 afastados de 3.
+
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
 O cadastro (`/avaliadores`) e o painel de cada ciclo contavam ambos "sem avaliador" e nenhum
@@ -2035,6 +2102,33 @@ Não o que dá o veredito — o que **executa**. É isto que futuro-eu vai procu
 | ler `No pending migrations` | `docker compose build <mod>-migrate && docker compose run --rm <mod>-migrate` — e a linha que vale é **`GUARDA: ok — as N migrations … estao aplicadas`** |
 | `npx tsc -b` / `tsc --noEmit` | `docker compose build gestao-pessoas-frontend` — o Dockerfile roda `npm run build`, e o script é **`tsc -b && vite build`**. O `&&` é a garantia; erro de tipo derruba com exit 2 antes do `vite` |
 | `docker compose run … npx jest` | `docker run --rm -m 3g -e NODE_OPTIONS=--max-old-space-size=2560 -v <backend>/src:/app/src -v <backend>/tsconfig*.json:/app/ -v <backend>/package.json:/app/package.json -w /app --entrypoint npx capul-platform-gestao-pessoas-backend:latest jest --maxWorkers=2` |
+
+#### ⚠️ Teste que afirma TEXTO fossiliza o defeito junto
+
+Achado no item F (08/09). Ao consertar a frase que mentia — *"não estão na lista de ninguém e
+ficarão de fora"*, dita sobre gente que estava dentro —, **um spec antigo falhou**. E a falha
+estava certa: ele afirmava
+
+```ts
+expect(r.avisos.join(' ')).toMatch(/não estão na lista de ninguém e ficarão de fora/);
+```
+
+ou seja, **estava preso à frase, não à regra**. O teste passava exatamente porque o defeito
+existia, e teria "protegido" o defeito de qualquer correção. Suíte verde a favor do erro.
+
+⭐ **A regra prática:** um teste deve afirmar o **fato**, não a redação dele.
+
+- ✅ afirmar contagens, motivos, códigos, estados: `porMotivo`, `acao`, `status`;
+- ✅ afirmar **igualdade com a função que decide**, quando o que importa é a origem do texto —
+  no item H, o teste compara a justificativa devolvida com a saída de `avaliarElegibilidade`
+  chamada no próprio teste, então reescrever o texto da régua não quebra nada;
+- ⚠️ quando o texto **é** o requisito (uma recusa tem de ensinar o caminho), afirmar o
+  **pedaço que carrega a obrigação** e dizer por escrito qual é: `/reabra o ciclo/i`,
+  `/RH_ADMIN/`, `/motivo/` — não a frase inteira. Foi assim que as recusas do ciclo encerrado
+  sobreviveram a três reescritas de texto sem um teste quebrar.
+
+⚠️ E o corolário incômodo: **spec que quebra quando você conserta um defeito é informação, não
+estorvo.** Vale ler o que ele afirmava antes de atualizá-lo — no item F, era o próprio defeito.
 
 #### ⭐⭐ O MÉTODO, não só os casos: verificação por MUTAÇÃO
 

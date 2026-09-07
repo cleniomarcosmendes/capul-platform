@@ -777,6 +777,14 @@ export interface PreviaDoPublico {
   jaNesta: number;
   /** ⭐ Ninguém em duas aplicações do mesmo ciclo — o aviso vem ANTES de salvar. */
   emOutraAplicacao: { colaboradorId: string; nome: string; matricula: string; aplicacao: string }[];
+  /**
+   * ⭐ Quantos dos que entram vão MESMO gerar avaliação. Entrar no público e
+   * gerar avaliação são perguntas diferentes — a régua do ciclo decide a
+   * segunda (§3.1.21).
+   */
+  geramAvaliacao: number;
+  /** Quem entra no público e não gera avaliação, com a justificativa da RÉGUA. */
+  barradosPelaRegua: { colaboradorId: string; nome: string; matricula: string; justificativa: string }[];
   amostra: { nome: string; matricula: string; area: string | null }[];
 }
 

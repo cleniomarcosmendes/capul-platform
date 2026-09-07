@@ -16,6 +16,9 @@ import { validarAplicacao } from '../ciclo/abertura.validator.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { marcarRestricoesPor } from '../avaliacao/separacao-funcoes.js';
 import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
+// ⚠️ A MESMA função que a tela de Designação usa. A prévia não tem — e não pode
+// ter — uma segunda ideia de quem gera avaliação (§3.1.21).
+import { avaliarElegibilidade } from '../designacao/elegibilidade-ciclo.js';
 
 export interface DadosAplicacao {
   cicloId: string;
@@ -242,6 +245,31 @@ export class AplicacaoService {
     return marcarRestricoesPor(publico, colaboradorId, (l) => l.colaboradorId);
   }
 
+  /**
+   * ⭐⭐ A PRÉVIA RESPONDE DUAS PERGUNTAS, e elas não são a mesma (08/09).
+   *
+   *   1. **quem entra no PÚBLICO?**  — o recorte, que é o que ela sempre disse;
+   *   2. **destes, quem GERA AVALIAÇÃO?** — a régua do ciclo, que ela não dizia.
+   *
+   * Item H do roteiro: a prévia prometeu 5, entraram 5 no público e **4**
+   * geraram avaliação — uma afastada na data-base, que o ciclo está configurado
+   * para não incluir. *"5 pessoa(s) entram"* estava **certo sobre o público** e
+   * era lido como "5 vão ser avaliadas". A informação existia e estava bem
+   * explicada na Designação (*"Fora: regra ciclo"*) — só chegava **depois de
+   * gravar**, que é tarde para quem monta o recorte.
+   *
+   * ⚠️ **A régua NÃO é recalculada aqui.** Chama-se `avaliarElegibilidade`, a
+   * mesma função da tela de Designação e da abertura do ciclo. Uma segunda conta
+   * de "quem é avaliável" divergiria no primeiro ajuste, e a prévia passaria a
+   * prometer o que a designação não entrega — que é o defeito que ela veio
+   * resolver.
+   *
+   * ⚠️ E usa a MESMA aproximação da Designação, de propósito:
+   * `categoriaFuncional: null` (não é coluna do nosso cadastro; Presidente e
+   * Vice saem por decisão registrada) e a situação de HOJE como proxy da
+   * situação na data-base. Melhorar isto só aqui criaria a divergência que este
+   * conserto está evitando.
+   */
   async previaDoPublico(aplicacaoId: string, alvo: AlvoDoPublico) {
     const { aplicacao, candidatos, noCiclo } = await this.resolverAlvo(aplicacaoId, alvo);
 
@@ -261,6 +289,32 @@ export class AplicacaoService {
       }
     }
 
+    // ⭐ A SEGUNDA PERGUNTA: destes que entram, quem a régua do ciclo barra?
+    const barrados = adicionar
+      .map((c) => ({
+        c,
+        regua: avaliarElegibilidade(
+          {
+            colaboradorId: c.id,
+            matricula: c.matricula,
+            nome: c.nome,
+            categoriaFuncional: null,
+            situacaoNaDataBase: c.situacao as never,
+          },
+          { incluirAfastados: aplicacao.ciclo.incluirAfastados },
+        ),
+      }))
+      .filter((x) => !x.regua.elegivel)
+      .map((x) => ({
+        colaboradorId: x.c.id,
+        nome: x.c.nome,
+        matricula: x.c.matricula,
+        // A MESMA justificativa que a Designação mostra — nem uma segunda
+        // versão do texto, nem um resumo dele.
+        justificativa: x.regua.justificativa ?? '',
+      }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
     return {
       aplicacaoId,
       aplicacaoNome: aplicacao.nome,
@@ -269,6 +323,14 @@ export class AplicacaoService {
       jaNesta: jaNesta.length,
       /** ⭐ O aviso. Ninguém em duas aplicações do mesmo ciclo. */
       emOutraAplicacao: emOutra.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+      /**
+       * ⭐ Quantos dos que entram vão MESMO gerar avaliação. Entrar no público e
+       * gerar avaliação são duas coisas, e a prévia agora diz as duas em vez de
+       * misturá-las num número só.
+       */
+      geramAvaliacao: adicionar.length - barrados.length,
+      /** Quem entra no público e NÃO gera avaliação, com o motivo da régua. */
+      barradosPelaRegua: barrados,
       amostra: adicionar
         .slice(0, 10)
         .map((c) => ({ nome: c.nome, matricula: c.matricula, area: c.centroCustoDescricao })),
@@ -366,7 +428,13 @@ export class AplicacaoService {
   private async resolverAlvo(aplicacaoId: string, alvo: AlvoDoPublico) {
     const aplicacao = await this.prisma.aplicacao.findUnique({
       where: { id: aplicacaoId },
-      select: { id: true, nome: true, cicloId: true },
+      // ⭐ `incluirAfastados` vem junto porque a PRÉVIA passou a responder também
+      // "quantos destes geram avaliação?", e quem decide isso é a régua do
+      // ciclo — não uma conta própria daqui (§3.1.21).
+      select: {
+        id: true, nome: true, cicloId: true,
+        ciclo: { select: { incluirAfastados: true } },
+      },
     });
     if (!aplicacao) throw new NotFoundException('Aplicação não encontrada.');
 
@@ -386,7 +454,7 @@ export class AplicacaoService {
       where: { situacao: { in: SITUACOES_ELEGIVEIS as never[] }, OR: filtros },
       select: {
         id: true, nome: true, matricula: true, filial: true,
-        centroCusto: true, centroCustoDescricao: true,
+        centroCusto: true, centroCustoDescricao: true, situacao: true,
       },
       orderBy: [{ filial: 'asc' }, { nome: 'asc' }],
     });

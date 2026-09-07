@@ -12,6 +12,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { createPrismaMock } from '../common/testing/prisma-mock.js';
 import { AplicacaoService } from './aplicacao.service.js';
+import { avaliarElegibilidade } from '../designacao/elegibilidade-ciclo.js';
 
 const APP = 'app-1';
 const CICLO = 'ciclo-1';
@@ -31,7 +32,11 @@ describe('AplicacaoService — público nominal', () => {
   const alvoCC = { origem: 'CENTRO_CUSTO' as const, referencia: '02|21010101', centrosCusto: [{ filial: '02', centroCusto: '21010101' }] };
 
   const montar = (ocupados: { colaboradorId: string; aplicacaoId: string; nome: string }[] = []) => {
-    prisma.aplicacao.findUnique.mockResolvedValue({ id: APP, nome: 'Operação de Loja', cicloId: CICLO });
+    // ⚠️ `ciclo.incluirAfastados` entrou no select em 08/09: a prévia passou a
+    // responder "quantos GERAM AVALIAÇÃO", e quem decide isso é a régua do ciclo.
+    prisma.aplicacao.findUnique.mockResolvedValue({
+      id: APP, nome: 'Operação de Loja', cicloId: CICLO, ciclo: { incluirAfastados: false },
+    });
     prisma.colaborador.findMany.mockResolvedValue(PESSOAS);
     prisma.aplicacaoPublico.findMany.mockResolvedValue(
       ocupados.map((o) => ({
@@ -205,5 +210,86 @@ describe('AplicacaoService — público nominal', () => {
       expect(prisma.aplicacaoPublico.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
       expect(auditoria.registrar).toHaveBeenCalledWith(expect.objectContaining({ acao: 'PUBLICO_REMOVER' }));
     });
+  });
+});
+
+/**
+ * ⭐⭐ A PRÉVIA RESPONDE DUAS PERGUNTAS (08/09, item H do roteiro).
+ *
+ * Ela prometeu 5, entraram 5 no público e só 4 geraram avaliação: uma afastada
+ * na data-base, num ciclo configurado para não incluir afastados. *"5 pessoa(s)
+ * entram"* estava CERTO sobre o público e era lido como "5 vão ser avaliadas".
+ *
+ * ⚠️ Estes testes afirmam a REGRA — os números e o vínculo com a régua —, não
+ * as frases da tela. Ver a nota de método na §6: teste preso a texto fossiliza
+ * o defeito junto com ele, e foi o que aconteceu no item F.
+ */
+describe('prévia: entrar no público ≠ gerar avaliação', () => {
+  let prisma: ReturnType<typeof createPrismaMock>;
+  let service: AplicacaoService;
+
+  const alvo = { origem: 'MANUAL' as const, colaboradorIds: ['c1', 'c2', 'c3'] };
+
+  const montar = (situacoes: string[], incluirAfastados = false) => {
+    prisma.aplicacao.findUnique.mockResolvedValue({
+      id: APP, nome: 'Operação de Loja', cicloId: CICLO, ciclo: { incluirAfastados },
+    });
+    prisma.colaborador.findMany.mockResolvedValue(
+      PESSOAS.map((p, i) => ({ ...p, situacao: situacoes[i] })),
+    );
+    prisma.aplicacaoPublico.findMany.mockResolvedValue([]);
+  };
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    service = new AplicacaoService(prisma as never, { registrar: jest.fn() } as never);
+  });
+
+  it('todos ativos: os dois números batem', async () => {
+    montar(['ATIVO', 'ATIVO', 'ATIVO']);
+    const p = await service.previaDoPublico(APP, alvo);
+    expect(p.adicionar).toBe(3);
+    expect(p.geramAvaliacao).toBe(3);
+    expect(p.barradosPelaRegua).toEqual([]);
+  });
+
+  /** ⭐ O CASO DO RELATÓRIO: entra no público, não gera avaliação. */
+  it('afastada num ciclo que não inclui afastados: entra no público e NÃO gera avaliação', async () => {
+    montar(['ATIVO', 'AFASTADO', 'ATIVO']);
+    const p = await service.previaDoPublico(APP, alvo);
+    expect(p.adicionar).toBe(3);
+    expect(p.geramAvaliacao).toBe(2);
+    expect(p.barradosPelaRegua).toHaveLength(1);
+    expect(p.barradosPelaRegua[0].nome).toBe('BRUNO');
+  });
+
+  /**
+   * ⚠️ A justificativa é a MESMA da régua — não um texto próprio da prévia.
+   * O teste afirma a IGUALDADE com a função, não o conteúdo da frase: se o RH
+   * reescrever o texto da régua, a prévia acompanha e o teste continua válido.
+   */
+  it('a justificativa vem da régua, não de um texto próprio da prévia', async () => {
+    montar(['ATIVO', 'AFASTADO', 'ATIVO']);
+    const p = await service.previaDoPublico(APP, alvo);
+    const daRegua = avaliarElegibilidade(
+      { colaboradorId: 'c2', matricula: '002', nome: 'BRUNO', categoriaFuncional: null, situacaoNaDataBase: 'AFASTADO' },
+      { incluirAfastados: false },
+    );
+    expect(p.barradosPelaRegua[0].justificativa).toBe(daRegua.justificativa);
+  });
+
+  /** ⭐ A POLÍTICA DO CICLO manda: o mesmo público, o outro ciclo, outro número. */
+  it('o mesmo público num ciclo que INCLUI afastados gera avaliação para todos', async () => {
+    montar(['ATIVO', 'AFASTADO', 'ATIVO'], true);
+    const p = await service.previaDoPublico(APP, alvo);
+    expect(p.geramAvaliacao).toBe(3);
+    expect(p.barradosPelaRegua).toEqual([]);
+  });
+
+  /** Férias entra — é transitório, e a régua já dizia isso. A prévia não redecide. */
+  it('férias NÃO é barrada — a prévia não tem régua própria', async () => {
+    montar(['ATIVO', 'FERIAS', 'ATIVO']);
+    const p = await service.previaDoPublico(APP, alvo);
+    expect(p.geramAvaliacao).toBe(3);
   });
 });

@@ -484,14 +484,56 @@ function EditorDePublico({
               clique em <strong>Ver o que vai entrar</strong> para recalcular.
             </p>
           )}
+          {/* ⚠️ DUAS PERGUNTAS, DOIS NÚMEROS. "N pessoa(s) entram" sempre esteve
+              CERTO sobre o público — e era lido como "N vão ser avaliadas".
+              Entrar no público e gerar avaliação são coisas diferentes: a régua
+              do ciclo pode barrar quem entrou (afastado na data-base, por
+              exemplo). Misturar as duas num número só é o mesmo erro do painel
+              do lote (§3.1.20): responder uma pergunta e escrever sobre a outra. */}
           <p className={`text-sm ${previaVelha ? 'text-slate-500' : 'text-slate-700'}`}>
             <strong
               className={`tabular-nums text-lg ${previaVelha ? 'text-slate-500' : 'text-capul-700'}`}
             >
               {previa.adicionar}
             </strong>{' '}
-            pessoa(s) entram · {previa.jaNesta} já estão aqui · {previa.encontradas} no recorte
+            pessoa(s) entram no público · {previa.jaNesta} já estão aqui ·{' '}
+            {previa.encontradas} no recorte
           </p>
+          {!previaVelha && previa.adicionar > 0 && (
+            <p
+              className={`text-sm ${
+                previa.barradosPelaRegua.length > 0 ? 'text-amber-900' : 'text-slate-600'
+              }`}
+            >
+              <strong className="tabular-nums">{previa.geramAvaliacao}</strong> destas geram
+              avaliação
+              {previa.barradosPelaRegua.length > 0 &&
+                ` — ${previa.barradosPelaRegua.length} não gera(m), pela régua do ciclo`}
+              .
+            </p>
+          )}
+
+          {/* ⭐ Os NOMES de quem é barrado, com o motivo da régua — a mesma
+              frase que a Designação mostra. Ela existia lá e só chegava DEPOIS
+              de gravar, que é tarde para quem está montando o recorte. */}
+          {!previaVelha && previa.barradosPelaRegua.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              <p className="font-medium">
+                Entram no público e NÃO geram avaliação — ficam na lista de Designação, marcadas
+                com o motivo:
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {previa.barradosPelaRegua.slice(0, 8).map((b) => (
+                  <li key={b.colaboradorId}>
+                    <strong>{b.nome}</strong> ({b.matricula}) — {b.justificativa}
+                  </li>
+                ))}
+                {previa.barradosPelaRegua.length > 8 && (
+                  <li>… e mais {previa.barradosPelaRegua.length - 8}</li>
+                )}
+              </ul>
+            </div>
+          )}
 
           {/* ⭐⭐ OS NOMES. `amostra` vinha do backend desde sempre e a tela
               mostrava só números (§3.1.9) — e é a tela em que o número já
