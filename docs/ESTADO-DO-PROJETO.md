@@ -107,9 +107,12 @@ nove itens desta lista não movem esse número em nada.
 | 13 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
 | 14 | ⚠️ **O QUE NUNCA FOI EXERCITADO — lista consolidada** (base do roteiro do Chrome): o botão **"Definir avaliador · N pessoas"** do GRUPO e o **aviso em lote** (nunca apareceram numa tela) · clicar **"Adicionar N ao público"**, **"Apurar N avaliação(ões)"** e **"Abrir o ciclo"** nas confirmações · **designar pela linha até gravar** · os textos do Apurar com **todas enviadas** e com **zero enviadas** · Resultados **com filtro** (*"sobre N em exibição"*) · a faixa no estado **✓ nada falta para abrir** · os outros **"Próximo"** (apurar, encerrar, montar público) · **"Tirar" do público** e **"Excluir/Incluir"** com o ciclo encerrado · o **checkbox de seleção** da Designação desabilitado (só conferido por código) · `RH_MODELO` e `RH_ADMIN` **sem fila** (não há conta) · **celular de verdade** (tudo a 360px foi Chromium) · **dois avaliadores ao mesmo tempo**. ⚠️ Testar com `ariellypereira` NÃO pega os caminhos de avaliador puro — use `wandersonnascimento` e `claudimaroliveira` | §3.1.6 · §5 |
 | 15 | 🟡 Do roteiro de tela, ainda **não registrados até 07/09** (falha minha — foram pedidos e não entraram): a **"promessa falsa" do modal** (mesma lacuna do questionário sem tela, item 13) · **regras de público não reproduzíveis** · **provisório sem tela de confirmação em bloco** · **sem sinal de sincronismo** (a tela não diz quando o cadastro veio do Protheus) · e os detalhes do 🟡 14 | roteiro do Chrome |
-| 16 | 🟡 **A linha de Resultados não parece clicável** — a memória de cálculo é a melhor peça do módulo (nota, conceito, quebra por grupo, quem avaliou, a observação) e está atrás de um clique que ninguém adivinha | roteiro do Chrome |
-| 17 | 🔴 **A FONTE REPÕE O PROBLEMA: demissão não toca avaliação viva.** O `sincronizacao` **não está** entre os oito arquivos que escrevem em `prisma.avaliacao` — quem é demitido vira `situacao='DEMITIDO'`, sai da régua das listas NOVAS, e a avaliação criada antes fica `PENDENTE` para sempre. O cancelamento manual de 08/09 **resolve o caso, não a fonte**: com 894 avaliações abertas, o RH vai fazer isso à mão toda vez. ⚠️ **É pergunta, não conserto** — cancelar automaticamente no sync é o sistema decidindo sozinho tirar alguém do ciclo, e "afastado" não é "demitido". Medido em 08/09: **0 demitidos** com avaliação viva hoje; os 86 não-ATIVOs com avaliação são **FERIAS**, que são elegíveis por definição | §3.1.18 |
-| 18 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
+| 16 | ✅ **FEITO em 08/09** — a linha de Resultados passou a parecer clicável (cursor, chevron, hover de fundo, rótulo “memória de cálculo”) e a memória ganhou **“Enviada em”** ao lado de “Apurado em”, que é a comparação que responde a contestação depois de reapuração. `enviadaEm` já vinha do backend | §3.1.9 |
+| 17 | 🟠 **"Recorte provisório" não tem como confirmar** (item D do roteiro + 🟡 11 do anterior — são o mesmo). A etiqueta marca que o público veio de um atalho e não é decisão do RH, e **não existe o ato de confirmar**: nem por linha, nem por aplicação, nem por ciclo. Etiqueta que ninguém pode tirar deixa de significar alguma coisa. 🔴 **Precisa da Arielly antes do desenho: confirmar é por linha, por aplicação ou por ciclo?** — a resposta muda a tela inteira | roteiro do Chrome · §5 |
+| 18 | 🟠 **Os menores do item K**, em ordem de custo: **Enter morto no modal de vínculo** (com 108 pendências é mouse em cada uma) · **duas convenções para o mesmo botão em lote** · **dois modais irmãos com contratos diferentes** (o do cadastro tem o resumo *"X passa a avaliar Y"*, o do ciclo não) · **"Minhas avaliações" sem `<h1>`** · **escolher a si mesmo descarta a escolha válida anterior em silêncio**. ⚠️ E um de OUTRO módulo, só registrado: o **Hub mostra "Bem-vindo, !"** sem interpolar o nome | roteiro do Chrome |
+| 19 | 🟠 **`/gestao-pessoas/resultados` leva ao lugar errado EM SILÊNCIO.** Resultados vive dentro do ciclo (`/ciclos/:id/resultados`) — decisão nossa no menu, e ela está certa. O defeito é outro: `<Route path="*" element={<Navigate to="/" replace />} />` faz **qualquer URL desconhecida** cair na fila do avaliador **sem dizer nada**, como se tivesse levado a algum lugar. Alguém vai compartilhar esse link. ⚠️ **A correção não é criar a rota de topo** — é a URL desconhecida **dizer que não existe** | §3.1.6 |
+| 20 | 🔴 **A FONTE REPÕE O PROBLEMA: demissão não toca avaliação viva.** O `sincronizacao` **não está** entre os oito arquivos que escrevem em `prisma.avaliacao` — quem é demitido vira `situacao='DEMITIDO'`, sai da régua das listas NOVAS, e a avaliação criada antes fica `PENDENTE` para sempre. O cancelamento manual de 08/09 **resolve o caso, não a fonte**: com 894 avaliações abertas, o RH vai fazer isso à mão toda vez. ⚠️ **É pergunta, não conserto** — cancelar automaticamente no sync é o sistema decidindo sozinho tirar alguém do ciclo, e "afastado" não é "demitido". Medido em 08/09: **0 demitidos** com avaliação viva hoje; os 86 não-ATIVOs com avaliação são **FERIAS**, que são elegíveis por definição | §3.1.18 |
+| 21 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
 
 ---
 
@@ -909,6 +912,26 @@ três listas de pessoas (a tela mostra `area`, que é o mesmo), `ordem`, `janela
 `importacaoId`, `origemReferencia`, `avaliacaoId`. Os tipos de ENTRADA (`NovoCiclo`,
 `NovaAplicacao`, `AlvoDoPublico`) aparecem na varredura e não são desta classe — são o que a tela
 ENVIA.
+
+#### Varredura rodada em 08/09 — depois do TERCEIRO caso, não do quarto
+
+O `enviadaEm` (campo declarado, nunca renderizado) foi o **terceiro** achado da classe em três
+dias, e é exatamente o lado que o script pega. Rodada logo depois: **40 interfaces, 22 telas,
+32 campos suspeitos em 19 interfaces.** Triados, sobra **um** que importa:
+
+| Veredito | Campos | Por quê |
+|---|---|---|
+| 🔴 **Real** | `centroCustoDescricao` em **`PessoaSemAvaliador`, `PessoaForaDoCiclo`, `ColaboradorDaBusca`** | as três telas mostram só o **código** (`02/21010101`). A descrição vem no mesmo payload e é o que um humano lê — e essas listas existem para alguém **agir** sobre elas: quem cobra precisa saber a área, não o número. Três interfaces = padrão, não descuido |
+| ⚪ Por desenho | `AlertaAgregado.criterioNome` / `.valores` | o backend manda a **frase pronta** (`resumo`) *e* os campos crus; a tela usa a frase, que é a regra do módulo. Redundância deliberada |
+| ⚪ Entrada | `NovoCiclo`, `NovaAplicacao`, `AlvoDoPublico` (`filiais`, `colaboradorIds`) | a tela **envia**, não renderiza. Falso positivo previsto e documentado |
+| ⚪ Tela não existe | `CriterioDoCatalogo` (`tipoValor`, `codigoCalculo`, `faixas`), `VersaoDeModelo.pontuacaoMaxima`, `CicloDetalhado.conceitos` | catálogo de critérios e questionários são itens 4 e 13 da lista (B) |
+| ⚪ Menor | `ordem`, `avaliacaoId`, `importacaoId`, `aplicacaoNome`, `abertoEm`/`reabertoEm` na lista | chave técnica, ordenação, ou informação já dita de outro jeito na mesma tela |
+
+⭐ **O dado de que quase nada voltou também vale** — e é o argumento a favor de rodar cedo: a
+varredura não achou um quarto `enviadaEm` porque o terceiro foi corrigido no mesmo dia em que
+apareceu. A rede meia continua meia (item 21 da lista (B)): ela só pega o campo que o contrato
+**declara**, nunca o que o backend devolve sem o contrato conhecer — que foi o primeiro caso
+da família.
 
 ### 3.1.10. ⭐⭐ PRÉVIA GRAVA O QUE MOSTROU — nunca recalcula no clique
 
