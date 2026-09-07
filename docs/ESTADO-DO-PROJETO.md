@@ -878,6 +878,127 @@ três listas de pessoas (a tela mostra `area`, que é o mesmo), `ordem`, `janela
 `NovaAplicacao`, `AlvoDoPublico`) aparecem na varredura e não são desta classe — são o que a tela
 ENVIA.
 
+### 3.1.10. ⭐⭐ PRÉVIA GRAVA O QUE MOSTROU — nunca recalcula no clique
+
+Achado de 07/09, e é **maior do que o relatório do Chrome apurou**. O relatório dizia
+"a prévia não acompanha a seleção: botão vivo com números velhos". O defeito era outro:
+
+> **`Aplicar` montava o alvo com a seleção ATUAL.** A tela conferia um recorte e gravava outro.
+
+Não era só mostrar número velho — era **gravar diferente do que foi conferido**, sem nada avisar.
+E a prévia é justamente a peça que existe para dar confiança antes de um ato em lote: **prévia
+que não protege é pior que prévia nenhuma, porque produz confiança**.
+
+**A regra, e vale para toda prévia do módulo:**
+
+> Uma prévia é um **retrato com identidade**: ela sabe de qual entrada foi calculada, e o botão
+> que aplica **grava exatamente aquilo**. Se a entrada mudou, o botão não aplica — ele diz que a
+> prévia envelheceu e manda recalcular. Nunca se recalcula o alvo no momento do clique.
+
+Duas maneiras de cumprir, e as duas servem:
+1. **guardar a identidade da entrada** junto da prévia e comparar no clique (foi o que se fez em
+   Montar público: a prévia amarela, esconde os nomes e o botão vira "Recalcule antes de
+   adicionar"); ou
+2. **o backend devolver uma conferência** que o gravar exige de volta — é o que a **importação
+   da planilha** já faz (`conferencia`), e é a mais forte, porque protege até de duas abas.
+
+⚠️ **Onde olhar quando aparecer a próxima:** toda tela com "ver o que vai acontecer" + "aplicar".
+Hoje são três — Montar público (corrigida), a importação da planilha (já protegida pela
+`conferencia`) e "Designar pelo cadastro". ⚠️ **Conferido em 07/09: esta terceira NÃO carrega conferência** —
+`copiarDoCadastro(ciclo, {aplicar})` é a MESMA função para prever e para gravar, e o
+`aplicar: true` **recalcula tudo do zero no clique**. O risco é menor que o de Montar público
+(a entrada não muda debaixo da mão de quem clica — vem do cadastro, não de checkboxes na tela),
+mas a classe é a mesma. Não corrigido; fica registrado.
+
+### 3.1.11. 📝 PROPOSTA (a decidir) — a tela ensina a sequência do ciclo
+
+Escrita em 07/09, **antes de qualquer código**, como se fez com o menu. Nada abaixo está
+implementado.
+
+#### 1. A sequência, como o RH a vive
+
+| # | Passo | Onde | Estado exigido |
+|---|---|---|---|
+| **0** | **questionário publicado** + **critérios com faixas** | 🔴 **não há tela** — só API | — |
+| 1 | criar o ciclo: período, data-base, régua de conceitos | Ciclos | nasce `RASCUNHO` |
+| 2 | montar as **aplicações** (questionário × peso × critérios) | Ciclo → Aplicações | **só `RASCUNHO`** |
+| 3 | montar o **público** de cada aplicação | Ciclo → Aplicações | qualquer |
+| 4 | ter **quem avalia quem** no cadastro | Quem avalia quem (fora do ciclo) | — |
+| 5 | **designar** — gera as avaliações | Ciclo → Designação | qualquer |
+| 6 | **abrir** | Ciclos | de `RASCUNHO`, **uma vez** |
+| 7 | avaliadores **respondem** | fila | **só `ABERTO`** |
+| 8 | acompanhar / conferir critérios | Ciclo → Painel | qualquer |
+| 9 | **apurar** (repetível) | Ciclo → Painel | qualquer |
+| 10 | **encerrar** | Ciclos | de `ABERTO`, com **0 pendentes** |
+
+⚠️ **As portas que de fato fecham são MUITO menos do que se supõe** — levantado no fonte:
+
+- **Abrir fecha UMA coisa**: criar aplicação e mudar peso (`aplicacao.service`). Mais nada.
+- **Não existe volta de `ABERTO` para `RASCUNHO`** — não há rota. É a porta mais definitiva do
+  módulo e hoje nada avisa antes.
+- **Encerrar quase não fecha nada.** Recusa só o ajuste de período. **Designar, mexer no público
+  e apurar continuam funcionando em ciclo ENCERRADO** — nenhum desses serviços olha o status do
+  ciclo. Contradiz o que o próprio módulo escreve ("ciclo ENCERRADO não muda: o resultado já foi
+  materializado"). 🔴 **Decidir se fecha.**
+- **`EM_APURACAO` é estado MORTO**: `encerrar` o aceita e **nada no código o produz**. Ou some do
+  enum, ou passa a existir.
+
+#### 2. RASCUNHO visível
+
+Hoje o estado é uma etiqueta e nada mais: não diz o que permite, o que a abertura fecha, nem que
+a abertura é sem volta.
+
+- **Faixa no topo do ciclo em RASCUNHO:** *"RASCUNHO — este é o único momento em que dá para
+  criar aplicação e mudar peso. Abrir é definitivo: não há volta para rascunho."*
+- **"O que falta para abrir", ANTES de tentar.** A validação (`assertCicloAbrivel`) é função pura
+  sobre dados que a tela já tem — hoje a lista de problemas só aparece **depois** do clique, como
+  erro. Vira lista viva no rascunho: conceitos contíguos ✓, cada aplicação com peso > 0 ✓,
+  critérios com resolver ✓, sem modelo de demonstração ✓.
+- **Confirmação ao abrir** dizendo o que fecha (e que não volta), no molde da confirmação do
+  Apurar (§3.1.8).
+
+#### 3. O que fazer agora — **não é stepper**
+
+O `EtapaStepper` do Inventário funciona lá porque as etapas são de **mão única**. Aqui não são:
+volta-se a Aplicações enquanto é rascunho, o público muda depois de designar, designar é
+repetível, apurar é repetível. Um "1→2→3→4" **mentiria** sobre o processo.
+
+**Proposta: uma LINHA DE ESTADO no cabeçalho do ciclo** — acima das abas, sempre visível,
+derivada do dado, com o **próximo passo em destaque**:
+
+> `RASCUNHO` · 4 aplicações · 894 no público · **95 sem avaliador** · 0 enviadas · 0 apuradas
+> → **Próximo: designar as 95 que faltam** (ou "Abrir o ciclo", ou "Encerrar")
+
+É o mesmo material do Painel, que hoje é uma aba: **"o que falta" não é uma seção, é o estado**.
+A aba Painel continua, com o detalhe; o cabeçalho passa a dizer onde se está sem exigir um
+clique.
+
+#### 4. O ciclo novo
+
+O modal pede nome, período, data-base, janela, flags e conceitos — **e está certo em não pedir
+questionário**: o questionário é da APLICAÇÃO, não do ciclo, e é essa separação que permite
+questionários diferentes por perfil (a melhoria que originou o módulo). O que falta é **dizer**:
+
+- ao criar, levar direto para **Aplicações** com *"O ciclo nasceu em RASCUNHO e ainda não tem
+  questionário nenhum. Monte a primeira aplicação."*;
+- e, se **não houver nenhum modelo publicado**, dizer isso **na criação** — hoje só se descobre ao
+  montar a aplicação, ou pior, na recusa da abertura.
+
+#### 5. O que custa
+
+| Tela | Mudança |
+|---|---|
+| `CicloPage` | a linha de estado + próximo passo (peça nova, dado já existente) |
+| `CiclosPage` | faixa do RASCUNHO, "o que falta para abrir", confirmação de abrir |
+| `AplicacoesPage` | frase do ciclo vazio; aviso de "nenhum modelo publicado" |
+| `PainelPage` | nada obrigatório — cede o resumo ao cabeçalho e mantém o detalhe |
+| 🔴 **novas** | **questionários** e **critérios/faixas** (passo 0) |
+
+⭐ **Tudo do passo 1 ao 10 pode ser feito sem as telas que faltam.** O passo 0 continua por API —
+e a proposta inclui **a tela dizer isso**, em vez de o RH descobrir que a tela não existe: no
+rascunho, ao lado de "o que falta para abrir", a linha *"questionário e critérios são cadastrados
+pela T.I. (ainda sem tela)"*.
+
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
 O cadastro (`/avaliadores`) e o painel de cada ciclo contavam ambos "sem avaliador" e nenhum
