@@ -223,7 +223,11 @@ describe('DesignacaoService.copiarDoCadastro', () => {
       montar({ cadastro: [{ avaliadoId: 'c1', avaliadorId: 'chefe', origem: 'CENTRO_CUSTO' }] });
       const r = await service.copiarDoCadastro(CICLO, { aplicar: false, substituirManuais: false }, RH);
       expect(r.porMotivo.SEM_AVALIADOR_NO_CADASTRO).toBe(2);
-      expect(r.avisos.join(' ')).toMatch(/não estão na lista de ninguém e ficarão de fora/);
+      // ⚠️ A frase mudou em 08/09 e o teste tinha de mudar junto: ela dizia
+      // "não estão na lista de ninguém e ficarão de fora" para TODO mundo sem
+      // cadastro, inclusive para quem já estava no ciclo. Agora o "ficarão de
+      // fora" só vale para quem também não tem avaliação — e o aviso diz isso.
+      expect(r.avisos.join(' ')).toMatch(/não têm avaliação neste ciclo: são as que ficarão de fora/);
     });
   });
 
@@ -262,5 +266,125 @@ describe('DesignacaoService.copiarDoCadastro', () => {
       expect(designar).toHaveBeenCalledTimes(1);
       expect(designar).toHaveBeenCalledWith(APP_A, 'c1', 'chefe-novo', RH, 'CENTRO_CUSTO');
     });
+  });
+});
+
+/**
+ * ⭐⭐ O PAINEL CLASSIFICAVA PELO CADASTRO E ESCREVIA SOBRE O CICLO (08/09).
+ *
+ * Item F do roteiro de tela: o aviso dizia *"2 pessoas não estão na lista de
+ * ninguém e ficarão de fora do ciclo"* sobre gente que estava DENTRO, com
+ * avaliador designado à mão. E a classificação era incoerente consigo mesma —
+ * três pessoas designadas à mão do mesmo jeito, e só uma caía em "ajustadas à
+ * mão"; as outras duas, em "sem avaliador no cadastro".
+ *
+ * ⚠️ **Não era defeito de texto, era de raciocínio.** `SEM_AVALIADOR_NO_CADASTRO`
+ * responde uma pergunta sobre o CADASTRO ("o cadastro tem avaliador para ela?")
+ * e a frase afirmava algo sobre o CICLO ("ficará de fora"). São dois eixos
+ * INDEPENDENTES — 2×2 —, e o código os tratava como uma sequência em que o
+ * primeiro teste absorvia os casos do segundo. Quem tinha cadastro chegava ao
+ * teste do manual; quem não tinha, não chegava. Daí a incoerência.
+ */
+describe('sem cadastro × já designada no ciclo — os dois eixos', () => {
+  let prisma: ReturnType<typeof createPrismaMock>;
+  let service: DesignacaoService;
+
+  const semCadastro: { avaliadoId: string; avaliadorId: string; origem: string }[] = [];
+
+  const montar = (opcoes: {
+    cadastro?: { avaliadoId: string; avaliadorId: string; origem: string }[];
+    avaliacoes?: {
+      avaliadoId: string; avaliadorId: string; aplicacaoId: string;
+      status: string; origemDesignacao: string; respostas: number;
+    }[];
+  }) => {
+    prisma.ciclo.findUnique.mockResolvedValue({
+      id: CICLO,
+      aplicacoes: [{ id: APP_A, nome: 'Aplicação 1' }],
+    });
+    jest.spyOn(service, 'listar').mockResolvedValue(PUBLICO as never);
+    prisma.designacaoPadrao.findMany.mockResolvedValue(opcoes.cadastro ?? []);
+    prisma.avaliacao.findMany.mockResolvedValue(
+      (opcoes.avaliacoes ?? []).map((a) => ({
+        id: `av-${a.avaliadoId}`, avaliadoId: a.avaliadoId, avaliadorId: a.avaliadorId,
+        aplicacaoId: a.aplicacaoId, status: a.status, origemDesignacao: a.origemDesignacao,
+        _count: { respostas: a.respostas },
+      })),
+    );
+  };
+
+  const manualNoCiclo = (avaliadoId: string) => ({
+    avaliadoId, avaliadorId: 'chefe-escolhido-a-mao', aplicacaoId: APP_A,
+    status: 'PENDENTE', origemDesignacao: 'MANUAL', respostas: 0,
+  });
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    service = new DesignacaoService(prisma as never, { registrar: jest.fn() } as never);
+    jest.spyOn(service, 'designar').mockResolvedValue({ id: 'av' } as never);
+  });
+
+  const previa = () => service.copiarDoCadastro(CICLO, { aplicar: false, substituirManuais: false }, RH);
+
+  /** ⭐ O CASO DO RELATÓRIO: designada à mão, sem cadastro. Ela NÃO fica de fora. */
+  it('designada à mão e sem cadastro NÃO é "ficará de fora do ciclo"', async () => {
+    montar({ cadastro: semCadastro, avaliacoes: [manualNoCiclo('c1')] });
+    const r = await previa();
+    const dela = r.naoAplicadas.find((l) => l.colaboradorId === 'c1')!;
+    expect(dela.motivo).toBe('SEM_CADASTRO_JA_DESIGNADA');
+    expect(dela.detalhe).toMatch(/continua com o avaliador/i);
+    // Ela NEGA explicitamente o "fica de fora" — que era a afirmação falsa.
+    expect(dela.detalhe).toMatch(/NÃO fica de fora/);
+    expect(dela.detalhe).not.toMatch(/ficará de fora/i);
+  });
+
+  /** E quem de fato fica de fora continua dizendo isso — a frase agora é verdade. */
+  it('sem cadastro e SEM avaliação: aí sim fica de fora, e a frase diz', async () => {
+    montar({ cadastro: semCadastro, avaliacoes: [] });
+    const r = await previa();
+    expect(r.porMotivo.SEM_AVALIADOR_NO_CADASTRO).toBe(3);
+    expect(r.naoAplicadas[0].detalhe).toMatch(/fica de fora/i);
+  });
+
+  /**
+   * ⭐⭐ A INCOERÊNCIA, medida: três designadas à mão do MESMO jeito, e o que as
+   * separava era só ter ou não linha no cadastro. Continuam em baldes
+   * diferentes — porque as perguntas são diferentes —, mas agora os dois baldes
+   * dizem a verdade, e nenhum dos dois diz "fica de fora".
+   */
+  it('três designadas à mão: o cadastro separa os baldes, não o "fica de fora"', async () => {
+    montar({
+      cadastro: [{ avaliadoId: 'c1', avaliadorId: 'outro-chefe', origem: 'CENTRO_CUSTO' }],
+      avaliacoes: [manualNoCiclo('c1'), manualNoCiclo('c2'), manualNoCiclo('c3')],
+    });
+    const r = await previa();
+    expect(r.porMotivo).toEqual({ AJUSTE_MANUAL_DO_CICLO: 1, SEM_CADASTRO_JA_DESIGNADA: 2 });
+    // Nenhuma das três é contada como "vai ficar de fora do ciclo".
+    expect(r.porMotivo.SEM_AVALIADOR_NO_CADASTRO).toBeUndefined();
+    expect(r.avisos.join(' ')).not.toMatch(/ficarão de fora/);
+  });
+
+  /**
+   * ⚠️ Nem "substituir os ajustes manuais" resolve este caso — e não deve:
+   * substituir por um cadastro que não existe deixaria a pessoa SEM avaliador,
+   * que é pior do que a situação de partida.
+   */
+  it('"substituir manuais" não alcança quem não tem cadastro', async () => {
+    montar({ cadastro: semCadastro, avaliacoes: [manualNoCiclo('c1')] });
+    const r = await service.copiarDoCadastro(CICLO, { aplicar: false, substituirManuais: true }, RH);
+    expect(r.porMotivo.SEM_CADASTRO_JA_DESIGNADA).toBe(1);
+    expect(r.criar + r.atualizar).toBe(0);
+    expect(r.naoAplicadas[0].detalhe).toMatch(/deixaria sem avaliador/i);
+  });
+
+  /** O aviso só conta quem REALMENTE fica de fora. */
+  it('o aviso do rodapé conta só quem fica de fora de verdade', async () => {
+    montar({
+      cadastro: semCadastro,
+      avaliacoes: [manualNoCiclo('c1')], // c2 e c3 ficam de fora; c1 não
+    });
+    const r = await previa();
+    const aviso = r.avisos.find((a) => a.includes('ficarão de fora'));
+    expect(aviso).toContain('2 pessoa');
   });
 });

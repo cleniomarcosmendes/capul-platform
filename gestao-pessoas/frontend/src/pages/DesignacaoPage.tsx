@@ -676,8 +676,14 @@ function PainelDaCopia({
   aoFechar: () => void;
 }) {
   const aGravar = copia.criar + copia.atualizar;
+  /**
+   * ⚠️ Cada rótulo diz de que EIXO ele fala. "Sem avaliador no cadastro" e
+   * "já designada à mão" são perguntas diferentes (cadastro × ciclo), e só a
+   * primeira significa ficar de fora — ver §3.1.20.
+   */
   const rotulo: Record<string, string> = {
-    SEM_AVALIADOR_NO_CADASTRO: 'sem avaliador no cadastro',
+    SEM_AVALIADOR_NO_CADASTRO: 'sem avaliador no cadastro e sem avaliação — ficam de fora',
+    SEM_CADASTRO_JA_DESIGNADA: 'sem cadastro, mas já designadas no ciclo — seguem como estão',
     AJUSTE_MANUAL_DO_CICLO: 'ajustadas à mão neste ciclo',
     JA_RESPONDIDA: 'já respondidas',
     TROCA_DE_APLICACAO: 'trocariam de aplicação',
@@ -727,8 +733,13 @@ function PainelDaCopia({
 
       {Object.keys(copia.porMotivo).length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          {/* ⚠️ Dizia "{N} pessoa(s) ficam de fora" para TODAS as não-aplicadas —
+              incluindo as já respondidas e as ajustadas à mão, que estão bem
+              dentro do ciclo. Era a mesma afirmação falsa do aviso, e mais
+              ampla que ele. "O lote não altera" é o que estas linhas têm em
+              comum; ficar de fora é só de uma delas, e o rótulo diz qual. */}
           <p className="font-medium text-slate-700">
-            {copia.naoAplicadas.length} pessoa(s) ficam de fora:
+            {copia.naoAplicadas.length} pessoa(s) que o lote NÃO altera:
           </p>
           <ul className="mt-1 space-y-0.5 text-slate-600">
             {Object.entries(copia.porMotivo).map(([motivo, n]) => (
@@ -739,7 +750,10 @@ function PainelDaCopia({
           </ul>
           {/* Os nomes, e não só o total: quem vai resolver precisa saber de quem
               se trata — menos os "sem avaliador", que se resolvem em lote no
-              cadastro e encheriam a tela com centenas de linhas. */}
+              cadastro e encheriam a tela com centenas de linhas.
+              ⚠️ As "sem cadastro, mas já designadas" APARECEM: são poucas, e
+              cada uma é uma decisão que alguém tomou à mão e que o cadastro
+              ainda não conhece. */}
           <ul className="mt-2 space-y-0.5 text-xs text-slate-500">
             {copia.naoAplicadas
               .filter((l) => l.motivo !== 'SEM_AVALIADOR_NO_CADASTRO')

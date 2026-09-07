@@ -680,7 +680,10 @@ export const cadastroAvaliadores = {
 // ---------------------------------------------------------------------------
 
 export type MotivoNaoAplicada =
+  /** Sem cadastro E sem avaliação — a única que significa ficar de fora. */
   | 'SEM_AVALIADOR_NO_CADASTRO'
+  /** Sem cadastro, mas já designada no ciclo: segue como está (§3.1.20). */
+  | 'SEM_CADASTRO_JA_DESIGNADA'
   | 'AJUSTE_MANUAL_DO_CICLO'
   | 'JA_RESPONDIDA'
   | 'TROCA_DE_APLICACAO';

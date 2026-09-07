@@ -87,8 +87,20 @@ interface DesignacaoVigente {
 }
 
 
+/**
+ * ⚠️ **DOIS EIXOS INDEPENDENTES, não uma sequência** (08/09). "Tem avaliador no
+ * CADASTRO?" e "já tem avaliação no CICLO?" são perguntas diferentes, e a
+ * combinação é 2×2. O código tratava como sequência — o teste do cadastro vinha
+ * primeiro e absorvia os casos do ciclo —, então três pessoas designadas à mão
+ * do mesmo jeito caíam em baldes diferentes só por terem, ou não, linha no
+ * cadastro. E a frase do balde de cima afirmava algo sobre o CICLO
+ * ("ficará de fora") que só o outro eixo sabe.
+ */
 export type MotivoNaoAplicada =
+  /** Sem cadastro **e** sem avaliação: esta fica MESMO de fora do ciclo. */
   | 'SEM_AVALIADOR_NO_CADASTRO'
+  /** Sem cadastro, **mas já designada no ciclo**: continua como está. */
+  | 'SEM_CADASTRO_JA_DESIGNADA'
   | 'AJUSTE_MANUAL_DO_CICLO'
   | 'JA_RESPONDIDA'
   | 'TROCA_DE_APLICACAO';
@@ -717,19 +729,39 @@ export class DesignacaoService {
 
       for (const linha of linhas) {
         const noCadastro = doCadastro.get(linha.colaboradorId);
+        const existente = avaliacaoDe.get(linha.colaboradorId);
+
         if (!noCadastro) {
-          contadores.semAvaliador++;
           contadores.naoAplicadas++;
+          // ⭐⭐ A FRASE DEPENDE DO OUTRO EIXO. Sem cadastro, o lote não tem o
+          // que copiar — mas isso NÃO quer dizer que a pessoa fica de fora do
+          // ciclo: ela pode já ter sido designada à mão, com avaliador e tudo.
+          // Dizer "ficará de fora" sobre quem está dentro é o defeito de
+          // raciocínio do item F: classificar pelo cadastro e escrever sobre o
+          // ciclo.
+          if (existente && existente.status !== 'CANCELADA') {
+            recusar(
+              linha,
+              'SEM_CADASTRO_JA_DESIGNADA',
+              'Já foi designada dentro do ciclo e não está na lista de ninguém no cadastro — ' +
+                'o lote não tem o que copiar por cima. Ela continua com o avaliador atual e ' +
+                'NÃO fica de fora. ⚠️ Nem "substituir os ajustes manuais" muda isto: substituir ' +
+                'por um cadastro que não existe a deixaria sem avaliador nenhum. Para o próximo ' +
+                'ciclo, registre quem a avalia no cadastro de avaliadores.',
+            );
+            continue;
+          }
+          contadores.semAvaliador++;
           recusar(
             linha,
             'SEM_AVALIADOR_NO_CADASTRO',
-            'Não está na lista de nenhum avaliador. Resolva no cadastro de avaliadores — ' +
-              'enquanto isso, esta pessoa fica de fora do ciclo sem gerar avaliação.',
+            'Não está na lista de nenhum avaliador e não tem avaliação neste ciclo. Resolva no ' +
+              'cadastro de avaliadores — enquanto isso, esta pessoa fica de fora do ciclo sem ' +
+              'gerar avaliação.',
           );
           continue;
         }
 
-        const existente = avaliacaoDe.get(linha.colaboradorId);
         if (existente && existente.avaliadorId === noCadastro.avaliadorId
             && existente.aplicacaoId === aplicacao.id) {
           contadores.jaIguais++;
@@ -813,10 +845,22 @@ export class DesignacaoService {
           'quem — se este ciclo valer mérito, revise no cadastro de avaliadores antes de aplicar.',
       );
     }
+    // ⚠️ Só quem fica de fora DE VERDADE entra neste aviso. Quem não tem
+    // cadastro mas já foi designada no ciclo tem aviso próprio, abaixo — e ele
+    // não fala em ficar de fora, porque ela não fica.
     if (relatorio.porMotivo.SEM_AVALIADOR_NO_CADASTRO) {
       relatorio.avisos.push(
-        `${relatorio.porMotivo.SEM_AVALIADOR_NO_CADASTRO} pessoa(s) não estão na lista de ninguém e ` +
-          'ficarão de fora do ciclo. Elas aparecem como pendência do cadastro e no painel.',
+        `${relatorio.porMotivo.SEM_AVALIADOR_NO_CADASTRO} pessoa(s) não estão na lista de ninguém ` +
+          'no cadastro E não têm avaliação neste ciclo: são as que ficarão de fora. Elas aparecem ' +
+          'como pendência do cadastro e no painel.',
+      );
+    }
+    if (relatorio.porMotivo.SEM_CADASTRO_JA_DESIGNADA) {
+      relatorio.avisos.push(
+        `${relatorio.porMotivo.SEM_CADASTRO_JA_DESIGNADA} pessoa(s) já designadas à mão neste ` +
+          'ciclo não estão na lista de ninguém no cadastro. Elas seguem com o avaliador que têm — ' +
+          'o lote não muda nada nelas —, mas o PRÓXIMO ciclo vai encontrá-las sem avaliador. ' +
+          'Registre quem as avalia no cadastro de avaliadores.',
       );
     }
 

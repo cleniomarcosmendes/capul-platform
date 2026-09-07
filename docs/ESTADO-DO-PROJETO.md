@@ -1122,6 +1122,9 @@ estava enviada e nunca fora apurada). Público, respostas e as 4 enviadas: **int
   `ciclo = Geral AND criado_em > '2026-09-07 14:00' AND status = 'PENDENTE'` sem nenhuma resposta
   e sem resultado. Conferido antes (84) e depois: o ciclo voltou a **9 avaliações**, público
   **98**, e as **4 enviadas com os `enviada_em` originais** de 06/09.
+- **08/09/2026** — apagado o ciclo **`ZZ TESTE — item F (08/09)`**, criado para reproduzir os
+  três quadrantes do §3.1.20: 2 avaliações, **0 respostas, 0 resultados**, 3 no público. SELECT
+  antes, DELETE transacional, auditoria preservada.
 - **08/09/2026** — apagado o ciclo **`ZZ TESTE — linha de estado (08/09)`**, criado para
   exercitar as quatro gravações do §3.1.19: 1 aplicação, 2 no público, 2 avaliações, **0
   respostas, 0 resultados**. SELECT antes, DELETE transacional, auditoria preservada (1 linha).
@@ -1551,6 +1554,85 @@ colaborador** (escolher avaliador entre homônimos de unidades diferentes era es
 e na lista **"fora de todas as aplicações"** do painel, que mostrava `02/21010101` para alguém
 que precisa agir sobre aquela pessoa. ⚠️ O terceiro consumidor (`PessoaSemAvaliador`) **não tem
 tela**: o painel mostra só a contagem, e a lista de nomes espera o "ver todos" da lista (B).
+
+### 3.1.20. 🟠 O painel classificava pelo CADASTRO e escrevia sobre o CICLO (08/09)
+
+Item F do roteiro: o aviso dizia *"2 pessoas não estão na lista de ninguém e **ficarão de fora
+do ciclo**"* sobre gente que estava **dentro**, com avaliador designado à mão. E a
+classificação era incoerente **consigo mesma**: três pessoas designadas à mão do mesmo jeito, e
+só uma caía em *"ajustadas à mão"* — as outras duas, em *"sem avaliador no cadastro"*.
+
+⚠️ **Defeito de raciocínio, não de texto.** Reescrever a frase teria disfarçado.
+
+#### Que pergunta cada número responde
+
+| Motivo | Pergunta | Eixo |
+|---|---|---|
+| `SEM_AVALIADOR_NO_CADASTRO` | o **cadastro** tem avaliador para ela? | CADASTRO |
+| `AJUSTE_MANUAL_DO_CICLO` | ela já tem avaliação **no ciclo**, feita à mão? | CICLO |
+| `JA_RESPONDIDA` | essa avaliação já tem resposta? | CICLO |
+| `TROCA_DE_APLICACAO` | copiar a moveria de aplicação? | CICLO |
+
+⭐ **Os dois primeiros são eixos INDEPENDENTES — a combinação é 2×2 —, e o código os tratava
+como uma sequência.** O teste do cadastro vinha primeiro e **absorvia** os casos do ciclo: quem
+tinha linha no cadastro chegava ao teste do manual (virava "ajustadas à mão"); quem não tinha
+parava antes (virava "sem avaliador no cadastro"). As três estavam na mesma situação de ciclo;
+o que as separou foi um fato de **outro eixo**. Daí a incoerência — e daí a frase falsa, porque
+o balde de cima afirmava algo sobre o ciclo que só o outro eixo sabe.
+
+#### O conserto
+
+O quadrante que faltava ganhou nome: **`SEM_CADASTRO_JA_DESIGNADA`**.
+
+| | **sem avaliação no ciclo** | **já designada no ciclo** |
+|---|---|---|
+| **sem cadastro** | `SEM_AVALIADOR_NO_CADASTRO` — *"fica de fora"*, e agora é **verdade** | 🆕 `SEM_CADASTRO_JA_DESIGNADA` — *"continua com o avaliador atual e **NÃO** fica de fora"* |
+| **com cadastro** | o lote cria | `AJUSTE_MANUAL_DO_CICLO` — *"marque substituir se o cadastro é que está certo"* |
+
+Os baldes continuam **dois** para as designadas à mão — porque as perguntas são duas e o RH age
+diferente em cada uma —, mas os dois dizem a verdade.
+
+⚠️ **`substituir os ajustes manuais` não alcança o quadrante novo, e não deve:** substituir por
+um cadastro que não existe deixaria a pessoa **sem avaliador nenhum**, pior que a situação de
+partida. A frase diz isso.
+
+⭐ E o aviso do quadrante novo aponta o custo REAL, que não é este ciclo: *"elas seguem com o
+avaliador que têm — o lote não muda nada nelas —, mas o **PRÓXIMO ciclo** vai encontrá-las sem
+avaliador. Registre quem as avalia no cadastro."*
+
+#### A segunda afirmação falsa, mais ampla que o aviso
+
+O cabeçalho do bloco dizia **"{N} pessoa(s) ficam de fora:"** para **todas** as não-aplicadas —
+incluindo as **já respondidas** e as **ajustadas à mão**, que estão bem dentro do ciclo. Virou
+**"{N} pessoa(s) que o lote NÃO altera:"**, que é o que essas linhas de fato têm em comum; ficar
+de fora é só de um dos motivos, e o rótulo de cada um diz qual.
+
+#### ⚠️ NÃO era o caso do §3.1.19
+
+Vale registrar porque a hipótese era razoável: o aviso continuar na tela ao lado de
+*"Sem avaliador (0)"* **não** é dado velho. `aplicarCopia` substitui o relatório pelo da
+execução que acabou de rodar — ele é **recalculado**. A frase estava errada **antes e depois**,
+e o canal do §3.1.19 não a conserta. Sintomas parecidos, causas diferentes: um era **dado não
+refeito**, este é **conta errada**.
+
+#### Verificação
+
+**466 testes** (5 novos). ⚠️ Um spec **antigo** falhou no conserto e a falha estava certa: ele
+estava preso à frase que mentia (`/não estão na lista de ninguém e ficarão de fora/`). Foi
+atualizado com o motivo escrito ao lado.
+
+✅ **Ao vivo**, ciclo descartável com as três situações e as duas primeiras designadas à mão
+**do mesmo jeito**:
+
+```
+ALLINE  (sem cadastro, designada à mão) → SEM_CADASTRO_JA_DESIGNADA  "continua com o avaliador atual"
+CLENIO  (com cadastro, designada à mão) → AJUSTE_MANUAL_DO_CICLO     "marque substituir se…"
+WAGNER  (sem cadastro, sem avaliação)   → SEM_AVALIADOR_NO_CADASTRO  "fica de fora do ciclo"
+```
+
+e os avisos separados: **1** que fica de fora, **1** que segue como está com a pendência jogada
+para o próximo ciclo. Antes, ALLINE e WAGNER cairiam no mesmo balde, com a mesma frase falsa
+sobre ALLINE.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
