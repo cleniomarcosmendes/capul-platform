@@ -2,6 +2,7 @@ import {
   CicloNaoAbrivelError,
   assertCicloAbrivel,
   conceitoDaNota,
+  problemasParaAbrir,
   validarAplicacao,
   validarConceitos,
   type AplicacaoParaValidar,
@@ -26,6 +27,8 @@ const criterioOk = (codigo = 'ESCOLARIDADE') => ({
 
 const aplicacao = (over: Partial<AplicacaoParaValidar> = {}): AplicacaoParaValidar => ({
   nome: 'Operação de Loja',
+  // Padrão com gente: quem testa "público vazio impede abrir" passa 0 de propósito.
+  pessoasNoPublico: 87,
   pesoAvaliacao: 60,
   criterios: [{ peso: 10, criterio: criterioOk() }],
   ...over,
@@ -195,5 +198,50 @@ describe('assertCicloAbrivel', () => {
     } catch (e) {
       expect((e as CicloNaoAbrivelError).problemas).toHaveLength(2);
     }
+  });
+});
+
+
+/**
+ * ⭐⭐ PÚBLICO VAZIO IMPEDE ABRIR — achado do roteiro de tela de 08/09.
+ *
+ * A faixa do rascunho dizia "Nada — a validação da abertura passa" com público
+ * vazio, enquanto o "→ Próximo", DUAS LINHAS ACIMA, dizia "sem público, o ciclo
+ * não alcança ninguém". Duas frases contraditórias no mesmo bloco — e a que
+ * autorizava era a de baixo, porque a validação real não olhava o público.
+ *
+ * ⚠️ A checagem vive em `problemasParaAbrir`, NÃO em `validarAplicacao`: esta
+ * roda também na CRIAÇÃO da aplicação, onde o público é zero por construção.
+ */
+describe('público vazio', () => {
+  it('não reprova a CRIAÇÃO da aplicação — lá o público é zero por construção', () => {
+    expect(validarAplicacao(aplicacao({ pessoasNoPublico: 0 }))).toEqual([]);
+  });
+
+  it('IMPEDE a abertura, dizendo qual aplicação e o que fazer', () => {
+    const problemas = problemasParaAbrir([aplicacao({ pessoasNoPublico: 0 })], CONCEITOS);
+    expect(problemas).toHaveLength(1);
+    expect(problemas[0]).toMatch(/nenhuma pessoa no público/);
+    expect(problemas[0]).toMatch(/Operação de Loja/);
+    expect(problemas[0]).toMatch(/monte o público/i);
+  });
+
+  it('com gente no público, não reclama', () => {
+    expect(problemasParaAbrir([aplicacao({ pessoasNoPublico: 1 })], CONCEITOS)).toEqual([]);
+  });
+
+  it('aponta CADA aplicação vazia, não só a primeira', () => {
+    const problemas = problemasParaAbrir(
+      [
+        aplicacao({ nome: 'Aprendizes', pessoasNoPublico: 0 }),
+        aplicacao({ nome: 'Loja', pessoasNoPublico: 31 }),
+        aplicacao({ nome: 'Indústria', pessoasNoPublico: 0 }),
+      ],
+      CONCEITOS,
+    );
+    expect(problemas).toHaveLength(2);
+    expect(problemas.join(' ')).toMatch(/Aprendizes/);
+    expect(problemas.join(' ')).toMatch(/Indústria/);
+    expect(problemas.join(' ')).not.toMatch(/"Loja"/);
   });
 });

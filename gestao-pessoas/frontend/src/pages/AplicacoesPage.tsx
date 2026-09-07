@@ -596,23 +596,21 @@ function DialogoNovaAplicacao({
 }) {
   const [modelos, setModelos] = useState<ModeloDoCatalogo[] | null>(null);
   const [criterios, setCriterios] = useState<CriterioDoCatalogo[] | null>(null);
-  const [centros, setCentros] = useState<CentroCustoDoCatalogo[] | null>(null);
 
   const [nome, setNome] = useState('');
   const [versaoId, setVersaoId] = useState('');
   const [pesoAvaliacao, setPeso] = useState(60);
   const [pesosCriterio, setPesos] = useState<Record<string, number>>({});
-  const [ccEscolhidos, setCc] = useState<Set<string>>(new Set());
-  const [filtroCc, setFiltroCc] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
-    Promise.all([catalogo.modelos(), catalogo.criterios(), catalogo.centrosCusto()])
-      .then(([m, c, cc]) => {
+    // ⚠️ Sem `centrosCusto` aqui desde 08/09: o modal não monta mais público —
+    // quem monta é o "Montar público" do cartão, com prévia.
+    Promise.all([catalogo.modelos(), catalogo.criterios()])
+      .then(([m, c]) => {
         setModelos(m);
         setCriterios(c);
-        setCentros(cc);
       })
       .catch((e) => setErro(mensagemDoErro(e, 'Não foi possível carregar o catálogo.')));
   }, []);
@@ -635,13 +633,6 @@ function DialogoNovaAplicacao({
       .map(([id, p]) => ({ nome: criterios?.find((c) => c.id === id)?.nome ?? id, peso: p })),
   );
 
-  const centrosFiltrados = (centros ?? []).filter((c) => {
-    const alvo = `${c.centroCusto} ${c.descricao ?? ''} ${c.filial}`.toLowerCase();
-    return alvo.includes(filtroCc.trim().toLowerCase());
-  });
-  const pessoasNoPublico = (centros ?? [])
-    .filter((c) => ccEscolhidos.has(chave(c)))
-    .reduce((s, c) => s + c.pessoas, 0);
 
   async function salvar() {
     setErro(null);
@@ -655,9 +646,6 @@ function DialogoNovaAplicacao({
         criterios: Object.entries(pesosCriterio)
           .filter(([, p]) => p > 0)
           .map(([criterioId, peso], i) => ({ criterioId, peso, ordem: i })),
-        centrosCusto: (centros ?? [])
-          .filter((c) => ccEscolhidos.has(chave(c)))
-          .map((c) => ({ filial: c.filial, centroCusto: c.centroCusto })),
       });
       await aoCriar();
     } catch (e) {
@@ -778,58 +766,29 @@ function DialogoNovaAplicacao({
               )}
             </div>
 
-            <div>
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-sm font-medium text-slate-700">Público (centros de custo)</p>
-                <p className="text-xs text-slate-500">
-                  <Users size={12} className="mr-1 inline" aria-hidden />
-                  {pessoasNoPublico} pessoa(s) selecionada(s)
-                </p>
-              </div>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Deixar vazio faz a lista de designação trazer todo mundo — útil para uma aplicação única,
-                arriscado quando há mais de uma.
+            {/* ⭐⭐ O SELETOR DE CENTROS DE CUSTO SAIU DAQUI (08/09).
+                Ele contava "3 pessoa(s) selecionada(s)" ao vivo e a aplicação
+                nascia com público VAZIO: a seleção ia para `aplicacao_centro_custo`,
+                que desde a virada para público NOMINAL (06/09) é só registro do
+                atalho e não põe ninguém em lugar nenhum. Contador que promete
+                gente que não entra é pior que campo nenhum.
+
+                Não virou "gravar de verdade" de propósito: o caminho que grava é
+                o "Montar público", que tem PRÉVIA, amostra de nomes e o aviso de
+                quem já está em outra aplicação do ciclo. Criar aplicação e
+                adicionar 87 pessoas num clique, sem nada disso, recriaria aqui o
+                defeito que a prévia acabou de resolver do outro lado (§3.1.10). */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-medium text-slate-700">Público: o próximo passo</p>
+              <p className="mt-0.5 text-sm text-slate-600">
+                A aplicação nasce <strong>sem público</strong>. Depois de criar, use{' '}
+                <strong>Montar público</strong> no cartão dela — lá dá para ver quem entra antes de
+                gravar, e o sistema avisa quem já está em outra aplicação deste ciclo.
               </p>
-              <input
-                value={filtroCc}
-                onChange={(e) => setFiltroCc(e.target.value)}
-                placeholder="Filtrar por código, descrição ou filial"
-                className="alvo-toque mt-2 w-full rounded-xl border border-slate-300 px-3 text-slate-800"
-              />
-              <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
-                {centrosFiltrados.map((c) => {
-                  const k = chave(c);
-                  return (
-                    <li key={k}>
-                      <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
-                        <input
-                          type="checkbox"
-                          checked={ccEscolhidos.has(k)}
-                          onChange={(e) => {
-                            const proximo = new Set(ccEscolhidos);
-                            if (e.target.checked) proximo.add(k);
-                            else proximo.delete(k);
-                            setCc(proximo);
-                          }}
-                          className="size-4 accent-capul-600"
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
-                          <strong className="font-medium">{c.centroCusto}</strong>
-                          {/* Sem descrição não vira "(sem descrição)" repetido 82
-                              vezes — ruído que empurra o dado útil para fora da
-                              linha. O código e a filial já identificam. */}
-                          {c.descricao ? ` ${c.descricao}` : ''}
-                          <span className="text-slate-400"> · filial {c.filial}</span>
-                        </span>
-                        <span className="shrink-0 text-xs tabular-nums text-slate-500">{c.pessoas}</span>
-                      </label>
-                    </li>
-                  );
-                })}
-                {centrosFiltrados.length === 0 && (
-                  <li className="px-2 py-3 text-center text-sm text-slate-500">Nada encontrado.</li>
-                )}
-              </ul>
+              <p className="mt-1 text-xs text-slate-500">
+                ⚠️ Aplicação sem público não gera avaliação nenhuma, e o ciclo não abre enquanto
+                houver uma assim.
+              </p>
             </div>
 
             {erro && <Erro mensagem={erro} />}
@@ -858,6 +817,3 @@ function DialogoNovaAplicacao({
   );
 }
 
-function chave(c: CentroCustoDoCatalogo) {
-  return `${c.filial}|${c.centroCusto}`;
-}

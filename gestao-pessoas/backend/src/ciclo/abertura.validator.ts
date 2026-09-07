@@ -17,6 +17,16 @@ export interface CriterioDaAplicacao {
 }
 
 export interface AplicacaoParaValidar {
+  /**
+   * ⭐ Quantas pessoas estão no público NOMINAL da aplicação.
+   *
+   * Aplicação sem público é aplicação que **não alcança ninguém**: o ciclo abre,
+   * nenhuma avaliação nasce dali, e ninguém recebe erro. Até 08/09 a faixa do
+   * rascunho dizia "nada falta para abrir" com público vazio, enquanto o próximo
+   * passo, duas linhas acima, dizia "sem público, o ciclo não alcança ninguém" —
+   * duas frases contraditórias no mesmo bloco, e a que autorizava era a de baixo.
+   */
+  pessoasNoPublico: number;
   nome: string;
   /** Peso do QUESTIONÁRIO na composição final. */
   pesoAvaliacao: number;
@@ -189,6 +199,16 @@ export function problemasParaAbrir(
   return [
     ...(aplicacoes.length === 0 ? ['O ciclo não tem nenhuma aplicação.'] : []),
     ...aplicacoes.flatMap(validarAplicacao),
+    // ⚠️ Público vazio é problema de ABRIR, não de CRIAR — por isso a checagem
+    // mora aqui e não em `validarAplicacao`, que roda também na criação (onde o
+    // público é sempre zero, por construção).
+    ...aplicacoes
+      .filter((a) => a.pessoasNoPublico === 0)
+      .map(
+        (a) =>
+          `Aplicação "${a.nome}": nenhuma pessoa no público. Ela não geraria avaliação nenhuma — ` +
+          'monte o público em Aplicações antes de abrir.',
+      ),
     ...validarConceitos(conceitos),
   ];
 }

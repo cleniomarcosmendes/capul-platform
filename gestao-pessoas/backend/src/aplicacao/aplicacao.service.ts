@@ -65,6 +65,9 @@ export class AplicacaoService {
     // quem cometeu o erro. A mesma validação roda de novo na abertura do ciclo.
     const problemas = validarAplicacao({
       nome: dados.nome,
+      // Nasce sempre vazia — o público se monta depois, e quem cobra isso é a
+      // ABERTURA do ciclo (`problemasParaAbrir`), não a criação.
+      pessoasNoPublico: 0,
       pesoAvaliacao: dados.pesoAvaliacao,
       modeloFinalidade: versao.modelo.finalidade,
       criterios: criterios.map((c) => ({

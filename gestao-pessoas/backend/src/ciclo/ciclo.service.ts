@@ -164,6 +164,7 @@ export class CicloService {
   ): AplicacaoParaValidar[] {
     return ciclo.aplicacoes.map((a) => ({
       nome: a.nome,
+      pessoasNoPublico: a._count.publico,
       pesoAvaliacao: Number(a.pesoAvaliacao),
       modeloFinalidade: a.modeloVersao.modelo.finalidade,
       criterios: a.criterios.map((ac) => ({
@@ -369,6 +370,9 @@ export class CicloService {
             modeloVersao: { include: { modelo: true } },
             criterios: { include: { criterio: true } },
             centrosCusto: true,
+            // Quantas pessoas no público NOMINAL — é o que decide se a aplicação
+            // alcança alguém. Ver `problemasParaAbrir`.
+            _count: { select: { publico: true } },
           },
         },
       },

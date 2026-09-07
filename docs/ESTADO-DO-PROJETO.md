@@ -1096,6 +1096,14 @@ estava enviada e nunca fora apurada). Público, respostas e as 4 enviadas: **int
   `ciclo = Geral AND criado_em > '2026-09-07 14:00' AND status = 'PENDENTE'` sem nenhuma resposta
   e sem resultado. Conferido antes (84) e depois: o ciclo voltou a **9 avaliações**, público
   **98**, e as **4 enviadas com os `enviada_em` originais** de 06/09.
+- **08/09/2026** — apagado o ciclo **`ZZ ROTEIRO 08/09`**, que a rodada de tela deixou ABERTO na
+  base: 1 aplicação, 5 no público, **4 avaliações órfãs** (3 na fila do ADAO BATISTA, 1 na do
+  CLAUDIMAR) e 4 linhas de elegibilidade. **Todas as 4 avaliações estavam `PENDENTE` com ZERO
+  respostas** — nenhum trabalho humano se perdeu. Conferido depois: **2 ciclos** (9/98 e
+  894/1036), fila do ADAO **zerada**, CLAUDIMAR de volta aos **44** do Piloto, nada órfão.
+  ⚠️ **A auditoria foi PRESERVADA** (3 linhas do ciclo) — decisão diferente da limpeza anterior,
+  em que apaguei as linhas junto: a trilha de que um teste aconteceu não deve ser limpa com o
+  teste. 🔴 **Não existe excluir ciclo no módulo** — é o que obriga a limpeza a ser por SQL.
 - **07/09/2026** — apagado o ciclo `ZZ TESTE — regra do encerrado (07/09)` e a aplicação dele
   (0 avaliações, 0 público, 0 resultados), criado só para exercitar a regra acima. Sobraram os
   **dois** ciclos de sempre.
@@ -1243,6 +1251,43 @@ Verificado ao vivo num terceiro ciclo descartável (criado, usado e **apagado**)
 botões desabilitados com o motivo no `title`, a confirmação recusando sem motivo e aceitando com
 ele, o registro aparecendo na linha de estado com nome e frase, e o Apurar voltando a habilitar
 depois da reabertura. Sobraram os dois ciclos de sempre.
+
+### 3.1.17. ✅ Público vazio impede abrir · o seletor decorativo saiu do modal (08/09)
+
+Dois achados do roteiro de tela de 08/09 — **a mesma falha em dois lugares**: a tela contava
+gente que não entrava em lugar nenhum.
+
+**🔴 B — o seletor de centros de custo do modal "Nova aplicação" era decorativo.** Contador ao
+vivo dizendo *"3 pessoa(s) selecionada(s)"*, e a aplicação nascia com **público vazio**. E não
+era descarte: a seleção **era gravada** em `aplicacao_centro_custo` — tabela que, desde a virada
+para **público NOMINAL** (06/09), é só **registro do atalho** e não põe ninguém em lugar nenhum.
+Contador que promete gente que não entra é pior que campo nenhum.
+
+⚠️ **Saiu do modal, em vez de "passar a gravar"** — e a escolha tem razão: quem grava é o
+**"Montar público"** do cartão, que tem **prévia, amostra de nomes e o aviso de quem já está em
+outra aplicação do ciclo**. Criar aplicação e adicionar 87 pessoas num clique, sem nada disso,
+recriaria aqui o defeito que a prévia acabou de resolver do outro lado (§3.1.10). No lugar, o
+modal **diz o que vem depois**: *"A aplicação nasce sem público. Depois de criar, use Montar
+público no cartão dela…"* ⚠️ E saiu junto um texto que a virada de 06/09 tinha deixado mentindo:
+*"deixar vazio faz a lista de designação trazer todo mundo"* — hoje vazio é **ninguém**.
+
+**🔴 C — a faixa dizia "Nada — a validação da abertura passa" com público vazio**, enquanto o
+**"→ Próximo", duas linhas acima**, dizia *"sem público, o ciclo não alcança ninguém"*. Duas
+frases contraditórias no mesmo bloco — **e a que autorizava era a de baixo**, porque a validação
+real não olhava o público.
+
+Agora **público vazio é bloqueio de abertura**, na mesma função que a tela lê (§3.1.15):
+
+> *Aplicação "Sem público": nenhuma pessoa no público. Ela não geraria avaliação nenhuma — monte
+> o público em Aplicações antes de abrir.*
+
+⚠️ A checagem mora em **`problemasParaAbrir`, não em `validarAplicacao`** — esta roda também na
+CRIAÇÃO da aplicação, onde o público é zero por construção. Público vazio é problema de **abrir**,
+não de **criar**. Quatro specs novos, inclusive o que garante que a criação continua passando e o
+que exige que **cada** aplicação vazia seja apontada, não só a primeira.
+
+Verificado ao vivo (ciclo descartável, criado e apagado): a faixa listando a pendência real, o
+`POST /ciclos/:id/abrir` recusando com a mesma frase, e o modal sem seletor nem contador.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
