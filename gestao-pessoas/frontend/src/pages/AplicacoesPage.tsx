@@ -248,6 +248,15 @@ function EditorDePublico({
   const [escolhidos, setEscolhidos] = useState<Set<string>>(new Set());
   const [busca, setBusca] = useState('');
   const [previa, setPrevia] = useState<PreviaDoPublico | null>(null);
+  /**
+   * ⭐⭐ DE QUAL SELEÇÃO esta prévia é.
+   *
+   * A prévia era um retrato que não sabia de quando: mudar os centros de custo
+   * deixava na tela os nomes e a contagem ANTIGOS, com o botão de aplicar vivo —
+   * e o clique gravava pela seleção NOVA. O que se conferia e o que se gravava
+   * eram coisas diferentes, sem nada avisar.
+   */
+  const [previaDe, setPreviaDe] = useState<string | null>(null);
   const [pessoas, setPessoas] = useState<PessoaDoPublico[] | null>(null);
   const [provisorio, setProvisorio] = useState(true);
   const [ocupado, setOcupado] = useState(false);
@@ -281,8 +290,10 @@ function EditorDePublico({
     setOcupado(true); setErro(null); setMsg(null);
     try {
       setPrevia(await publicoDaAplicacao.previa(aplicacao.id, alvo()));
+      setPreviaDe(chaveDaSelecao);
     } catch (e) {
       setPrevia(null);
+      setPreviaDe(null);
       setErro(mensagemDoErro(e, 'Não foi possível calcular.'));
     } finally {
       setOcupado(false);
@@ -295,6 +306,7 @@ function EditorDePublico({
       const r = await publicoDaAplicacao.adicionar(aplicacao.id, alvo());
       setMsg(`${r.adicionadas} pessoa(s) adicionadas ao público.`);
       setPrevia(null);
+      setPreviaDe(null);
       setEscolhidos(new Set());
       await recarregarPessoas();
       await aoMudar();
@@ -318,6 +330,18 @@ function EditorDePublico({
       setOcupado(false);
     }
   }
+
+  /** Identidade da seleção — é o que diz se a prévia na tela ainda vale. */
+  const chaveDaSelecao = [...escolhidos].sort().join(',');
+  const previaVelha = previa !== null && previaDe !== chaveDaSelecao;
+  /**
+   * ⚠️ Soma das pessoas dos CCs escolhidos — é ESTIMATIVA, não "quem entra":
+   * não desconta quem já está aqui nem quem está em outra aplicação. Por isso
+   * aparece como "pessoas neles", e o número de quem entra só sai na prévia.
+   */
+  const pessoasNosCentros = (centros ?? [])
+    .filter((c) => escolhidos.has(`${c.filial}|${c.centroCusto}`))
+    .reduce((soma, c) => soma + c.pessoas, 0);
 
   const filtrados = (centros ?? []).filter((c) => {
     const alvoTexto = `${c.centroCusto} ${c.descricao ?? ''} ${c.filial}`.toLowerCase();
@@ -394,15 +418,25 @@ function EditorDePublico({
         </span>
       </label>
 
-      <div className="flex flex-wrap gap-2">
+      {/* ⚠️ O (N) do botão contava CENTROS DE CUSTO, e o rótulo "o que vai
+          entrar" faz qualquer um ler GENTE — "Ver o que vai entrar (3)" com 87
+          pessoas atrás. Agora o botão não carrega número, e a conta da seleção
+          fica ao lado dele, dizendo o que cada número é. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"
           disabled={ocupado || escolhidos.size === 0}
           onClick={() => void verPrevia()}
           className="alvo-toque rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 disabled:opacity-50"
         >
-          Ver o que vai entrar ({escolhidos.size})
+          Ver o que vai entrar
         </button>
+        {escolhidos.size > 0 && (
+          <p className="text-sm text-slate-600">
+            <strong className="tabular-nums">{escolhidos.size}</strong> centro(s) de custo ·{' '}
+            <strong className="tabular-nums">{pessoasNosCentros}</strong> pessoa(s) neles
+          </p>
+        )}
       </div>
 
       {erro && <Erro mensagem={erro} />}
@@ -413,11 +447,49 @@ function EditorDePublico({
       )}
 
       {previa && (
-        <div className="space-y-2 rounded-xl border-2 border-capul-300 p-3">
-          <p className="text-sm text-slate-700">
-            <strong className="tabular-nums text-lg text-capul-700">{previa.adicionar}</strong>{' '}
+        <div
+          className={`space-y-2 rounded-xl border-2 p-3 ${
+            previaVelha ? 'border-amber-300 bg-amber-50/40' : 'border-capul-300'
+          }`}
+        >
+          {/* ⭐ A prévia envelhece com a seleção — e diz isso, em vez de sumir.
+              Sumir esconderia que ela existiu; ficar calada era pior ainda. */}
+          {previaVelha && (
+            <p className="rounded-lg bg-amber-100 px-2 py-1.5 text-xs font-medium text-amber-900">
+              A seleção mudou depois desta prévia. Os números abaixo são do recorte anterior —
+              clique em <strong>Ver o que vai entrar</strong> para recalcular.
+            </p>
+          )}
+          <p className={`text-sm ${previaVelha ? 'text-slate-500' : 'text-slate-700'}`}>
+            <strong
+              className={`tabular-nums text-lg ${previaVelha ? 'text-slate-500' : 'text-capul-700'}`}
+            >
+              {previa.adicionar}
+            </strong>{' '}
             pessoa(s) entram · {previa.jaNesta} já estão aqui · {previa.encontradas} no recorte
           </p>
+
+          {/* ⭐⭐ OS NOMES. `amostra` vinha do backend desde sempre e a tela
+              mostrava só números (§3.1.9) — e é a tela em que o número já
+              enganava. Ver dez nomes é o que denuncia o recorte errado antes de
+              gravar; contagem certa de gente errada continua parecendo certa. */}
+          {!previaVelha && previa.amostra.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-600">
+              <p className="font-medium text-slate-700">
+                Quem entra {previa.amostra.length < previa.adicionar
+                  ? `(os ${previa.amostra.length} primeiros de ${previa.adicionar})`
+                  : ''}
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {previa.amostra.map((a) => (
+                  <li key={a.matricula} className="truncate">
+                    {a.nome} <span className="text-slate-400">· {a.matricula}</span>
+                    {a.area && <span className="text-slate-500"> · {a.area}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {previa.emOutraAplicacao.length > 0 && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
               <p className="font-medium">
@@ -435,13 +507,15 @@ function EditorDePublico({
           )}
           <button
             type="button"
-            disabled={ocupado || previa.adicionar === 0}
+            disabled={ocupado || previa.adicionar === 0 || previaVelha}
             onClick={() => void adicionar()}
             className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {previa.adicionar === 0
-              ? 'Nada a adicionar'
-              : `Adicionar ${previa.adicionar} ao público`}
+            {previaVelha
+              ? 'Recalcule antes de adicionar'
+              : previa.adicionar === 0
+                ? 'Nada a adicionar'
+                : `Adicionar ${previa.adicionar} ao público`}
           </button>
         </div>
       )}
