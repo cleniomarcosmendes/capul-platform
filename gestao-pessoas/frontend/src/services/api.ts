@@ -466,7 +466,24 @@ export interface ResumoDoCiclo {
   ultimaReabertura: { em: string; por: string | null; motivo: string | null } | null;
 }
 
+export interface PreviaDaAbertura {
+  /** Vazio = a abertura passa. Mesma função que a API roda no clique. */
+  problemas: string[];
+  totalAplicacoes: number;
+  noPublico: number;
+  /** Avaliações que já existem e serão liberadas — abrir NÃO cria nenhuma. */
+  designados: number;
+  semAvaliador: number;
+  /** No público e fora pela régua do ciclo — o caso de borda da contagem. */
+  barradosPelaRegua: number;
+  aplicacoesProvisorias: number;
+}
+
 export const painel = {
+  previaDaAbertura: (cicloId: string) =>
+    rhApi
+      .get<PreviaDaAbertura>(`/painel/ciclo/${cicloId}/previa-da-abertura`)
+      .then((r) => r.data),
   resumo: (cicloId: string) =>
     rhApi.get<ResumoDoCiclo>(`/painel/ciclo/${cicloId}/resumo`).then((r) => r.data),
   doCiclo: (cicloId: string) => rhApi.get<PainelDoCiclo>(`/painel/ciclo/${cicloId}`).then((r) => r.data),

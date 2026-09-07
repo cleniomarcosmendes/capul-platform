@@ -1122,6 +1122,8 @@ estava enviada e nunca fora apurada). Público, respostas e as 4 enviadas: **int
   `ciclo = Geral AND criado_em > '2026-09-07 14:00' AND status = 'PENDENTE'` sem nenhuma resposta
   e sem resultado. Conferido antes (84) e depois: o ciclo voltou a **9 avaliações**, público
   **98**, e as **4 enviadas com os `enviada_em` originais** de 06/09.
+- **08/09/2026** — apagados os ciclos **`ZZ TESTE — abrir vazio/montado (08/09)`**, das duas
+  telas do §3.1.23: 1 avaliação, **0 respostas**, 3 no público.
 - **08/09/2026** — apagados os ciclos **`ZZ TESTE — item H false/true (08/09)`**, criados para
   medir a prévia sob as duas políticas de afastados (§3.1.21): 2 ciclos, 2 aplicações, **0 no
   público, 0 avaliações** — só a prévia foi chamada, e ela não grava.
@@ -1772,6 +1774,60 @@ duas envelheceriam separadas.
 prévia de 3 pessoas devolvendo os três casos distintos (`CRIAR`, `SUBSTITUIR` com o nome de quem
 sai, `EXIGE_CONFIRMACAO` na ENVIADA) **sem gravar nada**; e o `POST .../designar` da ENVIADA
 **recusado com 400** sem a confirmação, com o banco conferido depois — avaliador **inalterado**.
+
+### 3.1.23. 🟠 A confirmação do Abrir sem números, e a validação DEPOIS do aviso (08/09)
+
+Item I. São dois, e o segundo é o que importa.
+
+**(b) A validação rodava depois do aviso de irreversibilidade.** A pessoa encarava *"não tem
+volta: não existe voltar para rascunho"*, confirmava, e **só então** recebia *"Falta resolver:
+o ciclo não tem nenhuma aplicação"*. O aviso mais pesado da tela era gasto com quem **nem podia
+abrir** — e quem podia lia um "tem certeza?" sem número nenhum.
+
+Invertido: a tela pergunta ao backend o que a abertura faria; **se há problema, mostra o
+problema e nada mais**; se não há, aí sim o aviso, com os números.
+
+**(a) A confirmação não dizia nada.** Agora diz — e os números vêm do backend
+(`GET /painel/ciclo/:id/previa-da-abertura`), das **mesmas funções que decidem**: `listar()` da
+designação, que aplica a régua do ciclo, e `problemasParaAbrir`, que a API roda no clique.
+Contar no diálogo divergiria no primeiro caso de borda, e o caso de borda aqui é **a régua
+barrando alguém que está no público**: a pessoa aparece no total e não gera avaliação.
+
+#### ⚠️ E a tela afirmava algo falso: "Abrir gera as avaliações"
+
+Achado ao ler o `abrir()` para saber de onde tirar o número: **abrir não cria avaliação
+nenhuma.** Ele muda o status e trava a montagem — quem cria `Avaliacao` é a **designação**
+(§3.12). A frase do cartão dizia o contrário desde sempre.
+
+Por isso o número certo não é "quantas vão nascer", e sim:
+
+> **1** avaliação(ões) já designadas serão liberadas para responder, em **1** aplicação(ões) ·
+> **3** pessoa(s) no público.
+> ⚠️ **2** no público estão **fora pela régua do ciclo** (afastados, cargo inelegível ou decisão
+> do RH) — entram na conta do público e não geram avaliação.
+
+E, quando existe, ⚠️ **N no público sem avaliador** — não serão avaliadas enquanto ninguém as
+designar (e designar continua valendo depois de abrir).
+
+#### Recorte provisório: avisa, não bloqueia
+
+> ⚠️ **1 de 1 aplicação(ões) estão com recorte provisório.** A própria tela chama esse público de
+> *recorte de trabalho, não decisão do RH* — e o ciclo vai abrir com ele.
+
+⚠️ **Deliberadamente não bloqueia.** Confirmar o provisório em bloco é a pergunta que está com a
+gestora (lista (A), item 17); bloquear antes de ela responder tiraria a única saída que existe
+hoje. O aviso resolve o que estava errado — abrir sem saber —, sem decidir no lugar dela.
+
+#### Verificação
+
+✅ **Ao vivo**, dois ciclos descartáveis:
+
+| Ciclo | O que a tela fez |
+|---|---|
+| **vazio** | **nenhum modal**. Só *"Falta resolver: O ciclo não tem nenhuma aplicação."* — o aviso de irreversibilidade não apareceu |
+| **montado** (público provisório num CC com 2 afastados de 3) | modal com **1 designada · 1 aplicação · 3 no público**, o aviso dos **2 barrados pela régua** e o do **recorte provisório** |
+
+Os dois apagados depois (1 avaliação, **0 respostas**), com os dois ciclos de sempre intactos.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

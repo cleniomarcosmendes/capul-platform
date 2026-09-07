@@ -22,6 +22,12 @@ export class PainelController {
   }
 
   /** A linha de estado do cabeçalho — barato de propósito, roda em toda aba. */
+  /** O que a abertura vai fazer — lido ANTES do aviso de irreversibilidade. */
+  @Get('ciclo/:cicloId/previa-da-abertura')
+  previaDaAbertura(@Param('cicloId') cicloId: string) {
+    return this.painel.previaDaAbertura(cicloId);
+  }
+
   @Get('ciclo/:cicloId/resumo') resumo(@Param('cicloId') cicloId: string) {
     return this.painel.resumoDoCiclo(cicloId);
   }

@@ -6,7 +6,15 @@ import { EtiquetaDeCiclo } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 import { data } from '../lib/formato';
-import { ciclos, ehFaltaDePermissao, mensagemDoErro, type CicloDaLista, type NovoCiclo } from '../services/api';
+import {
+  ciclos,
+  ehFaltaDePermissao,
+  mensagemDoErro,
+  painel,
+  type CicloDaLista,
+  type NovoCiclo,
+  type PreviaDaAbertura,
+} from '../services/api';
 import { Modal } from '../components/Modal';
 
 /**
@@ -103,6 +111,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
   const [ocupado, setOcupado] = useState(false);
   const [problemas, setProblemas] = useState<string[] | null>(null);
   const [confirmandoAbrir, setConfirmandoAbrir] = useState(false);
+  const [previaAbertura, setPreviaAbertura] = useState<PreviaDaAbertura | null>(null);
   const [reabrindo, setReabrindo] = useState(false);
   const [motivoReabertura, setMotivoReabertura] = useState('');
   const [encerrandoComPendencia, setEncerrandoComPendencia] = useState(false);
@@ -118,6 +127,36 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
       await aoMudar();
     } catch (e) {
       setProblemas([mensagemDoErro(e)]);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  /**
+   * ⭐⭐ VALIDA PRIMEIRO, AVISA DEPOIS (08/09).
+   *
+   * A validação rodava DEPOIS do aviso de irreversibilidade: a pessoa encarava
+   * "não tem volta", confirmava, e só então recebia *"Falta resolver: o ciclo
+   * não tem nenhuma aplicação"*. O aviso mais pesado da tela era gasto com quem
+   * nem podia abrir — e quem podia lia um "tem certeza?" sem número nenhum.
+   *
+   * Agora: pergunta ao backend o que a abertura faria; se há problema, mostra o
+   * problema **e nada mais**; se não há, aí sim o aviso — com os números vindos
+   * das mesmas funções que decidem.
+   */
+  async function pedirParaAbrir() {
+    setProblemas(null);
+    setOcupado(true);
+    try {
+      const p = await painel.previaDaAbertura(ciclo.id);
+      if (p.problemas.length > 0) {
+        setProblemas(p.problemas);
+        return;
+      }
+      setPreviaAbertura(p);
+      setConfirmandoAbrir(true);
+    } catch (e) {
+      setProblemas([mensagemDoErro(e, 'Não foi possível conferir a abertura.')]);
     } finally {
       setOcupado(false);
     }
@@ -205,7 +244,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             disabled={ocupado}
             onClick={() =>
               ciclo.status === 'RASCUNHO'
-                ? setConfirmandoAbrir(true)
+                ? void pedirParaAbrir()
                 : ciclo.status === 'ENCERRADO'
                   ? setReabrindo(true)
                   : ciclo.avaliacoesPendentes > 0
@@ -227,7 +266,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             {ciclo.status === 'ENCERRADO'
               ? `Encerrado${ciclo.encerradoEm ? ` em ${data(ciclo.encerradoEm)}` : ''} — designar, mexer no público e apurar estão fechados. Reabrir devolve tudo isso, com motivo registrado.`
               : ciclo.status === 'RASCUNHO'
-              ? 'Abrir gera as avaliações e trava a montagem: aplicações e critérios só mudam enquanto é rascunho.'
+              ? 'Abrir LIBERA os avaliadores para responder e trava a montagem: aplicações e critérios só mudam enquanto é rascunho. As avaliações já existem — quem as cria é a designação.'
               : ciclo.avaliacoesPendentes > 0
                 ? `Faltam ${ciclo.avaliacoesPendentes} avaliação(ões) por enviar. Se não vão entrar, dá para encerrar com pendência — elas ficam canceladas, com motivo registrado.`
                 : 'Todas as avaliações foram enviadas: o ciclo pode ser encerrado.'}
@@ -240,12 +279,64 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           ⚠️ Abrir é a porta mais definitiva do módulo: não existe rota de ABERTO
           para RASCUNHO. Até 07/09 nada avisava — a única frase era a cinza
           embaixo do botão, que se lê depois de clicar. */}
-      {confirmandoAbrir && (
+      {confirmandoAbrir && previaAbertura && (
         <Modal titulo={`Abrir "${ciclo.nome}"`} aoFechar={() => setConfirmandoAbrir(false)}>
           <p className="text-sm text-slate-700">
             Abrir <strong>libera os avaliadores para responder</strong> — e{' '}
             <strong className="text-amber-800">não tem volta: não existe voltar para rascunho.</strong>
           </p>
+
+          {/* ⭐⭐ OS NÚMEROS, e eles vêm do BACKEND (§3.1.23) — das mesmas funções
+              que decidem: `listar()` da designação, que aplica a régua do ciclo,
+              e `problemasParaAbrir`, que a API roda no clique. Contar aqui
+              divergiria no primeiro caso de borda, e o caso de borda é a régua
+              barrando alguém que está no público.
+              ⚠️ E o número NÃO é "quantas avaliações vão nascer": abrir não cria
+              nenhuma. Elas nascem na designação; abrir libera as que existem. */}
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+            <p className="text-slate-700">
+              <strong className="tabular-nums text-capul-700">{previaAbertura.designados}</strong>{' '}
+              avaliação(ões) já designadas serão liberadas para responder, em{' '}
+              <strong className="tabular-nums">{previaAbertura.totalAplicacoes}</strong> aplicação(ões)
+              · <strong className="tabular-nums">{previaAbertura.noPublico}</strong> pessoa(s) no
+              público.
+            </p>
+            {(previaAbertura.semAvaliador > 0 || previaAbertura.barradosPelaRegua > 0) && (
+              <ul className="mt-2 space-y-0.5 text-amber-900">
+                {previaAbertura.semAvaliador > 0 && (
+                  <li>
+                    ⚠️ <strong className="tabular-nums">{previaAbertura.semAvaliador}</strong> no
+                    público <strong>sem avaliador</strong> — não serão avaliadas enquanto ninguém as
+                    designar. Designar continua valendo depois de abrir.
+                  </li>
+                )}
+                {previaAbertura.barradosPelaRegua > 0 && (
+                  <li>
+                    ⚠️ <strong className="tabular-nums">{previaAbertura.barradosPelaRegua}</strong> no
+                    público estão <strong>fora pela régua do ciclo</strong> (afastados, cargo
+                    inelegível ou decisão do RH) — entram na conta do público e não geram avaliação.
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+
+          {/* ⚠️ RECORTE PROVISÓRIO: avisa, não bloqueia. Confirmar em bloco é a
+              pergunta que está com a gestora (lista A); bloquear antes de ela
+              responder tiraria a única saída que existe hoje. */}
+          {previaAbertura.aplicacoesProvisorias > 0 && (
+            <div className="mt-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-semibold">
+                ⚠️ {previaAbertura.aplicacoesProvisorias} de {previaAbertura.totalAplicacoes}{' '}
+                aplicação(ões) estão com <strong>recorte provisório</strong>.
+              </p>
+              <p className="mt-1">
+                A própria tela chama esse público de <em>recorte de trabalho, não decisão do RH</em>{' '}
+                — e o ciclo vai abrir com ele. Se a lista ainda não é a que o RH confirmou, volte a
+                Aplicações antes de abrir: depois, o público ainda muda, mas a montagem trava.
+              </p>
+            </div>
+          )}
           <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
             <p className="font-medium">A abertura FECHA:</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-5">

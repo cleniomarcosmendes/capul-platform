@@ -246,6 +246,69 @@ export class PainelService {
    * e quem a régua tirou. Duas contas de "quem falta" divergem no primeiro
    * ajuste manual — e o cabeçalho é onde o número é lido primeiro.
    */
+  /**
+   * ⭐⭐ O QUE A ABERTURA VAI FAZER — lido ANTES do aviso de irreversibilidade.
+   *
+   * Item I do roteiro. A confirmação do Abrir não dizia número nenhum, e a
+   * validação rodava **depois** do aviso: a pessoa encarava "não tem volta",
+   * confirmava, e só então recebia *"o ciclo não tem nenhuma aplicação"*.
+   *
+   * ⚠️ **Os números vêm daqui, das MESMAS funções que decidem** — `listar()` da
+   * designação (que aplica a régua do ciclo) e `problemasParaAbrir` (que a API
+   * roda no clique). Se o diálogo contasse sozinho, divergiria no primeiro caso
+   * de borda, e o caso de borda aqui é **a régua barrando alguém do público**:
+   * a pessoa está na lista, aparece no total, e não vai gerar avaliação.
+   *
+   * ⚠️ E o número que importa **não é "quantas avaliações vão nascer": abrir não
+   * cria avaliação nenhuma.** Elas nascem na designação. Abrir libera as que já
+   * existem e trava a montagem — a tela dizia o contrário até 08/09.
+   */
+  async previaDaAbertura(cicloId: string) {
+    const ciclo = await this.prisma.ciclo.findUnique({
+      where: { id: cicloId },
+      include: { aplicacoes: { orderBy: { ordem: 'asc' }, select: { id: true, nome: true } } },
+    });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+
+    const [designados, noPublico, provisorias] = await Promise.all([
+      this.prisma.avaliacao.count({ where: { cicloId, status: { not: 'CANCELADA' } } }),
+      this.prisma.aplicacaoPublico.count({ where: { cicloId } }),
+      // Aplicações cujo público veio de um atalho e o RH ainda não confirmou.
+      this.prisma.aplicacaoPublico.groupBy({
+        by: ['aplicacaoId'],
+        where: { cicloId, provisorio: true },
+      }),
+    ]);
+
+    let semAvaliador = 0;
+    let barradosPelaRegua = 0;
+    for (const a of ciclo.aplicacoes) {
+      const linhas = await this.designacao.listar(a.id);
+      const comAvaliacao = new Set(
+        (
+          await this.prisma.avaliacao.groupBy({ by: ['avaliadoId'], where: { aplicacaoId: a.id } })
+        ).map((x) => x.avaliadoId),
+      );
+      barradosPelaRegua += linhas.filter((l) => !l.elegivel).length;
+      semAvaliador += linhas.filter((l) => l.elegivel && !comAvaliacao.has(l.colaboradorId)).length;
+    }
+
+    return {
+      /** Vazio = a abertura passa. Mesma função que a API roda no clique. */
+      problemas: await this.ciclos.pendenciasParaAbrir(cicloId),
+      totalAplicacoes: ciclo.aplicacoes.length,
+      noPublico,
+      /** Avaliações que já existem e serão liberadas para responder. */
+      designados,
+      /** No público, elegíveis, e ninguém disse quem avalia — não serão avaliadas. */
+      semAvaliador,
+      /** No público e fora pela régua do ciclo — o caso de borda que a tela não veria. */
+      barradosPelaRegua,
+      /** Aplicações com público marcado como recorte provisório. */
+      aplicacoesProvisorias: provisorias.length,
+    };
+  }
+
   async resumoDoCiclo(cicloId: string): Promise<ResumoDoCiclo> {
     const ciclo = await this.prisma.ciclo.findUnique({
       where: { id: cicloId },
