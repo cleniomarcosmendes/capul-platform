@@ -62,6 +62,24 @@ Os 🔴 do dia nasceram espalhados por §3.1.1, §3.1.2, §3.1.4, §5 e §11. Aq
 mesmos itens em dois blocos, sem prosa. **Esta lista é um índice: quem decide o quê fica
 na seção citada.**
 
+### 📍 ONDE O DIA PAROU — 08/09/2026
+
+**16 commits locais**, `origin/main` em **`6f13a210`**. ⚠️ **Push é do Clenio.**
+
+O dia foi inteiro o **roteiro de tela**: 11 itens fechados (A, B, C + os 8 da lista), **490
+testes** (eram 422 na véspera), **1 migration** aplicada com `GUARDA: ok`
+(`20260908090000_avaliacao_cancelada_com_motivo`), e **5 ciclos descartáveis** criados e
+apagados, cada um com o SELECT antes e a conta conferida depois.
+
+⚠️ **PROD e HLG continuam em `6855c918`, sem o módulo.** Nada do que foi feito hoje está em
+nenhum ambiente além do DEV, e o roteiro de deploy do Marco segue **superado** (o alvo mudou de
+novo: mais uma migration).
+
+**O que ficou registrado sem fazer**, por decisão: itens **17** (recorte provisório sem
+confirmação — depende da Arielly), **18** (os menores do item K) e **19** (URL desconhecida que
+leva ao lugar errado em silêncio) da lista (B). E **⭐ as regras de método do dia estão na
+§5.9** — é o que se relê daqui a um mês, não a lista de tarefas.
+
 ### (A) DEPENDE DE FORA — decisão de quem não é a T.I.
 
 **Só o que a gestora de RH e a diretoria respondem.** Nada aqui anda com trabalho técnico, e
@@ -2245,6 +2263,91 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 | Segundo `RH_ADMIN` (a separação de funções exige dois) | Gestora de RH + T.I. |
 
 ---
+
+## 5.9. ⭐⭐ REGRAS DE MÉTODO — o que reler daqui a um mês
+
+Nasceram todas em 08/09, cada uma de um caso concreto, e **valem além do caso**. Ficam juntas de
+propósito: a lista de tarefas envelhece em semanas, estas não.
+
+### Sobre ferramentas de verificação
+
+**1. Falso verde adia a descoberta; falso vermelho destrói a ferramenta.**
+*Caso:* `npx tsc` rodando o pacote decoy `tsc@2.0.4` e saindo 1, ao lado do cache do Docker
+servindo bundle velho e saindo 0.
+O verde falso alguém descobre quando o defeito aparece — é dívida com data de vencimento. O
+vermelho falso faz alguém **desligar o passo** achando que é problema de máquina ("aqui o
+typecheck não roda", "essa suíte é instável"), e a verificação some do processo **sem ninguém
+ter decidido removê-la**. Ver §6.
+
+**2. Mutação como método: injetar o erro e ver a ferramenta pegá-lo.**
+*Caso:* `const MUTACAO_DO_TESTE: number = ciclo.nome;` derrubando o build com `TS2322` antes do
+`vite`.
+Garantia que ninguém tentou quebrar é garantia **suposta**. Antes de escrever "X está limpo",
+saber dizer **qual comando executou a checagem** e **como sei que ele executou** — "ele imprimiu
+que estava tudo bem" não é resposta.
+
+### Sobre testes
+
+**3. Afirmar o FATO, não a redação. Suíte verde a favor do erro.**
+*Caso:* o spec que exigia `/não estão na lista de ninguém e ficarão de fora/` — a frase que
+mentia. Ele passava **exatamente porque o defeito existia**.
+Afirmar contagens, motivos, códigos e estados; quando o texto **é** o requisito (uma recusa tem
+de ensinar o caminho), afirmar o **pedaço que carrega a obrigação** (`/RH_ADMIN/`, `/motivo/`),
+nunca a frase inteira. Melhor ainda: comparar com a **saída da função que decide**, chamada
+dentro do próprio teste — foi assim no §3.1.21.
+
+**4. Spec que quebra ao consertar um defeito é INFORMAÇÃO — ler antes de atualizar.**
+*Casos, e os dois desfechos:* no item F o spec era **fóssil do defeito** e foi corrigido; no
+item E ele era **decisão escrita com motivo** (*"trocar só o avaliador não é bloqueado nem com
+nota enviada"*) e **não foi atropelado** — virou `EXIGE_CONFIRMACAO`, conciliando as duas.
+O teste que quebra está dizendo alguma coisa. Às vezes é "você quebrou"; às vezes é "alguém já
+decidiu isto, com razão". Não dá para saber sem ler.
+
+### Sobre contratos entre partes
+
+**5. Relatório cita atributo, não o possui.**
+*Caso:* `/resumo` mandando `status` e `encerradoEm`, que `GET /ciclos/:id` já entrega — a
+etiqueta lia um, as faixas liam o outro.
+Quem sobrevive a uma duplicata é o **dono natural do fato**, não o mais conveniente: atributo
+gravado na linha pertence ao **registro**; contagem apurada agora pertence ao **relatório**.
+⚠️ E elas vêm em bando: procuradas depois de achar uma, apareceram **cinco**.
+
+**6. Prévia mostra o que vai gravar, e vem de quem decide.**
+*Casos:* `efeitoDoExcluir`, `previaDaDesignacao`, a prévia do público e a da abertura.
+Se a tela recalcula, ela diverge no primeiro caso de borda — e o caso de borda é sempre o que a
+prévia existia para pegar (a régua barrando alguém, a avaliação já respondida). A frase que o
+usuário lê antes de confirmar e a que a API devolve ao recusar têm de sair **da mesma função**.
+Corolário: **entrar numa lista e produzir um efeito são perguntas diferentes** — responder uma e
+escrever sobre a outra foi o defeito dos itens F, H e I.
+
+### Sobre o que a tela diz
+
+**7. A tela não afirma intenção sobre pessoas.**
+*Caso:* *"do mais atrasado ao menos"* e *"quem está segurando"*, lidos imediatamente antes de a
+gestora cobrar alguém ou cancelar a avaliação dele.
+Quem não respondeu pode ter mil motivos. A tela mostra **contagem**, não veredito. E o
+vocabulário se propaga: **quem escreve a próxima frase copia da anterior** — por isso, ao
+corrigir uma, varrer as vizinhas (o mesmo motivo da varredura de *"Abrir gera as avaliações"*).
+
+**8. Capacidade sem sinal na tela é capacidade que não existe.**
+*Casos:* a rota de reabrir sem botão; *"Definir avaliador"* que sumia de quem já tinha um; a
+memória de cálculo atrás de um clique sem cursor nem seta.
+E o par dela: **desabilitar com o motivo, nunca esconder**.
+
+### Sobre o próprio trabalho
+
+**9. Passo que falha INTERROMPE o roteiro.**
+*Caso:* 07/09, script que seguiu depois de uma recusa da API e escreveu **84 avaliações** por
+engano.
+
+**10. Token vencido é pedido a fazer, não obstáculo a contornar.**
+*Caso:* 08/09, senha adivinhada e JWT forjado — as duas bloqueadas, e bloqueadas **certo**. Ver
+§6. ⚠️ A regra é sobre **eu ir buscar**, não sobre o Clenio entregar.
+
+**11. Mudança em dado de DEV: SELECT que isola primeiro, DELETE transacional, auditoria
+preservada — e o número conferido depois.**
+*Caso:* as cinco limpezas de ciclos descartáveis do dia, todas com "0 respostas, 0 resultados"
+verificado antes de apagar.
 
 ## 6. Armadilhas do ambiente
 
