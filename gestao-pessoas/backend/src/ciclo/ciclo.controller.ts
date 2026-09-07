@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsBoolean, IsDate, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsBoolean, IsDate, IsInt, IsNumber, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
@@ -26,6 +26,11 @@ export class CriarCicloDto {
 }
 
 /** Montar o ciclo é de RH_CICLO; abrir e encerrar, só de RH_ADMIN. */
+export class ReabrirCicloDto {
+  /** Como no reabrir avaliação: sem motivo não há reabertura. */
+  @IsString() @MinLength(3) motivo!: string;
+}
+
 export class AjustarPeriodoDto {
   @Type(() => Date) @IsDate() periodoInicio!: Date;
   @Type(() => Date) @IsDate() periodoFim!: Date;
@@ -61,6 +66,12 @@ export class CicloController {
   @Post(':id/abrir') @HttpCode(200) @Roles(ROLES.RH_ADMIN)
   abrir(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.ciclos.abrir(id, user.sub);
+  }
+
+  /** Reabrir é do RH_ADMIN, como encerrar — e exige motivo. */
+  @Post(':id/reabrir') @HttpCode(200) @Roles(ROLES.RH_ADMIN)
+  reabrir(@Param('id') id: string, @Body() dto: ReabrirCicloDto, @CurrentUser() user: JwtPayload) {
+    return this.ciclos.reabrir(id, dto.motivo, user.sub);
   }
 
   @Post(':id/encerrar') @HttpCode(200) @Roles(ROLES.RH_ADMIN)

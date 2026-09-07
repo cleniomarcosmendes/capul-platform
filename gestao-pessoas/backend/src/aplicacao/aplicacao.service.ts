@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { validarAplicacao } from '../ciclo/abertura.validator.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { marcarRestricoesPor } from '../avaliacao/separacao-funcoes.js';
+import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
 
 export interface DadosAplicacao {
   cicloId: string;
@@ -278,6 +279,7 @@ export class AplicacaoService {
     usuarioId: string,
   ) {
     const { aplicacao, candidatos, noCiclo } = await this.resolverAlvo(aplicacaoId, alvo);
+    await this.assertCicloDaAplicacaoOperavel(aplicacao.cicloId, 'mudança no público');
     const novos = candidatos.filter((c) => !noCiclo.has(c.id));
 
     if (novos.length > 0) {
@@ -310,6 +312,7 @@ export class AplicacaoService {
       where: { aplicacaoId, colaboradorId },
     });
     if (!linha) throw new NotFoundException('Esta pessoa não está no público desta aplicação.');
+    await this.assertCicloDaAplicacaoOperavel(linha.cicloId, 'mudança no público');
 
     const avaliacao = await this.prisma.avaliacao.count({
       where: { aplicacaoId, avaliadoId: colaboradorId },
@@ -328,6 +331,18 @@ export class AplicacaoService {
       valorAnterior: { colaboradorId, origem: linha.origem },
     });
     return { removida: true };
+  }
+
+  /**
+   * ⚠️ A PRÉVIA continua abrindo no ciclo encerrado — ela não grava, e é assim
+   * que se descobre o que aconteceria antes de decidir reabrir.
+   */
+  private async assertCicloDaAplicacaoOperavel(cicloId: string, acao: string) {
+    const ciclo = await this.prisma.ciclo.findUniqueOrThrow({
+      where: { id: cicloId },
+      select: { status: true, encerradoEm: true },
+    });
+    assertCicloOperavel(ciclo, acao);
   }
 
   /** Resolve o atalho em pessoas, e diz quem já está em alguma aplicação do ciclo. */

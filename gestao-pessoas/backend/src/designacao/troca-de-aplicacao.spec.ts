@@ -136,9 +136,11 @@ describe('DesignacaoService.designar — troca de aplicação', () => {
     prisma.aplicacao.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
       Promise.resolve(
         where.id === APP_A
-          ? { id: APP_A, cicloId: CICLO, nome: 'Operação de Loja' }
+          // ⚠️ O `ciclo` entra aqui porque `designar` passou a checar se ele
+          // ainda aceita escrita (ciclo encerrado recusa designação).
+          ? { id: APP_A, cicloId: CICLO, nome: 'Operação de Loja', ciclo: { status: 'ABERTO', encerradoEm: null } }
           : where.id === APP_B
-            ? { id: APP_B, cicloId: CICLO, nome: 'Aprendizes' }
+            ? { id: APP_B, cicloId: CICLO, nome: 'Aprendizes', ciclo: { status: 'ABERTO', encerradoEm: null } }
             : null,
       ),
     );

@@ -3,6 +3,13 @@ function modelMock() {
   return {
     findMany: jest.fn().mockResolvedValue([]),
     findUnique: jest.fn().mockResolvedValue(null),
+    /**
+     * ⚠️ Devolve ciclo ABERTO por padrão. `findUniqueOrThrow` entrou aqui em
+     * 07/09 com a guarda do ciclo encerrado: sem um padrão, TODO spec que grava
+     * teria de mockar o ciclo, e o teste passaria a falar de um assunto que não
+     * é o dele. Quem testa a guarda mocka o encerrado explicitamente.
+     */
+    findUniqueOrThrow: jest.fn().mockResolvedValue({ status: 'ABERTO', encerradoEm: null }),
     findFirst: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockResolvedValue({}),
     createMany: jest.fn().mockResolvedValue({ count: 0 }),

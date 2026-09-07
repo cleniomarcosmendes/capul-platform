@@ -453,6 +453,12 @@ model Ciclo {
   incluirAfastados  Boolean      @default(false) @map("incluir_afastados")
   abertoEm          DateTime?    @map("aberto_em")
   encerradoEm       DateTime?    @map("encerrado_em")
+  /// REABERTURA do ciclo — mesmo desenho do reabrir avaliação: quem, quando e
+  /// POR QUÊ. Encerrado é o estado que fecha designação, público e apuração;
+  /// sem uma porta registrada, "encerrei sem querer" viraria criar outro ciclo.
+  reabertoEm        DateTime?    @map("reaberto_em")
+  reabertoPorId     String?      @map("reaberto_por_id")
+  motivoReabertura  String?      @map("motivo_reabertura")
   criadoEm          DateTime     @default(now()) @map("criado_em")
   atualizadoEm      DateTime     @updatedAt @map("atualizado_em")
 
@@ -599,12 +605,15 @@ model CicloElegibilidade {
   @@schema("rh")
 }
 
+/// ⚠️ TRÊS estados, e só. `EM_APURACAO` e `CANCELADO` saíram em 07/09/2026:
+/// estavam no enum desde o início, **nada no código os produzia** e nenhuma
+/// linha os tinha. `encerrar` até aceitava vir de `EM_APURACAO` — um caminho
+/// que nunca existiu. Estado que ninguém escreve é estado que engana quem lê o
+/// enum para entender o processo.
 enum StatusCiclo {
   RASCUNHO
   ABERTO
-  EM_APURACAO
   ENCERRADO
-  CANCELADO
 
   @@schema("rh")
 }

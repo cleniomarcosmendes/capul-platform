@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { calcularNotaAvaliacao, notaPorGrupo, type ItemRespondido } from '../calculo/nota-avaliacao.js';
 import { AvaliacaoAcessoService, type ContextoAcesso } from './avaliacao-acesso.service.js';
 import { marcarRestricoes } from './separacao-funcoes.js';
+import { assertCicloAceitaReaberturaDeAvaliacao } from '../ciclo/ciclo-operavel.js';
 
 @Injectable()
 export class AvaliacaoService {
@@ -242,7 +243,16 @@ export class AvaliacaoService {
   /** Reabertura — ato do RH, com motivo, e nunca na própria avaliação. */
   async reabrir(contexto: ContextoAcesso, avaliacaoId: string, motivo: string) {
     if (!motivo?.trim()) throw new BadRequestException('Informe o motivo da reabertura.');
-    await this.acesso.carregarParaAcao(contexto, avaliacaoId, 'reabrir');
+    const alvo = await this.acesso.carregarParaAcao(contexto, avaliacaoId, 'reabrir');
+
+    // ⚠️ O BECO: reabrir num ciclo encerrado deixava a avaliação EM_ANDAMENTO
+    // sem ninguém poder responder (responder exige ABERTO). A recusa ensina a
+    // ordem — ciclo primeiro, avaliação depois.
+    const ciclo = await this.prisma.ciclo.findUniqueOrThrow({
+      where: { id: alvo.cicloId },
+      select: { status: true, encerradoEm: true },
+    });
+    assertCicloAceitaReaberturaDeAvaliacao(ciclo);
 
     const reaberta = await this.prisma.avaliacao.update({
       where: { id: avaliacaoId },

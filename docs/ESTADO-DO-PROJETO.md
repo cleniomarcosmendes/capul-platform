@@ -8,10 +8,10 @@
 ## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**65 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**66 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 65 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 66 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -75,9 +75,10 @@ nove itens desta lista não movem esse número em nada.
 | 9 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
 | 10 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
 | 11 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
-| 12 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
-| 13 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
-| 14 | ⚠️ **Duas verificações pendentes de conta** — `RH_ADMIN` **sem fila** (o estado vazio com "Ir para os ciclos") e `RH_MODELO` (que hoje não tem tela): os dois caminhos são **derivados do código, não exercidos**, porque nenhuma conta do DEV está nesses estados. Saem quando houver **segundo `RH_ADMIN`** (A) e **tela de questionários** (item 12) | §3.1.6 · §5 |
+| 12 | 🔴 **"Designar pelo cadastro" não tem desfazer** — cria N avaliações com um clique (no DEV: 84 de uma vez) e **não há como reverter pela tela**; o único caminho hoje é SQL. A importação de planilha TEM desfazer, e é a mesma natureza de ato em lote. A gestora pode fazer pela tela o que se fez por script em 07/09 e ficar sem saída | §3.1.13 |
+| 13 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
+| 14 | ⚠️ **Duas verificações pendentes de conta** — `RH_ADMIN` **sem fila** (o estado vazio com "Ir para os ciclos") e `RH_MODELO` (que hoje não tem tela): os dois caminhos são **derivados do código, não exercidos**, porque nenhuma conta do DEV está nesses estados. Saem quando houver **segundo `RH_ADMIN`** (A) e **tela de questionários** (item 13) | §3.1.6 · §5 |
+| 15 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
 
 ---
 
@@ -107,7 +108,7 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 | Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **42 endpoints** em 9 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
 | Banco | 8 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **402 testes, 28 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Testes | **411 testes, 29 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -998,6 +999,74 @@ questionários diferentes por perfil (a melhoria que originou o módulo). O que 
 e a proposta inclui **a tela dizer isso**, em vez de o RH descobrir que a tela não existe: no
 rascunho, ao lado de "o que falta para abrir", a linha *"questionário e critérios são cadastrados
 pela T.I. (ainda sem tela)"*.
+
+### 3.1.12. ✅ Ciclo ENCERRADO fecha — com porta de volta (07/09)
+
+`encerrar` recusava só o ajuste de período. **Designar, mexer no público e apurar continuavam
+funcionando em ciclo encerrado** — nenhum desses serviços olhava o status, e o módulo escrevia
+"ciclo ENCERRADO não muda" sem cumprir. O pior dos três é o apurar: muda a **nota** de quem já
+recebeu devolutiva.
+
+| Passa a RECUSAR no encerrado | Continua ABRINDO (é leitura) |
+|---|---|
+| designar (à mão e em lote) · decisão de elegibilidade · público (adicionar/remover) · apurar · **reabrir avaliação** | painel · resultados · memória de cálculo · lista de designação · **as duas prévias** (não gravam) · o cadastro "quem avalia quem" (é da plataforma, não do ciclo) |
+
+⭐ **A recusa ensina.** *"Este ciclo foi encerrado em 07/09/2026 e não aceita apuração. Para mexer
+nele, reabra o ciclo — é ato do RH_ADMIN, exige motivo e fica registrado. Encerrado, ele continua
+servindo para LER: resultados, memória de cálculo, painel e designação seguem abrindo."*
+"Não pode" sem alternativa é da mesma família do "Excluir" ser o único botão da linha.
+
+⭐⭐ **O BECO que a regra fechou:** reabrir uma avaliação em ciclo encerrado **dava certo e não
+servia para nada** — a avaliação voltava a `EM_ANDAMENTO` e ninguém podia respondê-la, porque
+responder exige `ABERTO`. Agora a recusa ensina a ORDEM: *"Reabra o CICLO primeiro e só depois a
+avaliação: com o ciclo encerrado, ela ficaria em andamento sem que ninguém pudesse responder."*
+
+**A porta:** `POST /ciclos/:id/reabrir` — `RH_ADMIN`, **motivo obrigatório**, auditado
+(`REABRIR`), com `reabertoEm`/`reabertoPorId`/`motivoReabertura` ao lado do `encerradoEm`, que
+**não se apaga**: a história é que foi encerrado e depois reaberto. ⚠️ **Volta para `ABERTO`,
+nunca para `RASCUNHO`** — rascunho reabriria criar aplicação e mudar peso, e peso mudado depois
+de existir resultado é reapuração silenciosa. Reabrir é para corrigir o que aconteceu DENTRO do
+ciclo, não para remontá-lo.
+
+**O enum perdeu dois estados mortos:** `EM_APURACAO` (que `encerrar` até aceitava como origem) e
+`CANCELADO`. Nada no código os produzia e nenhuma linha os tinha — conferido antes da migration.
+Migration `20260907140000_ciclo_encerrado_fecha_e_reabre`, com o script de reversão escrito
+dentro dela.
+
+Verificado ao vivo em 07/09 num **ciclo descartável** (criado, usado e apagado): as quatro
+recusas com a mensagem certa, as cinco leituras abrindo, reabrir sem motivo recusando, reabrir
+com motivo devolvendo `ABERTO` com `encerradoEm` preservado, e as operações voltando depois.
+
+### 3.1.13. ⚠️ INCIDENTE de 07/09 — o roteiro seguiu depois de a API recusar
+
+**Eu** fiz, no papel de cliente, a classe que este módulo passou o dia caçando.
+
+O roteiro de verificação encerrava o ciclo "Avaliação Geral 2026" e **depois** testava as
+recusas. O `encerrar` **falhou** (*"5 avaliação(ões) ainda não foram enviadas"*) — e o script
+**continuou**, rodando as escritas contra um ciclo que seguia ABERTO. Elas passaram, como deviam
+passar num ciclo aberto, e a verificação não verificou nada.
+
+**Estrago:** `Designar pelo cadastro` com `aplicar: true` criou **84 avaliações** no ciclo Geral
+(9 → 93), todas `PENDENTE` e sem resposta; o apurar gerou o 4º resultado (de uma avaliação que
+estava enviada e nunca fora apurada). Público, respostas e as 4 enviadas: **intactos**.
+
+> **REGRA, e vale para todo roteiro de verificação daqui em diante: passo que falha INTERROMPE o
+> roteiro.** `set -e` mais uma checagem explícita do código HTTP esperado a cada passo. Um roteiro
+> que segue depois de uma recusa não está testando — está escrevendo.
+
+**Limpeza (registrada porque é DELETE por SQL, sem rastro em `rh.auditoria`):**
+
+- **07/09/2026** — apagadas as **84** avaliações do ciclo `Avaliação Geral 2026`, pelo critério
+  `ciclo = Geral AND criado_em > '2026-09-07 14:00' AND status = 'PENDENTE'` sem nenhuma resposta
+  e sem resultado. Conferido antes (84) e depois: o ciclo voltou a **9 avaliações**, público
+  **98**, e as **4 enviadas com os `enviada_em` originais** de 06/09.
+- **07/09/2026** — apagado o ciclo `ZZ TESTE — regra do encerrado (07/09)` e a aplicação dele
+  (0 avaliações, 0 público, 0 resultados), criado só para exercitar a regra acima. Sobraram os
+  **dois** ciclos de sempre.
+
+⚠️ **Isto é a mesma classe do UPDATE manual que custou meses no Fiscal** e que motivou a rota de
+ajuste de período em vez do SQL: mudança sem rastro. Fazer foi certo — era dado que eu mesmo
+criei por erro, em DEV —, **não registrar é que não seria**.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

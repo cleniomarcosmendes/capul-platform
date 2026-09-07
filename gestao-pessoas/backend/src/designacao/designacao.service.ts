@@ -21,6 +21,7 @@ import {
   type CandidatoDesignacao,
   type MotivoExclusao,
 } from './elegibilidade-ciclo.js';
+import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
 import {
   decidirSituacao,
   pedeAcao,
@@ -354,6 +355,13 @@ export class DesignacaoService {
       throw new BadRequestException('Informe o motivo da decisão.');
     }
 
+    const ciclo = await this.prisma.ciclo.findUnique({
+      where: { id: cicloId },
+      select: { status: true, encerradoEm: true },
+    });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+    assertCicloOperavel(ciclo, 'mudança na lista de quem entra');
+
     const vigente = await this.prisma.cicloElegibilidade.findFirst({
       where: { cicloId, colaboradorId, removidoEm: null },
     });
@@ -405,11 +413,15 @@ export class DesignacaoService {
     origem: 'CENTRO_CUSTO' | 'MANUAL' = 'CENTRO_CUSTO',
   ) {
     const [aplicacao, avaliado] = await Promise.all([
-      this.prisma.aplicacao.findUnique({ where: { id: aplicacaoId } }),
+      this.prisma.aplicacao.findUnique({
+        where: { id: aplicacaoId },
+        include: { ciclo: { select: { status: true, encerradoEm: true } } },
+      }),
       this.prisma.colaborador.findUnique({ where: { id: avaliadoId } }),
     ]);
     if (!aplicacao) throw new NotFoundException('Aplicação não encontrada.');
     if (!avaliado) throw new NotFoundException('Colaborador não encontrado.');
+    assertCicloOperavel(aplicacao.ciclo, 'designação');
 
     if (avaliadoId === avaliadorId) {
       // Autoavaliação não existe (decisão A2/F1), e deixar passar aqui seria a
@@ -552,6 +564,9 @@ export class DesignacaoService {
       include: { aplicacoes: { orderBy: { ordem: 'asc' }, select: { id: true, nome: true } } },
     });
     if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+    // ⚠️ Só quando GRAVA: a prévia é leitura e continua abrindo no encerrado —
+    // é assim que se descobre o que teria acontecido antes de reabrir.
+    if (opcoes.aplicar) assertCicloOperavel(ciclo, 'designação em lote');
     if (ciclo.aplicacoes.length === 0) {
       throw new BadRequestException(
         'O ciclo não tem nenhuma aplicação. Monte as aplicações e o público antes de designar.',

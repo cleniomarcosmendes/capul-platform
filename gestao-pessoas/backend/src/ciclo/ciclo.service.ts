@@ -127,8 +127,14 @@ export class CicloService {
   async encerrar(cicloId: string, usuarioId: string) {
     const ciclo = await this.prisma.ciclo.findUnique({ where: { id: cicloId } });
     if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
-    if (ciclo.status !== 'EM_APURACAO' && ciclo.status !== 'ABERTO') {
-      throw new BadRequestException(`O ciclo está ${ciclo.status} e não pode ser encerrado.`);
+    // ⚠️ Só de ABERTO. `EM_APURACAO` estava aqui como origem possível e **nada
+    // no código jamais o produziu** — saiu do enum em 07/09/2026.
+    if (ciclo.status !== 'ABERTO') {
+      throw new BadRequestException(
+        ciclo.status === 'ENCERRADO'
+          ? 'Este ciclo já está encerrado. Para mexer nele, reabra o ciclo — é ato do RH_ADMIN, exige motivo e fica registrado.'
+          : `O ciclo está ${ciclo.status} e não pode ser encerrado — só um ciclo ABERTO encerra.`,
+      );
     }
 
     // Encerrar com avaliação pendente encerraria em silêncio — a API recusa e
@@ -148,6 +154,55 @@ export class CicloService {
     });
     await this.auditoria.registrar({ entidade: 'Ciclo', entidadeId: cicloId, acao: 'ENCERRAR', usuarioId });
     return encerrado;
+  }
+
+  /**
+   * ⭐⭐ REABRIR O CICLO — a porta que faz a recusa do encerrado ser honesta.
+   *
+   * Mesmo desenho do reabrir AVALIAÇÃO: `RH_ADMIN`, **motivo obrigatório**,
+   * auditado, e o rastro fica no registro (`reabertoEm`, `reabertoPorId`,
+   * `motivoReabertura`) ao lado do `encerradoEm`, que **não se apaga** — a
+   * história é que ele foi encerrado e depois reaberto, não que nunca encerrou.
+   *
+   * ⚠️ **Volta para ABERTO, nunca para RASCUNHO.** RASCUNHO reabriria a porta de
+   * criar aplicação e mudar peso — e peso mudado depois de existir resultado é
+   * reapuração silenciosa, com nota diferente para quem já recebeu devolutiva.
+   * Reabrir é para corrigir o que aconteceu DENTRO do ciclo (designação,
+   * avaliação, apuração), não para remontá-lo.
+   */
+  async reabrir(cicloId: string, motivo: string, usuarioId: string) {
+    if (!motivo?.trim()) {
+      // Mesma exigência do reabrir avaliação: sem motivo, a linha vira "alguém
+      // reabriu algo" — que é o mesmo que não ter registro nenhum.
+      throw new BadRequestException('Informe o motivo da reabertura.');
+    }
+    const ciclo = await this.prisma.ciclo.findUnique({ where: { id: cicloId } });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+    if (ciclo.status !== 'ENCERRADO') {
+      throw new BadRequestException(
+        `O ciclo está ${ciclo.status} — só um ciclo ENCERRADO é reaberto.`,
+      );
+    }
+
+    const reaberto = await this.prisma.ciclo.update({
+      where: { id: cicloId },
+      data: {
+        status: 'ABERTO',
+        reabertoEm: new Date(),
+        reabertoPorId: usuarioId,
+        motivoReabertura: motivo.trim(),
+      },
+    });
+    await this.auditoria.registrar({
+      entidade: 'Ciclo',
+      entidadeId: cicloId,
+      acao: 'REABRIR',
+      usuarioId,
+      justificativa: motivo.trim(),
+      valorAnterior: { status: 'ENCERRADO', encerradoEm: ciclo.encerradoEm },
+      valorNovo: { status: 'ABERTO' },
+    });
+    return reaberto;
   }
 
   /**

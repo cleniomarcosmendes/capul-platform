@@ -33,9 +33,12 @@ describe('DesignacaoService.listar — público nominal', () => {
     prisma = createPrismaMock();
     service = new DesignacaoService(prisma as never, { registrar: jest.fn() } as never);
     prisma.aplicacao.findUnique.mockResolvedValue({
+
       id: APLICACAO,
       cicloId: CICLO,
-      ciclo: { id: CICLO, incluirAfastados: false },
+      // ⚠️ `status` entra aqui porque `designar` passou a checar se o ciclo
+      // ainda aceita escrita (encerrado recusa designação).
+      ciclo: { id: CICLO, incluirAfastados: false, status: 'ABERTO', encerradoEm: null },
     });
   });
 

@@ -18,6 +18,7 @@ import { conceitoDaNota } from '../ciclo/abertura.validator.js';
 import { agregarAlertas, apurarColaborador, type AlertaAgregado, type AlertaApuracao, type CriterioConfigurado } from '../calculo/motor.js';
 import type { Faixa } from '../calculo/faixa.js';
 import { assertEscopoReapuracaoValido, type EscopoReapuracao } from '../avaliacao/separacao-funcoes.js';
+import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
 
 export interface ResultadoDaApuracao {
   escopo: EscopoReapuracao;
@@ -57,12 +58,38 @@ export class ApuracaoService {
     return this.executar(escopo, null, false);
   }
 
+  /** O ciclo do escopo — direto (CICLO) ou pela aplicação (APLICACAO). */
+  private async cicloDoEscopo(escopo: EscopoReapuracao) {
+    if (escopo.tipo === 'CICLO') {
+      return this.prisma.ciclo.findUnique({
+        where: { id: escopo.cicloId },
+        select: { status: true, encerradoEm: true },
+      });
+    }
+    const aplicacao = await this.prisma.aplicacao.findUnique({
+      where: { id: escopo.aplicacaoId },
+      select: { ciclo: { select: { status: true, encerradoEm: true } } },
+    });
+    return aplicacao?.ciclo ?? null;
+  }
+
   private async executar(
     escopo: EscopoReapuracao,
     usuarioId: string | null,
     gravar: boolean,
   ): Promise<ResultadoDaApuracao> {
     assertEscopoReapuracaoValido(escopo);
+
+    /**
+     * ⚠️ Só quando GRAVA. `conferir` (gravar = false) é o que alimenta a
+     * conferência do painel e continua valendo no ciclo encerrado — é leitura.
+     * Apurar é o ato mais perigoso de fazer num ciclo encerrado: muda a NOTA de
+     * gente cujo resultado já foi comunicado.
+     */
+    if (gravar) {
+      const ciclo = await this.cicloDoEscopo(escopo);
+      if (ciclo) assertCicloOperavel(ciclo, 'apuração');
+    }
 
     const avaliacoes = await this.prisma.avaliacao.findMany({
       where: {
