@@ -5,18 +5,31 @@
 >
 > Piloto previsto para **15/09/2026**.
 
-## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
+## ✅ PUBLICADO EM 07/09/2026 — `origin/main` = `6f13a210`
 
-**Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**78 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+O bloco que ficava aqui dizia **não dar push**. Está superado: o Clenio publicou em 07/09,
+`6855c918..6f13a210`, **1.079 objetos**. Local e remoto iguais (`git status -sb` sem ahead).
 
-O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 78 commits agora — que trazem um módulo inteiro, com
-migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
-e refaz o roteiro.
+⚠️ **O que isso muda para o deploy:** o roteiro que o Marco tem em mãos foi escrito contra
+`6855c918` e **está superado** — o alvo mudou debaixo dele. Um roteiro novo precisa levar:
 
-⚠️ Se alguém mexer no repositório e esta nota parecer velha, confira em vez de supor:
-`git status -sb` e `git log --oneline origin/main..HEAD | wc -l`.
+| O que entrou | Detalhe |
+|---|---|
+| **3 serviços novos** no `docker-compose.yml` | `gestao-pessoas-migrate` (job com build próprio e GUARDA), `gestao-pessoas-backend` (porta **3004**), `gestao-pessoas-frontend` |
+| **nginx** | duas `location` novas (`/gestao-pessoas/` e `/api/v1/gestao-pessoas/`) — **reload obrigatório** depois do rebuild |
+| **11 migrations** | **2 do `auth-gateway`** (registra o módulo + roles; e a que **ativa o card no Hub**) e **9 do `gestao-pessoas`** |
+| **`.env`** | nada novo: o serviço reusa `DB_USER`/`DB_PASSWORD`/`JWT_SECRET`/`CORS_ORIGINS` que já existem |
+
+⚠️ **Ordem que importa:** as migrations do **auth-gateway** registram o módulo e as roles — sem
+elas ninguém tem permissão para entrar; a do Hub é a que faz o card aparecer (e é migration de
+propósito: à mão, o módulo ficaria ATIVO num ambiente e INATIVO noutro sem nada registrar a
+diferença). ⚠️ E o job `*-migrate` **tem build próprio**: rebuildar só o backend deixa o job com
+imagem velha e o `migrate deploy` diz "No pending migrations" com razão — foi o que aconteceu
+aqui em 07/09, e a **GUARDA** avisou.
+
+🔴 **Ninguém tem permissão no módulo em PROD ainda.** Lá isso é conceder `GESTAO_PESSOAS` no
+Configurador, pessoa a pessoa — ver a lista (A): quem recebe é decisão do RH, e o **segundo
+`RH_ADMIN`** é exigência do desenho, não conveniência.
 
 ## 👤 Quem escreve isto, e para quem
 
