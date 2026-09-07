@@ -1,22 +1,27 @@
 # Gestão de Pessoas — estado do projeto
 
 > Ponto de entrada para quem vai mexer no módulo. Diz onde estamos, o que não se
-> discute mais e onde ler o resto. Última revisão: **07/09/2026** (fim do dia).
+> discute mais e onde ler o resto. Última revisão: **08/09/2026** (fim do dia).
 >
 > Piloto previsto para **15/09/2026**.
 
-## ✅ PUBLICADO EM 07/09/2026 — `origin/main` = `6f13a210`
+## ✅ PUBLICADO EM 08/09/2026 — `origin/main` = `e4f7d453`
 
-O bloco que ficava aqui dizia **não dar push**. Está superado: o Clenio publicou em 07/09,
-`6855c918..6f13a210`, **1.079 objetos**. Local e remoto iguais (`git status -sb` sem ahead).
+Publicado pelo Clenio no fim do dia: **`6f13a210..e4f7d453`**, 17 commits, 201 objetos. Local e
+remoto iguais (`git status -sb` sem ahead). A publicação anterior foi em 07/09
+(`6855c918..6f13a210`, 1.079 objetos).
 
-### Onde cada ambiente está (07/09)
+### Onde cada ambiente está (08/09)
 
 | | Commit | Tem o Gestão de Pessoas? |
 |---|---|---|
-| `origin/main` | **`6f13a210`** | sim |
+| `origin/main` | **`e4f7d453`** | sim |
 | **HOMOLOGAÇÃO** | `6855c918` | **não** |
 | **PRODUÇÃO** | `6855c918` | **não** |
+
+⚠️ **A distância cresceu.** O que está publicado tem **hoje inteiro** — 11 itens do roteiro de
+tela, incluindo o cancelamento de avaliação (com **migration**) e o encerramento com pendência.
+Nenhum ambiente além do DEV viu qualquer coisa disso.
 
 O Marco aplicou em 07/09, em HLG **e** em PROD, o roteiro de 04/09
 (`PlatformCapul_20260904_Roteiro_Deploy.md`, alvo `6855c918`) — que **não continha este
@@ -30,7 +35,7 @@ sobe um serviço novo em vez de atualizar um existente:
 |---|---|
 | **3 serviços novos** no `docker-compose.yml` | `gestao-pessoas-migrate` (job com build próprio e GUARDA), `gestao-pessoas-backend` (porta **3004**), `gestao-pessoas-frontend` |
 | **nginx** | duas `location` novas (`/gestao-pessoas/` e `/api/v1/gestao-pessoas/`) — **reload obrigatório** depois do rebuild |
-| **11 migrations** | **2 do `auth-gateway`** (registra o módulo + roles; e a que **ativa o card no Hub**) e **9 do `gestao-pessoas`** |
+| **12 migrations** | **2 do `auth-gateway`** (registra o módulo + roles; e a que **ativa o card no Hub**) e **10 do `gestao-pessoas`** — a última é a de 08/09, `20260908090000_avaliacao_cancelada_com_motivo` |
 | **`.env`** | nada novo: o serviço reusa `DB_USER`/`DB_PASSWORD`/`JWT_SECRET`/`CORS_ORIGINS` que já existem |
 
 ⚠️ **Ordem que importa:** as migrations do **auth-gateway** registram o módulo e as roles — sem
@@ -64,7 +69,7 @@ na seção citada.**
 
 ### 📍 ONDE O DIA PAROU — 08/09/2026
 
-**16 commits locais**, `origin/main` em **`6f13a210`**. ⚠️ **Push é do Clenio.**
+✅ **Publicado no fim do dia:** `6f13a210..e4f7d453`, **17 commits**. Nada pendente de push.
 
 O dia foi inteiro o **roteiro de tela**: 11 itens fechados (A, B, C + os 8 da lista), **490
 testes** (eram 422 na véspera), **1 migration** aplicada com `GUARDA: ok`
