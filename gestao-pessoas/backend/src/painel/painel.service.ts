@@ -105,8 +105,29 @@ export interface PainelDoCiclo {
 }
 
 /** O que a linha de estado do cabeçalho do ciclo mostra. */
+/**
+ * ⭐⭐ O RESUMO É UM RELATÓRIO, NÃO UMA CÓPIA DO CICLO (08/09).
+ *
+ * Ele mandava `status` e `encerradoEm` — **dois fatos que a linha `rh.ciclo`
+ * grava e `GET /ciclos/:id` já entrega**. A tela do ciclo carregava os dois
+ * endpoints e lia o mesmo fato de fontes diferentes: a etiqueta do topo pelo
+ * ciclo, as faixas pelo resumo. Enquanto os dois eram buscados no mesmo
+ * `useEffect` ninguém via; bastaria recarregar um só para a tela passar a
+ * mostrar "ABERTO" na etiqueta com a faixa de RASCUNHO embaixo.
+ *
+ * ⚠️ **O critério de quem sobrevive é o DONO NATURAL do fato**, não a
+ * conveniência de quem consome:
+ *   - atributo gravado na linha do ciclo (status, datas, período, data-base)
+ *     → dono é o **registro**, `GET /ciclos/:id`;
+ *   - contagem e derivação que não existem na linha e são apuradas agora
+ *     (público, designados, enviadas, apuradas, próximo passo, pendências,
+ *     reaberturas vindas da auditoria) → dono é **este relatório**.
+ *
+ * `status` continua entrando no cálculo aqui dentro — `proximoPasso` e
+ * `pendenciasParaAbrir` derivam dele. O que ele não faz mais é **atravessar o
+ * contrato**: quem decide pelo status, decide pelo dono dele.
+ */
 export interface ResumoDoCiclo {
-  status: string;
   aplicacoes: number;
   noPublico: number;
   designados: number;
@@ -114,7 +135,6 @@ export interface ResumoDoCiclo {
   enviadas: number;
   aFazer: number;
   apuradas: number;
-  encerradoEm: Date | null;
   /** `null` quando não há passo óbvio — a tela não mostra nada. Ver a regra. */
   proximoPasso: ProximoPasso | null;
   /**
@@ -262,9 +282,11 @@ export class PainelService {
       aFazer: conta('PENDENTE') + conta('EM_ANDAMENTO'),
       apuradas,
     };
+    // ⚠️ `estado` tem `status` porque `proximoPasso` deriva dele — mas ele NÃO
+    // sai daqui: o dono do fato é `GET /ciclos/:id`. Ver o comentário do tipo.
+    const { status: _status, ...numeros } = estado;
     return {
-      ...estado,
-      encerradoEm: ciclo.encerradoEm,
+      ...numeros,
       proximoPasso: proximoPasso(estado),
       // Só faz sentido no rascunho — nos outros estados a porta já passou.
       pendenciasParaAbrir:

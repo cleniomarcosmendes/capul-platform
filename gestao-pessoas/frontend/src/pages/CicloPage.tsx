@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -25,25 +25,39 @@ export default function CicloPage() {
   const [resumo, setResumo] = useState<ResumoDoCiclo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
+  /**
+   * ⭐⭐ O CANAL — o cabeçalho não tinha como saber que a aba gravou (08/09).
+   *
+   * O `/resumo` era buscado UMA vez, num efeito com dependência `[cicloId]`, e
+   * nunca mais: trocar de aba não remonta este componente (só o `<Outlet>`), e
+   * as abas — que recarregam o próprio dado corretamente — não tinham por onde
+   * avisar. O resultado era a tela se contradizendo sozinha: "0 aplicações"
+   * logo acima da aplicação recém-criada, "0 no público" com 5 listados.
+   *
+   * ⚠️ **É pior do que atraso.** A linha de estado existe para dizer "onde
+   * estou": mostrar o número anterior à ação que a pessoa acabou de fazer não é
+   * estar desatualizado, é mentir no único trabalho que ela tem — e contamina a
+   * decisão seguinte (quem lê "0 aplicações" vai criar a segunda).
+   *
+   * ⚠️ Recarrega os DOIS juntos, sempre. Eles não são independentes: as faixas
+   * decidem pelo ciclo e mostram números do resumo. Atualizar um só devolveria
+   * a divergência que a saída do `status` do resumo acabou de fechar.
+   */
+  const recarregar = useCallback(async () => {
+    const [c, r] = await Promise.allSettled([ciclos.obter(cicloId), painel.resumo(cicloId)]);
+    if (c.status === 'fulfilled') setCiclo(c.value);
+    else setErro(mensagemDoErro(c.reason, 'Não foi possível carregar o ciclo.'));
+    // Falhar aqui NÃO derruba a tela: sem o resumo, some a linha de estado e o
+    // ciclo continua abrindo. É informação sobre o trabalho, não o trabalho.
+    setResumo(r.status === 'fulfilled' ? r.value : null);
+  }, [cicloId]);
+
   useEffect(() => {
-    let vivo = true;
     setCiclo(null);
     setErro(null);
     setResumo(null);
-    ciclos
-      .obter(cicloId)
-      .then((c) => vivo && setCiclo(c))
-      .catch((e) => vivo && setErro(mensagemDoErro(e, 'Não foi possível carregar o ciclo.')));
-    // ⚠️ Falhar aqui NÃO derruba a tela: sem o resumo, some a linha de estado e
-    // o ciclo continua abrindo. É informação sobre o trabalho, não o trabalho.
-    painel
-      .resumo(cicloId)
-      .then((r) => vivo && setResumo(r))
-      .catch(() => vivo && setResumo(null));
-    return () => {
-      vivo = false;
-    };
-  }, [cicloId]);
+    void recarregar();
+  }, [recarregar]);
 
   return (
     <div className="px-4 pb-24 pt-4">
@@ -76,8 +90,17 @@ export default function CicloPage() {
           </div>
 
           {resumo && <LinhaDeEstado resumo={resumo} cicloId={cicloId} />}
-          {resumo?.status === 'RASCUNHO' && <FaixaDoRascunho resumo={resumo} />}
-          {resumo?.status === 'ENCERRADO' && <FaixaDoEncerrado resumo={resumo} />}
+          {/* ⚠️ Cada faixa decide por UMA fonte, não por duas.
+              A do RASCUNHO decide pelo próprio conteúdo: `pendenciasParaAbrir`
+              é `null` fora de rascunho, por construção do backend — então não
+              precisa perguntar o status a ninguém.
+              A do ENCERRADO decide pelo `ciclo`, que é o dono do status, e
+              mostra o `encerradoEm` da MESMA fonte. ⚠️ `encerradoEm` não serve
+              de discriminador: ele sobrevive de propósito à reabertura. */}
+          {resumo?.pendenciasParaAbrir !== null && resumo && <FaixaDoRascunho resumo={resumo} />}
+          {ciclo.status === 'ENCERRADO' && (
+            <FaixaDoEncerrado encerradoEm={ciclo.encerradoEm} />
+          )}
 
           <nav className="mt-4 flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Etapas do ciclo">
             <Aba para="aplicacoes" rotulo="Aplicações" />
@@ -87,7 +110,7 @@ export default function CicloPage() {
           </nav>
 
           <div className="pt-5">
-            <Outlet context={{ ciclo }} />
+            <Outlet context={{ ciclo, recarregarResumo: recarregar }} />
           </div>
         </>
       )}
@@ -114,6 +137,12 @@ function Aba({ para, rotulo }: { para: string; rotulo: string }) {
 
 export interface ContextoDoCiclo {
   ciclo: CicloDetalhado;
+  /**
+   * ⭐ Chame DEPOIS de toda gravação da aba. O cabeçalho (linha de estado,
+   * próximo passo, faixas) é do pai, e sem isto ele fica mostrando o número
+   * anterior à ação que a pessoa acabou de fazer.
+   */
+  recarregarResumo: () => Promise<void>;
 }
 
 /**
@@ -273,14 +302,14 @@ function FaixaDoRascunho({ resumo }: { resumo: ResumoDoCiclo }) {
  * morta, e ela não é: resultados, memória de cálculo e painel seguem abrindo —
  * que é justamente para o que um ciclo encerrado serve.
  */
-function FaixaDoEncerrado({ resumo }: { resumo: ResumoDoCiclo }) {
+function FaixaDoEncerrado({ encerradoEm }: { encerradoEm: string | null }) {
   return (
     <div className="mt-3 rounded-xl border border-slate-300 bg-slate-100 p-3">
       <p className="flex items-start gap-2 text-sm text-slate-700">
         <Lock size={15} className="mt-0.5 shrink-0" aria-hidden />
         <span>
           <strong className="font-semibold">
-            Ciclo encerrado{resumo.encerradoEm ? ` em ${data(resumo.encerradoEm)}` : ''}.
+            Ciclo encerrado{encerradoEm ? ` em ${data(encerradoEm)}` : ''}.
           </strong>{' '}
           Designar, mexer no público e apurar estão fechados — os botões aparecem desabilitados,
           com o motivo. <strong>Continua valendo:</strong> resultados, memória de cálculo, painel e

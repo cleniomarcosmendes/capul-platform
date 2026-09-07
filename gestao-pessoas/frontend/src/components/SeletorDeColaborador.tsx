@@ -108,11 +108,16 @@ export function SeletorDeColaborador({
               }`}
             >
               {escolhido?.id === c.id && <Check size={15} aria-hidden />}
+              {/* ⭐ A ÁREA entra aqui (08/09): escolher avaliador por nome e
+                  cargo, entre homônimos de unidades diferentes, é escolher no
+                  escuro. `centroCustoDescricao` já vinha no payload e a tela
+                  descartava — achado da varredura do §3.1.9. */}
               <span className="min-w-0 flex-1 truncate">
                 <strong className="font-medium">{c.nome}</strong>
                 <span className="text-slate-500">
                   {' '}
                   · {c.matricula} · {c.cargoDescricao ?? 'sem cargo'}
+                  {c.centroCustoDescricao ? ` · ${c.centroCustoDescricao}` : ''}
                 </span>
               </span>
             </button>

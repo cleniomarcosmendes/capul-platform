@@ -31,7 +31,7 @@ import type { ContextoDoCiclo } from './CicloPage';
  * pendência do módulo que some sozinha.
  */
 export default function DesignacaoPage() {
-  const { ciclo } = useOutletContext<ContextoDoCiclo>();
+  const { ciclo, recarregarResumo } = useOutletContext<ContextoDoCiclo>();
   /** `null` = o ciclo aceita escrita. Ver `lib/ciclo-encerrado.ts`. */
   const fechado = motivoCicloEncerrado(ciclo);
   const [apls, setApls] = useState<AplicacaoDoCiclo[] | null>(null);
@@ -66,7 +66,7 @@ export default function DesignacaoPage() {
     setErro(null);
     try {
       setCopia(await copiaDoCadastro.aplicar(ciclo.id, substituirManuais));
-      await carregar();
+      await gravou();
     } catch (e) {
       setErro(mensagemDoErro(e, 'Não foi possível aplicar a cópia.'));
     } finally {
@@ -89,6 +89,20 @@ export default function DesignacaoPage() {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aplicacaoId]);
+
+  /**
+   * ⭐ Depois de GRAVAR — nunca na montagem. O cabeçalho (linha de estado,
+   * "→ Próximo", faixas) é do pai e não tem como saber que esta aba escreveu.
+   *
+   * ⚠️ Separado do `carregar()` de propósito: `carregar` roda também ao montar
+   * a aba, e o `/resumo` é caro (ele varre as aplicações para contar quem está
+   * sem avaliador). Pendurar a recarga ali dobrava o custo a cada troca de aba,
+   * para atualizar um número que não mudou.
+   */
+  async function gravou() {
+    await carregar();
+    void recarregarResumo();
+  }
 
   async function carregar() {
     setErro(null);
@@ -270,7 +284,7 @@ export default function DesignacaoPage() {
           aoFechar={() => setDecidindo(null)}
           aoDecidir={async () => {
             setDecidindo(null);
-            await carregar();
+            await gravou();
           }}
         />
       )}
@@ -284,7 +298,7 @@ export default function DesignacaoPage() {
           aoFechar={() => setDesignandoUm(null)}
           aoConcluir={async () => {
             setDesignandoUm(null);
-            await carregar();
+            await gravou();
           }}
         />
       )}
@@ -297,7 +311,7 @@ export default function DesignacaoPage() {
           aoFechar={() => setDesignando(false)}
           aoConcluir={async () => {
             setDesignando(false);
-            await carregar();
+            await gravou();
           }}
         />
       )}

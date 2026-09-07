@@ -31,7 +31,7 @@ import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
  * não tenha — e o RH resolveria um problema que não existe.
  */
 export default function PainelPage() {
-  const { ciclo } = useOutletContext<ContextoDoCiclo>();
+  const { ciclo, recarregarResumo } = useOutletContext<ContextoDoCiclo>();
   const { tem } = useAuth();
   const [dados, setDados] = useState<PainelDoCiclo | null>(null);
   const [conferencia, setConferencia] = useState<Conferencia | null>(null);
@@ -64,6 +64,8 @@ export default function PainelPage() {
       const r = await apuracao.doCiclo(ciclo.id);
       setResultado(`${r.avaliacoesApuradas} avaliação(ões) apurada(s).`);
       await carregar();
+      // Apurar muda "N apuradas" e pode mudar o "→ Próximo" para ENCERRAR.
+      void recarregarResumo();
     } catch (e) {
       setResultado(mensagemDoErro(e, 'Não foi possível apurar.'));
     } finally {
@@ -162,7 +164,10 @@ export default function PainelPage() {
             <p className="mt-1 text-xs text-red-900/80">
               {dados.foraDeTodasAsAplicacoes.pessoas
                 .slice(0, 6)
-                .map((p) => `${p.nome} (${p.filial}/${p.centroCusto ?? '—'})`)
+                // ⭐ A DESCRIÇÃO, não o código: esta lista existe para alguém
+                // AGIR sobre ela, e "02/21010101" não diz a ninguém de que área
+                // é a pessoa. O campo já vinha do backend (§3.1.9).
+                .map((p) => `${p.nome} (${p.filial}/${p.centroCustoDescricao ?? p.centroCusto ?? '—'})`)
                 .join(' · ')}
               {dados.foraDeTodasAsAplicacoes.pessoas.length > 6 &&
                 ` … e mais ${dados.foraDeTodasAsAplicacoes.pessoas.length - 6}`}

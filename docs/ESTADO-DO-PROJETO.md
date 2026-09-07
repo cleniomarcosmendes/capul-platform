@@ -1122,6 +1122,10 @@ estava enviada e nunca fora apurada). Público, respostas e as 4 enviadas: **int
   `ciclo = Geral AND criado_em > '2026-09-07 14:00' AND status = 'PENDENTE'` sem nenhuma resposta
   e sem resultado. Conferido antes (84) e depois: o ciclo voltou a **9 avaliações**, público
   **98**, e as **4 enviadas com os `enviada_em` originais** de 06/09.
+- **08/09/2026** — apagado o ciclo **`ZZ TESTE — linha de estado (08/09)`**, criado para
+  exercitar as quatro gravações do §3.1.19: 1 aplicação, 2 no público, 2 avaliações, **0
+  respostas, 0 resultados**. SELECT antes, DELETE transacional, auditoria preservada (1 linha).
+  Depois: 2 ciclos (9/98 e 894/1036), 0 órfãos.
 - **08/09/2026** — apagado o ciclo **`ZZ TESTE — cancelar (08/09)`**, criado para a bateria ao
   vivo do cancelamento (§3.1.18): 1 aplicação, 3 no público, 3 avaliações, 11 respostas e 1
   resultado — **tudo criado na própria sessão, nenhum trabalho humano**. SELECT isolando antes,
@@ -1455,6 +1459,98 @@ respostas, 1 resultado, 3 do público, 1 elegibilidade, 2 conceitos — **tudo c
 nesta sessão, nenhum trabalho humano**), DELETE transacional na ordem das FKs, **auditoria
 preservada** (4 linhas). Depois: os **2 ciclos de sempre** (9/98 e 894/1036), **0 órfãos**, e a
 fila da Arielly de volta às **13** do Piloto.
+
+### 3.1.19. 🟠 A linha de estado mentia entre a gravação e o F5 (08/09)
+
+Item G do roteiro de tela: em **todas** as gravações, o cabeçalho ficava com o número anterior
+— *"0 aplicações"* com a aplicação na tela, *"0 no público"* com 5 listados.
+
+⚠️ **Não é atraso, é mentira no único trabalho que a peça tem.** A linha de estado existe para
+dizer "onde estou": mostrar o número anterior à ação que a pessoa acabou de fazer contamina a
+decisão seguinte — quem lê "0 aplicações" vai criar a segunda.
+
+#### O diagnóstico, antes do conserto
+
+Não era cache mal invalidado nem estado compartilhado mal assinado. **O `/resumo` era buscado
+UMA vez** (`useEffect` com dependência `[cicloId]`) e nunca mais. Dois agravantes:
+
+- **trocar de aba não corrigia** — as abas são `<Outlet>` dentro do `CicloPage`, que **não
+  remonta** na navegação; a linha sobrevivia velha a toda a sessão de montagem;
+- **as abas estavam certas** — cada uma recarrega o próprio dado depois de gravar (18 pontos no
+  módulo). Por isso o sintoma era o corpo atualizado com o cabeçalho velho: **a tela se
+  contradizendo sozinha**, que é pior do que congelar inteira.
+
+E a causa de fundo: **não havia canal**. O pai é dono do `resumo` num `useState` local e passava
+`<Outlet context={{ ciclo }}>` — só o ciclo, só leitura. Os filhos não tinham como dizer "gravei".
+
+#### PRIMEIRO a duplicata, depois o canal
+
+Antes de ligar o canal, uma limpeza que o conserto teria petrificado: `/resumo` mandava
+**`status` e `encerradoEm`**, dois fatos que `GET /ciclos/:id` já entrega. A etiqueta do topo
+lia um; as faixas liam o outro. Concordavam só porque as duas chamadas saíam do mesmo efeito —
+bastaria recarregar uma para a tela mostrar **ABERTO na etiqueta com a faixa de RASCUNHO
+embaixo**.
+
+⭐ **O critério de quem sobrevive é o DONO NATURAL do fato**, não a conveniência:
+
+| Natureza | Dono | Exemplos |
+|---|---|---|
+| atributo **gravado na linha** `rh.ciclo` | o **registro**, `GET /ciclos/:id` | status, data-base, período, `encerradoEm`, `reabertoEm` |
+| contagem/derivação que **não existe na linha** e é apurada agora | o **relatório**, `/painel/.../resumo` | público, designados, enviadas, apuradas, próximo passo, pendências, reaberturas (da auditoria) |
+
+⚠️ **Isso trocaria uma duplicata por um acoplamento?** Era o risco, e a resposta é **não** —
+porque depois do conserto **nenhuma faixa decide com duas fontes**:
+
+- **FaixaDoRascunho** decide pelo **próprio conteúdo**: `pendenciasParaAbrir` é `null` fora de
+  rascunho, por construção do backend. Ela deixou de perguntar o status a quem quer que seja.
+- **FaixaDoEncerrado** decide pelo `ciclo` — dono do status — e mostra o `encerradoEm` da
+  **mesma** fonte. ⚠️ `encerradoEm` não serve de discriminador: ele sobrevive de propósito à
+  reabertura.
+- **LinhaDeEstado** e **`proximoPasso`** nunca precisaram do status: o próximo passo é derivado
+  no backend, e o cliente não decide nada.
+
+#### As outras duplicatas — e por que ficam
+
+O dia mostrou que essas coisas vêm em três; vieram em **cinco**. Duas eram **ativas** (as duas
+telas liam de fontes diferentes) e saíram. As outras três são **latentes** e ficam, com motivo
+escrito: `_count.aplicacoes`, `_count.avaliacoes` e `reabertoEm/motivoReabertura` existem em
+`CicloDaLista` porque a **lista de Ciclos** precisa desses números **sem carregar o resumo** —
+ela não tem um. Ninguém na tela do ciclo lê essas três; se alguém passar a ler, aí sim viram
+ativas.
+
+#### O canal
+
+`recarregarResumo()` desce pelo `Outlet context`, ao lado do `ciclo` — sem store e sem
+biblioteca. ⚠️ **Recarrega os DOIS endpoints juntos, sempre**: as faixas decidem pelo ciclo e
+mostram números do resumo; atualizar um só devolveria a divergência que a saída do `status`
+acabou de fechar.
+
+⚠️ **Fora do `carregar()`, num `gravou()` próprio.** A primeira versão pendurou a recarga no
+`carregar()` das abas — que roda **também na montagem**, e a medição ao vivo mostrou **2
+chamadas ao `/resumo` no load**. O `/resumo` é caro (varre as aplicações contando quem está sem
+avaliador), e isso dobraria o custo a cada troca de aba para atualizar um número que não mudou.
+
+#### ✅ Verificado AO VIVO, sem F5 (ciclo descartável, Playwright)
+
+| Ação | Linha de estado, sem recarregar a página |
+|---|---|
+| **criar aplicação** | `0 aplicações` → **`1 aplicação`**; Próximo: *"Monte a primeira aplicação"* → *"Monte o público"* |
+| **adicionar ao público** | `0 no público` → **`2 no público`**, `0 sem avaliador` → **`2`**; Próximo → *"Designe as 2 pessoa(s)"* |
+| **designar pela linha** | `2 sem avaliador` → **`1`**, `0 de 0 enviadas` → **`0 de 1`** |
+| **designar em lote** | `1 sem avaliador` → **`0`**, `0 de 1` → **`0 de 2`**; Próximo → ***"Abra o ciclo"*** |
+
+E o `/resumo` foi chamado **1 vez no load** (era 2) e **1 vez por gravação**.
+
+⚠️ **Dois achados do próprio roteiro**, que não são desta correção e vão para a lista: marcar em
+lote alcança quem **já tem avaliador** e redesigna **sem avisar** (item E/6 do relatório, já
+previsto), e a faixa passou corretamente de *"nenhuma pessoa no público"* para *"Nada — a
+validação da abertura passa"* assim que o público entrou — o §3.1.17 conferido de novo, de graça.
+
+**Junto, o achado da varredura:** `centroCustoDescricao` passou a aparecer no **seletor de
+colaborador** (escolher avaliador entre homônimos de unidades diferentes era escolher no escuro)
+e na lista **"fora de todas as aplicações"** do painel, que mostrava `02/21010101` para alguém
+que precisa agir sobre aquela pessoa. ⚠️ O terceiro consumidor (`PessoaSemAvaliador`) **não tem
+tela**: o painel mostra só a contagem, e a lista de nomes espera o "ver todos" da lista (B).
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

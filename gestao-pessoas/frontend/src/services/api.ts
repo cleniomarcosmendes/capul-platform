@@ -390,8 +390,12 @@ export interface ProximoPassoDoCiclo {
 }
 
 /** A linha de estado do cabeçalho do ciclo. */
+/**
+ * ⭐ RELATÓRIO, não cópia do ciclo. `status` e `encerradoEm` saíram daqui em
+ * 08/09: são atributos gravados na linha do ciclo, e o dono deles é
+ * `ciclos.obter`. Aqui ficam só as contagens e o que é derivado agora.
+ */
 export interface ResumoDoCiclo {
-  status: StatusCiclo;
   aplicacoes: number;
   noPublico: number;
   designados: number;
@@ -399,7 +403,6 @@ export interface ResumoDoCiclo {
   enviadas: number;
   aFazer: number;
   apuradas: number;
-  encerradoEm: string | null;
   /** `null` quando não há passo óbvio — e aí a tela não mostra nada. */
   proximoPasso: ProximoPassoDoCiclo | null;
   /**

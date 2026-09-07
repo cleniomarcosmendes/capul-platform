@@ -37,7 +37,7 @@ import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
  * no piso de escolaridade, tempo de casa e cursos por definição.
  */
 export default function AplicacoesPage() {
-  const { ciclo } = useOutletContext<ContextoDoCiclo>();
+  const { ciclo, recarregarResumo } = useOutletContext<ContextoDoCiclo>();
   /** `null` = o ciclo aceita escrita. Ver `lib/ciclo-encerrado.ts`. */
   const fechado = motivoCicloEncerrado(ciclo);
   const { tem } = useAuth();
@@ -51,6 +51,20 @@ export default function AplicacoesPage() {
     void carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ciclo.id]);
+
+  /**
+   * ⭐ Depois de GRAVAR — nunca na montagem. O cabeçalho (linha de estado,
+   * "→ Próximo", faixas) é do pai e não tem como saber que esta aba escreveu.
+   *
+   * ⚠️ Separado do `carregar()` de propósito: `carregar` roda também ao montar
+   * a aba, e o `/resumo` é caro (ele varre as aplicações para contar quem está
+   * sem avaliador). Pendurar a recarga ali dobrava o custo a cada troca de aba,
+   * para atualizar um número que não mudou.
+   */
+  async function gravou() {
+    await carregar();
+    void recarregarResumo();
+  }
 
   async function carregar() {
     setErro(null);
@@ -106,7 +120,7 @@ export default function AplicacoesPage() {
         <ul className="space-y-3">
           {lista.map((a) => (
             <li key={a.id}>
-              <CartaoDeAplicacao aplicacao={a} fechado={fechado} aoMudarPublico={carregar} />
+              <CartaoDeAplicacao aplicacao={a} fechado={fechado} aoMudarPublico={gravou} />
             </li>
           ))}
         </ul>
@@ -118,7 +132,7 @@ export default function AplicacoesPage() {
           aoFechar={() => setCriando(false)}
           aoCriar={async () => {
             setCriando(false);
-            await carregar();
+            await gravou();
           }}
         />
       )}
