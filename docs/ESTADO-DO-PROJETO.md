@@ -1,17 +1,17 @@
 # Gestão de Pessoas — estado do projeto
 
 > Ponto de entrada para quem vai mexer no módulo. Diz onde estamos, o que não se
-> discute mais e onde ler o resto. Última revisão: **06/09/2026** (noite).
+> discute mais e onde ler o resto. Última revisão: **07/09/2026**.
 >
 > Piloto previsto para **15/09/2026**.
 
-## 🚫 NÃO DAR PUSH — 06/09/2026
+## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**61 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**62 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 61 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 62 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -67,15 +67,17 @@ nove itens desta lista não movem esse número em nada.
 | 1 | **Contas para os avaliadores** — 46 dos 53 não têm conta, e 3 têm conta sem permissão. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
 | 2 | **`rodrigoleao`** — é avaliador de 4 pessoas e a permissão GESTAO_PESSOAS **não salvou**. ⚠️ Segunda ocorrência do mesmo sintoma (a 1ª foi o INVENTARIO do `wandersonnascimento`): ver se a tela do Configurador erra ao salvar, porque aí é de todos os módulos | §6 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
-| 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
-| 5 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
-| 6 | Tela do **sync** (hoje só por API) | §7 · §2 |
-| 7 | `.dockerignore` do **fiscal/frontend** — o do gestao-pessoas foi feito em 06/09 | §6 |
-| 8 | **IP na auditoria**: 13 das 14 ações gravam `NULL`, e quando grava é o IP do nginx | §6 |
-| 9 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
-| 10 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
-| 11 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
-| 12 | `RH_MODELO` vê "Ciclos" no menu e leva 403 na listagem — mesmo degrau fechado hoje na fila, uma tela adiante | §3.1.3 |
+| 4 | 🔴 **Tela de vínculo avaliador → avaliado, um por vez** — a rota existe e não tem botão; hoje o vínculo do cadastro só nasce por planilha. **Precede a reorganização do menu** | §3.1.5 |
+| 5 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
+| 6 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
+| 7 | Tela do **sync** (hoje só por API) | §7 · §2 |
+| 8 | `.dockerignore` do **fiscal/frontend** — o do gestao-pessoas foi feito em 06/09 | §6 |
+| 9 | **IP na auditoria**: 13 das 14 ações gravam `NULL`, e quando grava é o IP do nginx | §6 |
+| 10 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
+| 11 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
+| 12 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
+| 13 | Menu: aplicar o padrão da plataforma — **com as duas dívidas** (o menu some com um item só; falta "Voltar ao Hub") e o destino das 4 abas do ciclo | §3.1.3 · §3.1.5 |
+| 14 | `RH_MODELO` vê "Ciclos" no menu e leva 403 na listagem — mesmo degrau fechado hoje na fila, uma tela adiante | §3.1.3 |
 
 ---
 
@@ -425,6 +427,55 @@ Mendes, avaliador de 13). Dar GESTAO_PESSOAS a essa conta é dar a fila dele a q
 conta. Não é defeito do módulo — é consequência de resolver identidade por matrícula, que é o
 desenho certo — mas é motivo para não haver conta de teste com matrícula de gente de verdade.
 
+#### ⭐⭐ A REGRA DE MENU que decorre disso — e ela é o OPOSTO da regra da plataforma
+
+> **Item cujo conteúdo vem do DADO, e não do papel, não leva condição de papel no menu.**
+> Ele aparece para quem tem acesso ao módulo, e **quem não tem fila cai no estado vazio da
+> própria tela**, que já diz o que aquilo significa. O gate de verdade é o backend, que filtra
+> por DESIGNAÇÃO.
+
+**Por que isto precisa estar escrito aqui, e não como comentário de um item:** hoje a regra
+mora num comentário dentro de `layouts/Layout.tsx`, ao lado do item "Minhas avaliações". A
+próxima pessoa que reorganizar o menu — inclusive eu, daqui a três semanas — vai olhar os três
+itens, ver que dois têm condição de papel e um não, achar que faltou, e "consertar". O sintoma
+de volta é **mudo**: ninguém recebe erro, o item simplesmente deixa de existir.
+
+**Ela contraria o padrão da plataforma de propósito.** Levantado em 07/09 lendo os cinco
+módulos com casca própria (Workspace, Inventário, Fiscal, Configurador, Logística): **todos**
+filtram o menu por papel antes de renderizar — some, nunca desabilita, nunca deixa levar 403 —
+e o comentário da Logística diz o porquê em uma linha: *"item de menu a mais abre tela vazia"*.
+A regra deles é boa e continua valendo para **Ciclos** e **Avaliadores**.
+
+**O que a plataforma não previu.** Workspace e Logística resolvem papéis SIMULTÂNEOS, mas os
+dois lados da conta ainda são **papéis vindos do JWT** — a mesma pessoa com papéis diferentes em
+departamentos diferentes (o Workspace cruza role × funcionalidade no MESMO depto; a Logística
+faz a união e expõe `temRole`). Aqui é outra coisa: **`RH_ADMIN` é papel, "ser avaliadora" é
+fato do dado** — existe uma linha em `avaliacao` com `avaliadorId` = ela. Não está no token, não
+é papel de departamento nenhum, e **nenhum item de menu da plataforma se decide assim**.
+
+**O caso que originou.** A gestora de RH avalia 13 pessoas e tem só `RH_ADMIN` — ela nunca teria
+o papel `AVALIADOR`. Enquanto o item exigia esse papel, **as 13 avaliações eram INALCANÇÁVEIS**:
+apareciam como pendência dela no painel do ciclo e não havia botão nenhum que as abrisse. Não
+há deep link no módulo, então esconder do menu é esconder a tela. Corrigido em 06/09 no menu e
+no controller (`QUALQUER_PAPEL_DO_MODULO`, acima).
+
+**Como saber se um item novo cai nesta regra:** pergunte *"o que esta tela mostra depende de o
+backend achar linhas com o meu id, ou de eu ter um papel?"*. Se for o primeiro, sem condição de
+papel — e a tela precisa ter estado vazio que explique. Se for o segundo, filtre por papel como
+o resto da plataforma faz.
+
+#### 🔴 Duas dívidas do menu, para entrarem quando o padrão for aplicado
+
+1. **O menu SOME quando sobra um item só** (`mostrarMenu = itens.length > 1`). Quem só responde
+   avaliação — o supervisor de loja, no celular — navega **sem barra nenhuma**. Nenhum outro
+   módulo esconde a navegação, e é justamente quem tem menos caminhos que fica sem nenhum.
+2. **Não existe "Voltar ao Hub".** Os cinco módulos têm, no rodapé da sidebar. Aqui, quem entra
+   por link direto só sai pelo **Sair**, que derruba a sessão da **plataforma inteira**, não a
+   deste módulo.
+
+⚠️ **Reorganizar a casca antes de existir a tela de vínculo manual seria decidir o agrupamento
+no escuro** (decisão de 07/09) — a peça principal do processo não está na mesa. Ver §3.1.5.
+
 ### 3.1.4. ⭐⭐ O VÃO: a separação de funções guarda a AVALIAÇÃO — e há atos ANTES dela
 
 Achado estrutural de 06/09/2026, e não detalhe de duas telas.
@@ -504,6 +555,35 @@ e cada passo é, sozinho, defensável:
 código, **não executada**: ninguém rodou a sequência, e nenhum dado foi alterado para comprová-la.
 Não a trate como verificada — se for útil confirmar, **faça no DEV e registre o resultado aqui**,
 com data, dizendo se ela se sustentou ou caiu.
+
+### 3.1.5. 🔴 Criar o vínculo avaliador → avaliado À MÃO não tem tela (07/09)
+
+Levantado em 07/09, depois de a gestora entrar como `ariellypereira` e **não achar onde se
+vincula um avaliador a um avaliado**. Ela não achou porque não está lá.
+
+| Caminho | O que faz | Existe? |
+|---|---|---|
+| `POST /designacao-padrao` (avaliadorId + avaliadoId) | cria o vínculo do CADASTRO, um por vez | ✅ backend · ✅ cliente (`api.ts`, `cadastroAvaliadores.designar`) · ❌ **nenhuma página chama** |
+| `/avaliadores` → *O que falta* | lista quem está sem avaliador, agrupado | ✅ — **somente leitura**. O texto diz *"nomear o responsável de um grupo resolve o grupo inteiro"* e **não há controle para nomear** |
+| `/avaliadores` → *Por avaliador* | **Tirar** uma linha, **Conferi, está certo** | ✅ — remove e revisa; **não cria** |
+| `/avaliadores` → *Importar planilha* | CSV com os pares | ✅ — **é o único caminho que cria vínculo hoje** |
+| `/ciclos/:id/designacao` | 1 avaliador → N avaliados **dentro do ciclo** | ✅ — mas cria `avaliacao`, **não** o cadastro; e vive numa aba de 2º nível que o menu não anuncia |
+
+⚠️ **A capacidade existe na API e não tem botão** — é a mesma família do
+`foraDeTodasAsAplicacoes` que chegava e era descartado (§3.12): o backend acerta, nada reclama,
+e a função simplesmente não existe para quem olha a tela.
+
+**Decisão de 07/09 — a ordem mudou por causa disto:** o menu do módulo diverge do padrão da
+plataforma (topo em vez de sidebar, sem seções, sem "Voltar ao Hub", processo em abas de 2º
+nível), e a vontade era aplicar o padrão. **Não se reorganiza a casca sem a peça principal na
+mesa:** falta a tela de vínculo manual, que é item de menu. Primeiro a tela, depois o menu
+inteiro de uma vez — telas que existem, as quatro abas do ciclo e o lugar da tela nova.
+
+🟡 **Em aberto, para decidir junto com o menu:** o que fazer com as quatro abas de 2º nível
+(Aplicações · Designação · Painel · Resultados). Nenhum outro módulo aninha navegação, e é aí
+que "Designação" se esconde. As opções levantadas — virar itens de sidebar com seletor de ciclo;
+continuar abas mas anunciadas no menu; ou um item "Ciclo em foco" — mudam de peso conforme
+**dois ciclos abertos ao mesmo tempo**, que é o caso de hoje (§3.10).
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
