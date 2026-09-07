@@ -359,6 +359,7 @@ function ListaDoAvaliador({
           titulo={`Adicionar pessoa à lista de ${nomeDoAvaliador}`}
           escolher="AVALIADO"
           avaliadorId={avaliadorId}
+          avaliadorNome={nomeDoAvaliador}
           aoFechar={() => setAdicionando(false)}
           aoConcluir={async () => {
             await carregar();
@@ -773,6 +774,7 @@ function DialogoDeVinculo({
   escolher,
   pessoas,
   avaliadorId,
+  avaliadorNome,
   aoFechar,
   aoConcluir,
 }: {
@@ -782,6 +784,8 @@ function DialogoDeVinculo({
   pessoas?: PessoaDoVinculo[];
   /** Quando `escolher === 'AVALIADO'`: a lista de quem recebe a pessoa escolhida. */
   avaliadorId?: string;
+  /** Idem — o nome, para o resumo poder dizer quem passa a avaliar. */
+  avaliadorNome?: string;
   aoFechar: () => void;
   aoConcluir: () => Promise<void>;
 }) {
@@ -792,6 +796,27 @@ function DialogoDeVinculo({
   const [feitos, setFeitos] = useState<VinculoCriado[] | null>(null);
 
   const alvos = pessoas ?? [];
+  /**
+   * ⚠️ Os dois lados TROCAM de papel conforme o modo, e o resumo tem de dizer a
+   * verdade nos dois: em `AVALIADOR` quem se escolhe é quem avalia; em
+   * `AVALIADO` quem avalia é o dono da lista e quem se escolhe é o avaliado.
+   */
+  const quemAvalia = escolher === 'AVALIADO' ? (avaliadorNome ?? 'Este avaliador') : escolhido?.nome;
+  const quemEAvaliado =
+    escolher === 'AVALIADO'
+      ? escolhido?.nome
+      : alvos.length === 1
+        ? alvos[0].nome
+        : `${alvos.length} pessoa(s) deste grupo`;
+  /**
+   * ⚠️ Só faz sentido quando há UMA pessoa dos dois lados. No grupo, quem recusa
+   * é o backend, linha a linha — e as demais seguem.
+   */
+  const ehAutoavaliacao =
+    !!escolhido &&
+    (escolher === 'AVALIADO'
+      ? escolhido.id === avaliadorId
+      : alvos.length === 1 && escolhido.id === alvos[0].colaboradorId);
 
   async function aplicar() {
     if (!escolhido) return;
@@ -828,21 +853,41 @@ function DialogoDeVinculo({
     <Modal titulo={titulo} aoFechar={aoFechar}>
       {feitos === null ? (
         <>
-          {escolher === 'AVALIADOR' && alvos.length > 1 && (
-            <p className="mb-2 text-sm text-slate-600">
-              A pessoa escolhida passa a avaliar as <strong>{alvos.length}</strong> deste grupo.
-            </p>
-          )}
           <SeletorDeColaborador
             escolhido={escolhido}
             aoEscolher={setEscolhido}
+            aoLimpar={() => setEscolhido(null)}
             rotulo={escolher === 'AVALIADOR' ? 'Quem vai avaliar' : 'Quem entra na lista'}
             autoFoco
           />
-          <p className="mt-2 text-xs text-slate-500">
-            Ninguém pode ser avaliador da própria avaliação — se a pessoa escolhida estiver no
-            grupo, a linha dela é recusada e as demais seguem.
-          </p>
+
+          {/* ⚠️ O aviso de autoavaliação é de GRUPO: em modal de uma pessoa só
+              ele fala de uma "seleção" que não existe na tela. Para uma pessoa,
+              o caso é checado e dito na hora, embaixo. */}
+          {escolher === 'AVALIADOR' && alvos.length > 1 && (
+            <p className="mt-2 text-xs text-slate-500">
+              Ninguém pode ser avaliador da própria avaliação — se a pessoa escolhida estiver no
+              grupo, a linha dela é recusada e as demais seguem.
+            </p>
+          )}
+
+          {/* ⭐⭐ O RESUMO ANTES DE CONFIRMAR. Diz, em uma frase, o que o botão
+              vai gravar — e é o que impede a "escolha invisível": a lista se
+              refaz a cada busca, o resumo não. Voz ATIVA ("X passa a avaliar Y")
+              de propósito: "Y passa a ser avaliado por X" exigiria concordância
+              de gênero, que o cadastro não tem como saber. */}
+          {escolhido && !ehAutoavaliacao && (
+            <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-800">
+              <strong className="font-semibold">{quemAvalia}</strong> passa a avaliar{' '}
+              <strong className="font-semibold">{quemEAvaliado}</strong>.
+            </p>
+          )}
+          {ehAutoavaliacao && (
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <strong>Ninguém avalia a si mesmo.</strong> Escolha outra pessoa.
+            </p>
+          )}
+
           {erro && <div className="mt-3"><Erro mensagem={erro} /></div>}
           <div className="mt-5 flex gap-2">
             <button
@@ -854,7 +899,7 @@ function DialogoDeVinculo({
             </button>
             <button
               type="button"
-              disabled={!escolhido || salvando}
+              disabled={!escolhido || ehAutoavaliacao || salvando}
               onClick={aplicar}
               className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
             >
