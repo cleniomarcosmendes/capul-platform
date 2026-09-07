@@ -1794,6 +1794,67 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 
 ## 6. Armadilhas do ambiente
 
+### ⭐⭐ A CLASSE: ferramenta que responde sem fazer o trabalho
+
+Não são cinco armadilhas soltas — são **uma classe**, e já mordeu cinco vezes em três dias.
+O denominador comum: **um comando dá um veredito sem ter executado a verificação que o
+veredito afirma.** Não há erro, não há log, não há nada que denuncie. O que se lê é o
+veredito; o que aconteceu é outra coisa.
+
+Ela tem **dois modos**, e o segundo é o pior.
+
+#### 🟢 FALSO VERDE — passa sem ter feito o trabalho
+
+| Caso | O que parece | O que houve |
+|---|---|---|
+| **Cache do Docker no build de frontend** | imagem nova, `Built` | o contexto (WSL lendo o filesystem do Windows) entregou **fonte velho**; em 06/09 uma imagem de 2 minutos servia código de duas edições atrás |
+| **`No pending migrations to apply.`** | sucesso, exit 0 | o job `*-migrate` tem **build próprio**; sem rebuildá-lo, ele confere o `prisma/migrations/` **da imagem velha** — poucas migrations, todas aplicadas |
+| **`tsc --noEmit`** | exit 0, "typecheck limpo" | o `tsconfig.json` é **arquivo-solução** (`files: []`): checou **zero arquivo** |
+
+#### 🔴 FALSO VERMELHO — falha sem ter feito o trabalho
+
+| Caso | O que parece | O que houve |
+|---|---|---|
+| **`npx tsc -b`** no frontend | *"This is not the tsc command you are looking for"*, exit 1 — parece dependência quebrada | sem `typescript` local, o `npx` foi ao registro e rodou o pacote npm literalmente chamado **`tsc`** (`tsc@2.0.4`, um decoy). O TypeScript **não rodou** |
+| **Suíte do backend** sob `mem_limit: 512m` | *"11 suítes falharam"* — parece código quebrado | os workers do Jest morreram por **SIGKILL / heap**. **Zero testes falharam de verdade** |
+
+⭐⭐ **O falso vermelho é o pior a longo prazo.** O falso verde alguém descobre quando o
+defeito aparece em tela — é uma dívida com data de vencimento. O falso vermelho não: ele faz
+alguém **desligar o passo** achando que é problema de máquina — "aqui o typecheck não roda",
+"essa suíte é instável" — e aí a verificação some do processo **para sempre**, sem ninguém ter
+decidido removê-la. Falso verde adia a descoberta; falso vermelho **destrói a ferramenta**.
+
+#### O comando que faz o trabalho de verdade
+
+Não o que dá o veredito — o que **executa**. É isto que futuro-eu vai procurar aqui:
+
+| Em vez de | Rode isto |
+|---|---|
+| olhar a data da imagem / `--no-cache` | `docker compose exec -T <mod>-frontend sh -c "grep -c 'string que você acabou de escrever' /usr/share/nginx/html/assets/*.js"` — e no backend, o mesmo no `dist/` |
+| ler `No pending migrations` | `docker compose build <mod>-migrate && docker compose run --rm <mod>-migrate` — e a linha que vale é **`GUARDA: ok — as N migrations … estao aplicadas`** |
+| `npx tsc -b` / `tsc --noEmit` | `docker compose build gestao-pessoas-frontend` — o Dockerfile roda `npm run build`, e o script é **`tsc -b && vite build`**. O `&&` é a garantia; erro de tipo derruba com exit 2 antes do `vite` |
+| `docker compose run … npx jest` | `docker run --rm -m 3g -e NODE_OPTIONS=--max-old-space-size=2560 -v <backend>/src:/app/src -v <backend>/tsconfig*.json:/app/ -v <backend>/package.json:/app/package.json -w /app --entrypoint npx capul-platform-gestao-pessoas-backend:latest jest --maxWorkers=2` |
+
+#### ⭐⭐ O MÉTODO, não só os casos: verificação por MUTAÇÃO
+
+As cinco só foram descobertas por acidente. O que as encontra de propósito é o mesmo método
+do teste de invariante do RDV: **injetar um erro e ver a ferramenta pegá-lo.** Garantia que
+ninguém tentou quebrar é garantia **suposta**.
+
+- **Typecheck** — em 08/09: `const MUTACAO_DO_TESTE: number = ciclo.nome;` em `CiclosPage.tsx`
+  → `error TS2322` + `exit code: 2`, antes do `vite`. Reverter e reconstruir em seguida.
+  ⚠️ O `vite build` sozinho **não** pegaria: ele transpila e joga os tipos fora.
+- **Bundle** — a "mutação" natural é a própria string nova: se ela não está no `.js` do
+  container, o build não é o seu.
+- **Migration** — a guarda já é a mutação institucionalizada: ela compara contra a **árvore do
+  repositório**, não contra a imagem, justamente para falhar no caso que se quer pegar.
+- **Suíte** — quebrar um `expect` de propósito e ver a suíte ficar vermelha *pelo motivo certo*
+  distingue "teste falhou" de "worker morreu".
+
+⚠️ **A regra prática:** antes de escrever "X está limpo" em qualquer lugar, saber dizer **qual
+comando executou a checagem** e **como sei que ele executou**. Se a resposta for "ele imprimiu
+que estava tudo bem", ainda não sei.
+
 ### Ver a tela em largura de celular, aqui
 
 Há um Chromium do Playwright em `~/.cache/ms-playwright/chromium-1187`. Com
@@ -1985,6 +2046,22 @@ symlinks Linux dentro da árvore montada do Windows:
 docker run --rm -t -v $PWD/gestao-pessoas/backend:/app -v /app/node_modules -w /app \
   node:22-alpine sh -c 'npm ci --silent && npx prisma generate && npx jest'
 ```
+
+⚠️ **Mais rápido, e o que se usou em 07–08/09** — reaproveita a imagem já construída (com o
+Prisma Client gerado) e monta só o fonte. **`-m 3g` e `NODE_OPTIONS` não são luxo:** sob o
+`mem_limit: 512m` do compose os workers morrem por SIGKILL/heap e o relatório sai *"11 suítes
+falharam"* **sem nenhum teste falhando** — o falso vermelho da classe acima.
+
+```bash
+B=$PWD/gestao-pessoas/backend
+docker run --rm -m 3g -e NODE_OPTIONS=--max-old-space-size=2560 \
+  -v $B/src:/app/src -v $B/tsconfig.json:/app/tsconfig.json \
+  -v $B/tsconfig.spec.json:/app/tsconfig.spec.json -v $B/package.json:/app/package.json \
+  -w /app --entrypoint npx capul-platform-gestao-pessoas-backend:latest jest --maxWorkers=2
+```
+
+⚠️ Se o schema do Prisma mudou, **rebuildar a imagem antes** — o client vem dela, não do
+fonte montado.
 
 ### Contas de teste no DEV
 
