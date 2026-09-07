@@ -40,6 +40,8 @@ export default function DesignacaoPage() {
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
   const [decidindo, setDecidindo] = useState<LinhaDaDesignacao | null>(null);
   const [designando, setDesignando] = useState(false);
+  /** Designar UMA pessoa, pela linha — sem passar pela seleção. */
+  const [designandoUm, setDesignandoUm] = useState<LinhaDaDesignacao | null>(null);
   const [copia, setCopia] = useState<RelatorioDaCopia | null>(null);
   const [copiando, setCopiando] = useState(false);
   const [substituirManuais, setSubstituirManuais] = useState(false);
@@ -242,6 +244,7 @@ export default function DesignacaoPage() {
                   setSelecao(p);
                 }}
                 aoDecidir={() => setDecidindo(l)}
+                aoDesignar={() => setDesignandoUm(l)}
               />
             </li>
           ))}
@@ -260,6 +263,20 @@ export default function DesignacaoPage() {
           aoFechar={() => setDecidindo(null)}
           aoDecidir={async () => {
             setDecidindo(null);
+            await carregar();
+          }}
+        />
+      )}
+
+      {designandoUm && (
+        <DialogoAvaliador
+          quantidade={1}
+          nomeUnico={designandoUm.nome}
+          aplicacaoId={aplicacaoId}
+          avaliados={[designandoUm.colaboradorId]}
+          aoFechar={() => setDesignandoUm(null)}
+          aoConcluir={async () => {
+            setDesignandoUm(null);
             await carregar();
           }}
         />
@@ -318,11 +335,13 @@ function LinhaDaLista({
   selecionada,
   aoSelecionar,
   aoDecidir,
+  aoDesignar,
 }: {
   linha: LinhaDaDesignacao;
   selecionada: boolean;
   aoSelecionar: (v: boolean) => void;
   aoDecidir: () => void;
+  aoDesignar: () => void;
 }) {
   const semAvaliador = linha.elegivel && !linha.avaliadorId;
   return (
@@ -378,13 +397,31 @@ function LinhaDaLista({
           <p className="mt-1 text-xs italic text-slate-500">“{linha.justificativa}”</p>
         )}
       </div>
-      <button
-        type="button"
-        onClick={aoDecidir}
-        className="alvo-toque shrink-0 self-center rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700"
-      >
-        {linha.elegivel ? 'Excluir' : 'Incluir'}
-      </button>
+      {/* ⭐⭐ "Definir avaliador" NA LINHA, e antes do "Excluir".
+          Quem está sem avaliador tinha um ato só à mão — **Excluir** —, e o
+          caminho de menor resistência para zerar a pendência era eliminar a
+          pessoa: o contador caía como se estivesse resolvido. Designar exigia
+          descobrir o checkbox e a barra de seleção. É irmão da hipótese dos dois
+          atos combinados (§3.1.4), com um agravante: ali são dois atos
+          deliberados, aqui é UM, e era o mais fácil. */}
+      <div className="flex shrink-0 flex-col items-stretch gap-1 self-center sm:flex-row sm:items-center">
+        {semAvaliador && (
+          <button
+            type="button"
+            onClick={aoDesignar}
+            className="alvo-toque inline-flex items-center justify-center gap-1.5 rounded-lg bg-capul-600 px-3 text-sm font-semibold text-white"
+          >
+            <UserPlus size={14} aria-hidden /> Definir avaliador
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={aoDecidir}
+          className="alvo-toque rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700"
+        >
+          {linha.elegivel ? 'Excluir' : 'Incluir'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -477,12 +514,15 @@ function DialogoDecisao({
 
 function DialogoAvaliador({
   quantidade,
+  nomeUnico,
   aplicacaoId,
   avaliados,
   aoFechar,
   aoConcluir,
 }: {
   quantidade: number;
+  /** Quando é UMA pessoa, o título diz o nome dela em vez de "1 pessoa(s)". */
+  nomeUnico?: string;
   aplicacaoId: string;
   avaliados: string[];
   aoFechar: () => void;
@@ -512,7 +552,10 @@ function DialogoAvaliador({
   }
 
   return (
-    <Modal titulo={`Definir avaliador de ${quantidade} pessoa(s)`} aoFechar={aoFechar}>
+    <Modal
+      titulo={nomeUnico ? `Definir avaliador de ${nomeUnico}` : `Definir avaliador de ${quantidade} pessoa(s)`}
+      aoFechar={aoFechar}
+    >
       {/* Mesma peça do cadastro (`SeletorDeColaborador`): duas cópias de uma
           busca com debounce envelhecem diferente, e a que envelhece pior é a que
           ninguém está olhando. */}

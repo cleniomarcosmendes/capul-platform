@@ -76,7 +76,8 @@ nove itens desta lista não movem esse número em nada.
 | 10 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
 | 11 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
 | 12 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
-| 13 | ⚠️ **Duas verificações pendentes de conta** — `RH_ADMIN` **sem fila** (o estado vazio com "Ir para os ciclos") e `RH_MODELO` (que hoje não tem tela): os dois caminhos são **derivados do código, não exercidos**, porque nenhuma conta do DEV está nesses estados. Saem quando houver **segundo `RH_ADMIN`** (A) e **tela de questionários** (item 12) | §3.1.6 · §5 |
+| 13 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
+| 14 | ⚠️ **Duas verificações pendentes de conta** — `RH_ADMIN` **sem fila** (o estado vazio com "Ir para os ciclos") e `RH_MODELO` (que hoje não tem tela): os dois caminhos são **derivados do código, não exercidos**, porque nenhuma conta do DEV está nesses estados. Saem quando houver **segundo `RH_ADMIN`** (A) e **tela de questionários** (item 12) | §3.1.6 · §5 |
 
 ---
 
@@ -845,11 +846,24 @@ nem declara — que foi exatamente o caso do `foraDeTodasAsAplicacoes`. Para ess
 saídas de verdade: gerar o cliente a partir do backend, ou um teste de contrato que compare a
 resposta real com o tipo.
 
+🔴 **A rede é MEIA rede, e fechar isso é pendência técnica** (lista B). Duas saídas, e elas não
+são intercambiáveis:
+
+1. **Gerar o cliente a partir do backend** — acaba com a divergência de tipo na origem, mas só
+   diz que o campo EXISTE; não diz que a tela o usa.
+2. **Teste de contrato** comparando a resposta REAL com o que a tela consome — é a única que
+   pegaria o **primeiro** dos três casos (`foraDeTodasAsAplicacoes`), em que o backend devolvia
+   um campo que o contrato do cliente nem declarava.
+
+⚠️ **A varredura periódica não substitui nenhuma das duas.** Ela é hábito, não rede: vale rodar
+antes de cada conferência de tela (`python3 scripts/varredura-contrato.py`, roda em minutos) —
+não como CI, porque o que ela devolve exige julgamento (34 achados, 7 que importam).
+
 **34 campos suspeitos em 20 interfaces**, dos quais estes importam:
 
 | Campo | Onde | Por que importa |
 |---|---|---|
-| `LinhaDaLista.observacao` | lista de um avaliador | é **texto que alguém escreveu** dizendo por que aquela linha é daquele avaliador (no DEV: *"A ALOCAÇÃO DESTA LINHA FOI ARBITRADA…"*). Mesma família do motivo da transferência do Workspace |
+| ✅ `LinhaDaLista.observacao` | lista de um avaliador | **CORRIGIDO em 07/09.** É **texto que alguém escreveu** dizendo por que aquela linha é daquele avaliador — no DEV, *"A ALOCAÇÃO DESTA LINHA FOI ARBITRADA: 32 pessoas divididas em ordem alfabética… Ninguém decidiu que esta pessoa é deste avaliador — revisar."*, escrito **logo acima do botão "Conferi, está certo"**. Quem conferia estava confirmando um chute sem ver que era um. Mesma família do motivo da transferência do Workspace |
 | `AlertaAgregado.valores` + `criterioNome` | Painel → conferência | `valores` são **os valores que ficaram fora de toda faixa** — é o dado com que se conserta a faixa. A tela mostra o código do critério e engole o nome e os valores |
 | `MemoriaDeCalculo.enviadaEm` | memória de cálculo | o par de `calculadoEm`: **enviada quando × apurada quando** é o que diz se a apuração já incluía esta avaliação. Corrigi metade do par ontem e deixei a outra no chão |
 | `PreviaDoPublico.amostra` + `aplicacaoNome` | Montar público | a prévia **já traz os nomes** de quem entraria e mostra só números — e a prévia é justamente a tela do 🟠 5, que engana com contagem velha |

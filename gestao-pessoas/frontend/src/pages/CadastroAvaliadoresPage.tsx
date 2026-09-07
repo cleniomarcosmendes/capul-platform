@@ -372,7 +372,8 @@ function ListaDoAvaliador({
           <AlertTriangle size={16} className="shrink-0" aria-hidden />
           <p className="min-w-0 flex-1">
             <strong>{aRevisar.length}</strong> linha(s) foram divididas em ordem alfabética pela
-            importação. A ordem é arbitrária e não diz quem trabalha com quem.
+            importação. A ordem é arbitrária e não diz quem trabalha com quem —{' '}
+            <strong>o motivo de cada uma está escrito na própria linha</strong>.
           </p>
           <button
             type="button"
@@ -402,11 +403,23 @@ function ListaDoAvaliador({
       </div>
       <ul className="divide-y divide-slate-100">
         {linhas.map((l) => (
-          <li key={l.id} className="flex items-center gap-3 px-4 py-2 pl-11 text-sm">
+          <li key={l.id} className="flex items-start gap-3 px-4 py-2 pl-11 text-sm">
             <div className="min-w-0 flex-1">
               <span className="font-medium text-slate-700">{l.nome}</span>
               <span className="text-slate-400"> · {l.matricula}</span>
               {l.cargo && <span className="text-slate-500"> · {l.cargo}</span>}
+              {/* ⭐⭐ A OBSERVAÇÃO DA LINHA — texto que alguém escreveu dizendo
+                  POR QUE esta pessoa é deste avaliador. Vinha do backend desde
+                  sempre e nenhuma tela a mostrava (§3.1.9). Nas linhas de
+                  divisão automática ela diz, com todas as letras, que a alocação
+                  foi ARBITRADA em ordem alfabética — e é logo acima do botão
+                  "Conferi, está certo". Quem confere estava confirmando um chute
+                  sem ver que era um. */}
+              {l.observacao && (
+                <p className="mt-0.5 text-xs italic leading-snug text-slate-500">
+                  “{l.observacao}”
+                </p>
+              )}
             </div>
             {/* Quem abre a lista de um avaliador pode ser uma das linhas dela —
                 é o caso da gestora, avaliada pelo Diretor Executivo. Marca,
