@@ -76,6 +76,7 @@ nove itens desta lista não movem esse número em nada.
 | 10 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
 | 11 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
 | 12 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
+| 13 | ⚠️ **Duas verificações pendentes de conta** — `RH_ADMIN` **sem fila** (o estado vazio com "Ir para os ciclos") e `RH_MODELO` (que hoje não tem tela): os dois caminhos são **derivados do código, não exercidos**, porque nenhuma conta do DEV está nesses estados. Saem quando houver **segundo `RH_ADMIN`** (A) e **tela de questionários** (item 12) | §3.1.6 · §5 |
 
 ---
 
@@ -765,6 +766,54 @@ não só mais correta.
 
 *(Nasceu em 07/09 de uma correção de uma frase só — o resumo do modal de vínculo — e subiu para
 regra porque a próxima frase seria escrita pela mesma mão, com o mesmo erro.)*
+
+### 3.1.8. ✅ Apurar com 3 de 894 — a confirmação, a base e a data (07/09)
+
+Achado do roteiro do Chrome: **"Encerrar" tinha guarda e "Apurar" não tinha nada**. Um clique
+verde apurava 3 avaliações de 894, sem dizer, e a tela de Resultados exibia
+*"3 resultado(s) · média 62,59"* — um número com cara de oficial.
+
+**Não virou trava, virou aviso.** Apurar cedo é legítimo: reapurar substitui o resultado sem
+reabrir avaliação nenhuma, e é assim que se confere o cálculo. O que não pode é não saber sobre
+quantas pessoas o resultado sai. A confirmação diz o número real:
+
+> **3 de 894** avaliações foram enviadas. Apurar agora produz resultado **só para essas 3**.
+> *Reapurar depois substitui o resultado, sem reabrir avaliação nenhuma — apurar cedo para
+> conferir o cálculo é legítimo.*
+> `[ Cancelar ]` `[ Apurar 3 avaliação(ões) ]`
+
+O botão de confirmar **carrega o número**, e o texto muda com o dado: se todas entraram, diz
+"todas entraram — o resultado sai completo"; com **zero** enviadas, diz que não há o que apurar e
+o botão fica desabilitado (o backend já recusava esse caso — a tela deixou de descobrir isso
+depois do clique).
+
+#### A base fica à vista SEMPRE, não só na hora de apurar
+
+Quem abre a tela uma semana depois não estava na hora do clique. Então o cabeçalho de Resultados
+passa a ser:
+
+> **3** de **894** avaliações do ciclo apuradas · média **62,59** sobre essas **3**
+> ⚠ *Apuração parcial: 891 avaliação(ões) do ciclo ainda não entraram nesta conta.*
+> *Última apuração em 06/09/2026, 18:40.*
+
+Com filtro aplicado, a média diz "sobre N em exibição" — o denominador acompanha o que está na
+tela, e o total do ciclo continua ao lado.
+
+#### ⭐ A DATA da apuração existia no dado e não aparecia em lugar nenhum
+
+`calculadoEm` vinha do backend **nas duas respostas** — na linha da lista e na memória de cálculo
+— e nenhuma das duas o renderizava. É a terceira ocorrência da mesma família neste módulo
+(`foraDeTodasAsAplicacoes` e o `restrita` do modal foram as outras): **o backend manda, o cliente
+descarta, e nada reclama**. Agora aparece como *"Última apuração em …"* no cabeçalho e
+*"Apurado em …"* dentro da memória de cálculo.
+
+Isso importa porque o resultado é **gravado e pode ser reapurado**: sem a data, ninguém sabe se o
+número já inclui as avaliações que entraram depois.
+
+⚠️ **`CicloDetalhado` voltou a carregar `_count`** (o `GET /ciclos/:id` não trazia): a base do
+ciclo é o que qualifica todo número lido na tela de Resultados, e ela precisa viajar junto do
+ciclo. `avaliacoesPendentes`, que a listagem calcula e o `obter` não, continua fora do tipo — o
+tipo diz a verdade sobre o que a rota devolve.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

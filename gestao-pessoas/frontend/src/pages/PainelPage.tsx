@@ -13,6 +13,7 @@ import {
   type PainelDoCiclo,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
+import { Modal } from '../components/Modal';
 
 /**
  * PAINEL — o que falta para o ciclo fechar.
@@ -35,6 +36,7 @@ export default function PainelPage() {
   const [conferencia, setConferencia] = useState<Conferencia | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [apurando, setApurando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const [resultadoApuracao, setResultado] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function PainelPage() {
   }
 
   async function apurar() {
+    setConfirmando(false);
     setResultado(null);
     setApurando(true);
     try {
@@ -290,12 +293,63 @@ export default function PainelPage() {
           <button
             type="button"
             disabled={apurando}
-            onClick={apurar}
+            onClick={() => setConfirmando(true)}
             className="alvo-toque mt-3 inline-flex items-center gap-2 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
           >
             <Calculator size={16} aria-hidden /> {apurando ? 'Apurando…' : 'Apurar o ciclo'}
           </button>
           {resultadoApuracao && <p className="mt-2 text-sm text-slate-700">{resultadoApuracao}</p>}
+
+          {/* ⭐⭐ CONFIRMAÇÃO COM O NÚMERO REAL — não é trava, é aviso.
+              "Encerrar" tinha guarda e "Apurar" não tinha nada: um clique verde
+              apurava 3 de 894 sem dizer. Apurar cedo é LEGÍTIMO (reapurar
+              substitui, e é assim que se confere o cálculo); o que não pode é
+              não saber sobre quantas pessoas o resultado sai. */}
+          {confirmando && (
+            <Modal titulo="Apurar o ciclo" aoFechar={() => setConfirmando(false)}>
+              {dados.enviadas === 0 ? (
+                <p className="text-sm text-slate-700">
+                  <strong>Nenhuma das {dados.designados} avaliações foi enviada.</strong> Não há o
+                  que apurar — a apuração só alcança avaliação enviada.
+                </p>
+              ) : (
+                <p className="text-sm text-slate-700">
+                  <strong className="font-semibold tabular-nums">
+                    {dados.enviadas} de {dados.designados}
+                  </strong>{' '}
+                  avaliações foram enviadas.{' '}
+                  {dados.enviadas < dados.designados ? (
+                    <>
+                      Apurar agora produz resultado <strong>só para essas {dados.enviadas}</strong>.
+                    </>
+                  ) : (
+                    <>Todas entraram — o resultado sai completo.</>
+                  )}
+                </p>
+              )}
+              <p className="mt-2 text-sm text-slate-500">
+                Reapurar depois substitui o resultado, sem reabrir avaliação nenhuma — apurar cedo
+                para conferir o cálculo é legítimo.
+              </p>
+              <div className="mt-5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmando(false)}
+                  className="alvo-toque flex-1 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={dados.enviadas === 0}
+                  onClick={apurar}
+                  className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  Apurar {dados.enviadas} avaliação(ões)
+                </button>
+              </div>
+            </Modal>
+          )}
         </section>
       )}
     </div>

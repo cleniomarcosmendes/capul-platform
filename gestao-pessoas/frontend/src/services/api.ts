@@ -134,7 +134,11 @@ export interface CicloDaLista {
   avaliacoesPendentes: number;
 }
 
-export interface CicloDetalhado extends Omit<CicloDaLista, '_count'> {
+/**
+ * ⚠️ `_count` NÃO é omitido: a base do ciclo (quantas avaliações ele tem) é o
+ * que qualifica a média da tela de Resultados. Ver §3.1.8 do ESTADO.
+ */
+export interface CicloDetalhado extends Omit<CicloDaLista, 'avaliacoesPendentes'> {
   conceitos: Conceito[];
   aplicacoes: {
     id: string;

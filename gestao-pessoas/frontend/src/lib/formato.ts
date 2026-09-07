@@ -16,3 +16,21 @@ export function data(valor: string | null | undefined): string {
 export function nota(valor: number): string {
   return valor.toFixed(2).replace('.', ',');
 }
+
+/**
+ * Data e HORA, para carimbo de quando algo foi feito.
+ *
+ * ⚠️ Aqui o `Date` é usado de propósito, ao contrário de `data()`: a hora vem em
+ * UTC e precisa ser mostrada no fuso de quem lê — "apurado às 13:02" tem de ser
+ * 13:02 do relógio da sala. O risco de `data()` (a data pular um dia) não existe
+ * quando a hora está junto.
+ */
+export function dataHora(valor: string | null | undefined): string {
+  if (!valor) return '—';
+  const d = new Date(valor);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}

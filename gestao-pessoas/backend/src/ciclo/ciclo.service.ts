@@ -237,6 +237,14 @@ export class CicloService {
     const ciclo = await this.prisma.ciclo.findUnique({
       where: { id: cicloId },
       include: {
+        /**
+         * ⚠️ A BASE do ciclo — quantas avaliações ele tem — viaja junto porque
+         * é o que qualifica todo número lido depois. A tela de Resultados
+         * mostrava "3 resultado(s) · média 62,59" sem dizer que os 3 são de
+         * 894: uma semana depois isso lê como número oficial. Mesma contagem
+         * agregada da listagem.
+         */
+        _count: { select: { aplicacoes: true, avaliacoes: true } },
         conceitos: { orderBy: { ordem: 'asc' } },
         aplicacoes: {
           include: {

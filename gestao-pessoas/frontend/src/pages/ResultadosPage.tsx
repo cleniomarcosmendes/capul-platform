@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Info, Search, Sigma, User } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
-import { nota } from '../lib/formato';
+import { dataHora, nota } from '../lib/formato';
 import { Etiqueta } from '../components/Etiqueta';
 import {
   mensagemDoErro,
@@ -64,6 +64,15 @@ export default function ResultadosPage() {
   }
 
   const media = visiveis.reduce((s, l) => s + l.notaFinal, 0) / (visiveis.length || 1);
+  /** A base do ciclo — quantas avaliações existem, apuradas ou não. */
+  const totalDoCiclo = ciclo._count?.avaliacoes ?? linhas.length;
+  const parcial = totalDoCiclo > linhas.length;
+  const filtrando = visiveis.length !== linhas.length;
+  /** A apuração mais recente entre os resultados que estão na tela. */
+  const ultimaApuracao = linhas.reduce<string | null>(
+    (maior, l) => (!maior || l.calculadoEm > maior ? l.calculadoEm : maior),
+    null,
+  );
 
   return (
     <div>
@@ -97,11 +106,49 @@ export default function ResultadosPage() {
         )}
       </div>
 
-      <p className="mt-3 inline-flex items-center gap-2 text-sm text-slate-600">
-        <Sigma size={15} aria-hidden />
-        {visiveis.length} resultado(s) · média{' '}
-        <strong className="font-semibold tabular-nums text-slate-800">{nota(media)}</strong>
-      </p>
+      {/* ⭐⭐ A BASE FICA À VISTA, SEMPRE — não só na hora de apurar.
+          "3 resultado(s) · média 62,59" é um número com cara de oficial: a
+          média é de 3 pessoas em 894, e nada dizia. Quem abre a tela uma semana
+          depois não tem como saber que a apuração foi parcial. E a DATA entra
+          pelo mesmo motivo: o resultado é gravado e pode ser reapurado, então
+          "quando isto foi apurado" é parte da leitura — sem ela ninguém sabe se
+          o número já inclui as avaliações que entraram depois. */}
+      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+        <p className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+          <Sigma size={15} aria-hidden />
+          <span>
+            <strong className="font-semibold tabular-nums text-slate-800">{linhas.length}</strong>{' '}
+            de{' '}
+            <strong className="font-semibold tabular-nums text-slate-800">{totalDoCiclo}</strong>{' '}
+            avaliações do ciclo apuradas
+          </span>
+          <span aria-hidden>·</span>
+          <span>
+            média{' '}
+            <strong className="font-semibold tabular-nums text-slate-800">{nota(media)}</strong>{' '}
+            {filtrando ? (
+              <>
+                sobre <strong className="tabular-nums">{visiveis.length}</strong> em exibição
+              </>
+            ) : (
+              <>
+                sobre essas <strong className="tabular-nums">{linhas.length}</strong>
+              </>
+            )}
+          </span>
+        </p>
+        {parcial && (
+          <p className="mt-1 text-xs text-amber-700">
+            Apuração parcial: {totalDoCiclo - linhas.length} avaliação(ões) do ciclo ainda não
+            entraram nesta conta. Reapurar depois substitui o resultado.
+          </p>
+        )}
+        {ultimaApuracao && (
+          <p className="mt-1 text-xs text-slate-500">
+            Última apuração em <strong className="font-medium">{dataHora(ultimaApuracao)}</strong>.
+          </p>
+        )}
+      </div>
 
       <ul className="mt-3 space-y-2">
         {visiveis.map((l) => (
@@ -212,6 +259,11 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                   {nota(memoria.notaFinal)}
                 </p>
                 {memoria.conceito && <p className="text-sm text-slate-500">{memoria.conceito}</p>}
+                {memoria.calculadoEm && (
+                  <p className="text-xs text-slate-400">
+                    Apurado em {dataHora(memoria.calculadoEm)}
+                  </p>
+                )}
               </div>
             </div>
 
