@@ -815,6 +815,55 @@ ciclo é o que qualifica todo número lido na tela de Resultados, e ela precisa 
 ciclo. `avaliacoesPendentes`, que a listagem calcula e o `obter` não, continua fora do tipo — o
 tipo diz a verdade sobre o que a rota devolve.
 
+### 3.1.9. ⭐⭐ A CLASSE: o backend manda, o cliente descarta, e nada reclama
+
+Três ocorrências em dois dias fazem padrão, não coincidência:
+
+| Campo | O que era | Como apareceu |
+|---|---|---|
+| `foraDeTodasAsAplicacoes` | 959 pessoas fora de todo recorte do ciclo | conferência de tela (06/09) |
+| `restrita` no modal da memória | "esta linha é você" | conferência de tela (06/09) |
+| `calculadoEm` | **quando** o resultado foi apurado | conferência de tela (07/09) |
+
+**Por que some em silêncio:** o backend calcula, serializa e devolve; o cliente não lê o campo.
+Não há erro, não há log, o `tsc` não reclama de campo **a mais** na resposta, e nenhum teste
+falha — o backend está certo e a tela está "funcionando". O dado simplesmente **não existe para
+quem olha**, e o custo é sempre o mesmo: alguém decide sem uma informação que o sistema já tinha.
+
+⚠️ **Nas três vezes quem perguntou foi uma CONFERÊNCIA DE TELA, não um teste.** É a assinatura
+da classe: teste de backend passa (o campo está lá), teste de tela passa (a tela renderiza o que
+manda renderizar), e só quem abre a tela procurando um dado específico nota a ausência. Enquanto
+não existir geração de cliente a partir do contrato — ou um teste que compare a resposta real com
+o que a tela consome —, **a varredura periódica é a única rede**.
+
+#### Varredura de 07/09 — o que chega e não aparece
+
+Método (barato, roda em minutos): extrair os campos de cada `interface` de
+`services/api.ts` e procurar cada um no fonte das telas. ⚠️ **Ela só acha metade da classe**:
+pega o que o contrato DECLARA e a tela ignora; **não pega** o que o backend devolve e o contrato
+nem declara — que foi exatamente o caso do `foraDeTodasAsAplicacoes`. Para esse lado só há duas
+saídas de verdade: gerar o cliente a partir do backend, ou um teste de contrato que compare a
+resposta real com o tipo.
+
+**34 campos suspeitos em 20 interfaces**, dos quais estes importam:
+
+| Campo | Onde | Por que importa |
+|---|---|---|
+| `LinhaDaLista.observacao` | lista de um avaliador | é **texto que alguém escreveu** dizendo por que aquela linha é daquele avaliador (no DEV: *"A ALOCAÇÃO DESTA LINHA FOI ARBITRADA…"*). Mesma família do motivo da transferência do Workspace |
+| `AlertaAgregado.valores` + `criterioNome` | Painel → conferência | `valores` são **os valores que ficaram fora de toda faixa** — é o dado com que se conserta a faixa. A tela mostra o código do critério e engole o nome e os valores |
+| `MemoriaDeCalculo.enviadaEm` | memória de cálculo | o par de `calculadoEm`: **enviada quando × apurada quando** é o que diz se a apuração já incluía esta avaliação. Corrigi metade do par ontem e deixei a outra no chão |
+| `PreviaDoPublico.amostra` + `aplicacaoNome` | Montar público | a prévia **já traz os nomes** de quem entraria e mostra só números — e a prévia é justamente a tela do 🟠 5, que engana com contagem velha |
+| `CicloDetalhado.conceitos` | ciclo | a **régua de conceitos** do ciclo. Escreve-se na criação e **não se lê em lugar nenhum depois** — quem vê "Atende" no resultado não tem como saber por qual faixa |
+| `MemoriaDeCalculo.notaCriterios` | memória de cálculo | quanto os **critérios cadastrais** somaram. A memória mostra a nota da avaliação, os pesos e cada critério, e não mostra o subtotal que fecha a conta |
+| `PreviaDaImportacao.novos` | importar planilha | quantas linhas são **novas** (vs. substituições) |
+
+Sem consequência prática (registrados para não voltarem à lista): `centroCustoDescricao` nas
+três listas de pessoas (a tela mostra `area`, que é o mesmo), `ordem`, `janelaTreinamentoMeses`,
+`pontuacaoMaxima`, `tipoValor`/`codigoCalculo`/`faixas` do catálogo, `vigenciaInicio`,
+`importacaoId`, `origemReferencia`, `avaliacaoId`. Os tipos de ENTRADA (`NovoCiclo`,
+`NovaAplicacao`, `AlvoDoPublico`) aparecem na varredura e não são desta classe — são o que a tela
+ENVIA.
+
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
 O cadastro (`/avaliadores`) e o painel de cada ciclo contavam ambos "sem avaliador" e nenhum
