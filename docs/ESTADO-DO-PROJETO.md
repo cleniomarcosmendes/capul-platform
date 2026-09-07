@@ -740,6 +740,32 @@ Conferido ao vivo em 07/09: RH_ADMIN vê 3 itens e as 2 seções; `wandersonnasc
 `--altura-cabecalho` segue MEDIDA — 0px no desktop (não há barra no topo) e 69px no celular —, e
 o cabeçalho sticky da fila continua parando no lugar certo nas duas larguras.
 
+### 3.1.7. ⭐ REGRA DE TEXTO: nada de particípio concordado — o cadastro não tem gênero
+
+> **Nenhum texto de tela usa particípio que concorde em gênero com uma pessoa.**
+> `rh.colaborador` não guarda gênero, e não há de onde derivar: "ANA CLAUDIA passa a ser
+> **avaliado** por FULANO" sai errado em metade dos casos.
+
+**A saída é a voz ATIVA**, que diz o mesmo e não depende de gênero:
+
+| ❌ Não | ✅ Sim |
+|---|---|
+| "ADELSON passa a ser avaliado por STEFANY" | "**STEFANY passa a avaliar ADELSON**" |
+| "Fulana foi designada para…" | "**O RH designou Fulana para…**" |
+| "…não está incluído no ciclo" | "**…está fora do ciclo**" / "**o ciclo não inclui…**" |
+
+Vale para os **oito avisos de vínculo** (§3.1.5), para as **recusas do lote**, para o
+**relatório da cópia do cadastro** — e para todo texto novo. Quando a voz ativa não couber,
+use forma nominal ("**sem avaliador**", "**fora do ciclo**", "**a avaliação de X é com Y**"),
+que também não concorda.
+
+⚠️ **Não resolva com "avaliado(a)".** Parêntese de gênero é ruído em tela que alguém lê em pé,
+no corredor da loja, e não escala para as frases longas dos avisos. A voz ativa é mais curta,
+não só mais correta.
+
+*(Nasceu em 07/09 de uma correção de uma frase só — o resumo do modal de vínculo — e subiu para
+regra porque a próxima frase seria escrita pela mesma mão, com o mesmo erro.)*
+
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
 O cadastro (`/avaliadores`) e o painel de cada ciclo contavam ambos "sem avaliador" e nenhum

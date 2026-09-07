@@ -77,7 +77,9 @@ function frase(l: SituacaoDoVinculoNoCiclo, nome: string) {
     case 'FORA_POR_DECISAO_RH':
       return (
         <>
-          {nome} foi tirado do ciclo {ciclo} <strong>por decisão do RH</strong>
+          {/* Voz ativa: "foi tirado" concorda com a PESSOA e erra metade das
+              vezes — o cadastro não tem gênero (§3.1.7). */}
+          <strong>O RH tirou</strong> {nome} do ciclo {ciclo}
           {l.justificativa ? <>: “{l.justificativa}”</> : '.'} Enquanto a decisão valer, o vínculo
           não gera avaliação — ela se desfaz na{' '}
           <Link

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, Lock, RefreshCw, Search, Send, X } from 'lucide-react';
 import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { ROLES } from '../lib/roles';
 
 /**
  * A FILA DO AVALIADOR — a primeira tela de quem vai avaliar.
@@ -522,7 +524,18 @@ function Carregando() {
   );
 }
 
+/**
+ * ⭐ O estado vazio é a resposta desenhada para "não tenho fila" — é por existir
+ * que o item de menu não precisa de condição de papel (§3.1.3), e é por isso que
+ * o redirect por papel foi removido (ver `App.tsx`).
+ *
+ * ⚠️ O atalho para Ciclos aparece para quem é do RH. É ATALHO, não porta: quem
+ * é do RH já tem "Ciclos" na barra lateral. Existe para a tela vazia não ser um
+ * beco para quem chegou aqui por engano.
+ */
 function Vazio() {
+  const { tem } = useAuth();
+  const doRh = tem(ROLES.RH_ADMIN, ROLES.RH_CICLO, ROLES.RH_MODELO);
   return (
     <div className="mx-auto max-w-2xl px-4 pt-16 text-center">
       <CheckCircle2 size={40} className="mx-auto text-slate-300" aria-hidden />
@@ -530,6 +543,14 @@ function Vazio() {
       <p className="mt-1 text-sm text-slate-500">
         Quando o RH abrir um ciclo e designar avaliações, elas aparecem aqui.
       </p>
+      {doRh && (
+        <Link
+          to="/ciclos"
+          className="alvo-toque mt-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Ir para os ciclos
+        </Link>
+      )}
     </div>
   );
 }

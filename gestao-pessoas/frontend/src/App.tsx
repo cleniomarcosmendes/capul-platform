@@ -1,6 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ROLES } from './lib/roles';
+import { AuthProvider } from './contexts/AuthContext';
 import Layout from './layouts/Layout';
 import MinhasAvaliacoesPage from './pages/MinhasAvaliacoesPage';
 import AvaliacaoResponderPage from './pages/AvaliacaoResponderPage';
@@ -13,23 +12,22 @@ import PainelPage from './pages/PainelPage';
 import ResultadosPage from './pages/ResultadosPage';
 
 /**
- * ⚠️ Papel sem caminho até a tela é papel inútil.
+ * ⭐⭐ A RAIZ DO MÓDULO É A FILA, PARA TODO MUNDO — sem desvio por papel.
  *
- * A raiz do módulo é a fila do AVALIADOR — mas quem é só do RH não tem fila, e
- * a barra de navegação não aparece para ele (um item só é rótulo, não menu).
- * Sem este desvio a gestora caía numa lista vazia sem link nenhum para os
- * ciclos: nada de errado no log, nenhum 403, e a tela do trabalho dela
- * inalcançável. É o mesmo defeito que deixou `REGISTRADOR_FROTA` com "só
- * Início" na Logística.
+ * Havia aqui um redirect: quem NÃO tinha o papel `AVALIADOR` e era do RH ia
+ * direto para `/ciclos`. Ele decidia por PAPEL, e a gestora de RH tem 13
+ * avaliações com `RH_ADMIN` e nenhum `AVALIADOR` — então o clique em "Minhas
+ * avaliações" caía em `/`, era desviado para `/ciclos`, e **a fila dela ficava
+ * inalcançável pela tela**: item de menu existindo, rota existindo, e nenhum
+ * jeito de chegar. Vale o mesmo por URL direta. É o mesmo defeito da §3.1.3,
+ * uma camada abaixo do menu — a regra "ser avaliador é fato do DADO, não papel"
+ * tinha sido aplicada ao menu e não a este desvio.
+ *
+ * ⚠️ E o motivo pelo qual ele existia **deixou de existir em 07/09**: ele era
+ * remendo para o menu que sumia quando havia um destino só. Com a sidebar
+ * permanente, quem é do RH e não tem fila vê "Ciclos" e "Quem avalia quem" ao
+ * lado da tela vazia — que agora ainda oferece o atalho. Não recriar o desvio.
  */
-function Inicio() {
-  const { carregando, tem } = useAuth();
-  if (carregando) return null;
-  if (!tem(ROLES.AVALIADOR) && tem(ROLES.RH_ADMIN, ROLES.RH_CICLO, ROLES.RH_MODELO)) {
-    return <Navigate to="/ciclos" replace />;
-  }
-  return <MinhasAvaliacoesPage />;
-}
 
 export default function App() {
   return (
@@ -43,7 +41,7 @@ export default function App() {
               loja, é uma alternativa a menos visível por vez. */}
           <Route path="/avaliacao/:id" element={<AvaliacaoResponderPage />} />
           <Route element={<Layout />}>
-            <Route path="/" element={<Inicio />} />
+            <Route path="/" element={<MinhasAvaliacoesPage />} />
             <Route path="/ciclos" element={<CiclosPage />} />
             {/* Fora de `/ciclos/:id` de propósito: o cadastro de quem avalia
                 quem é da PLATAFORMA, não do ciclo — cada ciclo copia dele. Pendurá-lo
