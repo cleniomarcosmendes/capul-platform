@@ -433,7 +433,15 @@ export interface Conferencia {
 }
 
 export interface ProximoPassoDoCiclo {
-  codigo: 'MONTAR_APLICACAO' | 'MONTAR_PUBLICO' | 'DESIGNAR' | 'ABRIR' | 'APURAR' | 'ENCERRAR';
+  /** ⚠️ `ACOMPANHAR` é o único que NÃO manda fazer nada — diz de quem é a vez. */
+  codigo:
+    | 'MONTAR_APLICACAO'
+    | 'MONTAR_PUBLICO'
+    | 'DESIGNAR'
+    | 'ABRIR'
+    | 'ACOMPANHAR'
+    | 'APURAR'
+    | 'ENCERRAR';
   /** Frase pronta, com o número dentro — a tela NÃO monta texto (a regra é do backend). */
   rotulo: string;
   aba: 'aplicacoes' | 'designacao' | 'painel' | null;

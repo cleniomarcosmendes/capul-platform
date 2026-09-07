@@ -1799,6 +1799,13 @@ Achado ao ler o `abrir()` para saber de onde tirar o número: **abrir não cria 
 nenhuma.** Ele muda o status e trava a montagem — quem cria `Avaliacao` é a **designação**
 (§3.12). A frase do cartão dizia o contrário desde sempre.
 
+⭐ **Varrido depois, porque quem escreve a próxima frase copia da anterior:** a frase falsa
+existia em **um lugar só** (o texto cinza sob o botão). Duas vizinhas parecem o mesmo e estão
+**certas**, e foram deixadas como estavam — *"Abrir gera **nota**"* (`ciclo.controller.ts`) e
+*"a partir dele começam a nascer **notas**"* (`CiclosPage`): a nota sai no **envio**, que exige
+ciclo ABERTO. O falso era "gerar **avaliações**". O ESTADO já registrava certo (*"designar —
+gera as avaliações"*), e nenhum spec afirmava o contrário.
+
 Por isso o número certo não é "quantas vão nascer", e sim:
 
 > **1** avaliação(ões) já designadas serão liberadas para responder, em **1** aplicação(ões) ·
@@ -1828,6 +1835,57 @@ hoje. O aviso resolve o que estava errado — abrir sem saber —, sem decidir n
 | **montado** (público provisório num CC com 2 afastados de 3) | modal com **1 designada · 1 aplicação · 3 no público**, o aviso dos **2 barrados pela régua** e o do **recorte provisório** |
 
 Os dois apagados depois (1 avaliação, **0 respostas**), com os dois ciclos de sempre intactos.
+
+### 3.1.24. 🟠 O "→ Próximo" sumia na fase mais LONGA do ciclo (08/09)
+
+Item J. Depois de aberto e arrumado, o passo desaparecia — exatamente entre **abrir e apurar**,
+que é onde o ciclo passa semanas.
+
+⚠️ **A regra do `null` estava certa e não mudou.** Ela continua valendo para o ciclo aberto e
+vazio e para o ENCERRADO. O que estava errado era este caso caber nela: **"a bola não é sua" e
+"não há nada a fazer" são coisas diferentes**, e o `null` dizia a segunda.
+
+O passo novo **não sugere apurar** (empurraria apuração parcial) **nem encerrar** (bateria na
+recusa) — há spec para cada uma dessas duas coisas.
+
+> → **Próximo:** *Agora é com os avaliadores: 891 avaliação(ões) a enviar. O Painel mostra
+> quantas faltam por avaliador*
+
+#### ⭐⭐ `ACOMPANHAR` é o único código NÃO-IMPERATIVO — e isso não é assimetria
+
+Todos os outros nomeiam um **ato do RH**, e o rótulo vem no imperativo: *"Monte"*, *"Designe"*,
+*"Apure"*, *"Encerre"*, *"Abra"*. **Nesta fase não há ato do RH**: as avaliações estão
+designadas e quem responde são os avaliadores. O passo existe para dizer **de quem é a vez**,
+que é informação, não ordem.
+
+⚠️ Está escrito no tipo, e com o porquê — não só "é exceção". Quem for uniformizar vai achar que
+faltou o verbo: **não faltou.** Escrever *"Acompanhe"* seria mandar olhar, e mandar olhar não é
+um passo. A frase aponta o Painel porque é lá que a contagem por avaliador existe — a única
+coisa concreta desta fase. Há spec exigindo que o rótulo **não** comece por verbo no imperativo.
+
+#### ⚠️ E a frase não atribui intenção — nem ela, nem as vizinhas
+
+Esta é a frase que a gestora lê **imediatamente antes de cobrar alguém**. Quem não respondeu
+pode ter mil motivos, e o Painel mostra uma **contagem por pessoa, não um veredito sobre ela**.
+Por isso *"quem está segurando"* não entrou — e as outras duas ocorrências do mesmo vício, que
+já estavam na tela, saíram junto:
+
+| Onde | Antes | Agora |
+|---|---|---|
+| Painel, título da fila | *"do mais **atrasado** ao menos"* | *"de quem tem **mais a fazer** para quem tem menos"* |
+| Diálogo de encerrar com pendência | *"cobre no Painel: lá está **quem está segurando**, por nome"* | *"o Painel mostra **quantas faltam por avaliador**"* |
+
+⭐ A varredura foi pelo mesmo motivo da frase falsa do §3.1.23: **quem escrever a próxima frase
+copia da anterior.** O vocabulário do módulo é o que decide o tom das próximas telas.
+
+#### Verificação
+
+**490 testes** (5 novos no `proximo-passo.spec`, entre eles: não sugere apurar nem encerrar; não
+começa por imperativo; não usa "segurando/atrasado/parado"). ✅ Ao vivo, num ciclo descartável
+com tudo designado e nada respondido — `ACOMPANHAR`, `aba: painel`, e o Painel apontado
+mostrando *"ARIELLY · 2 a fazer"*. ⚠️ Os dois ciclos reais **não** mostram este passo, e é o
+certo: ambos ainda têm gente sem avaliador, então `DESIGNAR` vence — a ordem das regras não
+mudou.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

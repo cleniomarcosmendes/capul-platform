@@ -24,6 +24,20 @@ export type CodigoDoProximoPasso =
   | 'MONTAR_PUBLICO'
   | 'DESIGNAR'
   | 'ABRIR'
+  /**
+   * ⭐⭐ O ÚNICO NÃO-IMPERATIVO, e isso NÃO é uma assimetria a consertar.
+   *
+   * Todos os outros nomeiam um ATO do RH e o rótulo vem no imperativo — "Monte",
+   * "Designe", "Apure", "Encerre". Nesta fase **não há ato do RH**: as
+   * avaliações estão designadas e quem responde são os avaliadores. O passo
+   * existe para dizer **DE QUEM É A VEZ**, que é informação, não ordem.
+   *
+   * ⚠️ Quem for uniformizar isto vai achar que faltou o verbo. Não faltou:
+   * escrever "Acompanhe" seria mandar olhar, e mandar olhar não é um passo. A
+   * frase aponta o Painel porque é lá que a contagem por avaliador existe — a
+   * única coisa concreta desta fase.
+   */
+  | 'ACOMPANHAR'
   | 'APURAR'
   | 'ENCERRAR';
 
@@ -92,10 +106,30 @@ export function proximoPasso(e: EstadoDoCiclo): ProximoPasso | null {
       };
     }
 
-    // ⭐ AQUI É O "NÃO SEI", e é de propósito: falta gente responder, e quem
-    // responde não é o RH. Sugerir "apurar" faria a tela empurrar uma apuração
-    // parcial; sugerir "encerrar" seria pior — o encerrar recusa com pendência.
-    if (e.aFazer > 0) return null;
+    /**
+     * ⭐⭐ A FASE MAIS LONGA DO CICLO, e ela ficava sem nada na tela.
+     *
+     * Devolver `null` aqui estava **meio certo**: a bola é dos avaliadores, e
+     * sugerir "apurar" empurraria uma apuração parcial, "encerrar" bateria na
+     * recusa. Mas *"a bola não é sua"* e *"não há nada a fazer"* são coisas
+     * diferentes — e o `null` dizia a segunda. Entre abrir e apurar podem
+     * passar semanas, e era justamente aí que o cabeçalho ficava mudo.
+     *
+     * ⚠️ O passo NÃO manda fazer nada (ver `ACOMPANHAR`): diz de quem é a vez e
+     * aponta onde está a contagem por avaliador.
+     */
+    if (e.aFazer > 0) {
+      return {
+        codigo: 'ACOMPANHAR',
+        // ⚠️ Sem atribuir intenção. Quem não respondeu pode ter mil motivos, e
+        // esta é a frase que a gestora lê imediatamente antes de cobrar alguém:
+        // o Painel mostra uma CONTAGEM por pessoa, não um veredito sobre ela.
+        rotulo:
+          `Agora é com os avaliadores: ${e.aFazer} avaliação(ões) a enviar. ` +
+          'O Painel mostra quantas faltam por avaliador',
+        aba: 'painel',
+      };
+    }
 
     if (e.enviadas > 0 && e.apuradas < e.enviadas) {
       return {

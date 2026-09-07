@@ -207,7 +207,11 @@ export default function PainelPage() {
 
       <section>
         <h3 className="mb-2 text-sm font-semibold text-slate-500">
-          Fila por avaliador — do mais atrasado ao menos
+          {/* ⚠️ Era "do mais atrasado ao menos". "Atrasado" atribui culpa, e esta
+              é a lista lida imediatamente antes de alguém ser cobrado: quem não
+              respondeu pode ter mil motivos. É uma ORDENAÇÃO por quantidade,
+              não um veredito sobre a pessoa (§3.1.24). */}
+          Fila por avaliador — de quem tem mais a fazer para quem tem menos
         </h3>
         {dados.avaliadores.length === 0 ? (
           <Vazio titulo="Ninguém designado ainda" />

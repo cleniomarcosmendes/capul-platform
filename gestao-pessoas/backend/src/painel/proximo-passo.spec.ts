@@ -48,18 +48,43 @@ describe('o próximo passo do ciclo', () => {
     });
 
     /**
-     * ⭐⭐ O CASO QUE DEFINE A REGRA. Tudo designado e ninguém respondendo: a
-     * bola é dos AVALIADORES, não do RH. Não há passo a sugerir — e sugerir
-     * "apurar" empurraria uma apuração parcial, "encerrar" bateria na recusa.
+     * ⭐⭐ A FASE MAIS LONGA — e ela ficava sem nada na tela (08/09).
+     *
+     * O `null` aqui estava MEIO certo: a bola é dos avaliadores, e sugerir
+     * "apurar" empurraria apuração parcial, "encerrar" bateria na recusa. Mas
+     * "a bola não é sua" e "não há nada a fazer" são coisas diferentes, e o
+     * `null` dizia a segunda. Entre abrir e apurar podem passar semanas.
      */
-    it('tudo designado e ninguém respondendo: NÃO INVENTA passo', () => {
-      expect(proximoPasso(aberto({ aplicacoes: 4, noPublico: 894, designados: 894, aFazer: 894 }))).toBeNull();
+    it('tudo designado e ninguém respondendo: diz DE QUEM É A VEZ', () => {
+      const p = proximoPasso(aberto({ aplicacoes: 4, noPublico: 894, designados: 894, aFazer: 894 }));
+      expect(p).toMatchObject({ codigo: 'ACOMPANHAR', aba: 'painel' });
+      expect(p?.rotulo).toContain('894');
     });
 
-    it('idem com envio parcial — apurar cedo é escolha, não dever', () => {
-      expect(
-        proximoPasso(aberto({ aplicacoes: 4, designados: 894, enviadas: 3, aFazer: 891, apuradas: 3 })),
-      ).toBeNull();
+    /** ⚠️ NÃO pode sugerir apurar (parcial) nem encerrar (bate na recusa). */
+    it('e NÃO manda apurar nem encerrar', () => {
+      const p = proximoPasso(aberto({ aplicacoes: 4, designados: 894, enviadas: 3, aFazer: 891, apuradas: 3 }));
+      expect(p?.codigo).toBe('ACOMPANHAR');
+      expect(p?.rotulo).not.toMatch(/apur/i);
+      expect(p?.rotulo).not.toMatch(/encerr/i);
+    });
+
+    /**
+     * ⭐ SEM ATRIBUIR INTENÇÃO. Quem não respondeu pode ter mil motivos, e esta
+     * é a frase lida imediatamente antes de a gestora cobrar alguém: o Painel
+     * mostra uma CONTAGEM por pessoa, não um veredito sobre ela.
+     */
+    it('a frase descreve a contagem, não julga quem não respondeu', () => {
+      const p = proximoPasso(aberto({ aplicacoes: 4, designados: 894, enviadas: 3, aFazer: 891 }));
+      expect(p?.rotulo).toMatch(/Agora é com os avaliadores/);
+      expect(p?.rotulo).toMatch(/quantas faltam por avaliador/);
+      expect(p?.rotulo).not.toMatch(/segurando|atras[a-z]*|parad[ao]/i);
+    });
+
+    /** ⚠️ E não é imperativo: não há ato do RH nesta fase. */
+    it('não manda fazer nada — não há ato do RH aqui', () => {
+      const p = proximoPasso(aberto({ aplicacoes: 4, designados: 894, aFazer: 894 }));
+      expect(p?.rotulo).not.toMatch(/^(Monte|Designe|Apure|Encerre|Abra|Acompanhe)/);
     });
 
     it('todas enviadas e nada apurado: apurar', () => {

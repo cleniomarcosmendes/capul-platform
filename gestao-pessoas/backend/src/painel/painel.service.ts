@@ -6,8 +6,10 @@
  * Resultados) e sim três coisas, nesta ordem:
  *
  *   1. quanto falta, por aplicação;
- *   2. QUEM está segurando — a fila por avaliador, do mais atrasado ao menos,
- *      porque quem cobra precisa de nome, não de percentual;
+ *   2. QUANTAS faltam por avaliador — a fila por avaliador, da maior pendência
+ *      para a menor, porque quem cobra precisa de nome, não de percentual.
+ *      ⚠️ É uma CONTAGEM, não um veredito: quem não respondeu pode ter mil
+ *      motivos, e esta lista é lida imediatamente antes de alguém ser cobrado;
  *   3. quem é elegível e ficou SEM designação — a única pendência que não
  *      aparece em lugar nenhum e faz a pessoa sumir do ciclo em silêncio;
  *   4. quem ficou FORA DE TODAS as aplicações.
@@ -468,7 +470,9 @@ export class PainelService {
   }
 
   /**
-   * Fila por avaliador, do mais atrasado para o menos. Cancelada fica fora da
+   * Fila por avaliador, de quem tem MAIS a fazer para quem tem menos — é uma
+   * ordenação por quantidade, não um juízo sobre quem não respondeu. Cancelada
+   * fica fora da
    * conta: não é trabalho de ninguém, e somá-la faria a fila de quem não deve
    * nada parecer cheia.
    */

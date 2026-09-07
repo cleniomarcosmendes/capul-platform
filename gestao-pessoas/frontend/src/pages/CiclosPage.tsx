@@ -443,8 +443,8 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           </ul>
           <p className="mt-2 text-sm text-slate-500">
             Use isto quando as pendências <strong>não vão entrar</strong> — pessoa desligada ou
-            afastada, avaliador que não vai responder. Se é só demora, cobre no Painel: lá está quem
-            está segurando, por nome.
+            afastada, avaliador que não vai responder. Se é só demora, o Painel mostra{' '}
+            <strong>quantas faltam por avaliador</strong>.
           </p>
           <label className="mt-3 block text-sm font-medium text-slate-700">
             Motivo do encerramento com pendência
