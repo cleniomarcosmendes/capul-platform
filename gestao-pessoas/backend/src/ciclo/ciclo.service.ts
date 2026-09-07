@@ -236,8 +236,10 @@ export class CicloService {
       throw new BadRequestException(
         `Não é possível encerrar: ${pendentes} avaliação(ões) ainda não foram enviadas. ` +
           'Se elas não vão entrar (pessoa desligada, afastada, avaliador que não vai responder), ' +
-          'encerre com pendência: exige confirmação e motivo escrito, e as ' +
-          `${pendentes} ficam registradas como CANCELADAS — nada é apagado, e a contagem aparece no painel.`,
+          // ⚠️ "e as 1 ficam" — a concordância quebrava com pendência única, e a
+          // frase é lida pela gestora. O número já está no começo da mensagem.
+          'encerre com pendência: exige confirmação e motivo escrito, e elas ficam ' +
+          'registradas como CANCELADAS — nada é apagado, e a contagem aparece no painel.',
       );
     }
     if (pendentes > 0 && motivo.length < 3) {

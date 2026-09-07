@@ -59,6 +59,14 @@ describe('CicloService.encerrar', () => {
       await expect(service.encerrar(CICLO, RH)).rejects.toThrow(/nada é apagado/i);
     });
 
+    /** ⚠️ Achado da bateria ao vivo de 08/09: com UMA pendência a frase dizia
+     *  "e as 1 ficam registradas". O número já está no começo da mensagem. */
+    it('a frase não quebra a concordância com pendência única', async () => {
+      pendentes(1);
+      await expect(service.encerrar(CICLO, RH)).rejects.toThrow(/1 avaliação/);
+      await expect(service.encerrar(CICLO, RH)).rejects.not.toThrow(/as 1 ficam/);
+    });
+
     it('nada é escrito quando recusa', async () => {
       pendentes(5);
       await expect(service.encerrar(CICLO, RH)).rejects.toThrow();

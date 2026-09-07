@@ -1099,6 +1099,11 @@ estava enviada e nunca fora apurada). Público, respostas e as 4 enviadas: **int
   `ciclo = Geral AND criado_em > '2026-09-07 14:00' AND status = 'PENDENTE'` sem nenhuma resposta
   e sem resultado. Conferido antes (84) e depois: o ciclo voltou a **9 avaliações**, público
   **98**, e as **4 enviadas com os `enviada_em` originais** de 06/09.
+- **08/09/2026** — apagado o ciclo **`ZZ TESTE — cancelar (08/09)`**, criado para a bateria ao
+  vivo do cancelamento (§3.1.18): 1 aplicação, 3 no público, 3 avaliações, 11 respostas e 1
+  resultado — **tudo criado na própria sessão, nenhum trabalho humano**. SELECT isolando antes,
+  DELETE transacional, **auditoria preservada** (4 linhas). Depois: 2 ciclos (9/98 e 894/1036),
+  0 órfãos, fila da Arielly de volta às 13 do Piloto.
 - **08/09/2026** — apagado o ciclo **`ZZ ROTEIRO 08/09`**, que a rodada de tela deixou ABERTO na
   base: 1 aplicação, 5 no público, **4 avaliações órfãs** (3 na fila do ADAO BATISTA, 1 na do
   CLAUDIMAR) e 4 linhas de elegibilidade. **Todas as 4 avaliações estavam `PENDENTE` com ZERO
@@ -1390,11 +1395,43 @@ da conta.
 #### Verificação
 
 Migration `20260908090000_avaliacao_cancelada_com_motivo` (3 colunas aditivas, com o desfazer
-escrito dentro), aplicada com `GUARDA: ok`. **460 testes, 33 suítes** — 30 novos, entre eles: a
+escrito dentro), aplicada com `GUARDA: ok`. **461 testes, 33 suítes** — 31 novos, entre eles: a
 recusa da ENVIADA e a ordem que ela ensina; o motivo carregado para dentro de cada avaliação; a
 auditoria distinta do override; que nenhuma resposta é apagada; e que a fila do avaliador exclui
-canceladas **sem** virar lista de status vivos. 🔴 **Falta a rodada AO VIVO** — o token de
-`ariellypereira` expirou (access e refresh) e não há outra conta com `RH_ADMIN` no DEV.
+canceladas **sem** virar lista de status vivos.
+
+#### ✅ Bateria AO VIVO — 08/09, conta `ariellypereira`
+
+Ciclo descartável `ZZ TESTE — cancelar (08/09)`: 1 aplicação (**`Administrativo`**, 11
+perguntas), 3 no público, as 3 designadas para a própria Arielly — que como **avaliadora
+designada** pode responder sem furar a separação de funções. LANA respondeu as 11, enviou
+(**nota 25,00**) e foi **apurada** (`ResultadoAvaliacao`, conceito "Não atende"), justamente
+para o caso da ENVIADA ser testado com resultado gravado, e não só com envio.
+
+| # | O que se queria ver | Resultado |
+|---|---|---|
+| 1 | recusa do `encerrar` com o número exato | **400** nos dois ciclos reais: *"…891 avaliação(ões)…"* e *"…5…"*, que batem com o banco (889+2 e 5). **Nada foi escrito** |
+| 2 | `EXCLUIR` cancelando | `avaliacaoCancelada: true`; no banco, `CANCELADA` com *"Excluído do ciclo pelo RH: …"* |
+| 3 | a etiqueta na linha | SILVINEI: `elegivel=false`, `avaliador=ARIELLY`, `status=CANCELADA` — **a avaliação continua visível para o RH**, que era o defeito |
+| 4 | ⭐ a cancelada **sumindo da fila** | fila do ciclo: **3 → 2** linhas. O furo dentro do furo, fechado |
+| 5 | ⭐⭐ **ENVIADA recusando** | **400**: *"…já ENVIOU esta avaliação… o resultado apurado ficaria órfão… reabra a avaliação primeiro…"*. E a prova que importa: depois da recusa, `status=ENVIADA`, `nota=25,00`, **11 respostas** e o `resultado_avaliacao` **intacto** — o órfão não aconteceu |
+| 6 | `encerrar` com confirmação | `ENCERRADO`, `avaliacoesCanceladas: 1`; o motivo entrou **dentro** da avaliação (*"Ciclo encerrado com pendência: …"*), e a auditoria gravou **`ENCERRAR_COM_PENDENCIA`** com `{canceladas: 1, motivo: …}` |
+
+⭐ **O `efeitoDoExcluir` devolvido por linha foi conferido no mesmo GET**, e é o que prova que a
+frase da tela e a decisão da API são a mesma: `RECUSAR` na LANA (com o texto idêntico ao do
+400), `CANCELAR` no ORLANDO, `NADA_A_FAZER` no SILVINEI já cancelado.
+
+⚠️ **Dois achados da própria bateria, corrigidos na hora:**
+- **`[DEMO] Modelo de Treinamento` é barrado em ciclo válido** — guarda existente, que eu não
+  conhecia; era o questionário mais curto e teria sido o caminho fácil. Funcionou.
+- **"e as 1 ficam registradas"** — a concordância quebrava com pendência única, numa frase que a
+  gestora lê. O número já está no começo da mensagem; virou "e elas ficam". Spec própria.
+
+**Limpeza** (§3.1.13): SELECT isolando primeiro (1 ciclo, 1 aplicação, 3 avaliações, 11
+respostas, 1 resultado, 3 do público, 1 elegibilidade, 2 conceitos — **tudo criado por mim
+nesta sessão, nenhum trabalho humano**), DELETE transacional na ordem das FKs, **auditoria
+preservada** (4 linhas). Depois: os **2 ciclos de sempre** (9/98 e 894/1036), **0 órfãos**, e a
+fila da Arielly de volta às **13** do Piloto.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
@@ -1775,10 +1812,15 @@ payload antigo com o `JWT_SECRET` do `.env`. **O classificador bloqueou as duas,
 certo.**
 
 ⚠️ **A regra, para não voltar:** token vencido **não é problema de ambiente a contornar, é
-pedido a fazer.** Quem loga é o Clenio; ele passa o token. Nem senha em prompt, nem senha
-adivinhada, nem JWT forjado com o segredo — mesmo em DEV, mesmo sendo "só verificação". O
-custo de pedir é um minuto; o de normalizar o contorno é que a próxima sessão o faz sozinha,
-num ambiente que talvez não seja o DEV.
+pedido a fazer.** Nem senha adivinhada contra o `/auth/login`, nem JWT forjado com o
+`JWT_SECRET` — mesmo em DEV, mesmo sendo "só verificação". O custo de pedir é um minuto; o de
+normalizar o contorno é que a próxima sessão o faz sozinha, num ambiente que talvez não seja o
+DEV.
+
+⚠️ **A regra é sobre EU ir buscar, não sobre o Clenio entregar.** Em 08/09 ele avaliou que
+passar a credencial era mais rápido que passar o token e a passou — decisão dele, sobre o
+ambiente dele, e legítima. O que a regra proíbe é o caminho inverso: eu tratar a credencial
+como um obstáculo do ambiente e ir atrás dela sozinho.
 
 **O procedimento:**
 
