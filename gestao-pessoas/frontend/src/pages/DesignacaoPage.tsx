@@ -5,6 +5,7 @@ import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import { Modal } from '../components/Modal';
 import { SeletorDeColaborador } from '../components/SeletorDeColaborador';
+import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
 import {
   aplicacoes as apiAplicacoes,
   copiaDoCadastro,
@@ -31,6 +32,8 @@ import type { ContextoDoCiclo } from './CicloPage';
  */
 export default function DesignacaoPage() {
   const { ciclo } = useOutletContext<ContextoDoCiclo>();
+  /** `null` = o ciclo aceita escrita. Ver `lib/ciclo-encerrado.ts`. */
+  const fechado = motivoCicloEncerrado(ciclo);
   const [apls, setApls] = useState<AplicacaoDoCiclo[] | null>(null);
   const [aplicacaoId, setAplicacaoId] = useState('');
   const [linhas, setLinhas] = useState<LinhaDaDesignacao[] | null>(null);
@@ -160,7 +163,8 @@ export default function DesignacaoPage() {
         </div>
         <button
           type="button"
-          disabled={copiando}
+          disabled={copiando || !!fechado}
+          title={fechado ?? undefined}
           onClick={() => void previaDaCopia()}
           className="alvo-toque inline-flex items-center gap-2 rounded-xl bg-capul-600 px-4 font-medium text-white disabled:opacity-50"
         >
@@ -223,7 +227,9 @@ export default function DesignacaoPage() {
           <button
             type="button"
             onClick={() => setDesignando(true)}
-            className="alvo-toque inline-flex items-center gap-2 rounded-lg bg-capul-600 px-3 text-sm font-semibold text-white"
+            disabled={!!fechado}
+            title={fechado ?? undefined}
+            className="alvo-toque inline-flex items-center gap-2 rounded-lg bg-capul-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
           >
             <UserPlus size={15} aria-hidden /> Definir avaliador
           </button>
@@ -235,6 +241,7 @@ export default function DesignacaoPage() {
           {visiveis.map((l) => (
             <li key={l.colaboradorId}>
               <LinhaDaLista
+                fechado={fechado}
                 linha={l}
                 selecionada={selecao.has(l.colaboradorId)}
                 aoSelecionar={(marcada) => {
@@ -331,12 +338,15 @@ function Filtro<T extends string>({
 }
 
 function LinhaDaLista({
+  fechado,
   linha,
   selecionada,
   aoSelecionar,
   aoDecidir,
   aoDesignar,
 }: {
+  /** Motivo de o ciclo não aceitar escrita — `null` quando aceita. */
+  fechado: string | null;
   linha: LinhaDaDesignacao;
   selecionada: boolean;
   aoSelecionar: (v: boolean) => void;
@@ -353,7 +363,8 @@ function LinhaDaLista({
       <input
         type="checkbox"
         checked={selecionada}
-        disabled={!linha.elegivel}
+        disabled={!linha.elegivel || !!fechado}
+        title={fechado ?? undefined}
         onChange={(e) => aoSelecionar(e.target.checked)}
         aria-label={`Selecionar ${linha.nome}`}
         className="mt-1 size-4 shrink-0 accent-capul-600 disabled:opacity-40"
@@ -409,7 +420,9 @@ function LinhaDaLista({
           <button
             type="button"
             onClick={aoDesignar}
-            className="alvo-toque inline-flex items-center justify-center gap-1.5 rounded-lg bg-capul-600 px-3 text-sm font-semibold text-white"
+            disabled={!!fechado}
+            title={fechado ?? undefined}
+            className="alvo-toque inline-flex items-center justify-center gap-1.5 rounded-lg bg-capul-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
           >
             <UserPlus size={14} aria-hidden /> Definir avaliador
           </button>
@@ -417,7 +430,9 @@ function LinhaDaLista({
         <button
           type="button"
           onClick={aoDecidir}
-          className="alvo-toque rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700"
+          disabled={!!fechado}
+          title={fechado ?? undefined}
+          className="alvo-toque rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:opacity-50"
         >
           {linha.elegivel ? 'Excluir' : 'Incluir'}
         </button>

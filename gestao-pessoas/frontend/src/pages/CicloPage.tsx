@@ -7,7 +7,7 @@ import { EtiquetaDeCiclo } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 import { ciclos, mensagemDoErro, painel, type CicloDetalhado, type ResumoDoCiclo } from '../services/api';
-import { data } from '../lib/formato';
+import { data, dataHora } from '../lib/formato';
 
 /**
  * A moldura do ciclo. As quatro telas do RH (aplicações, designação, painel e
@@ -77,6 +77,7 @@ export default function CicloPage() {
 
           {resumo && <LinhaDeEstado resumo={resumo} cicloId={cicloId} />}
           {resumo?.status === 'RASCUNHO' && <FaixaDoRascunho resumo={resumo} />}
+          {resumo?.status === 'ENCERRADO' && <FaixaDoEncerrado resumo={resumo} />}
 
           <nav className="mt-4 flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Etapas do ciclo">
             <Aba para="aplicacoes" rotulo="Aplicações" />
@@ -165,6 +166,17 @@ function LinhaDeEstado({ resumo, cicloId }: { resumo: ResumoDoCiclo; cicloId: st
           exemplo — o backend devolve `null` e aqui não se mostra nada: passo
           chutado manda alguém fazer o que talvez não seja a vez de fazer, e a
           tela passa a mentir com ar de ajuda. */}
+      {/* ⭐ Um ciclo REABERTO duas vezes é informação, não detalhe — e some da
+          tela assim que ele volta a ABERTO, se ninguém disser. Fica aqui, na
+          linha que está sempre visível. */}
+      {resumo.reaberturas > 0 && resumo.ultimaReabertura && (
+        <p className="mt-1 text-xs text-slate-500">
+          Reaberto {resumo.reaberturas}× · última em {dataHora(resumo.ultimaReabertura.em)}
+          {resumo.ultimaReabertura.por ? ` por ${resumo.ultimaReabertura.por}` : ''}
+          {resumo.ultimaReabertura.motivo ? ` — “${resumo.ultimaReabertura.motivo}”` : ''}
+        </p>
+      )}
+
       {resumo.proximoPasso && (
         <p className="mt-1.5 flex items-center gap-1.5 text-sm">
           <ArrowRight size={15} className="shrink-0 text-capul-700" aria-hidden />
@@ -244,6 +256,43 @@ function FaixaDoRascunho({ resumo }: { resumo: ResumoDoCiclo }) {
       <p className="mt-2 text-xs text-amber-900/80">
         Questionários e critérios (com as faixas) são cadastrados pela T.I. — ainda não têm tela
         neste módulo.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * ⭐⭐ A FAIXA DO ENCERRADO — a tela passa a saber do que o backend recusa.
+ *
+ * A regra do ciclo encerrado (§3.1.12) nasceu no backend e as telas não sabiam:
+ * os botões continuavam com aparência normal e a pessoa só descobria no erro,
+ * **depois** do clique. Aqui ela lê antes — e a frase aponta para o botão de
+ * reabrir, que agora existe.
+ *
+ * ⚠️ Diz também o que CONTINUA valendo. "Encerrado" sem isso soa como tela
+ * morta, e ela não é: resultados, memória de cálculo e painel seguem abrindo —
+ * que é justamente para o que um ciclo encerrado serve.
+ */
+function FaixaDoEncerrado({ resumo }: { resumo: ResumoDoCiclo }) {
+  return (
+    <div className="mt-3 rounded-xl border border-slate-300 bg-slate-100 p-3">
+      <p className="flex items-start gap-2 text-sm text-slate-700">
+        <Lock size={15} className="mt-0.5 shrink-0" aria-hidden />
+        <span>
+          <strong className="font-semibold">
+            Ciclo encerrado{resumo.encerradoEm ? ` em ${data(resumo.encerradoEm)}` : ''}.
+          </strong>{' '}
+          Designar, mexer no público e apurar estão fechados — os botões aparecem desabilitados,
+          com o motivo. <strong>Continua valendo:</strong> resultados, memória de cálculo, painel e
+          a lista de designação.
+        </span>
+      </p>
+      <p className="mt-1.5 text-sm text-slate-600">
+        Para voltar a mexer,{' '}
+        <Link to="/ciclos" className="font-medium text-capul-700 underline">
+          reabra o ciclo na lista de Ciclos
+        </Link>{' '}
+        — é ato do RH_ADMIN, exige motivo e fica registrado.
       </p>
     </div>
   );

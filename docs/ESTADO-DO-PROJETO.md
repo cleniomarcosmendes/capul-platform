@@ -8,10 +8,10 @@
 ## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**68 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**70 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 68 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 70 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -1163,6 +1163,50 @@ mesmo tratamento que o Apurar recebeu (§3.1.8), pela mesma razão.
 Verificado ao vivo em 07/09 num segundo ciclo descartável (criado, usado e **apagado**): a faixa
 com a pendência real *"O ciclo não tem nenhuma aplicação"*, o próximo passo apontando para montar
 a primeira, e a confirmação com os dois blocos. Sobraram os dois ciclos de sempre.
+
+### 3.1.16. ✅ O botão de REABRIR e a tela sabendo do encerrado (07/09)
+
+Duas dívidas que **eu mesmo criei** ao fazer a regra do §3.1.12 — e as duas são a classe que o
+módulo passou o dia caçando:
+
+1. **Rota sem botão.** `POST /ciclos/:id/reabrir` existia e não tinha caminho na tela: um ciclo
+   encerrado só se reabria por `curl`. É exatamente a lacuna da §3.1.5 (o vínculo), repetida no
+   mesmo dia por quem tinha acabado de registrá-la.
+2. **Regra no backend, tela sem saber.** Em ciclo encerrado, designar / público / apurar
+   continuavam com **aparência normal** e a pessoa só descobria no **erro, depois do clique** — o
+   oposto do que se fez no Apurar e no Abrir.
+
+⭐ **Desabilitado COM O MOTIVO, nunca escondido.** Esconder faria o ciclo encerrado parecer outra
+tela e apagaria a informação de que a ação existe; desabilitado mantém a leitura e ensina a
+saída. É o padrão que o "Encerrar ciclo" com avaliação pendente e a faixa do rascunho já usavam.
+A frase é uma só (`lib/ciclo-encerrado.ts`) e **aponta para o botão de reabrir**, que agora
+existe: *"Ciclo encerrado em 07/09/2026. Para voltar a mexer, reabra o ciclo na lista de Ciclos —
+é ato do RH_ADMIN, exige motivo e fica registrado."*
+
+**Onde cada coisa fica:**
+
+| Peça | Lugar | Por quê |
+|---|---|---|
+| **Botão Reabrir** | lista de Ciclos, junto de Abrir/Encerrar | é onde o ciclo de vida do objeto já mora |
+| **Faixa do encerrado** | dentro do ciclo, em toda aba | é onde a pessoa está quando esbarra na regra — e leva um **link** para a lista, não um segundo botão: duas portas para o mesmo ato viram duas confirmações para manter |
+| **Botões desabilitados + `title`** | Designação, Aplicações, Painel | a leitura da tela continua inteira |
+
+**A confirmação de reabrir** diz o que **volta a ser possível** (designar, público, apurar,
+reabrir avaliação), pede o **motivo no próprio diálogo** — o botão fica desabilitado sem ele, em
+vez de deixar o backend recusar depois — e avisa que **volta para ABERTO, nunca para rascunho**.
+
+⭐ **A reabertura fica VISÍVEL depois**, na linha de estado, sempre: *"Reaberto 1× · última em
+07/09/2026, 12:38 por Arielly Aparecida Jose Pereira — «…»"*. A contagem vem de `rh.auditoria`
+(a tabela do ciclo só guarda a última), porque **um ciclo reaberto duas vezes é informação, não
+detalhe** — e sem isso ela sumiria da tela assim que o ciclo voltasse a ABERTO.
+
+⚠️ **A linha de estado em ciclo ENCERRADO** mostra os números e **não mostra "Próximo"** — está
+certo: não há passo seguinte, e reabrir é exceção, não caminho. Quem diz o estado é a faixa.
+
+Verificado ao vivo num terceiro ciclo descartável (criado, usado e **apagado**): a faixa, os dois
+botões desabilitados com o motivo no `title`, a confirmação recusando sem motivo e aceitando com
+ele, o registro aparecendo na linha de estado com nome e frase, e o Apurar voltando a habilitar
+depois da reabertura. Sobraram os dois ciclos de sempre.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

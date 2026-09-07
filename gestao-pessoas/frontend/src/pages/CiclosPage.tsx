@@ -103,6 +103,23 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
   const [ocupado, setOcupado] = useState(false);
   const [problemas, setProblemas] = useState<string[] | null>(null);
   const [confirmandoAbrir, setConfirmandoAbrir] = useState(false);
+  const [reabrindo, setReabrindo] = useState(false);
+  const [motivoReabertura, setMotivoReabertura] = useState('');
+
+  async function reabrir() {
+    setProblemas(null);
+    setOcupado(true);
+    try {
+      await ciclos.reabrir(ciclo.id, motivoReabertura.trim());
+      setReabrindo(false);
+      setMotivoReabertura('');
+      await aoMudar();
+    } catch (e) {
+      setProblemas([mensagemDoErro(e)]);
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   async function agir(acao: 'abrir' | 'encerrar') {
     setConfirmandoAbrir(false);
@@ -155,7 +172,11 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
         </Link>
       </div>
 
-      {tem(ROLES.RH_ADMIN) && (ciclo.status === 'RASCUNHO' || ciclo.status === 'ABERTO') && (
+      {/* ⚠️ ENCERRADO entra aqui: é onde mora o botão de REABRIR. Antes, um
+          ciclo encerrado não tinha ação nenhuma na tela — e a rota de reabertura
+          existia sem botão, a mesma lacuna da §3.1.5 que tínhamos acabado de
+          registrar sobre o vínculo. */}
+      {tem(ROLES.RH_ADMIN) && (
         <div className="mt-3 border-t border-slate-100 pt-3">
           <button
             type="button"
@@ -166,22 +187,34 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
              * descobrir a regra clicando no botão que fecha o ciclo é o tipo de
              * aprendizado que só se quer ter uma vez.
              */
-            disabled={ocupado || (ciclo.status !== 'RASCUNHO' && ciclo.avaliacoesPendentes > 0)}
+            disabled={ocupado || (ciclo.status === 'ABERTO' && ciclo.avaliacoesPendentes > 0)}
             title={
-              ciclo.status !== 'RASCUNHO' && ciclo.avaliacoesPendentes > 0
+              ciclo.status === 'ABERTO' && ciclo.avaliacoesPendentes > 0
                 ? `${ciclo.avaliacoesPendentes} avaliação(ões) ainda não foram enviadas`
                 : undefined
             }
             onClick={() =>
-              ciclo.status === 'RASCUNHO' ? setConfirmandoAbrir(true) : agir('encerrar')
+              ciclo.status === 'RASCUNHO'
+                ? setConfirmandoAbrir(true)
+                : ciclo.status === 'ENCERRADO'
+                  ? setReabrindo(true)
+                  : agir('encerrar')
             }
             className="alvo-toque inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:opacity-50"
           >
-            {ciclo.status === 'RASCUNHO' ? <Unlock size={15} aria-hidden /> : <Lock size={15} aria-hidden />}
-            {ocupado ? 'Aguarde…' : ciclo.status === 'RASCUNHO' ? 'Abrir ciclo' : 'Encerrar ciclo'}
+            {ciclo.status === 'ABERTO' ? <Lock size={15} aria-hidden /> : <Unlock size={15} aria-hidden />}
+            {ocupado
+              ? 'Aguarde…'
+              : ciclo.status === 'RASCUNHO'
+                ? 'Abrir ciclo'
+                : ciclo.status === 'ENCERRADO'
+                  ? 'Reabrir ciclo'
+                  : 'Encerrar ciclo'}
           </button>
           <p className="mt-2 text-xs text-slate-500">
-            {ciclo.status === 'RASCUNHO'
+            {ciclo.status === 'ENCERRADO'
+              ? `Encerrado${ciclo.encerradoEm ? ` em ${data(ciclo.encerradoEm)}` : ''} — designar, mexer no público e apurar estão fechados. Reabrir devolve tudo isso, com motivo registrado.`
+              : ciclo.status === 'RASCUNHO'
               ? 'Abrir gera as avaliações e trava a montagem: aplicações e critérios só mudam enquanto é rascunho.'
               : ciclo.avaliacoesPendentes > 0
                 ? `Faltam ${ciclo.avaliacoesPendentes} avaliação(ões) por enviar — encerrar só depois que todas entrarem.`
@@ -229,6 +262,56 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
             >
               {ocupado ? 'Abrindo…' : 'Abrir o ciclo'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ⭐⭐ REABRIR — mesmo tratamento do Apurar e do Abrir: diz o que VOLTA a
+          ser possível e exige o motivo no próprio diálogo, porque é ele que fica
+          registrado. Sem motivo o backend recusa; pedir aqui evita o vaivém. */}
+      {reabrindo && (
+        <Modal titulo={`Reabrir "${ciclo.nome}"`} aoFechar={() => setReabrindo(false)}>
+          <p className="text-sm text-slate-700">
+            Reabrir devolve o ciclo para <strong>ABERTO</strong> — e volta a permitir:
+          </p>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-slate-700">
+            <li>designar (à mão e pelo cadastro) e mexer no público</li>
+            <li>apurar e reapurar</li>
+            <li>reabrir avaliações — que com o ciclo fechado ficariam sem quem respondesse</li>
+          </ul>
+          <p className="mt-2 text-sm text-slate-500">
+            ⚠️ Volta para ABERTO, <strong>nunca para rascunho</strong>: aplicação e peso continuam
+            travados, porque mudar peso depois de haver resultado é reapuração, não montagem.
+          </p>
+          <label className="mt-3 block text-sm font-medium text-slate-700">
+            Motivo da reabertura
+            <textarea
+              value={motivoReabertura}
+              onChange={(e) => setMotivoReabertura(e.target.value)}
+              rows={2}
+              placeholder="Por que este ciclo está sendo reaberto?"
+              className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm text-slate-800"
+            />
+          </label>
+          <p className="text-xs text-slate-500">
+            Fica registrado no ciclo e na auditoria, com quem reabriu e quando.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setReabrindo(false)}
+              className="alvo-toque flex-1 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={ocupado || motivoReabertura.trim().length < 3}
+              onClick={() => void reabrir()}
+              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {ocupado ? 'Reabrindo…' : 'Reabrir o ciclo'}
             </button>
           </div>
         </Modal>

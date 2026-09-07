@@ -129,6 +129,11 @@ export interface CicloDaLista {
   janelaTreinamentoMeses: number;
   incluirAfastados: boolean;
   valeParaMerito: boolean;
+  /** Preenchidos conforme o ciclo anda — a tela usa para dizer desde quando. */
+  abertoEm: string | null;
+  encerradoEm: string | null;
+  reabertoEm: string | null;
+  motivoReabertura: string | null;
   _count: { aplicacoes: number; avaliacoes: number };
   /** Não enviadas — é o que `encerrar` exige que seja zero. */
   avaliacoesPendentes: number;
@@ -167,6 +172,9 @@ export const ciclos = {
   criar: (dados: NovoCiclo) => rhApi.post<CicloDaLista>('/ciclos', dados).then((r) => r.data),
   abrir: (id: string) => rhApi.post(`/ciclos/${id}/abrir`).then((r) => r.data),
   encerrar: (id: string) => rhApi.post(`/ciclos/${id}/encerrar`).then((r) => r.data),
+  /** Reabrir exige motivo — como o reabrir de avaliação. */
+  reabrir: (id: string, motivo: string) =>
+    rhApi.post(`/ciclos/${id}/reabrir`, { motivo }).then((r) => r.data),
 };
 
 export interface VersaoDeModelo {
@@ -385,6 +393,9 @@ export interface ResumoDoCiclo {
    * versão própria da regra, senão diria "pode abrir" e a API recusaria.
    */
   pendenciasParaAbrir: string[] | null;
+  /** Quantas vezes o ciclo já foi reaberto — a tabela guarda só a última. */
+  reaberturas: number;
+  ultimaReabertura: { em: string; por: string | null; motivo: string | null } | null;
 }
 
 export const painel = {

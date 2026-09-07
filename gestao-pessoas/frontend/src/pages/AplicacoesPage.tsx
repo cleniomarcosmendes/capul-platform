@@ -19,6 +19,7 @@ import {
   type PreviaDoPublico,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
+import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
 
 /**
  * APLICAÇÕES — a peça que resolve o problema que originou o módulo: as mesmas 15
@@ -37,6 +38,8 @@ import type { ContextoDoCiclo } from './CicloPage';
  */
 export default function AplicacoesPage() {
   const { ciclo } = useOutletContext<ContextoDoCiclo>();
+  /** `null` = o ciclo aceita escrita. Ver `lib/ciclo-encerrado.ts`. */
+  const fechado = motivoCicloEncerrado(ciclo);
   const { tem } = useAuth();
   const [lista, setLista] = useState<AplicacaoDoCiclo[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -103,7 +106,7 @@ export default function AplicacoesPage() {
         <ul className="space-y-3">
           {lista.map((a) => (
             <li key={a.id}>
-              <CartaoDeAplicacao aplicacao={a} aoMudarPublico={carregar} />
+              <CartaoDeAplicacao aplicacao={a} fechado={fechado} aoMudarPublico={carregar} />
             </li>
           ))}
         </ul>
@@ -134,9 +137,12 @@ function repartir(pesoAvaliacao: number, criterios: { nome: string; peso: number
 }
 
 function CartaoDeAplicacao({
+  fechado,
   aplicacao,
   aoMudarPublico,
 }: {
+  /** Motivo de o ciclo não aceitar escrita — `null` quando aceita. */
+  fechado: string | null;
   aplicacao: AplicacaoDoCiclo;
   aoMudarPublico: () => Promise<void> | void;
 }) {
@@ -210,7 +216,11 @@ function CartaoDeAplicacao({
             type="button"
             onClick={() => setEditandoPublico((v) => !v)}
             aria-expanded={editandoPublico}
-            className="alvo-toque mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700"
+            // ⚠️ Desabilitado COM O MOTIVO, nunca escondido — ver
+            // `lib/ciclo-encerrado.ts`.
+            disabled={!!fechado}
+            title={fechado ?? undefined}
+            className="alvo-toque mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:opacity-50"
           >
             <Users size={14} aria-hidden />
             {editandoPublico ? 'Fechar' : 'Montar público'}

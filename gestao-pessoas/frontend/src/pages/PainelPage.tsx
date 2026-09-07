@@ -14,6 +14,7 @@ import {
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
 import { Modal } from '../components/Modal';
+import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
 
 /**
  * PAINEL — o que falta para o ciclo fechar.
@@ -72,6 +73,7 @@ export default function PainelPage() {
 
   if (erro) return <Erro mensagem={erro} aoTentarDeNovo={carregar} />;
   if (!dados) return <Carregando linhas={4} />;
+  const fechado = motivoCicloEncerrado(ciclo);
 
   /**
    * ⚠️ Conta ENVIADAS, na mesma direção da fila do avaliador e da própria barra.
@@ -292,12 +294,17 @@ export default function PainelPage() {
           </p>
           <button
             type="button"
-            disabled={apurando}
+            // ⚠️ Desabilitado COM O MOTIVO, nunca escondido: esconder faria o
+            // ciclo encerrado parecer outra tela e apagaria a informação de que
+            // a ação existe. Ver `lib/ciclo-encerrado.ts`.
+            disabled={apurando || !!fechado}
+            title={fechado ?? undefined}
             onClick={() => setConfirmando(true)}
             className="alvo-toque mt-3 inline-flex items-center gap-2 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
           >
             <Calculator size={16} aria-hidden /> {apurando ? 'Apurando…' : 'Apurar o ciclo'}
           </button>
+          {fechado && <p className="mt-2 text-sm text-slate-600">{fechado}</p>}
           {resultadoApuracao && <p className="mt-2 text-sm text-slate-700">{resultadoApuracao}</p>}
 
           {/* ⭐⭐ CONFIRMAÇÃO COM O NÚMERO REAL — não é trava, é aviso.

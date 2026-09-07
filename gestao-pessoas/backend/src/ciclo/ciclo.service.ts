@@ -5,6 +5,7 @@
  * modelos diferentes por perfil de centro de custo dentro do mesmo ciclo.
  */
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
@@ -67,6 +68,43 @@ export class CicloService {
       valorNovo: { nome: ciclo.nome, dataBase: ciclo.dataBase, valeParaMerito: ciclo.valeParaMerito },
     });
     return ciclo;
+  }
+
+  /**
+   * ⭐ O HISTÓRICO DE REABERTURA — porque **um ciclo reaberto duas vezes é
+   * informação, não detalhe**.
+   *
+   * A tabela guarda só a ÚLTIMA reabertura (colunas únicas); a contagem vem de
+   * `rh.auditoria`, que guarda todas. O nome de quem reabriu sai de
+   * `core.usuarios` por `$queryRaw` — `core` é read-only aqui, como na Logística
+   * e no Fiscal.
+   */
+  async historicoDeReabertura(cicloId: string) {
+    const ciclo = await this.prisma.ciclo.findUnique({
+      where: { id: cicloId },
+      select: { reabertoEm: true, reabertoPorId: true, motivoReabertura: true },
+    });
+    if (!ciclo?.reabertoEm) return { reaberturas: 0, ultima: null };
+
+    const [reaberturas, nome] = await Promise.all([
+      this.prisma.auditoria.count({
+        where: { entidade: 'Ciclo', entidadeId: cicloId, acao: 'REABRIR' },
+      }),
+      this.nomeDoUsuario(ciclo.reabertoPorId),
+    ]);
+    return {
+      reaberturas: Math.max(reaberturas, 1),
+      ultima: { em: ciclo.reabertoEm, por: nome, motivo: ciclo.motivoReabertura },
+    };
+  }
+
+  /** `core` é read-only: consulta por SQL cru, como os outros módulos fazem. */
+  private async nomeDoUsuario(usuarioId: string | null): Promise<string | null> {
+    if (!usuarioId) return null;
+    const linhas = await this.prisma.$queryRaw<{ nome: string | null }[]>(
+      Prisma.sql`SELECT nome FROM "core"."usuarios" WHERE id = ${usuarioId} LIMIT 1`,
+    );
+    return linhas[0]?.nome ?? null;
   }
 
   /**

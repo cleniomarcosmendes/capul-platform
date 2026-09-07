@@ -123,6 +123,12 @@ export interface ResumoDoCiclo {
    * significa que o clique passa, e é a mesma conta que a API vai fazer.
    */
   pendenciasParaAbrir: string[] | null;
+  /**
+   * ⭐ Reaberturas do ciclo. `reaberturas` conta TODAS (vem da auditoria); a
+   * tabela só guarda a última. Um ciclo reaberto duas vezes é informação.
+   */
+  reaberturas: number;
+  ultimaReabertura: { em: Date; por: string | null; motivo: string | null } | null;
 }
 
 @Injectable()
@@ -263,6 +269,10 @@ export class PainelService {
       // Só faz sentido no rascunho — nos outros estados a porta já passou.
       pendenciasParaAbrir:
         ciclo.status === 'RASCUNHO' ? await this.ciclos.pendenciasParaAbrir(cicloId) : null,
+      ...(await this.ciclos.historicoDeReabertura(cicloId).then((h) => ({
+        reaberturas: h.reaberturas,
+        ultimaReabertura: h.ultima,
+      }))),
     };
   }
 
