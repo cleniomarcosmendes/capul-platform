@@ -21,6 +21,11 @@ export class PainelController {
     return this.painel.doCiclo(cicloId);
   }
 
+  /** A linha de estado do cabeçalho — barato de propósito, roda em toda aba. */
+  @Get('ciclo/:cicloId/resumo') resumo(@Param('cicloId') cicloId: string) {
+    return this.painel.resumoDoCiclo(cicloId);
+  }
+
   /** Mesma conta da apuração, sem gravar — ver `ApuracaoService.conferir`. */
   @Get('ciclo/:cicloId/pendencias') pendencias(@Param('cicloId') cicloId: string) {
     return this.apuracao.conferir({ tipo: 'CICLO', cicloId });

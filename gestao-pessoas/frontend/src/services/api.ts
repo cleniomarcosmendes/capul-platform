@@ -359,7 +359,31 @@ export interface Conferencia {
   alertas: AlertaAgregado[];
 }
 
+export interface ProximoPassoDoCiclo {
+  codigo: 'MONTAR_APLICACAO' | 'MONTAR_PUBLICO' | 'DESIGNAR' | 'ABRIR' | 'APURAR' | 'ENCERRAR';
+  /** Frase pronta, com o número dentro — a tela NÃO monta texto (a regra é do backend). */
+  rotulo: string;
+  aba: 'aplicacoes' | 'designacao' | 'painel' | null;
+}
+
+/** A linha de estado do cabeçalho do ciclo. */
+export interface ResumoDoCiclo {
+  status: StatusCiclo;
+  aplicacoes: number;
+  noPublico: number;
+  designados: number;
+  semDesignacao: number;
+  enviadas: number;
+  aFazer: number;
+  apuradas: number;
+  encerradoEm: string | null;
+  /** `null` quando não há passo óbvio — e aí a tela não mostra nada. */
+  proximoPasso: ProximoPassoDoCiclo | null;
+}
+
 export const painel = {
+  resumo: (cicloId: string) =>
+    rhApi.get<ResumoDoCiclo>(`/painel/ciclo/${cicloId}/resumo`).then((r) => r.data),
   doCiclo: (cicloId: string) => rhApi.get<PainelDoCiclo>(`/painel/ciclo/${cicloId}`).then((r) => r.data),
   pendencias: (cicloId: string) =>
     rhApi.get<Conferencia>(`/painel/ciclo/${cicloId}/pendencias`).then((r) => r.data),

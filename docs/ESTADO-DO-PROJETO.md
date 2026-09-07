@@ -8,10 +8,10 @@
 ## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**66 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**67 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 66 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 67 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -108,7 +108,7 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 | Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **42 endpoints** em 9 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
 | Banco | 8 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **411 testes, 29 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Testes | **422 testes, 30 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -1033,9 +1033,17 @@ ciclo, não para remontá-lo.
 Migration `20260907140000_ciclo_encerrado_fecha_e_reabre`, com o script de reversão escrito
 dentro dela.
 
-Verificado ao vivo em 07/09 num **ciclo descartável** (criado, usado e apagado): as quatro
-recusas com a mensagem certa, as cinco leituras abrindo, reabrir sem motivo recusando, reabrir
-com motivo devolvendo `ABERTO` com `encerradoEm` preservado, e as operações voltando depois.
+Verificado ao vivo em 07/09 num **ciclo descartável** (criado, usado e apagado): **as quatro
+recusas com a mensagem certa — designar, público, apurar e decisão de elegibilidade** —, as cinco
+leituras abrindo, reabrir sem motivo recusando, e reabrir com motivo devolvendo `ABERTO` com
+`encerradoEm` preservado.
+
+⚠️ **O que NÃO foi exercitado ao vivo:** que o **apurar volta a funcionar depois de reabrir**. O
+ciclo descartável tinha **zero avaliações enviadas**, então a chamada voltou com a recusa
+pré-existente *"Nenhuma avaliação enviada neste escopo — nada a apurar"*. Isso **prova que a
+guarda soltou** (a mensagem mudou de dona), mas não é o mesmo que ver a apuração rodar. Fica no
+padrão do `RH_ADMIN` sem fila e do `RH_MODELO`: **verificado por teste, não ao vivo** — sai
+quando houver um ciclo com avaliação enviada que possa ser encerrado e reaberto.
 
 ### 3.1.13. ⚠️ INCIDENTE de 07/09 — o roteiro seguiu depois de a API recusar
 
@@ -1067,6 +1075,56 @@ estava enviada e nunca fora apurada). Público, respostas e as 4 enviadas: **int
 ⚠️ **Isto é a mesma classe do UPDATE manual que custou meses no Fiscal** e que motivou a rota de
 ajuste de período em vez do SQL: mudança sem rastro. Fazer foi certo — era dado que eu mesmo
 criei por erro, em DEV —, **não registrar é que não seria**.
+
+### 3.1.14. ✅ A LINHA DE ESTADO do ciclo — "onde estou e o que falta" (07/09)
+
+Primeira parte da proposta da §3.1.11. A tela do ciclo não dizia em que passo se estava; os
+números existiam, espalhados entre as abas. Agora ficam **acima** delas, em toda aba:
+
+> **4** aplicações · **1036** no público · **95** sem avaliador neste ciclo · **3** de 894 enviadas · **3** apuradas
+> → **Próximo:** *Designe as 95 pessoa(s) sem avaliador neste ciclo*
+
+⚠️ **Cada número traz o UNIVERSO no rótulo** — "sem avaliador **neste ciclo**", não "sem
+avaliador". O cabeçalho é onde o número é lido primeiro, e é onde a ambiguidade custa mais: 95
+aqui e 108 no cadastro são contas de coisas diferentes (§3.12).
+
+#### A regra do "Próximo" — e o direito de dizer "não sei"
+
+Mora no **backend** (`painel/proximo-passo.ts`, função pura com spec), junto dos números que a
+derivam — mesma razão do `pedeAcao`: regra derivada na tela envelhece separada do dado. E lá há
+teste; no frontend não há runner.
+
+| Estado | Condição | Próximo |
+|---|---|---|
+| RASCUNHO | 0 aplicações | montar a primeira aplicação |
+| RASCUNHO | 0 no público | montar o público |
+| RASCUNHO / ABERTO | `semDesignacao > 0` | designar as N **deste ciclo** |
+| RASCUNHO | tudo designado | abrir o ciclo |
+| ABERTO | todas enviadas, nada apurado | apurar as N enviadas |
+| ABERTO | tudo enviado e apurado | encerrar |
+
+⭐⭐ **E quando não há passo óbvio, NÃO aparece nada.** O caso que define a regra é o **ciclo
+aberto com tudo designado e ninguém respondendo**: a bola é dos **avaliadores**, não do RH.
+Sugerir "apurar" empurraria uma apuração parcial; sugerir "encerrar" bateria na recusa. A linha
+de estado continua na tela dizendo "3 de 894 enviadas", que é a informação verdadeira. Também
+não aparece em ciclo **ENCERRADO** (reabrir é exceção, não caminho) nem em ciclo aberto e vazio.
+**Passo chutado manda alguém fazer o que talvez não seja a vez de fazer — e a tela passa a mentir
+com ar de ajuda.**
+
+#### Não é stepper, e por quê
+
+O `EtapaStepper` do Inventário funciona lá porque as etapas são de **mão única**. Aqui volta-se a
+Aplicações enquanto é rascunho, o público muda depois de designar, designar e apurar são
+repetíveis: "1→2→3→4" mentiria. **"O que falta" não é uma seção, é o estado** — a aba Painel
+continua com o detalhe.
+
+⚙️ Endpoint próprio (`GET /painel/ciclo/:id/resumo`), **de propósito mais barato que o painel**:
+não faz a varredura de quem está fora de todas as aplicações (percorre 1.036 pessoas) nem a fila
+por avaliador. O cabeçalho aparece em todas as abas — o que ele custa, custa quatro vezes. ⚠️ Mas
+`semDesignacao` sai da **mesma régua** da tela de Designação: `noPublico - designados` seria mais
+barato e daria número diferente, porque ignora quem o RH excluiu e quem a régua tirou.
+
+Falhar no resumo **não derruba a tela**: sem ele, some a linha e o ciclo continua abrindo.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

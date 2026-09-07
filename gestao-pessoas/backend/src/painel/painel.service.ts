@@ -34,6 +34,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { DesignacaoService } from '../designacao/designacao.service.js';
 import { montarListaInicial } from '../designacao/elegibilidade-ciclo.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
+import { proximoPasso, type ProximoPasso } from './proximo-passo.js';
 
 export interface ProgressoDaAplicacao {
   aplicacaoId: string;
@@ -100,6 +101,21 @@ export interface PainelDoCiclo {
   foraDeTodasAsAplicacoes: { total: number; pessoas: PessoaForaDoCiclo[] };
   aplicacoes: ProgressoDaAplicacao[];
   avaliadores: FilaDoAvaliador[];
+}
+
+/** O que a linha de estado do cabeçalho do ciclo mostra. */
+export interface ResumoDoCiclo {
+  status: string;
+  aplicacoes: number;
+  noPublico: number;
+  designados: number;
+  semDesignacao: number;
+  enviadas: number;
+  aFazer: number;
+  apuradas: number;
+  encerradoEm: Date | null;
+  /** `null` quando não há passo óbvio — a tela não mostra nada. Ver a regra. */
+  proximoPasso: ProximoPasso | null;
 }
 
 @Injectable()
@@ -179,6 +195,60 @@ export class PainelService {
       aplicacoes,
       avaliadores: await this.filaPorAvaliador(cicloId),
     };
+  }
+
+  /**
+   * ⭐ O RESUMO — o que a LINHA DE ESTADO do cabeçalho do ciclo mostra, e o
+   * próximo passo derivado dele.
+   *
+   * É irmão do `doCiclo`, e de propósito **não** faz as duas partes caras dele:
+   * a varredura de quem está fora de todas as aplicações (percorre as 1.036
+   * pessoas) e a fila por avaliador. O cabeçalho aparece em TODAS as abas do
+   * ciclo — o que ele custa, custa quatro vezes.
+   *
+   * ⚠️ `semDesignacao` sai da MESMA régua da tela de Designação (via
+   * `designacao.listar`), não de uma conta paralela: `noPublico - designados`
+   * seria mais barato e daria número diferente, porque ignora quem o RH excluiu
+   * e quem a régua tirou. Duas contas de "quem falta" divergem no primeiro
+   * ajuste manual — e o cabeçalho é onde o número é lido primeiro.
+   */
+  async resumoDoCiclo(cicloId: string): Promise<ResumoDoCiclo> {
+    const ciclo = await this.prisma.ciclo.findUnique({
+      where: { id: cicloId },
+      include: { aplicacoes: { orderBy: { ordem: 'asc' }, select: { id: true } } },
+    });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+
+    const [porStatus, noPublico, apuradas] = await Promise.all([
+      this.prisma.avaliacao.groupBy({ by: ['status'], where: { cicloId }, _count: { _all: true } }),
+      this.prisma.aplicacaoPublico.count({ where: { cicloId } }),
+      this.prisma.resultadoAvaliacao.count({ where: { cicloId } }),
+    ]);
+    const conta = (s: string) => porStatus.find((l) => l.status === s)?._count._all ?? 0;
+    const designados = porStatus.reduce((t, l) => t + l._count._all, 0);
+
+    let semDesignacao = 0;
+    for (const a of ciclo.aplicacoes) {
+      const elegiveis = (await this.designacao.listar(a.id)).filter((l) => l.elegivel);
+      const comAvaliacao = new Set(
+        (
+          await this.prisma.avaliacao.groupBy({ by: ['avaliadoId'], where: { aplicacaoId: a.id } })
+        ).map((x) => x.avaliadoId),
+      );
+      semDesignacao += elegiveis.filter((e) => !comAvaliacao.has(e.colaboradorId)).length;
+    }
+
+    const estado = {
+      status: ciclo.status as string,
+      aplicacoes: ciclo.aplicacoes.length,
+      noPublico,
+      designados,
+      semDesignacao,
+      enviadas: conta('ENVIADA'),
+      aFazer: conta('PENDENTE') + conta('EM_ANDAMENTO'),
+      apuradas,
+    };
+    return { ...estado, encerradoEm: ciclo.encerradoEm, proximoPasso: proximoPasso(estado) };
   }
 
   /**
