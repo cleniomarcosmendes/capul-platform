@@ -316,11 +316,61 @@ export const designacao = {
       .then((r) => r.data),
   // O backend grava origem MANUAL — não existe designação automática por
   // centro de custo hoje, porque o cadastro não tem quem é o superior de quem.
-  designar: (aplicacaoId: string, avaliadoId: string, avaliadorId: string) =>
+  designar: (
+    aplicacaoId: string,
+    avaliadoId: string,
+    avaliadorId: string,
+    confirmarTrocaDeAvaliador = false,
+  ) =>
     rhApi
-      .post(`/designacao/aplicacao/${aplicacaoId}/designar`, { avaliadoId, avaliadorId })
+      .post(`/designacao/aplicacao/${aplicacaoId}/designar`, {
+        avaliadoId,
+        avaliadorId,
+        confirmarTrocaDeAvaliador,
+      })
+      .then((r) => r.data),
+  /**
+   * ⭐ O que o botão vai fazer com CADA um dos selecionados, calculado pelo
+   * BACKEND — pela mesma função que o `designar` usa para decidir. A tela não
+   * recalcula quantos serão substituídos (§3.1.22).
+   */
+  previaDaDesignacao: (aplicacaoId: string, avaliadoIds: string[], avaliadorId: string) =>
+    rhApi
+      .post<PreviaDaDesignacao>(`/designacao/aplicacao/${aplicacaoId}/designar/previa`, {
+        avaliadoIds,
+        avaliadorId,
+      })
       .then((r) => r.data),
 };
+
+export type AcaoDaDesignacao =
+  | 'CRIAR'
+  | 'SUBSTITUIR'
+  | 'NADA_A_FAZER'
+  /** Substituiria o avaliador de avaliação já respondida — permitido, com aviso. */
+  | 'EXIGE_CONFIRMACAO'
+  | 'RECUSAR';
+
+export interface PreviaDaDesignacao {
+  avaliadorNome: string | null;
+  total: number;
+  criar: number;
+  substituir: number;
+  nadaAFazer: number;
+  recusar: number;
+  /** A explicação do grupo, escrita UMA vez pelo backend. `null` quando não há. */
+  avisoDeRespondidas: string | null;
+  linhas: {
+    colaboradorId: string;
+    nome: string;
+    matricula: string;
+    acao: AcaoDaDesignacao;
+    avaliadorAtual: string | null;
+    /** Estado em uma linha ("ENVIADA por JOÃO"), para a lista não repetir a frase. */
+    estadoAtual: string | null;
+    frase: string | null;
+  }[];
+}
 
 export interface ProgressoDaAplicacao {
   aplicacaoId: string;

@@ -14,6 +14,7 @@ import {
   type AplicacaoDoCiclo,
   type ColaboradorDaBusca,
   type LinhaDaDesignacao,
+  type PreviaDaDesignacao,
   type RelatorioDaCopia,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
@@ -436,15 +437,27 @@ function LinhaDaLista({
           atos combinados (§3.1.4), com um agravante: ali são dois atos
           deliberados, aqui é UM, e era o mais fácil. */}
       <div className="flex shrink-0 flex-col items-stretch gap-1 self-center sm:flex-row sm:items-center">
-        {semAvaliador && (
+        {/* ⭐⭐ TROCAR pela LINHA (08/09). O botão só aparecia para quem estava
+            SEM avaliador: quem errou a designação não tinha correção na linha —
+            sobrava "Excluir", e a única saída era o lote, que era o outro
+            defeito do item E. Agora a linha oferece as duas coisas, e o rótulo
+            diz qual é qual.
+            ⚠️ Some só quando não há o que designar (linha fora do ciclo) — e aí
+            fica DESABILITADO com o motivo, nunca escondido. */}
+        {linha.elegivel && (
           <button
             type="button"
             onClick={aoDesignar}
             disabled={!!fechado}
             title={fechado ?? undefined}
-            className="alvo-toque inline-flex items-center justify-center gap-1.5 rounded-lg bg-capul-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
+            className={`alvo-toque inline-flex items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold disabled:opacity-50 ${
+              semAvaliador
+                ? 'bg-capul-600 text-white'
+                : 'border border-capul-300 text-capul-800'
+            }`}
           >
-            <UserPlus size={14} aria-hidden /> Definir avaliador
+            <UserPlus size={14} aria-hidden />
+            {semAvaliador ? 'Definir avaliador' : 'Trocar avaliador'}
           </button>
         )}
         <button
@@ -588,16 +601,53 @@ function DialogoAvaliador({
   aoConcluir: () => Promise<void>;
 }) {
   const [escolhido, setEscolhido] = useState<ColaboradorDaBusca | null>(null);
+  const [previa, setPrevia] = useState<PreviaDaDesignacao | null>(null);
+  const [carregandoPrevia, setCarregandoPrevia] = useState(false);
   const [progresso, setProgresso] = useState<{ feitos: number; falhas: string[] } | null>(null);
+  const [sucesso, setSucesso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  /**
+   * ⭐⭐ A PRÉVIA VEM DO BACKEND, da MESMA função que o `designar` usa para
+   * decidir. A tela não recalcula quantos serão substituídos: se recalculasse,
+   * a prévia e o ato divergiriam no primeiro caso de borda — que é exatamente o
+   * defeito que ela veio evitar (§3.1.22).
+   */
+  useEffect(() => {
+    if (!escolhido) {
+      setPrevia(null);
+      return;
+    }
+    let vivo = true;
+    setCarregandoPrevia(true);
+    designacao
+      .previaDaDesignacao(aplicacaoId, avaliados, escolhido.id)
+      .then((p) => vivo && setPrevia(p))
+      .catch((e) => vivo && setErro(mensagemDoErro(e, 'Não foi possível calcular o efeito.')))
+      .finally(() => vivo && setCarregandoPrevia(false));
+    return () => {
+      vivo = false;
+    };
+  }, [escolhido, aplicacaoId, avaliados]);
+
+  const substituicoes = previa?.linhas.filter((l) => l.acao === 'SUBSTITUIR') ?? [];
+  const comAviso = previa?.linhas.filter((l) => l.acao === 'EXIGE_CONFIRMACAO') ?? [];
+  const recusadas = previa?.linhas.filter((l) => l.acao === 'RECUSAR') ?? [];
 
   async function aplicar() {
     if (!escolhido) return;
     setErro(null);
+    setSucesso(null);
     const falhas: string[] = [];
+    let feitas = 0;
     for (const [i, avaliadoId] of avaliados.entries()) {
       try {
-        await designacao.designar(aplicacaoId, avaliadoId, escolhido.id);
+        // ⚠️ A confirmação só vale para as linhas que a PRÉVIA marcou como
+        // "exige confirmação" — a pessoa leu o aviso com o nome delas antes de
+        // clicar. Mandar `true` para todas seria confirmar o que ninguém viu.
+        const precisaConfirmar = comAviso.some((l) => l.colaboradorId === avaliadoId);
+        await designacao.designar(aplicacaoId, avaliadoId, escolhido.id, precisaConfirmar);
+        feitas++;
       } catch (e) {
         // ⚠️ Uma recusa não pode derrubar as outras — a mais comum é a pessoa
         // selecionada ser o próprio avaliador, e a lista inteira parar por
@@ -606,8 +656,17 @@ function DialogoAvaliador({
       }
       setProgresso({ feitos: i + 1, falhas });
     }
-    if (falhas.length === 0) await aoConcluir();
-    else setErro(`${falhas.length} de ${avaliados.length} não puderam ser designadas.`);
+    if (falhas.length === 0) {
+      // ⭐ MENSAGEM DE SUCESSO. O diálogo fechava calado, e quem clicou ficava
+      // sem saber se algo aconteceu — em lote, sem saber com quantas.
+      setSucesso(
+        `${feitas} designação(ões) gravada(s) para ${escolhido.nome}.` +
+          (substituicoes.length > 0 ? ` ${substituicoes.length} substituíram o avaliador anterior.` : ''),
+      );
+      await aoConcluir();
+    } else {
+      setErro(`${falhas.length} de ${avaliados.length} não puderam ser designadas.`);
+    }
   }
 
   return (
@@ -625,10 +684,82 @@ function DialogoAvaliador({
         linha dela é recusada e as demais seguem.
       </p>
 
+      {/* ⭐⭐ QUEM SÃO AS N, e o que acontece com cada uma. O diálogo em lote não
+          dizia nem uma coisa nem outra: marcava-se um grupo, escolhia-se um
+          avaliador e quem já tinha outro era SOBRESCRITO em silêncio. É a
+          família do modal de vínculo — botão armado com efeito que a tela não
+          mostra. */}
+      {carregandoPrevia && <p className="mt-3 text-sm text-slate-500">Calculando o efeito…</p>}
+      {previa && !carregandoPrevia && (
+        <div className="mt-3 space-y-2 rounded-xl border-2 border-capul-300 p-3">
+          <p className="text-sm text-slate-700">
+            <strong className="tabular-nums">{previa.criar}</strong> ganham avaliador ·{' '}
+            <strong className={`tabular-nums ${previa.substituir > 0 ? 'text-amber-800' : ''}`}>
+              {previa.substituir}
+            </strong>{' '}
+            têm o avaliador SUBSTITUÍDO
+            {previa.nadaAFazer > 0 && ` · ${previa.nadaAFazer} já são de ${previa.avaliadorNome}`}
+          </p>
+
+          {substituicoes.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              <p className="font-medium">Estas trocam de avaliador:</p>
+              <ul className="mt-1 space-y-0.5">
+                {substituicoes.slice(0, 10).map((l) => (
+                  <li key={l.colaboradorId}>
+                    <strong>{l.nome}</strong> — hoje é avaliada por {l.avaliadorAtual}
+                  </li>
+                ))}
+                {substituicoes.length > 10 && <li>… e mais {substituicoes.length - 10}</li>}
+              </ul>
+            </div>
+          )}
+
+          {/* ⚠️ Avaliação JÁ RESPONDIDA: continua permitido — é como o RH corrige
+              "designei o supervisor errado" — mas nunca em silêncio.
+              ⚠️ A EXPLICAÇÃO vai UMA VEZ (`avisoDeRespondidas`, escrito pelo
+              backend) e a lista diz só de QUEM se trata: repetir a frase inteira
+              por pessoa fica ilegível já em três, e com cinquenta ninguém lê. */}
+          {comAviso.length > 0 && (
+            <div className="rounded-lg border-2 border-rose-300 bg-rose-50 p-2 text-xs text-rose-900">
+              <p className="font-semibold">{previa.avisoDeRespondidas}</p>
+              <ul className="mt-1.5 space-y-0.5">
+                {comAviso.slice(0, 10).map((l) => (
+                  <li key={l.colaboradorId}>
+                    <strong>{l.nome}</strong> — {l.estadoAtual}
+                  </li>
+                ))}
+                {comAviso.length > 10 && <li>… e mais {comAviso.length - 10}</li>}
+              </ul>
+            </div>
+          )}
+
+          {recusadas.length > 0 && (
+            <div className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-xs text-slate-700">
+              <p className="font-medium">{recusadas.length} serão recusadas:</p>
+              <ul className="mt-1 space-y-1">
+                {recusadas.map((l) => (
+                  <li key={l.colaboradorId}>{l.frase}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {previa.criar + previa.substituir + comAviso.length === 0 && (
+            <p className="text-sm text-slate-500">Nada mudaria com esta escolha.</p>
+          )}
+        </div>
+      )}
+
       {progresso && (
         <p className="mt-3 text-sm text-slate-600">
           {progresso.feitos} de {avaliados.length} processada(s)
           {progresso.falhas.length > 0 && ` · ${progresso.falhas.length} recusada(s)`}
+        </p>
+      )}
+      {sucesso && (
+        <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          {sucesso}
         </p>
       )}
       {erro && (
@@ -647,11 +778,22 @@ function DialogoAvaliador({
         </button>
         <button
           type="button"
-          disabled={!escolhido || (progresso !== null && progresso.feitos === avaliados.length)}
+          disabled={
+            !escolhido ||
+            carregandoPrevia ||
+            (progresso !== null && progresso.feitos === avaliados.length)
+          }
           onClick={aplicar}
-          className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+          className={`alvo-toque flex-1 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 ${
+            comAviso.length > 0 ? 'bg-rose-700' : 'bg-capul-600'
+          }`}
         >
-          Aplicar
+          {/* O rótulo carrega o efeito, não "Aplicar" — em lote, o número. */}
+          {comAviso.length > 0
+            ? `Aplicar mesmo assim (${comAviso.length} respondida(s))`
+            : previa && previa.substituir > 0
+              ? `Aplicar · ${previa.substituir} substituição(ões)`
+              : 'Aplicar'}
         </button>
       </div>
     </Modal>

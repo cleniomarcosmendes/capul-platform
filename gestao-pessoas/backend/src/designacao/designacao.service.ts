@@ -24,6 +24,11 @@ import {
 import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
 import { efeitoDoExcluir, type EfeitoDoCancelamento } from '../avaliacao/cancelamento.js';
 import {
+  avisoDeTrocaEmRespondidas,
+  efeitoDeDesignar,
+  type EfeitoDaDesignacao,
+} from './efeito-de-designar.js';
+import {
   decidirSituacao,
   pedeAcao,
   type SituacaoDoVinculoNoCiclo,
@@ -511,6 +516,12 @@ export class DesignacaoService {
     avaliadorId: string,
     usuarioId: string,
     origem: 'CENTRO_CUSTO' | 'MANUAL' = 'CENTRO_CUSTO',
+    /**
+     * ⭐ Trocar o avaliador de uma avaliação JÁ RESPONDIDA continua permitido —
+     * é como o RH corrige "designei o supervisor errado" —, mas deixou de ser
+     * silencioso: sem esta confirmação, a API recusa e diz o que aconteceria.
+     */
+    confirmarTrocaDeAvaliador = false,
   ) {
     const [aplicacao, avaliado] = await Promise.all([
       this.prisma.aplicacao.findUnique({
@@ -531,8 +542,40 @@ export class DesignacaoService {
 
     const existente = await this.prisma.avaliacao.findUnique({
       where: { cicloId_avaliadoId: { cicloId: aplicacao.cicloId, avaliadoId } },
-      select: { id: true, aplicacaoId: true, avaliadorId: true, status: true },
+      select: {
+        id: true, aplicacaoId: true, avaliadorId: true, status: true,
+        _count: { select: { respostas: true } },
+      },
     });
+
+    /**
+     * ⭐⭐ TROCAR O AVALIADOR DE QUEM JÁ RESPONDEU é o mesmo problema que o lote
+     * do cadastro recusava como `JA_RESPONDIDA` — e aqui não havia checagem
+     * nenhuma: o `upsert` trocava o nome em silêncio. Medido em 08/09: 368
+     * trocas de avaliador na auditoria do DEV, zero sobre respondida. Sorte.
+     */
+    const efeito = efeitoDeDesignar(
+      existente
+        ? {
+            status: existente.status,
+            respostas: existente._count.respostas,
+            avaliadorId: existente.avaliadorId,
+            avaliadorNome: await this.nomeDoColaborador(existente.avaliadorId),
+            aplicacaoId: existente.aplicacaoId,
+          }
+        : null,
+      {
+        nomeDoAvaliado: avaliado.nome,
+        novoAvaliadorId: avaliadorId,
+        novoAvaliadorNome: await this.nomeDoColaborador(avaliadorId),
+        aplicacaoId,
+      },
+    );
+    if (efeito.acao === 'RECUSAR') throw new BadRequestException(efeito.frase!);
+    if (efeito.acao === 'EXIGE_CONFIRMACAO' && !confirmarTrocaDeAvaliador) {
+      throw new BadRequestException(efeito.frase!);
+    }
+
     const trocaDeAplicacao = existente !== null && existente.aplicacaoId !== aplicacaoId;
     if (trocaDeAplicacao) {
       await this.assertPodeTrocarDeAplicacao(existente, avaliado.nome);
@@ -559,7 +602,14 @@ export class DesignacaoService {
       // A troca de aplicação é ato distinto de designar pela primeira vez: muda
       // QUAL questionário a pessoa responde, e quem for reconstruir o ciclo
       // meses depois precisa achar isso sem ler o diff de dois campos.
-      acao: trocaDeAplicacao ? 'DESIGNAR_TROCA_APLICACAO' : 'DESIGNAR',
+      // ⚠️ Trocar o avaliador de uma avaliação já respondida não pode ter o
+      // mesmo nome de designar pela primeira vez: é o ato que alguém vai
+      // procurar quando a memória de cálculo mostrar um nome inesperado.
+      acao: trocaDeAplicacao
+        ? 'DESIGNAR_TROCA_APLICACAO'
+        : efeito.acao === 'EXIGE_CONFIRMACAO'
+          ? 'DESIGNAR_TROCA_AVALIADOR_RESPONDIDA'
+          : 'DESIGNAR',
       usuarioId,
       valorAnterior: existente
         ? { aplicacaoId: existente.aplicacaoId, avaliadorId: existente.avaliadorId, status: existente.status }
@@ -916,6 +966,96 @@ export class DesignacaoService {
         },
       ]),
     );
+  }
+
+  /**
+   * ⭐⭐ A PRÉVIA DA DESIGNAÇÃO — o que o botão vai fazer com CADA um dos N.
+   *
+   * O diálogo em lote não dizia **quem** eram as N, não avisava que ia
+   * **sobrescrever** quem já tinha avaliador, e não dava retorno nenhum. Era a
+   * família do modal de vínculo: botão armado com efeito que a tela não mostra.
+   *
+   * ⚠️ A conta vem daqui, da MESMA função que o `designar()` usa para decidir
+   * (`efeitoDeDesignar`). A tela não recalcula quantos serão substituídos — se
+   * recalculasse, a prévia e o ato divergiriam no primeiro caso de borda, que é
+   * exatamente o defeito que ela veio evitar.
+   */
+  async previaDaDesignacao(aplicacaoId: string, avaliadoIds: string[], avaliadorId: string) {
+    const aplicacao = await this.prisma.aplicacao.findUnique({
+      where: { id: aplicacaoId },
+      select: { id: true, cicloId: true },
+    });
+    if (!aplicacao) throw new NotFoundException('Aplicação não encontrada.');
+
+    const [pessoas, avaliacoes, avaliador] = await Promise.all([
+      this.prisma.colaborador.findMany({
+        where: { id: { in: avaliadoIds } },
+        select: { id: true, nome: true, matricula: true },
+      }),
+      this.prisma.avaliacao.findMany({
+        where: { cicloId: aplicacao.cicloId, avaliadoId: { in: avaliadoIds } },
+        select: {
+          avaliadoId: true, avaliadorId: true, aplicacaoId: true, status: true,
+          _count: { select: { respostas: true } },
+        },
+      }),
+      this.prisma.colaborador.findUnique({ where: { id: avaliadorId }, select: { nome: true } }),
+    ]);
+
+    const porAvaliado = new Map(avaliacoes.map((a) => [a.avaliadoId, a]));
+    const nomesDeAvaliadores = new Map(
+      (
+        await this.prisma.colaborador.findMany({
+          where: { id: { in: [...new Set(avaliacoes.map((a) => a.avaliadorId))] } },
+          select: { id: true, nome: true },
+        })
+      ).map((c) => [c.id, c.nome]),
+    );
+
+    const linhas = pessoas
+      .map((pessoa) => {
+        const atual = porAvaliado.get(pessoa.id);
+        const efeito = efeitoDeDesignar(
+          atual
+            ? {
+                status: atual.status,
+                respostas: atual._count.respostas,
+                avaliadorId: atual.avaliadorId,
+                avaliadorNome: nomesDeAvaliadores.get(atual.avaliadorId) ?? null,
+                aplicacaoId: atual.aplicacaoId,
+              }
+            : null,
+          {
+            nomeDoAvaliado: pessoa.nome,
+            novoAvaliadorId: avaliadorId,
+            novoAvaliadorNome: avaliador?.nome ?? null,
+            aplicacaoId,
+          },
+        );
+        return {
+          colaboradorId: pessoa.id,
+          nome: pessoa.nome,
+          matricula: pessoa.matricula,
+          acao: efeito.acao,
+          avaliadorAtual: efeito.avaliadorAtual,
+          estadoAtual: efeito.estadoAtual,
+          frase: efeito.frase,
+        };
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    const conta = (acao: EfeitoDaDesignacao['acao']) => linhas.filter((l) => l.acao === acao).length;
+    return {
+      avaliadorNome: avaliador?.nome ?? null,
+      total: linhas.length,
+      criar: conta('CRIAR'),
+      substituir: conta('SUBSTITUIR'),
+      nadaAFazer: conta('NADA_A_FAZER'),
+      recusar: conta('RECUSAR'),
+      /** ⭐ A explicação do grupo, UMA vez — a lista abaixo diz só de quem se trata. */
+      avisoDeRespondidas: avisoDeTrocaEmRespondidas(conta('EXIGE_CONFIRMACAO')),
+      linhas,
+    };
   }
 
   private async nomeDoColaborador(id: string): Promise<string | null> {

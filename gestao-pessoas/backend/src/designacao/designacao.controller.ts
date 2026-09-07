@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -15,6 +15,13 @@ export class DecidirDto {
 
 export class DesignarDto {
   @IsString() avaliadoId!: string;
+  @IsString() avaliadorId!: string;
+  /** Trocar o avaliador de avaliação já respondida — só com confirmação. */
+  @IsOptional() @IsBoolean() confirmarTrocaDeAvaliador?: boolean;
+}
+
+export class PreviaDaDesignacaoDto {
+  @IsArray() @IsString({ each: true }) @ArrayMinSize(1) avaliadoIds!: string[];
   @IsString() avaliadorId!: string;
 }
 
@@ -53,13 +60,28 @@ export class DesignacaoController {
 
   @Post('aplicacao/:aplicacaoId/designar') @HttpCode(200)
   designar(@Param('aplicacaoId') id: string, @Body() dto: DesignarDto, @CurrentUser() user: JwtPayload) {
-    return this.designacao.designar(id, dto.avaliadoId, dto.avaliadorId, user.sub, 'MANUAL');
+    return this.designacao.designar(
+      id, dto.avaliadoId, dto.avaliadorId, user.sub, 'MANUAL',
+      dto.confirmarTrocaDeAvaliador ?? false,
+    );
   }
 
   /**
    * Copia o cadastro da plataforma para a designação do ciclo. `aplicar: false`
    * (o padrão) é a prévia — a tela mostra o que VAI acontecer e só então grava.
    */
+  /**
+   * ⭐ O que o "Definir avaliador" vai fazer com cada um dos selecionados —
+   * lido ANTES do clique valer. A conta é do serviço, não da tela.
+   */
+  @Post('aplicacao/:aplicacaoId/designar/previa') @HttpCode(200)
+  previaDaDesignacao(
+    @Param('aplicacaoId') aplicacaoId: string,
+    @Body() dto: PreviaDaDesignacaoDto,
+  ) {
+    return this.designacao.previaDaDesignacao(aplicacaoId, dto.avaliadoIds, dto.avaliadorId);
+  }
+
   @Post('ciclo/:cicloId/copiar-do-cadastro') @HttpCode(200)
   copiarDoCadastro(
     @Param('cicloId') cicloId: string,

@@ -1701,6 +1701,78 @@ Mesmo recorte, política diferente, número diferente — que é a prova de que 
 do ciclo, e não uma conta da prévia. E **férias não é barrada**, como a régua já dizia.
 Conferido também na tela, num centro de custo real com 2 afastados de 3.
 
+### 3.1.22. 🟠 Não dava para trocar o avaliador pela linha — e o lote sobrescrevia calado (08/09)
+
+Itens E e 5.c do roteiro. São dois, e o segundo é pior.
+
+**(a) A linha não oferecia correção.** O botão *"Definir avaliador"* só aparecia para quem estava
+**sem** avaliador; quem errou a designação via só *"Excluir"*. A única saída era o lote — que é
+o defeito (b). Agora a linha tem o botão **sempre** que a pessoa é elegível, com o rótulo dizendo
+qual é o caso: **"Definir avaliador"** ou **"Trocar avaliador"**.
+
+**(b) O lote sobrescrevia em silêncio.** O diálogo não dizia **quem** eram as N, não avisava que
+ia **substituir** quem já tinha avaliador, e não dava retorno nenhum ao terminar. No roteiro ele
+trocou o avaliador da CLEIA sem uma palavra — e eu esbarrei no mesmo em 08/09, redesignando
+alguém que já tinha avaliador e vendo o número não mudar.
+
+É a família do modal de vínculo: **botão armado com efeito que a tela não mostra.**
+
+#### A pergunta antes do conserto: trocar o avaliador esbarra em regra que o excluir não tem?
+
+**Sim — e o buraco era maior do que o do relatório.** `designar()` é um `upsert`, e trocar só o
+**avaliador** dentro da mesma aplicação **não passava por guarda nenhuma**: nem `ENVIADA`, nem
+respostas gravadas. É parente do `JA_RESPONDIDA` que o lote do cadastro recusa desde sempre.
+
+⚠️ **Medido antes de mexer**, na auditoria do DEV: **368 trocas de avaliador**, e **zero** sobre
+avaliação `ENVIADA`/`EM_ANDAMENTO`. O buraco existia e nunca foi acionado. Sorte, não guarda.
+
+#### ⭐⭐ Mas havia uma DECISÃO ESCRITA em contrário, e ela não foi atropelada
+
+`troca-de-aplicacao.spec.ts` afirmava, com motivo: *"trocar só o AVALIADOR, na mesma aplicação,
+não é bloqueado nem com nota enviada"* — porque nenhuma resposta muda de instrumento, nenhum
+modelo entra em jogo, e *"corrigir 'designei o supervisor errado' continua sendo um ato de uma
+linha para o RH"*.
+
+**Essa decisão está certa sobre a INTEGRIDADE do dado. O que faltava nela é a ATRIBUIÇÃO:** quem
+lê a memória de cálculo vê *"avaliado por"* com o nome **novo** sobre respostas que foram de
+outra pessoa.
+
+⭐ As duas se conciliam sem que nenhuma perca: **o ato continua permitido e deixa de ser
+silencioso.** Novo estado `EXIGE_CONFIRMACAO` — a API recusa sem `confirmarTrocaDeAvaliador`, e
+a recusa é o próprio aviso. Recusar de vez tiraria do RH uma correção legítima; deixar passar
+calado era o defeito. Auditoria própria: **`DESIGNAR_TROCA_AVALIADOR_RESPONDIDA`**, porque é o
+ato que alguém vai procurar quando a memória mostrar um nome inesperado.
+
+⚠️ E `CANCELADA` passou a **recusar**: o `upsert` a reviveria cancelada com avaliador novo — um
+estado que não quer dizer nada. A recusa admite que **não há caminho para descancelar** hoje, em
+vez de inventar um de passagem.
+
+#### A prévia vem do backend
+
+`POST /designacao/aplicacao/:id/designar/previa` devolve, por pessoa, o que o botão vai fazer —
+pela **mesma função** que o `designar` usa para decidir (`efeitoDeDesignar`). A tela **não
+recalcula** quantos serão substituídos: se recalculasse, a prévia e o ato divergiriam no primeiro
+caso de borda, que é o defeito que ela veio evitar. Mesmo desenho do `efeitoDoExcluir` (§3.1.18).
+
+O diálogo passou a mostrar: **N ganham avaliador · N têm o avaliador SUBSTITUÍDO**, a lista de
+quem troca *com o nome de quem sai*, o bloco vermelho das já respondidas, as recusadas com o
+motivo — e, ao fim, **mensagem de sucesso** com quantas foram gravadas e quantas substituíram.
+O rótulo do botão carrega o efeito: *"Aplicar · 3 substituição(ões)"*, *"Aplicar mesmo assim
+(3 respondida(s))"*.
+
+⚠️ **A explicação vai UMA vez, a lista diz só de quem se trata.** A primeira versão repetia a
+frase inteira por pessoa: já em três ficou ilegível, e com cinquenta ninguém leria. O aviso do
+grupo (`avisoDeRespondidas`) e o resumo de uma linha (`estadoAtual`, *"ENVIADA por JOÃO"*, *"7
+resposta(s), por JOÃO"*) **também são escritos no backend** — se a tela compusesse os dela, as
+duas envelheceriam separadas.
+
+#### Verificação
+
+**488 testes** (17 novos). ✅ Ao vivo no ciclo Geral: **9 botões "Trocar avaliador"** na lista; a
+prévia de 3 pessoas devolvendo os três casos distintos (`CRIAR`, `SUBSTITUIR` com o nome de quem
+sai, `EXIGE_CONFIRMACAO` na ENVIADA) **sem gravar nada**; e o `POST .../designar` da ENVIADA
+**recusado com 400** sem a confirmação, com o banco conferido depois — avaliador **inalterado**.
+
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
 O cadastro (`/avaliadores`) e o painel de cada ciclo contavam ambos "sem avaliador" e nenhum

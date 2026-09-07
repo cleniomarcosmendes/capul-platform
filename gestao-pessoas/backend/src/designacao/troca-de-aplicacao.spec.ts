@@ -161,12 +161,16 @@ describe('DesignacaoService.designar — troca de aplicação', () => {
       aplicacaoId: APP_A,
       avaliadorId: AVALIADOR,
       status,
+      // ⚠️ Entrou em 08/09: `efeitoDeDesignar` lê as respostas para decidir se a
+      // troca de AVALIADOR precisa de confirmação. A guarda da APLICAÇÃO
+      // continua contando por `resposta.count`, que é outro caminho.
+      _count: { respostas },
     });
     prisma.resposta.count.mockResolvedValue(respostas);
   };
 
-  const designarPara = (aplicacaoId: string, avaliadorId = AVALIADOR) =>
-    service.designar(aplicacaoId, AVALIADO, avaliadorId, RH, 'MANUAL');
+  const designarPara = (aplicacaoId: string, avaliadorId = AVALIADOR, confirmar = false) =>
+    service.designar(aplicacaoId, AVALIADO, avaliadorId, RH, 'MANUAL', confirmar);
 
   describe('recusa', () => {
     it('ENVIADA: recusa sempre, mesmo sem nenhuma resposta gravada', async () => {
@@ -225,22 +229,56 @@ describe('DesignacaoService.designar — troca de aplicação', () => {
       );
     });
 
-    it('⭐ trocar só o AVALIADOR, na mesma aplicação, não é bloqueado nem com nota enviada', async () => {
-      // Nenhuma resposta muda de instrumento e nenhum modelo entra em jogo: a
-      // guarda é sobre a APLICAÇÃO. Corrigir "designei o supervisor errado"
-      // continua sendo um ato de uma linha para o RH.
+    /**
+     * ⭐⭐ A DECISÃO ORIGINAL, CONCILIADA (08/09).
+     *
+     * Este teste dizia *"trocar só o AVALIADOR, na mesma aplicação, não é
+     * bloqueado nem com nota enviada"*, e o motivo escrito era bom: nenhuma
+     * resposta muda de instrumento, nenhum modelo entra em jogo, e corrigir
+     * "designei o supervisor errado" é um ato de uma linha para o RH.
+     *
+     * O que faltava não era integridade — era **atribuição**: quem lê a memória
+     * de cálculo vê "avaliado por" com o nome NOVO sobre respostas que foram de
+     * outra pessoa. As duas se conciliam sem que nenhuma perca: **continua
+     * permitido, deixa de ser silencioso.** Recusar de vez tiraria do RH uma
+     * correção legítima; deixar passar calado era o defeito.
+     */
+    it('⭐ trocar só o AVALIADOR com nota enviada: PASSA, mas só com confirmação', async () => {
       jaEstaNaAplicacaoA('ENVIADA', 11);
-      await designarPara(APP_A, OUTRO_AVALIADOR);
+      await designarPara(APP_A, OUTRO_AVALIADOR, true);
 
       expect(prisma.avaliacao.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ update: expect.objectContaining({ avaliadorId: OUTRO_AVALIADOR }) }),
       );
+    });
+
+    it('⚠️ sem confirmação, a mesma troca é recusada — e o aviso diz o que faria', async () => {
+      jaEstaNaAplicacaoA('ENVIADA', 11);
+      await expect(designarPara(APP_A, OUTRO_AVALIADOR)).rejects.toThrow(
+        /põe o nome de .* sobre o julgamento de/,
+      );
+      expect(prisma.avaliacao.upsert).not.toHaveBeenCalled();
+    });
+
+    /** ⚠️ Não pode ter o mesmo nome de designar pela primeira vez: é o ato que
+     *  alguém vai procurar quando a memória mostrar um nome inesperado. */
+    it('a auditoria distingue a troca de avaliador sobre respondida', async () => {
+      jaEstaNaAplicacaoA('ENVIADA', 11);
+      await designarPara(APP_A, OUTRO_AVALIADOR, true);
+      expect(auditoria.registrar).toHaveBeenCalledWith(
+        expect.objectContaining({ acao: 'DESIGNAR_TROCA_AVALIADOR_RESPONDIDA' }),
+      );
+    });
+
+    it('sem nada respondido, trocar o avaliador segue sendo um ato de uma linha', async () => {
+      jaEstaNaAplicacaoA('PENDENTE', 0);
+      await designarPara(APP_A, OUTRO_AVALIADOR);
       expect(auditoria.registrar).toHaveBeenCalledWith(expect.objectContaining({ acao: 'DESIGNAR' }));
     });
 
-    it('nem chega a contar respostas quando a aplicação não muda', async () => {
+    it('nem chega a contar respostas pelo caminho da APLICAÇÃO quando ela não muda', async () => {
       jaEstaNaAplicacaoA('ENVIADA', 11);
-      await designarPara(APP_A, OUTRO_AVALIADOR);
+      await designarPara(APP_A, OUTRO_AVALIADOR, true);
       expect(prisma.resposta.count).not.toHaveBeenCalled();
     });
   });
