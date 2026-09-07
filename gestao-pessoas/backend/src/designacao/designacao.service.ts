@@ -22,6 +22,7 @@ import {
   type MotivoExclusao,
 } from './elegibilidade-ciclo.js';
 import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
+import { efeitoDoExcluir, type EfeitoDoCancelamento } from '../avaliacao/cancelamento.js';
 import {
   decidirSituacao,
   pedeAcao,
@@ -63,12 +64,26 @@ export interface LinhaDaLista {
    */
   restrita?: boolean;
   motivoRestricao?: string;
+  /**
+   * ⭐⭐ O QUE O "EXCLUIR" VAI FAZER NESTA LINHA — derivado no backend, pela
+   * MESMA função que o serviço usa para decidir (`efeitoDoExcluir`).
+   *
+   * Até 08/09 a confirmação do Excluir dizia uma generalidade ("Excluir a tira
+   * deste ciclo") enquanto o ato, no dado, era outro: a avaliação continuava
+   * viva na fila do avaliador. Agora a tela mostra o efeito real, com o nome de
+   * quem está com ela e o número de respostas já dadas. Se a tela montasse essa
+   * frase sozinha, ela envelheceria separada da regra — foi o que aconteceu com
+   * o texto do modal de aplicação, que passou 2 dias mentindo.
+   */
+  efeitoDoExcluir: EfeitoDoCancelamento;
 }
 
 interface DesignacaoVigente {
   avaliadorId: string;
   avaliadorNome: string;
   status: string;
+  /** Quantas respostas já existem — entra na frase da confirmação do Excluir. */
+  respostas: number;
 }
 
 
@@ -176,7 +191,12 @@ export class DesignacaoService {
     const decisoes = await this.decisoesVigentes(aplicacao.cicloId);
     const designadas = await this.designacoesVigentes(aplicacao.cicloId);
 
-    const semDesignacao = { avaliadorId: null, avaliadorNome: null, avaliacaoStatus: null };
+    const semDesignacao = {
+      avaliadorId: null,
+      avaliadorNome: null,
+      avaliacaoStatus: null,
+      efeitoDoExcluir: efeitoDoExcluir(null),
+    };
     const linhas: LinhaDaLista[] = [
       ...incluidos.map((c) => ({
         ...this.paraLinha(c),
@@ -204,6 +224,15 @@ export class DesignacaoService {
         avaliadorId: designada?.avaliadorId ?? null,
         avaliadorNome: designada?.avaliadorNome ?? null,
         avaliacaoStatus: designada?.status ?? null,
+        efeitoDoExcluir: efeitoDoExcluir(
+          designada
+            ? {
+                status: designada.status,
+                respostas: designada.respostas,
+                avaliadorNome: designada.avaliadorNome,
+              }
+            : null,
+        ),
       };
 
       const decisao = decisoes.get(linha.colaboradorId);
@@ -341,6 +370,17 @@ export class DesignacaoService {
   /**
    * Decisão manual do RH — incluir alguém que a régua excluiu, ou o contrário.
    * A decisão anterior, se houver, é MARCADA como removida e permanece.
+   *
+   * ⭐⭐ **EXCLUIR CANCELA A AVALIAÇÃO** (08/09). Até aqui este método escrevia
+   * uma linha em `ciclo_elegibilidade` e mais nada: a pessoa saía da vista do
+   * RH e a avaliação dela continuava PENDENTE na fila do avaliador e no
+   * contador do `encerrar`. "Excluir" não fazia o que a palavra promete — e a
+   * recusa do "Tirar do público" mandava **cancelar a avaliação**, um ato que
+   * não existia em lugar nenhum do módulo.
+   *
+   * ⚠️ A avaliação **ENVIADA barra o Excluir** em vez de ser cancelada: ela já
+   * tem nota e pode ter resultado apurado. A recusa ensina a ordem (reabrir
+   * primeiro), como a do ciclo encerrado. Ver `efeitoDoExcluir`.
    */
   async decidir(
     cicloId: string,
@@ -366,6 +406,27 @@ export class DesignacaoService {
       where: { cicloId, colaboradorId, removidoEm: null },
     });
 
+    // ⭐ O que o EXCLUIR faz com a avaliação viva. Decidido pela mesma função
+    // que a lista devolve por linha, para a confirmação da tela e a decisão da
+    // API nunca discordarem.
+    const avaliacao =
+      decisao === 'EXCLUIR'
+        ? await this.prisma.avaliacao.findUnique({
+            where: { cicloId_avaliadoId: { cicloId, avaliadoId: colaboradorId } },
+            select: { id: true, status: true, avaliadorId: true, _count: { select: { respostas: true } } },
+          })
+        : null;
+    const efeito = efeitoDoExcluir(
+      avaliacao
+        ? {
+            status: avaliacao.status,
+            respostas: avaliacao._count.respostas,
+            avaliadorNome: await this.nomeDoColaborador(avaliacao.avaliadorId),
+          }
+        : null,
+    );
+    if (efeito.acao === 'RECUSAR') throw new BadRequestException(efeito.frase!);
+
     return this.prisma.$transaction(async (tx) => {
       if (vigente) {
         await tx.cicloElegibilidade.update({
@@ -383,6 +444,31 @@ export class DesignacaoService {
           registradoPorId: usuarioId,
         },
       });
+      // ⚠️ O cancelamento vai DENTRO da transação: decisão registrada com
+      // avaliação viva (ou o inverso) é exatamente o estado partido que este
+      // conserto veio fechar.
+      if (avaliacao && efeito.acao === 'CANCELAR') {
+        await tx.avaliacao.update({
+          where: { id: avaliacao.id },
+          data: {
+            status: 'CANCELADA',
+            canceladaEm: new Date(),
+            canceladaPorId: usuarioId,
+            // O motivo do cancelamento é a justificativa da exclusão: são o
+            // mesmo ato, e duas frases diferentes para ele só criariam dúvida.
+            motivoCancelamento: `Excluído do ciclo pelo RH: ${justificativa.trim()}`,
+          },
+        });
+        await this.auditoria.registrar({
+          entidade: 'Avaliacao',
+          entidadeId: avaliacao.id,
+          acao: 'CANCELAR',
+          usuarioId,
+          valorAnterior: { status: avaliacao.status, respostas: avaliacao._count.respostas },
+          valorNovo: { status: 'CANCELADA', origem: 'DECISAO_RH', justificativa },
+        });
+      }
+
       await this.auditoria.registrar({
         entidade: 'CicloElegibilidade',
         entidadeId: nova.id,
@@ -391,7 +477,9 @@ export class DesignacaoService {
         valorAnterior: vigente ? { decisao: vigente.decisao, motivo: vigente.motivo } : undefined,
         valorNovo: { decisao, justificativa },
       });
-      return nova;
+      // A tela precisa saber se cancelou, para dizer o que aconteceu — e não
+      // repetir a frase da confirmação como se fosse resultado.
+      return { ...nova, avaliacaoCancelada: efeito.acao === 'CANCELAR' };
     });
   }
 
@@ -758,7 +846,12 @@ export class DesignacaoService {
   private async designacoesVigentes(cicloId: string) {
     const avaliacoes = await this.prisma.avaliacao.findMany({
       where: { cicloId },
-      select: { avaliadoId: true, avaliadorId: true, status: true },
+      select: {
+        avaliadoId: true,
+        avaliadorId: true,
+        status: true,
+        _count: { select: { respostas: true } },
+      },
     });
     if (avaliacoes.length === 0) return new Map<string, DesignacaoVigente>();
 
@@ -775,9 +868,15 @@ export class DesignacaoService {
           avaliadorId: a.avaliadorId,
           avaliadorNome: nomePorId.get(a.avaliadorId) ?? '(colaborador não encontrado)',
           status: a.status as string,
+          respostas: a._count.respostas,
         },
       ]),
     );
+  }
+
+  private async nomeDoColaborador(id: string): Promise<string | null> {
+    const c = await this.prisma.colaborador.findUnique({ where: { id }, select: { nome: true } });
+    return c?.nome ?? null;
   }
 
   private async decisoesVigentes(cicloId: string) {

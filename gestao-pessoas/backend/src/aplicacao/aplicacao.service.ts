@@ -317,14 +317,28 @@ export class AplicacaoService {
     if (!linha) throw new NotFoundException('Esta pessoa não está no público desta aplicação.');
     await this.assertCicloDaAplicacaoOperavel(linha.cicloId, 'mudança no público');
 
+    // ⚠️ CANCELADA não conta: a avaliação cancelada já saiu de toda conta, e
+    // segurar o público por causa dela seria travar por um registro histórico.
     const avaliacao = await this.prisma.avaliacao.count({
-      where: { aplicacaoId, avaliadoId: colaboradorId },
+      where: { aplicacaoId, avaliadoId: colaboradorId, status: { not: 'CANCELADA' } },
     });
     if (avaliacao > 0) {
       // Tirar do público quem já tem avaliação deixaria a `Avaliacao` órfã do
       // recorte que a originou — e ela sumiria da contagem sem sumir do banco.
+      //
+      // ⭐ A recusa APONTA O CAMINHO (08/09). Ela dizia "Cancele a avaliação
+      // antes" — um ato que não existia em lugar nenhum do módulo, mandando a
+      // pessoa procurar sozinha uma porta inexistente. O ato agora existe, e
+      // tem um lugar: excluir do ciclo, na Designação, cancela junto.
+      //
+      // ⚠️ De propósito NÃO cancela daqui. Tirar do público e cancelar
+      // avaliação são atos diferentes, e juntá-los num clique repetiria o
+      // defeito do seletor de CC que saiu do modal hoje: um ato com efeito que
+      // a tela não mostra.
       throw new BadRequestException(
-        'Esta pessoa já tem avaliação nesta aplicação. Cancele a avaliação antes de tirá-la do público.',
+        'Esta pessoa já tem avaliação nesta aplicação. Para tirá-la do ciclo, use ' +
+          'Designação → Excluir: lá a exclusão cancela a avaliação, com motivo registrado, ' +
+          'e a confirmação mostra o que isso afeta antes de valer.',
       );
     }
 

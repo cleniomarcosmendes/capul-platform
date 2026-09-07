@@ -392,16 +392,22 @@ function LinhaDaLista({
             </Etiqueta>
           )}
           {linha.decididoManualmente && <Etiqueta tom="azul">decisão do RH</Etiqueta>}
-          {linha.elegivel && linha.avaliadorId && (
-            <Etiqueta tom="verde">
-              <UserCheck size={11} aria-hidden /> Avalia: {linha.avaliadorNome}
+          {/* ⚠️ NÃO depende mais de `elegivel` (08/09). A etiqueta só aparecia
+              para elegíveis, então bastava excluir alguém para a avaliação dele
+              SUMIR DA TELA DO RH — enquanto continuava na fila do avaliador.
+              Era pior que esconder a pessoa: escondia o que estava em jogo,
+              justamente de quem precisava decidir. Marcar, nunca filtrar. */}
+          {linha.avaliadorId && (
+            <Etiqueta tom={linha.avaliacaoStatus === 'CANCELADA' ? 'neutro' : 'verde'}>
+              <UserCheck size={11} aria-hidden />{' '}
+              {linha.avaliacaoStatus === 'CANCELADA' ? 'Era de' : 'Avalia'}: {linha.avaliadorNome}
             </Etiqueta>
           )}
           {semAvaliador && (
             <Etiqueta tom="ambar">Sem avaliador — não vai gerar avaliação</Etiqueta>
           )}
           {linha.avaliacaoStatus && linha.avaliacaoStatus !== 'PENDENTE' && (
-            <Etiqueta tom="neutro">{linha.avaliacaoStatus.replace('_', ' ')}</Etiqueta>
+            <Etiqueta tom="neutro">{linha.avaliacaoStatus.replace('_', ' ').toLowerCase()}</Etiqueta>
           )}
         </div>
         {linha.justificativa && (
@@ -458,6 +464,15 @@ function DialogoDecisao({
   aoDecidir: () => Promise<void>;
 }) {
   const decisao = linha.elegivel ? 'EXCLUIR' : 'INCLUIR';
+  /**
+   * ⭐⭐ O EFEITO REAL, dito antes do clique valer — e vindo do backend, que é
+   * quem decide. Até 08/09 esta confirmação dizia só "Excluir a tira deste
+   * ciclo", enquanto no dado a avaliação continuava viva na fila do avaliador.
+   * `RECUSAR` = a API vai barrar (avaliação já enviada): a tela desabilita e
+   * mostra o porquê, em vez de deixar descobrir no erro.
+   */
+  const efeito = decisao === 'EXCLUIR' ? linha.efeitoDoExcluir : null;
+  const bloqueado = efeito?.acao === 'RECUSAR';
   const [justificativa, setJustificativa] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -485,6 +500,21 @@ function DialogoDecisao({
       <p className="mt-2 text-sm text-slate-500">
         A decisão anterior não é apagada — fica marcada como removida, e reverter é registrar outra.
       </p>
+
+      {efeito?.frase && (
+        <div
+          className={`mt-3 rounded-xl border p-3 text-sm ${
+            bloqueado
+              ? 'border-rose-200 bg-rose-50 text-rose-900'
+              : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}
+        >
+          <p className="font-medium">
+            {bloqueado ? 'Não dá para excluir agora' : 'O que isto faz com a avaliação'}
+          </p>
+          <p className="mt-1">{efeito.frase}</p>
+        </div>
+      )}
 
       <label className="mt-4 block">
         <span className="text-sm font-medium text-slate-700">Motivo</span>
@@ -516,7 +546,7 @@ function DialogoDecisao({
         </button>
         <button
           type="button"
-          disabled={salvando || justificativa.trim().length < 3}
+          disabled={salvando || bloqueado || justificativa.trim().length < 3}
           onClick={salvar}
           className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
         >

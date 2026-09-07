@@ -188,7 +188,29 @@ export class CicloService {
     }));
   }
 
-  async encerrar(cicloId: string, usuarioId: string) {
+  /**
+   * ⭐⭐ ENCERRAR — e a saída para a pendência que NÃO vai entrar (08/09).
+   *
+   * Exigir 100% enviado, sem exceção, tranca o ciclo para sempre no dia em que
+   * alguém sai da empresa, entra em licença longa ou simplesmente não responde:
+   * a avaliação fica PENDENTE, ninguém pode respondê-la, e o encerrar continua
+   * contando-a. Piloto (891) e Geral (5) estão nesse estado hoje.
+   *
+   * A saída é a MESMA da Logística no RDV, que já roda em produção: **a API
+   * recusa e diz quantas são**; só encerra com `confirmarPendentes`, e aí as
+   * pendentes viram CANCELADA **com o motivo escrito**. Nada é apagado — as
+   * respostas parciais ficam registradas e fora da apuração, e o painel mostra
+   * a contagem de canceladas, que é onde o custo do override fica à vista.
+   *
+   * ⚠️ Motivo OBRIGATÓRIO e auditado. Sem isso o override vira o caminho fácil
+   * e, três ciclos adiante, ninguém encerra sem ele.
+   * ⚠️ RH_ADMIN só — mesmo degrau do reabrir, garantido no controller.
+   */
+  async encerrar(
+    cicloId: string,
+    usuarioId: string,
+    opcoes: { confirmarPendentes?: boolean; motivo?: string } = {},
+  ) {
     const ciclo = await this.prisma.ciclo.findUnique({ where: { id: cicloId } });
     if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
     // ⚠️ Só de ABERTO. `EM_APURACAO` estava aqui como origem possível e **nada
@@ -206,18 +228,53 @@ export class CicloService {
     const pendentes = await this.prisma.avaliacao.count({
       where: { cicloId, status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
     });
-    if (pendentes > 0) {
+    const motivo = opcoes.motivo?.trim() ?? '';
+    if (pendentes > 0 && !opcoes.confirmarPendentes) {
+      // ⭐ A recusa DIZ QUANTAS e DIZ A SAÍDA. Recusa sem alternativa manda a
+      // pessoa procurar sozinha um caminho — e o que ela acha é criar outro
+      // ciclo, que duplica resultado sem ninguém decidir.
       throw new BadRequestException(
-        `Não é possível encerrar: ${pendentes} avaliação(ões) ainda não foram enviadas.`,
+        `Não é possível encerrar: ${pendentes} avaliação(ões) ainda não foram enviadas. ` +
+          'Se elas não vão entrar (pessoa desligada, afastada, avaliador que não vai responder), ' +
+          'encerre com pendência: exige confirmação e motivo escrito, e as ' +
+          `${pendentes} ficam registradas como CANCELADAS — nada é apagado, e a contagem aparece no painel.`,
+      );
+    }
+    if (pendentes > 0 && motivo.length < 3) {
+      throw new BadRequestException(
+        'Informe o motivo de encerrar com pendência. Ele fica registrado no ciclo e em cada ' +
+          'avaliação cancelada — é o que responde, meses depois, por que estas ficaram sem nota.',
       );
     }
 
-    const encerrado = await this.prisma.ciclo.update({
-      where: { id: cicloId },
-      data: { status: 'ENCERRADO', encerradoEm: new Date() },
+    const encerrado = await this.prisma.$transaction(async (tx) => {
+      if (pendentes > 0) {
+        await tx.avaliacao.updateMany({
+          where: { cicloId, status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
+          data: {
+            status: 'CANCELADA',
+            canceladaEm: new Date(),
+            canceladaPorId: usuarioId,
+            motivoCancelamento: `Ciclo encerrado com pendência: ${motivo}`,
+          },
+        });
+      }
+      const ciclo = await tx.ciclo.update({
+        where: { id: cicloId },
+        data: { status: 'ENCERRADO', encerradoEm: new Date() },
+      });
+      await this.auditoria.registrar({
+        entidade: 'Ciclo',
+        entidadeId: cicloId,
+        // ⚠️ Ação DIFERENTE quando houve override: "ENCERRAR" e "encerrar
+        // cancelando 891 avaliações" não podem ter o mesmo nome na auditoria.
+        acao: pendentes > 0 ? 'ENCERRAR_COM_PENDENCIA' : 'ENCERRAR',
+        usuarioId,
+        valorNovo: pendentes > 0 ? { canceladas: pendentes, motivo } : undefined,
+      });
+      return ciclo;
     });
-    await this.auditoria.registrar({ entidade: 'Ciclo', entidadeId: cicloId, acao: 'ENCERRAR', usuarioId });
-    return encerrado;
+    return { ...encerrado, avaliacoesCanceladas: pendentes };
   }
 
   /**

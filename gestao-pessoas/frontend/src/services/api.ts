@@ -171,7 +171,13 @@ export const ciclos = {
   obter: (id: string) => rhApi.get<CicloDetalhado>(`/ciclos/${id}`).then((r) => r.data),
   criar: (dados: NovoCiclo) => rhApi.post<CicloDaLista>('/ciclos', dados).then((r) => r.data),
   abrir: (id: string) => rhApi.post(`/ciclos/${id}/abrir`).then((r) => r.data),
-  encerrar: (id: string) => rhApi.post(`/ciclos/${id}/encerrar`).then((r) => r.data),
+  /**
+   * ⭐ `confirmarPendentes` é o contrato de 08/09, o mesmo do RDV na Logística:
+   * a API recusa e diz QUANTAS faltam; a tela pergunta e reenvia com motivo, e
+   * as pendentes viram CANCELADA com esse motivo escrito.
+   */
+  encerrar: (id: string, opcoes?: { confirmarPendentes?: boolean; motivo?: string }) =>
+    rhApi.post(`/ciclos/${id}/encerrar`, opcoes ?? {}).then((r) => r.data),
   /** Reabrir exige motivo — como o reabrir de avaliação. */
   reabrir: (id: string, motivo: string) =>
     rhApi.post(`/ciclos/${id}/reabrir`, { motivo }).then((r) => r.data),
@@ -290,6 +296,15 @@ export interface LinhaDaDesignacao {
   /** A linha de quem está olhando — marcada, nunca filtrada (§3.1). */
   restrita?: boolean;
   motivoRestricao?: string;
+  /**
+   * ⭐ O que o "Excluir" desta linha vai fazer, derivado no BACKEND. A tela
+   * apenas MOSTRA a frase — não a monta. Regra montada na tela envelhece
+   * separada da regra que decide (§3.1.16).
+   */
+  efeitoDoExcluir: {
+    acao: 'CANCELAR' | 'NADA_A_FAZER' | 'RECUSAR';
+    frase: string | null;
+  };
 }
 
 export const designacao = {

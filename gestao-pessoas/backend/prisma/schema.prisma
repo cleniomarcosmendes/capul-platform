@@ -644,6 +644,14 @@ model Avaliacao {
   reabertaPorId   String?         @map("reaberta_por_id")
   motivoReabertura String?        @map("motivo_reabertura")
 
+  /// ⭐ Cancelamento — o ato que faltava (08/09). Cancelar tira a avaliação da
+  /// CONTA (fila do avaliador e `encerrar`), nunca do banco: as respostas já
+  /// dadas ficam registradas e fora da apuração. `motivo` é obrigatório no
+  /// serviço; a coluna é nula só por causa das linhas anteriores ao ato existir.
+  canceladaEm         DateTime?   @map("cancelada_em")
+  canceladaPorId      String?     @map("cancelada_por_id")
+  motivoCancelamento  String?     @map("motivo_cancelamento")
+
   /// Mitigações recomendadas (F2/F3 = "não"). Opcionais, não bloqueiam o fluxo,
   /// mas registram evidência de devolutiva e contexto da nota.
   observacaoAvaliador String?     @map("observacao_avaliador")

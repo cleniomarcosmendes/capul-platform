@@ -37,7 +37,23 @@ export class AvaliacaoService {
    */
   async minhasAvaliacoes(contexto: ContextoAcesso, cicloId?: string) {
     const linhas = await this.prisma.avaliacao.findMany({
-      where: { avaliadorId: contexto.colaboradorId, ...(cicloId ? { cicloId } : {}) },
+      /**
+       * ⚠️ **CANCELADA sai da fila** — e isto é metade do conserto, não um
+       * detalhe. O `filaPorAvaliador` do painel do RH já excluía canceladas
+       * desde sempre; aqui não havia filtro de status nenhum. Sem esta linha, o
+       * cancelamento que nasceu em 08/09 daria ao RH uma fila limpa enquanto o
+       * avaliador continuaria com a avaliação na mão — o mesmo beco do
+       * "Excluir", só que em outra fantasia.
+       *
+       * É `not: CANCELADA` de propósito, e não uma lista de status vivos: a
+       * fila mostra ENVIADA (é o histórico do que a pessoa já fez neste ciclo).
+       * O que ela não pode mostrar é o que foi tirado da conta.
+       */
+      where: {
+        avaliadorId: contexto.colaboradorId,
+        status: { not: 'CANCELADA' },
+        ...(cicloId ? { cicloId } : {}),
+      },
       orderBy: { criadoEm: 'asc' },
       select: {
         id: true,

@@ -80,6 +80,8 @@ nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 | Régua de escolaridade · aprendizes · afastados · enunciados das perguntas | Gestora de RH | §5 |
 | Quem dispara o sync — enquanto não se decide, não existe cron | Gestora de RH | §5 |
 | **Quem é o segundo `RH_ADMIN`** (a pessoa) — dar a permissão é da T.I. e está em (B) | Gestora de RH | §5 · §3.1 |
+| 🟢 **CONFIRMAÇÃO, não bloqueio:** cancelar avaliação com respostas já dadas — implementado com **as respostas ficando registradas e fora da apuração, nunca apagadas**. Se ela preferir que o sistema recuse e obrigue o avaliador a enviar, a mudança é pequena | Gestora de RH | §5 · §3.1.18 |
+| 🟢 **CONFIRMAÇÃO, não bloqueio:** encerrar ciclo com pendência é **RH_ADMIN só**, o mesmo degrau do reabrir. Se ela quiser estender a quem monta o ciclo (`RH_CICLO`), é uma linha no controller | Gestora de RH | §5 · §3.1.18 |
 
 ### (B) TRABALHO TÉCNICO PENDENTE — na ordem em que eu faria
 
@@ -106,7 +108,8 @@ nove itens desta lista não movem esse número em nada.
 | 14 | ⚠️ **O QUE NUNCA FOI EXERCITADO — lista consolidada** (base do roteiro do Chrome): o botão **"Definir avaliador · N pessoas"** do GRUPO e o **aviso em lote** (nunca apareceram numa tela) · clicar **"Adicionar N ao público"**, **"Apurar N avaliação(ões)"** e **"Abrir o ciclo"** nas confirmações · **designar pela linha até gravar** · os textos do Apurar com **todas enviadas** e com **zero enviadas** · Resultados **com filtro** (*"sobre N em exibição"*) · a faixa no estado **✓ nada falta para abrir** · os outros **"Próximo"** (apurar, encerrar, montar público) · **"Tirar" do público** e **"Excluir/Incluir"** com o ciclo encerrado · o **checkbox de seleção** da Designação desabilitado (só conferido por código) · `RH_MODELO` e `RH_ADMIN` **sem fila** (não há conta) · **celular de verdade** (tudo a 360px foi Chromium) · **dois avaliadores ao mesmo tempo**. ⚠️ Testar com `ariellypereira` NÃO pega os caminhos de avaliador puro — use `wandersonnascimento` e `claudimaroliveira` | §3.1.6 · §5 |
 | 15 | 🟡 Do roteiro de tela, ainda **não registrados até 07/09** (falha minha — foram pedidos e não entraram): a **"promessa falsa" do modal** (mesma lacuna do questionário sem tela, item 13) · **regras de público não reproduzíveis** · **provisório sem tela de confirmação em bloco** · **sem sinal de sincronismo** (a tela não diz quando o cadastro veio do Protheus) · e os detalhes do 🟡 14 | roteiro do Chrome |
 | 16 | 🟡 **A linha de Resultados não parece clicável** — a memória de cálculo é a melhor peça do módulo (nota, conceito, quebra por grupo, quem avaliou, a observação) e está atrás de um clique que ninguém adivinha | roteiro do Chrome |
-| 17 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
+| 17 | 🔴 **A FONTE REPÕE O PROBLEMA: demissão não toca avaliação viva.** O `sincronizacao` **não está** entre os oito arquivos que escrevem em `prisma.avaliacao` — quem é demitido vira `situacao='DEMITIDO'`, sai da régua das listas NOVAS, e a avaliação criada antes fica `PENDENTE` para sempre. O cancelamento manual de 08/09 **resolve o caso, não a fonte**: com 894 avaliações abertas, o RH vai fazer isso à mão toda vez. ⚠️ **É pergunta, não conserto** — cancelar automaticamente no sync é o sistema decidindo sozinho tirar alguém do ciclo, e "afastado" não é "demitido". Medido em 08/09: **0 demitidos** com avaliação viva hoje; os 86 não-ATIVOs com avaliação são **FERIAS**, que são elegíveis por definição | §3.1.18 |
+| 18 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
 
 ---
 
@@ -1288,6 +1291,110 @@ que exige que **cada** aplicação vazia seja apontada, não só a primeira.
 
 Verificado ao vivo (ciclo descartável, criado e apagado): a faixa listando a pendência real, o
 `POST /ciclos/:id/abrir` recusando com a mesma frase, e o modal sem seletor nem contador.
+
+### 3.1.18. 🔴 O BECO: "Excluir" não cancelava nada, e o ciclo travava para sempre (08/09)
+
+O roteiro de tela de 08/09 achou uma trava que **nenhuma das três peças fecha sozinha**. Por
+isso as três saíram no mesmo commit — separadas, cada uma deixa um beco.
+
+#### O que existia, medido antes de mexer
+
+| Peça | O que fazia de fato |
+|---|---|
+| **"Excluir"** na Designação | escrevia **uma linha** em `ciclo_elegibilidade` e mais nada. Não tocava `avaliacao`, não tocava `aplicacao_publico` |
+| A avaliação da pessoa excluída | continuava `PENDENTE` na fila do avaliador (`minhasAvaliacoes` filtrava por `avaliadorId`, e **só**) e continuava contando no `encerrar` |
+| **"Tirar do público"** | recusava com *"Cancele a avaliação antes"* — **ato que não existia em lugar nenhum do módulo** |
+| **`CANCELADA`** | estava no enum, era **lida em 3 lugares** (`assertPodeEditar`, a contagem do painel, a exclusão da fila do painel) e **escrita em zero**. Terceiro estado morto depois de `EM_APURACAO`/`CANCELADO` — com a diferença de que **este era peça que faltava**, não lixo: o tratamento já estava escrito |
+| **`encerrar`** | exigia 100% enviado, sem override |
+
+⚠️ **E havia algo pior que "esconder a pessoa".** Na linha do RH, a etiqueta *"Avalia: Fulano"*
+só aparecia se `linha.elegivel`. Depois do Excluir, **a existência da avaliação sumia da tela**
+— o RH deixava de ver que ela existia, exatamente enquanto o avaliador continuava com ela na
+mão. Excluir não escondia a pessoa (a lista **marca, nunca filtra**, e a linha ficava lá);
+escondia **a avaliação**, de quem precisava decidir.
+
+**O tamanho real, medido em 08/09 e dito sem inflar:** os dois ciclos recusam `encerrar` hoje
+(Piloto 889+2, Geral 5+0) — mas **por ora só porque ninguém respondeu ainda**, que é legítimo.
+Não havia nenhum caso de EXCLUIR com avaliação viva (`ciclo_elegibilidade` estava **vazia**) nem
+nenhum demitido com avaliação viva. O que torna a trava **certa e não hipotética** é outra
+coisa, e é maior que este conserto — ver o item 17 da lista (B): **a sincronização não escreve
+em `prisma.avaliacao`**, então a demissão não toca a avaliação já criada.
+
+#### O que passou a existir
+
+**1 — `EXCLUIR` cancela a avaliação.** `decidir` continua registrando a decisão e agora,
+**dentro da mesma transação**, cancela a avaliação viva: `CANCELADA`, com `canceladaEm`,
+`canceladaPorId` e `motivoCancelamento` — que **carrega a justificativa da exclusão**, porque são
+o mesmo ato e duas frases para ele só criariam dúvida meses depois. Auditoria própria
+(`Avaliacao/CANCELAR`), além da da decisão.
+
+⚠️ **`ENVIADA` não se cancela: recusa e ensina a ordem.** Ela já tem nota e pode ter
+`ResultadoAvaliacao` — cancelá-la deixaria resultado órfão de avaliação viva, que é uma segunda
+verdade sobre a mesma pessoa. A recusa manda **reabrir a avaliação primeiro**, no mesmo desenho
+do `assertCicloAceitaReaberturaDeAvaliacao`.
+
+⭐ **Nenhuma resposta é apagada.** Cancelar tira a avaliação da **conta** (fila e encerramento),
+não do banco. Quem gastou meia hora respondendo doze perguntas não perde o rastro porque o RH
+mudou de ideia. *(Proposta nossa — confirmação pendente da gestora, na lista (A). Se ela
+preferir que o sistema recuse e obrigue o envio, a mudança é pequena; esperar travaria o resto.)*
+
+**2 — A confirmação diz o efeito REAL, com o número.** O diálogo do Excluir dizia
+*"Excluir a tira deste ciclo"* enquanto no dado a avaliação seguia viva. Agora:
+
+> *Isto cancela a avaliação que está com **ADAO BATISTA**. As **12** resposta(s) já dadas ficam
+> registradas e não entram na apuração — nada é apagado. Ela sai da fila dele e deixa de travar
+> o encerramento do ciclo.*
+
+⚠️ **A frase vem do BACKEND** (`efeitoDoExcluir`, devolvida por linha na lista de designação) —
+é a **mesma função** que o serviço usa para decidir. Frase montada na tela envelheceria separada
+da regra, que é exatamente o que aconteceu com o texto do modal de aplicação (§3.1.17). Quando o
+efeito é `RECUSAR`, o botão fica **desabilitado com o motivo**, em vez de deixar descobrir no erro.
+
+**3 — A etiqueta "Avalia" deixou de depender de `elegivel`.** Excluído, o RH continua vendo
+quem estava com a avaliação — agora como *"Era de: FULANO"* + `cancelada`. Marcar, nunca filtrar,
+que é a regra que o próprio módulo já segue em quatro listas.
+
+**4 — "Tirar do público" aponta um caminho que EXISTE.** A recusa deixou de mandar fazer um ato
+inexistente e passou a dizer onde se faz: *"use Designação → Excluir: lá a exclusão cancela a
+avaliação, com motivo registrado"*. ⚠️ **De propósito não cancela dali**: tirar do público e
+cancelar avaliação são atos diferentes, e juntá-los num clique repetiria o defeito do seletor de
+CC que saiu do modal no mesmo dia — um ato com efeito que a tela não mostra. E `CANCELADA`
+deixou de segurar o público: ela já saiu de toda conta.
+
+**5 — `encerrar` com pendência confirmada.** Precedente idêntico do **RDV na Logística**, que já
+roda em produção: *a API recusa e diz quantas; só encerra com `confirmarPendentes`, e as
+PLANEJADAS viram PULADA com o motivo escrito*. Aqui as pendentes viram `CANCELADA` com o motivo.
+
+- a recusa agora **diz a saída**, não só o número: recusa sem alternativa manda a pessoa
+  procurar sozinha um caminho — e o que ela acha é **criar outro ciclo**, que duplica resultado
+  sem ninguém decidir;
+- **motivo obrigatório**, gravado no ciclo, na auditoria **e em cada avaliação cancelada** — é o
+  que responde, meses depois, por que aquela pessoa ficou sem nota;
+- a auditoria distingue: `ENCERRAR_COM_PENDENCIA` ≠ `ENCERRAR`. "Encerrar" e "encerrar
+  cancelando 891 avaliações" não podem ter o mesmo nome;
+- o custo fica **à vista de quem usa**: o diálogo mostra o número exato antes do clique, e o
+  painel já contava `canceladas` por aplicação;
+- ⚠️ **RH_ADMIN só**, o mesmo degrau do reabrir *(confirmação pendente na lista (A))*;
+- ⚠️ O botão de encerrar **deixou de ser desabilitado** por pendência. Ficar cinza sem saída
+  **era** o beco: agora ele abre a conversa.
+
+#### O furo dentro do furo
+
+`filaPorAvaliador` (painel do RH) já excluía `CANCELADA` desde sempre; **`minhasAvaliacoes` não
+filtrava status nenhum**. Sem corrigir os dois lados, o cancelamento daria ao RH uma fila limpa
+enquanto o avaliador continuaria com a linha — o mesmo beco em outra fantasia. É
+`not: CANCELADA` de propósito, e não uma lista de status vivos: **`ENVIADA` continua aparecendo**
+(é o histórico do que a pessoa já fez no ciclo); o que a fila não pode mostrar é o que foi tirado
+da conta.
+
+#### Verificação
+
+Migration `20260908090000_avaliacao_cancelada_com_motivo` (3 colunas aditivas, com o desfazer
+escrito dentro), aplicada com `GUARDA: ok`. **460 testes, 33 suítes** — 30 novos, entre eles: a
+recusa da ENVIADA e a ordem que ela ensina; o motivo carregado para dentro de cada avaliação; a
+auditoria distinta do override; que nenhuma resposta é apagada; e que a fila do avaliador exclui
+canceladas **sem** virar lista de status vivos. 🔴 **Falta a rodada AO VIVO** — o token de
+`ariellypereira` expirou (access e refresh) e não há outra conta com `RH_ADMIN` no DEV.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

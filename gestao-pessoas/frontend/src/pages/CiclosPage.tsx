@@ -105,6 +105,8 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
   const [confirmandoAbrir, setConfirmandoAbrir] = useState(false);
   const [reabrindo, setReabrindo] = useState(false);
   const [motivoReabertura, setMotivoReabertura] = useState('');
+  const [encerrandoComPendencia, setEncerrandoComPendencia] = useState(false);
+  const [motivoPendencia, setMotivoPendencia] = useState('');
 
   async function reabrir() {
     setProblemas(null);
@@ -121,12 +123,19 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
     }
   }
 
-  async function agir(acao: 'abrir' | 'encerrar') {
+  async function agir(acao: 'abrir' | 'encerrar', confirmarPendentes = false) {
     setConfirmandoAbrir(false);
     setProblemas(null);
     setOcupado(true);
     try {
-      await (acao === 'abrir' ? ciclos.abrir(ciclo.id) : ciclos.encerrar(ciclo.id));
+      await (acao === 'abrir'
+        ? ciclos.abrir(ciclo.id)
+        : ciclos.encerrar(
+            ciclo.id,
+            confirmarPendentes ? { confirmarPendentes: true, motivo: motivoPendencia.trim() } : {},
+          ));
+      setEncerrandoComPendencia(false);
+      setMotivoPendencia('');
       await aoMudar();
     } catch (e) {
       // A validação de abertura devolve um ARRAY de problemas. Juntar tudo numa
@@ -187,18 +196,21 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
              * descobrir a regra clicando no botão que fecha o ciclo é o tipo de
              * aprendizado que só se quer ter uma vez.
              */
-            disabled={ocupado || (ciclo.status === 'ABERTO' && ciclo.avaliacoesPendentes > 0)}
-            title={
-              ciclo.status === 'ABERTO' && ciclo.avaliacoesPendentes > 0
-                ? `${ciclo.avaliacoesPendentes} avaliação(ões) ainda não foram enviadas`
-                : undefined
-            }
+            /**
+             * ⚠️ Não é mais DESABILITADO por pendência (08/09). Ficar cinza sem
+             * saída era o beco: uma pessoa desligada travava o ciclo para
+             * sempre, e o botão só dizia "não". Agora ele ABRE A CONVERSA — o
+             * diálogo mostra quantas ficariam canceladas e exige o motivo.
+             */
+            disabled={ocupado}
             onClick={() =>
               ciclo.status === 'RASCUNHO'
                 ? setConfirmandoAbrir(true)
                 : ciclo.status === 'ENCERRADO'
                   ? setReabrindo(true)
-                  : agir('encerrar')
+                  : ciclo.avaliacoesPendentes > 0
+                    ? setEncerrandoComPendencia(true)
+                    : agir('encerrar')
             }
             className="alvo-toque inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:opacity-50"
           >
@@ -217,7 +229,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               : ciclo.status === 'RASCUNHO'
               ? 'Abrir gera as avaliações e trava a montagem: aplicações e critérios só mudam enquanto é rascunho.'
               : ciclo.avaliacoesPendentes > 0
-                ? `Faltam ${ciclo.avaliacoesPendentes} avaliação(ões) por enviar — encerrar só depois que todas entrarem.`
+                ? `Faltam ${ciclo.avaliacoesPendentes} avaliação(ões) por enviar. Se não vão entrar, dá para encerrar com pendência — elas ficam canceladas, com motivo registrado.`
                 : 'Todas as avaliações foram enviadas: o ciclo pode ser encerrado.'}
           </p>
         </div>
@@ -312,6 +324,68 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
             >
               {ocupado ? 'Reabrindo…' : 'Reabrir o ciclo'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ⭐⭐ ENCERRAR COM PENDÊNCIA — o override, no molde do RDV da Logística.
+          O custo aparece ANTES: o número exato do que vai ser cancelado, o que
+          acontece com as respostas parciais, e o motivo obrigatório, que fica
+          gravado em CADA avaliação cancelada, não só no ciclo. */}
+      {encerrandoComPendencia && (
+        <Modal
+          titulo={`Encerrar "${ciclo.nome}" com pendência`}
+          aoFechar={() => setEncerrandoComPendencia(false)}
+        >
+          <p className="text-sm text-slate-700">
+            Faltam{' '}
+            <strong className="text-amber-800">
+              {ciclo.avaliacoesPendentes} avaliação(ões)
+            </strong>{' '}
+            por enviar. Encerrar assim <strong>cancela todas elas</strong>.
+          </p>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-sm text-slate-700">
+            <li>As respostas já dadas <strong>ficam registradas</strong> e não entram na apuração.</li>
+            <li>Elas somem da fila dos avaliadores e param de travar o encerramento.</li>
+            <li>A contagem de canceladas fica visível no Painel, por aplicação.</li>
+          </ul>
+          <p className="mt-2 text-sm text-slate-500">
+            Use isto quando as pendências <strong>não vão entrar</strong> — pessoa desligada ou
+            afastada, avaliador que não vai responder. Se é só demora, cobre no Painel: lá está quem
+            está segurando, por nome.
+          </p>
+          <label className="mt-3 block text-sm font-medium text-slate-700">
+            Motivo do encerramento com pendência
+            <textarea
+              value={motivoPendencia}
+              onChange={(e) => setMotivoPendencia(e.target.value)}
+              rows={2}
+              placeholder="Por que estas avaliações não vão entrar?"
+              className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm text-slate-800"
+            />
+          </label>
+          <p className="text-xs text-slate-500">
+            Fica gravado no ciclo, na auditoria e <strong>em cada avaliação cancelada</strong> — é o
+            que responde, meses depois, por que estas ficaram sem nota.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setEncerrandoComPendencia(false)}
+              className="alvo-toque flex-1 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={ocupado || motivoPendencia.trim().length < 3}
+              onClick={() => void agir('encerrar', true)}
+              className="alvo-toque flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {ocupado
+                ? 'Encerrando…'
+                : `Encerrar e cancelar ${ciclo.avaliacoesPendentes}`}
             </button>
           </div>
         </Modal>

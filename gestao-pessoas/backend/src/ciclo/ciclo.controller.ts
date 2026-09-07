@@ -31,6 +31,16 @@ export class ReabrirCicloDto {
   @IsString() @MinLength(3) motivo!: string;
 }
 
+/**
+ * ⭐ Encerrar com pendência: confirmação EXPLÍCITA + motivo. Mesmo contrato do
+ * `confirmarPendentes` do RDV na Logística — a API recusa e diz quantas são, e
+ * a tela só reenvia depois de perguntar.
+ */
+export class EncerrarCicloDto {
+  @IsOptional() @IsBoolean() confirmarPendentes?: boolean;
+  @IsOptional() @IsString() @MinLength(3) motivo?: string;
+}
+
 export class AjustarPeriodoDto {
   @Type(() => Date) @IsDate() periodoInicio!: Date;
   @Type(() => Date) @IsDate() periodoFim!: Date;
@@ -74,8 +84,14 @@ export class CicloController {
     return this.ciclos.reabrir(id, dto.motivo, user.sub);
   }
 
+  /** ⚠️ RH_ADMIN só — inclusive para o encerramento com pendência, que é o
+      mesmo degrau do reabrir: os dois desfazem ou atropelam uma regra do ciclo. */
   @Post(':id/encerrar') @HttpCode(200) @Roles(ROLES.RH_ADMIN)
-  encerrar(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.ciclos.encerrar(id, user.sub);
+  encerrar(
+    @Param('id') id: string,
+    @Body() dto: EncerrarCicloDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.ciclos.encerrar(id, user.sub, dto ?? {});
   }
 }

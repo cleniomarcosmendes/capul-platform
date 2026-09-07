@@ -164,8 +164,38 @@ describe('AplicacaoService — público nominal', () => {
       // contagem sem sumir do banco.
       prisma.aplicacaoPublico.findFirst.mockResolvedValue({ id: 'p1', origem: 'CENTRO_CUSTO' });
       prisma.avaliacao.count.mockResolvedValue(1);
-      await expect(service.removerDoPublico(APP, 'c1', RH)).rejects.toThrow(/Cancele a avaliação antes/);
+      await expect(service.removerDoPublico(APP, 'c1', RH)).rejects.toThrow(
+        /já tem avaliação nesta aplicação/,
+      );
       expect(prisma.aplicacaoPublico.delete).not.toHaveBeenCalled();
+    });
+
+    /**
+     * ⭐⭐ A recusa APONTA UM CAMINHO QUE EXISTE (08/09). Ela mandava "Cancele a
+     * avaliação antes" — ato que não existia em lugar nenhum do módulo, e que
+     * por isso mandava a pessoa procurar sozinha uma porta inexistente. O ato
+     * agora existe e tem endereço: Designação → Excluir.
+     */
+    it('a recusa diz ONDE se faz isso, e não um ato inexistente', async () => {
+      prisma.aplicacaoPublico.findFirst.mockResolvedValue({ id: 'p1', origem: 'CENTRO_CUSTO' });
+      prisma.avaliacao.count.mockResolvedValue(1);
+      await expect(service.removerDoPublico(APP, 'c1', RH)).rejects.toThrow(/Designação → Excluir/);
+    });
+
+    /**
+     * ⚠️ Cancelada já saiu de toda conta — segurar o público por causa dela
+     * seria travar por um registro histórico.
+     */
+    it('avaliação CANCELADA não segura o público', async () => {
+      prisma.aplicacaoPublico.findFirst.mockResolvedValue({ id: 'p1', origem: 'CENTRO_CUSTO' });
+      prisma.avaliacao.count.mockResolvedValue(0);
+      await service.removerDoPublico(APP, 'c1', RH);
+      expect(prisma.avaliacao.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: { not: 'CANCELADA' } }),
+        }),
+      );
+      expect(prisma.aplicacaoPublico.delete).toHaveBeenCalled();
     });
 
     it('sem avaliação, sai e fica registrado', async () => {
