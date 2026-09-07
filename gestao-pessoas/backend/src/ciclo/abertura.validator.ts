@@ -173,15 +173,31 @@ export function conceitoDaNota<T extends FaixaConceito>(
   return null;
 }
 
+/**
+ * ⭐⭐ O QUE FALTA PARA ABRIR — a MESMA conta que a abertura faz.
+ *
+ * Existe separada do `assert` porque a tela precisa mostrar a lista **antes** do
+ * clique, e não como erro depois dele. ⚠️ E é uma função só de propósito: se a
+ * tela tivesse a própria versão da regra, ela diria "pode abrir" e a API
+ * recusaria — as duas cópias divergem no primeiro critério novo. Aqui a tela lê
+ * exatamente o que a guarda vai cobrar.
+ */
+export function problemasParaAbrir(
+  aplicacoes: readonly AplicacaoParaValidar[],
+  conceitos: readonly FaixaConceito[],
+): string[] {
+  return [
+    ...(aplicacoes.length === 0 ? ['O ciclo não tem nenhuma aplicação.'] : []),
+    ...aplicacoes.flatMap(validarAplicacao),
+    ...validarConceitos(conceitos),
+  ];
+}
+
 /** Guarda da abertura do ciclo: aplicações + conceitos, tudo de uma vez. */
 export function assertCicloAbrivel(
   aplicacoes: readonly AplicacaoParaValidar[],
   conceitos: readonly FaixaConceito[],
 ): void {
-  const problemas = [
-    ...(aplicacoes.length === 0 ? ['O ciclo não tem nenhuma aplicação.'] : []),
-    ...aplicacoes.flatMap(validarAplicacao),
-    ...validarConceitos(conceitos),
-  ];
+  const problemas = problemasParaAbrir(aplicacoes, conceitos);
   if (problemas.length > 0) throw new CicloNaoAbrivelError(problemas);
 }

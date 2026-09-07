@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Carregando, Erro } from '../components/Estado';
 import { EtiquetaDeCiclo } from '../components/Etiqueta';
@@ -76,6 +76,7 @@ export default function CicloPage() {
           </div>
 
           {resumo && <LinhaDeEstado resumo={resumo} cicloId={cicloId} />}
+          {resumo?.status === 'RASCUNHO' && <FaixaDoRascunho resumo={resumo} />}
 
           <nav className="mt-4 flex gap-1 overflow-x-auto border-b border-slate-200" aria-label="Etapas do ciclo">
             <Aba para="aplicacoes" rotulo="Aplicações" />
@@ -183,6 +184,67 @@ function LinhaDeEstado({ resumo, cicloId }: { resumo: ResumoDoCiclo; cicloId: st
           )}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * ⭐⭐ A FAIXA DO RASCUNHO — o que só se faz agora, e o que abrir fecha.
+ *
+ * O estado era uma etiqueta e nada mais: não dizia o que RASCUNHO permite, o que
+ * a abertura fecha, nem — o mais caro — que **não há volta**. Não existe rota de
+ * ABERTO para RASCUNHO, e nada avisava antes do clique.
+ *
+ * ⚠️ Aparece na TELA DO CICLO, não só na lista: quem cria um ciclo trabalha
+ * aqui dentro (aplicações, público, designação), e um aviso que só existe na
+ * lista é um aviso que a pessoa leu antes de precisar dele. A lista de Ciclos
+ * tem a CONFIRMAÇÃO, que é onde o clique acontece.
+ *
+ * ⭐ A lista de pendências vem do backend, da MESMA função que a abertura roda
+ * (`problemasParaAbrir`). Lista vazia aqui significa que o clique passa lá — se
+ * fossem duas implementações, a tela diria "pode abrir" e a API recusaria.
+ */
+function FaixaDoRascunho({ resumo }: { resumo: ResumoDoCiclo }) {
+  const pendencias = resumo.pendenciasParaAbrir ?? [];
+  const pode = pendencias.length === 0;
+  return (
+    <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
+      <p className="flex items-start gap-2 text-sm text-amber-900">
+        <Lock size={15} className="mt-0.5 shrink-0" aria-hidden />
+        <span>
+          <strong className="font-semibold">RASCUNHO — é agora que se monta.</strong> Criar
+          aplicação e mudar peso só valem enquanto o ciclo é rascunho.{' '}
+          <strong>Abrir é definitivo: não há volta para rascunho.</strong>
+        </span>
+      </p>
+
+      <div className="mt-2 rounded-lg border border-amber-200 bg-white p-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          O que falta para abrir
+        </p>
+        {pode ? (
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-emerald-800">
+            <CheckCircle2 size={15} className="shrink-0 text-emerald-600" aria-hidden />
+            Nada — a validação da abertura passa. O botão fica na lista de Ciclos.
+          </p>
+        ) : (
+          <ul className="mt-1 space-y-1">
+            {pendencias.map((p) => (
+              <li key={p} className="flex items-start gap-1.5 text-sm text-slate-700">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
+                {p}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* ⚠️ O PASSO 0 não tem tela, e hoje o RH descobre isso procurando por ela.
+          Dizer onde ele mora custa uma frase e evita a busca. */}
+      <p className="mt-2 text-xs text-amber-900/80">
+        Questionários e critérios (com as faixas) são cadastrados pela T.I. — ainda não têm tela
+        neste módulo.
+      </p>
     </div>
   );
 }

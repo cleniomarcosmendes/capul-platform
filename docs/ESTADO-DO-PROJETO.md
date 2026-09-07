@@ -8,10 +8,10 @@
 ## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**67 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**68 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 67 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 68 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -1125,6 +1125,44 @@ por avaliador. O cabeçalho aparece em todas as abas — o que ele custa, custa 
 barato e daria número diferente, porque ignora quem o RH excluiu e quem a régua tirou.
 
 Falhar no resumo **não derruba a tela**: sem ele, some a linha e o ciclo continua abrindo.
+
+### 3.1.15. ✅ A faixa do RASCUNHO, "o que falta para abrir" e a confirmação (07/09)
+
+As outras duas partes da §3.1.11 — e elas só funcionam juntas.
+
+**A faixa**, na tela do ciclo, em toda aba enquanto for rascunho:
+
+> 🔒 **RASCUNHO — é agora que se monta.** Criar aplicação e mudar peso só valem enquanto o ciclo
+> é rascunho. **Abrir é definitivo: não há volta para rascunho.**
+> **O QUE FALTA PARA ABRIR** — ⚠ *O ciclo não tem nenhuma aplicação.*
+> *Questionários e critérios (com as faixas) são cadastrados pela T.I. — ainda não têm tela neste módulo.*
+
+⭐⭐ **A lista do "o que falta" e a validação do abrir são A MESMA FUNÇÃO.** `assertCicloAbrivel`
+passou a ser uma casca sobre **`problemasParaAbrir`**, e é essa que a tela lê — pelos MESMOS dados
+(`carregarParaAbertura`), com o MESMO mapeamento (extraído para um método só). Se fossem duas
+implementações, a tela diria "pode abrir" e a API recusaria: é a classe do dia, e aqui ela foi
+evitada por construção, não por cuidado.
+
+**Onde a faixa aparece, e por quê:** na **tela do ciclo**, não só na lista. Quem cria um ciclo
+trabalha aqui dentro — aplicações, público, designação —, e aviso que só existe na lista é aviso
+lido antes de fazer falta. Na **lista de Ciclos** fica a **confirmação**, que é onde o clique
+acontece:
+
+> **Abrir "Piloto 15/09/2026"** — Abrir **libera os avaliadores para responder** — e **não tem
+> volta: não existe voltar para rascunho.**
+> **A abertura FECHA:** criar aplicação e mudar o peso da avaliação ou dos critérios.
+> **CONTINUA valendo:** montar público, designar e apurar; mudar o período — a **data-base**, não.
+> `[ Cancelar ]` `[ Abrir o ciclo ]`
+
+Antes, a única barreira era a frase cinza embaixo do botão — que se lê **depois** de clicar. É o
+mesmo tratamento que o Apurar recebeu (§3.1.8), pela mesma razão.
+
+⚙️ `GET /painel/ciclo/:id/resumo` passou a trazer `pendenciasParaAbrir` — **só em RASCUNHO**
+(`null` nos outros estados: a porta já passou).
+
+Verificado ao vivo em 07/09 num segundo ciclo descartável (criado, usado e **apagado**): a faixa
+com a pendência real *"O ciclo não tem nenhuma aplicação"*, o próximo passo apontando para montar
+a primeira, e a confirmação com os dois blocos. Sobraram os dois ciclos de sempre.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

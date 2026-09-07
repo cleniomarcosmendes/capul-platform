@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 import { data } from '../lib/formato';
 import { ciclos, ehFaltaDePermissao, mensagemDoErro, type CicloDaLista, type NovoCiclo } from '../services/api';
+import { Modal } from '../components/Modal';
 
 /**
  * CICLOS — a lista de ciclos e a criação de um novo.
@@ -101,8 +102,10 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
   const { tem } = useAuth();
   const [ocupado, setOcupado] = useState(false);
   const [problemas, setProblemas] = useState<string[] | null>(null);
+  const [confirmandoAbrir, setConfirmandoAbrir] = useState(false);
 
   async function agir(acao: 'abrir' | 'encerrar') {
+    setConfirmandoAbrir(false);
     setProblemas(null);
     setOcupado(true);
     try {
@@ -169,7 +172,9 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
                 ? `${ciclo.avaliacoesPendentes} avaliação(ões) ainda não foram enviadas`
                 : undefined
             }
-            onClick={() => agir(ciclo.status === 'RASCUNHO' ? 'abrir' : 'encerrar')}
+            onClick={() =>
+              ciclo.status === 'RASCUNHO' ? setConfirmandoAbrir(true) : agir('encerrar')
+            }
             className="alvo-toque inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:opacity-50"
           >
             {ciclo.status === 'RASCUNHO' ? <Unlock size={15} aria-hidden /> : <Lock size={15} aria-hidden />}
@@ -183,6 +188,50 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
                 : 'Todas as avaliações foram enviadas: o ciclo pode ser encerrado.'}
           </p>
         </div>
+      )}
+
+      {/* ⭐⭐ CONFIRMAÇÃO DE ABRIR — no molde da do Apurar (§3.1.8): diz o que
+          FECHA e o que NÃO VOLTA, antes do clique valer.
+          ⚠️ Abrir é a porta mais definitiva do módulo: não existe rota de ABERTO
+          para RASCUNHO. Até 07/09 nada avisava — a única frase era a cinza
+          embaixo do botão, que se lê depois de clicar. */}
+      {confirmandoAbrir && (
+        <Modal titulo={`Abrir "${ciclo.nome}"`} aoFechar={() => setConfirmandoAbrir(false)}>
+          <p className="text-sm text-slate-700">
+            Abrir <strong>libera os avaliadores para responder</strong> — e{' '}
+            <strong className="text-amber-800">não tem volta: não existe voltar para rascunho.</strong>
+          </p>
+          <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+            <p className="font-medium">A abertura FECHA:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              <li>criar aplicação e mudar o peso da avaliação ou dos critérios</li>
+            </ul>
+            <p className="mt-2 font-medium">CONTINUA valendo depois de abrir:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              <li>montar público, designar e apurar</li>
+              <li>
+                mudar o período do ciclo — a <strong>data-base</strong>, não: ela congela o cálculo
+              </li>
+            </ul>
+          </div>
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmandoAbrir(false)}
+              className="alvo-toque flex-1 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={ocupado}
+              onClick={() => void agir('abrir')}
+              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {ocupado ? 'Abrindo…' : 'Abrir o ciclo'}
+            </button>
+          </div>
+        </Modal>
       )}
 
       {problemas && (

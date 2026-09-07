@@ -379,6 +379,12 @@ export interface ResumoDoCiclo {
   encerradoEm: string | null;
   /** `null` quando não há passo óbvio — e aí a tela não mostra nada. */
   proximoPasso: ProximoPassoDoCiclo | null;
+  /**
+   * ⭐ O que falta para ABRIR, só em RASCUNHO (`null` nos outros estados).
+   * ⚠️ Vem da MESMA função que a API roda no clique de abrir — a tela não tem
+   * versão própria da regra, senão diria "pode abrir" e a API recusaria.
+   */
+  pendenciasParaAbrir: string[] | null;
 }
 
 export const painel = {

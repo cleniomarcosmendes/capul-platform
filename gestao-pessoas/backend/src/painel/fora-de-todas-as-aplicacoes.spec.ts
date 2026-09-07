@@ -54,7 +54,14 @@ describe('PainelService — fora de todas as aplicações', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    service = new PainelService(prisma as never, { listar: jest.fn().mockResolvedValue([]) } as never);
+    // 3º argumento: o CicloService, de quem o RESUMO pede "o que falta para
+    // abrir" — a mesma função que a abertura usa. Este spec é do painel cheio,
+    // então basta existir.
+    service = new PainelService(
+      prisma as never,
+      { listar: jest.fn().mockResolvedValue([]) } as never,
+      { pendenciasParaAbrir: jest.fn().mockResolvedValue([]) } as never,
+    );
   });
 
   it('⭐ quem não está no público de nenhuma aplicação aparece, com nome', async () => {

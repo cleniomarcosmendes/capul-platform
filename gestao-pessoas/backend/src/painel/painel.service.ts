@@ -35,6 +35,7 @@ import { DesignacaoService } from '../designacao/designacao.service.js';
 import { montarListaInicial } from '../designacao/elegibilidade-ciclo.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { proximoPasso, type ProximoPasso } from './proximo-passo.js';
+import { CicloService } from '../ciclo/ciclo.service.js';
 
 export interface ProgressoDaAplicacao {
   aplicacaoId: string;
@@ -116,6 +117,12 @@ export interface ResumoDoCiclo {
   encerradoEm: Date | null;
   /** `null` quando não há passo óbvio — a tela não mostra nada. Ver a regra. */
   proximoPasso: ProximoPasso | null;
+  /**
+   * ⭐ O que falta para ABRIR — só em RASCUNHO (`null` nos outros estados).
+   * Vem da MESMA função que a abertura usa (`problemasParaAbrir`): lista vazia
+   * significa que o clique passa, e é a mesma conta que a API vai fazer.
+   */
+  pendenciasParaAbrir: string[] | null;
 }
 
 @Injectable()
@@ -123,6 +130,7 @@ export class PainelService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly designacao: DesignacaoService,
+    private readonly ciclos: CicloService,
   ) {}
 
   async doCiclo(cicloId: string): Promise<PainelDoCiclo> {
@@ -248,7 +256,14 @@ export class PainelService {
       aFazer: conta('PENDENTE') + conta('EM_ANDAMENTO'),
       apuradas,
     };
-    return { ...estado, encerradoEm: ciclo.encerradoEm, proximoPasso: proximoPasso(estado) };
+    return {
+      ...estado,
+      encerradoEm: ciclo.encerradoEm,
+      proximoPasso: proximoPasso(estado),
+      // Só faz sentido no rascunho — nos outros estados a porta já passou.
+      pendenciasParaAbrir:
+        ciclo.status === 'RASCUNHO' ? await this.ciclos.pendenciasParaAbrir(cicloId) : null,
+    };
   }
 
   /**

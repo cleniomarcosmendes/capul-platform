@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import {
   CicloNaoAbrivelError,
   assertCicloAbrivel,
+  problemasParaAbrir,
   type AplicacaoParaValidar,
   type FaixaConceito,
 } from './abertura.validator.js';
@@ -69,6 +70,16 @@ export class CicloService {
   }
 
   /**
+   * O que falta para o ciclo poder abrir — a lista VIVA, para a tela mostrar
+   * antes do clique. Roda a MESMA função da abertura sobre os MESMOS dados
+   * (`carregarParaAbertura`), então não existe "a tela achava que dava".
+   */
+  async pendenciasParaAbrir(cicloId: string): Promise<string[]> {
+    const ciclo = await this.carregarParaAbertura(cicloId);
+    return problemasParaAbrir(this.aplicacoesParaValidar(ciclo), this.conceitosParaValidar(ciclo));
+  }
+
+  /**
    * ABRIR — a última porta antes de gerar nota. Valida tudo de uma vez (§4.6):
    * conceitos contíguos, aplicações com `pesoAvaliacao > 0`, critérios ativos e
    * com resolver registrado, e nenhum modelo de demonstração.
@@ -81,27 +92,8 @@ export class CicloService {
       );
     }
 
-    const aplicacoes: AplicacaoParaValidar[] = ciclo.aplicacoes.map((a) => ({
-      nome: a.nome,
-      pesoAvaliacao: Number(a.pesoAvaliacao),
-      modeloFinalidade: a.modeloVersao.modelo.finalidade,
-      criterios: a.criterios.map((ac) => ({
-        peso: Number(ac.peso),
-        criterio: {
-          codigo: ac.criterio.codigo,
-          nome: ac.criterio.nome,
-          origem: ac.criterio.origem,
-          codigoCalculo: ac.criterio.codigoCalculo,
-          ativo: ac.criterio.ativo,
-        },
-      })),
-    }));
-
-    const conceitos = ciclo.conceitos.map((c) => ({
-      descricao: c.descricao,
-      limiteInferior: Number(c.limiteInferior),
-      limiteSuperior: Number(c.limiteSuperior),
-    }));
+    const aplicacoes = this.aplicacoesParaValidar(ciclo);
+    const conceitos = this.conceitosParaValidar(ciclo);
 
     try {
       assertCicloAbrivel(aplicacoes, conceitos);
@@ -122,6 +114,35 @@ export class CicloService {
       valorNovo: { aplicacoes: aplicacoes.length },
     });
     return aberto;
+  }
+
+  /** ⚠️ Um mapeamento só: a lista viva e a guarda leem o ciclo do mesmo jeito. */
+  private aplicacoesParaValidar(
+    ciclo: Awaited<ReturnType<CicloService['carregarParaAbertura']>>,
+  ): AplicacaoParaValidar[] {
+    return ciclo.aplicacoes.map((a) => ({
+      nome: a.nome,
+      pesoAvaliacao: Number(a.pesoAvaliacao),
+      modeloFinalidade: a.modeloVersao.modelo.finalidade,
+      criterios: a.criterios.map((ac) => ({
+        peso: Number(ac.peso),
+        criterio: {
+          codigo: ac.criterio.codigo,
+          nome: ac.criterio.nome,
+          origem: ac.criterio.origem,
+          codigoCalculo: ac.criterio.codigoCalculo,
+          ativo: ac.criterio.ativo,
+        },
+      })),
+    }));
+  }
+
+  private conceitosParaValidar(ciclo: { conceitos: { descricao: string; limiteInferior: unknown; limiteSuperior: unknown }[] }) {
+    return ciclo.conceitos.map((c) => ({
+      descricao: c.descricao,
+      limiteInferior: Number(c.limiteInferior),
+      limiteSuperior: Number(c.limiteSuperior),
+    }));
   }
 
   async encerrar(cicloId: string, usuarioId: string) {
