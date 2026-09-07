@@ -1766,6 +1766,55 @@ print — foi assim que se pegou o título do módulo virando "Aval…" no cabe�
 ⚠️ Ponha o token no `localStorage` com `context.addInitScript` **antes** do primeiro
 `goto`: sem token o `AuthProvider` redireciona para o Hub e a navegação é interrompida.
 
+### 🔴 `npx` nesta máquina responde por um pacote que NÃO é a ferramenta
+
+Não existe `node_modules` nos frontends aqui (o build é todo em Docker). Rodar
+`npx tsc -b` no `gestao-pessoas/frontend` **não roda o TypeScript**: sem `typescript`
+instalado local, o `npx` baixa e executa o pacote npm literalmente chamado **`tsc`** —
+`tsc@2.0.4`, *"A deprecated release of the TypeScript compiler"*, um esqueleto cujo único
+trabalho é imprimir:
+
+> `This is not the tsc command you are looking for`
+
+Ele fica em `~/.npm/_npx/1d6e82a4126006c4/node_modules/tsc`. **Não é o TypeScript do Deno** —
+é um pacote decoy do próprio npm, e a distinção importa porque a saída também não é.
+
+⚠️ **A diferença para a armadilha do cache do Docker:** esta **sai com código 1**. Não dá
+falso verde — dá falso VERMELHO, que engana de outro jeito: lido rápido, parece "o typecheck
+quebrou nesta máquina" ou "falta dependência do projeto", quando o que houve foi rodar outro
+programa. O parentesco com o cache é a família, não o modo: **ferramenta que responde sem
+fazer o trabalho**. Some a isso a armadilha já registrada de que `tsc --noEmit` checa ZERO
+arquivo aqui (o tsconfig é arquivo-solução, `files: []`) e há **duas** maneiras de sair de um
+"typecheck" sem ter compilado nada.
+
+**O comando que funciona — é o build da imagem, e não é atalho:**
+
+```bash
+docker compose build gestao-pessoas-frontend      # o Dockerfile roda `npm run build`
+                                                   # e o script é `tsc -b && vite build`
+```
+
+O `&&` é a garantia: erro de tipo derruba o build **antes** do `vite`, com exit code 2. Não
+existe caminho em que a imagem saia pronta com erro de tipo dentro.
+
+⭐ **E isso foi verificado por MUTAÇÃO em 08/09, não por leitura do `package.json`** — que é a
+mesma regra do teste de invariante do RDV: garantia que ninguém tentou quebrar é garantia
+suposta. Injetei `const MUTACAO_DO_TESTE: number = ciclo.nome;` em `CiclosPage.tsx` e o build
+parou com
+
+```
+src/pages/CiclosPage.tsx(110,9): error TS2322: Type 'string' is not assignable to type 'number'.
+ERROR: process "/bin/sh -c npm run build" did not complete successfully: exit code: 2
+```
+
+A mutação foi revertida e a imagem reconstruída limpa em seguida. ⚠️ **O `vite build` sozinho
+NÃO pegaria isso** — ele transpila e joga os tipos fora; quem checa é o `tsc -b` do `&&`.
+
+⚠️ O mesmo vale para o backend: a suíte roda em container, e com `-m 3g` +
+`NODE_OPTIONS=--max-old-space-size=2560`. Com o `mem_limit: 512m` do compose, os workers do
+Jest morrem por **SIGKILL/heap** e o relatório sai "11 suítes falharam" sem nenhum teste
+falhando de verdade — outra saída que parece defeito do código e é do ambiente.
+
 ### 🔴 A armadilha mais perigosa daqui: build de frontend com fonte velho
 
 > **Depois de TODO build de frontend: `grep` de uma string nova no bundle DENTRO do
