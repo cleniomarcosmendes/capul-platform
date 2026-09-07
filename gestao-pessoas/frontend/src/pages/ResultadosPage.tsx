@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Info, Search, Sigma, User } from 'lucide-react';
+import { ChevronRight, Info, Search, Sigma, User } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { dataHora, nota } from '../lib/formato';
 import { Etiqueta } from '../components/Etiqueta';
@@ -153,10 +153,19 @@ export default function ResultadosPage() {
       <ul className="mt-3 space-y-2">
         {visiveis.map((l) => (
           <li key={l.id}>
+            {/* ⭐⭐ A LINHA TEM DE PARECER CLICÁVEL (08/09).
+                A memória de cálculo é a peça que responde "por que 58,60?" — é o
+                que o RH leva para o feedback e para a contestação — e estava
+                atrás de um clique que ninguém adivinha: cursor `default`, sem
+                seta, e o hover só trocando a cor da borda. Os cartões da fila
+                do avaliador, mesma família visual, sempre tiveram chevron.
+                ⚠️ Não é enfeite: capacidade sem sinal na tela é capacidade que
+                não existe para quem usa — é a mesma classe da rota sem botão. */}
             <button
               type="button"
               onClick={() => setAberta(l)}
-              className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left hover:border-capul-300"
+              aria-label={`Ver a memória de cálculo de ${l.nome}`}
+              className="alvo-toque flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition-colors hover:border-capul-300 hover:bg-capul-50/40"
             >
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 truncate font-medium text-slate-800">
@@ -175,7 +184,9 @@ export default function ResultadosPage() {
               <div className="shrink-0 text-right">
                 <p className="text-lg font-semibold tabular-nums text-slate-800">{nota(l.notaFinal)}</p>
                 {l.conceito && <p className="text-xs text-slate-500">{l.conceito}</p>}
+                <p className="mt-0.5 text-[11px] text-capul-700">memória de cálculo</p>
               </div>
+              <ChevronRight size={20} className="shrink-0 text-slate-300" aria-hidden />
             </button>
           </li>
         ))}
@@ -259,6 +270,17 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                   {nota(memoria.notaFinal)}
                 </p>
                 {memoria.conceito && <p className="text-sm text-slate-500">{memoria.conceito}</p>}
+                {/* ⭐ AS DUAS DATAS, JUNTAS — e é a comparação que serve, não
+                    cada uma. "Apurado em" sozinho não diz se a apuração é
+                    posterior à resposta, que é exatamente a pergunta quando
+                    alguém contesta a nota depois de uma reapuração.
+                    ⚠️ `enviadaEm` já vinha do backend e a tela descartava: mais
+                    um caso da meia rede do §3.1.9. */}
+                {memoria.enviadaEm && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Enviada em {dataHora(memoria.enviadaEm)}
+                  </p>
+                )}
                 {memoria.calculadoEm && (
                   <p className="text-xs text-slate-400">
                     Apurado em {dataHora(memoria.calculadoEm)}
