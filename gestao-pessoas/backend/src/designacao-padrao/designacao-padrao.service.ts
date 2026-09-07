@@ -27,6 +27,7 @@ import {
 } from './planilha.js';
 import { montarPrevia, type ParaGravar, type Previa } from './distribuicao.js';
 import { marcarRestricoesPor } from '../avaliacao/separacao-funcoes.js';
+import { DesignacaoService } from '../designacao/designacao.service.js';
 
 /** Origem que significa "ninguém decidiu esta linha ainda". */
 const NAO_REVISADA = 'DIVISAO_AUTOMATICA';
@@ -59,6 +60,14 @@ export class DesignacaoPadraoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditoria: AuditoriaService,
+    /**
+     * ⚠️ O aviso de "o que muda no ciclo" é PERGUNTADO ao dono do assunto, não
+     * respondido aqui. Quem sabe quem avalia quem DENTRO de um ciclo é o
+     * `DesignacaoService` — e é ele que tem dispensa escrita no invariante da
+     * separação de funções. Consultar `prisma.avaliacao` daqui criaria uma
+     * exceção NOVA à regra, que é o momento de revisar o desenho, não a lista.
+     */
+    private readonly designacao: DesignacaoService,
   ) {}
 
   private get vigente() {
@@ -226,7 +235,7 @@ export class DesignacaoPadraoService {
       where: { avaliadoId, ...this.vigente },
     });
 
-    return this.prisma.$transaction(async (tx) => {
+    const criada = await this.prisma.$transaction(async (tx) => {
       if (vigente) await this.encerrar(tx, vigente.id);
       const nova = await tx.designacaoPadrao.create({
         data: {
@@ -242,6 +251,13 @@ export class DesignacaoPadraoService {
       });
       return nova;
     });
+
+    // ⭐ O vínculo é do CADASTRO e não toca ciclo aberto — a tela precisa dizer
+    // isso na hora, e dizer o que FALTA em cada ciclo, não um aviso genérico.
+    // Ver `situacao-no-ciclo.ts`. Consulta de leitura, fora da transação: se ela
+    // falhar, o vínculo está gravado e a tela cai no aviso genérico.
+    const ciclos = await this.designacao.situacaoNosCiclosAbertos(avaliadoId, avaliadorId);
+    return { ...criada, avaliadoNome: avaliado.nome, avaliadorNome: avaliador.nome, ciclos };
   }
 
   /** Tira alguém de uma lista — encerrando a vigência, nunca apagando. */

@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileUp, ShieldQuestion,
-  Undo2, UserCheck, UserX,
+  AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileUp, Plus, ShieldQuestion,
+  Undo2, UserCheck, UserPlus, UserX,
 } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
+import { Modal } from '../components/Modal';
+import { SeletorDeColaborador } from '../components/SeletorDeColaborador';
+import { AvisoDosCiclos, AvisoDosCiclosEmLote } from '../components/AvisoDosCiclos';
 import {
   cadastroAvaliadores, mensagemDoErro,
-  type CartaoDeAvaliador, type LinhaDaLista, type LoteDeImportacao,
-  type PendenciasDoCadastro, type PreviaDaImportacao,
+  type CartaoDeAvaliador, type ColaboradorDaBusca, type LinhaDaLista, type LoteDeImportacao,
+  type PendenciasDoCadastro, type PreviaDaImportacao, type SituacaoNoCiclo, type VinculoCriado,
 } from '../services/api';
 
 /**
@@ -60,7 +63,7 @@ export default function CadastroAvaliadoresPage() {
         <AbaBotao atual={aba} valor="importacao" ao={setAba}>Importar planilha</AbaBotao>
       </nav>
 
-      {aba === 'pendencias' && <SemAvaliador p={pendencias} />}
+      {aba === 'pendencias' && <SemAvaliador p={pendencias} aoMudar={carregar} />}
       {aba === 'avaliadores' && <PorAvaliador aoMudar={carregar} />}
       {aba === 'importacao' && <Importacao aoImportar={carregar} />}
     </div>
@@ -146,8 +149,10 @@ function Cartao({
 
 // ── O que falta ─────────────────────────────────────────────────────────────
 
-function SemAvaliador({ p }: { p: PendenciasDoCadastro }) {
+function SemAvaliador({ p, aoMudar }: { p: PendenciasDoCadastro; aoMudar: () => Promise<void> }) {
   const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  /** Quem vai receber avaliador — o grupo inteiro ou uma pessoa da lista. */
+  const [alvo, setAlvo] = useState<{ titulo: string; pessoas: PessoaDoVinculo[] } | null>(null);
   if (p.semAvaliador.total === 0) {
     return (
       <Vazio
@@ -162,6 +167,15 @@ function SemAvaliador({ p }: { p: PendenciasDoCadastro }) {
         Agrupado por filial e centro de custo, o maior primeiro — nomear o responsável de um
         grupo resolve o grupo inteiro.
       </p>
+      {alvo && (
+        <DialogoDeVinculo
+          titulo={alvo.titulo}
+          escolher="AVALIADOR"
+          pessoas={alvo.pessoas}
+          aoFechar={() => setAlvo(null)}
+          aoConcluir={aoMudar}
+        />
+      )}
       {p.semAvaliador.grupos.map((g) => {
         const aberto = abertos.has(g.chave);
         return (
@@ -191,13 +205,47 @@ function SemAvaliador({ p }: { p: PendenciasDoCadastro }) {
                 {g.pessoas.length} {g.pessoas.length === 1 ? 'pessoa' : 'pessoas'}
               </Etiqueta>
             </button>
+            {/* ⚠️ FORA do botão que expande: botão dentro de botão é HTML
+                inválido, e no celular o toque cairia no errado. */}
+            <div className="border-t border-slate-100 px-4 py-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setAlvo({
+                    titulo: `Definir avaliador de ${g.pessoas.length} pessoa(s) — ${g.descricao ?? g.chave}`,
+                    pessoas: g.pessoas.map((x) => ({ colaboradorId: x.colaboradorId, nome: x.nome })),
+                  })
+                }
+                className="alvo-toque inline-flex items-center gap-1.5 rounded-lg border border-capul-600 px-3 text-sm font-medium text-capul-700 hover:bg-capul-50"
+              >
+                <UserPlus size={15} aria-hidden />
+                Definir avaliador · {g.pessoas.length} pessoa(s)
+              </button>
+            </div>
             {aberto && (
               <ul className="divide-y divide-slate-100 border-t border-slate-100">
                 {g.pessoas.map((pessoa) => (
-                  <li key={pessoa.colaboradorId} className="px-4 py-2 pl-11 text-sm">
-                    <span className="font-medium text-slate-700">{pessoa.nome}</span>
-                    <span className="text-slate-400"> · {pessoa.matricula}</span>
-                    {pessoa.cargo && <span className="text-slate-500"> · {pessoa.cargo}</span>}
+                  <li
+                    key={pessoa.colaboradorId}
+                    className="flex items-center gap-2 px-4 py-2 pl-11 text-sm"
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-medium text-slate-700">{pessoa.nome}</span>
+                      <span className="text-slate-400"> · {pessoa.matricula}</span>
+                      {pessoa.cargo && <span className="text-slate-500"> · {pessoa.cargo}</span>}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAlvo({
+                          titulo: `Definir avaliador de ${pessoa.nome}`,
+                          pessoas: [{ colaboradorId: pessoa.colaboradorId, nome: pessoa.nome }],
+                        })
+                      }
+                      className="alvo-toque shrink-0 rounded-lg px-2 text-xs font-medium text-capul-700 hover:bg-capul-50"
+                    >
+                      Definir avaliador
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -262,6 +310,7 @@ function PorAvaliador({ aoMudar }: { aoMudar: () => Promise<void> }) {
           {aberto === c.avaliadorId && (
             <ListaDoAvaliador
               avaliadorId={c.avaliadorId}
+              nomeDoAvaliador={c.nome}
               aoMudar={async () => { await carregar(); await aoMudar(); }}
             />
           )}
@@ -272,9 +321,10 @@ function PorAvaliador({ aoMudar }: { aoMudar: () => Promise<void> }) {
 }
 
 function ListaDoAvaliador({
-  avaliadorId, aoMudar,
-}: { avaliadorId: string; aoMudar: () => Promise<void> }) {
+  avaliadorId, nomeDoAvaliador, aoMudar,
+}: { avaliadorId: string; nomeDoAvaliador: string; aoMudar: () => Promise<void> }) {
   const [linhas, setLinhas] = useState<LinhaDaLista[] | null>(null);
+  const [adicionando, setAdicionando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
@@ -304,6 +354,18 @@ function ListaDoAvaliador({
 
   return (
     <div className="border-t border-slate-100">
+      {adicionando && (
+        <DialogoDeVinculo
+          titulo={`Adicionar pessoa à lista de ${nomeDoAvaliador}`}
+          escolher="AVALIADO"
+          avaliadorId={avaliadorId}
+          aoFechar={() => setAdicionando(false)}
+          aoConcluir={async () => {
+            await carregar();
+            await aoMudar();
+          }}
+        />
+      )}
       {aRevisar.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
           <AlertTriangle size={16} className="shrink-0" aria-hidden />
@@ -327,6 +389,16 @@ function ListaDoAvaliador({
         </div>
       )}
       {aviso && <p className="bg-slate-50 px-4 py-2 text-sm text-slate-700">{aviso}</p>}
+      <div className="px-4 py-2 pl-11">
+        <button
+          type="button"
+          onClick={() => setAdicionando(true)}
+          className="alvo-toque inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          <Plus size={15} aria-hidden />
+          Adicionar pessoa
+        </button>
+      </div>
       <ul className="divide-y divide-slate-100">
         {linhas.map((l) => (
           <li key={l.id} className="flex items-center gap-3 px-4 py-2 pl-11 text-sm">
@@ -671,4 +743,181 @@ function Bloco({
       <div className="mt-1 opacity-90">{children}</div>
     </div>
   );
+}
+
+
+// ── Vínculo avaliador → avaliado ────────────────────────────────────────────
+
+export interface PessoaDoVinculo {
+  colaboradorId: string;
+  nome: string;
+}
+
+/**
+ * ⭐⭐ A TELA QUE FALTAVA. Até 07/09/2026 o vínculo do cadastro só nascia por
+ * PLANILHA: a rota `POST /designacao-padrao` existia no backend e no cliente, e
+ * nenhuma página a chamava — capacidade na API sem botão na tela. A gestora
+ * entrou procurando "vincular um avaliador" e não achou porque não estava lá.
+ *
+ * O mesmo diálogo serve aos dois sentidos, porque é o mesmo ato:
+ *   • `AVALIADOR` — escolhe quem avalia N pessoas (um grupo, ou uma linha);
+ *   • `AVALIADO`  — escolhe mais uma pessoa para a lista de um avaliador.
+ *
+ * ⚠️ **Não fecha sozinho depois de gravar.** O que ele mostra no fim — o que o
+ * vínculo muda em cada ciclo ABERTO — é a metade do trabalho que não cabe num
+ * toast: o cadastro não toca ciclo já aberto, e quem não ler isso sai daqui
+ * convencido de que resolveu.
+ */
+function DialogoDeVinculo({
+  titulo,
+  escolher,
+  pessoas,
+  avaliadorId,
+  aoFechar,
+  aoConcluir,
+}: {
+  titulo: string;
+  escolher: 'AVALIADOR' | 'AVALIADO';
+  /** Quando `escolher === 'AVALIADOR'`: quem vai receber o avaliador escolhido. */
+  pessoas?: PessoaDoVinculo[];
+  /** Quando `escolher === 'AVALIADO'`: a lista de quem recebe a pessoa escolhida. */
+  avaliadorId?: string;
+  aoFechar: () => void;
+  aoConcluir: () => Promise<void>;
+}) {
+  const [escolhido, setEscolhido] = useState<ColaboradorDaBusca | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [falhas, setFalhas] = useState<string[]>([]);
+  const [feitos, setFeitos] = useState<VinculoCriado[] | null>(null);
+
+  const alvos = pessoas ?? [];
+
+  async function aplicar() {
+    if (!escolhido) return;
+    setSalvando(true);
+    setErro(null);
+    const criados: VinculoCriado[] = [];
+    const recusas: string[] = [];
+    try {
+      if (escolher === 'AVALIADOR') {
+        for (const pessoa of alvos) {
+          try {
+            criados.push(await cadastroAvaliadores.designar(escolhido.id, pessoa.colaboradorId));
+          } catch (e) {
+            // ⚠️ Uma recusa não derruba as outras — a mais comum é a pessoa
+            // escolhida estar dentro do próprio grupo (ninguém avalia a si).
+            recusas.push(`${pessoa.nome}: ${mensagemDoErro(e)}`);
+          }
+        }
+      } else {
+        criados.push(await cadastroAvaliadores.designar(avaliadorId!, escolhido.id));
+      }
+      setFeitos(criados);
+      setFalhas(recusas);
+      if (criados.length > 0) await aoConcluir();
+      if (criados.length === 0) setErro(recusas[0] ?? 'Nada foi gravado.');
+    } catch (e) {
+      setErro(mensagemDoErro(e));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <Modal titulo={titulo} aoFechar={aoFechar}>
+      {feitos === null ? (
+        <>
+          {escolher === 'AVALIADOR' && alvos.length > 1 && (
+            <p className="mb-2 text-sm text-slate-600">
+              A pessoa escolhida passa a avaliar as <strong>{alvos.length}</strong> deste grupo.
+            </p>
+          )}
+          <SeletorDeColaborador
+            escolhido={escolhido}
+            aoEscolher={setEscolhido}
+            rotulo={escolher === 'AVALIADOR' ? 'Quem vai avaliar' : 'Quem entra na lista'}
+            autoFoco
+          />
+          <p className="mt-2 text-xs text-slate-500">
+            Ninguém pode ser avaliador da própria avaliação — se a pessoa escolhida estiver no
+            grupo, a linha dela é recusada e as demais seguem.
+          </p>
+          {erro && <div className="mt-3"><Erro mensagem={erro} /></div>}
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={aoFechar}
+              className="alvo-toque flex-1 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={!escolhido || salvando}
+              onClick={aplicar}
+              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {salvando ? 'Gravando…' : 'Definir vínculo'}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {feitos.length === 1 ? (
+            <AvisoDosCiclos nome={primeiroNome(feitos[0].avaliadoNome)} ciclos={feitos[0].ciclos} />
+          ) : (
+            <AvisoDosCiclosEmLote quantidade={feitos.length} porCiclo={agruparPorCiclo(feitos)} />
+          )}
+          {falhas.length > 0 && (
+            <div className="mt-3">
+              <Erro
+                mensagem={`${falhas.length} pessoa(s) não receberam o vínculo.`}
+                dica={falhas[0]}
+              />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={aoFechar}
+            className="alvo-toque mt-5 w-full rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white"
+          >
+            Entendi
+          </button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+/** "MARIA APARECIDA DA SILVA" → "MARIA": a frase do aviso fica legível. */
+function primeiroNome(nome: string) {
+  return nome.trim().split(/\s+/)[0] ?? nome;
+}
+
+/**
+ * No lote, uma linha por pessoa seria ilegível (o maior grupo tem 61). Soma por
+ * situação DENTRO de cada ciclo — o ciclo continua nomeado, que é a regra.
+ */
+function agruparPorCiclo(criados: VinculoCriado[]) {
+  const porCiclo = new Map<
+    string,
+    { cicloId: string; cicloNome: string; contagem: Map<SituacaoNoCiclo, { pedeAcao: boolean; total: number }> }
+  >();
+  for (const c of criados) {
+    for (const l of c.ciclos) {
+      const atual =
+        porCiclo.get(l.cicloId) ??
+        { cicloId: l.cicloId, cicloNome: l.cicloNome, contagem: new Map() };
+      const contado = atual.contagem.get(l.situacao) ?? { pedeAcao: l.pedeAcao, total: 0 };
+      contado.total += 1;
+      atual.contagem.set(l.situacao, contado);
+      porCiclo.set(l.cicloId, atual);
+    }
+  }
+  return [...porCiclo.values()].map((c) => ({
+    cicloId: c.cicloId,
+    cicloNome: c.cicloNome,
+    contagem: [...c.contagem.entries()].map(([situacao, v]) => ({ situacao, ...v })),
+  }));
 }

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { AlertTriangle, Check, Search, UserCheck, UserPlus, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Search, UserCheck, UserPlus, Wand2, X } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
+import { Modal } from '../components/Modal';
+import { SeletorDeColaborador } from '../components/SeletorDeColaborador';
 import {
   aplicacoes as apiAplicacoes,
-  catalogo,
   copiaDoCadastro,
   designacao,
   mensagemDoErro,
@@ -487,18 +488,9 @@ function DialogoAvaliador({
   aoFechar: () => void;
   aoConcluir: () => Promise<void>;
 }) {
-  const [busca, setBusca] = useState('');
-  const [achados, setAchados] = useState<ColaboradorDaBusca[]>([]);
   const [escolhido, setEscolhido] = useState<ColaboradorDaBusca | null>(null);
   const [progresso, setProgresso] = useState<{ feitos: number; falhas: string[] } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      catalogo.colaboradores(busca).then(setAchados).catch(() => setAchados([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [busca]);
 
   async function aplicar() {
     if (!escolhido) return;
@@ -521,39 +513,10 @@ function DialogoAvaliador({
 
   return (
     <Modal titulo={`Definir avaliador de ${quantidade} pessoa(s)`} aoFechar={aoFechar}>
-      <input
-        value={busca}
-        onChange={(e) => setBusca(e.target.value)}
-        placeholder="Buscar por nome ou matrícula"
-        aria-label="Buscar avaliador"
-        className="alvo-toque w-full rounded-xl border border-slate-300 px-3 text-slate-800"
-      />
-
-      <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
-        {achados.map((c) => (
-          <li key={c.id}>
-            <button
-              type="button"
-              onClick={() => setEscolhido(c)}
-              className={`alvo-toque flex w-full items-center gap-2 rounded-lg px-2 text-left text-sm ${
-                escolhido?.id === c.id ? 'bg-capul-50 text-capul-800' : 'text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {escolhido?.id === c.id && <Check size={15} aria-hidden />}
-              <span className="min-w-0 flex-1 truncate">
-                <strong className="font-medium">{c.nome}</strong>
-                <span className="text-slate-500">
-                  {' '}
-                  · {c.matricula} · {c.cargoDescricao ?? 'sem cargo'}
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-        {achados.length === 0 && (
-          <li className="px-2 py-3 text-center text-sm text-slate-500">Nenhum resultado.</li>
-        )}
-      </ul>
+      {/* Mesma peça do cadastro (`SeletorDeColaborador`): duas cópias de uma
+          busca com debounce envelhecem diferente, e a que envelhece pior é a que
+          ninguém está olhando. */}
+      <SeletorDeColaborador escolhido={escolhido} aoEscolher={setEscolhido} rotulo="Buscar avaliador" />
 
       <p className="mt-2 text-xs text-slate-500">
         Ninguém pode ser avaliador da própria avaliação — se a pessoa escolhida estiver na seleção, a
@@ -590,34 +553,6 @@ function DialogoAvaliador({
         </button>
       </div>
     </Modal>
-  );
-}
-
-function Modal({
-  titulo,
-  aoFechar,
-  children,
-}: {
-  titulo: string;
-  aoFechar: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 sm:items-center sm:p-4"
-      onClick={aoFechar}
-    >
-      <div
-        role="dialog"
-        aria-modal
-        aria-label={titulo}
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl"
-      >
-        <h3 className="text-lg font-semibold text-slate-800">{titulo}</h3>
-        <div className="mt-3">{children}</div>
-      </div>
-    </div>
   );
 }
 

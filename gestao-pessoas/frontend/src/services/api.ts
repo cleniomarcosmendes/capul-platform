@@ -524,6 +524,38 @@ export interface LoteDeImportacao {
   desfeitoEm: string | null;
 }
 
+/** O que o vínculo do cadastro muda num ciclo ABERTO. Espelha o backend. */
+export type SituacaoNoCiclo =
+  | 'JA_REFLETE'
+  | 'SEM_AVALIACAO'
+  | 'FORA_DO_PUBLICO'
+  | 'FORA_PELA_REGUA'
+  | 'FORA_POR_DECISAO_RH'
+  | 'OUTRO_AVALIADOR'
+  | 'OUTRO_AVALIADOR_MANUAL'
+  | 'JA_RESPONDIDA';
+
+export interface SituacaoDoVinculoNoCiclo {
+  cicloId: string;
+  cicloNome: string;
+  situacao: SituacaoNoCiclo;
+  /** ⚠️ Vem do backend — a tela ordena por ele e não re-deriva a regra. */
+  pedeAcao: boolean;
+  avaliadorAtual: string | null;
+  justificativa: string | null;
+  respostas: number;
+  statusAvaliacao: string | null;
+}
+
+export interface VinculoCriado {
+  id: string;
+  avaliadorId: string;
+  avaliadoId: string;
+  avaliadoNome: string;
+  avaliadorNome: string;
+  ciclos: SituacaoDoVinculoNoCiclo[];
+}
+
 export const cadastroAvaliadores = {
   pendencias: () =>
     rhApi.get<PendenciasDoCadastro>('/designacao-padrao/pendencias').then((r) => r.data),
@@ -531,8 +563,14 @@ export const cadastroAvaliadores = {
     rhApi.get<CartaoDeAvaliador[]>('/designacao-padrao/avaliadores').then((r) => r.data),
   listaDe: (avaliadorId: string) =>
     rhApi.get<LinhaDaLista[]>(`/designacao-padrao/avaliadores/${avaliadorId}`).then((r) => r.data),
+  /**
+   * Cria o vínculo do CADASTRO — e devolve o que ele muda (ou não) em cada ciclo
+   * ABERTO, porque o cadastro não toca ciclo já aberto. Ver `AvisoDosCiclos`.
+   */
   designar: (avaliadorId: string, avaliadoId: string, observacao?: string) =>
-    rhApi.post('/designacao-padrao', { avaliadorId, avaliadoId, observacao }).then((r) => r.data),
+    rhApi
+      .post<VinculoCriado>('/designacao-padrao', { avaliadorId, avaliadoId, observacao })
+      .then((r) => r.data),
   remover: (id: string) => rhApi.delete(`/designacao-padrao/${id}`).then((r) => r.data),
   revisar: (ids: string[]) =>
     rhApi

@@ -16,10 +16,16 @@ import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import {
+  avaliarElegibilidade,
   montarListaInicial,
   type CandidatoDesignacao,
   type MotivoExclusao,
 } from './elegibilidade-ciclo.js';
+import {
+  decidirSituacao,
+  pedeAcao,
+  type SituacaoDoVinculoNoCiclo,
+} from './situacao-no-ciclo.js';
 import { marcarRestricoesPor } from '../avaliacao/separacao-funcoes.js';
 import {
   decidirTrocaDeAplicacao,
@@ -218,6 +224,117 @@ export class DesignacaoService {
     // regra de visibilidade envelhece errada — já custou um achado de segurança
     // neste repositório.
     return marcarRestricoesPor(comDecisao, colaboradorId, (l) => l.colaboradorId);
+  }
+
+  /**
+   * O que muda (e o que NÃO muda) em cada ciclo ABERTO por causa deste vínculo.
+   *
+   * ⚠️ **Uma linha por ciclo aberto, sempre — inclusive as que dizem "nada a
+   * fazer"**. Com dois ciclos abertos (o caso de hoje), omitir aquele em que
+   * nada muda faz o silêncio ser lido como "não se aplica", que é justamente a
+   * ambiguidade que este aviso existe para matar.
+   */
+  async situacaoNosCiclosAbertos(
+    avaliadoId: string,
+    avaliadorVinculadoId: string,
+  ): Promise<SituacaoDoVinculoNoCiclo[]> {
+    const [abertos, colaborador] = await Promise.all([
+      this.prisma.ciclo.findMany({
+        where: { status: 'ABERTO' },
+        select: { id: true, nome: true, incluirAfastados: true },
+        orderBy: { criadoEm: 'asc' },
+      }),
+      this.prisma.colaborador.findUnique({
+        where: { id: avaliadoId },
+        select: { situacao: true },
+      }),
+    ]);
+    if (abertos.length === 0 || !colaborador) return [];
+
+    return Promise.all(
+      abertos.map(async (ciclo) => {
+        const [avaliacao, noPublico, decisao] = await Promise.all([
+          this.prisma.avaliacao.findUnique({
+            where: { cicloId_avaliadoId: { cicloId: ciclo.id, avaliadoId } },
+            select: {
+              avaliadorId: true, status: true, origemDesignacao: true, aplicacaoId: true,
+              _count: { select: { respostas: true } },
+            },
+          }),
+          this.prisma.aplicacaoPublico.findFirst({
+            where: { cicloId: ciclo.id, colaboradorId: avaliadoId },
+            select: { id: true },
+          }),
+          this.prisma.cicloElegibilidade.findFirst({
+            where: { cicloId: ciclo.id, colaboradorId: avaliadoId, removidoEm: null },
+            select: { decisao: true, justificativa: true },
+          }),
+        ]);
+
+        const regua = avaliarElegibilidade(
+          {
+            colaboradorId: avaliadoId,
+            matricula: '',
+            nome: '',
+            // Mesma nota da tela de designação: categoria funcional não é coluna
+            // do nosso cadastro — Presidente e Vice saem por decisão registrada.
+            categoriaFuncional: null,
+            situacaoNaDataBase: colaborador.situacao as never,
+          },
+          { incluirAfastados: ciclo.incluirAfastados },
+        );
+
+        const situacao = decidirSituacao({
+          avaliadorVinculadoId,
+          avaliacao: avaliacao
+            ? {
+                avaliadorId: avaliacao.avaliadorId,
+                status: avaliacao.status,
+                respostas: avaliacao._count.respostas,
+                origemDesignacao: avaliacao.origemDesignacao,
+              }
+            : null,
+          noPublico: noPublico !== null,
+          decisaoDoRh: decisao
+            ? { decisao: decisao.decisao as 'INCLUIR' | 'EXCLUIR', justificativa: decisao.justificativa }
+            : null,
+          regua: { elegivel: regua.elegivel, justificativa: regua.justificativa },
+        });
+
+        // O nome de quem avalia hoje só é buscado quando a frase vai usá-lo.
+        let avaliadorAtual: string | null = null;
+        if (
+          avaliacao &&
+          (situacao === 'OUTRO_AVALIADOR' ||
+            situacao === 'OUTRO_AVALIADOR_MANUAL' ||
+            situacao === 'JA_RESPONDIDA')
+        ) {
+          const atual = await this.prisma.colaborador.findUnique({
+            where: { id: avaliacao.avaliadorId },
+            select: { nome: true },
+          });
+          avaliadorAtual = atual?.nome ?? null;
+        }
+
+        return {
+          cicloId: ciclo.id,
+          cicloNome: ciclo.nome,
+          situacao,
+          pedeAcao: pedeAcao(situacao),
+          avaliadorAtual,
+          // A justificativa que a tela mostra entre aspas: a do RH quando houve
+          // decisão, a da régua quando foi a régua. Nunca as duas.
+          justificativa:
+            situacao === 'FORA_POR_DECISAO_RH'
+              ? (decisao?.justificativa ?? null)
+              : situacao === 'FORA_PELA_REGUA'
+                ? regua.justificativa
+                : null,
+          respostas: avaliacao?._count.respostas ?? 0,
+          statusAvaliacao: avaliacao?.status ?? null,
+        };
+      }),
+    );
   }
 
   /**

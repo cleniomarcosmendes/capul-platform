@@ -17,12 +17,16 @@ const RH = 'user-rh';
 describe('DesignacaoPadraoService', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let auditoria: { registrar: jest.Mock };
+  let designacao: { situacaoNosCiclosAbertos: jest.Mock };
   let service: DesignacaoPadraoService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
     auditoria = { registrar: jest.fn().mockResolvedValue(undefined) };
-    service = new DesignacaoPadraoService(prisma as never, auditoria as never);
+    // O 3º argumento é o DesignacaoService: o cadastro PERGUNTA a ele o que o
+    // vínculo muda no ciclo aberto, em vez de consultar `prisma.avaliacao` daqui.
+    designacao = { situacaoNosCiclosAbertos: jest.fn().mockResolvedValue([]) };
+    service = new DesignacaoPadraoService(prisma as never, auditoria as never, designacao as never);
     prisma.colaborador.findMany.mockResolvedValue([
       { id: 'c-a', filial: '02', matricula: '000001', nome: 'ANA', centroCusto: '21010101', centroCustoDescricao: 'S', cargoDescricao: null },
       { id: 'c-chefe', filial: '02', matricula: '000010', nome: 'CHEFE', centroCusto: '21010101', centroCustoDescricao: 'S', cargoDescricao: 'GERENTE' },

@@ -8,10 +8,10 @@
 ## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**63 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**64 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 63 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 64 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -67,16 +67,15 @@ nove itens desta lista não movem esse número em nada.
 | 1 | **Contas para os avaliadores** — 46 dos 53 não têm conta, e 3 têm conta sem permissão. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
 | 2 | **`rodrigoleao`** — é avaliador de 4 pessoas e a permissão GESTAO_PESSOAS **não salvou**. ⚠️ Segunda ocorrência do mesmo sintoma (a 1ª foi o INVENTARIO do `wandersonnascimento`): ver se a tela do Configurador erra ao salvar, porque aí é de todos os módulos | §6 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
-| 4 | 🔴 **Tela de vínculo avaliador → avaliado, um por vez** — a rota existe e não tem botão; hoje o vínculo do cadastro só nasce por planilha. **Precede a reorganização do menu** | §3.1.5 |
-| 5 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
-| 6 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
-| 7 | Tela do **sync** (hoje só por API) | §7 · §2 |
-| 8 | `.dockerignore` do **fiscal/frontend** — o do gestao-pessoas foi feito em 06/09 | §6 |
-| 9 | **IP na auditoria**: 13 das 14 ações gravam `NULL`, e quando grava é o IP do nginx | §6 |
-| 10 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
-| 11 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
-| 12 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
-| 13 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
+| 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
+| 5 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
+| 6 | Tela do **sync** (hoje só por API) | §7 · §2 |
+| 7 | `.dockerignore` do **fiscal/frontend** — o do gestao-pessoas foi feito em 06/09 | §6 |
+| 8 | **IP na auditoria**: 13 das 14 ações gravam `NULL`, e quando grava é o IP do nginx | §6 |
+| 9 | Marca da própria linha no **modal da memória de cálculo** (`GET /resultados/:id` não manda `restrita`) | §3.1.1 |
+| 10 | Revisitar a marca de `foraDeTodasAsAplicacoes` **quando alguém fizer o "ver todos"** | §3.1.1 |
+| 11 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
+| 12 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
 
 ---
 
@@ -106,7 +105,7 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 | Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **42 endpoints** em 9 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
 | Banco | 8 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **388 testes, 27 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Testes | **402 testes, 28 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -555,7 +554,7 @@ código, **não executada**: ninguém rodou a sequência, e nenhum dado foi alte
 Não a trate como verificada — se for útil confirmar, **faça no DEV e registre o resultado aqui**,
 com data, dizendo se ela se sustentou ou caiu.
 
-### 3.1.5. 🔴 Criar o vínculo avaliador → avaliado À MÃO não tem tela (07/09)
+### 3.1.5. ✅ Criar o vínculo avaliador → avaliado À MÃO — a tela que faltava (07/09)
 
 Levantado em 07/09, depois de a gestora entrar como `ariellypereira` e **não achar onde se
 vincula um avaliador a um avaliado**. Ela não achou porque não está lá.
@@ -577,6 +576,66 @@ plataforma (topo em vez de sidebar, sem seções, sem "Voltar ao Hub", processo 
 nível), e a vontade era aplicar o padrão. **Não se reorganiza a casca sem a peça principal na
 mesa:** falta a tela de vínculo manual, que é item de menu. Primeiro a tela, depois o menu
 inteiro de uma vez — telas que existem, as quatro abas do ciclo e o lugar da tela nova.
+
+#### ✅ Feito em 07/09 — o botão, nos três pontos de entrada
+
+Não virou tela nova, de propósito: um item de menu ao lado de *Quem avalia quem* recriaria as
+**duas portas para a mesma pergunta** que acabamos de fechar. O que faltava era o botão que a
+tela já deveria ter:
+
+| Onde | Rótulo | Alcance |
+|---|---|---|
+| *O que falta* → cabeçalho do grupo | **Definir avaliador · N pessoa(s)** | o grupo inteiro (é o que o texto da tela já prometia e não cumpria) |
+| *O que falta* → linha da pessoa | **Definir avaliador** | uma pessoa — o caso da gestora em 07/09 |
+| *Por avaliador* → dentro do cartão | **Adicionar pessoa** | entra pelo outro lado: "mais alguém para o fulano avaliar" |
+
+#### ⭐⭐ O aviso: o cadastro NÃO toca ciclo já aberto
+
+O cadastro é permanente e o ciclo é uma **cópia** dele. Sem dizer isso na hora, o nome bom da
+tela **piora** o problema: a pessoa vincula, sai convencida de que resolveu, e a avaliação não
+existe. O aviso é **inline e fica** (toast some antes de ser lido) e **nomeia o ciclo** —
+"o ciclo aberto" é ambíguo justamente com dois abertos.
+
+⚠️ **Aviso genérico não serve, e o motivo tem nome: `JA_RESPONDIDA`.** O lote RECUSA trocar o
+avaliador de uma avaliação que já tem resposta; com o texto genérico a pessoa rodaria o lote e
+não veria nada — o motivo ficaria enterrado no relatório. São **oito estados**, decididos em
+`designacao/situacao-no-ciclo.ts` (função pura, com spec):
+
+| Estado | O que a tela diz |
+|---|---|
+| `JA_REFLETE` | *"o ciclo já reflete este vínculo — nada a fazer"* |
+| `SEM_AVALIACAO` | falta rodar **Designar pelo cadastro** (com link) |
+| `FORA_DO_PUBLICO` | *"não entra no ciclo: não está no público de nenhuma aplicação"* + link para Aplicações |
+| `FORA_PELA_REGUA` | *"está fora pela **régua**: «…»"* |
+| `FORA_POR_DECISAO_RH` | *"foi tirado **por decisão do RH**: «…»"* — com a justificativa, porque **quem lê pode ser quem decidiu** |
+| `OUTRO_AVALIADOR` | a avaliação é com fulano; o cadastro não troca sozinho |
+| `OUTRO_AVALIADOR_MANUAL` | idem, e foi designada à mão no ciclo: o lote só substitui se mandarem |
+| `JA_RESPONDIDA` | *"nada muda: fulano já respondeu N pergunta(s). Trocar o avaliador agora atribuiria o julgamento de uma pessoa a outra"* — **a mesma frase da recusa do lote: uma voz só** |
+
+⭐ **A ORDEM das checagens é regra:** `JA_REFLETE` vem antes de tudo. Dizer *"já tem avaliação
+com Fulano"* logo depois de vincular o Fulano é absurdo — e se ela já foi respondida, é o
+processo andando, não um aviso. **`FORA_PELA_REGUA` × `FORA_POR_DECISAO_RH` são estados
+distintos** pela mesma razão: a segunda tem autor e justificativa registrados.
+
+⭐ **Uma linha por ciclo aberto, SEMPRE** — inclusive as que dizem "nada a fazer". Com dois
+abertos, omitir aquele em que nada muda faz o silêncio ser lido como "não se aplica". O que
+**pede ação vem primeiro**, e `pedeAcao` vem do backend: a tela ordena por ele e não re-deriva a
+regra. No lote, soma por situação dentro de cada ciclo (o maior grupo tem 61 pessoas — uma linha
+por pessoa seria ilegível).
+
+#### ⭐ O teste de invariante pegou a primeira versão — e estava certo
+
+A consulta nasceu dentro do serviço do CADASTRO e tocava `prisma.avaliacao`; o
+`separacao-funcoes.invariante.spec` reprovou. A lista de dispensas diz, por escrito, que
+**entrada que não couber nas frases existentes é exceção NOVA — e aí o desenho é que precisa de
+revisão, não a lista**. Foi o que se fez: a consulta **mudou de dono** para o `DesignacaoService`
+(quem sabe quem avalia quem dentro de um ciclo, e que já tem dispensa escrita), e o cadastro
+**pergunta** a ele. Nenhuma dispensa nova foi criada.
+
+Conferido ao vivo em 07/09 com a conta da gestora: pelo botão da linha, o aviso trouxe as duas
+linhas certas — `FORA_DO_PUBLICO` no *Avaliação Geral 2026* e `SEM_AVALIACAO` no
+*Piloto 15/09/2026*. ⚠️ **O vínculo de teste foi DESFEITO em seguida** e o cadastro voltou aos
+**108** (o histórico guarda as duas linhas, como manda o desenho: encerra, nunca apaga).
 
 🟡 **Em aberto, para decidir junto com o menu:** o que fazer com as quatro abas de 2º nível
 (Aplicações · Designação · Painel · Resultados). Nenhum outro módulo aninha navegação, e é aí
