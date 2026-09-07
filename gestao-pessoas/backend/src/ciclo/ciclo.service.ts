@@ -74,8 +74,12 @@ export class CicloService {
    * ⭐ O HISTÓRICO DE REABERTURA — porque **um ciclo reaberto duas vezes é
    * informação, não detalhe**.
    *
-   * A tabela guarda só a ÚLTIMA reabertura (colunas únicas); a contagem vem de
-   * `rh.auditoria`, que guarda todas. O nome de quem reabriu sai de
+   * 🔒 A tabela guarda só a ÚLTIMA reabertura (colunas únicas); a contagem vem de
+   * `rh.auditoria`, que guarda todas. **Não troque por um campo da tabela.**
+   * Parece simplificação — uma consulta a menos — e apaga a informação sem nada
+   * acusar: a tela continua funcionando, o número continua aparecendo, e passa a
+   * dizer "1×" sempre. Se incomodar, o caminho é uma coluna `reaberturas`
+   * incrementada aqui, nunca derivar do `reabertoEm`. O nome de quem reabriu sai de
    * `core.usuarios` por `$queryRaw` — `core` é read-only aqui, como na Logística
    * e no Fiscal.
    */

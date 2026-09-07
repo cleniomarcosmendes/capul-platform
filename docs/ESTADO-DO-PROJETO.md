@@ -1,17 +1,17 @@
 # Gestão de Pessoas — estado do projeto
 
 > Ponto de entrada para quem vai mexer no módulo. Diz onde estamos, o que não se
-> discute mais e onde ler o resto. Última revisão: **07/09/2026**.
+> discute mais e onde ler o resto. Última revisão: **07/09/2026** (fim do dia).
 >
 > Piloto previsto para **15/09/2026**.
 
 ## 🚫 NÃO DAR PUSH — 06/09/2026 (revisto 07/09)
 
 **Os commits deste módulo ficam LOCAIS até segunda ordem.** Em 06/09/2026 são
-**70 commits** à frente do `origin/main`, que segue em **`6855c918`**.
+**78 commits** à frente do `origin/main`, que segue em **`6855c918`**.
 
 O motivo não é técnico: **o Marco tem um roteiro de deploy escrito contra o
-`6855c918`**, e publicar estes 70 commits agora — que trazem um módulo inteiro, com
+`6855c918`**, e publicar estes 78 commits agora — que trazem um módulo inteiro, com
 migrations — muda o alvo debaixo do roteiro dele. Quem for empurrar isso combina antes,
 e refaz o roteiro.
 
@@ -77,8 +77,10 @@ nove itens desta lista não movem esse número em nada.
 | 11 | Comprovar (ou derrubar) no DEV a **hipótese dos dois atos combinados** e registrar o resultado | §3.1.4 |
 | 12 | 🔴 **"Designar pelo cadastro" não tem desfazer** — cria N avaliações com um clique (no DEV: 84 de uma vez) e **não há como reverter pela tela**; o único caminho hoje é SQL. A importação de planilha TEM desfazer, e é a mesma natureza de ato em lote. A gestora pode fazer pela tela o que se fez por script em 07/09 e ficar sem saída | §3.1.13 |
 | 13 | Tela de **questionários** (`RH_MODELO` está sem nenhum item de menu até ela existir) | §3.1.6 · §2 |
-| 14 | ⚠️ **Duas verificações pendentes de conta** — `RH_ADMIN` **sem fila** (o estado vazio com "Ir para os ciclos") e `RH_MODELO` (que hoje não tem tela): os dois caminhos são **derivados do código, não exercidos**, porque nenhuma conta do DEV está nesses estados. Saem quando houver **segundo `RH_ADMIN`** (A) e **tela de questionários** (item 13) | §3.1.6 · §5 |
-| 15 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
+| 14 | ⚠️ **O QUE NUNCA FOI EXERCITADO — lista consolidada** (base do roteiro do Chrome): o botão **"Definir avaliador · N pessoas"** do GRUPO e o **aviso em lote** (nunca apareceram numa tela) · clicar **"Adicionar N ao público"**, **"Apurar N avaliação(ões)"** e **"Abrir o ciclo"** nas confirmações · **designar pela linha até gravar** · os textos do Apurar com **todas enviadas** e com **zero enviadas** · Resultados **com filtro** (*"sobre N em exibição"*) · a faixa no estado **✓ nada falta para abrir** · os outros **"Próximo"** (apurar, encerrar, montar público) · **"Tirar" do público** e **"Excluir/Incluir"** com o ciclo encerrado · o **checkbox de seleção** da Designação desabilitado (só conferido por código) · `RH_MODELO` e `RH_ADMIN` **sem fila** (não há conta) · **celular de verdade** (tudo a 360px foi Chromium) · **dois avaliadores ao mesmo tempo**. ⚠️ Testar com `ariellypereira` NÃO pega os caminhos de avaliador puro — use `wandersonnascimento` e `claudimaroliveira` | §3.1.6 · §5 |
+| 15 | 🟡 Do roteiro de tela, ainda **não registrados até 07/09** (falha minha — foram pedidos e não entraram): a **"promessa falsa" do modal** (mesma lacuna do questionário sem tela, item 13) · **regras de público não reproduzíveis** · **provisório sem tela de confirmação em bloco** · **sem sinal de sincronismo** (a tela não diz quando o cadastro veio do Protheus) · e os detalhes do 🟡 14 | roteiro do Chrome |
+| 16 | 🟡 **A linha de Resultados não parece clicável** — a memória de cálculo é a melhor peça do módulo (nota, conceito, quebra por grupo, quem avaliou, a observação) e está atrás de um clique que ninguém adivinha | roteiro do Chrome |
+| 17 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
 
 ---
 
@@ -1196,9 +1198,17 @@ reabrir avaliação), pede o **motivo no próprio diálogo** — o botão fica d
 vez de deixar o backend recusar depois — e avisa que **volta para ABERTO, nunca para rascunho**.
 
 ⭐ **A reabertura fica VISÍVEL depois**, na linha de estado, sempre: *"Reaberto 1× · última em
-07/09/2026, 12:38 por Arielly Aparecida Jose Pereira — «…»"*. A contagem vem de `rh.auditoria`
-(a tabela do ciclo só guarda a última), porque **um ciclo reaberto duas vezes é informação, não
-detalhe** — e sem isso ela sumiria da tela assim que o ciclo voltasse a ABERTO.
+07/09/2026, 12:38 por Arielly Aparecida Jose Pereira — «…»"*.
+
+> 🔒 **A CONTAGEM VEM DE `rh.auditoria`, NÃO da tabela do ciclo — e não simplifique isso.**
+> `ciclo.reabertoEm/reabertoPorId/motivoReabertura` guardam **só a ÚLTIMA** reabertura: quem
+> contar por ali sempre verá "1×". Quem faz "reaberto duas vezes" ser visível é a auditoria, que
+> guarda todas (`entidade: 'Ciclo'`, `acao: 'REABRIR'`).
+>
+> Trocar a contagem por um campo da tabela parece uma simplificação óbvia — uma consulta a menos —
+> e **apaga a informação sem nada acusar**: a tela continua funcionando, o número continua
+> aparecendo, e passa a estar errado só nos casos que importam. Se um dia isso incomodar, o
+> caminho é uma coluna `reaberturas` incrementada no serviço, **nunca** derivar do `reabertoEm`.
 
 ⚠️ **A linha de estado em ciclo ENCERRADO** mostra os números e **não mostra "Próximo"** — está
 certo: não há passo seguinte, e reabrir é exceção, não caminho. Quem diz o estado é a faixa.
