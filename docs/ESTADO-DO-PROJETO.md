@@ -10,8 +10,21 @@
 O bloco que ficava aqui dizia **não dar push**. Está superado: o Clenio publicou em 07/09,
 `6855c918..6f13a210`, **1.079 objetos**. Local e remoto iguais (`git status -sb` sem ahead).
 
-⚠️ **O que isso muda para o deploy:** o roteiro que o Marco tem em mãos foi escrito contra
-`6855c918` e **está superado** — o alvo mudou debaixo dele. Um roteiro novo precisa levar:
+### Onde cada ambiente está (07/09)
+
+| | Commit | Tem o Gestão de Pessoas? |
+|---|---|---|
+| `origin/main` | **`6f13a210`** | sim |
+| **HOMOLOGAÇÃO** | `6855c918` | **não** |
+| **PRODUÇÃO** | `6855c918` | **não** |
+
+O Marco aplicou em 07/09, em HLG **e** em PROD, o roteiro de 04/09
+(`PlatformCapul_20260904_Roteiro_Deploy.md`, alvo `6855c918`) — que **não continha este
+módulo**. ⚠️ Confirmar o rótulo quando for conveniente (`/health` → `versao.commit`): o que
+está acima é o declarado, e estado de ambiente é o que mais envelhece nestes registros.
+
+⚠️ **Então o módulo precisa de roteiro PRÓPRIO** — e ele é maior que uma onda comum, porque
+sobe um serviço novo em vez de atualizar um existente:
 
 | O que entrou | Detalhe |
 |---|---|
