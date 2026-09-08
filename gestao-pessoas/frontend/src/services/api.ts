@@ -136,16 +136,16 @@ export interface CicloDaLista {
   motivoReabertura: string | null;
   _count: { aplicacoes: number; avaliacoes: number };
   /** Não enviadas — é o que `encerrar` exige que seja zero. */
-  avaliacoesPendentes: number;
+  pendentes: number;
   /** Quantas o ciclo já cancelou. ⚠️ Reabrir o ciclo NÃO as traz de volta. */
-  avaliacoesCanceladas: number;
+  canceladas: number;
 }
 
 /**
  * ⚠️ `_count` NÃO é omitido: a base do ciclo (quantas avaliações ele tem) é o
  * que qualifica a média da tela de Resultados. Ver §3.1.8 do ESTADO.
  */
-export interface CicloDetalhado extends Omit<CicloDaLista, 'avaliacoesPendentes'> {
+export interface CicloDetalhado extends Omit<CicloDaLista, 'pendentes'> {
   conceitos: Conceito[];
   aplicacoes: {
     id: string;

@@ -282,7 +282,7 @@ export class CicloService {
       });
       return ciclo;
     });
-    return { ...encerrado, avaliacoesCanceladas: pendentes };
+    return { ...encerrado, canceladas: pendentes };
   }
 
   /**
@@ -422,9 +422,17 @@ export class CicloService {
         .reduce((t, p) => t + p._count._all, 0);
     return ciclos.map((c) => ({
       ...c,
-      avaliacoesPendentes: soma(c.id, ['PENDENTE', 'EM_ANDAMENTO']),
-      /** Quantas o ciclo já cancelou — reabrir NÃO as traz de volta. */
-      avaliacoesCanceladas: soma(c.id, ['CANCELADA']),
+      pendentes: soma(c.id, ['PENDENTE', 'EM_ANDAMENTO']),
+      /**
+       * Quantas o ciclo já cancelou — reabrir NÃO as traz de volta.
+       *
+       * ⚠️ `canceladas` e não `avaliacoesCanceladas`: é o MESMO fato que
+       * `ResumoDoCiclo.canceladas`, e eu escrevi os dois com nomes diferentes
+       * no mesmo dia em que documentei colisões de vocabulário (§3.1.32).
+       * `avaliacoesPendentes` foi junto — o módulo usa o nome nu (`enviadas`,
+       * `apuradas`, `designados`) e o prefixo aqui era a única exceção.
+       */
+      canceladas: soma(c.id, ['CANCELADA']),
     }));
   }
 

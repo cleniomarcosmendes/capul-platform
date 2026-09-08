@@ -256,7 +256,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
                 ? void pedirParaAbrir()
                 : ciclo.status === 'ENCERRADO'
                   ? setReabrindo(true)
-                  : ciclo.avaliacoesPendentes > 0
+                  : ciclo.pendentes > 0
                     ? setEncerrandoComPendencia(true)
                     : agir('encerrar')
             }
@@ -276,8 +276,8 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               ? `Encerrado${ciclo.encerradoEm ? ` em ${data(ciclo.encerradoEm)}` : ''} — designar, mexer no público e apurar estão fechados. Reabrir devolve tudo isso, com motivo registrado.`
               : ciclo.status === 'RASCUNHO'
               ? 'Abrir LIBERA os avaliadores para responder e trava a montagem: aplicações e critérios só mudam enquanto é rascunho. As avaliações já existem — quem as cria é a designação.'
-              : ciclo.avaliacoesPendentes > 0
-                ? `${flexao(ciclo.avaliacoesPendentes, 'Falta', 'Faltam')} ${contagem(ciclo.avaliacoesPendentes, 'avaliação', 'avaliações')} por enviar. Se não vão entrar, dá para encerrar com pendência — elas ficam canceladas, com motivo registrado.`
+              : ciclo.pendentes > 0
+                ? `${flexao(ciclo.pendentes, 'Falta', 'Faltam')} ${contagem(ciclo.pendentes, 'avaliação', 'avaliações')} por enviar. Se não vão entrar, dá para encerrar com pendência — elas ficam canceladas, com motivo registrado.`
                 : 'Todas as avaliações foram enviadas: o ciclo pode ser encerrado.'}
           </p>
         </div>
@@ -440,11 +440,11 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               não há caminho para descancelar. Dizer só o que se ganha, num ato
               que alguém aciona para consertar outro, é meia verdade que custa
               caro. */}
-          {ciclo.avaliacoesCanceladas > 0 && (
+          {ciclo.canceladas > 0 && (
             <p className="mt-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
               ⚠️ <strong>O que reabrir NÃO faz:</strong> as{' '}
-              <strong className="tabular-nums">{ciclo.avaliacoesCanceladas}</strong>{' '}
-              {flexao(ciclo.avaliacoesCanceladas, 'avaliação cancelada continua cancelada',
+              <strong className="tabular-nums">{ciclo.canceladas}</strong>{' '}
+              {flexao(ciclo.canceladas, 'avaliação cancelada continua cancelada',
                       'avaliações canceladas continuam canceladas')}. Reabrir devolve o ciclo, não
               as avaliações — não há caminho para descancelar.
             </p>
@@ -498,7 +498,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           <p className="text-sm text-slate-700">
             Faltam{' '}
             <strong className="text-amber-800">
-              {contagem(ciclo.avaliacoesPendentes, 'avaliação', 'avaliações')}
+              {contagem(ciclo.pendentes, 'avaliação', 'avaliações')}
             </strong>{' '}
             por enviar. Encerrar assim <strong>cancela todas elas</strong>.
           </p>
@@ -516,7 +516,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             <strong>Isto não tem volta.</strong> Uma avaliação cancelada não pode ser
             descancelada — não há caminho em tela para isso, e{' '}
             <strong>reabrir o ciclo não as traz de volta</strong>: ele volta a permitir designar e
-            apurar, mas estas {ciclo.avaliacoesPendentes} continuam canceladas. Se houver dúvida se
+            apurar, mas estas {ciclo.pendentes} continuam canceladas. Se houver dúvida se
             alguma ainda vai responder, é melhor esperar do que encerrar.
           </p>
           <p className="mt-2 text-sm text-slate-500">
@@ -565,7 +565,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             >
               {ocupado
                 ? 'Encerrando…'
-                : `Encerrar e cancelar ${ciclo.avaliacoesPendentes}`}
+                : `Encerrar e cancelar ${ciclo.pendentes}`}
             </button>
           </div>
         </Modal>

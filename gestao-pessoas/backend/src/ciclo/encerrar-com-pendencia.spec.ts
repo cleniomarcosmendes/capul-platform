@@ -11,6 +11,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { createPrismaMock } from '../common/testing/prisma-mock.js';
 import { CicloService } from './ciclo.service.js';
+import { MOTIVO_MINIMO_EM_MASSA, faltamCaracteres } from '../common/motivo.js';
 
 const CICLO = 'ciclo-1';
 const RH = 'user-rh';
@@ -34,7 +35,7 @@ describe('CicloService.encerrar', () => {
     it('encerra e não cancela nada', async () => {
       pendentes(0);
       const r = await service.encerrar(CICLO, RH);
-      expect(r.avaliacoesCanceladas).toBe(0);
+      expect(r.canceladas).toBe(0);
       expect(prisma.avaliacao.updateMany).not.toHaveBeenCalled();
       expect(auditoria.registrar).toHaveBeenCalledWith(expect.objectContaining({ acao: 'ENCERRAR' }));
     });
@@ -93,7 +94,7 @@ describe('CicloService.encerrar', () => {
         confirmarPendentes: true,
         motivo: 'Desligados e afastados de longa duração',
       });
-      expect(r.avaliacoesCanceladas).toBe(5);
+      expect(r.canceladas).toBe(5);
       expect(prisma.avaliacao.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { cicloId: CICLO, status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
@@ -139,7 +140,12 @@ describe('CicloService.encerrar', () => {
       pendentes(37);
       await expect(
         service.encerrar(CICLO, RH, { confirmarPendentes: true, motivo: 'xpt' }),
-      ).rejects.toThrow(/pelo menos 15 caracteres — faltam 12/);
+        // ⚠️ Compara com a SAÍDA DA FUNÇÃO que escreve a frase, não com a
+        // frase — é o que a regra 3 manda ("melhor ainda: comparar com a saída
+        // da função que decide, chamada dentro do próprio teste"), e eu tinha
+        // acabado de afirmar a redação aqui. Reescrever o texto passa a não
+        // quebrar o teste; mudar o MÍNIMO quebra, que é o fato protegido.
+      ).rejects.toThrow(faltamCaracteres('xpt', MOTIVO_MINIMO_EM_MASSA));
     });
 
     it('uma frase curta e legítima passa — o mínimo não pode inviabilizar', async () => {
