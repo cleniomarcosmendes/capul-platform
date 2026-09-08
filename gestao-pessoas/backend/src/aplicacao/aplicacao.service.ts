@@ -19,6 +19,7 @@ import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
 // ⚠️ A MESMA função que a tela de Designação usa. A prévia não tem — e não pode
 // ter — uma segunda ideia de quem gera avaliação (§3.1.21).
 import { avaliarElegibilidade } from '../designacao/elegibilidade-ciclo.js';
+import { ONDE_A_AVALIACAO_CONTA } from '../avaliacao/avaliacoes-que-contam.js';
 
 export interface DadosAplicacao {
   cicloId: string;
@@ -394,7 +395,7 @@ export class AplicacaoService {
     // ⚠️ CANCELADA não conta: a avaliação cancelada já saiu de toda conta, e
     // segurar o público por causa dela seria travar por um registro histórico.
     const avaliacao = await this.prisma.avaliacao.count({
-      where: { aplicacaoId, avaliadoId: colaboradorId, status: { not: 'CANCELADA' } },
+      where: { aplicacaoId, avaliadoId: colaboradorId, ...ONDE_A_AVALIACAO_CONTA },
     });
     if (avaliacao > 0) {
       // Tirar do público quem já tem avaliação deixaria a `Avaliacao` órfã do

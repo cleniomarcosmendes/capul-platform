@@ -18,6 +18,7 @@ import { calcularNotaAvaliacao, notaPorGrupo, type ItemRespondido } from '../cal
 import { AvaliacaoAcessoService, type ContextoAcesso } from './avaliacao-acesso.service.js';
 import { marcarRestricoes } from './separacao-funcoes.js';
 import { assertCicloAceitaReaberturaDeAvaliacao } from '../ciclo/ciclo-operavel.js';
+import { ONDE_A_AVALIACAO_CONTA } from './avaliacoes-que-contam.js';
 
 @Injectable()
 export class AvaliacaoService {
@@ -51,7 +52,7 @@ export class AvaliacaoService {
        */
       where: {
         avaliadorId: contexto.colaboradorId,
-        status: { not: 'CANCELADA' },
+        ...ONDE_A_AVALIACAO_CONTA,
         ...(cicloId ? { cicloId } : {}),
       },
       orderBy: { criadoEm: 'asc' },
