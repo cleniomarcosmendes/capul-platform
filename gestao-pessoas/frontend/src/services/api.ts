@@ -293,6 +293,8 @@ export interface LinhaDaDesignacao {
   avaliadorId: string | null;
   avaliadorNome: string | null;
   avaliacaoStatus: StatusAvaliacao | null;
+  /** Id da avaliação, quando existe — o que a linha precisa para reabrir. */
+  avaliacaoId: string | null;
   /** A linha de quem está olhando — marcada, nunca filtrada (§3.1). */
   restrita?: boolean;
   motivoRestricao?: string;
@@ -379,6 +381,22 @@ export interface PreviaDaDesignacao {
     frase: string | null;
   }[];
 }
+
+export interface EfeitoDaReabertura {
+  /** ⭐ true quando há resultado apurado — a reabertura vai APAGÁ-LO. */
+  apagaResultado: boolean;
+  notaFinal: number | null;
+  conceito: string | null;
+  apuradoEm: string | null;
+}
+
+export const avaliacoesRh = {
+  efeitoDaReabertura: (avaliacaoId: string) =>
+    rhApi.get<EfeitoDaReabertura>(`/avaliacoes/${avaliacaoId}/efeito-da-reabertura`).then((r) => r.data),
+  /** ⚠️ RH_ADMIN, motivo obrigatório, e APAGA o resultado apurado — ver §3.1.43. */
+  reabrir: (avaliacaoId: string, motivo: string) =>
+    rhApi.post(`/avaliacoes/${avaliacaoId}/reabrir`, { motivo }).then((r) => r.data),
+};
 
 export interface ProgressoDaAplicacao {
   aplicacaoId: string;

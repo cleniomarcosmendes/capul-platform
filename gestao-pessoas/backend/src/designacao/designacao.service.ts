@@ -62,6 +62,12 @@ export interface LinhaDaLista {
   avaliadorNome: string | null;
   avaliacaoStatus: string | null;
   /**
+   * ⭐ O id da avaliação, quando existe. A linha trazia só o `status`, e com ele
+   * a tela sabia QUE havia avaliação mas não conseguia agir sobre ela — foi o
+   * que faltava para o botão de reabrir (§3.1.41).
+   */
+  avaliacaoId: string | null;
+  /**
    * ⭐ A linha de quem está OLHANDO a lista, marcada. A §3.1 manda "mostrar a
    * linha marcada, nunca filtrar em silêncio", e esta lista mostra, por pessoa,
    * QUEM a avalia e o status da avaliação dela — a gestora se vê aqui com
@@ -84,6 +90,8 @@ export interface LinhaDaLista {
 }
 
 interface DesignacaoVigente {
+  /** Id da avaliação — o que a linha precisa para agir sobre ela (reabrir). */
+  id: string;
   avaliadorId: string;
   avaliadorNome: string;
   status: string;
@@ -234,6 +242,7 @@ export class DesignacaoService {
       avaliadorId: null,
       avaliadorNome: null,
       avaliacaoStatus: null,
+      avaliacaoId: null,
       efeitoDoExcluir: efeitoDoExcluir(null),
     };
     const linhas: LinhaDaLista[] = [
@@ -263,6 +272,7 @@ export class DesignacaoService {
         avaliadorId: designada?.avaliadorId ?? null,
         avaliadorNome: designada?.avaliadorNome ?? null,
         avaliacaoStatus: designada?.status ?? null,
+        avaliacaoId: designada?.id ?? null,
         efeitoDoExcluir: efeitoDoExcluir(
           designada
             ? {
@@ -962,6 +972,7 @@ export class DesignacaoService {
     const avaliacoes = await this.prisma.avaliacao.findMany({
       where: { cicloId },
       select: {
+        id: true,
         avaliadoId: true,
         avaliadorId: true,
         status: true,
@@ -980,6 +991,7 @@ export class DesignacaoService {
       avaliacoes.map((a) => [
         a.avaliadoId,
         {
+          id: a.id,
           avaliadorId: a.avaliadorId,
           avaliadorNome: nomePorId.get(a.avaliadorId) ?? '(colaborador não encontrado)',
           status: a.status as string,

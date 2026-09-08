@@ -8,17 +8,21 @@ import { SeletorDeColaborador } from '../components/SeletorDeColaborador';
 import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
 import {
   aplicacoes as apiAplicacoes,
+  avaliacoesRh,
   copiaDoCadastro,
   designacao,
   mensagemDoErro,
   type AplicacaoDoCiclo,
   type ColaboradorDaBusca,
+  type EfeitoDaReabertura,
   type LinhaDaDesignacao,
   type PreviaDaDesignacao,
   type RelatorioDaCopia,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
-import { contagem, flexao } from '../lib/formato';
+import { contagem, dataHora, flexao, nota } from '../lib/formato';
+import { useAuth } from '../contexts/AuthContext';
+import { ROLES } from '../lib/roles';
 
 /**
  * DESIGNAÇÃO — quem entra no ciclo, e quem avalia quem.
@@ -41,12 +45,14 @@ export default function DesignacaoPage() {
   const [linhas, setLinhas] = useState<LinhaDaDesignacao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [filtro, setFiltro] = useState('');
+  const { tem } = useAuth();
   const [so, setSo] = useState<'TODOS' | 'SEM_AVALIADOR' | 'EXCLUIDOS'>('TODOS');
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
   const [decidindo, setDecidindo] = useState<LinhaDaDesignacao | null>(null);
   const [designando, setDesignando] = useState(false);
   /** Designar UMA pessoa, pela linha — sem passar pela seleção. */
   const [designandoUm, setDesignandoUm] = useState<LinhaDaDesignacao | null>(null);
+  const [reabrindo, setReabrindo] = useState<LinhaDaDesignacao | null>(null);
   const [copia, setCopia] = useState<RelatorioDaCopia | null>(null);
   const [copiando, setCopiando] = useState(false);
   const [substituirManuais, setSubstituirManuais] = useState(false);
@@ -274,6 +280,8 @@ export default function DesignacaoPage() {
                 }}
                 aoDecidir={() => setDecidindo(l)}
                 aoDesignar={() => setDesignandoUm(l)}
+                aoReabrir={() => setReabrindo(l)}
+                podeReabrir={tem(ROLES.RH_ADMIN)}
               />
             </li>
           ))}
@@ -292,6 +300,17 @@ export default function DesignacaoPage() {
           aoFechar={() => setDecidindo(null)}
           aoDecidir={async () => {
             setDecidindo(null);
+            await gravou();
+          }}
+        />
+      )}
+
+      {reabrindo?.avaliacaoId && (
+        <DialogoReabrir
+          linha={reabrindo}
+          aoFechar={() => setReabrindo(null)}
+          aoReabrir={async () => {
+            setReabrindo(null);
             await gravou();
           }}
         />
@@ -369,6 +388,8 @@ function LinhaDaLista({
   aoSelecionar,
   aoDecidir,
   aoDesignar,
+  aoReabrir,
+  podeReabrir,
 }: {
   /** Motivo de o ciclo não aceitar escrita — `null` quando aceita. */
   fechado: string | null;
@@ -377,6 +398,9 @@ function LinhaDaLista({
   aoSelecionar: (v: boolean) => void;
   aoDecidir: () => void;
   aoDesignar: () => void;
+  aoReabrir: () => void;
+  /** RH_ADMIN — só ele reabre, e a API cobra o mesmo. */
+  podeReabrir: boolean;
 }) {
   const semAvaliador = linha.elegivel && !linha.avaliadorId;
   return (
@@ -468,6 +492,25 @@ function LinhaDaLista({
           >
             <UserPlus size={14} aria-hidden />
             {semAvaliador ? 'Definir avaliador' : 'Trocar avaliador'}
+          </button>
+        )}
+        {/* ⭐⭐ REABRIR, NA LINHA. O diálogo de envio PROMETE ao avaliador que
+            "o RH pode reabrir", e o ato só existia na API — a tela anunciava
+            para outra pessoa uma saída que ninguém conseguia percorrer
+            (§3.1.41). É "capacidade sem sinal na tela" agravada.
+            ⚠️ Só aparece para RH_ADMIN e só sobre avaliação ENVIADA; nos demais
+            casos não há o que reabrir, então some em vez de ficar cinza — o
+            "desabilite com o motivo" vale para o que a pessoa poderia querer
+            fazer, não para um ato sem objeto. */}
+        {podeReabrir && linha.avaliacaoStatus === 'ENVIADA' && linha.avaliacaoId && (
+          <button
+            type="button"
+            onClick={aoReabrir}
+            disabled={!!fechado}
+            title={fechado ?? undefined}
+            className="alvo-toque rounded-lg border border-amber-400 px-3 text-sm font-medium text-amber-800 disabled:opacity-50"
+          >
+            Reabrir
           </button>
         )}
         <button
@@ -1053,5 +1096,123 @@ function NumeroDaCopia({
       </dd>
       <dt className="text-xs text-slate-600">{rotulo}</dt>
     </div>
+  );
+}
+
+/**
+ * ⭐⭐ REABRIR UMA AVALIAÇÃO — o diálogo que faltava (§3.1.41).
+ *
+ * ⚠️ **Diz o que vai APAGAR, com o número.** Reabrir apaga o resultado apurado
+ * desta pessoa (decisão de 09/09: apagar, não recusar nem marcar como vencido —
+ * ver o comentário de `avaliacao.service.reabrir`). Anunciar "isto apaga o
+ * resultado" sem a nota deixaria alguém decidir no escuro; e a nota vem do
+ * BACKEND, do mesmo registro que o ato vai apagar, não de uma conta da tela.
+ */
+function DialogoReabrir({
+  linha,
+  aoFechar,
+  aoReabrir,
+}: {
+  linha: LinhaDaDesignacao;
+  aoFechar: () => void;
+  aoReabrir: () => Promise<void>;
+}) {
+  const [efeito, setEfeito] = useState<EfeitoDaReabertura | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    avaliacoesRh
+      .efeitoDaReabertura(linha.avaliacaoId!)
+      .then((e) => vivo && setEfeito(e))
+      .catch((e) => vivo && setErro(mensagemDoErro(e, 'Não foi possível ver o efeito da reabertura.')));
+    return () => {
+      vivo = false;
+    };
+  }, [linha.avaliacaoId]);
+
+  async function confirmar() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      await avaliacoesRh.reabrir(linha.avaliacaoId!, motivo.trim());
+      await aoReabrir();
+    } catch (e) {
+      setErro(mensagemDoErro(e));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <Modal titulo={`Reabrir a avaliação de ${linha.nome}`} aoFechar={aoFechar}>
+      <p className="text-sm text-slate-700">
+        A avaliação volta para <strong>EM ANDAMENTO</strong> e{' '}
+        <strong>{linha.avaliadorNome ?? 'o avaliador'}</strong> poderá responder de novo. A nota do
+        envio deixa de valer.
+      </p>
+
+      {efeito === null && !erro && (
+        <p className="mt-3 text-sm text-slate-500">Vendo o que isto afeta…</p>
+      )}
+
+      {/* ⭐⭐ O NÚMERO QUE SOME. Sem isto, quem reabre não sabe que está apagando
+          um resultado — e a média do ciclo em Resultados muda sem explicação. */}
+      {efeito?.apagaResultado && (
+        <div className="mt-3 rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+          <p className="font-semibold">Isto apaga o resultado apurado desta pessoa.</p>
+          <p className="mt-1">
+            Nota <strong className="tabular-nums">{nota(efeito.notaFinal ?? 0)}</strong>
+            {efeito.conceito && <> · conceito <strong>{efeito.conceito}</strong></>}
+            {efeito.apuradoEm && <> · apurado em {dataHora(efeito.apuradoEm)}</>}.
+          </p>
+          <p className="mt-1 text-xs">
+            Ele <strong>volta quando você apurar de novo</strong>. Até lá, esta pessoa sai da lista
+            de Resultados e da média do ciclo — que passa a ser sobre as demais.
+          </p>
+        </div>
+      )}
+      {efeito && !efeito.apagaResultado && (
+        <p className="mt-3 text-sm text-slate-600">
+          Esta avaliação ainda não foi apurada — não há resultado a apagar.
+        </p>
+      )}
+
+      <label className="mt-4 block text-sm font-medium text-slate-700">
+        Motivo da reabertura
+        <textarea
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          rows={3}
+          className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm"
+          placeholder="Por que esta avaliação precisa ser refeita?"
+        />
+        <span className="mt-1 block text-xs text-slate-500">
+          Fica registrado com o seu nome na auditoria, junto com o resultado apagado.
+        </span>
+      </label>
+
+      {erro && <div className="mt-3"><Erro mensagem={erro} /></div>}
+
+      <div className="mt-5 flex gap-2">
+        <button
+          type="button"
+          onClick={aoFechar}
+          className="alvo-toque flex-1 rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          disabled={salvando || efeito === null || motivo.trim().length < 3}
+          onClick={() => void confirmar()}
+          className="alvo-toque flex-1 rounded-xl bg-rose-700 px-4 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          {salvando ? 'Reabrindo…' : 'Reabrir'}
+        </button>
+      </div>
+    </Modal>
   );
 }

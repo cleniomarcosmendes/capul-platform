@@ -19,6 +19,7 @@ import { AvaliacaoAcessoService, type ContextoAcesso } from './avaliacao-acesso.
 import { marcarRestricoes } from './separacao-funcoes.js';
 import { assertCicloAceitaReaberturaDeAvaliacao } from '../ciclo/ciclo-operavel.js';
 import { ONDE_A_AVALIACAO_CONTA } from './avaliacoes-que-contam.js';
+import { apagarResultadoDe } from '../apuracao/apagar-resultado.js';
 
 @Injectable()
 export class AvaliacaoService {
@@ -271,17 +272,46 @@ export class AvaliacaoService {
     });
     assertCicloAceitaReaberturaDeAvaliacao(ciclo);
 
-    const reaberta = await this.prisma.avaliacao.update({
-      where: { id: avaliacaoId },
-      data: {
-        status: 'EM_ANDAMENTO',
-        reabertaEm: new Date(),
-        reabertaPorId: contexto.usuarioId,
-        motivoReabertura: motivo.trim(),
-        // A nota volta a ser indefinida: ela é do envio, e o envio foi desfeito.
-        notaAvaliacao: null,
-      },
+    /**
+     * ⭐⭐ REABRIR APAGA O RESULTADO APURADO — decisão de 09/09, e as três
+     * opções foram pesadas:
+     *
+     *   RECUSAR enquanto houver resultado transformaria *"apurei cedo para
+     *   conferir o cálculo"* — que a própria tela de Resultados diz ser
+     *   legítimo — em porta fechada: quem apurou parcial ficaria impedido de
+     *   corrigir QUALQUER avaliação daquele ciclo.
+     *
+     *   MARCAR COMO VENCIDO criaria um terceiro estado que ninguém pediu, com o
+     *   resultado antigo visível em Resultados enquanto a avaliação está
+     *   EM_ANDAMENTO — a inconsistência que se quer evitar, com um rótulo em
+     *   cima.
+     *
+     *   APAGAR é o que a reapuração já faz (`delete` + `create`). Não é
+     *   comportamento novo: é o mesmo, disparado antes. E é coerente com o
+     *   `notaAvaliacao: null` logo abaixo — a nota é do ENVIO, e o envio foi
+     *   desfeito; o resultado que a combinava com os critérios também deixou de
+     *   valer.
+     *
+     * ⚠️ O que foi apagado vai para a AUDITORIA, com a nota. Resultado apagado
+     * sem rastro deixa "por que a média do ciclo mudou" sem resposta — e a
+     * média de Resultados é calculada sobre as linhas existentes.
+     */
+    const apagado = await this.prisma.$transaction(async (tx) => {
+      const removido = await apagarResultadoDe(tx as never, avaliacaoId);
+      await tx.avaliacao.update({
+        where: { id: avaliacaoId },
+        data: {
+          status: 'EM_ANDAMENTO',
+          reabertaEm: new Date(),
+          reabertaPorId: contexto.usuarioId,
+          motivoReabertura: motivo.trim(),
+          // A nota volta a ser indefinida: ela é do envio, e o envio foi desfeito.
+          notaAvaliacao: null,
+        },
+      });
+      return removido;
     });
+
     await this.auditoria.registrar({
       entidade: 'Avaliacao',
       entidadeId: avaliacaoId,
@@ -289,8 +319,44 @@ export class AvaliacaoService {
       usuarioId: contexto.usuarioId,
       justificativa: motivo.trim(),
       ip: contexto.ip,
+      // ⭐ A nota apagada, nominalmente. Sem isto o resultado some e ninguém
+      // consegue reconstruir por que a média do ciclo caiu.
+      valorAnterior: apagado
+        ? {
+            resultadoApagado: {
+              notaFinal: apagado.notaFinal,
+              conceito: apagado.conceitoDescricao,
+              apuradoEm: apagado.calculadoEm,
+            },
+          }
+        : undefined,
     });
-    return reaberta;
+
+    return this.prisma.avaliacao.findUniqueOrThrow({ where: { id: avaliacaoId } });
+  }
+
+  /**
+   * ⭐ O QUE A REABERTURA VAI FAZER — antes de fazer.
+   *
+   * A tela precisa dizer, com o número, que a reabertura apaga o resultado
+   * apurado desta pessoa. Anunciar "isto apaga o resultado" sem a nota deixa a
+   * pessoa decidir no escuro; anunciar a nota que a tela calculou por conta
+   * própria voltaria a divergir do ato. Vem daqui, do mesmo registro que o ato
+   * vai apagar.
+   */
+  async efeitoDaReabertura(contexto: ContextoAcesso, avaliacaoId: string) {
+    // A MESMA porta do ato — quem não pode reabrir também não fica sabendo a nota.
+    await this.acesso.carregarParaAcao(contexto, avaliacaoId, 'reabrir');
+    const resultado = await this.prisma.resultadoAvaliacao.findUnique({
+      where: { avaliacaoId },
+      select: { notaFinal: true, conceitoDescricao: true, calculadoEm: true },
+    });
+    return {
+      apagaResultado: resultado !== null,
+      notaFinal: resultado ? Number(resultado.notaFinal) : null,
+      conceito: resultado?.conceitoDescricao ?? null,
+      apuradoEm: resultado?.calculadoEm ?? null,
+    };
   }
 
   /**

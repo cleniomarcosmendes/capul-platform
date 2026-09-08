@@ -71,6 +71,21 @@ export class AvaliacaoController {
     return this.avaliacoes.enviar(this.contexto(user, colaboradorId, req), id, dto.observacao);
   }
 
+  /**
+   * ⭐ O que a reabertura vai apagar — para o diálogo dizer com o número.
+   * Mesmo papel e mesma porta do ato: quem não pode reabrir não fica sabendo a
+   * nota de ninguém por este caminho.
+   */
+  @Get(':id/efeito-da-reabertura') @Roles(ROLES.RH_ADMIN)
+  efeitoDaReabertura(
+    @Param('id') id: string,
+    @ColaboradorAtual('id') colaboradorId: string,
+    @CurrentUser() user: JwtPayload,
+    @Req() req: { ip?: string },
+  ) {
+    return this.avaliacoes.efeitoDaReabertura(this.contexto(user, colaboradorId, req), id);
+  }
+
   /** Reabrir é ato do RH — e continua barrado na própria avaliação. */
   @Post(':id/reabrir') @HttpCode(200) @Roles(ROLES.RH_ADMIN)
   reabrir(

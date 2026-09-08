@@ -19,6 +19,7 @@ import { agregarAlertas, apurarColaborador, type AlertaAgregado, type AlertaApur
 import type { Faixa } from '../calculo/faixa.js';
 import { assertEscopoReapuracaoValido, type EscopoReapuracao } from '../avaliacao/separacao-funcoes.js';
 import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
+import { apagarResultadoDe } from './apagar-resultado.js';
 
 export interface ResultadoDaApuracao {
   escopo: EscopoReapuracao;
@@ -157,17 +158,11 @@ export class ApuracaoService {
       }
 
       await this.prisma.$transaction(async (tx) => {
-        const anterior = await tx.resultadoAvaliacao.findUnique({
-          where: { avaliacaoId: avaliacao.id },
-          select: { id: true },
-        });
-        if (anterior) {
-          // Reapuração: a memória de cálculo antiga sai junto com o resultado
-          // antigo — resultado novo com critério velho pendurado seria pior que
-          // não ter memória nenhuma.
-          await tx.resultadoCriterio.deleteMany({ where: { resultadoId: anterior.id } });
-          await tx.resultadoAvaliacao.delete({ where: { id: anterior.id } });
-        }
+        // Reapuração: a memória de cálculo antiga sai junto com o resultado
+        // antigo — resultado novo com critério velho pendurado seria pior que
+        // não ter memória nenhuma. A sequência mora em `apagarResultadoDe`,
+        // compartilhada com a reabertura da avaliação.
+        await apagarResultadoDe(tx as never, avaliacao.id);
         await tx.resultadoAvaliacao.create({
           data: {
             cicloId: avaliacao.cicloId,

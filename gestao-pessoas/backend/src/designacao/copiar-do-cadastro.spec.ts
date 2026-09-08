@@ -23,7 +23,7 @@ const RH = 'user-rh';
 const pessoa = (id: string, nome: string): LinhaDaLista => ({
   colaboradorId: id, matricula: id.slice(-3), nome, centroCusto: '21010101', filial: '02',
   elegivel: true, motivo: null, justificativa: null, decididoManualmente: false,
-  avaliadorId: null, avaliadorNome: null, avaliacaoStatus: null,
+  avaliadorId: null, avaliadorNome: null, avaliacaoStatus: null, avaliacaoId: null,
   // Sem avaliação, o Excluir não tem o que cancelar — é o que `efeitoDoExcluir`
   // devolve para linha nenhuma designada.
   efeitoDoExcluir: { acao: 'NADA_A_FAZER', frase: null },
