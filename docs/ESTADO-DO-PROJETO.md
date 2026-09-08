@@ -85,6 +85,15 @@ erraria justamente nas **citações datadas**, que são a maioria e estão certa
 quanto a regra — sem isso, alguém escreve o script daqui a um mês e ele vira ruído que se
 aprende a ignorar.
 
+⚠️ **E esta regra é SÓ deste documento — o motivo é a natureza dele.** O ESTADO é o documento
+**vivo**, atualizado várias vezes por dia, e é dele que se lê *"como as coisas estão"*. A
+especificação e os ADRs são **estáveis por construção**: número neles é quase sempre citação
+legítima, e **um ADR sem o número da época perde a evidência da decisão** — atualizar apagaria
+o que se decidiu e sobre qual dado. O mesmo vale para documento dirigido a quem vai decidir
+(`DECISAO_RH_ESCOLARIDADE.md`): a base de 05/09 é o que a gestora leu, e reescrevê-la depois da
+resposta invalidaria a própria decisão. **Aplicar esta regra lá faz mal.** Conferido em 08/09:
+nenhum dos quatro documentos do módulo apresenta estado corrente do DEV.
+
 ---
 
 ## 0. O que trava e o que anda — fechamento de 06/09/2026
@@ -100,7 +109,10 @@ na seção citada.**
 > Se você precisa citá-lo noutra seção, **date-o** (*"em 08/09 eram 8"*) ou aponte para cá — não
 > repita como estado. O porquê está no cabeçalho do arquivo.
 
-✅ **Publicado no fim do dia:** `6f13a210..e4f7d453`, **17 commits**. Nada pendente de push.
+✅ Publicado no meio do dia: `6f13a210..e4f7d453`, 17 commits. ⚠️ **Depois disso vieram mais
+7 commits locais — `origin/main` está em `b121fa78` e o push é do Clenio.** Eles são: a
+correção da chapa no Configurador e a rede no módulo (§3.1.25), a designação das 13 do
+`supdept01` para a `renataborges`, e a varredura dos números do próprio documento.
 
 O dia foi inteiro o **roteiro de tela**: 11 itens fechados (A, B, C + os 8 da lista), **490
 testes** (eram 422 na véspera), **1 migration** aplicada com `GUARDA: ok`
@@ -115,6 +127,16 @@ novo: mais uma migration).
 confirmação — depende da Arielly), **18** (os menores do item K) e **19** (URL desconhecida que
 leva ao lugar errado em silêncio) da lista (B). E **⭐ as regras de método do dia estão na
 §5.9** — é o que se relê daqui a um mês, não a lista de tarefas.
+
+⚠️ **Duas linhas mudaram DEPOIS de este fechamento ser escrito:**
+
+- **o censo** — **8 de 54** abrem o módulo, **187 de 894** alcançáveis, **0** contas sem
+  permissão, **46** sem conta nenhuma. **A lacuna "conta sem permissão" zerou em 08/09**;
+- **o item 2 da (B) saiu** — o `rodrigoleao` salvou, e **não houve terceiro caso do sintoma do
+  Configurador**. No lugar dele entrou a **colisão de chapa** (§3.1.25), já ✅.
+
+**Amanhã:** o roteiro curto do Chrome nas duas partes combinadas, e depois o **item 1** — as
+46 contas, que é trabalho do Clenio no Configurador.
 
 ### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
 
