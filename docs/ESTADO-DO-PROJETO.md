@@ -104,6 +104,9 @@ na seção citada.**
 
 ### 📍 ONDE O DIA PAROU — 08/09/2026
 
+> 📐 **Regras de método:** `docs/REGRAS-DE-METODO.md` — 23 regras, cada uma com o **gatilho** que
+> a dispara. É o que se relê daqui a um mês; esta seção é o que envelhece em semanas.
+
 > ⚠️ **Esta seção é a DONA das contas vivas** — ambientes e commits, censo de acesso, contagem
 > de testes e de migrations. **Está atualizando algum desses números?** Ele se atualiza **aqui**.
 > Se você precisa citá-lo noutra seção, **date-o** (*"em 08/09 eram 8"*) ou aponte para cá — não
@@ -3303,140 +3306,22 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 
 ---
 
-## 5.9. ⭐⭐ REGRAS DE MÉTODO — o que reler daqui a um mês
+## 5.9. ⭐⭐ REGRAS DE MÉTODO → `docs/REGRAS-DE-METODO.md`
 
-Nasceram todas em 08/09, cada uma de um caso concreto, e **valem além do caso**. Ficam juntas de
-propósito: a lista de tarefas envelhece em semanas, estas não.
+**As regras saíram daqui em 09/09/2026.** Eram 14, no fim de um arquivo de 4.000 linhas, lidas só
+por quem já sabia que existiam — e a varredura mostrou que **outras 9 lições nunca tinham chegado
+até elas**, tendo virado item numerado, comentário de código ou memória.
 
-### Sobre ferramentas de verificação
+👉 **`docs/REGRAS-DE-METODO.md` — 23 regras, cada uma com GATILHO.**
 
-**1. Falso verde adia a descoberta; falso vermelho destrói a ferramenta.**
-*Caso:* `npx tsc` rodando o pacote decoy `tsc@2.0.4` e saindo 1, ao lado do cache do Docker
-servindo bundle velho e saindo 0.
-O verde falso alguém descobre quando o defeito aparece — é dívida com data de vencimento. O
-vermelho falso faz alguém **desligar o passo** achando que é problema de máquina ("aqui o
-typecheck não roda", "essa suíte é instável"), e a verificação some do processo **sem ninguém
-ter decidido removê-la**. Ver §6.
+⚠️ **Esta seção continua existindo como ÂNCORA**: há comentários de código, commits e memórias que
+citam *"§5.9 regra 8"*, *"regra 12 da §5.9"*. Os **números 1 a 14 não mudaram** — as novas são
+15 a 23.
 
-**2. Mutação como método: injetar o erro e ver a ferramenta pegá-lo.**
-*Caso:* `const MUTACAO_DO_TESTE: number = ciclo.nome;` derrubando o build com `TS2322` antes do
-`vite`.
-Garantia que ninguém tentou quebrar é garantia **suposta**. Antes de escrever "X está limpo",
-saber dizer **qual comando executou a checagem** e **como sei que ele executou** — "ele imprimiu
-que estava tudo bem" não é resposta.
-
-### Sobre testes
-
-**3. Afirmar o FATO, não a redação. Suíte verde a favor do erro.**
-*Caso:* o spec que exigia `/não estão na lista de ninguém e ficarão de fora/` — a frase que
-mentia. Ele passava **exatamente porque o defeito existia**.
-Afirmar contagens, motivos, códigos e estados; quando o texto **é** o requisito (uma recusa tem
-de ensinar o caminho), afirmar o **pedaço que carrega a obrigação** (`/RH_ADMIN/`, `/motivo/`),
-nunca a frase inteira. Melhor ainda: comparar com a **saída da função que decide**, chamada
-dentro do próprio teste — foi assim no §3.1.21.
-
-**4. Spec que quebra ao consertar um defeito é INFORMAÇÃO — ler antes de atualizar.**
-*Casos, e os dois desfechos:* no item F o spec era **fóssil do defeito** e foi corrigido; no
-item E ele era **decisão escrita com motivo** (*"trocar só o avaliador não é bloqueado nem com
-nota enviada"*) e **não foi atropelado** — virou `EXIGE_CONFIRMACAO`, conciliando as duas.
-O teste que quebra está dizendo alguma coisa. Às vezes é "você quebrou"; às vezes é "alguém já
-decidiu isto, com razão". Não dá para saber sem ler.
-
-### Sobre contratos entre partes
-
-**5. Relatório cita atributo, não o possui.**
-*Caso:* `/resumo` mandando `status` e `encerradoEm`, que `GET /ciclos/:id` já entrega — a
-etiqueta lia um, as faixas liam o outro.
-Quem sobrevive a uma duplicata é o **dono natural do fato**, não o mais conveniente: atributo
-gravado na linha pertence ao **registro**; contagem apurada agora pertence ao **relatório**.
-⚠️ E elas vêm em bando: procuradas depois de achar uma, apareceram **cinco**.
-
-**6. Prévia mostra o que vai gravar, e vem de quem decide.**
-*Casos:* `efeitoDoExcluir`, `previaDaDesignacao`, a prévia do público e a da abertura.
-Se a tela recalcula, ela diverge no primeiro caso de borda — e o caso de borda é sempre o que a
-prévia existia para pegar (a régua barrando alguém, a avaliação já respondida). A frase que o
-usuário lê antes de confirmar e a que a API devolve ao recusar têm de sair **da mesma função**.
-Corolário: **entrar numa lista e produzir um efeito são perguntas diferentes** — responder uma e
-escrever sobre a outra foi o defeito dos itens F, H e I.
-
-### Sobre o que a tela diz
-
-**7. A tela não afirma intenção sobre pessoas.**
-*Caso:* *"do mais atrasado ao menos"* e *"quem está segurando"*, lidos imediatamente antes de a
-gestora cobrar alguém ou cancelar a avaliação dele.
-Quem não respondeu pode ter mil motivos. A tela mostra **contagem**, não veredito. E o
-vocabulário se propaga: **quem escreve a próxima frase copia da anterior** — por isso, ao
-corrigir uma, varrer as vizinhas (o mesmo motivo da varredura de *"Abrir gera as avaliações"*).
-
-**8. Capacidade sem sinal na tela é capacidade que não existe.**
-*Casos:* a rota de reabrir sem botão; *"Definir avaliador"* que sumia de quem já tinha um; a
-memória de cálculo atrás de um clique sem cursor nem seta.
-E o par dela: **desabilitar com o motivo, nunca esconder**.
-
-### Sobre o próprio trabalho
-
-**9. Passo que falha INTERROMPE o roteiro.**
-*Caso:* 07/09, script que seguiu depois de uma recusa da API e escreveu **84 avaliações** por
-engano.
-
-**10. Token vencido é pedido a fazer, não obstáculo a contornar.**
-*Caso:* 08/09, senha adivinhada e JWT forjado — as duas bloqueadas, e bloqueadas **certo**. Ver
-§6. ⚠️ A regra é sobre **eu ir buscar**, não sobre o Clenio entregar.
-
-**11. Mudança em dado de DEV: SELECT que isola primeiro, DELETE transacional, auditoria
-preservada — e o número conferido depois.**
-*Caso:* as cinco limpezas de ciclos descartáveis do dia, todas com "0 respostas, 0 resultados"
-verificado antes de apagar.
-
-**12. Leitura de bundle minificado é HIPÓTESE, não fato — só o nome do símbolo sustenta
-identificação.**
-*Caso:* 08/09, um `.slice(0, N)` identificado como *"lista de erros"* por **proximidade textual**
-a tokens no bundle. A conclusão virou fato ao ser repassada, e **priorizou o trabalho**
-("truncar falha esconde problema"). Reconferido, no mesmo bloco havia tokens de badge de status —
-e no minificado não dá para dizer qual lista é. Varrido o fonte depois: dos dois `.slice(0, 10)`
-suspeitos, **os dois são conversão de data ISO**, e o `.slice(0, 5)` **não existe no nosso
-código** — é de dependência.
-
-**Proximidade não identifica nada.** O minificador reordena, inlina e junta módulos: dois
-símbolos vizinhos no bundle podem vir de arquivos que nunca se viram. O que sustenta uma
-identificação é **o nome do símbolo** (quando sobrevive) ou **o source map**; na falta dos dois,
-a saída é o `grep` no fonte — foi o que o item 4 pediu, e por isso pediu.
-
-⚠️ **Vale para os dois lados da conversa.** Quem lê o bundle deve **marcar como hipótese**; quem
-recebe não deve **promover a fato** ao repassar. É da mesma família da regra 3: afirmar o fato que
-se verificou, e não a redação que se leu.
-
-**13. Quando um defeito escapa, pergunte se escapou o CASO ou a FORMA.**
-*Casos:* os três `_count` do §3.1.40 e a segunda frase da reabertura do §3.1.45.
-
-Caso difícil se conserta **no sítio**; **forma não procurada se conserta no INSTRUMENTO**. Os três
-`_count` escaparam porque o grep buscava `status: { not: 'CANCELADA' }` — a regra escrita — e eles
-são exatamente onde ela **nunca foi escrita**; o conserto foi um varredor de fonte, não três
-edições. A segunda frase escapou porque consertei **a que o Clenio citou**; o conserto foi varrer
-as frases que citam a capacidade, não reescrever aquela.
-
-⭐ **O sinal é barato e não falha: se você deu o assunto por encerrado e ele voltou, foi FORMA.**
-Defeito que volta depois de "resolvido" quase nunca é um caso a mais — é a evidência de que a
-busca tinha um formato e o mundo tem outros.
-
-É a mesma família da regra 3 (*afirmar o fato, não a redação*) e do padrão das duplicatas: as três
-dizem que **verificar o que você lembra não é verificar o que existe**. A regra 3 é sobre o que se
-lê, esta é sobre o que se procura, e a terceira é sobre o que se conta.
-
-**14. O passo que ninguém testou não é o mais simples — é o menos conhecido.**
-*Caso:* o ciclo de simulação de 09/09 rendeu **18 defeitos**, e **9 vieram do encerramento** — a
-única etapa do processo que nunca tinha sido percorrida. Metade dos defeitos em um sexto do
-caminho.
-
-⚠️ A intuição é a oposta e é por isso que a regra precisa estar escrita: a etapa não testada parece
-a mais simples **porque nunca deu problema** — e nunca deu problema porque ninguém passou por ela.
-O silêncio é ausência de observação, não de defeito.
-
-⭐ **Muda como escolher o que testar.** Cobertura por risco imaginado ("o que parece frágil") olha
-onde já se olhou. A pergunta melhor é **"qual passo deste processo nunca foi percorrido inteiro,
-com dado real, até o fim?"** — e é ali que se começa, mesmo que ele pareça trivial. Vale mais que
-qualquer um dos 18.
-
+⭐ **O que a mudança de lugar trouxe junto, e é o mais importante:** toda regra passou a começar
+pelo **momento em que alguém para e pergunta**, não pelo princípio. A razão está escrita no topo do
+arquivo novo — em 09/09 quebrei **três regras minhas no mesmo dia em que as escrevi**, e o padrão
+foi exato: as que me pegaram nomeavam um momento, as que me escaparam descreviam um estado bom.
 
 ## 6. Armadilhas do ambiente
 
