@@ -276,6 +276,7 @@ move esse número.
 
 | # | Item | Onde está |
 |---|---|---|
+| **0** | 🔴 **Reabrir avaliação — botão em tela.** Sobe para o topo: o diálogo de envio **promete ao avaliador** que o RH pode reabrir, e o RH não tem por onde (§3.1.41). Backend pronto; custo é de tela **+ uma decisão**: o que fazer com o `ResultadoAvaliacao` de uma avaliação já apurada | §3.1.41 |
 | 1 | **Contas para os avaliadores — `46 dos 54` não têm conta.** É o que decide o piloto, e é **trabalho do Clenio no Configurador**, não daqui. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
 | 2 | ✅ **FEITO em 08/09 — colisão de chapa (`E01981` × `001981`)**, dos dois lados: a **fonte** no Configurador (`normalizarChapa` ao preencher e ao salvar) e a **rede** no módulo (`porMatricula` e a importação de planilha buscam pelas duas formas). ⚠️ O sintoma era um **403 que PARECE falta de permissão**, e mandava quem investiga ao Configurador dar papel a quem já tem. ✅ E o dado legado foi corrigido no mesmo dia: **nenhuma conta de pessoa real fora do formato** | §3.1.25 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
@@ -2622,6 +2623,99 @@ fica ao lado do seletor de aplicação, que sugere o contrário. O seletor filtr
 nasceram provisórias e a abertura avisa sem bloquear. O padrão seguro é defensável (§ da
 importação: *"o padrão é o seguro"*), mas ninguém decidiu para o público. **Liga na pergunta da
 Arielly que já está na lista (A)** — decidir aqui sem ela seria escolher por omissão.
+
+### 3.1.40. 🟠 O oitavo, o nono e o décimo — e por que o grep não podia achá-los (09/09)
+
+Depois dos 13 envios, o **mesmo card** da lista de Ciclos mostrava as duas linhas:
+
+```
+2 aplicações · 52 avaliações
+Faltam 37 avaliações por enviar.          ← 37 = 50 − 13
+```
+
+Dois números de **fontes diferentes no mesmo render**: o "Faltam" já vinha da regra corrigida
+(§3.1.38), o "52" não. O mesmo campo alimentava o chip *"31 avaliações"* da aba Aplicações.
+
+#### Eram três, não dois — e escaparam por MUDANÇA DE FORMA
+
+| Onde | O quê |
+|---|---|
+| `ciclo.service.ts` `listar()` | o card da lista |
+| `ciclo.service.ts` `porId()` | o cabeçalho de um ciclo |
+| `aplicacao.service.ts` `listarDoCiclo()` | o chip da aba Aplicações |
+
+⚠️ **Eu disse "os sete lugares usam". Eram sete de dez** — e a falha não foi descuido, foi método.
+Procurei por `status: { not: 'CANCELADA' }` e substituí onde achei. Os três que faltaram **nunca
+tiveram um `where`**: são `_count: { select: { avaliacoes: true } }`, contagem de RELAÇÃO declarada
+num `select`. O grep não podia encontrá-los, porque eu procurava **pela regra escrita** e eles são
+exatamente o lugar onde ela nunca foi escrita.
+
+⚠️ **E o teste de invariante que escrevi não os cobria**: ele dirige `resumoDoCiclo`, `doCiclo` e
+`previaDaAbertura` — os três consumidores que eu **conhecia**. Nenhum passa por `ciclo.listar()`.
+Enumerar consumidores à mão verifica os que você lembra; varrer o fonte verifica os que existem.
+
+#### O conserto é o varredor, não os três sítios
+
+`avaliacoes-que-contam.invariante.spec.ts` varre o FONTE e cobra duas formas: nenhum `_count`
+conta a relação `avaliacoes` sem `where`, e nenhum `avaliacao.count()` conta sem citar a regra ou
+um status. Mesmo remédio do `separacao-funcoes.invariante.spec.ts`, pela mesma razão.
+
+⚠️⚠️ **A primeira versão do varredor tinha um furo, e a mutação o denunciou.** A dispensa era **por
+arquivo**: `ciclo.service.ts` entrou nela por um motivo legítimo (conta PENDENTE/EM_ANDAMENTO por
+status antes de encerrar) e com isso ficou isento **também da checagem do `_count`** — que é
+justamente onde estava o defeito. Restaurados os três erros, o varredor acusou o `aplicacao` e
+**passou batido no `ciclo`**. Agora são **duas listas, uma por checagem**, e a da relação só admite
+o próprio arquivo da regra, com teste cobrando isso. Dispensa larga demais é um furo com aparência
+de decisão.
+
+Conferido no ciclo real: card **50** · chips **21 + 29 = 50** · cabeçalho **13 de 50** ·
+50 − 37 = 13. **554 testes.**
+
+### 3.1.41. 🔴 A tela promete ao AVALIADOR um caminho que o RH não tem (09/09)
+
+O diálogo de envio diz: *"Se precisar corrigir alguma coisa, será necessário pedir ao RH que
+reabra a avaliação."* **Reabrir avaliação só existe na API** — nenhum botão, em tela nenhuma.
+
+⚠️ É a família "capacidade sem sinal na tela" (§5.9 regra 8) **agravada**: ali a tela esconde uma
+capacidade de quem a usaria; aqui ela **anuncia a capacidade para outra pessoa**. O avaliador envia
+confiando na saída, e o RH não tem por onde. Quem descobre é o avaliador, depois, pedindo algo
+impossível.
+
+#### Custo — quase todo de tela, com uma pergunta que não é
+
+O backend está **completo**: `POST /avaliacoes/:id/reabrir`, `RH_ADMIN` only, motivo obrigatório,
+separação de funções por `carregarParaAcao`, recusa se o ciclo não aceita
+(`assertCicloAceitaReaberturaDeAvaliacao`), zera `notaAvaliacao`, grava `REABRIR` na auditoria com
+o motivo. Nada a fazer lá.
+
+| Item | Tamanho |
+|---|---|
+| `api.ts` — um método | ~5 linhas |
+| Botão na linha da Designação (só com `avaliacaoStatus === 'ENVIADA'`), desabilitado com o motivo quando não cabe | pequeno |
+| Modal com motivo obrigatório — o `DialogoDecisao` da mesma tela já é o molde | pequeno |
+| ⚠️ `LinhaDaLista` **não traz `avaliacaoId`** — só `avaliacaoStatus`. Um campo no backend | 1 linha |
+
+🔴 **E uma que não é de tela:** `reabrir` **não toca em `ResultadoAvaliacao`**. Reabrir uma
+avaliação **já apurada** deixa o resultado antigo de pé — a tela de Resultados segue mostrando uma
+nota de uma avaliação que agora está `EM_ANDAMENTO` e com `notaAvaliacao: null`. Só a apuração
+apaga (`delete` + `create`), e ninguém garante que ela rode. **Decidir antes de fazer o botão:** o
+reabrir apaga o resultado, marca-o como vencido, ou recusa enquanto houver resultado? O ciclo de
+simulação vai bater nisso assim que alguém quiser refazer uma resposta já apurada.
+
+### 3.1.42. 📌 Registrado, sem fazer — dado de teste e método de cálculo
+
+**Dado de simulação no banco de produção do RH.** Os 13 envios do `SIMULACAO 09/09` são sobre
+**pessoas reais, com matrícula**, assinados pela `ariellypereira`, na mesma base do Piloto. Antes
+de produção: **ou apagar o ciclo, ou garantir que ciclo de simulação não entre em relatório de RH
+nenhum**. ⚠️ Hoje **não há marca de "simulação"** no modelo de ciclo — a distinção existe só no
+nome, que nada lê. Decisão do Clenio; fica escrito para não depender de alguém lembrar.
+
+**⭐ Método: resposta determinística vira invariante de cálculo.** A skill respondeu com padrão
+determinístico — 4 níveis, 11 perguntas no mesmo nível cada. Isso dá um invariante para a
+apuração: **mesmo nível em todas as perguntas tem de produzir nota idêntica**, e notas de níveis
+diferentes têm de ordenar como os níveis. Se divergir, o defeito está no **peso por pergunta**, não
+na faixa de conceito — a faixa é a mesma para todos. É um jeito barato de separar as duas causas
+sem instrumentar o motor, e vale para toda apuração futura.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
