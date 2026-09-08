@@ -198,6 +198,25 @@ regra escrita ao lado da irmã dela (§3.1.7).
 com o contexto e é do **React DOM** (teste de prefixo `data-`/`aria-`). O fonte tem 8 `.slice(`
 no total, os 8 catalogados. Não volta.
 
+### 🧪 Ciclo de SIMULACAO 09/09 — montado pela TELA, parado em RASCUNHO (09/09)
+
+**2 aplicações · 54 no público · 50 designados · 0 sem avaliador · 4 fora do ciclo.**
+Roteiro em `docs/ROTEIRO_CICLO_SIMULACAO_09SET.md`. **Não aberto** — decisão do Clenio.
+
+⚠️ **Duas previsões minhas caíram, e a tela estava certa nas duas:**
+- previ **3 sem avaliador** deixando a Controladoria fora da cópia. Deu **0** — o cadastro cobre as
+  54, Controladoria inclusive, e a inclusão posterior no público não impediu o vínculo de existir;
+- previ **2 fora do ciclo**. São **4** — duas afastadas a mais, nascidas na montagem do público, e
+  a prévia avisou com nome e motivo **antes de gravar**. A tela fez o trabalho dela.
+
+⭐ **O ciclo pagou o que custou no primeiro dia:** dois defeitos, um deles o mais grave achado no
+módulo desde que ele existe (§3.1.37, 48% das designações impossíveis), mais quatro menores
+(§3.1.39). Nenhum apareceu em 537 testes nem em três rodadas de conferência de tela — só em rodar
+o processo inteiro com dado real.
+
+**Depois de §3.1.37 e §3.1.38:** a skill redistribui as 24 designações dos avaliadores sem conta
+para RENATA e LIDYANE, e aí abre e responde.
+
 ### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
 
 O Clenio configurou `rodrigoleao`, `vanialucia` e `denisealves` no Configurador; **as três
@@ -2487,6 +2506,122 @@ O termo novo do §3.1.29 aparecia zerado em ciclo limpo. Correto e inútil.
 **CONCILIAÇÃO**: existe para a soma fechar quando alguém foi tirado do ciclo. Num ciclo limpo a
 conta já fecha sem ele. Some quando é zero (`soQuandoHa`), com o motivo escrito ao lado — para
 ninguém "consertar" achando que faltou.
+
+### 3.1.37. 🔴 DESIGNAR NÃO DÁ ACESSO — 24 de 50 designações eram impossíveis (09/09)
+
+O ciclo de simulação foi montado pela tela e ficou pronto para abrir. **48% das designações
+estavam em avaliadores sem conta na plataforma**, e a *"Fila por avaliador"* os mostrava
+exatamente como os demais — mesma linha, mesma barra, mesmo *"N a fazer"*.
+
+O ciclo abriria, o RH veria filas cheias, o prazo correria, e **essas avaliações nunca seriam
+respondidas**. Sem erro, sem log, sem nada. O defeito só apareceria quando alguém fosse cobrar o
+atraso — e cobraria a pessoa errada, que não tem como nem entrar.
+
+⚠️ É a família do modelo de DEMONSTRAÇÃO (§3.1.30), **sem a guarda**: lá a recusa existe e chega
+tarde, na abertura; aqui não existia recusa nenhuma.
+
+#### Medido, não estimado
+
+| Avaliador | Avaliações | Situação |
+|---|---|---|
+| ESMERALDA (001277) | 13 | sem conta |
+| GILBERTO (001121) | 5 | sem conta |
+| JAICLER (001134) | 2 | sem conta |
+| LAIS (002865) | 2 | sem conta |
+| MARCELINO (005373) | 2 | sem conta |
+| **total** | **24 de 50** | **48%** |
+
+⚠️ **O primeiro levantamento dizia 22 (44%).** Faltava o MARCELINO — ele é da Controladoria, avalia
+2 pessoas do próprio setor e entrou no público no último passo da montagem. A conta certa só
+apareceu quando a consulta foi rodada contra o ciclo em vez de derivada da montagem.
+
+#### Dava para saber, e sem acoplar ao Configurador
+
+O módulo **já lê `core` read-only por `$queryRaw`** — é assim que o `IdentidadeService` resolve
+usuário → colaborador desde sempre. A checagem nova é o caminho inverso, e usa as mesmas tabelas:
+`core.usuarios` + `core.permissoes_modulo` + `core.modulos_sistema`. Nenhuma dependência nova,
+nenhuma escrita, nenhum acoplamento além do que existia.
+
+São **três degraus**, e são exatamente os que o login já cobra de quem tenta entrar:
+`SEM_CONTA` → `CONTA_INATIVA` → `SEM_PERMISSAO`. ⚠️ A ordem importa para a **frase**: dizer *"sem
+permissão"* de quem não tem conta manda alguém procurar a tela de permissões de um usuário que não
+existe. Hoje os 24 são todos `SEM_CONTA`; os outros dois entram porque são igualmente invisíveis.
+
+⚠️ **A regra da chapa não foi reescrita em SQL.** As formas possíveis saem de `chapasEquivalentes`
+(TypeScript) e entram como parâmetro — duplicar a normalização criaria a segunda cópia que
+envelhece errada, e essa regra já custou um 403 que parecia falta de permissão (§3.1.25).
+
+#### Aviso, nunca bloqueio
+
+A designação é **legítima**: quem avalia quem é decisão do RH, e a pessoa existe como colaborador.
+O que falta é **conta**, que é ato do Configurador e de outra pessoa, e que pode ser resolvido com
+o ciclo já aberto. Então aparece em dois lugares e não impede nada:
+
+- **na fila do painel**, com a frase do backend, e a fila passa a **ordenar por "não consegue"
+  antes de por tamanho** — uma fila de 13 que ninguém abre não é trabalho atrasado, é trabalho
+  impossível, e é a pergunta mais urgente das duas;
+- **na prévia da abertura**, em bloco próprio — fora da lista âmbar de pendências do ciclo, porque
+  esta se resolve em **outro módulo**. Diz quantas avaliações estão paradas, com quem, e por quê.
+
+⚠️ O rótulo da fila também mudou: quem não consegue entrar lê **"13 paradas"**, não *"13 a fazer"*.
+*"A fazer"* pressupõe que dá para fazer.
+
+### 3.1.38. 🟠 "0 de 52 enviadas" — três telas, três números (09/09)
+
+O mesmo ciclo, a mesma pergunta, três respostas: cabeçalho e card da lista diziam **52**; o cartão
+da aplicação separava *"29 não iniciadas / 2 canceladas"*; a prévia da abertura dizia **50**.
+
+⭐ **O certo é 50**, e não é preferência. O próprio diálogo de exclusão promete que a cancelada
+*"deixa de travar o encerramento do ciclo"*; o encerramento de fato a ignora; e `filaPorAvaliador`
+já a tirava da conta, com a razão escrita (*"não é trabalho de ninguém, e somá-la faria a fila de
+quem não deve nada parecer cheia"*). Contá-la no denominador quebra a promessa de um jeito que só
+aparece no fim: **o ciclo nunca chega a 100%.**
+
+#### Não corrigi dois pontos — extraí a regra
+
+Estava assim: **cinco lugares certos com `status: { not: 'CANCELADA' }` escrito à mão, e dois
+esquecidos**. Nada apontava os dois. Corrigir só eles deixaria a sétima consulta livre para nascer
+errada do mesmo jeito — [[feedback_regra_duplicada_envelhece_errada]].
+
+Agora há `avaliacao/avaliacoes-que-contam.ts`: um fragmento de `where` para o Prisma e duas
+funções para contagem em memória. Os sete lugares usam. ⚠️ É `not: CANCELADA` e **não** uma lista
+de status vivos, de propósito: um status novo no enum deve entrar na conta **por padrão** — uma
+allowlist o deixaria de fora em silêncio, que é o mesmo defeito ao contrário.
+
+**Teste de invariante:** os três lugares são chamados sobre o mesmo estado e têm de devolver o
+mesmo número. Validado por mutação — restaurada a conta antiga, 2 falhas.
+
+Conferido no ciclo real: cabeçalho **50** · prévia **50** · painel **50** · canceladas `0 + 2`.
+
+### 3.1.39. 📋 Achados menores do ciclo de simulação (09/09)
+
+| # | O quê | Estado |
+|---|---|---|
+| **A9** | `em 2 aplicações· 54 pessoas` — faltava espaço | ✅ **corrigido** |
+| **A5** | O cartão do público não consolida os centros de custo | 📋 registrado |
+| **A1** | *"Designar pelo cadastro"* ao lado do seletor de aplicação | 📋 registrado |
+| **A3** | *"Recorte provisório"* vem marcado por padrão | ⏸️ ligado à pergunta da lista (A) |
+
+**A9 — a causa vale a regra.** O JSX **apaga** a quebra de linha entre uma expressão e o texto
+seguinte: `{flexao(…)}` + nova linha + `· <strong>` sai como *"aplicações· 54"*. Não é typo, é
+comportamento — e some com `{' '}` explícito. Varri o módulo: as outras duas ocorrências do padrão
+(`SeletorDeColaborador`) já tinham o `{' '}`. Esta era a única.
+
+**A5 —** depois de incluir a Controladoria, a aplicação B mostra *"29 por centro custo — 3 centros
+de custo"* **e** *"3 por centro custo — 01|11010211"*, em duas linhas, em vez de 4 centros
+consolidados. São duas linhas de `publico.origens[]`, uma por ato de inclusão. ⚠️ A segunda metade
+do achado (mostrar `01|11010211` em vez do nome) **esbarra no §3.1.31**: `origens[].referencia` é
+**texto livre gravado na montagem**, não campo de centro de custo — consolidar exige decidir o que
+guardar ali, não só formatar na leitura.
+
+**A1 —** *"Designar pelo cadastro"* é ato **do ciclo** (percorre todas as aplicações), mas o botão
+fica ao lado do seletor de aplicação, que sugere o contrário. O seletor filtra a **lista**, não a
+**ação**. É a família do §3.1.34: a tela sugerindo um escopo que o botão não tem.
+
+**A3 —** *"Recorte provisório"* vem **marcado** por padrão, então as duas aplicações do ciclo
+nasceram provisórias e a abertura avisa sem bloquear. O padrão seguro é defensável (§ da
+importação: *"o padrão é o seguro"*), mas ninguém decidiu para o público. **Liga na pergunta da
+Arielly que já está na lista (A)** — decidir aqui sem ela seria escolher por omissão.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

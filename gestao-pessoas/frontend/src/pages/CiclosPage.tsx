@@ -298,10 +298,46 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             <p className="text-slate-700">
               <strong className="tabular-nums text-capul-700">{previaAbertura.designados}</strong>{' '}
               {flexao(previaAbertura.designados, 'avaliação já designada será liberada', 'avaliações já designadas serão liberadas')} para responder, em{' '}
-              <strong className="tabular-nums">{previaAbertura.totalAplicacoes}</strong> {flexao(previaAbertura.totalAplicacoes, 'aplicação', 'aplicações')}
-              · <strong className="tabular-nums">{previaAbertura.noPublico}</strong> {flexao(previaAbertura.noPublico, 'pessoa', 'pessoas')} no
-              público.
+              <strong className="tabular-nums">{previaAbertura.totalAplicacoes}</strong>{' '}
+              {flexao(previaAbertura.totalAplicacoes, 'aplicação', 'aplicações')}{' '}
+              {/* ⚠️ O `{' '}` não é enfeite: o JSX APAGA a quebra de linha entre
+                  uma expressão e o texto seguinte, e saía "aplicações· 54". */}
+              · <strong className="tabular-nums">{previaAbertura.noPublico}</strong>{' '}
+              {flexao(previaAbertura.noPublico, 'pessoa', 'pessoas')} no público.
             </p>
+            {/* ⭐⭐ QUEM NÃO CONSEGUE RESPONDER — o último momento barato de
+                dizer. Depois de abrir, a fila existe, o prazo corre, e ninguém
+                descobre que parte dela é impossível até alguém ir cobrar.
+                No ciclo de simulação de 09/09 eram 24 de 50 designações.
+                ⚠️ Fica FORA da lista âmbar de propósito: aquelas são pendências
+                do ciclo, esta é uma pendência de CADASTRO DE ACESSO, resolvida
+                em outro módulo e por outra pessoa. E não bloqueia. */}
+            {previaAbertura.avaliadoresSemAcesso.length > 0 && (
+              <div className="mt-2 rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+                <p className="font-semibold">
+                  ⚠️ {contagem(previaAbertura.avaliacoesSemAvaliadorComAcesso, 'avaliação está', 'avaliações estão')}{' '}
+                  com {contagem(previaAbertura.avaliadoresSemAcesso.length, 'avaliador que NÃO consegue', 'avaliadores que NÃO conseguem')}{' '}
+                  entrar na plataforma.
+                </p>
+                <p className="mt-1 text-xs">
+                  Designar não dá acesso. O ciclo abre e essas avaliações ficam paradas até alguém
+                  criar a conta ou dar a permissão — no <strong>Configurador</strong>, que é outro
+                  módulo. Dá para abrir assim e resolver depois; só não dá para não saber.
+                </p>
+                <ul className="mt-1.5 space-y-0.5 text-xs">
+                  {previaAbertura.avaliadoresSemAcesso.slice(0, 8).map((a) => (
+                    <li key={a.avaliadorId}>
+                      <strong>{a.nome}</strong> ({a.matricula}) —{' '}
+                      {contagem(a.avaliacoes, 'avaliação', 'avaliações')} · {a.motivo}
+                    </li>
+                  ))}
+                  {previaAbertura.avaliadoresSemAcesso.length > 8 && (
+                    <li>… e mais {previaAbertura.avaliadoresSemAcesso.length - 8}</li>
+                  )}
+                </ul>
+              </div>
+            )}
+
             {(previaAbertura.semAvaliador > 0 || previaAbertura.foraDoCiclo > 0) && (
               <ul className="mt-2 space-y-0.5 text-amber-900">
                 {previaAbertura.semAvaliador > 0 && (
