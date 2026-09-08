@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../../layouts/Header';
 import { usuarioService } from '../../services/usuario.service';
+import { normalizarChapa } from '../../lib/chapa';
 import { departamentoService } from '../../services/departamento.service';
 import { departamentoFuncionalidadeService } from '../../services/departamento-funcionalidade.service';
 import { ArrowLeft, Save, Shield, KeyRound, Clock, AlertTriangle, Lock, Plus, Trash2, Eye, Check, X, HelpCircle } from 'lucide-react';
@@ -82,7 +83,8 @@ export function UsuarioFormPage() {
   // Login pelo portal RH (app do entregador): matrícula + senha do portal.
   const [matricula, setMatricula] = useState('');
   const [autenticaPortal, setAutenticaPortal] = useState(false);
-  // Busca de funcionário por nome (Protheus SA1, só chapas E…) → preenche a matrícula.
+  // Busca por nome no Protheus (chapas `E…`) → preenche a matrícula JÁ NORMALIZADA
+  // para o formato da nossa base (`0…`). Ver `lib/chapa.ts`.
   const [funcNome, setFuncNome] = useState('');
   const [funcResultados, setFuncResultados] = useState<{ matricula: string; nome: string }[]>([]);
   // Nome do colaborador da chapa digitada: undefined = conferindo; null = não achou.
@@ -113,7 +115,10 @@ export function UsuarioFormPage() {
   }, [matricula]);
 
   const escolherFuncionario = (f: { matricula: string; nome: string }) => {
-    setMatricula(f.matricula);
+    // ⭐ O Protheus devolve `E01981`; a nossa base guarda `001981`. Gravar a
+    // forma do Protheus dá, lá na frente, um 403 que PARECE falta de permissão.
+    // Ver `lib/chapa.ts` — inclusive por que é seguro converter.
+    setMatricula(normalizarChapa(f.matricula));
     if (!nome.trim()) setNome(f.nome); // preenche o Nome Completo se ainda vazio
     setFuncResultados([]); setFuncNome(''); setFuncMsg('');
   };
@@ -536,7 +541,7 @@ export function UsuarioFormPage() {
           telefone: telefone || undefined,
           cargo: cargo || undefined,
           tipo,
-          matricula: matricula.trim() || undefined,
+          matricula: normalizarChapa(matricula) || undefined,
           autenticaPortal,
           filialPrincipalId: filialPrincipalId || undefined,
           departamentoId: departamentoId || undefined,
@@ -581,7 +586,7 @@ export function UsuarioFormPage() {
           nome,
           // Portal RH: sem senha local (o backend gera hash inutilizável).
           senha: autenticaPortal ? undefined : senha,
-          matricula: matricula.trim() || undefined,
+          matricula: normalizarChapa(matricula) || undefined,
           autenticaPortal,
           email: email || undefined,
           telefone: telefone || undefined,

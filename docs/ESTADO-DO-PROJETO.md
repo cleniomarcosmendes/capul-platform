@@ -143,7 +143,7 @@ nove itens desta lista não movem esse número em nada.
 | # | Item | Onde está |
 |---|---|---|
 | 1 | **Contas para os avaliadores — `46 dos 54` não têm conta.** É o que decide o piloto, e é **trabalho do Clenio no Configurador**, não daqui. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
-| 2 | 🔴 **Colisão de chapa dá 403 que PARECE falta de permissão** — `porMatricula` compara texto exato, então `E01981` (em `core.usuarios`) **não** acha `001981` (em `rh.colaborador`), e o usuário lê *"matrícula que não corresponde a nenhum colaborador ativo"*. ⚠️ **O sintoma é o que custa**, não o código: quem bater nisso vai ao Configurador **dar papel a quem já tem**. ⭐ **Precedente pronto: a Logística já normaliza pelos 5 últimos dígitos** — não é decisão nova, é aplicar o que a casa faz | §6 · §3.1.25 |
+| 2 | 🔴 **Colisão de chapa dá 403 que PARECE falta de permissão** — ⚠️ a FONTE foi fechada no Configurador em 08/09 (`normalizarChapa`), mas o módulo segue sem defesa: `porMatricula` compara texto exato, então `E01981` (em `core.usuarios`) **não** acha `001981` (em `rh.colaborador`), e o usuário lê *"matrícula que não corresponde a nenhum colaborador ativo"*. ⚠️ **O sintoma é o que custa**, não o código: quem bater nisso vai ao Configurador **dar papel a quem já tem**. ⭐ **Precedente pronto: a Logística já normaliza pelos 5 últimos dígitos** — não é decisão nova, é aplicar o que a casa faz | §6 · §3.1.25 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
 | 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
 | 5 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
@@ -1970,8 +1970,34 @@ par (`escolherColaboradorUnico` e o `MatriculaAmbiguaError`).
 ⚠️ Quando for feito: a normalização vale para a **busca**, não para o dado. Nada de reescrever
 `core.usuarios` — o schema é read-only aqui, e o cadastro é do Configurador.
 
-**Estado em 08/09:** o cadastro da Renata foi corrigido à mão pelo Clenio e as duas pontas batem.
-O próximo `E0xxxx` falha do mesmo jeito. Item **2** da lista (B).
+#### ✅ A FONTE foi corrigida no Configurador (08/09)
+
+O Clenio achou de onde vinha: a busca **"pelo nome (Protheus)"** do `UsuarioFormPage` preenchia o
+campo de matrícula com o valor **cru** do `infoFuncionario`, que é a forma `E…`. O comentário do
+próprio código já dizia *"Protheus SA1, só chapas E…"* — e ninguém tinha ligado uma coisa à outra.
+
+`configurador/src/lib/chapa.ts` → `normalizarChapa()`, aplicada em **dois pontos**: ao escolher o
+funcionário na busca (que é onde o Clenio viu) e **no envio**, que cobre quem digita `E01981` à
+mão.
+
+⚠️ **Regra estreita de propósito:** só converte `^E\d{5}$`. Não toca em `SUPVEN01` (login de
+posto, 8 caracteres) nem em nada que não case — se aparecer outro prefixo, é para falhar
+visivelmente, não para adivinhar.
+
+⚠️ **Por que trocar é seguro, e isso precisou ser medido antes:** a mesma consulta ao Protheus
+alimenta o `verificarMatricula` da **varredura que DESATIVA usuário**. Se o Protheus só conhecesse
+`E…`, gravar `0…` faria a varredura ler *"saiu da empresa"* para gente que está trabalhando.
+Verificado em 08/09 com duas leituras pontuais: **`MATRICULA=003942` devolve `E03942`** — o
+Protheus aceita as duas formas e resolve internamente. E o `verificarMatricula` só olha se veio
+alguém; **não compara formatos**.
+
+#### O que sobra
+
+| | |
+|---|---|
+| 🟡 **Dado antigo** | `marcelojunio` = `E03942` em `core.usuarios`, conta ATIVA, e a pessoa existe no `rh` como `003942`. **Vai dar o 403 no dia em que ele for avaliador.** É correção de cadastro, do Clenio — não se mexe em conta daqui |
+| ⚪ `admin` = `E09999` | conta de sistema, sem colaborador. Correto que não resolva |
+| 🔴 **Item 2 da (B) continua** | a fonte fechou, mas o **Gestão de Pessoas segue sem defesa**: `porMatricula` compara texto exato. Dado legado e qualquer outro caminho de escrita reabrem o buraco, e o sintoma continua sendo um 403 que parece falta de permissão |
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
