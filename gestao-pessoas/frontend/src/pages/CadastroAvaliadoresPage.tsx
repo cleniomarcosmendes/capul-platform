@@ -388,7 +388,7 @@ function ListaDoAvaliador({
                 `${contagem(aRevisar.length, 'linha marcada', 'linhas marcadas')} como conferida${flexao(aRevisar.length, '', 's')}.`,
               )
             }
-            className="alvo-toque shrink-0 rounded-lg border border-amber-300 bg-white px-3 text-sm font-medium text-amber-900 disabled:opacity-50"
+            className="alvo-toque shrink-0 rounded-lg border border-amber-300 bg-white px-3 text-sm font-medium text-amber-900 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             {ocupado ? 'Marcando…' : 'Conferi, está certo'}
           </button>
@@ -723,7 +723,7 @@ function PainelDaPrevia({
         type="button"
         disabled={ocupado || nadaAGravar}
         onClick={() => void aoGravar()}
-        className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2.5 font-medium text-white disabled:opacity-50"
+        className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2.5 font-medium text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
       >
         {ocupado
           ? 'Gravando…'
@@ -971,7 +971,7 @@ function DialogoDeVinculo({
               type="button"
               disabled={!escolhido || ehAutoavaliacao || salvando}
               onClick={aplicar}
-              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
               {salvando ? 'Gravando…' : 'Definir vínculo'}
             </button>

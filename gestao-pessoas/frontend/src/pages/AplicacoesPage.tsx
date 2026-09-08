@@ -100,12 +100,28 @@ export default function AplicacoesPage() {
           alguém ao público de um ciclo aberto é operação legítima (a pessoa
           entra, é designada e responde). Aviso que descreve uma proibição
           diferente da do controle ao lado ensina a ignorar o aviso. */}
+      {/* ⚠️ ESTE AVISO TEM DOIS ESTADOS, e antes só tinha um. "Montar público
+          continua valendo" é verdade no ciclo ABERTO e é FALSO no ENCERRADO —
+          onde o botão ao lado está desabilitado e a faixa do topo diz o
+          contrário. Texto do estado anterior sobrevivendo à mudança de estado é
+          a mesma família do §3.1.19 (a linha de estado que mentia entre a
+          gravação e o F5): quem lê acredita no texto, não no botão cinza. */}
       {ciclo.status !== 'RASCUNHO' && (
         <p className="mb-4 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-600">
           O ciclo está {ciclo.status.replace('_', ' ')} — <strong>criar</strong> aplicação e mudar peso
           só enquanto ele é RASCUNHO; mudança de peso depois da abertura é reapuração, não
-          remontagem. <strong>Montar público continua valendo:</strong> quem entrar agora precisa ser
-          designado para gerar avaliação.
+          remontagem.{' '}
+          {fechado ? (
+            <>
+              <strong>E montar público também está fechado:</strong> com o ciclo encerrado, nada
+              entra nem sai. Reabra o ciclo para mexer.
+            </>
+          ) : (
+            <>
+              <strong>Montar público continua valendo:</strong> quem entrar agora precisa ser
+              designado para gerar avaliação.
+            </>
+          )}
         </p>
       )}
 
@@ -592,7 +608,7 @@ function EditorDePublico({
             type="button"
             disabled={ocupado || previa.entramNoPublico === 0 || previaVelha}
             onClick={() => void adicionar()}
-            className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             {previaVelha
               ? 'Recalcule antes de adicionar'
@@ -880,7 +896,7 @@ function DialogoNovaAplicacao({
             type="button"
             disabled={salvando || !nome.trim() || !versaoId || pesoAvaliacao <= 0}
             onClick={salvar}
-            className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             {salvando ? 'Criando…' : 'Criar aplicação'}
           </button>

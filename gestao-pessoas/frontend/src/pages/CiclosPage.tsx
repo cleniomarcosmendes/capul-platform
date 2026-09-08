@@ -18,6 +18,14 @@ import {
 import { Modal } from '../components/Modal';
 
 /**
+ * ⚠️ Espelha `MOTIVO_MINIMO_EM_MASSA` de `backend/src/common/motivo.ts`. O ato
+ * atinge N registros e não tem volta, então a frase é a única explicação que
+ * sobra — 3 caracteres ("xpt") passavam e não respondem nada. Se mudar lá,
+ * mude aqui: tela mais frouxa deixa clicar onde a API recusa.
+ */
+const MOTIVO_MINIMO = 15;
+
+/**
  * CICLOS — a lista de ciclos e a criação de um novo.
  *
  * ⭐ ABRIR é o ponto sem volta do módulo: a partir dele começam a nascer notas.
@@ -405,7 +413,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               type="button"
               disabled={ocupado}
               onClick={() => void agir('abrir')}
-              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
               {ocupado ? 'Abrindo…' : 'Abrir o ciclo'}
             </button>
@@ -426,6 +434,21 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             <li>apurar e reapurar</li>
             <li>reabrir avaliações — que com o ciclo fechado ficariam sem quem respondesse</li>
           </ul>
+          {/* ⭐⭐ O QUE REABRIR **NÃO** DESFAZ. O diálogo listava só o que volta,
+              e quem encerrou com pendência lê isso como "desfaz o
+              encerramento". Não desfaz: as canceladas continuam canceladas, e
+              não há caminho para descancelar. Dizer só o que se ganha, num ato
+              que alguém aciona para consertar outro, é meia verdade que custa
+              caro. */}
+          {ciclo.avaliacoesCanceladas > 0 && (
+            <p className="mt-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              ⚠️ <strong>O que reabrir NÃO faz:</strong> as{' '}
+              <strong className="tabular-nums">{ciclo.avaliacoesCanceladas}</strong>{' '}
+              {flexao(ciclo.avaliacoesCanceladas, 'avaliação cancelada continua cancelada',
+                      'avaliações canceladas continuam canceladas')}. Reabrir devolve o ciclo, não
+              as avaliações — não há caminho para descancelar.
+            </p>
+          )}
           <p className="mt-2 text-sm text-slate-500">
             ⚠️ Volta para ABERTO, <strong>nunca para rascunho</strong>: aplicação e peso continuam
             travados, porque mudar peso depois de haver resultado é reapuração, não montagem.
@@ -455,7 +478,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               type="button"
               disabled={ocupado || motivoReabertura.trim().length < 3}
               onClick={() => void reabrir()}
-              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+              className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
               {ocupado ? 'Reabrindo…' : 'Reabrir o ciclo'}
             </button>
@@ -484,6 +507,18 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             <li>Elas somem da fila dos avaliadores e param de travar o encerramento.</li>
             <li>A contagem de canceladas fica visível no Painel, por aplicação.</li>
           </ul>
+          {/* ⭐⭐ IRREVERSÍVEL, DITO ANTES. O diálogo listava só o que ganha e
+              omitia o que se perde: cancelada não tem caminho de volta em tela
+              nenhuma — nem "Incluir", nem restaurar, nem em lote —, e reabrir o
+              ciclo NÃO as descancela. Quem encerrasse achando que reabrir
+              desfaz, desfazia só metade. */}
+          <p className="mt-2 rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+            <strong>Isto não tem volta.</strong> Uma avaliação cancelada não pode ser
+            descancelada — não há caminho em tela para isso, e{' '}
+            <strong>reabrir o ciclo não as traz de volta</strong>: ele volta a permitir designar e
+            apurar, mas estas {ciclo.avaliacoesPendentes} continuam canceladas. Se houver dúvida se
+            alguma ainda vai responder, é melhor esperar do que encerrar.
+          </p>
           <p className="mt-2 text-sm text-slate-500">
             Use isto quando as pendências <strong>não vão entrar</strong> — pessoa desligada ou
             afastada, avaliador que não vai responder. Se é só demora, o Painel mostra{' '}
@@ -499,9 +534,20 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm text-slate-800"
             />
           </label>
-          <p className="text-xs text-slate-500">
-            Fica gravado no ciclo, na auditoria e <strong>em cada avaliação cancelada</strong> — é o
-            que responde, meses depois, por que estas ficaram sem nota.
+          {/* ⚠️ A EXIGÊNCIA ERA MUDA. O botão ficava desabilitado abaixo do
+              mínimo, sem hint, sem contador e sem mensagem: digitar "ab" e
+              clicar não produzia nada e parecia defeito. Agora a regra aparece
+              ANTES de o botão travar, e o texto muda quando ela é cumprida. */}
+          <p
+            className={`text-xs ${
+              motivoPendencia.trim().length > 0 && motivoPendencia.trim().length < MOTIVO_MINIMO
+                ? 'font-medium text-amber-800'
+                : 'text-slate-500'
+            }`}
+          >
+            {motivoPendencia.trim().length > 0 && motivoPendencia.trim().length < MOTIVO_MINIMO
+              ? `Escreva pelo menos ${MOTIVO_MINIMO} caracteres — faltam ${MOTIVO_MINIMO - motivoPendencia.trim().length}.`
+              : 'Fica gravado no ciclo, na auditoria e em cada avaliação cancelada — é o que responde, meses depois, por que estas ficaram sem nota.'}
           </p>
           <div className="mt-4 flex gap-2">
             <button
@@ -513,9 +559,9 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             </button>
             <button
               type="button"
-              disabled={ocupado || motivoPendencia.trim().length < 3}
+              disabled={ocupado || motivoPendencia.trim().length < MOTIVO_MINIMO}
               onClick={() => void agir('encerrar', true)}
-              className="alvo-toque flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+              className="alvo-toque flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
               {ocupado
                 ? 'Encerrando…'
@@ -700,7 +746,7 @@ function DialogoNovoCiclo({
             type="button"
             disabled={salvando || !nome.trim()}
             onClick={salvar}
-            className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             {salvando ? 'Criando…' : 'Criar ciclo'}
           </button>

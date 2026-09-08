@@ -159,8 +159,14 @@ export default function PainelPage() {
                 ciclo.
               </strong>{' '}
               Elegíveis que não entraram em público nenhum — não aparecem sequer como &quot;sem
-              avaliador&quot;, porque essa conta é por aplicação. Monte o público que falta, em
-              Aplicações.
+              avaliador&quot;, porque essa conta é por aplicação.{' '}
+              {/* ⚠️ Instrução que não cabe no estado: num ciclo encerrado,
+                  "monte o público" manda a pessoa a uma tela onde o botão está
+                  desabilitado. O número continua verdadeiro e útil (é ele que
+                  diz o tamanho do buraco); o que muda é o que se pode fazer. */}
+              {fechado
+                ? 'O ciclo está encerrado — para incluí-las, reabra o ciclo primeiro.'
+                : 'Monte o público que falta, em Aplicações.'}
             </p>
             <p className="mt-1 text-xs text-red-900/80">
               {dados.foraDeTodasAsAplicacoes.pessoas
@@ -335,7 +341,7 @@ export default function PainelPage() {
             disabled={apurando || !!fechado}
             title={fechado ?? undefined}
             onClick={() => setConfirmando(true)}
-            className="alvo-toque mt-3 inline-flex items-center gap-2 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            className="alvo-toque mt-3 inline-flex items-center gap-2 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             <Calculator size={16} aria-hidden /> {apurando ? 'Apurando…' : 'Apurar o ciclo'}
           </button>
@@ -388,7 +394,7 @@ export default function PainelPage() {
                   type="button"
                   disabled={dados.enviadas === 0}
                   onClick={apurar}
-                  className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+                  className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   Apurar {contagem(dados.enviadas, 'avaliação', 'avaliações')}
                 </button>
