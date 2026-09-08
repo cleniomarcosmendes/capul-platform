@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, Check, CloudOff, Loader2, Send } from 'lucide-react';
+import { contagem, flexao } from '../lib/formato';
 import {
   avaliacoes,
   mensagemDoErro,
@@ -247,7 +248,7 @@ function CabecalhoFixo({
         aria-valuenow={respondidas}
         aria-valuemin={0}
         aria-valuemax={total}
-        aria-label={`${respondidas} de ${total} perguntas respondidas`}
+        aria-label={`${respondidas} de ${contagem(total, 'pergunta respondida', 'perguntas respondidas')}`}
       >
         <div className="h-full bg-capul-600 transition-[width]" style={{ width: `${percentual}%` }} />
       </div>
@@ -356,12 +357,15 @@ function BarraDeEnvio({
             acontece, sem saber por quê. O texto acima diz o que falta. */}
         {!completo && (
           <p className="mb-2 text-center text-sm text-slate-600">
-            Faltam <strong>{faltam}</strong> {faltam === 1 ? 'pergunta' : 'perguntas'} para poder enviar
+            {flexao(faltam, 'Falta', 'Faltam')} <strong>{faltam}</strong>{' '}
+            {flexao(faltam, 'pergunta', 'perguntas')} para poder enviar
           </p>
         )}
         {comErro > 0 && (
           <p className="mb-2 text-center text-sm text-amber-700">
-            {comErro} {comErro === 1 ? 'resposta não foi salva' : 'respostas não foram salvas'} — toque nelas de novo
+            {comErro}{' '}
+            {flexao(comErro, 'resposta não foi salva', 'respostas não foram salvas')} — toque nelas
+            de novo
           </p>
         )}
         <button

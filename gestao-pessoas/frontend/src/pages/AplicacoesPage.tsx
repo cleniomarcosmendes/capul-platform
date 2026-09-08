@@ -20,6 +20,7 @@ import {
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
 import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
+import { contagem, flexao } from '../lib/formato';
 
 /**
  * APLICAÇÕES — a peça que resolve o problema que originou o módulo: as mesmas 15
@@ -170,7 +171,7 @@ function CartaoDeAplicacao({
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-semibold text-slate-800">{aplicacao.nome}</h3>
-        <Etiqueta tom="azul">{aplicacao._count.avaliacoes} avaliação(ões)</Etiqueta>
+        <Etiqueta tom="azul">{contagem(aplicacao._count.avaliacoes, 'avaliação', 'avaliações')}</Etiqueta>
         {aplicacao.criterios.length === 0 && (
           <Etiqueta tom="ambar">só questionário</Etiqueta>
         )}
@@ -208,7 +209,7 @@ function CartaoDeAplicacao({
           ) : (
             <div className="mt-1 space-y-1">
               <p className="text-sm text-slate-700">
-                <strong className="tabular-nums">{aplicacao.publico.total}</strong> pessoa(s)
+                <strong className="tabular-nums">{aplicacao.publico.total}</strong> {flexao(aplicacao.publico.total, 'pessoa', 'pessoas')}
               </p>
               {aplicacao.publico.provisorio && (
                 <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
@@ -304,7 +305,10 @@ function EditorDePublico({
     });
     return {
       origem: 'CENTRO_CUSTO',
-      referencia: lista.length === 1 ? `${lista[0].filial}|${lista[0].centroCusto}` : `${lista.length} centros de custo`,
+      referencia:
+        lista.length === 1
+          ? `${lista[0].filial}|${lista[0].centroCusto}`
+          : contagem(lista.length, 'centro de custo', 'centros de custo'),
       centrosCusto: lista,
       provisorio,
     };
@@ -328,7 +332,7 @@ function EditorDePublico({
     setOcupado(true); setErro(null);
     try {
       const r = await publicoDaAplicacao.adicionar(aplicacao.id, alvo());
-      setMsg(`${r.adicionadas} pessoa(s) adicionadas ao público.`);
+      setMsg(`${contagem(r.adicionadas, 'pessoa adicionada', 'pessoas adicionadas')} ao público.`);
       setPrevia(null);
       setPreviaDe(null);
       setEscolhidos(new Set());
@@ -457,8 +461,8 @@ function EditorDePublico({
         </button>
         {escolhidos.size > 0 && (
           <p className="text-sm text-slate-600">
-            <strong className="tabular-nums">{escolhidos.size}</strong> centro(s) de custo ·{' '}
-            <strong className="tabular-nums">{pessoasNosCentros}</strong> pessoa(s) neles
+            <strong className="tabular-nums">{escolhidos.size}</strong> {flexao(escolhidos.size, 'centro de custo', 'centros de custo')} ·{' '}
+            <strong className="tabular-nums">{pessoasNosCentros}</strong> {flexao(pessoasNosCentros, 'pessoa nele', 'pessoas neles')}
           </p>
         )}
       </div>
@@ -496,7 +500,8 @@ function EditorDePublico({
             >
               {previa.entramNoPublico}
             </strong>{' '}
-            pessoa(s) entram no público · {previa.jaNesta} já estão aqui ·{' '}
+            {flexao(previa.entramNoPublico, 'pessoa entra', 'pessoas entram')} no público ·{' '}
+            {previa.jaNesta} {flexao(previa.jaNesta, 'já está', 'já estão')} aqui ·{' '}
             {previa.encontradas} no recorte
           </p>
           {!previaVelha && previa.entramNoPublico > 0 && (
@@ -559,7 +564,13 @@ function EditorDePublico({
           {previa.emOutraAplicacao.length > 0 && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
               <p className="font-medium">
-                ⚠️ {previa.emOutraAplicacao.length} já estão em OUTRA aplicação e não entram —
+                ⚠️ {previa.emOutraAplicacao.length}{' '}
+                {flexao(
+                  previa.emOutraAplicacao.length,
+                  'já está em OUTRA aplicação e não entra',
+                  'já estão em OUTRA aplicação e não entram',
+                )}{' '}
+                —
                 ninguém responde dois questionários no mesmo ciclo:
               </p>
               {/* ⚠️ O mesmo corte de 8 do bloco de cima — que TEM indicador.
@@ -760,7 +771,7 @@ function DialogoNovaAplicacao({
                 <option value="">Escolha…</option>
                 {versoes.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.modeloNome} · v{v.versao} · {v.perguntas} perguntas
+                    {v.modeloNome} · v{v.versao} · {contagem(v.perguntas, 'pergunta', 'perguntas')}
                     {v.finalidade === 'DEMONSTRACAO' ? ' (DEMONSTRAÇÃO)' : ''}
                   </option>
                 ))}

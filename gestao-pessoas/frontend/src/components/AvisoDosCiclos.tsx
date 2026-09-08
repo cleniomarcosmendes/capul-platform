@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import type { SituacaoDoVinculoNoCiclo, SituacaoNoCiclo } from '../services/api';
+import { contagem } from '../lib/formato';
 
 /**
  * ⭐⭐ O QUE O VÍNCULO MUDA — E O QUE NÃO MUDA — NO CICLO ABERTO.
@@ -118,7 +119,7 @@ function frase(l: SituacaoDoVinculoNoCiclo, nome: string) {
           <strong>{l.avaliadorAtual ?? 'o avaliador atual'}</strong>{' '}
           {l.statusAvaliacao === 'ENVIADA'
             ? 'já enviou a avaliação'
-            : `já respondeu ${l.respostas} pergunta(s)`}
+            : `já respondeu ${contagem(l.respostas, 'pergunta', 'perguntas')}`}
           . Trocar o avaliador agora atribuiria o julgamento de uma pessoa a outra.
         </>
       );
@@ -191,7 +192,7 @@ export function AvisoDosCiclosEmLote({
   return (
     <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
       <p className="text-sm font-medium text-slate-800">
-        {quantidade} vínculo(s) definido(s).
+        {contagem(quantidade, 'vínculo definido', 'vínculos definidos')}.
       </p>
       {porCiclo.length === 0 ? (
         <p className="mt-1 text-sm text-slate-600">

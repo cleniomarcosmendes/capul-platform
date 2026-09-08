@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { ChevronRight, Info, Search, Sigma, User } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
-import { dataHora, nota } from '../lib/formato';
+import { contagem, dataHora, nota } from '../lib/formato';
 import { Etiqueta } from '../components/Etiqueta';
 import {
   mensagemDoErro,
@@ -139,7 +139,7 @@ export default function ResultadosPage() {
         </p>
         {parcial && (
           <p className="mt-1 text-xs text-amber-700">
-            Apuração parcial: {totalDoCiclo - linhas.length} avaliação(ões) do ciclo ainda não
+            Apuração parcial: {contagem(totalDoCiclo - linhas.length, 'avaliação', 'avaliações')} do ciclo ainda não
             entraram nesta conta. Reapurar depois substitui o resultado.
           </p>
         )}

@@ -15,6 +15,7 @@ import {
 import type { ContextoDoCiclo } from './CicloPage';
 import { Modal } from '../components/Modal';
 import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
+import { contagem, flexao } from '../lib/formato';
 
 /**
  * PAINEL — o que falta para o ciclo fechar.
@@ -62,7 +63,7 @@ export default function PainelPage() {
     setApurando(true);
     try {
       const r = await apuracao.doCiclo(ciclo.id);
-      setResultado(`${r.avaliacoesApuradas} avaliação(ões) apurada(s).`);
+      setResultado(`${contagem(r.avaliacoesApuradas, 'avaliação apurada', 'avaliações apuradas')}.`);
       await carregar();
       // Apurar muda "N apuradas" e pode mudar o "→ Próximo" para ENCERRAR.
       void recarregarResumo();
@@ -109,7 +110,7 @@ export default function PainelPage() {
           aria-valuenow={dados.enviadas}
           aria-valuemin={0}
           aria-valuemax={dados.designados}
-          aria-label={`${dados.enviadas} de ${dados.designados} avaliações enviadas`}
+          aria-label={`${dados.enviadas} de ${contagem(dados.designados, 'avaliação enviada', 'avaliações enviadas')}`}
         >
           <div className="h-full rounded-full bg-capul-600" style={{ width: `${proporcao}%` }} />
         </div>
@@ -125,7 +126,7 @@ export default function PainelPage() {
                 painel mostra a conta, com o que fazer em cada caso. */}
             <p className="text-sm text-amber-900">
               <strong className="font-semibold">
-                {dados.semDesignacao} pessoa(s) sem avaliador neste ciclo.
+                {contagem(dados.semDesignacao, 'pessoa', 'pessoas')} sem avaliador neste ciclo.
               </strong>{' '}
               Elegíveis do público deste ciclo que ninguém designou: não têm avaliação, não
               aparecem em nenhum status e ficam de fora dele.
@@ -154,7 +155,7 @@ export default function PainelPage() {
           <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3">
             <p className="text-sm text-red-900">
               <strong className="font-semibold">
-                {dados.foraDeTodasAsAplicacoes.total} pessoa(s) fora de TODAS as aplicações deste
+                {contagem(dados.foraDeTodasAsAplicacoes.total, 'pessoa', 'pessoas')} fora de TODAS as aplicações deste
                 ciclo.
               </strong>{' '}
               Elegíveis que não entraram em público nenhum — não aparecem sequer como &quot;sem
@@ -191,10 +192,10 @@ export default function PainelPage() {
                   </span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {a.pendentes > 0 && <Etiqueta tom="neutro">{a.pendentes} não iniciada(s)</Etiqueta>}
+                  {a.pendentes > 0 && <Etiqueta tom="neutro">{contagem(a.pendentes, 'não iniciada', 'não iniciadas')}</Etiqueta>}
                   {a.emAndamento > 0 && <Etiqueta tom="azul">{a.emAndamento} em andamento</Etiqueta>}
-                  {a.enviadas > 0 && <Etiqueta tom="verde">{a.enviadas} enviada(s)</Etiqueta>}
-                  {a.canceladas > 0 && <Etiqueta tom="neutro">{a.canceladas} cancelada(s)</Etiqueta>}
+                  {a.enviadas > 0 && <Etiqueta tom="verde">{contagem(a.enviadas, 'enviada', 'enviadas')}</Etiqueta>}
+                  {a.canceladas > 0 && <Etiqueta tom="neutro">{contagem(a.canceladas, 'cancelada', 'canceladas')}</Etiqueta>}
                   {a.semDesignacao > 0 && (
                     <Etiqueta tom="ambar">{a.semDesignacao} sem avaliador nesta aplicação</Etiqueta>
                   )}
@@ -252,7 +253,7 @@ export default function PainelPage() {
           <p className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
             {conferencia.avaliacoesApuradas === 0
               ? 'Nada a conferir ainda — a checagem roda sobre as avaliações já enviadas.'
-              : `Nenhuma pendência nas ${conferencia.avaliacoesApuradas} avaliação(ões) enviada(s).`}
+              : `Nenhuma pendência ${flexao(conferencia.avaliacoesApuradas, 'na', 'nas')} ${contagem(conferencia.avaliacoesApuradas, 'avaliação enviada', 'avaliações enviadas')}.`}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -287,7 +288,7 @@ export default function PainelPage() {
 
         {conferencia && conferencia.semNotaDeAvaliacao > 0 && (
           <p className="mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-            {conferencia.semNotaDeAvaliacao} avaliação(ões) estão ENVIADAS sem nota — inconsistência de
+            {contagem(conferencia.semNotaDeAvaliacao, 'avaliação está ENVIADA', 'avaliações estão ENVIADAS')} sem nota — inconsistência de
             estado, já que a nota é calculada no envio. Vale reabrir e reenviar essas.
           </p>
         )}
@@ -325,7 +326,10 @@ export default function PainelPage() {
             <Modal titulo="Apurar o ciclo" aoFechar={() => setConfirmando(false)}>
               {dados.enviadas === 0 ? (
                 <p className="text-sm text-slate-700">
-                  <strong>Nenhuma das {dados.designados} avaliações foi enviada.</strong> Não há o
+                  <strong>
+                    {flexao(dados.designados, 'A única avaliação não foi enviada', `Nenhuma das ${dados.designados} avaliações foi enviada`)}.
+                  </strong>{' '}
+                  Não há o
                   que apurar — a apuração só alcança avaliação enviada.
                 </p>
               ) : (
@@ -361,7 +365,7 @@ export default function PainelPage() {
                   onClick={apurar}
                   className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
                 >
-                  Apurar {dados.enviadas} avaliação(ões)
+                  Apurar {contagem(dados.enviadas, 'avaliação', 'avaliações')}
                 </button>
               </div>
             </Modal>

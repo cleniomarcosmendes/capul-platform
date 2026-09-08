@@ -5,7 +5,7 @@ import { Carregando, Erro, Vazio } from '../components/Estado';
 import { EtiquetaDeCiclo } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
-import { data } from '../lib/formato';
+import { contagem, data, flexao } from '../lib/formato';
 import {
   ciclos,
   ehFaltaDePermissao,
@@ -208,7 +208,8 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             </span>
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            {ciclo._count.aplicacoes} aplicação(ões) · {ciclo._count.avaliacoes} avaliação(ões)
+            {contagem(ciclo._count.aplicacoes, 'aplicação', 'aplicações')} ·{' '}
+            {contagem(ciclo._count.avaliacoes, 'avaliação', 'avaliações')}
             {ciclo.incluirAfastados && ' · inclui afastados'}
           </p>
         </div>
@@ -268,7 +269,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               : ciclo.status === 'RASCUNHO'
               ? 'Abrir LIBERA os avaliadores para responder e trava a montagem: aplicações e critérios só mudam enquanto é rascunho. As avaliações já existem — quem as cria é a designação.'
               : ciclo.avaliacoesPendentes > 0
-                ? `Faltam ${ciclo.avaliacoesPendentes} avaliação(ões) por enviar. Se não vão entrar, dá para encerrar com pendência — elas ficam canceladas, com motivo registrado.`
+                ? `${flexao(ciclo.avaliacoesPendentes, 'Falta', 'Faltam')} ${contagem(ciclo.avaliacoesPendentes, 'avaliação', 'avaliações')} por enviar. Se não vão entrar, dá para encerrar com pendência — elas ficam canceladas, com motivo registrado.`
                 : 'Todas as avaliações foram enviadas: o ciclo pode ser encerrado.'}
           </p>
         </div>
@@ -296,9 +297,9 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
             <p className="text-slate-700">
               <strong className="tabular-nums text-capul-700">{previaAbertura.designados}</strong>{' '}
-              avaliação(ões) já designadas serão liberadas para responder, em{' '}
-              <strong className="tabular-nums">{previaAbertura.totalAplicacoes}</strong> aplicação(ões)
-              · <strong className="tabular-nums">{previaAbertura.noPublico}</strong> pessoa(s) no
+              {flexao(previaAbertura.designados, 'avaliação já designada será liberada', 'avaliações já designadas serão liberadas')} para responder, em{' '}
+              <strong className="tabular-nums">{previaAbertura.totalAplicacoes}</strong> {flexao(previaAbertura.totalAplicacoes, 'aplicação', 'aplicações')}
+              · <strong className="tabular-nums">{previaAbertura.noPublico}</strong> {flexao(previaAbertura.noPublico, 'pessoa', 'pessoas')} no
               público.
             </p>
             {(previaAbertura.semAvaliador > 0 || previaAbertura.foraDoCiclo > 0) && (
@@ -333,7 +334,8 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             <div className="mt-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
               <p className="font-semibold">
                 ⚠️ {previaAbertura.aplicacoesProvisorias} de {previaAbertura.totalAplicacoes}{' '}
-                aplicação(ões) estão com <strong>recorte provisório</strong>.
+                {flexao(previaAbertura.aplicacoesProvisorias, 'aplicação está', 'aplicações estão')} com{' '}
+                <strong>recorte provisório</strong>.
               </p>
               <p className="mt-1">
                 A própria tela chama esse público de <em>recorte de trabalho, não decisão do RH</em>{' '}
@@ -437,7 +439,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           <p className="text-sm text-slate-700">
             Faltam{' '}
             <strong className="text-amber-800">
-              {ciclo.avaliacoesPendentes} avaliação(ões)
+              {contagem(ciclo.avaliacoesPendentes, 'avaliação', 'avaliações')}
             </strong>{' '}
             por enviar. Encerrar assim <strong>cancela todas elas</strong>.
           </p>
@@ -490,7 +492,9 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
       {problemas && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <p className="text-sm font-semibold text-amber-900">
-            {problemas.length === 1 ? 'Falta resolver:' : `Faltam resolver ${problemas.length} pontos:`}
+            {problemas.length === 1
+              ? 'Falta resolver:'
+              : `Faltam resolver ${contagem(problemas.length, 'ponto', 'pontos')}:`}
           </p>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-900">
             {problemas.map((p) => (

@@ -8,6 +8,7 @@ import { Etiqueta } from '../components/Etiqueta';
 import { Modal } from '../components/Modal';
 import { SeletorDeColaborador } from '../components/SeletorDeColaborador';
 import { AvisoDosCiclos, AvisoDosCiclosEmLote } from '../components/AvisoDosCiclos';
+import { contagem, flexao } from '../lib/formato';
 import {
   cadastroAvaliadores, mensagemDoErro,
   type CartaoDeAvaliador, type ColaboradorDaBusca, type LinhaDaLista, type LoteDeImportacao,
@@ -115,8 +116,10 @@ function Resumo({ p }: { p: PendenciasDoCadastro }) {
         icone={<UserCheck size={18} />}
         numero={p.totais.comAvaliador}
         rotulo={`de ${p.totais.elegiveis} com avaliador`}
-        detalhe={`${p.totais.avaliadores} pessoas avaliam${
-          p.totais.provisorias > 0 ? ` · ${p.totais.provisorias} linhas provisórias` : ''
+        detalhe={`${contagem(p.totais.avaliadores, 'pessoa avalia', 'pessoas avaliam')}${
+          p.totais.provisorias > 0
+            ? ` · ${contagem(p.totais.provisorias, 'linha provisória', 'linhas provisórias')}`
+            : ''
         }`}
       />
     </section>
@@ -202,7 +205,7 @@ function SemAvaliador({ p, aoMudar }: { p: PendenciasDoCadastro; aoMudar: () => 
                 <p className="truncate text-xs text-slate-500">{g.chave}</p>
               </div>
               <Etiqueta tom={g.pessoas.length >= 10 ? 'vermelho' : 'ambar'}>
-                {g.pessoas.length} {g.pessoas.length === 1 ? 'pessoa' : 'pessoas'}
+                {contagem(g.pessoas.length, 'pessoa', 'pessoas')}
               </Etiqueta>
             </button>
             {/* ⚠️ FORA do botão que expande: botão dentro de botão é HTML
@@ -212,14 +215,14 @@ function SemAvaliador({ p, aoMudar }: { p: PendenciasDoCadastro; aoMudar: () => 
                 type="button"
                 onClick={() =>
                   setAlvo({
-                    titulo: `Definir avaliador de ${g.pessoas.length} pessoa(s) — ${g.descricao ?? g.chave}`,
+                    titulo: `Definir avaliador de ${contagem(g.pessoas.length, 'pessoa', 'pessoas')} — ${g.descricao ?? g.chave}`,
                     pessoas: g.pessoas.map((x) => ({ colaboradorId: x.colaboradorId, nome: x.nome })),
                   })
                 }
                 className="alvo-toque inline-flex items-center gap-1.5 rounded-lg border border-capul-600 px-3 text-sm font-medium text-capul-700 hover:bg-capul-50"
               >
                 <UserPlus size={15} aria-hidden />
-                Definir avaliador · {g.pessoas.length} pessoa(s)
+                Definir avaliador · {contagem(g.pessoas.length, 'pessoa', 'pessoas')}
               </button>
             </div>
             {aberto && (
@@ -371,7 +374,8 @@ function ListaDoAvaliador({
         <div className="flex flex-wrap items-center gap-3 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
           <AlertTriangle size={16} className="shrink-0" aria-hidden />
           <p className="min-w-0 flex-1">
-            <strong>{aRevisar.length}</strong> linha(s) foram divididas em ordem alfabética pela
+            <strong>{aRevisar.length}</strong>{' '}
+            {flexao(aRevisar.length, 'linha foi dividida', 'linhas foram divididas')} em ordem alfabética pela
             importação. A ordem é arbitrária e não diz quem trabalha com quem —{' '}
             <strong>o motivo de cada uma está escrito na própria linha</strong>.
           </p>
@@ -381,7 +385,7 @@ function ListaDoAvaliador({
             onClick={() =>
               agir(
                 () => cadastroAvaliadores.revisar(aRevisar.map((l) => l.id)),
-                `${aRevisar.length} linha(s) marcadas como conferidas.`,
+                `${contagem(aRevisar.length, 'linha marcada', 'linhas marcadas')} como conferida${flexao(aRevisar.length, '', 's')}.`,
               )
             }
             className="alvo-toque shrink-0 rounded-lg border border-amber-300 bg-white px-3 text-sm font-medium text-amber-900 disabled:opacity-50"
@@ -509,8 +513,10 @@ function Importacao({ aoImportar }: { aoImportar: () => Promise<void> }) {
     try {
       const r = await cadastroAvaliadores.desfazer(lote.id);
       setMsg(
-        `${r.encerradas} designação(ões) encerradas` +
-          (r.revisadasAMao > 0 ? `, das quais ${r.revisadasAMao} já tinham sido revisadas à mão. ` : '. ') +
+        `${contagem(r.encerradas, 'designação encerrada', 'designações encerradas')}` +
+          (r.revisadasAMao > 0
+            ? `, das quais ${r.revisadasAMao} ${flexao(r.revisadasAMao, 'já tinha', 'já tinham')} revisão à mão. `
+            : '. ') +
           r.aviso,
       );
       await Promise.all([carregarLotes(), aoImportar()]);
@@ -603,7 +609,7 @@ function Importacao({ aoImportar }: { aoImportar: () => Promise<void> }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-slate-700">{l.arquivoNome}</p>
                   <p className="text-xs text-slate-500">
-                    {new Date(l.criadoEm).toLocaleString('pt-BR')} · {l.linhasNoArquivo} linha(s) ·{' '}
+                    {new Date(l.criadoEm).toLocaleString('pt-BR')} · {contagem(l.linhasNoArquivo, 'linha', 'linhas')} ·{' '}
                     {l.paresGravados} par(es)
                   </p>
                 </div>
@@ -653,7 +659,7 @@ function PainelDaPrevia({
         />
       </dl>
       <p className="text-xs text-slate-500">
-        {previa.linhasNoArquivo} linha(s) no arquivo
+        {contagem(previa.linhasNoArquivo, 'linha', 'linhas')} no arquivo
         {previa.linhasSemAvaliador > 0 && `, ${previa.linhasSemAvaliador} sem avaliador preenchido`}.
       </p>
 
@@ -668,7 +674,8 @@ function PainelDaPrevia({
           <ul className="mt-2 space-y-1">
             {previa.centrosCusto.filter((c) => c.porDivisaoAutomatica).map((c) => (
               <li key={c.chave}>
-                <strong>{c.descricao ?? c.chave}</strong> ({c.chave}): {c.pessoas} pessoas →{' '}
+                <strong>{c.descricao ?? c.chave}</strong> ({c.chave}):{' '}
+                {contagem(c.pessoas, 'pessoa', 'pessoas')} →{' '}
                 {c.divisao.map((d) => `${d.avaliador} ${d.quantos}`).join(' · ')}
               </li>
             ))}
@@ -694,7 +701,7 @@ function PainelDaPrevia({
       )}
 
       {previa.recusas.length > 0 && (
-        <Bloco tom="vermelho" titulo={`${previa.recusas.length} linha(s) recusadas`}>
+        <Bloco tom="vermelho" titulo={`${contagem(previa.recusas.length, 'linha recusada', 'linhas recusadas')}`}>
           <ul className="space-y-1">
             {previa.recusas.map((r, i) => (
               <li key={`${r.numero}-${i}`}>
@@ -844,7 +851,7 @@ function DialogoDeVinculo({
       ? escolhido?.nome
       : alvosEfetivos.length === 1
         ? alvosEfetivos[0].nome
-        : `${alvosEfetivos.length} pessoa(s) deste grupo`;
+        : `${contagem(alvosEfetivos.length, 'pessoa', 'pessoas')} deste grupo`;
   /**
    * ⚠️⚠️ RECUSA É SÓ QUANDO NÃO SOBRA NADA A GRAVAR — e isto foi decidido
    * explicitamente, contra a primeira formulação do conserto. **Não "corrija"
@@ -980,7 +987,7 @@ function DialogoDeVinculo({
           {falhas.length > 0 && (
             <div className="mt-3">
               <Erro
-                mensagem={`${falhas.length} pessoa(s) não receberam o vínculo.`}
+                mensagem={`${contagem(falhas.length, 'pessoa não recebeu', 'pessoas não receberam')} o vínculo.`}
                 dica={falhas[0]}
               />
             </div>

@@ -4,6 +4,7 @@ import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, Lock, RefreshCw
 import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
+import { contagem } from '../lib/formato';
 
 /**
  * A FILA DO AVALIADOR — a primeira tela de quem vai avaliar.
@@ -198,7 +199,7 @@ function Busca({
         <p className="mt-1.5 px-1 text-xs text-slate-500" aria-live="polite">
           {resultados === 0
             ? `Nenhum resultado — sua fila tem ${total}`
-            : `${resultados} de ${total} ${resultados === 1 ? 'avaliação' : 'avaliações'}`}
+            : `${resultados} de ${contagem(total, 'avaliação', 'avaliações')}`}
         </p>
       )}
     </div>
@@ -211,7 +212,7 @@ function NadaEncontrado({ termo, total }: { termo: string; total: number }) {
       <Search size={28} className="mx-auto text-slate-300" aria-hidden />
       <p className="mt-3 font-medium text-slate-700">Ninguém com “{termo.trim()}”</p>
       <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
-        Sua fila tem {total} {total === 1 ? 'avaliação' : 'avaliações'} — limpe a busca para
+        Sua fila tem {contagem(total, 'avaliação', 'avaliações')} — limpe a busca para
         ver todas. A procura é por nome ou matrícula.
       </p>
     </div>
@@ -363,7 +364,7 @@ function CabecalhoDoCiclo({
       >
         <CalendarClock size={13} aria-hidden />
         até {prazo.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-        {dias >= 0 ? ` · ${dias} dia${dias === 1 ? '' : 's'}` : ' · prazo vencido'}
+        {dias >= 0 ? ` · ${contagem(dias, 'dia', 'dias')}` : ' · prazo vencido'}
       </span>
     </div>
   );
@@ -401,7 +402,7 @@ function ProgressoGeral({ total, concluidas }: { total: number; concluidas: numb
         aria-valuenow={concluidas}
         aria-valuemin={0}
         aria-valuemax={total}
-        aria-label={`${concluidas} de ${total} avaliações enviadas`}
+        aria-label={`${concluidas} de ${contagem(total, 'avaliação enviada', 'avaliações enviadas')}`}
       >
         <div
           className="h-full rounded-full bg-capul-600 transition-[width]"
@@ -493,7 +494,11 @@ function ProgressoDoItem({ respondidas, total }: { respondidas: number; total: n
   // elemento cinza que nunca muda não informa nada e ainda sugere defeito. Ela
   // só aparece quando tem o que mostrar; antes disso basta o tamanho da tarefa.
   if (!comecou) {
-    return <span className="text-xs tabular-nums text-slate-500">{total} perguntas</span>;
+    return (
+      <span className="text-xs tabular-nums text-slate-500">
+        {contagem(total, 'pergunta', 'perguntas')}
+      </span>
+    );
   }
 
   return (
@@ -505,7 +510,7 @@ function ProgressoDoItem({ respondidas, total }: { respondidas: number; total: n
         />
       </div>
       <span className="text-xs tabular-nums text-slate-500">
-        {respondidas} de {total} perguntas respondidas
+        {respondidas} de {contagem(total, 'pergunta respondida', 'perguntas respondidas')}
       </span>
     </div>
   );
