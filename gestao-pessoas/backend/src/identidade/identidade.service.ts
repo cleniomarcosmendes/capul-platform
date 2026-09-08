@@ -29,6 +29,12 @@ import { $Enums, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { chapasEquivalentes } from '../common/chapa.js';
+import {
+  classificarAcesso,
+  motivoDoAcesso,
+  type AcessoDoAvaliador,
+  type ContaEncontrada,
+} from './acesso-do-avaliador.js';
 
 export interface ColaboradorResumo {
   id: string;
@@ -157,5 +163,80 @@ export class IdentidadeService {
       );
     }
     return colaborador;
+  }
+
+  /**
+   * ⭐⭐ QUEM DESSAS PESSOAS CONSEGUIRIA ENTRAR PARA RESPONDER.
+   *
+   * O caminho inverso do `colaboradorDoUsuario`: dali se vai do usuário logado
+   * ao colaborador; aqui se vai do colaborador ao usuário, para responder
+   * **antes de abrir o ciclo** se as designações têm dono capaz de cumpri-las.
+   *
+   * ⚠️ Uma consulta para o lote inteiro, não uma por avaliador — o painel do
+   * ciclo do Piloto tem 54 e a fila é montada a cada abertura da tela.
+   *
+   * ⚠️ **A regra da chapa NÃO é reescrita em SQL.** As formas possíveis saem de
+   * `chapasEquivalentes` (TypeScript) e entram como parâmetro; o `WHERE` só
+   * compara. Duplicar a normalização no SQL criaria a segunda cópia que
+   * envelhece errada — e esta regra já custou um 403 que parecia falta de
+   * permissão.
+   *
+   * `core` é read-only aqui, como no resto do módulo: `$queryRaw`, sem escrita,
+   * sem FK, sem acoplamento ao Configurador além da leitura que já existia.
+   */
+  async acessoDeAvaliadores(
+    matriculas: readonly string[],
+  ): Promise<Map<string, { acesso: AcessoDoAvaliador; motivo: string | null; username: string | null }>> {
+    const resultado = new Map<
+      string,
+      { acesso: AcessoDoAvaliador; motivo: string | null; username: string | null }
+    >();
+    if (matriculas.length === 0) return resultado;
+
+    /** Todas as formas de todas as chapas — a busca é por elas, em um `IN` só. */
+    const candidatas = [...new Set(matriculas.flatMap((m) => chapasEquivalentes(m)))];
+    if (candidatas.length === 0) return resultado;
+
+    const contas = await this.prisma.$queryRaw<
+      { matricula: string; usuario_id: string; username: string; status_conta: string; permissoes: bigint }[]
+    >(Prisma.sql`
+      SELECT upper(trim(u.matricula)) AS matricula,
+             u.id   AS usuario_id,
+             u.username,
+             u.status::text AS status_conta,
+             (SELECT count(*) FROM "core"."permissoes_modulo" p
+                JOIN "core"."modulos_sistema" m ON m.id = p.modulo_id
+              WHERE p.usuario_id = u.id
+                AND m.codigo = 'GESTAO_PESSOAS'
+                AND p.status::text = 'ATIVO') AS permissoes
+        FROM "core"."usuarios" u
+       WHERE upper(trim(u.matricula)) IN (${Prisma.join(candidatas)})
+    `);
+
+    const porChapa = new Map<string, ContaEncontrada>();
+    for (const c of contas) {
+      porChapa.set(c.matricula, {
+        usuarioId: c.usuario_id,
+        username: c.username,
+        statusConta: c.status_conta,
+        permissoesNoModulo: Number(c.permissoes),
+      });
+    }
+
+    for (const matricula of matriculas) {
+      // A conta pode estar gravada em qualquer uma das formas — procura por
+      // todas, como a busca de colaborador faz.
+      const conta =
+        chapasEquivalentes(matricula)
+          .map((forma) => porChapa.get(forma))
+          .find((c): c is ContaEncontrada => c !== undefined) ?? null;
+      const acesso = classificarAcesso(conta);
+      resultado.set(matricula, {
+        acesso,
+        motivo: motivoDoAcesso(acesso),
+        username: conta?.username ?? null,
+      });
+    }
+    return resultado;
   }
 }

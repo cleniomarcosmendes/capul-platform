@@ -223,6 +223,19 @@ export default function PainelPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-slate-800">{a.nome}</p>
                   <p className="text-sm text-slate-500">{a.matricula}</p>
+                  {/* ⭐⭐ DESIGNAR NÃO DÁ ACESSO. A fila mostrava quem não tem
+                      conta exatamente como quem tem — no ciclo de simulação de
+                      09/09 eram 24 das 50 designações, quase metade, e nada na
+                      tela dizia. O ciclo abriria e essas avaliações nunca
+                      seriam respondidas.
+                      ⚠️ Aviso, não bloqueio: a designação é legítima e quem
+                      resolve a conta é o Configurador. */}
+                  {a.acesso !== 'OK' && (
+                    <p className="mt-0.5 flex items-start gap-1 text-xs font-medium text-rose-800">
+                      <AlertTriangle size={13} className="mt-0.5 shrink-0" aria-hidden />
+                      <span>{a.motivoDoAcesso}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="w-28 shrink-0">
                   <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -234,10 +247,22 @@ export default function PainelPage() {
                 </div>
                 <span
                   className={`w-24 shrink-0 text-right text-sm tabular-nums ${
-                    a.aFazer > 0 ? 'font-semibold text-amber-800' : 'text-slate-500'
+                    a.acesso !== 'OK'
+                      ? 'font-semibold text-rose-800'
+                      : a.aFazer > 0
+                        ? 'font-semibold text-amber-800'
+                        : 'text-slate-500'
                   }`}
                 >
-                  {a.aFazer > 0 ? `${a.aFazer} a fazer` : 'concluído'}
+                  {/* ⚠️ "a fazer" pressupõe que dá para fazer. Fila de quem não
+                      consegue entrar não é trabalho atrasado, é trabalho
+                      impossível — e ler "13 a fazer" faz alguém cobrar a pessoa
+                      errada pelo motivo errado. */}
+                  {a.acesso !== 'OK'
+                    ? contagem(a.aFazer, 'parada', 'paradas')
+                    : a.aFazer > 0
+                      ? `${a.aFazer} a fazer`
+                      : 'concluído'}
                 </span>
               </li>
             ))}

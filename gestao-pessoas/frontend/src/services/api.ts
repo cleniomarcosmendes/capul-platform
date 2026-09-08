@@ -390,6 +390,8 @@ export interface ProgressoDaAplicacao {
   canceladas: number;
   semDesignacao: number;
 }
+export type AcessoDoAvaliador = 'OK' | 'SEM_CONTA' | 'CONTA_INATIVA' | 'SEM_PERMISSAO';
+
 export interface FilaDoAvaliador {
   avaliadorId: string;
   nome: string;
@@ -397,6 +399,14 @@ export interface FilaDoAvaliador {
   total: number;
   enviadas: number;
   aFazer: number;
+  /**
+   * ⭐⭐ Se esta pessoa consegue ENTRAR para responder. Designar não dá acesso, e
+   * a fila mostrava quem não tem conta igual a quem tem — 24 de 50 no ciclo de
+   * simulação de 09/09.
+   */
+  acesso: AcessoDoAvaliador;
+  /** Frase pronta, escrita pelo backend, quando `acesso !== 'OK'`. */
+  motivoDoAcesso: string | null;
 }
 export interface PessoaForaDoCiclo {
   colaboradorId: string;
@@ -496,6 +506,21 @@ export interface PreviaDaAbertura {
   /** Avaliações que já existem e serão liberadas — abrir NÃO cria nenhuma. */
   designados: number;
   semAvaliador: number;
+  /**
+   * ⭐⭐ Quem foi designado e NÃO consegue entrar para responder. Aviso, nunca
+   * bloqueio: a designação é legítima, o que falta é conta — ato do Configurador
+   * e de outra pessoa, que pode ser resolvido com o ciclo já aberto.
+   */
+  avaliadoresSemAcesso: {
+    avaliadorId: string;
+    nome: string;
+    matricula: string;
+    acesso: AcessoDoAvaliador;
+    motivo: string | null;
+    avaliacoes: number;
+  }[];
+  /** Quantas avaliações estão nas mãos deles — o número que dói. */
+  avaliacoesSemAvaliadorComAcesso: number;
   /**
    * No público e FORA do ciclo — pela régua **ou** por exclusão manual do RH.
    * ⚠️ Chamava-se `barradosPelaRegua` e o nome afirmava a causa, e só uma

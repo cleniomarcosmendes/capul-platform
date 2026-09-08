@@ -57,10 +57,13 @@ describe('PainelService — fora de todas as aplicações', () => {
     // 3º argumento: o CicloService, de quem o RESUMO pede "o que falta para
     // abrir" — a mesma função que a abertura usa. Este spec é do painel cheio,
     // então basta existir.
+    // 4º: o IdentidadeService, de quem a FILA pede se cada avaliador consegue
+    // entrar para responder (§A7). Idem — basta existir.
     service = new PainelService(
       prisma as never,
       { listar: jest.fn().mockResolvedValue([]) } as never,
       { pendenciasParaAbrir: jest.fn().mockResolvedValue([]) } as never,
+      { acessoDeAvaliadores: jest.fn().mockResolvedValue(new Map()) } as never,
     );
   });
 

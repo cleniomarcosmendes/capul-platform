@@ -38,6 +38,12 @@ import { montarListaInicial } from '../designacao/elegibilidade-ciclo.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { proximoPasso, type ProximoPasso } from './proximo-passo.js';
 import { CicloService } from '../ciclo/ciclo.service.js';
+import { IdentidadeService } from '../identidade/identidade.service.js';
+import type { AcessoDoAvaliador } from '../identidade/acesso-do-avaliador.js';
+import {
+  ONDE_A_AVALIACAO_CONTA,
+  somarQueContam,
+} from '../avaliacao/avaliacoes-que-contam.js';
 
 export interface ProgressoDaAplicacao {
   aplicacaoId: string;
@@ -58,6 +64,14 @@ export interface FilaDoAvaliador {
   total: number;
   enviadas: number;
   aFazer: number;
+  /**
+   * ⭐⭐ Se esta pessoa CONSEGUE entrar para responder. Designar não dá acesso, e
+   * a fila mostrava quem não tem conta igual a quem tem — ver
+   * `identidade/acesso-do-avaliador.ts`.
+   */
+  acesso: AcessoDoAvaliador;
+  /** Frase pronta quando `acesso !== 'OK'`. */
+  motivoDoAcesso: string | null;
 }
 
 /** Uma pessoa que o ciclo não enxerga: elegível e fora de toda aplicação. */
@@ -176,6 +190,7 @@ export class PainelService {
     private readonly prisma: PrismaService,
     private readonly designacao: DesignacaoService,
     private readonly ciclos: CicloService,
+    private readonly identidade: IdentidadeService,
   ) {}
 
   async doCiclo(cicloId: string): Promise<PainelDoCiclo> {
@@ -197,7 +212,9 @@ export class PainelService {
     for (const a of ciclo.aplicacoes) {
       const linhas = porAplicacaoEStatus.filter((l) => l.aplicacaoId === a.id);
       const conta = (s: string) => linhas.find((l) => l.status === s)?._count._all ?? 0;
-      const designados = linhas.reduce((t, l) => t + l._count._all, 0);
+      // ⭐ Cancelada fora do denominador — a mesma regra da prévia da abertura e
+      // da fila por avaliador, agora de um lugar só (§A6).
+      const designados = somarQueContam(linhas);
 
       // A lista de elegibilidade é a mesma da tela de Designação — de propósito.
       // Duas contas de "quem deveria estar no ciclo" divergem no primeiro ajuste
@@ -290,7 +307,7 @@ export class PainelService {
     if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
 
     const [designados, noPublico, provisorias] = await Promise.all([
-      this.prisma.avaliacao.count({ where: { cicloId, status: { not: 'CANCELADA' } } }),
+      this.prisma.avaliacao.count({ where: { cicloId, ...ONDE_A_AVALIACAO_CONTA } }),
       this.prisma.aplicacaoPublico.count({ where: { cicloId } }),
       // Aplicações cujo público veio de um atalho e o RH ainda não confirmou.
       this.prisma.aplicacaoPublico.groupBy({
@@ -328,6 +345,44 @@ export class PainelService {
       semAvaliador += linhas.filter((l) => l.elegivel && !comAvaliacao.has(l.colaboradorId)).length;
     }
 
+    /**
+     * ⭐ Sai da MESMA função da fila do painel (`acessoDeAvaliadores`), não de
+     * uma segunda checagem — duas contas de "quem consegue entrar" divergiriam
+     * no primeiro caso de borda, e este aviso existe justamente para o caso de
+     * borda que ninguém vê.
+     */
+    const porAvaliador = await this.prisma.avaliacao.groupBy({
+      by: ['avaliadorId'],
+      where: { cicloId, ...ONDE_A_AVALIACAO_CONTA },
+      _count: { _all: true },
+    });
+    const nomes = new Map(
+      (
+        await this.prisma.colaborador.findMany({
+          where: { id: { in: porAvaliador.map((l) => l.avaliadorId) } },
+          select: { id: true, nome: true, matricula: true },
+        })
+      ).map((c) => [c.id, c]),
+    );
+    const acessos = await this.identidade.acessoDeAvaliadores(
+      [...nomes.values()].map((c) => c.matricula),
+    );
+    const avaliadoresSemAcesso = porAvaliador
+      .map((l) => {
+        const c = nomes.get(l.avaliadorId);
+        const a = c ? acessos.get(c.matricula) : undefined;
+        return {
+          avaliadorId: l.avaliadorId,
+          nome: c?.nome ?? '(colaborador não encontrado)',
+          matricula: c?.matricula ?? '',
+          acesso: a?.acesso ?? 'SEM_CONTA',
+          motivo: a?.motivo ?? null,
+          avaliacoes: l._count._all,
+        };
+      })
+      .filter((x) => x.acesso !== 'OK')
+      .sort((a, b) => b.avaliacoes - a.avaliacoes || a.nome.localeCompare(b.nome, 'pt-BR'));
+
     return {
       /** Vazio = a abertura passa. Mesma função que a API roda no clique. */
       problemas: await this.ciclos.pendenciasParaAbrir(cicloId),
@@ -345,6 +400,16 @@ export class PainelService {
       foraDoCiclo,
       /** Aplicações com público marcado como recorte provisório. */
       aplicacoesProvisorias: provisorias.length,
+      /**
+       * ⭐⭐ AVALIADORES QUE NÃO CONSEGUEM RESPONDER — o aviso que faltava.
+       * Aparece na prévia porque é o último momento barato: depois de abrir, a
+       * fila existe, o prazo corre e ninguém sabe que metade dela é impossível.
+       * ⚠️ NÃO impede abrir. Falta conta, que é ato de outra pessoa, e pode ser
+       * resolvido com o ciclo já aberto.
+       */
+      avaliadoresSemAcesso,
+      /** Quantas avaliações estão nas mãos deles — o número que dói. */
+      avaliacoesSemAvaliadorComAcesso: avaliadoresSemAcesso.reduce((t, a) => t + a.avaliacoes, 0),
     };
   }
 
@@ -361,7 +426,12 @@ export class PainelService {
       this.prisma.resultadoAvaliacao.count({ where: { cicloId } }),
     ]);
     const conta = (s: string) => porStatus.find((l) => l.status === s)?._count._all ?? 0;
-    const designados = porStatus.reduce((t, l) => t + l._count._all, 0);
+    /**
+     * ⭐ "0 de 52 enviadas" contava as 2 CANCELADAS e o ciclo nunca chegaria a
+     * 100% — enquanto o diálogo que cancela promete que ela "deixa de travar o
+     * encerramento". Agora sai da mesma regra que as outras quatro consultas.
+     */
+    const designados = somarQueContam(porStatus);
 
     let semDesignacao = 0;
     // ⭐ Sai da MESMA varredura de `semDesignacao`, e da mesma régua: uma segunda
@@ -522,7 +592,7 @@ export class PainelService {
   private async filaPorAvaliador(cicloId: string): Promise<FilaDoAvaliador[]> {
     const linhas = await this.prisma.avaliacao.groupBy({
       by: ['avaliadorId', 'status'],
-      where: { cicloId, status: { not: 'CANCELADA' } },
+      where: { cicloId, ...ONDE_A_AVALIACAO_CONTA },
       _count: { _all: true },
     });
     if (linhas.length === 0) return [];
@@ -544,6 +614,9 @@ export class PainelService {
           total: 0,
           enviadas: 0,
           aFazer: 0,
+          // Preenchidos depois, numa consulta só para o lote.
+          acesso: 'OK' as AcessoDoAvaliador,
+          motivoDoAcesso: null as string | null,
         };
       atual.total += l._count._all;
       if (l.status === 'ENVIADA') atual.enviadas += l._count._all;
@@ -551,6 +624,28 @@ export class PainelService {
       acumulado.set(l.avaliadorId, atual);
     }
 
-    return [...acumulado.values()].sort((a, b) => b.aFazer - a.aFazer || a.nome.localeCompare(b.nome));
+    // ⭐ UMA consulta para o lote inteiro, depois de a fila estar montada.
+    const acesso = await this.identidade.acessoDeAvaliadores(
+      [...acumulado.values()].map((a) => a.matricula).filter(Boolean),
+    );
+    for (const fila of acumulado.values()) {
+      const a = acesso.get(fila.matricula);
+      fila.acesso = a?.acesso ?? 'SEM_CONTA';
+      fila.motivoDoAcesso = a?.motivo ?? null;
+    }
+
+    /**
+     * ⚠️ Ordena por "não consegue responder" ANTES de por tamanho da fila. A
+     * ordenação por quantidade responde "quem tem mais a fazer"; esta responde
+     * "o que impede o ciclo de andar", e é a pergunta mais urgente das duas —
+     * uma fila de 13 que ninguém consegue abrir não é trabalho atrasado, é
+     * trabalho impossível.
+     */
+    return [...acumulado.values()].sort(
+      (a, b) =>
+        Number(a.acesso === 'OK') - Number(b.acesso === 'OK') ||
+        b.aFazer - a.aFazer ||
+        a.nome.localeCompare(b.nome),
+    );
   }
 }
