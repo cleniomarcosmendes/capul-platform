@@ -815,21 +815,45 @@ function DialogoDeVinculo({
    * `AVALIADO` quem avalia é o dono da lista e quem se escolhe é o avaliado.
    */
   const quemAvalia = escolher === 'AVALIADO' ? (avaliadorNome ?? 'Este avaliador') : escolhido?.nome;
+
+  /**
+   * ⭐⭐ QUEM O BOTÃO VAI MESMO GRAVAR — a lista, não o total.
+   *
+   * A regra "ninguém avalia a si mesmo" existia e só rodava no modo de UMA
+   * pessoa (`escolhido.id === alvos[0].colaboradorId`). No grupo ela não era
+   * feita: escolher ADELSON para o grupo dele mesmo era aceito, e o modal
+   * anunciava as 18 do grupo quando o efeito real eram 17 — erro de 1 no caso
+   * que a própria tela recomenda ("nomear o responsável de um grupo resolve o
+   * grupo inteiro"), porque o responsável quase sempre está dentro do grupo.
+   *
+   * A checagem é a MESMA, corrida contra a pertinência ao grupo em vez da
+   * identidade com um alvo único. E é UMA lista, usada em três lugares — o
+   * resumo, o botão e o `aplicar()` —, para que a tela grave exatamente o que
+   * mostrou: um "desconto" só no texto voltaria a divergir do ato na primeira
+   * mexida.
+   */
+  const alvosEfetivos =
+    escolhido && escolher === 'AVALIADOR'
+      ? alvos.filter((p) => p.colaboradorId !== escolhido.id)
+      : alvos;
+  /** A pessoa escolhida está dentro do próprio grupo: a linha dela fica de fora. */
+  const escolhidoNoGrupo = alvosEfetivos.length < alvos.length;
+
   const quemEAvaliado =
     escolher === 'AVALIADO'
       ? escolhido?.nome
-      : alvos.length === 1
-        ? alvos[0].nome
-        : `${alvos.length} pessoa(s) deste grupo`;
+      : alvosEfetivos.length === 1
+        ? alvosEfetivos[0].nome
+        : `${alvosEfetivos.length} pessoa(s) deste grupo`;
   /**
-   * ⚠️ Só faz sentido quando há UMA pessoa dos dois lados. No grupo, quem recusa
-   * é o backend, linha a linha — e as demais seguem.
+   * ⚠️ RECUSA é só quando não sobra NADA a gravar — uma pessoa que é ela
+   * mesma, ou um grupo cujo único membro é quem se escolheu. No grupo de vários,
+   * o ato continua valendo para as outras: bloquear o botão tiraria justamente o
+   * caminho que a tela recomenda.
    */
   const ehAutoavaliacao =
     !!escolhido &&
-    (escolher === 'AVALIADO'
-      ? escolhido.id === avaliadorId
-      : alvos.length === 1 && escolhido.id === alvos[0].colaboradorId);
+    (escolher === 'AVALIADO' ? escolhido.id === avaliadorId : alvosEfetivos.length === 0);
 
   async function aplicar() {
     if (!escolhido) return;
@@ -839,12 +863,16 @@ function DialogoDeVinculo({
     const recusas: string[] = [];
     try {
       if (escolher === 'AVALIADOR') {
-        for (const pessoa of alvos) {
+        // ⭐ `alvosEfetivos`, não `alvos`: a mesma lista que o resumo contou. A
+        // linha da própria pessoa já sai daqui, então o backend não precisa
+        // recusá-la — e o "N pessoa(s) não receberam o vínculo" deixa de
+        // aparecer para quem a tela nunca prometeu gravar.
+        for (const pessoa of alvosEfetivos) {
           try {
             criados.push(await cadastroAvaliadores.designar(escolhido.id, pessoa.colaboradorId));
           } catch (e) {
-            // ⚠️ Uma recusa não derruba as outras — a mais comum é a pessoa
-            // escolhida estar dentro do próprio grupo (ninguém avalia a si).
+            // ⚠️ Uma recusa não derruba as outras — a guarda do backend continua
+            // sendo a que vale, para o caso de a tela estar com dado velho.
             recusas.push(`${pessoa.nome}: ${mensagemDoErro(e)}`);
           }
         }
@@ -880,7 +908,7 @@ function DialogoDeVinculo({
           {escolher === 'AVALIADOR' && alvos.length > 1 && (
             <p className="mt-2 text-xs text-slate-500">
               Ninguém pode ser avaliador da própria avaliação — se a pessoa escolhida estiver no
-              grupo, a linha dela é recusada e as demais seguem.
+              grupo, ela fica de fora e as demais seguem.
             </p>
           )}
 
@@ -893,6 +921,13 @@ function DialogoDeVinculo({
             <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-800">
               <strong className="font-semibold">{quemAvalia}</strong> passa a avaliar{' '}
               <strong className="font-semibold">{quemEAvaliado}</strong>.
+              {/* ⭐ O termo que falta, NOMEADO. Só dizer "17" onde o grupo tem 18
+                  deixaria quem lê procurando o que sumiu. */}
+              {escolhidoNoGrupo && (
+                <span className="mt-1 block text-xs text-slate-600">
+                  {escolhido.nome} está neste grupo e fica de fora — ninguém avalia a si mesmo.
+                </span>
+              )}
             </p>
           )}
           {ehAutoavaliacao && (
