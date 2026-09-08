@@ -224,7 +224,22 @@ testes nem em três rodadas de conferência de tela.
 
 ⚠️ **Dois deles foram achados DEPOIS de eu dizer que estava resolvido** — os três `_count` do
 §3.1.40 e a promessa do §3.1.45. O padrão vale mais que os defeitos: o que escapa não é o caso
-difícil, é a **forma que eu não procurei**.
+difícil, é a **forma que eu não procurei**. Virou a regra 13 da §5.9.
+
+### ✅ O processo foi percorrido INTEIRO pela tela — e o encerramento rendeu 9 (09/09)
+
+Montar → designar → abrir → responder → apurar → resultado → **encerrar**. O último passo nunca
+tinha sido percorrido, e sozinho rendeu **9 achados** (§3.1.46 a §3.1.51), dois graves: o motivo
+que estava gravado e não chegava à tela, e o cancelamento em massa irreversível que **nenhum dos
+dois diálogos** mencionava.
+
+⭐ **Saldo do ciclo de simulação: 18 defeitos.** Nenhum apareceu em 537 testes nem em três rodadas
+de conferência de tela — só em rodar o processo inteiro, com dado real, até o fim. **A etapa que
+nunca tinha sido percorrida foi a que mais rendeu**, e isso vale para o próximo módulo: o passo
+que ninguém testou não é o mais simples, é o menos conhecido.
+
+O ciclo está **ABERTO, reaberto 1×, com 39 canceladas** — o único lugar onde esse estado existe.
+Não apagar.
 
 ### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
 
@@ -2817,6 +2832,116 @@ sistema.
 
 ⭐ As duas frases agora são verdade. Ficam registradas porque **texto que promete capacidade é
 dívida**: quem escrever a próxima precisa saber que ela será cobrada.
+
+### 3.1.46. 🔴 O motivo estava gravado nas 39 e a tela não tinha por onde mostrá-lo (09/09)
+
+O diálogo de encerrar promete que o motivo *"fica gravado no ciclo, na auditoria e **em cada
+avaliação cancelada** — é o que responde, meses depois, por que estas ficaram sem nota"*. Na
+Designação, as 37 apareciam só como **"cancelada"**, sem uma palavra.
+
+**Conferido no banco: as 39 têm `motivoCancelamento` preenchido.** O ato cumpre a promessa; a
+**tela não lia**.
+
+#### Por que 2 mostravam e 37 não — e a distinção que faltava
+
+| Campo | Responde |
+|---|---|
+| `justificativa` (de `CicloElegibilidade`) | por que a **PESSOA** está fora do ciclo |
+| `motivoCancelamento` (de `Avaliacao`) | por que a **AVALIAÇÃO** dela foi cancelada |
+
+A linha só trazia o primeiro. O *Excluir* grava **os dois** (mesmo texto), então as 2 excluídas à
+mão mostravam o delas; o *encerrar com pendência* não cria decisão de elegibilidade nenhuma, então
+as 37 não tinham nada a exibir. ⚠️ O efeito colateral era pior que o silêncio: parecia que **umas
+tinham motivo e outras não**, quando todas tinham.
+
+Agora a linha traz `motivoCancelamento` e o mostra **quando difere** da justificativa — senão o
+Excluir imprimiria o mesmo texto duas vezes.
+
+### 3.1.47. 🔴 O cancelamento em massa é irreversível, e os dois diálogos calavam (09/09)
+
+As 2 antigas têm *"Incluir"*; as 37 do encerramento **não têm caminho nenhum** — nem Incluir, nem
+restaurar, nem em lote. E `efeitoDeDesignar` recusa designar sobre CANCELADA (*"o upsert a reviveria
+cancelada"*), com a nota escrita de que **não há caminho para descancelar**.
+
+⚠️ **Os dois diálogos listavam só o que se ganha:**
+- **Encerrar** falava das respostas preservadas, da fila que libera, da contagem no painel — e nada
+  sobre não ter volta;
+- **Reabrir** promete *"volta a permitir designar, mexer no público, apurar, reabrir avaliações"* —
+  e quem encerrou com pendência lê isso como **"desfaz o encerramento"**. Não desfaz.
+
+Meia verdade num ato que alguém aciona **para consertar outro** é o pior lugar para ela estar.
+
+Os dois textos entraram: o encerrar diz *"isto não tem volta… reabrir o ciclo não as traz de
+volta"*, com o número; o reabrir ganhou um bloco *"o que reabrir NÃO faz"*, que só aparece quando
+há canceladas — e para isso a listagem passou a devolver `avaliacoesCanceladas`.
+
+#### O custo de descancelar — pequeno em código, quatro decisões em aberto
+
+| | |
+|---|---|
+| Backend | `descancelar(id, motivo)` — RH_ADMIN, ciclo aberto, motivo, auditoria: ~30 linhas |
+| Frontend | botão na linha + modal: pequeno |
+| **Decisões** | (a) volta para `PENDENTE` ou `EM_ANDAMENTO` quando há respostas parciais? (b) o `motivoCancelamento` é apagado ou vira histórico? (c) **em massa?** — 37 uma a uma é inviável, e em massa reintroduz o risco do encerrar em massa (d) descancelar 37 devolve 37 pendências que **voltam a travar o encerramento** — é o ponto, mas alguém tem de querer |
+
+⚠️ Nenhuma delas é técnica. **Enquanto não forem respondidas, os dois textos são a defesa** — e
+eles valem mesmo que descancelar venha depois.
+
+### 3.1.48. 🟠 Dois textos do estado ABERTO sobrevivendo no ENCERRADO (09/09)
+
+- **Aplicações:** *"Montar público continua valendo: quem entrar agora precisa ser designado"* —
+  verdade no ABERTO, **falsa** no ENCERRADO, com o botão ao lado desabilitado e a faixa do topo
+  dizendo o contrário.
+- **Painel:** *"937 pessoas fora de TODAS as aplicações… Monte o público que falta, em Aplicações"*
+  — instrução que manda a pessoa a uma tela onde o botão está cinza.
+
+⭐ É a família do §3.1.19 (a linha de estado que mentia entre a gravação e o F5): **quem lê acredita
+no texto, não no botão cinza.** Os dois passaram a ter dois estados. No Painel o **número continua**
+(é ele que diz o tamanho do buraco); o que muda é o que se pode fazer.
+
+### 3.1.49. 🟠 A exigência de motivo era muda — e 3 caracteres a tornavam decorativa (09/09)
+
+Digitar `"ab"` e clicar não produzia nada: sem hint, sem contador, sem mensagem. E `"xpt"` passava.
+
+**Duas correções, porque o achado era duplo.** A regra passou a **aparecer antes de o botão travar**
+(*"Escreva pelo menos N caracteres — faltam M"*), no encerrar e no reabrir avaliação.
+
+E o mínimo virou **dois números** (`common/motivo.ts`), acompanhando o alcance do ato:
+
+| | | Por quê |
+|---|---|---|
+| `MOTIVO_MINIMO` | **3** | atos de UMA linha — quem lê tem o nome, o status e a data ao redor |
+| `MOTIVO_MINIMO_EM_MASSA` | **15** | encerrar com pendência: esta frase é a **única** explicação que sobra para dezenas de pessoas |
+
+⚠️ *"Pessoa desligada"* tem 16 — o mínimo força uma oração sem inviabilizar a resposta curta
+legítima. E a tela usa **o mesmo número** do backend: tela mais frouxa deixa clicar onde a API
+recusa; mais estrita trava onde a API aceitaria.
+
+⭐ **Um spec quebrou e estava certo:** o caso da auditoria usava `'fim do piloto'` (13). O fato que
+ele protege é o nome da ação, não o tamanho do motivo — corrigido o fixture, não a regra.
+
+### 3.1.50. 🟠 Botão desabilitado que não parece desabilitado — 16 lugares (09/09)
+
+*"Designar pelo cadastro"* seguia **verde sólido** e *"Reabrir"* laranja num ciclo encerrado; só o
+cursor e o `title` denunciavam. ⚠️ A causa é `disabled:opacity-50` **sobre cor própria**: um verde a
+50% continua um verde. Funciona em botão branco ou de borda cinza — e é por isso que *"Trocar
+avaliador"* e *"Excluir"* acinzentavam certo, e ninguém tinha percebido.
+
+**Botão com cor precisa TROCAR de cor ao desabilitar**, não ficar translúcido. Varridos **16** —
+não os 2 relatados: era forma, não caso (§5.9 regra 13).
+
+### 3.1.51. 📌 Registrado, sem fazer — o que o encerramento apaga da vista
+
+- **A fila por avaliador colapsa sem histórico.** LIDYANE (12), RENATA (12), CLAUDIMAR (7) e VANIA
+  (6) somem do Painel com 37 tarefas. É correto — cancelada não é trabalho de ninguém —, mas quem
+  abrir no dia seguinte não sabe o que houve. O rastro existe só na auditoria.
+- **O cartão da aplicação B mostra "0 avaliações · público 32"** e nada sobre as 31 canceladas:
+  indistinguível de uma aplicação que nunca gerou nada.
+- **O Painel conta 39 numa etiqueta só**, sem separar as 2 do *Excluir* das 37 do encerramento.
+  São dois atos, dois motivos e duas histórias; a tela mostra um número.
+
+⭐ Os três são a **mesma pergunta**: depois do encerramento, o painel fica limpo e a evidência do
+custo sai da tela. O §3.1.45 (a linha de estado ganhando *"39 canceladas"*) foi o primeiro passo;
+estes três são o resto dele.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
