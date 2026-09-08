@@ -85,6 +85,33 @@ confirmação — depende da Arielly), **18** (os menores do item K) e **19** (U
 leva ao lugar errado em silêncio) da lista (B). E **⭐ as regras de método do dia estão na
 §5.9** — é o que se relê daqui a um mês, não a lista de tarefas.
 
+### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
+
+O Clenio configurou `rodrigoleao`, `vanialucia` e `denisealves` no Configurador; **as três
+salvaram**. ⚠️ **Não houve terceiro caso do sintoma "a permissão não salvou"** — o item 2 da
+lista (B) saiu. A primeira consulta que fiz à `denisealves` rodou **antes** de ele salvar, e eu
+apresentei "nenhuma linha" como fato sobre a configuração quando era só o instante em que olhei.
+
+E as **13 avaliações do `supdept01`** (Clenio) foram para a **RENATA BORGES** — pela API, com a
+prévia conferida antes (13 `SUBSTITUIR`, **0 respondidas**, 0 recusas) e 13 linhas `DESIGNAR` na
+auditoria.
+
+| | Fechamento | Agora |
+|---|---|---|
+| Avaliadores do ciclo | 53 | **54** |
+| Com conta | 5 | **8** |
+| **Abrem o módulo** | 5 | **8** |
+| **Conta sem permissão** | 3 | **0** ✅ |
+| Sem conta nenhuma | 48 | **46** |
+| **Avaliações alcançáveis** | ~110 | **187 de 894** |
+
+Quem entra: `adrianacaetano` 84 · `claudimaroliveira` 44 · `wandersonnascimento` 22 ·
+`renataborges` 13 · `ariellypereira` 13 (RH_ADMIN) · `vanialucia` 6 · `rodrigoleao` 4 ·
+`lidyanerocha` 1.
+
+⚠️ **`clenio` segue sem matrícula** em `core.usuarios` — sem ela o módulo recusa antes de olhar
+papel. **O Clenio resolve; não mexer em conta daqui.**
+
 ### (A) DEPENDE DE FORA — decisão de quem não é a T.I.
 
 **Só o que a gestora de RH e a diretoria respondem.** Nada aqui anda com trabalho técnico, e
@@ -115,8 +142,8 @@ nove itens desta lista não movem esse número em nada.
 
 | # | Item | Onde está |
 |---|---|---|
-| 1 | **Contas para os avaliadores** — 46 dos 53 não têm conta, e 3 têm conta sem permissão. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
-| 2 | **`rodrigoleao`** — é avaliador de 4 pessoas e a permissão GESTAO_PESSOAS **não salvou**. ⚠️ Segunda ocorrência do mesmo sintoma (a 1ª foi o INVENTARIO do `wandersonnascimento`): ver se a tela do Configurador erra ao salvar, porque aí é de todos os módulos | §6 |
+| 1 | **Contas para os avaliadores — `46 dos 54` não têm conta.** É o que decide o piloto, e é **trabalho do Clenio no Configurador**, não daqui. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
+| 2 | 🔴 **Colisão de chapa dá 403 que PARECE falta de permissão** — `porMatricula` compara texto exato, então `E01981` (em `core.usuarios`) **não** acha `001981` (em `rh.colaborador`), e o usuário lê *"matrícula que não corresponde a nenhum colaborador ativo"*. ⚠️ **O sintoma é o que custa**, não o código: quem bater nisso vai ao Configurador **dar papel a quem já tem**. ⭐ **Precedente pronto: a Logística já normaliza pelos 5 últimos dígitos** — não é decisão nova, é aplicar o que a casa faz | §6 · §3.1.25 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
 | 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
 | 5 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
@@ -1909,6 +1936,42 @@ com tudo designado e nada respondido — `ACOMPANHAR`, `aba: painel`, e o Painel
 mostrando *"ARIELLY · 2 a fazer"*. ⚠️ Os dois ciclos reais **não** mostram este passo, e é o
 certo: ambos ainda têm gente sem avaliador, então `DESIGNAR` vence — a ordem das regras não
 mudou.
+
+### 3.1.25. 🔴 Colisão de chapa: um 403 que PARECE falta de permissão (08/09)
+
+`IdentidadeService.porMatricula` compara **texto exato** (`matricula: alvo`). A `renataborges`
+tinha **`E01981`** em `core.usuarios` e **`001981`** em `rh.colaborador` — a mesma pessoa, dois
+formatos. Resultado: login válido, papel `AVALIADOR` ativo, e a tela dizendo *"sua matrícula não
+corresponde a nenhum colaborador ativo"*.
+
+#### ⚠️ O caro não é o código — é o SINTOMA
+
+Quem bate nisso lê um **403** e conclui *"a permissão não salvou"*. E vai ao Configurador **dar
+papel a quem já tem**, onde vai encontrar tudo certo, e concluir que a tela do Configurador está
+com defeito. O defeito está a dois schemas de distância, num campo de texto.
+
+⭐ **Isso quase contaminou a investigação de 08/09.** Estávamos caçando exatamente esse sintoma —
+"a permissão não salvou" — no `rodrigoleao` e depois na `denisealves`. Se o Clenio não tivesse
+corrigido a matrícula da Renata **antes** de eu mover as 13 avaliações para ela, ela as receberia
+e **não veria nada**; a leitura natural teria sido *"a permissão dela também não salvou"* — o
+terceiro caso do sintoma que estávamos perseguindo, e que **não existe**. Duas causas
+completamente diferentes com a mesma cara na tela, e a errada estava com a atenção toda.
+
+⚠️ E o custo teria sido maior que uma investigação perdida: eu teria **entregue as 13 avaliações
+como resolvidas** — a designação certa, o número certo no censo, e ninguém conseguindo abrir.
+
+#### O precedente já existe
+
+⭐ **A Logística normaliza pelos 5 últimos dígitos** ([[feedback_chapa_colide_5_digitos]]):
+`E01047` e `001047` são a mesma chapa; **1 valor usa, 0 ou 2+ devolve `null`**. Não é decisão
+nova a tomar — é aplicar o que a casa já faz, com a mesma regra de ambiguidade, que aqui já tem
+par (`escolherColaboradorUnico` e o `MatriculaAmbiguaError`).
+
+⚠️ Quando for feito: a normalização vale para a **busca**, não para o dado. Nada de reescrever
+`core.usuarios` — o schema é read-only aqui, e o cadastro é do Configurador.
+
+**Estado em 08/09:** o cadastro da Renata foi corrigido à mão pelo Clenio e as duas pontas batem.
+O próximo `E0xxxx` falha do mesmo jeito. Item **2** da lista (B).
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
