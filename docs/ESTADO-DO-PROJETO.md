@@ -177,8 +177,26 @@ agora na lista (A) junto da do `EXIGE_CONFIRMACAO` no cadastro. Unificar antes e
 política por omissão, que é como o buraco do §3.1.27 nasceu.
 
 **537 testes** (eram 515). Nenhuma migration. **Nada foi gravado no banco** — o ciclo
-`ZZ CONFERE 09/09` segue intacto (9 no público, 1 aplicação, 2 designados) para a skill terminar
-a conferência.
+`ZZ CONFERE 09/09` seguiu intacto para a skill terminar a conferência.
+
+### 🔁 Terceira rodada — os nove passaram, e vieram mais três (08/09)
+
+A skill confirmou o item 4 no payload (`recusar: 1`, `acao: RECUSAR`). O que ela achou depois:
+
+| # | O quê | Estado |
+|---|---|---|
+| 1 | Botão armado sobre prévia vazia — o inverso do §3.1.27 | ✅ §3.1.34 (as outras 4 prévias já travavam) |
+| 2 | Concordância de número — **e era geral**: 19 erradas, 56 fugas, 10 ternários | ✅ §3.1.35 |
+| 3 | "0 fora do ciclo" como ruído | ✅ §3.1.36 |
+| 4 | Os dois slices por identificar | ✅ **fechado** — §3.1.28 |
+
+⭐ **O item 2 é o achado do dia**, e não pelo tamanho: as duas frases erradas eram sintoma de
+**três convenções convivendo** no mesmo módulo. Um jeito só agora (`flexao`/`contagem`), com a
+regra escrita ao lado da irmã dela (§3.1.7).
+
+⭐ **O item 4 fechou com identificação, não com dedução**: o `.slice(0,5)` foi extraído do bundle
+com o contexto e é do **React DOM** (teste de prefixo `data-`/`aria-`). O fonte tem 8 `.slice(`
+no total, os 8 catalogados. Não volta.
 
 ### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
 
@@ -954,6 +972,10 @@ não só mais correta.
 
 *(Nasceu em 07/09 de uma correção de uma frase só — o resumo do modal de vínculo — e subiu para
 regra porque a próxima frase seria escrita pela mesma mão, com o mesmo erro.)*
+
+⭐ **A irmã desta regra é o §3.1.35 — concordância de NÚMERO**, e ela nasceu do mesmo jeito, um dia
+depois. A diferença que importa: para gênero **não há dado**; para número o dado está na mão. Por
+isso lá o `"(s)"` saiu de vez, enquanto aqui a saída é a voz ativa.
 
 ### 3.1.8. ✅ Apurar com 3 de 894 — a confirmação, a base e a data (07/09)
 
@@ -2225,10 +2247,23 @@ O item 4 pedia para não presumir. Varridos **todos** os `.slice(` / `.substring
 | `PainelPage.tsx:166` | `.slice(0, 6)` | lista, **com** "… e mais N". OK. |
 | `DesignacaoPage.tsx:708 / 727` | `.slice(0, 10)` | listas, **com** "… e mais N". OK. |
 
-⭐ **`.slice(0, 5)` não existe no nosso fonte.** Nenhuma ocorrência, em nenhum arquivo. O que a
-skill viu no bundle é código de dependência. E o `.slice(0, 10)` "perto de tokens de status/retry"
-é uma das **duas conversões de data** acima — que num minificado ficam a poucos bytes de qualquer
-coisa. Ver a regra 12 da §5.9.
+⭐ **`.slice(0, 5)` não existe no nosso fonte.** Nenhuma ocorrência, em nenhum arquivo. E o
+`.slice(0, 10)` "perto de tokens de status/retry" é uma das **duas conversões de data** acima —
+que num minificado ficam a poucos bytes de qualquer coisa.
+
+#### ✅ FECHADO — os dois foram identificados no bundle, não por dedução
+
+O bundle construído tem **4** `.slice(0,10)` e **1** `.slice(0,5)`. Os quatro são nossos: duas
+datas (`formato.ts`, `CiclosPage`) e duas listas que já têm indicador (`DesignacaoPage`). O
+`.slice(0,5)`, extraído com o contexto ao redor, é do **React DOM**:
+
+```js
+case "boolean": var n = t.toLowerCase().slice(0,5); if (n !== "data-" && n !== "aria-") …
+```
+
+É o teste de prefixo `data-`/`aria-` na aplicação de atributos. **Não é lista, não trunca nada e
+não é nosso.** O item não volta: o fonte tem 8 `.slice(` no total, e os 8 estão na tabela acima.
+Ver a regra 12 da §5.9 — foi o caso que a gerou.
 
 ### 3.1.29. 🟠 O cabeçalho do ciclo misturava dois registros, e a conta não fechava (08/09)
 
@@ -2383,6 +2418,75 @@ quebra os casos sem que ninguém precise lembrar de vir aqui.
 ato → 2 falhas; guarda de troca invisível à prévia → 7 falhas (com a suíte da troca junto).
 
 **537 testes.**
+
+### 3.1.34. 🟠 Botão armado sobre prévia vazia — o inverso do §3.1.27 (08/09)
+
+Com **tudo recusado**, o diálogo de designar imprimia *"Nada mudaria com esta escolha"* e o botão
+continuava habilitado. É a mesma família do defeito da manhã, invertida: lá o botão fazia **mais**
+do que o resumo dizia; aqui não faria **nada** e parecia que faria.
+
+`disabled` quando `criar + substituir + exigeConfirmacao === 0` — e a conta é **a mesma** que
+escreve o "Nada mudaria", extraída para uma constante lida nos dois lugares. Se ficassem duas,
+voltariam a discordar, que é o assunto do §3.1.27.
+
+#### As outras quatro prévias, conferidas
+
+| Prévia | Trava? |
+|---|---|
+| modal de vínculo (cadastro) | ✅ já travava — `alvosEfetivos` vazio |
+| público da aplicação | ✅ já travava — *"Nada a adicionar"* |
+| lote / cópia do cadastro | ✅ já travava — `aGravar === 0` (`criar + atualizar`) |
+| importação de planilha | ✅ já travava — `pares.total === 0`, e `total` é `aGravar.length`, sem os inalterados |
+| **designar** | 🔴 era a única aberta |
+
+### 3.1.35. ⭐ CONCORDÂNCIA DE NÚMERO — a irmã da regra §3.1.7, e ela era geral
+
+Duas frases erradas apareceram na conferência (*"1 já respondidas — pedem confirmação"*, *"1 serão
+recusadas"*). Não eram duas: varrido o módulo, havia **três jeitos convivendo**.
+
+| | Quantos | O que é |
+|---|---|---|
+| ternário `n === 1 ? … : …` | 10 | certo, reinventado um a um |
+| **frase simplesmente errada** | **19** | *"1 pessoas"*, *"1 ganham avaliador"*, *"1 serão recusadas"* |
+| fuga com `"(s)"` | 56 | não erra, mas não resolve — e gerava híbridos |
+
+⭐ **Três jeitos é o mesmo que nenhum.** A próxima frase é escrita pela mesma mão que escreveu a
+anterior — foi assim que as 19 nasceram, e é o argumento literal do §3.1.7 ("*subiu para regra
+porque a próxima frase seria escrita pela mesma mão, com o mesmo erro*").
+
+#### Por que o `"(s)"` também saiu
+
+O §3.1.7 **já decidiu** o caso análogo: *"não resolva com 'avaliado(a)' — parêntese é ruído em
+tela que alguém lê em pé, no corredor da loja"*. E aqui o argumento é mais forte: para **gênero**
+não há dado (`rh.colaborador` não guarda), para **número** o dado está na mão. Escrever `"(s)"` é
+declinar de usar o que se tem.
+
+⚠️ E o parêntese estava **produzindo** erro, não só ruído: *"1 pessoa(s) **adicionadas** ao
+público"*, *"1 avaliação(ões) **estão ENVIADAS**"* — o substantivo fugia da concordância e o verbo
+ficava presa dela. Quatro híbridos assim, todos dentro de frases que pareciam resolvidas.
+
+#### Um jeito só
+
+`flexao(n, umaSó, várias)` e `contagem(n, umaSó, várias)` em `lib/formato.ts`. Recebem as duas
+formas por extenso de propósito: plural em português não é "+s" (`avaliação`→`avaliações`), e uma
+regra automática erraria **calada** — que é o defeito que elas existem para tirar da tela.
+
+⚠️ Colisão achada no caminho: `DesignacaoPage` já tinha um `const contagem` (contadores dos
+filtros). Renomeado para `contadores`, que é o nome que o backend usa para a mesma coisa. Nome de
+helper genérico colide com nome de domínio; o typecheck pegou.
+
+**Resultado: 0 parênteses de número e 0 concordâncias nuas no módulo** — conferido por varredura,
+não por amostra.
+
+### 3.1.36. 🟠 "0 fora do ciclo" era ruído na linha de estado (08/09)
+
+O termo novo do §3.1.29 aparecia zerado em ciclo limpo. Correto e inútil.
+
+⭐ **A distinção que decide:** os outros números da linha são de **ESTADO** — *"0 apuradas"* e
+*"0 sem avaliador"* dizem em que passo o ciclo está, e valem zerados. Este é um termo de
+**CONCILIAÇÃO**: existe para a soma fechar quando alguém foi tirado do ciclo. Num ciclo limpo a
+conta já fecha sem ele. Some quando é zero (`soQuandoHa`), com o motivo escrito ao lado — para
+ninguém "consertar" achando que faltou.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
