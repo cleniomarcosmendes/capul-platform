@@ -138,6 +138,31 @@ leva ao lugar errado em silêncio) da lista (B). E **⭐ as regras de método do
 **Amanhã:** o roteiro curto do Chrome nas duas partes combinadas, e depois o **item 1** — as
 46 contas, que é trabalho do Clenio no Configurador.
 
+### 🔁 Segunda rodada da conferência de tela — 6 consertos + 1 levantamento (08/09)
+
+A skill do Chrome rodou de novo sobre os 11 itens da véspera. **8 passaram limpos** e não voltam
+a ser conferidos. O que ela achou está em **§3.1.26 a §3.1.31**:
+
+| # | O quê | Estado |
+|---|---|---|
+| 1 | Modal de vínculo errava por 1 no modo GRUPO | ✅ §3.1.26 |
+| 2 | `designar/previa`: cinco ações, quatro contadores | ✅ §3.1.27 |
+| 3 + 4 | Dois cortes de lista mudos (+ o grep dos dois restantes) | ✅ §3.1.28 |
+| 5 + 6 | Cabeçalho não fechava a conta · título não recebia o modo | ✅ §3.1.29 |
+| 7 | As **cinco** superfícies de prévia | 📋 levantado, decisão do Clenio |
+| 8 | Prévia de verdade no modal de vínculo | 📝 §3.1.30 — trava numa pergunta de produto |
+| 9 | Descrição do centro de custo | ⏸️ §3.1.31 — adiado, escopo corrigido |
+
+⭐ **O levantamento do item 7 está em `docs/LEVANTAMENTO_PREVIAS_GESTAO_PESSOAS_08SET.md`** — os
+cinco payloads lado a lado, a resposta às quatro perguntas, e **dois achados novos**: a prévia de
+`designar` **não roda duas guardas que o ato roda** (autoavaliação e troca de aplicação — medido:
+a prévia diz `SUBSTITUIR`, o ato recusa), e `barradosPelaRegua` conta exclusão manual em
+`previa-da-abertura`. Também **corrige uma premissa**: o `criar` dos dois endpoints **não** colide.
+
+**520 testes** (eram 515; 5 novos em `previa-fecha-a-conta.spec.ts`, validados por mutação).
+Nenhuma migration. **Nada foi gravado no banco** — o ciclo `ZZ CONFERE 09/09` segue intacto
+(9 no público, 1 aplicação, 2 designados) para a skill terminar a conferência.
+
 ### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
 
 O Clenio configurou `rodrigoleao`, `vanialucia` e `denisealves` no Configurador; **as três
@@ -2085,8 +2110,171 @@ lançava `MatriculaAmbiguaError` — a função só oferece candidatos, não dec
 `expect(where.matricula.in).toContain('001741')`, com o motivo ao lado. É a regra 3 da §5.9 numa
 variante que ainda não tínhamos visto: **acoplamento à forma, não ao texto.**
 
-**515 testes** (25 novos). Conferido na imagem: `chapasEquivalentes('E03942')` →
+**515 testes** (25 novos) *no fechamento deste item*. Conferido na imagem: `chapasEquivalentes('E03942')` →
 `["003942","E03942"]`.
+
+### 3.1.26. 🔴 O modal de vínculo errava por 1 — no caso que a própria tela recomenda (08/09)
+
+A regra *"ninguém avalia a si mesmo"* **existia e não rodava no modo grupo**. Com uma pessoa,
+escolher ADELSON para ADELSON desabilitava o botão. Com o grupo COMERCIO LATICINIOS (18), o mesmo
+ADELSON era aceito e o modal anunciava **"passa a avaliar 18 pessoa(s)"** — o efeito real era 17.
+
+⭐⭐ **O agravante é onde o erro cai.** A tela diz, logo acima da lista: *"nomear o responsável de
+um grupo resolve o grupo inteiro"*. O responsável **quase sempre está no grupo**. O caminho que a
+tela recomenda era exatamente o que contava errado.
+
+#### A checagem é a MESMA — o que mudou foi contra o quê ela roda
+
+`escolhido.id === alvos[0].colaboradorId` (identidade com um alvo único) virou
+`alvos.filter(p => p.colaboradorId !== escolhido.id)` (pertinência ao grupo). Uma lista, usada em
+**três** lugares: o resumo, o `disabled` do botão e o `aplicar()`. Nada de "desconto" só no texto —
+[[feedback_previa_grava_o_que_mostrou]]: o número anunciado e a lista gravada têm de ser o mesmo
+objeto, senão voltam a divergir na primeira mexida.
+
+⚠️ **Bloquear o botão no grupo seria a correção errada.** Só recusa quando não sobra nada a gravar
+(uma pessoa que é ela mesma; um grupo cujo único membro é quem se escolheu). No grupo de vários o
+ato segue valendo para as outras — barrar tiraria o caminho recomendado para resolver um defeito
+de contagem. E o resumo passa a **nomear** quem ficou de fora: dizer "17" onde o grupo tem 18
+deixaria quem lê procurando o que sumiu.
+
+Efeito colateral bom: como a linha da própria pessoa não é mais enviada, o *"1 pessoa(s) não
+receberam o vínculo"* some — ele anunciava a falha de algo que a tela nunca prometeu gravar.
+
+### 3.1.27. 🔴 Cinco ações, quatro contadores — o buraco saía do servidor pronto (08/09)
+
+`efeitoDeDesignar` devolve **cinco** ações; `designar/previa` publicava **quatro** contadores.
+`EXIGE_CONFIRMACAO` existia só derretido dentro da frase `avisoDeRespondidas` — como texto, não
+como número. Trocar o avaliador de quem já respondeu devolvia:
+
+```
+{ total: 1, criar: 0, substituir: 0, nadaAFazer: 0, recusar: 0 }
+```
+
+A tela imprimia *"0 ganham · 0 SUBSTITUÍDO"* e o botão logo abaixo aplicava **1**, porque ele lê
+`linhas` direto. ⭐ **A tela não calculava nada** — o buraco vinha pronto do servidor, e é por isso
+que o conserto é lá.
+
+⚠️ **NÃO somar dentro de `substituir`.** Dobrar fecharia a conta e **apagaria a distinção** de que
+o bloco vermelho e a flag `confirmar` dependem — a diferença entre "troca comum" e "troca sobre o
+julgamento de outro". Campo novo, `exigeConfirmacao`.
+
+#### A invariante virou teste — `previa-fecha-a-conta.spec.ts`
+
+```
+criar + substituir + nadaAFazer + recusar + exigeConfirmacao === total
+```
+
+É a regra 6 da §5.9 ([[feedback_invariante_varre_o_fonte]]) na forma aritmética: **uma sexta ação
+que ninguém publique quebra a suíte por construção**. Revisão caso a caso é justamente o que
+falhou aqui — a quinta ação existia desde que `EXIGE_CONFIRMACAO` foi criada, e ninguém notou.
+
+⭐ A prévia do público **já** fechava a conta (`encontradas = adicionar + jaNesta +
+emOutraAplicacao`; `adicionar = geramAvaliacao + barrados`) e entra no mesmo arquivo como caso que
+passa — para não regredir, e para deixar escrito qual é o padrão da casa.
+
+**Validado por mutação** (regra 2 da §5.9), duas vezes: remover o balde → 3 falhas; dobrar dentro
+de `substituir` → 3 falhas. A soma sozinha **não** pegaria a segunda; quem a pega é o
+`expect(p.substituir).toBe(1)` explícito. Por isso ele existe.
+
+Conferido contra o Piloto: a linha ENVIADA devolve `exigeConfirmacao: 1`, soma 1 = total 1; o lote
+misto (1 enviada + 4 pendentes) devolve `substituir: 4, exigeConfirmacao: 1`, soma 5 = total 5.
+
+### 3.1.28. 🟠 Dois cortes de lista mudos — um deles ao lado do irmão que fala (08/09)
+
+**`naoAplicadas`**: a prévia do lote dizia *"13 ajustadas à mão"* e listava **12 nomes**, sem
+indicador. O backend mandava os 13 certos (`porMotivo.AJUSTE_MANUAL_DO_CICLO: 13`). Qualquer ciclo
+com mais de 12 ajustes manuais mentia calado — **e o Piloto já passou desse número**.
+
+⚠️ A causa: a **contagem** era sobre `naoAplicadas` inteira e o **corte** sobre a lista filtrada.
+Duas listas diferentes na mesma frase. Agora é uma só (`nomeadas`), e o "… e mais N" fala dela.
+
+**`emOutraAplicacao`**: cortava em 8 sem indicador, **encostado** em `barradosPelaRegua`, que corta
+em 8 **com** indicador. Alguém acertou um e esqueceu o irmão.
+
+O padrão *"… e mais N"* já existia na casa (o Painel, em "fora de todas as aplicações", mostra
+*"… e mais 890"*). Usado o que já existe, não inventado outro.
+
+#### ⚠️ O grep dos dois slices restantes — e o que eles NÃO são
+
+O item 4 pedia para não presumir. Varridos **todos** os `.slice(` / `.substring(` do frontend
+(8 ocorrências):
+
+| Onde | O quê | Veredito |
+|---|---|---|
+| `lib/formato.ts:11` | `valor.slice(0, 10)` | **data ISO**, `AAAA-MM-DD` → pt-BR. Não é lista. |
+| `pages/CiclosPage.tsx:714` | `d.toISOString().slice(0, 10)` | **data ISO**. Não é lista. |
+| `PainelPage.tsx:166` | `.slice(0, 6)` | lista, **com** "… e mais N". OK. |
+| `DesignacaoPage.tsx:708 / 727` | `.slice(0, 10)` | listas, **com** "… e mais N". OK. |
+
+⭐ **`.slice(0, 5)` não existe no nosso fonte.** Nenhuma ocorrência, em nenhum arquivo. O que a
+skill viu no bundle é código de dependência. E o `.slice(0, 10)` "perto de tokens de status/retry"
+é uma das **duas conversões de data** acima — que num minificado ficam a poucos bytes de qualquer
+coisa. Ver a regra 12 da §5.9.
+
+### 3.1.29. 🟠 O cabeçalho do ciclo misturava dois registros, e a conta não fechava (08/09)
+
+`4 aplicações · 1036 no público · 95 sem avaliador · 3 de 894 enviadas · 3 apuradas`.
+**894 + 95 = 989**, não 1036. Faltavam **47** — e nada na linha dizia que existiam.
+
+⭐⭐ **Os dois números estão certos, e respondem perguntas diferentes.** `1036` é o número de
+**montagem**: todas as linhas de público, inclusive as que o RH já tirou (é o mesmo dos chips
+*"Todos (N)"* da Designação). `989` é **quem o ciclo ainda alcança**. O defeito era imprimir um de
+montagem seguido de três operacionais, **sem o termo que os liga**.
+
+⚠️ **Trocar o cabeçalho para 989 seria a correção errada:** "resolveria" a soma apagando da tela a
+existência dos excluídos — que é uma decisão de alguém, com justificativa registrada. O termo que
+faltava entra; o número de montagem fica:
+
+```
+4 aplicações · 1036 no público · 47 fora do ciclo · 95 sem avaliador · 3 de 894 enviadas · 3 apuradas
+```
+
+Campo novo `foraDoCiclo`, calculado **na mesma varredura** de `semDesignacao` e da mesma régua —
+uma segunda conta divergiria na primeira listagem que mudasse. E a prévia do lote passa a dizer
+**"ativos no público"**, porque o `publico` de `porAplicacao` sempre foi o dos elegíveis.
+
+⚠️ **O nome `foraDoCiclo` é deliberado.** `!elegivel` inclui a régua **e** a exclusão manual do RH
+("a decisão manual SOBREPÕE a régua, nos dois sentidos"). Chamar isso de `barradosPelaRegua` —
+como `previa-da-abertura` faz — passaria a dizer "régua" sobre decisão de pessoa. Hoje os 47 são
+`REGRA_CICLO` 47 / manual 0: concordam **por acaso**. Ver o levantamento das prévias.
+
+Conferido contra o Piloto: `1036 − 47 = 989 = 894 + 95`. **Fecha.**
+
+Junto, cosmético: o diálogo se intitulava *"Definir avaliador de…"* mesmo aberto pelo botão
+**"Trocar avaliador"**. O título não recebia o modo; a linha já sabia qual era (`semAvaliador`).
+Agora recebe.
+
+### 3.1.30. 📝 PENDENTE (a decidir) — o que `EXIGE_CONFIRMACAO` significa no CADASTRO
+
+O modal de vínculo (§3.1.26) segue **sem prévia de verdade**: ele anuncia uma frase, não um
+contrato de baldes como as outras cinco superfícies. O encanamento existe ao lado — o módulo
+`designacao-padrao` já tem a prévia da importação de planilha.
+
+⚠️ **O que trava o desenho é uma pergunta de produto, não código.** No ciclo,
+`EXIGE_CONFIRMACAO` quer dizer *"já respondida"*. **O cadastro não tem resposta.** Então:
+
+- **Opção A — "aqui nada exige confirmação".** O campo fica `0`, sempre. O contrato continua
+  uniforme entre as superfícies e não há caso especial.
+- **Opção B — sobrescrever linha PROVISÓRIA ou NÃO REVISADA.** A tela já anuncia **927
+  provisórias** e **159 não revisadas**; substituir uma decisão que ninguém conferiu é o análogo
+  mais próximo de "pôr o nome de um sobre o julgamento de outro".
+
+**Alguém precisa dizer qual.** Sem isso o endpoint é desenhado duas vezes — e, como o
+§3.1.27 mostrou, política escolhida por omissão é como o buraco nasce.
+
+⚠️ Isto **não pega carona** no conserto do §3.1.26: aquele era número errado na tela, este é
+capacidade nova.
+
+### 3.1.31. ⏸️ ADIADO, com escopo corrigido — descrição do centro de custo
+
+São **DOIS** endpoints, não três: `resultados/ciclo/:id` e `designacao/aplicacao/:id` mandam
+`"centroCusto": "11010205"` **sem descrição**. É **payload**, não formatação — a tela não tem o
+dado para formatar.
+
+⚠️ **O terceiro caso não é do mesmo assunto.** Em `aplicacoes/ciclo` →
+`publico.origens[].referencia` o valor é **texto livre gravado na montagem**
+(*"PROVISORIO: prefixo 11"*), não um campo de centro de custo. **Não forçar descrição ali** —
+seria inventar estrutura sobre uma anotação de quem montou.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
@@ -2531,6 +2719,24 @@ engano.
 preservada — e o número conferido depois.**
 *Caso:* as cinco limpezas de ciclos descartáveis do dia, todas com "0 respostas, 0 resultados"
 verificado antes de apagar.
+
+**12. Leitura de bundle minificado é HIPÓTESE, não fato — só o nome do símbolo sustenta
+identificação.**
+*Caso:* 08/09, um `.slice(0, N)` identificado como *"lista de erros"* por **proximidade textual**
+a tokens no bundle. A conclusão virou fato ao ser repassada, e **priorizou o trabalho**
+("truncar falha esconde problema"). Reconferido, no mesmo bloco havia tokens de badge de status —
+e no minificado não dá para dizer qual lista é. Varrido o fonte depois: dos dois `.slice(0, 10)`
+suspeitos, **os dois são conversão de data ISO**, e o `.slice(0, 5)` **não existe no nosso
+código** — é de dependência.
+
+**Proximidade não identifica nada.** O minificador reordena, inlina e junta módulos: dois
+símbolos vizinhos no bundle podem vir de arquivos que nunca se viram. O que sustenta uma
+identificação é **o nome do símbolo** (quando sobrevive) ou **o source map**; na falta dos dois,
+a saída é o `grep` no fonte — foi o que o item 4 pediu, e por isso pediu.
+
+⚠️ **Vale para os dois lados da conversa.** Quem lê o bundle deve **marcar como hipótese**; quem
+recebe não deve **promover a fato** ao repassar. É da mesma família da regra 3: afirmar o fato que
+se verificou, e não a redação que se leu.
 
 ## 6. Armadilhas do ambiente
 
