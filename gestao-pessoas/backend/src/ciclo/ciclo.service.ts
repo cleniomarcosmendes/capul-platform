@@ -8,6 +8,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ONDE_A_AVALIACAO_CONTA } from '../avaliacao/avaliacoes-que-contam.js';
 import {
   CicloNaoAbrivelError,
   assertCicloAbrivel,
@@ -391,7 +392,14 @@ export class CicloService {
     const [ciclos, pendentes] = await Promise.all([
       this.prisma.ciclo.findMany({
         orderBy: { periodoInicio: 'desc' },
-        include: { _count: { select: { aplicacoes: true, avaliacoes: true } } },
+        // ⭐⭐ `_count` FILTRADO. Sem o `where`, a relação conta TODAS as linhas,
+        // canceladas inclusive — e este é o número do card da lista ("52
+        // avaliações") que discordava do "Faltam 37" logo abaixo, no mesmo
+        // render. Ver `avaliacoes-que-contam.ts` e o invariante que varre o
+        // fonte cobrando isto.
+        include: {
+          _count: { select: { aplicacoes: true, avaliacoes: { where: ONDE_A_AVALIACAO_CONTA } } },
+        },
       }),
       // groupBy e não `_count` filtrado: o `_count` do Prisma não aceita a
       // mesma relação duas vezes (total e filtrada) na mesma consulta.
@@ -422,7 +430,8 @@ export class CicloService {
          * 894: uma semana depois isso lê como número oficial. Mesma contagem
          * agregada da listagem.
          */
-        _count: { select: { aplicacoes: true, avaliacoes: true } },
+        // ⭐ Filtrado, como na listagem: cancelada não é avaliação do ciclo.
+        _count: { select: { aplicacoes: true, avaliacoes: { where: ONDE_A_AVALIACAO_CONTA } } },
         conceitos: { orderBy: { ordem: 'asc' } },
         aplicacoes: {
           include: {

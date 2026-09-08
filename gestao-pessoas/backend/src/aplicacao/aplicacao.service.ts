@@ -145,7 +145,9 @@ export class AplicacaoService {
       include: {
         criterios: { include: { criterio: true } },
         centrosCusto: true,
-        _count: { select: { avaliacoes: true, publico: true } },
+        // ⭐ Filtrado: é o chip "N avaliações" da aba Aplicações, e sem o
+        // `where` ele contava as canceladas (§A6/§3.1.40).
+        _count: { select: { avaliacoes: { where: ONDE_A_AVALIACAO_CONTA }, publico: true } },
       },
     });
 
