@@ -846,10 +846,25 @@ function DialogoDeVinculo({
         ? alvosEfetivos[0].nome
         : `${alvosEfetivos.length} pessoa(s) deste grupo`;
   /**
-   * ⚠️ RECUSA é só quando não sobra NADA a gravar — uma pessoa que é ela
-   * mesma, ou um grupo cujo único membro é quem se escolheu. No grupo de vários,
-   * o ato continua valendo para as outras: bloquear o botão tiraria justamente o
-   * caminho que a tela recomenda.
+   * ⚠️⚠️ RECUSA É SÓ QUANDO NÃO SOBRA NADA A GRAVAR — e isto foi decidido
+   * explicitamente, contra a primeira formulação do conserto. **Não "corrija"
+   * para desabilitar o botão quando a pessoa escolhida está no grupo.**
+   *
+   * Parece a leitura natural da regra ("ninguém avalia a si mesmo" ⇒ escolha
+   * inválida ⇒ botão desligado), e é errada aqui. A tela recomenda, na frase
+   * logo acima da lista, *"nomear o responsável de um grupo resolve o grupo
+   * inteiro"* — e **o responsável quase sempre está no grupo**. Desabilitar o
+   * botão tiraria o caminho que a própria tela ensina, para consertar um
+   * defeito que era de CONTAGEM: o modal anunciava 18 e gravava 17.
+   *
+   * A regra certa é sobre o EFEITO, não sobre a escolha: recusa quando
+   * `alvosEfetivos` fica vazio — uma pessoa que é ela mesma, ou um grupo cujo
+   * único membro é quem se escolheu. Com 18 e o responsável dentro, o ato vale
+   * para as 17 e o resumo diz 17, nomeando quem ficou de fora.
+   *
+   * ⚠️ A guarda do backend (`designar` recusa o par avaliado === avaliador)
+   * continua sendo a que vale. Esta aqui existe para a tela não PROMETER o que
+   * a API vai negar — não para substituí-la.
    */
   const ehAutoavaliacao =
     !!escolhido &&
