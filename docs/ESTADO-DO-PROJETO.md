@@ -288,6 +288,7 @@ nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 | **Quem é o segundo `RH_ADMIN`** (a pessoa) — dar a permissão é da T.I. e está em (B) | Gestora de RH | §5 · §3.1 |
 | 🟢 **CONFIRMAÇÃO, não bloqueio:** cancelar avaliação com respostas já dadas — implementado com **as respostas ficando registradas e fora da apuração, nunca apagadas**. Se ela preferir que o sistema recuse e obrigue o avaliador a enviar, a mudança é pequena | Gestora de RH | §5 · §3.1.18 |
 | 🟢 **CONFIRMAÇÃO, não bloqueio:** encerrar ciclo com pendência é **RH_ADMIN só**, o mesmo degrau do reabrir. Se ela quiser estender a quem monta o ciclo (`RH_CICLO`), é uma linha no controller | Gestora de RH | §5 · §3.1.18 |
+| 🔵 **POLÍTICA, não código — DESCANCELAR uma avaliação.** Hoje não existe: cancelada não volta, por nenhum caminho. Fazer custa **~30 linhas + um modal**, e trava em **três perguntas que não são da T.I.**: **(a)** a avaliação volta para `PENDENTE` ou `EM_ANDAMENTO` quando há **respostas parciais**? (é sobre o que acontece com o trabalho já feito) · **(b)** o `motivoCancelamento` é **apagado ou vira histórico**? (é sobre a trilha) · **(c)** **em massa ou uma a uma**? — 37 uma a uma é inviável, e em massa reintroduz o risco do encerrar em massa. ⚠️ A 4ª (devolver pendências que voltam a travar o encerramento) **não é decisão, é consequência**: quem descancela quer exatamente isso. ⭐ Os textos do §3.1.47 valem **de qualquer forma**, inclusive depois de descancelar existir | Gestora de RH | §3.1.47 |
 | 🔵 **POLÍTICA, não código:** trocar o avaliador de uma avaliação **já respondida** — o **lote** do cadastro RECUSA (`JA_RESPONDIDA`) e a designação **individual** PERMITE com confirmação (`EXIGE_CONFIRMACAO`). Só a segunda tem razão escrita. Pode estar certo (em lote ninguém lê 50 avisos), mas ninguém decidiu — e **unificar as prévias está parado até isto** | Gestora de RH | §3.1.30 · levantamento |
 | 🔵 **POLÍTICA, não código:** no **cadastro** de avaliadores, o que "exige confirmação" quer dizer? No ciclo é *"já respondida"*, e o cadastro não tem resposta. **(A)** nada exige — campo 0, contrato uniforme; **(B)** sobrescrever linha provisória ou não revisada (927 e 159 hoje). Sem a resposta, o endpoint é desenhado duas vezes | Gestora de RH | §3.1.30 |
 
@@ -305,7 +306,7 @@ move esse número.
 | 2 | ✅ **FEITO em 08/09 — colisão de chapa (`E01981` × `001981`)**, dos dois lados: a **fonte** no Configurador (`normalizarChapa` ao preencher e ao salvar) e a **rede** no módulo (`porMatricula` e a importação de planilha buscam pelas duas formas). ⚠️ O sintoma era um **403 que PARECE falta de permissão**, e mandava quem investiga ao Configurador dar papel a quem já tem. ✅ E o dado legado foi corrigido no mesmo dia: **nenhuma conta de pessoa real fora do formato** | §3.1.25 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
 | 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
-| 5 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
+| ~~5~~ | ✅ **FEITO em 09/09** — era o mesmo item que o ~~0~~. Ver §3.1.43 | §7 · §2 |
 | 6 | Tela do **sync** (hoje só por API) | §7 · §2 |
 | 7 | `.dockerignore` do **fiscal/frontend** — o do gestao-pessoas foi feito em 06/09 | §6 |
 | 8 | **IP na auditoria**: 13 das 14 ações gravam `NULL`, e quando grava é o IP do nginx | §6 |
@@ -3421,6 +3422,21 @@ busca tinha um formato e o mundo tem outros.
 É a mesma família da regra 3 (*afirmar o fato, não a redação*) e do padrão das duplicatas: as três
 dizem que **verificar o que você lembra não é verificar o que existe**. A regra 3 é sobre o que se
 lê, esta é sobre o que se procura, e a terceira é sobre o que se conta.
+
+**14. O passo que ninguém testou não é o mais simples — é o menos conhecido.**
+*Caso:* o ciclo de simulação de 09/09 rendeu **18 defeitos**, e **9 vieram do encerramento** — a
+única etapa do processo que nunca tinha sido percorrida. Metade dos defeitos em um sexto do
+caminho.
+
+⚠️ A intuição é a oposta e é por isso que a regra precisa estar escrita: a etapa não testada parece
+a mais simples **porque nunca deu problema** — e nunca deu problema porque ninguém passou por ela.
+O silêncio é ausência de observação, não de defeito.
+
+⭐ **Muda como escolher o que testar.** Cobertura por risco imaginado ("o que parece frágil") olha
+onde já se olhou. A pergunta melhor é **"qual passo deste processo nunca foi percorrido inteiro,
+com dado real, até o fim?"** — e é ali que se começa, mesmo que ele pareça trivial. Vale mais que
+qualquer um dos 18.
+
 
 ## 6. Armadilhas do ambiente
 
