@@ -190,6 +190,14 @@ function LinhaDeEstado({ resumo, cicloId }: { resumo: ResumoDoCiclo; cicloId: st
     { valor: resumo.semDesignacao, rotulo: 'sem avaliador neste ciclo' },
     { valor: resumo.enviadas, rotulo: `de ${resumo.designados} enviadas` },
     { valor: resumo.apuradas, rotulo: 'apuradas' },
+    /**
+     * ⭐⭐ O CUSTO DO OVERRIDE, na linha que se lê primeiro. Termo de
+     * conciliação como o `fora do ciclo`: só aparece quando existe, mas quando
+     * existe é o que impede "13 de 13 enviadas" de ler como ciclo perfeito —
+     * as canceladas saíram do denominador para o ciclo poder fechar em 100%, e
+     * é justamente por isso que elas precisam aparecer ao lado.
+     */
+    { valor: resumo.canceladas, rotulo: 'canceladas', soQuandoHa: true },
   ];
   const numeros = todos.filter((n) => !n.soQuandoHa || n.valor > 0);
 

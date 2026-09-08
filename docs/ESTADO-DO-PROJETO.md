@@ -3280,6 +3280,23 @@ a saída é o `grep` no fonte — foi o que o item 4 pediu, e por isso pediu.
 recebe não deve **promover a fato** ao repassar. É da mesma família da regra 3: afirmar o fato que
 se verificou, e não a redação que se leu.
 
+**13. Quando um defeito escapa, pergunte se escapou o CASO ou a FORMA.**
+*Casos:* os três `_count` do §3.1.40 e a segunda frase da reabertura do §3.1.45.
+
+Caso difícil se conserta **no sítio**; **forma não procurada se conserta no INSTRUMENTO**. Os três
+`_count` escaparam porque o grep buscava `status: { not: 'CANCELADA' }` — a regra escrita — e eles
+são exatamente onde ela **nunca foi escrita**; o conserto foi um varredor de fonte, não três
+edições. A segunda frase escapou porque consertei **a que o Clenio citou**; o conserto foi varrer
+as frases que citam a capacidade, não reescrever aquela.
+
+⭐ **O sinal é barato e não falha: se você deu o assunto por encerrado e ele voltou, foi FORMA.**
+Defeito que volta depois de "resolvido" quase nunca é um caso a mais — é a evidência de que a
+busca tinha um formato e o mundo tem outros.
+
+É a mesma família da regra 3 (*afirmar o fato, não a redação*) e do padrão das duplicatas: as três
+dizem que **verificar o que você lembra não é verificar o que existe**. A regra 3 é sobre o que se
+lê, esta é sobre o que se procura, e a terceira é sobre o que se conta.
+
 ## 6. Armadilhas do ambiente
 
 ### ⭐⭐ A CLASSE: ferramenta que responde sem fazer o trabalho

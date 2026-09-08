@@ -499,6 +499,11 @@ export interface ResumoDoCiclo {
    */
   foraDoCiclo: number;
   designados: number;
+  /**
+   * ⭐ Quantas o ciclo cancelou. Elas saem do denominador (certo), e sem este
+   * termo um encerramento com pendência lê como 100% de sucesso.
+   */
+  canceladas: number;
   semDesignacao: number;
   enviadas: number;
   aFazer: number;

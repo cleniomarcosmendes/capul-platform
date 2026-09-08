@@ -164,6 +164,19 @@ export interface ResumoDoCiclo {
    */
   foraDoCiclo: number;
   designados: number;
+  /**
+   * ⭐⭐ QUANTAS FORAM CANCELADAS. Sem este termo, um ciclo encerrado com
+   * pendência lê como sucesso: as canceladas saem do denominador (é o certo —
+   * §3.1.38), então "13 de 13 enviadas" aparece como **100%** enquanto 39
+   * pessoas foram canceladas para chegar lá. Dois números verdadeiros, mesma
+   * linha, sem o termo que os concilia — a terceira vez (52×50, peso 60×100%).
+   *
+   * ⚠️ O comentário do `encerrar` promete que *"o painel mostra a contagem de
+   * canceladas, que é onde o custo do override fica à vista"*. O cartão da
+   * aplicação mostrava; **a linha de estado do ciclo, não** — e é ela que se lê
+   * primeiro.
+   */
+  canceladas: number;
   semDesignacao: number;
   enviadas: number;
   aFazer: number;
@@ -455,6 +468,7 @@ export class PainelService {
       noPublico,
       foraDoCiclo,
       designados,
+      canceladas: conta('CANCELADA'),
       semDesignacao,
       enviadas: conta('ENVIADA'),
       aFazer: conta('PENDENTE') + conta('EM_ANDAMENTO'),

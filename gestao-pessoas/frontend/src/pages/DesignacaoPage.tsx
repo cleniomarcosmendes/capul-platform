@@ -498,10 +498,17 @@ function LinhaDaLista({
             "o RH pode reabrir", e o ato só existia na API — a tela anunciava
             para outra pessoa uma saída que ninguém conseguia percorrer
             (§3.1.41). É "capacidade sem sinal na tela" agravada.
-            ⚠️ Só aparece para RH_ADMIN e só sobre avaliação ENVIADA; nos demais
-            casos não há o que reabrir, então some em vez de ficar cinza — o
-            "desabilite com o motivo" vale para o que a pessoa poderia querer
-            fazer, não para um ato sem objeto. */}
+            ⚠️⚠️ SOME, não fica desabilitado — e a distinção é regra, não gosto.
+            "Desabilite com o motivo, nunca esconda" (§5.9 regra 8) existe para
+            o caso em que a pessoa **poderia querer fazer** e algo a impede:
+            ali o cinza com o motivo ensina o que falta. Reabrir uma avaliação
+            que não foi enviada é **ato sem objeto** — não há nada para reabrir,
+            e um botão cinza dizendo "não enviada" ofereceria uma ação que não
+            existe, convidando a pessoa a procurar a permissão que lhe falta.
+            **Falta de objeto some; falta de permissão ou de estado desabilita
+            com o motivo** — e é por isso que o `disabled={!!fechado}` continua
+            aqui: ciclo encerrado É estado, e aí o botão fica cinza dizendo
+            "reabra o ciclo primeiro". */}
         {podeReabrir && linha.avaliacaoStatus === 'ENVIADA' && linha.avaliacaoId && (
           <button
             type="button"
