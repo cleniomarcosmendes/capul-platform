@@ -135,6 +135,13 @@ export interface RelatorioDaCopia {
   porAplicacao: {
     aplicacaoId: string;
     nome: string;
+    /**
+     * ⚠️ Os ELEGÍVEIS da aplicação — quem o ciclo tirou não conta aqui. NÃO é o
+     * `noPublico` do resumo do ciclo, que é o total de linhas montadas: as duas
+     * contas respondem perguntas diferentes ("quem o ciclo alcança" × "quanto
+     * foi montado") e a diferença entre elas são os excluídos. A tela rotula
+     * este como "ativos no público" por isso.
+     */
     publico: number;
     criar: number;
     atualizar: number;
@@ -1052,6 +1059,23 @@ export class DesignacaoService {
       substituir: conta('SUBSTITUIR'),
       nadaAFazer: conta('NADA_A_FAZER'),
       recusar: conta('RECUSAR'),
+      /**
+       * ⭐⭐ O QUINTO BALDE. São CINCO ações e havia quatro contadores:
+       * `EXIGE_CONFIRMACAO` ficava só dentro de `avisoDeRespondidas`, como
+       * frase, e sumia da soma. Trocar o avaliador de uma pessoa que já
+       * respondeu devolvia `criar: 0, substituir: 0, nadaAFazer: 0, recusar: 0,
+       * total: 1` — o resumo da tela dizia "0 ganham · 0 SUBSTITUÍDO" e o botão
+       * logo abaixo aplicava 1, porque ele conta `linhas`. O buraco saía daqui
+       * pronto; a tela não calculava nada.
+       *
+       * ⚠️ NÃO somar dentro de `substituir`: é justamente a distinção de que o
+       * bloco vermelho e a flag `confirmar` dependem — dobrada, a tela perderia
+       * como saber quais linhas pedem confirmação explícita.
+       *
+       * A soma dos cinco é igual a `total`, e há teste de invariante cobrando
+       * isso (`previa-fecha-a-conta.spec.ts`).
+       */
+      exigeConfirmacao: conta('EXIGE_CONFIRMACAO'),
       /** ⭐ A explicação do grupo, UMA vez — a lista abaixo diz só de quem se trata. */
       avisoDeRespondidas: avisoDeTrocaEmRespondidas(conta('EXIGE_CONFIRMACAO')),
       linhas,

@@ -164,9 +164,21 @@ export interface ContextoDoCiclo {
  * coisas diferentes (§3.12).
  */
 function LinhaDeEstado({ resumo, cicloId }: { resumo: ResumoDoCiclo; cicloId: string }) {
+  /**
+   * ⭐⭐ A LINHA MISTURAVA DOIS REGISTROS e não fechava. `noPublico` é o número
+   * de MONTAGEM (todas as linhas de público, inclusive as já tiradas — o mesmo
+   * dos chips "Todos (N)" da Designação); os três seguintes são OPERACIONAIS,
+   * e falam de quem o ciclo ainda alcança. Sem o termo dos excluídos,
+   * 894 + 95 não davam os 1036 impressos ao lado, e a conta parecia errada.
+   *
+   * ⚠️ Trocar o cabeçalho para 989 "resolveria" a soma apagando da tela a
+   * existência dos excluídos — que é uma decisão registrada, com justificativa.
+   * O termo que faltava entra; o número de montagem fica.
+   */
   const numeros: { valor: number; rotulo: string }[] = [
     { valor: resumo.aplicacoes, rotulo: resumo.aplicacoes === 1 ? 'aplicação' : 'aplicações' },
     { valor: resumo.noPublico, rotulo: 'no público' },
+    { valor: resumo.foraDoCiclo, rotulo: 'fora do ciclo' },
     { valor: resumo.semDesignacao, rotulo: 'sem avaliador neste ciclo' },
     { valor: resumo.enviadas, rotulo: `de ${resumo.designados} enviadas` },
     { valor: resumo.apuradas, rotulo: 'apuradas' },

@@ -358,6 +358,14 @@ export interface PreviaDaDesignacao {
   substituir: number;
   nadaAFazer: number;
   recusar: number;
+  /**
+   * ⭐ O quinto balde. São cinco ações; por um tempo só quatro tinham contador e
+   * `EXIGE_CONFIRMACAO` só existia dentro da frase de `avisoDeRespondidas` — o
+   * resumo dizia "0 ganham · 0 SUBSTITUÍDO" e o botão aplicava 1.
+   * Invariante (com teste no backend):
+   * `criar + substituir + nadaAFazer + recusar + exigeConfirmacao === total`.
+   */
+  exigeConfirmacao: number;
   /** A explicação do grupo, escrita UMA vez pelo backend. `null` quando não há. */
   avisoDeRespondidas: string | null;
   linhas: {
@@ -455,7 +463,13 @@ export interface ProximoPassoDoCiclo {
  */
 export interface ResumoDoCiclo {
   aplicacoes: number;
+  /** TODAS as linhas de público montadas, inclusive as já tiradas do ciclo. */
   noPublico: number;
+  /**
+   * ⭐ Quantas dessas o RH tirou do ciclo. Sem este termo o cabeçalho não fecha:
+   * designados + sem avaliador não somam `noPublico`, e quem lê procura o erro.
+   */
+  foraDoCiclo: number;
   designados: number;
   semDesignacao: number;
   enviadas: number;

@@ -131,7 +131,24 @@ export interface PainelDoCiclo {
  */
 export interface ResumoDoCiclo {
   aplicacoes: number;
+  /**
+   * ⭐⭐ TODAS as linhas de público montadas — inclusive as que o RH já tirou do
+   * ciclo. É o número de MONTAGEM, e é o mesmo dos chips "Todos (N)" da
+   * Designação.
+   */
   noPublico: number;
+  /**
+   * ⭐⭐ O TERMO QUE FALTAVA. `noPublico` responde "quanto foi montado" e os
+   * números seguintes respondem "quem o ciclo ainda alcança" — dois registros
+   * diferentes na mesma linha. Sem este campo a conta não fechava na tela:
+   * 894 designados + 95 sem avaliador não dão os 1036 do público, porque 47
+   * tinham sido tirados do ciclo e nada dizia isso.
+   *
+   * ⚠️ A saída NÃO é trocar `noPublico` por 989: isso apagaria da tela a
+   * existência dos excluídos, que é uma decisão que alguém tomou e registrou.
+   * Mostram-se os dois, com o termo intermediário à vista.
+   */
+  foraDoCiclo: number;
   designados: number;
   semDesignacao: number;
   enviadas: number;
@@ -327,8 +344,13 @@ export class PainelService {
     const designados = porStatus.reduce((t, l) => t + l._count._all, 0);
 
     let semDesignacao = 0;
+    // ⭐ Sai da MESMA varredura de `semDesignacao`, e da mesma régua: uma segunda
+    // conta de "quem o ciclo tirou" divergiria da primeira listagem que mudasse.
+    let foraDoCiclo = 0;
     for (const a of ciclo.aplicacoes) {
-      const elegiveis = (await this.designacao.listar(a.id)).filter((l) => l.elegivel);
+      const linhas = await this.designacao.listar(a.id);
+      const elegiveis = linhas.filter((l) => l.elegivel);
+      foraDoCiclo += linhas.length - elegiveis.length;
       const comAvaliacao = new Set(
         (
           await this.prisma.avaliacao.groupBy({ by: ['avaliadoId'], where: { aplicacaoId: a.id } })
@@ -341,6 +363,7 @@ export class PainelService {
       status: ciclo.status as string,
       aplicacoes: ciclo.aplicacoes.length,
       noPublico,
+      foraDoCiclo,
       designados,
       semDesignacao,
       enviadas: conta('ENVIADA'),

@@ -294,6 +294,9 @@ export default function DesignacaoPage() {
         <DialogoAvaliador
           quantidade={1}
           nomeUnico={designandoUm.nome}
+          // ⭐ A MESMA condição do rótulo do botão da linha (`semAvaliador`), para
+          // o título do diálogo não contradizer o botão que o abriu.
+          verbo={designandoUm.avaliadorId ? 'Trocar' : 'Definir'}
           aplicacaoId={aplicacaoId}
           avaliados={[designandoUm.colaboradorId]}
           aoFechar={() => setDesignandoUm(null)}
@@ -587,6 +590,7 @@ function DialogoDecisao({
 function DialogoAvaliador({
   quantidade,
   nomeUnico,
+  verbo = 'Definir',
   aplicacaoId,
   avaliados,
   aoFechar,
@@ -595,6 +599,13 @@ function DialogoAvaliador({
   quantidade: number;
   /** Quando é UMA pessoa, o título diz o nome dela em vez de "1 pessoa(s)". */
   nomeUnico?: string;
+  /**
+   * ⭐ O MODO, dito por quem abriu. O título era sempre "Definir avaliador de…",
+   * inclusive quando o botão clicado dizia "Trocar avaliador" — quem já tem
+   * avaliador lia, no diálogo, que estava definindo um do zero. A linha sabe
+   * qual é o caso (`semAvaliador`); faltava passar.
+   */
+  verbo?: 'Definir' | 'Trocar';
   aplicacaoId: string;
   avaliados: string[];
   aoFechar: () => void;
@@ -671,7 +682,11 @@ function DialogoAvaliador({
 
   return (
     <Modal
-      titulo={nomeUnico ? `Definir avaliador de ${nomeUnico}` : `Definir avaliador de ${quantidade} pessoa(s)`}
+      titulo={
+        nomeUnico
+          ? `${verbo} avaliador de ${nomeUnico}`
+          : `${verbo} avaliador de ${quantidade} pessoa(s)`
+      }
       aoFechar={aoFechar}
     >
       {/* Mesma peça do cadastro (`SeletorDeColaborador`): duas cópias de uma
@@ -692,13 +707,26 @@ function DialogoAvaliador({
       {carregandoPrevia && <p className="mt-3 text-sm text-slate-500">Calculando o efeito…</p>}
       {previa && !carregandoPrevia && (
         <div className="mt-3 space-y-2 rounded-xl border-2 border-capul-300 p-3">
+          {/* ⭐⭐ AS CINCO AÇÕES, e não quatro. O contador de `EXIGE_CONFIRMACAO`
+              faltava e o efeito não tinha onde aparecer: trocar o avaliador de
+              quem já respondeu imprimia "0 ganham · 0 SUBSTITUÍDO" com o botão
+              logo abaixo prestes a aplicar 1. Os zeros continuam ocultos — o que
+              não pode é um número existir e não ter linha. */}
           <p className="text-sm text-slate-700">
             <strong className="tabular-nums">{previa.criar}</strong> ganham avaliador ·{' '}
             <strong className={`tabular-nums ${previa.substituir > 0 ? 'text-amber-800' : ''}`}>
               {previa.substituir}
             </strong>{' '}
             têm o avaliador SUBSTITUÍDO
+            {previa.exigeConfirmacao > 0 && (
+              <>
+                {' · '}
+                <strong className="tabular-nums text-rose-800">{previa.exigeConfirmacao}</strong>{' '}
+                <span className="text-rose-800">já respondidas — pedem confirmação</span>
+              </>
+            )}
             {previa.nadaAFazer > 0 && ` · ${previa.nadaAFazer} já são de ${previa.avaliadorNome}`}
+            {previa.recusar > 0 && ` · ${previa.recusar} recusada(s)`}
           </p>
 
           {substituicoes.length > 0 && (
@@ -745,7 +773,7 @@ function DialogoAvaliador({
             </div>
           )}
 
-          {previa.criar + previa.substituir + comAviso.length === 0 && (
+          {previa.criar + previa.substituir + previa.exigeConfirmacao === 0 && (
             <p className="text-sm text-slate-500">Nada mudaria com esta escolha.</p>
           )}
         </div>
@@ -831,6 +859,14 @@ function PainelDaCopia({
     TROCA_DE_APLICACAO: 'trocariam de aplicação',
   };
 
+  /**
+   * Quem aparece NOMEADA na lista de baixo: todas as não-aplicadas menos as "sem
+   * avaliador no cadastro", que se resolvem em lote no cadastro e encheriam a
+   * tela com centenas de linhas. É esta lista que o corte de 12 recorta — e é
+   * dela que o "… e mais N" tem de falar.
+   */
+  const nomeadas = copia.naoAplicadas.filter((l) => l.motivo !== 'SEM_AVALIADOR_NO_CADASTRO');
+
   return (
     <section className="mt-4 space-y-3 rounded-2xl border-2 border-capul-300 bg-white p-4">
       <div className="flex items-start gap-2">
@@ -875,6 +911,9 @@ function PainelDaCopia({
 
       {Object.keys(copia.porMotivo).length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          {/* Uma lista só, para o corte e o "e mais N" contarem a MESMA coisa —
+              a contagem sobre `naoAplicadas` inteira e o corte sobre a filtrada
+              foi o que deixou o 13 e o 12 divergirem. */}
           {/* ⚠️ Dizia "{N} pessoa(s) ficam de fora" para TODAS as não-aplicadas —
               incluindo as já respondidas e as ajustadas à mão, que estão bem
               dentro do ciclo. Era a mesma afirmação falsa do aviso, e mais
@@ -896,15 +935,18 @@ function PainelDaCopia({
               ⚠️ As "sem cadastro, mas já designadas" APARECEM: são poucas, e
               cada uma é uma decisão que alguém tomou à mão e que o cadastro
               ainda não conhece. */}
+          {/* ⚠️ O CORTE TEM DE APARECER. A lista dizia "13 ajustadas à mão" e
+              mostrava 12 nomes, sem indicador: qualquer ciclo com mais de 12
+              ajustes manuais mentia calado, e o Piloto já passou desse número.
+              O "… e mais N" é o padrão que o Painel ("fora de todas as
+              aplicações") e as listas do diálogo de avaliador já usam. */}
           <ul className="mt-2 space-y-0.5 text-xs text-slate-500">
-            {copia.naoAplicadas
-              .filter((l) => l.motivo !== 'SEM_AVALIADOR_NO_CADASTRO')
-              .slice(0, 12)
-              .map((l) => (
-                <li key={l.colaboradorId}>
-                  <strong>{l.nome}</strong> ({l.matricula}) — {rotulo[l.motivo]}
-                </li>
-              ))}
+            {nomeadas.slice(0, 12).map((l) => (
+              <li key={l.colaboradorId}>
+                <strong>{l.nome}</strong> ({l.matricula}) — {rotulo[l.motivo]}
+              </li>
+            ))}
+            {nomeadas.length > 12 && <li>… e mais {nomeadas.length - 12}</li>}
           </ul>
         </div>
       )}
@@ -914,7 +956,11 @@ function PainelDaCopia({
         <ul className="mt-2 space-y-1 text-slate-600">
           {copia.porAplicacao.map((a) => (
             <li key={a.aplicacaoId}>
-              <strong>{a.nome}</strong>: {a.publico} no público · {a.criar} a criar ·{' '}
+              {/* ⭐ "ATIVOS no público": este número é o dos ELEGÍVEIS da
+                  aplicação, não o das linhas montadas — quem o ciclo tirou não
+                  entra aqui. O cabeçalho do ciclo imprime os dois lados
+                  (montado × fora do ciclo); aqui basta o rótulo dizer qual é. */}
+              <strong>{a.nome}</strong>: {a.publico} ativos no público · {a.criar} a criar ·{' '}
               {a.jaIguais} já iguais · {a.semAvaliador} sem avaliador
             </li>
           ))}
