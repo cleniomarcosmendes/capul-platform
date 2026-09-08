@@ -496,8 +496,12 @@ export interface PreviaDaAbertura {
   /** Avaliações que já existem e serão liberadas — abrir NÃO cria nenhuma. */
   designados: number;
   semAvaliador: number;
-  /** No público e fora pela régua do ciclo — o caso de borda da contagem. */
-  barradosPelaRegua: number;
+  /**
+   * No público e FORA do ciclo — pela régua **ou** por exclusão manual do RH.
+   * ⚠️ Chamava-se `barradosPelaRegua` e o nome afirmava a causa, e só uma
+   * delas: a conta é `!elegivel`, e a decisão manual sobrepõe a régua.
+   */
+  foraDoCiclo: number;
   aplicacoesProvisorias: number;
 }
 
@@ -862,7 +866,8 @@ export interface PreviaDoPublico {
   aplicacaoId: string;
   aplicacaoNome: string;
   encontradas: number;
-  adicionar: number;
+  /** Entram na LISTA da aplicação. Par de `geramAvaliacao` — objetos diferentes. */
+  entramNoPublico: number;
   jaNesta: number;
   /** ⭐ Ninguém em duas aplicações do mesmo ciclo — o aviso vem ANTES de salvar. */
   emOutraAplicacao: { colaboradorId: string; nome: string; matricula: string; aplicacao: string }[];

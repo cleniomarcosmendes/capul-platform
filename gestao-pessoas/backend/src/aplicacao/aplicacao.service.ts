@@ -319,14 +319,26 @@ export class AplicacaoService {
       aplicacaoId,
       aplicacaoNome: aplicacao.nome,
       encontradas: candidatos.length,
-      adicionar: adicionar.length,
+      /**
+       * ⭐⭐ DOIS OBJETOS, DOIS NOMES. Este campo se chamava `adicionar`, e
+       * "adicionar" não diz **a quê**: quem lesse como "quantas avaliações
+       * saem daqui" erraria exatamente em `barradosPelaRegua`.
+       *
+       * A prévia conta duas coisas ENCADEADAS e elas não são a mesma:
+       *   `entramNoPublico`  → entram na LISTA da aplicação;
+       *   `geramAvaliacao`   → viram AVALIAÇÃO de verdade.
+       * Entre uma e outra está a régua do ciclo. É o mesmo eixo do cabeçalho
+       * do ciclo (1036 montado × 989 alcançado): **público e avaliação são
+       * objetos diferentes, e cada um precisa da sua palavra.**
+       */
+      entramNoPublico: adicionar.length,
       jaNesta: jaNesta.length,
       /** ⭐ O aviso. Ninguém em duas aplicações do mesmo ciclo. */
       emOutraAplicacao: emOutra.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
       /**
        * ⭐ Quantos dos que entram vão MESMO gerar avaliação. Entrar no público e
-       * gerar avaliação são duas coisas, e a prévia agora diz as duas em vez de
-       * misturá-las num número só.
+       * gerar avaliação são duas coisas, e a prévia diz as duas em vez de
+       * misturá-las num número só. Par de `entramNoPublico` — ver lá.
        */
       geramAvaliacao: adicionar.length - barrados.length,
       /** Quem entra no público e NÃO gera avaliação, com o motivo da régua. */

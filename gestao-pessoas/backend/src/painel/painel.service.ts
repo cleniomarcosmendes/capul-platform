@@ -300,7 +300,23 @@ export class PainelService {
     ]);
 
     let semAvaliador = 0;
-    let barradosPelaRegua = 0;
+    /**
+     * ⚠️⚠️ ESTE CAMPO SE CHAMAVA `barradosPelaRegua`, E O NOME MENTIA.
+     *
+     * A conta é `!elegivel`, e `elegivel` sai de `designacao.listar`, onde
+     * **"a decisão manual SOBREPÕE a régua, nos dois sentidos"**. Ou seja: o
+     * número inclui quem o **RH tirou à mão**, que não é régua nenhuma — é
+     * decisão de uma pessoa, com justificativa registrada.
+     *
+     * ⚠️ Medido no Piloto em 08/09: 47 fora do ciclo, `REGRA_CICLO` 47,
+     * manual 0. Os dois sentidos concordam **por acaso** — ninguém excluiu à
+     * mão ainda. Na primeira exclusão manual o campo passaria a dizer "a régua
+     * barrou" sobre um ato de gente, com toda a confiança de um número.
+     *
+     * `foraDoCiclo` é o mesmo nome do campo equivalente em `resumoDoCiclo`, e
+     * pela mesma razão: nomeia o EFEITO (está fora), não a causa suposta.
+     */
+    let foraDoCiclo = 0;
     for (const a of ciclo.aplicacoes) {
       const linhas = await this.designacao.listar(a.id);
       const comAvaliacao = new Set(
@@ -308,7 +324,7 @@ export class PainelService {
           await this.prisma.avaliacao.groupBy({ by: ['avaliadoId'], where: { aplicacaoId: a.id } })
         ).map((x) => x.avaliadoId),
       );
-      barradosPelaRegua += linhas.filter((l) => !l.elegivel).length;
+      foraDoCiclo += linhas.filter((l) => !l.elegivel).length;
       semAvaliador += linhas.filter((l) => l.elegivel && !comAvaliacao.has(l.colaboradorId)).length;
     }
 
@@ -321,8 +337,12 @@ export class PainelService {
       designados,
       /** No público, elegíveis, e ninguém disse quem avalia — não serão avaliadas. */
       semAvaliador,
-      /** No público e fora pela régua do ciclo — o caso de borda que a tela não veria. */
-      barradosPelaRegua,
+      /**
+       * No público e FORA do ciclo — pela régua **ou** por exclusão manual do
+       * RH. O caso de borda que a tela não veria. Ver o comentário do cálculo:
+       * o nome antigo (`barradosPelaRegua`) afirmava a causa, e só uma delas.
+       */
+      foraDoCiclo,
       /** Aplicações com público marcado como recorte provisório. */
       aplicacoesProvisorias: provisorias.length,
     };

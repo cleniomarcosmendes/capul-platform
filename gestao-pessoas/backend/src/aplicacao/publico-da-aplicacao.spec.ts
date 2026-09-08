@@ -57,14 +57,14 @@ describe('AplicacaoService — público nominal', () => {
     it('traz todo mundo do recorte quando ninguém está em aplicação nenhuma', async () => {
       montar();
       const p = await service.previaDoPublico(APP, alvoCC);
-      expect(p).toMatchObject({ encontradas: 3, adicionar: 3, jaNesta: 0, emOutraAplicacao: [] });
+      expect(p).toMatchObject({ encontradas: 3, entramNoPublico: 3, jaNesta: 0, emOutraAplicacao: [] });
     });
 
     it('⭐ AVISA quem já está em OUTRA aplicação, com nome e qual é', async () => {
       montar([{ colaboradorId: 'c1', aplicacaoId: 'app-aprendizes', nome: 'Aprendizes' }]);
       const p = await service.previaDoPublico(APP, alvoCC);
 
-      expect(p.adicionar).toBe(2);
+      expect(p.entramNoPublico).toBe(2);
       expect(p.emOutraAplicacao).toEqual([
         expect.objectContaining({ nome: 'ANA', aplicacao: 'Aprendizes' }),
       ]);
@@ -73,7 +73,7 @@ describe('AplicacaoService — público nominal', () => {
     it('quem já está NESTA aplicação não conta como conflito', async () => {
       montar([{ colaboradorId: 'c1', aplicacaoId: APP, nome: 'Operação de Loja' }]);
       const p = await service.previaDoPublico(APP, alvoCC);
-      expect(p).toMatchObject({ adicionar: 2, jaNesta: 1, emOutraAplicacao: [] });
+      expect(p).toMatchObject({ entramNoPublico: 2, jaNesta: 1, emOutraAplicacao: [] });
     });
 
     it('a prévia não grava nada', async () => {
@@ -248,7 +248,7 @@ describe('prévia: entrar no público ≠ gerar avaliação', () => {
   it('todos ativos: os dois números batem', async () => {
     montar(['ATIVO', 'ATIVO', 'ATIVO']);
     const p = await service.previaDoPublico(APP, alvo);
-    expect(p.adicionar).toBe(3);
+    expect(p.entramNoPublico).toBe(3);
     expect(p.geramAvaliacao).toBe(3);
     expect(p.barradosPelaRegua).toEqual([]);
   });
@@ -257,7 +257,7 @@ describe('prévia: entrar no público ≠ gerar avaliação', () => {
   it('afastada num ciclo que não inclui afastados: entra no público e NÃO gera avaliação', async () => {
     montar(['ATIVO', 'AFASTADO', 'ATIVO']);
     const p = await service.previaDoPublico(APP, alvo);
-    expect(p.adicionar).toBe(3);
+    expect(p.entramNoPublico).toBe(3);
     expect(p.geramAvaliacao).toBe(2);
     expect(p.barradosPelaRegua).toHaveLength(1);
     expect(p.barradosPelaRegua[0].nome).toBe('BRUNO');

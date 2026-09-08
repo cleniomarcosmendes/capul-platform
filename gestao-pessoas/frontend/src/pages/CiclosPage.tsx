@@ -301,7 +301,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               · <strong className="tabular-nums">{previaAbertura.noPublico}</strong> pessoa(s) no
               público.
             </p>
-            {(previaAbertura.semAvaliador > 0 || previaAbertura.barradosPelaRegua > 0) && (
+            {(previaAbertura.semAvaliador > 0 || previaAbertura.foraDoCiclo > 0) && (
               <ul className="mt-2 space-y-0.5 text-amber-900">
                 {previaAbertura.semAvaliador > 0 && (
                   <li>
@@ -310,11 +310,16 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
                     designar. Designar continua valendo depois de abrir.
                   </li>
                 )}
-                {previaAbertura.barradosPelaRegua > 0 && (
+                {previaAbertura.foraDoCiclo > 0 && (
                   <li>
-                    ⚠️ <strong className="tabular-nums">{previaAbertura.barradosPelaRegua}</strong> no
-                    público estão <strong>fora pela régua do ciclo</strong> (afastados, cargo
-                    inelegível ou decisão do RH) — entram na conta do público e não geram avaliação.
+                    ⚠️ <strong className="tabular-nums">{previaAbertura.foraDoCiclo}</strong> no
+                    público estão <strong>fora do ciclo</strong> — pela régua (afastados, cargo
+                    inelegível) <em>ou</em> por decisão do RH. Entram na conta do público e não
+                    geram avaliação.
+                    {/* ⚠️ O negrito dizia "fora pela régua do ciclo" e a ressalva ia entre
+                        parênteses. O número conta as duas causas: afirmar a régua no destaque
+                        e admitir a outra no rodapé é a mesma mentira do nome antigo do campo,
+                        só que na tela. */}
                   </li>
                 )}
               </ul>

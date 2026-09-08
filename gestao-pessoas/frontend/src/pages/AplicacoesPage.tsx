@@ -494,12 +494,12 @@ function EditorDePublico({
             <strong
               className={`tabular-nums text-lg ${previaVelha ? 'text-slate-500' : 'text-capul-700'}`}
             >
-              {previa.adicionar}
+              {previa.entramNoPublico}
             </strong>{' '}
             pessoa(s) entram no público · {previa.jaNesta} já estão aqui ·{' '}
             {previa.encontradas} no recorte
           </p>
-          {!previaVelha && previa.adicionar > 0 && (
+          {!previaVelha && previa.entramNoPublico > 0 && (
             <p
               className={`text-sm ${
                 previa.barradosPelaRegua.length > 0 ? 'text-amber-900' : 'text-slate-600'
@@ -542,8 +542,8 @@ function EditorDePublico({
           {!previaVelha && previa.amostra.length > 0 && (
             <div className="rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-600">
               <p className="font-medium text-slate-700">
-                Quem entra {previa.amostra.length < previa.adicionar
-                  ? `(os ${previa.amostra.length} primeiros de ${previa.adicionar})`
+                Quem entra {previa.amostra.length < previa.entramNoPublico
+                  ? `(os ${previa.amostra.length} primeiros de ${previa.entramNoPublico})`
                   : ''}
               </p>
               <ul className="mt-1 space-y-0.5">
@@ -579,15 +579,15 @@ function EditorDePublico({
           )}
           <button
             type="button"
-            disabled={ocupado || previa.adicionar === 0 || previaVelha}
+            disabled={ocupado || previa.entramNoPublico === 0 || previaVelha}
             onClick={() => void adicionar()}
             className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {previaVelha
               ? 'Recalcule antes de adicionar'
-              : previa.adicionar === 0
+              : previa.entramNoPublico === 0
                 ? 'Nada a adicionar'
-                : `Adicionar ${previa.adicionar} ao público`}
+                : `Adicionar ${previa.entramNoPublico} ao público`}
           </button>
         </div>
       )}
