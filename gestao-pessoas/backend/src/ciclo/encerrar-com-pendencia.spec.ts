@@ -117,13 +117,35 @@ describe('CicloService.encerrar', () => {
      *  mesmo nome na auditoria — quem lê depois não distinguiria os dois. */
     it('a auditoria distingue o override, com o número e o motivo', async () => {
       pendentes(891);
-      await service.encerrar(CICLO, RH, { confirmarPendentes: true, motivo: 'fim do piloto' });
+      // ⚠️ 15+ caracteres: o mínimo do ato em massa subiu em 09/09 (`xpt` passava).
+      await service.encerrar(CICLO, RH, { confirmarPendentes: true, motivo: 'Fim do piloto de 2026' });
       expect(auditoria.registrar).toHaveBeenCalledWith(
         expect.objectContaining({
           acao: 'ENCERRAR_COM_PENDENCIA',
-          valorNovo: { canceladas: 891, motivo: 'fim do piloto' },
+          valorNovo: { canceladas: 891, motivo: 'Fim do piloto de 2026' },
         }),
       );
+    });
+
+    /**
+     * ⭐⭐ O MÍNIMO DO MOTIVO ACOMPANHA O ALCANCE DO ATO (09/09).
+     *
+     * Era 3 — `"xpt"` passava, e a regra existia só para o formulário poder
+     * travar. Esta frase é a ÚNICA explicação que vai sobrar para dezenas de
+     * pessoas ("por que estas 37 ficaram sem nota?"), e quem a lê meses depois
+     * não estava na sala. 15 força uma oração em vez de um token.
+     */
+    it('⭐ motivo curto demais recusa — e a recusa diz quantos faltam', async () => {
+      pendentes(37);
+      await expect(
+        service.encerrar(CICLO, RH, { confirmarPendentes: true, motivo: 'xpt' }),
+      ).rejects.toThrow(/pelo menos 15 caracteres — faltam 12/);
+    });
+
+    it('uma frase curta e legítima passa — o mínimo não pode inviabilizar', async () => {
+      pendentes(37);
+      await service.encerrar(CICLO, RH, { confirmarPendentes: true, motivo: 'Pessoa desligada' });
+      expect(prisma.avaliacao.updateMany).toHaveBeenCalled();
     });
 
     /** Confirmar sem haver pendência não inventa cancelamento nenhum. */

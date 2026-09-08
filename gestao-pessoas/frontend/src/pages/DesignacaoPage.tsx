@@ -194,7 +194,10 @@ export default function DesignacaoPage() {
           disabled={copiando || !!fechado}
           title={fechado ?? undefined}
           onClick={() => void previaDaCopia()}
-          className="alvo-toque inline-flex items-center gap-2 rounded-xl bg-capul-600 px-4 font-medium text-white disabled:opacity-50"
+          /* ⚠️ `opacity-50` sobre um botão VERDE SÓLIDO continua um botão verde
+             sólido: só o cursor e o `title` denunciavam que estava desligado.
+             O desabilitado precisa MUDAR DE COR, não ficar translúcido. */
+          className="alvo-toque inline-flex items-center gap-2 rounded-xl bg-capul-600 px-4 font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
           <Wand2 size={16} aria-hidden />
           {copiando && !copia ? 'Calculando…' : 'Designar pelo cadastro'}
@@ -257,7 +260,7 @@ export default function DesignacaoPage() {
             onClick={() => setDesignando(true)}
             disabled={!!fechado}
             title={fechado ?? undefined}
-            className="alvo-toque inline-flex items-center gap-2 rounded-lg bg-capul-600 px-3 text-sm font-semibold text-white disabled:opacity-50"
+            className="alvo-toque inline-flex items-center gap-2 rounded-lg bg-capul-600 px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             <UserPlus size={15} aria-hidden /> Definir avaliador
           </button>
@@ -462,6 +465,17 @@ function LinhaDaLista({
         {linha.justificativa && (
           <p className="mt-1 text-xs italic text-slate-500">“{linha.justificativa}”</p>
         )}
+        {/* ⭐⭐ O MOTIVO DO CANCELAMENTO, que a linha não tinha por onde mostrar.
+            As 37 canceladas pelo encerramento do SIMULACAO apareciam só como
+            "cancelada", enquanto as 2 excluídas à mão traziam o texto delas —
+            e o motivo das 37 estava gravado o tempo todo. O diálogo de encerrar
+            promete que ele "responde, meses depois, por que estas ficaram sem
+            nota"; era o único caso em que não respondia.
+            ⚠️ Só quando DIFERE da justificativa: o Excluir grava o mesmo texto
+            nos dois campos, e repeti-lo faria a linha dizer duas vezes. */}
+        {linha.motivoCancelamento && linha.motivoCancelamento !== linha.justificativa && (
+          <p className="mt-1 text-xs italic text-rose-700">“{linha.motivoCancelamento}”</p>
+        )}
       </div>
       {/* ⭐⭐ "Definir avaliador" NA LINHA, e antes do "Excluir".
           Quem está sem avaliador tinha um ato só à mão — **Excluir** —, e o
@@ -482,9 +496,23 @@ function LinhaDaLista({
           <button
             type="button"
             onClick={aoDesignar}
-            disabled={!!fechado}
-            title={fechado ?? undefined}
-            className={`alvo-toque inline-flex items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold disabled:opacity-50 ${
+            /* ⚠️ CANCELADA recusa no backend (`efeitoDeDesignar`: o upsert a
+               reviveria cancelada, com avaliador novo). O botão era oferecido
+               igual e só falhava no clique — a tela prometendo o que a API
+               nega, de novo. É estado, não falta de objeto: desabilita com o
+               motivo, e o motivo diz que não há caminho de volta. */
+            disabled={!!fechado || linha.avaliacaoStatus === 'CANCELADA'}
+            title={
+              fechado ??
+              (linha.avaliacaoStatus === 'CANCELADA'
+                ? 'A avaliação desta pessoa está CANCELADA e não há caminho para descancelar — designar de novo a reviveria cancelada.'
+                : undefined)
+            }
+            /* ⚠️ REGRA DE DESABILITADO (varrida em 16 botões): `opacity-50`
+               sobre cor própria NÃO lê como desligado — um verde 50% continua
+               verde. Só o cursor e o `title` denunciavam. Botão com cor
+               precisa TROCAR de cor ao desabilitar; o cinza é o sinal. */
+            className={`alvo-toque inline-flex items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${
               semAvaliador
                 ? 'bg-capul-600 text-white'
                 : 'border border-capul-300 text-capul-800'
@@ -515,7 +543,7 @@ function LinhaDaLista({
             onClick={aoReabrir}
             disabled={!!fechado}
             title={fechado ?? undefined}
-            className="alvo-toque rounded-lg border border-amber-400 px-3 text-sm font-medium text-amber-800 disabled:opacity-50"
+            className="alvo-toque rounded-lg border border-amber-400 px-3 text-sm font-medium text-amber-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             Reabrir
           </button>
@@ -635,7 +663,7 @@ function DialogoDecisao({
           type="button"
           disabled={salvando || bloqueado || justificativa.trim().length < 3}
           onClick={salvar}
-          className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+          className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >
           {salvando ? 'Registrando…' : 'Registrar decisão'}
         </button>
@@ -1075,7 +1103,7 @@ function PainelDaCopia({
             type="button"
             disabled={copiando || aGravar === 0}
             onClick={() => void aoAplicar()}
-            className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2.5 font-medium text-white disabled:opacity-50"
+            className="alvo-toque w-full rounded-xl bg-capul-600 px-4 py-2.5 font-medium text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             {copiando
               ? 'Aplicando…'
@@ -1196,8 +1224,18 @@ function DialogoReabrir({
           className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm"
           placeholder="Por que esta avaliação precisa ser refeita?"
         />
-        <span className="mt-1 block text-xs text-slate-500">
-          Fica registrado com o seu nome na auditoria, junto com o resultado apagado.
+        {/* ⚠️ Mesma correção do encerrar: a exigência era MUDA — o botão
+            travava abaixo do mínimo sem dizer o mínimo. */}
+        <span
+          className={`mt-1 block text-xs ${
+            motivo.trim().length > 0 && motivo.trim().length < 3
+              ? 'font-medium text-amber-800'
+              : 'text-slate-500'
+          }`}
+        >
+          {motivo.trim().length > 0 && motivo.trim().length < 3
+            ? `Escreva pelo menos 3 caracteres — ${flexao(3 - motivo.trim().length, 'falta', 'faltam')} ${3 - motivo.trim().length}.`
+            : 'Fica registrado com o seu nome na auditoria, junto com o resultado apagado.'}
         </span>
       </label>
 
@@ -1215,7 +1253,7 @@ function DialogoReabrir({
           type="button"
           disabled={salvando || efeito === null || motivo.trim().length < 3}
           onClick={() => void confirmar()}
-          className="alvo-toque flex-1 rounded-xl bg-rose-700 px-4 text-sm font-semibold text-white disabled:opacity-50"
+          className="alvo-toque flex-1 rounded-xl bg-rose-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >
           {salvando ? 'Reabrindo…' : 'Reabrir'}
         </button>

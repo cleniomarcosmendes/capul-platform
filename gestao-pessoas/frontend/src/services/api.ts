@@ -137,6 +137,8 @@ export interface CicloDaLista {
   _count: { aplicacoes: number; avaliacoes: number };
   /** Não enviadas — é o que `encerrar` exige que seja zero. */
   avaliacoesPendentes: number;
+  /** Quantas o ciclo já cancelou. ⚠️ Reabrir o ciclo NÃO as traz de volta. */
+  avaliacoesCanceladas: number;
 }
 
 /**
@@ -295,6 +297,12 @@ export interface LinhaDaDesignacao {
   avaliacaoStatus: StatusAvaliacao | null;
   /** Id da avaliação, quando existe — o que a linha precisa para reabrir. */
   avaliacaoId: string | null;
+  /**
+   * ⭐ Por que a AVALIAÇÃO foi cancelada. Pergunta diferente de `justificativa`,
+   * que diz por que a PESSOA está fora do ciclo — as duas coincidem quando veio
+   * do Excluir, e só esta existe quando veio do encerrar com pendência.
+   */
+  motivoCancelamento: string | null;
   /** A linha de quem está olhando — marcada, nunca filtrada (§3.1). */
   restrita?: boolean;
   motivoRestricao?: string;

@@ -62,6 +62,22 @@ export interface LinhaDaLista {
   avaliadorNome: string | null;
   avaliacaoStatus: string | null;
   /**
+   * ⭐⭐ POR QUE A AVALIAÇÃO FOI CANCELADA — e é pergunta DIFERENTE da
+   * `justificativa`, que diz por que a PESSOA está fora do ciclo.
+   *
+   * ⚠️ As duas coincidem quando o cancelamento veio do *Excluir* (o mesmo texto
+   * é gravado nos dois campos); só uma existe quando veio do *encerrar com
+   * pendência*, que não cria decisão de elegibilidade nenhuma. Era esse o caso
+   * das 37 do SIMULACAO: o motivo estava gravado e **a linha não tinha por onde
+   * mostrá-lo** — enquanto as 2 excluídas à mão mostravam o delas, o que fazia
+   * parecer que umas tinham motivo e outras não.
+   *
+   * O diálogo de encerrar promete que o motivo *"fica registrado no ciclo e em
+   * cada avaliação cancelada — é o que responde, meses depois, por que estas
+   * ficaram sem nota"*. Sem este campo a promessa não chegava à tela.
+   */
+  motivoCancelamento: string | null;
+  /**
    * ⭐ O id da avaliação, quando existe. A linha trazia só o `status`, e com ele
    * a tela sabia QUE havia avaliação mas não conseguia agir sobre ela — foi o
    * que faltava para o botão de reabrir (§3.1.41).
@@ -92,6 +108,8 @@ export interface LinhaDaLista {
 interface DesignacaoVigente {
   /** Id da avaliação — o que a linha precisa para agir sobre ela (reabrir). */
   id: string;
+  /** Por que a AVALIAÇÃO foi cancelada — pergunta diferente da `justificativa`. */
+  motivoCancelamento: string | null;
   avaliadorId: string;
   avaliadorNome: string;
   status: string;
@@ -243,6 +261,7 @@ export class DesignacaoService {
       avaliadorNome: null,
       avaliacaoStatus: null,
       avaliacaoId: null,
+      motivoCancelamento: null,
       efeitoDoExcluir: efeitoDoExcluir(null),
     };
     const linhas: LinhaDaLista[] = [
@@ -273,6 +292,7 @@ export class DesignacaoService {
         avaliadorNome: designada?.avaliadorNome ?? null,
         avaliacaoStatus: designada?.status ?? null,
         avaliacaoId: designada?.id ?? null,
+        motivoCancelamento: designada?.motivoCancelamento ?? null,
         efeitoDoExcluir: efeitoDoExcluir(
           designada
             ? {
@@ -976,6 +996,7 @@ export class DesignacaoService {
         avaliadoId: true,
         avaliadorId: true,
         status: true,
+        motivoCancelamento: true,
         _count: { select: { respostas: true } },
       },
     });
@@ -992,6 +1013,7 @@ export class DesignacaoService {
         a.avaliadoId,
         {
           id: a.id,
+          motivoCancelamento: a.motivoCancelamento,
           avaliadorId: a.avaliadorId,
           avaliadorNome: nomePorId.get(a.avaliadorId) ?? '(colaborador não encontrado)',
           status: a.status as string,

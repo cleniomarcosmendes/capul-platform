@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ONDE_A_AVALIACAO_CONTA } from '../avaliacao/avaliacoes-que-contam.js';
+import { MOTIVO_MINIMO_EM_MASSA, faltamCaracteres } from '../common/motivo.js';
 import {
   CicloNaoAbrivelError,
   assertCicloAbrivel,
@@ -243,10 +244,14 @@ export class CicloService {
           'registradas como CANCELADAS — nada é apagado, e a contagem aparece no painel.',
       );
     }
-    if (pendentes > 0 && motivo.length < 3) {
+    // ⚠️ Mínimo MAIOR aqui do que nos atos de uma linha: esta frase vai ser a
+    // única explicação que sobra para dezenas de pessoas, e 3 caracteres
+    // ("xpt") passavam. Ver `common/motivo.ts`.
+    if (pendentes > 0 && motivo.length < MOTIVO_MINIMO_EM_MASSA) {
       throw new BadRequestException(
         'Informe o motivo de encerrar com pendência. Ele fica registrado no ciclo e em cada ' +
-          'avaliação cancelada — é o que responde, meses depois, por que estas ficaram sem nota.',
+          'avaliação cancelada — é o que responde, meses depois, por que estas ficaram sem nota. ' +
+          faltamCaracteres(motivo, MOTIVO_MINIMO_EM_MASSA),
       );
     }
 
@@ -403,14 +408,24 @@ export class CicloService {
       }),
       // groupBy e não `_count` filtrado: o `_count` do Prisma não aceita a
       // mesma relação duas vezes (total e filtrada) na mesma consulta.
+      // ⭐ Por status, e não só as pendentes: o diálogo de REABRIR precisa saber
+      // quantas foram canceladas para poder dizer que elas NÃO voltam.
       this.prisma.avaliacao.groupBy({
-        by: ['cicloId'],
-        where: { status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
+        by: ['cicloId', 'status'],
+        where: { status: { in: ['PENDENTE', 'EM_ANDAMENTO', 'CANCELADA'] } },
         _count: { _all: true },
       }),
     ]);
-    const porCiclo = new Map(pendentes.map((p) => [p.cicloId, p._count._all]));
-    return ciclos.map((c) => ({ ...c, avaliacoesPendentes: porCiclo.get(c.id) ?? 0 }));
+    const soma = (cicloId: string, status: string[]) =>
+      pendentes
+        .filter((p) => p.cicloId === cicloId && status.includes(p.status as string))
+        .reduce((t, p) => t + p._count._all, 0);
+    return ciclos.map((c) => ({
+      ...c,
+      avaliacoesPendentes: soma(c.id, ['PENDENTE', 'EM_ANDAMENTO']),
+      /** Quantas o ciclo já cancelou — reabrir NÃO as traz de volta. */
+      avaliacoesCanceladas: soma(c.id, ['CANCELADA']),
+    }));
   }
 
   async obter(cicloId: string) {
