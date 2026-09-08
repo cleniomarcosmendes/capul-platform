@@ -59,6 +59,32 @@ semanas**, quando a decisão tiver sido esquecida e só o código restar. Quem e
 nova aqui **escreve o PORQUÊ, não só o quê** — o "o quê" o código já conta; o "por quê" some
 com a memória, e é ele que impede a decisão de ser refeita ao contrário meses depois.
 
+### ⭐⭐ Quem é dono de cada NÚMERO neste documento
+
+Achado em 08/09, varrendo o próprio arquivo: o censo de acesso aparecia como **estado atual**
+em três lugares, e dois estavam errados havia um dia. É a **regra 5 da §5.9 aplicada ao
+documento** — *relatório cita atributo, não o possui* —, e vale como convenção de escrita:
+
+**1. Toda conta viva tem UM dono declarado, e ele é a §0.** Ambiente e commits, censo de
+acesso, contagem de testes e de migrations moram lá. Fora da §0, o mesmo número só aparece
+**datado** (*"em 08/09 eram 8"*) ou como **ponteiro** (*"a conta está na §0"*).
+
+**2. Número dentro de um achado é CITAÇÃO, e citação não se atualiza.** Ele registra o que se
+mediu quando aquilo foi consertado; reescrevê-lo apaga a evidência do conserto. Foi por isso
+que a tabela do acesso virou "07/09 × 08/09" em vez de ser trocada.
+
+**3. O teste é a FRASE, não a repetição.** Se ela responde *"como está hoje?"*, precisa de dono
+ou de data. Se responde *"como estava quando isto foi decidido?"*, está no lugar certo — ainda
+que o número apareça dez vezes no arquivo. Os **108** e **95** da §3.12 se repetem de propósito:
+são o exemplo que sustenta a explicação, não um estado.
+
+⚠️ **Isto é convenção, e NÃO é verificável por ferramenta** — ao contrário da varredura de
+contrato do §3.1.9, que roda. Um script que comparasse os números do documento com o banco
+erraria justamente nas **citações datadas**, que são a maioria e estão certas: ele acusaria como
+"desatualizado" cada evidência de conserto. Saber **por que não automatizamos** vale tanto
+quanto a regra — sem isso, alguém escreve o script daqui a um mês e ele vira ruído que se
+aprende a ignorar.
+
 ---
 
 ## 0. O que trava e o que anda — fechamento de 06/09/2026
@@ -68,6 +94,11 @@ mesmos itens em dois blocos, sem prosa. **Esta lista é um índice: quem decide 
 na seção citada.**
 
 ### 📍 ONDE O DIA PAROU — 08/09/2026
+
+> ⚠️ **Esta seção é a DONA das contas vivas** — ambientes e commits, censo de acesso, contagem
+> de testes e de migrations. **Está atualizando algum desses números?** Ele se atualiza **aqui**.
+> Se você precisa citá-lo noutra seção, **date-o** (*"em 08/09 eram 8"*) ou aponte para cá — não
+> repita como estado. O porquê está no cabeçalho do arquivo.
 
 ✅ **Publicado no fim do dia:** `6f13a210..e4f7d453`, **17 commits**. Nada pendente de push.
 
@@ -125,7 +156,7 @@ nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 | A mesma pessoa em dois ciclos abertos ao mesmo tempo | Gestora de RH | §5 · §3.10 |
 | Quem é o avaliador de cada centro de custo (a lista real) — sem ela, 174 pessoas ficam fora | Gestora de RH | §5 · §7 · §11 |
 | O público real de cada aplicação — 3 das 4 estão com recorte provisório | Gestora de RH | §5 · §7 · §11 |
-| Quem avalia os ~53 avaliadores — 46 caem no Diretor Executivo pela regra provisória | Diretoria + RH | §5 · §11 |
+| Quem avalia **os avaliadores do ciclo** (quantos são, na §0) — a maioria cai no Diretor Executivo pela regra provisória | Diretoria + RH | §5 · §11 |
 | Quem avalia Presidente e Vice | Diretoria | §5 |
 | Régua de escolaridade · aprendizes · afastados · enunciados das perguntas | Gestora de RH | §5 |
 | Quem dispara o sync — enquanto não se decide, não existe cron | Gestora de RH | §5 |
@@ -191,8 +222,8 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 |---|---|
 | Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **42 endpoints** em 9 controllers. |
 | Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
-| Banco | 8 migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação). |
-| Testes | **422 testes, 30 suítes**, verdes. `tsc -b` e ESLint limpos nos dois lados. |
+| Banco | migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação) — **a conta está na §0** |
+| Testes | verdes, com `tsc -b` e ESLint limpos nos dois lados — **a contagem está na §0** |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
 
 **As oito telas:** fila do avaliador · responder questionário · ciclos · aplicações ·
@@ -2103,7 +2134,7 @@ O avaliador **não vê** os critérios cadastrais enquanto responde: saber "Temp
 ### 3.4. Uma definição de "ativo"
 
 `src/common/elegibilidade.ts`: `RA_DEMISSA = ' '` **e** `RA_SITFOLH <> 'D'` — o que
-**inclui férias (98) e afastados (47)**. Usar `situacao = 'ATIVO'` derrubaria 145 das 1.036
+**inclui férias e afastados** (em 06/09, 98 e 47). Usar `situacao = 'ATIVO'` derrubaria 145 das 1.036
 pessoas de todas as listas, calado. Afastado entra ou não no ciclo por opção do ciclo
 (`incluirAfastados`), medida na data-base; férias entra sempre.
 
@@ -3002,9 +3033,8 @@ script provisório, não de decisão de ninguém.
 
 ⚠️ Estes números são do momento da importação. Depois dela, o script
 `popular-dev-fila-do-avaliador.ts` reatribuiu 15 pessoas para a conta de teste do AVALIADOR
-(§ abaixo), e o estado corrente é **928 linhas vigentes · 108 sem avaliador · 159 não
-revisadas · 53 avaliadores**. Confira no banco antes de citar — número de documento
-envelhece.
+(§ abaixo), e **em 06/09 eram 928 linhas vigentes · 108 sem avaliador · 159 não revisadas ·
+53 avaliadores**. Confira no banco antes de citar — número de documento envelhece.
 | Média / mediana / maior | 9,4 / 9 / 58 | **17,2 / 11,5 / 95** |
 
 ⚠️ **A lista real CONCENTRA em vez de espalhar, e isso é informação para o RH.** O critério
@@ -3038,11 +3068,20 @@ produção; aqui o que precisa ser exercitável é o caminho. Sortear avaliadore
 descartado por duas razões: apagaria o cenário da pendência (abaixo) e produziria dado que
 *parece* decisão — a gerente de Buritis avaliando a Segurança Patrimonial de Unaí.
 
-**O bloqueio real não era a lista, era o acesso.** Das 894 avaliações do ciclo, só 27
-estavam com alguém que consegue entrar no sistema — e a conta que tem o papel `AVALIADOR`
+**O bloqueio real não era a lista, era o acesso.** Em 06/09, das 894 avaliações do ciclo, só
+27 estavam com alguém que conseguia entrar no sistema — e a conta que tem o papel `AVALIADOR`
 (`wandersonnascimento`) tinha **zero**.
 
-🔴 **E o acesso continua sendo o gargalo do piloto: só 2 contas têm permissão no módulo.**
+✅ **Isso foi resolvido em 08/09** — o Clenio concedeu as permissões que faltavam, e **nenhuma
+conta com matrícula ficou sem acesso ao módulo**. A conta viva está na §0.
+
+🔴 **O gargalo MUDOU de lugar, e o de hoje é outro: a maioria dos avaliadores não tem conta
+nenhuma na plataforma.** Não é mais "permissão que falta em quem já entra" — é gente que nunca
+teve login. É o **item 1 da lista (B)**, é trabalho do Clenio no Configurador, e é o único que
+move o número que decide o piloto.
+
+⚠️ O parágrafo abaixo é o retrato de **06/09** e fica como registro do que motivou o script de
+população — não como estado de hoje:
 `core.permissoes_modulo` para `GESTAO_PESSOAS` tem exatamente duas linhas —
 `ariellypereira` (RH_ADMIN) e `wandersonnascimento` (AVALIADOR). Todas as outras contas com
 matrícula, inclusive `supdept01` (Clenio, com **13 avaliações designadas**), **não abrem o
