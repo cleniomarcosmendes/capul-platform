@@ -5,11 +5,15 @@
 >
 > Piloto previsto para **15/09/2026**.
 
-## ✅ PUBLICADO EM 08/09/2026 — `origin/main` = `e4f7d453`
+## ✅ PUBLICADO EM 09/09/2026 — `origin/main` = `eb1264a9`
 
-Publicado pelo Clenio no fim do dia: **`6f13a210..e4f7d453`**, 17 commits, 201 objetos. Local e
-remoto iguais (`git status -sb` sem ahead). A publicação anterior foi em 07/09
-(`6855c918..6f13a210`, 1.079 objetos).
+Publicado pelo Clenio no fim do dia: **`2835b51d..eb1264a9`**, 27 commits, 313 objetos. Local e
+remoto iguais (0 à frente, 0 atrás, árvore limpa). Publicações anteriores: 08/09
+(`6f13a210..e4f7d453`, 17 commits) e 07/09 (`6855c918..6f13a210`, 1.079 objetos).
+
+⚠️ **O que foi publicado hoje NÃO está em ambiente nenhum além do DEV.** PROD e HLG continuam sem
+o módulo Gestão de Pessoas, e o roteiro de deploy do Marco segue **superado** — o alvo mudou de
+novo com a onda de hoje.
 
 ### Onde cada ambiente está (08/09)
 
