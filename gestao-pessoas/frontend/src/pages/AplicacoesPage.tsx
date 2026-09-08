@@ -21,6 +21,7 @@ import {
 import type { ContextoDoCiclo } from './CicloPage';
 import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
 import { contagem, flexao } from '../lib/formato';
+import { repartirPesos } from '../lib/composicao-da-nota';
 
 /**
  * APLICAÇÕES — a peça que resolve o problema que originou o módulo: as mesmas 15
@@ -141,14 +142,13 @@ export default function AplicacoesPage() {
   );
 }
 
-/** Divisão em percentual — a mesma normalização que o motor faz ao apurar. */
+/**
+ * Divisão em percentual — a mesma normalização que o motor faz ao apurar, e a
+ * MESMA função que a memória de cálculo usa (`lib/composicao-da-nota`). Duas
+ * normalizações foi o que fez esta tela dizer "100,0%" e a memória dizer "60".
+ */
 function repartir(pesoAvaliacao: number, criterios: { nome: string; peso: number }[]) {
-  const total = pesoAvaliacao + criterios.reduce((s, c) => s + c.peso, 0);
-  if (total <= 0) return [];
-  return [
-    { nome: 'Questionário', pct: (pesoAvaliacao / total) * 100 },
-    ...criterios.map((c) => ({ nome: c.nome, pct: (c.peso / total) * 100 })),
-  ];
+  return repartirPesos([{ nome: 'Questionário', peso: pesoAvaliacao }, ...criterios]);
 }
 
 function CartaoDeAplicacao({

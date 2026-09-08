@@ -11,6 +11,7 @@ import {
   type MemoriaDeCalculo,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
+import { fracao } from '../lib/composicao-da-nota';
 
 /**
  * RESULTADOS — a nota final e a conta que chegou nela.
@@ -299,7 +300,12 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                     <th className="pb-1 font-medium">Item</th>
                     <th className="pb-1 text-right font-medium">Valor</th>
                     <th className="pb-1 text-right font-medium">Pontos</th>
-                    <th className="pb-1 text-right font-medium">Peso</th>
+                    {/* ⭐ "Peso" sozinho lia como "de 100": com 0 critérios a
+                        memória dizia "Peso 60" e quem conferia procurava 40
+                        pontos que não existem. O peso BRUTO fica (é o que está
+                        cadastrado e é o insumo da conta) e ganha ao lado a
+                        fração que ele representa — o termo que faltava. */}
+                    <th className="pb-1 text-right font-medium">Peso · da nota</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -310,7 +316,8 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                       {nota(memoria.notaAvaliacao)}
                     </td>
                     <td className="py-1.5 text-right tabular-nums text-slate-600">
-                      {memoria.pesoAvaliacao}
+                      {memoria.pesoAvaliacao}{' '}
+                      <span className="text-slate-400">· {fracao(memoria.pesoAvaliacao, pesoTotal)}</span>
                     </td>
                   </tr>
                   {memoria.criterios.map((c) => (
@@ -320,7 +327,15 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                       <td className="py-1.5 text-right tabular-nums">
                         {c.semDado ? 'sem dado' : (c.pontuacao ?? '—')}
                       </td>
-                      <td className="py-1.5 text-right tabular-nums">{c.peso}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {c.peso}{' '}
+                        <span className="text-slate-400">
+                          {/* Critério sem dado não entra na conta — o motor
+                              redistribui o peso dele. Mostrar uma fração para
+                              ele faria a soma das frações passar de 100%. */}
+                          · {c.semDado ? '—' : fracao(c.peso, pesoTotal)}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -331,7 +346,9 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                     <td className="pt-2 text-right font-semibold tabular-nums text-slate-800">
                       {nota(memoria.notaFinal)}
                     </td>
-                    <td className="pt-2 text-right tabular-nums text-slate-600">{pesoTotal}</td>
+                    <td className="pt-2 text-right tabular-nums text-slate-600">
+                      {pesoTotal} <span className="text-slate-400">· 100%</span>
+                    </td>
                   </tr>
                 </tfoot>
               </table>
