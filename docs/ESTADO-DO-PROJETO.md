@@ -135,10 +135,10 @@ nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 
 ### (B) TRABALHO TÉCNICO PENDENTE — na ordem em que eu faria
 
-⭐ **Os três primeiros são provisionamento, e vão na frente por um motivo só: são os únicos
-que mexem no número que decide o piloto.** Hoje, dos **53 avaliadores do ciclo, 5 conseguem
-entrar** — e um desses cinco é a conta de TESTE do Claudimar, criada por nós (§6). Os outros
-nove itens desta lista não movem esse número em nada.
+⭐ **O item 1 é o único que mexe no número que decide o piloto.** Em 08/09, dos **54 avaliadores
+do ciclo, 8 conseguem entrar** — e um desses oito é a conta de TESTE do Claudimar, criada por nós
+(§6). **187 das 894** avaliações do Piloto são alcançáveis hoje. Nenhum outro item desta lista
+move esse número.
 
 | # | Item | Onde está |
 |---|---|---|
@@ -478,16 +478,21 @@ A correção de 06/09 (RH_ADMIN entra na fila; o item de menu sem condição de 
 caso: a gestora avalia 13 pessoas e tem só `RH_ADMIN`. **Conferido depois se pegou todo mundo**
 — e o recorte é este, no DEV de 06/09:
 
-| | |
-|---|---|
-| Avaliadores do ciclo Piloto (pelo dado) | **53** |
-| …com conta na plataforma (matrícula casada) | **7** |
-| …com permissão no módulo GESTAO_PESSOAS | **4** |
-| …que de fato abrem a própria fila (HTTP 200) | **4** — 13 · 84 · 6 · 22 avaliações |
+⚠️ **Censo de 07/09 — SUPERADO.** Mantido porque é o que motivou o degrau abaixo; a conta viva
+está na §0 (*"Depois do fechamento — o acesso destravou"*).
 
-Os **46 sem conta** são esperados: o piloto ainda não distribuiu acesso. Os **3 com conta e sem
-permissão** não são — `supdept01` (matrícula 001047, **13 avaliações**), `rodrigoleao` (4) e
-`lidyanerocha` (1) fazem parte do dado como avaliadores e recebem `403 Sem acesso ao módulo`.
+| | 07/09 | **08/09** |
+|---|---|---|
+| Avaliadores do ciclo (pelo dado) | 53 | **54** |
+| …com conta na plataforma (matrícula casada) | 7 | **8** |
+| …com permissão no módulo | 4 | **8** |
+| …com conta e SEM permissão | 3 | **0** ✅ |
+| …sem conta nenhuma | 46 | **46** |
+
+Em 07/09 os **3 com conta e sem permissão** — `supdept01` (13 avaliações), `rodrigoleao` (4) e
+`lidyanerocha` (1) — recebiam `403 Sem acesso ao módulo`. **Resolvido em 08/09:** o Clenio
+concedeu no Configurador, e as 13 do `supdept01` passaram para a `renataborges`. Os **46 sem
+conta** seguem esperados — o piloto ainda não distribuiu acesso, e é o item 1 da lista (B).
 
 ✅ **O degrau que sobrava foi fechado em 06/09.** O menu mostra *"Minhas avaliações"* a quem
 tiver **qualquer papel no módulo** (de propósito — ser avaliador é fato do dado), e o controller
@@ -1937,7 +1942,7 @@ mostrando *"ARIELLY · 2 a fazer"*. ⚠️ Os dois ciclos reais **não** mostram
 certo: ambos ainda têm gente sem avaliador, então `DESIGNAR` vence — a ordem das regras não
 mudou.
 
-### 3.1.25. 🔴 Colisão de chapa: um 403 que PARECE falta de permissão (08/09)
+### 3.1.25. ✅ Colisão de chapa: um 403 que PARECE falta de permissão (08/09)
 
 `IdentidadeService.porMatricula` compara **texto exato** (`matricula: alvo`). A `renataborges`
 tinha **`E01981`** em `core.usuarios` e **`001981`** em `rh.colaborador` — a mesma pessoa, dois
