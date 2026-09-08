@@ -143,7 +143,7 @@ nove itens desta lista não movem esse número em nada.
 | # | Item | Onde está |
 |---|---|---|
 | 1 | **Contas para os avaliadores — `46 dos 54` não têm conta.** É o que decide o piloto, e é **trabalho do Clenio no Configurador**, não daqui. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
-| 2 | ✅ **FEITO em 08/09 — colisão de chapa (`E01981` × `001981`)**, dos dois lados: a **fonte** no Configurador (`normalizarChapa` ao preencher e ao salvar) e a **rede** no módulo (`porMatricula` e a importação de planilha buscam pelas duas formas). ⚠️ O sintoma era um **403 que PARECE falta de permissão**, e mandava quem investiga ao Configurador dar papel a quem já tem. 🟡 **Sobra dado legado**: `marcelojunio` = `E03942` — agora resolve pela rede, mas o cadastro segue torto | §3.1.25 |
+| 2 | ✅ **FEITO em 08/09 — colisão de chapa (`E01981` × `001981`)**, dos dois lados: a **fonte** no Configurador (`normalizarChapa` ao preencher e ao salvar) e a **rede** no módulo (`porMatricula` e a importação de planilha buscam pelas duas formas). ⚠️ O sintoma era um **403 que PARECE falta de permissão**, e mandava quem investiga ao Configurador dar papel a quem já tem. ✅ E o dado legado foi corrigido no mesmo dia: **nenhuma conta de pessoa real fora do formato** | §3.1.25 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
 | 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
 | 5 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
@@ -1995,8 +1995,7 @@ alguém; **não compara formatos**.
 
 | | |
 |---|---|
-| 🟡 **Dado antigo** | `marcelojunio` = `E03942` em `core.usuarios`, conta ATIVA, e a pessoa existe no `rh` como `003942`. **Vai dar o 403 no dia em que ele for avaliador.** É correção de cadastro, do Clenio — não se mexe em conta daqui |
-| ⚪ `admin` = `E09999` | conta de sistema, sem colaborador. Correto que não resolva |
+| ✅ **Dado antigo, corrigido** | `marcelojunio` foi de `E03942` para `003942` pelo Clenio, ainda em 08/09. **Nenhuma conta de pessoa real ficou fora do formato** — a varredura de `core.usuarios` devolve só `admin` (`E09999`), `supven01` (`SUPVEN01`) e `zz_teste94` (`999888`, INATIVA), que **não são colaboradores** e é correto não resolverem |
 | ✅ **A defesa também foi feita** | ver abaixo — a fonte é a torneira, isto é a rede |
 
 #### ✅ E a REDE, no próprio módulo (08/09)
