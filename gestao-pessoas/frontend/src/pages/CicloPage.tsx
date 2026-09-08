@@ -7,7 +7,7 @@ import { EtiquetaDeCiclo } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 import { ciclos, mensagemDoErro, painel, type CicloDetalhado, type ResumoDoCiclo } from '../services/api';
-import { data, dataHora } from '../lib/formato';
+import { data, dataHora, flexao } from '../lib/formato';
 
 /**
  * A moldura do ciclo. As quatro telas do RH (aplicações, designação, painel e
@@ -175,14 +175,23 @@ function LinhaDeEstado({ resumo, cicloId }: { resumo: ResumoDoCiclo; cicloId: st
    * existência dos excluídos — que é uma decisão registrada, com justificativa.
    * O termo que faltava entra; o número de montagem fica.
    */
-  const numeros: { valor: number; rotulo: string }[] = [
-    { valor: resumo.aplicacoes, rotulo: resumo.aplicacoes === 1 ? 'aplicação' : 'aplicações' },
+  const todos: { valor: number; rotulo: string; soQuandoHa?: boolean }[] = [
+    { valor: resumo.aplicacoes, rotulo: flexao(resumo.aplicacoes, 'aplicação', 'aplicações') },
     { valor: resumo.noPublico, rotulo: 'no público' },
-    { valor: resumo.foraDoCiclo, rotulo: 'fora do ciclo' },
+    /**
+     * ⭐ SÓ APARECE QUANDO EXISTE. Os outros números são de ESTADO — "0
+     * apuradas" e "0 sem avaliador" dizem em que passo o ciclo está, e valem
+     * zerados. Este é um termo de CONCILIAÇÃO: existe para a soma fechar
+     * quando alguém foi tirado do ciclo. Num ciclo limpo ele não concilia
+     * nada e a conta já fecha sem ele — "0 fora do ciclo" é ruído numa linha
+     * que se lê de relance.
+     */
+    { valor: resumo.foraDoCiclo, rotulo: 'fora do ciclo', soQuandoHa: true },
     { valor: resumo.semDesignacao, rotulo: 'sem avaliador neste ciclo' },
     { valor: resumo.enviadas, rotulo: `de ${resumo.designados} enviadas` },
     { valor: resumo.apuradas, rotulo: 'apuradas' },
   ];
+  const numeros = todos.filter((n) => !n.soQuandoHa || n.valor > 0);
 
   return (
     <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2">

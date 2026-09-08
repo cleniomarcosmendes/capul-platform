@@ -18,6 +18,7 @@ import {
   type RelatorioDaCopia,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
+import { contagem, flexao } from '../lib/formato';
 
 /**
  * DESIGNAÇÃO — quem entra no ciclo, e quem avalia quem.
@@ -116,7 +117,13 @@ export default function DesignacaoPage() {
     }
   }
 
-  const contagem = useMemo(() => {
+  /**
+   * ⚠️ Chamava-se `contagem` e colidia com o helper de concordância
+   * (`lib/formato`), que tem o mesmo nome e é usado nesta mesma tela. São
+   * contadores dos filtros, e `contadores` é o nome que o backend já usa para
+   * a mesma coisa no relatório da cópia.
+   */
+  const contadores = useMemo(() => {
     const l = linhas ?? [];
     const elegiveis = l.filter((x) => x.elegivel);
     return {
@@ -207,11 +214,11 @@ export default function DesignacaoPage() {
           <Filtro atual={so} valor="TODOS" aoEscolher={setSo}>
             Todos ({linhas.length})
           </Filtro>
-          <Filtro atual={so} valor="SEM_AVALIADOR" aoEscolher={setSo} destaque={contagem.semAvaliador > 0}>
-            Sem avaliador ({contagem.semAvaliador})
+          <Filtro atual={so} valor="SEM_AVALIADOR" aoEscolher={setSo} destaque={contadores.semAvaliador > 0}>
+            Sem avaliador ({contadores.semAvaliador})
           </Filtro>
           <Filtro atual={so} valor="EXCLUIDOS" aoEscolher={setSo}>
-            Fora do ciclo ({contagem.excluidos})
+            Fora do ciclo ({contadores.excluidos})
           </Filtro>
         </div>
       )}
@@ -230,7 +237,7 @@ export default function DesignacaoPage() {
       {selecao.size > 0 && (
         <div className="sticky top-0 z-10 mt-4 flex items-center gap-3 rounded-xl border border-capul-200 bg-capul-50 p-3">
           <p className="flex-1 text-sm font-medium text-capul-800">
-            {selecao.size} selecionada(s)
+            {contagem(selecao.size, 'selecionada', 'selecionadas')}
           </p>
           <button
             type="button"
@@ -641,6 +648,14 @@ function DialogoAvaliador({
     };
   }, [escolhido, aplicacaoId, avaliados]);
 
+  /**
+   * ⭐ O QUE O BOTÃO VAI MESMO FAZER. Uma conta, lida em dois lugares — a frase
+   * "Nada mudaria com esta escolha" e o `disabled` do botão. `recusar` e
+   * `nadaAFazer` ficam de fora porque nenhum dos dois grava.
+   */
+  const nadaAAplicar =
+    previa !== null && previa.criar + previa.substituir + previa.exigeConfirmacao === 0;
+
   const substituicoes = previa?.linhas.filter((l) => l.acao === 'SUBSTITUIR') ?? [];
   const comAviso = previa?.linhas.filter((l) => l.acao === 'EXIGE_CONFIRMACAO') ?? [];
   const recusadas = previa?.linhas.filter((l) => l.acao === 'RECUSAR') ?? [];
@@ -671,7 +686,7 @@ function DialogoAvaliador({
       // ⭐ MENSAGEM DE SUCESSO. O diálogo fechava calado, e quem clicou ficava
       // sem saber se algo aconteceu — em lote, sem saber com quantas.
       setSucesso(
-        `${feitas} designação(ões) gravada(s) para ${escolhido.nome}.` +
+        `${contagem(feitas, 'designação gravada', 'designações gravadas')} para ${escolhido.nome}.` +
           (substituicoes.length > 0 ? ` ${substituicoes.length} substituíram o avaliador anterior.` : ''),
       );
       await aoConcluir();
@@ -685,7 +700,7 @@ function DialogoAvaliador({
       titulo={
         nomeUnico
           ? `${verbo} avaliador de ${nomeUnico}`
-          : `${verbo} avaliador de ${quantidade} pessoa(s)`
+          : `${verbo} avaliador de ${contagem(quantidade, 'pessoa', 'pessoas')}`
       }
       aoFechar={aoFechar}
     >
@@ -713,20 +728,28 @@ function DialogoAvaliador({
               logo abaixo prestes a aplicar 1. Os zeros continuam ocultos — o que
               não pode é um número existir e não ter linha. */}
           <p className="text-sm text-slate-700">
-            <strong className="tabular-nums">{previa.criar}</strong> ganham avaliador ·{' '}
+            <strong className="tabular-nums">{previa.criar}</strong>{' '}
+            {flexao(previa.criar, 'ganha', 'ganham')} avaliador ·{' '}
             <strong className={`tabular-nums ${previa.substituir > 0 ? 'text-amber-800' : ''}`}>
               {previa.substituir}
             </strong>{' '}
-            têm o avaliador SUBSTITUÍDO
+            {flexao(previa.substituir, 'tem', 'têm')} o avaliador SUBSTITUÍDO
             {previa.exigeConfirmacao > 0 && (
               <>
                 {' · '}
                 <strong className="tabular-nums text-rose-800">{previa.exigeConfirmacao}</strong>{' '}
-                <span className="text-rose-800">já respondidas — pedem confirmação</span>
+                <span className="text-rose-800">
+                  {flexao(
+                    previa.exigeConfirmacao,
+                    'já respondida — pede confirmação',
+                    'já respondidas — pedem confirmação',
+                  )}
+                </span>
               </>
             )}
-            {previa.nadaAFazer > 0 && ` · ${previa.nadaAFazer} já são de ${previa.avaliadorNome}`}
-            {previa.recusar > 0 && ` · ${previa.recusar} recusada(s)`}
+            {previa.nadaAFazer > 0 &&
+              ` · ${previa.nadaAFazer} ${flexao(previa.nadaAFazer, 'já é', 'já são')} de ${previa.avaliadorNome}`}
+            {previa.recusar > 0 && ` · ${contagem(previa.recusar, 'recusada', 'recusadas')}`}
           </p>
 
           {substituicoes.length > 0 && (
@@ -764,7 +787,10 @@ function DialogoAvaliador({
 
           {recusadas.length > 0 && (
             <div className="rounded-lg border border-slate-300 bg-slate-50 p-2 text-xs text-slate-700">
-              <p className="font-medium">{recusadas.length} serão recusadas:</p>
+              <p className="font-medium">
+                {recusadas.length}{' '}
+                {flexao(recusadas.length, 'será recusada', 'serão recusadas')}:
+              </p>
               <ul className="mt-1 space-y-1">
                 {recusadas.map((l) => (
                   <li key={l.colaboradorId}>{l.frase}</li>
@@ -773,7 +799,7 @@ function DialogoAvaliador({
             </div>
           )}
 
-          {previa.criar + previa.substituir + previa.exigeConfirmacao === 0 && (
+          {nadaAAplicar && (
             <p className="text-sm text-slate-500">Nada mudaria com esta escolha.</p>
           )}
         </div>
@@ -781,8 +807,8 @@ function DialogoAvaliador({
 
       {progresso && (
         <p className="mt-3 text-sm text-slate-600">
-          {progresso.feitos} de {avaliados.length} processada(s)
-          {progresso.falhas.length > 0 && ` · ${progresso.falhas.length} recusada(s)`}
+          {progresso.feitos} de {contagem(avaliados.length, 'processada', 'processadas')}
+          {progresso.falhas.length > 0 && ` · ${contagem(progresso.falhas.length, 'recusada', 'recusadas')}`}
         </p>
       )}
       {sucesso && (
@@ -806,9 +832,18 @@ function DialogoAvaliador({
         </button>
         <button
           type="button"
+          /* ⭐⭐ NADA A APLICAR ⇒ BOTÃO DESLIGADO. Com tudo recusado, o painel
+             já dizia "Nada mudaria com esta escolha" e o botão continuava
+             armado: o inverso exato do defeito do §3.1.27 — lá ele fazia MAIS
+             do que o resumo dizia, aqui não faria nada e parecia que faria.
+             ⚠️ A conta é a MESMA do "Nada mudaria" logo acima, e é de propósito:
+             a frase e o botão têm de sair do mesmo número, senão voltam a
+             discordar. O modal de vínculo e a prévia do lote (`aGravar === 0`)
+             já seguiam esta regra; esta era a que faltava. */
           disabled={
             !escolhido ||
             carregandoPrevia ||
+            nadaAAplicar ||
             (progresso !== null && progresso.feitos === avaliados.length)
           }
           onClick={aplicar}
@@ -818,9 +853,9 @@ function DialogoAvaliador({
         >
           {/* O rótulo carrega o efeito, não "Aplicar" — em lote, o número. */}
           {comAviso.length > 0
-            ? `Aplicar mesmo assim (${comAviso.length} respondida(s))`
+            ? `Aplicar mesmo assim (${contagem(comAviso.length, 'respondida', 'respondidas')})`
             : previa && previa.substituir > 0
-              ? `Aplicar · ${previa.substituir} substituição(ões)`
+              ? `Aplicar · ${contagem(previa.substituir, 'substituição', 'substituições')}`
               : 'Aplicar'}
         </button>
       </div>
@@ -920,7 +955,7 @@ function PainelDaCopia({
               ampla que ele. "O lote não altera" é o que estas linhas têm em
               comum; ficar de fora é só de uma delas, e o rótulo diz qual. */}
           <p className="font-medium text-slate-700">
-            {copia.naoAplicadas.length} pessoa(s) que o lote NÃO altera:
+            {contagem(copia.naoAplicadas.length, 'pessoa', 'pessoas')} que o lote NÃO altera:
           </p>
           <ul className="mt-1 space-y-0.5 text-slate-600">
             {Object.entries(copia.porMotivo).map(([motivo, n]) => (
@@ -960,8 +995,9 @@ function PainelDaCopia({
                   aplicação, não o das linhas montadas — quem o ciclo tirou não
                   entra aqui. O cabeçalho do ciclo imprime os dois lados
                   (montado × fora do ciclo); aqui basta o rótulo dizer qual é. */}
-              <strong>{a.nome}</strong>: {a.publico} ativos no público · {a.criar} a criar ·{' '}
-              {a.jaIguais} já iguais · {a.semAvaliador} sem avaliador
+              <strong>{a.nome}</strong>: {a.publico} {flexao(a.publico, 'ativo', 'ativos')} no
+              público · {a.criar} a criar · {a.jaIguais}{' '}
+              {flexao(a.jaIguais, 'já igual', 'já iguais')} · {a.semAvaliador} sem avaliador
             </li>
           ))}
         </ul>
@@ -995,7 +1031,7 @@ function PainelDaCopia({
               ? 'Aplicando…'
               : aGravar === 0
                 ? 'Nada a fazer — a designação já reflete o cadastro'
-                : `Confirmar e designar ${aGravar} pessoa(s)`}
+                : `Confirmar e designar ${contagem(aGravar, 'pessoa', 'pessoas')}`}
           </button>
         </>
       )}
