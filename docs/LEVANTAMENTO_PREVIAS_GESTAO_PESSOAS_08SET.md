@@ -168,6 +168,15 @@ implementação.
 
 ---
 
+## Desfecho (08/09, no mesmo dia)
+
+O Clenio decidiu na ordem abaixo: **1 e 2 feitos**, **3 parado** até a pergunta de política ser
+respondida. Ver §3.1.32 e §3.1.33 do `ESTADO-DO-PROJETO.md`; as duas perguntas estão na lista (A).
+
+⚠️ **Este documento fica como está** — ele descreve o estado em que o levantamento foi feito, e é
+o que dá sentido às duas seções novas. Os nomes que ele cita (`adicionar`, `barradosPelaRegua` na
+abertura) **já não existem no código**; foi essa a decisão 1.
+
 ## O que eu levaria à decisão
 
 Três coisas, em ordem de custo:

@@ -149,7 +149,7 @@ a ser conferidos. O que ela achou está em **§3.1.26 a §3.1.31**:
 | 2 | `designar/previa`: cinco ações, quatro contadores | ✅ §3.1.27 |
 | 3 + 4 | Dois cortes de lista mudos (+ o grep dos dois restantes) | ✅ §3.1.28 |
 | 5 + 6 | Cabeçalho não fechava a conta · título não recebia o modo | ✅ §3.1.29 |
-| 7 | As **cinco** superfícies de prévia | 📋 levantado, decisão do Clenio |
+| 7 | As **cinco** superfícies de prévia | 📋 levantado → **1 e 2 feitos**, 3 parado |
 | 8 | Prévia de verdade no modal de vínculo | 📝 §3.1.30 — trava numa pergunta de produto |
 | 9 | Descrição do centro de custo | ⏸️ §3.1.31 — adiado, escopo corrigido |
 
@@ -159,9 +159,26 @@ cinco payloads lado a lado, a resposta às quatro perguntas, e **dois achados no
 a prévia diz `SUBSTITUIR`, o ato recusa), e `barradosPelaRegua` conta exclusão manual em
 `previa-da-abertura`. Também **corrige uma premissa**: o `criar` dos dois endpoints **não** colide.
 
-**520 testes** (eram 515; 5 novos em `previa-fecha-a-conta.spec.ts`, validados por mutação).
-Nenhuma migration. **Nada foi gravado no banco** — o ciclo `ZZ CONFERE 09/09` segue intacto
-(9 no público, 1 aplicação, 2 designados) para a skill terminar a conferência.
+#### O que saiu do levantamento, na ordem de custo que ele propôs
+
+**1. As duas colisões, nomeadas** (§3.1.32) — `barradosPelaRegua` → `foraDoCiclo` na
+`previa-da-abertura`, que era o mais urgente porque o campo conta **exclusão manual do RH** e o
+nome afirmava régua; e `adicionar` → `entramNoPublico`, para separar os dois objetos (lista ×
+avaliação). Junto: o `criar` **não** colidia, e isso ficou escrito no fonte, ao lado dos dois
+campos, porque a próxima pessoa vai desconfiar de novo.
+
+**2. A prévia rodando as mesmas guardas** (§3.1.33) — as duas subiram para o classificador
+compartilhado e `assertPodeTrocarDeAplicacao` deixou de existir. **Não é uma cópia das guardas: é
+a mesma função.** Conferido no DEV: onde a prévia dizia `SUBSTITUIR` e o ato recusava, agora os
+dois dizem `RECUSAR` **com a mesma frase**.
+
+**3. Unificar (1) e (2)** — **parado**, e de propósito: depende da pergunta do `JA_RESPONDIDA`,
+agora na lista (A) junto da do `EXIGE_CONFIRMACAO` no cadastro. Unificar antes escolheria a
+política por omissão, que é como o buraco do §3.1.27 nasceu.
+
+**537 testes** (eram 515). Nenhuma migration. **Nada foi gravado no banco** — o ciclo
+`ZZ CONFERE 09/09` segue intacto (9 no público, 1 aplicação, 2 designados) para a skill terminar
+a conferência.
 
 ### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
 
@@ -210,6 +227,8 @@ nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 | **Quem é o segundo `RH_ADMIN`** (a pessoa) — dar a permissão é da T.I. e está em (B) | Gestora de RH | §5 · §3.1 |
 | 🟢 **CONFIRMAÇÃO, não bloqueio:** cancelar avaliação com respostas já dadas — implementado com **as respostas ficando registradas e fora da apuração, nunca apagadas**. Se ela preferir que o sistema recuse e obrigue o avaliador a enviar, a mudança é pequena | Gestora de RH | §5 · §3.1.18 |
 | 🟢 **CONFIRMAÇÃO, não bloqueio:** encerrar ciclo com pendência é **RH_ADMIN só**, o mesmo degrau do reabrir. Se ela quiser estender a quem monta o ciclo (`RH_CICLO`), é uma linha no controller | Gestora de RH | §5 · §3.1.18 |
+| 🔵 **POLÍTICA, não código:** trocar o avaliador de uma avaliação **já respondida** — o **lote** do cadastro RECUSA (`JA_RESPONDIDA`) e a designação **individual** PERMITE com confirmação (`EXIGE_CONFIRMACAO`). Só a segunda tem razão escrita. Pode estar certo (em lote ninguém lê 50 avisos), mas ninguém decidiu — e **unificar as prévias está parado até isto** | Gestora de RH | §3.1.30 · levantamento |
+| 🔵 **POLÍTICA, não código:** no **cadastro** de avaliadores, o que "exige confirmação" quer dizer? No ciclo é *"já respondida"*, e o cadastro não tem resposta. **(A)** nada exige — campo 0, contrato uniforme; **(B)** sobrescrever linha provisória ou não revisada (927 e 159 hoje). Sem a resposta, o endpoint é desenhado duas vezes | Gestora de RH | §3.1.30 |
 
 ### (B) TRABALHO TÉCNICO PENDENTE — na ordem em que eu faria
 
@@ -2262,6 +2281,20 @@ contrato de baldes como as outras cinco superfícies. O encanamento existe ao la
 **Alguém precisa dizer qual.** Sem isso o endpoint é desenhado duas vezes — e, como o
 §3.1.27 mostrou, política escolhida por omissão é como o buraco nasce.
 
+#### ⚠️ E há uma SEGUNDA pergunta de política, do mesmo tipo
+
+Trocar o avaliador de uma avaliação **já respondida**: o **lote** do cadastro RECUSA
+(`JA_RESPONDIDA`) e a designação **individual** PERMITE com confirmação (`EXIGE_CONFIRMACAO`).
+Mesmo fato do domínio, decisões opostas — e **só a segunda tem razão escrita** (o cabeçalho de
+`efeito-de-designar.ts`: recusar de vez tiraria do RH uma correção legítima). Pode estar certo
+que o lote recuse — em lote ninguém lê cinquenta avisos, e recusar é o padrão seguro —, mas isso
+é decisão a registrar, não detalhe de implementação.
+
+⭐ **Unificar as prévias (item 3 da ordem de custo) está parado até esta resposta.** Unificar
+antes escolheria a política por omissão, que é literalmente como o buraco do §3.1.27 nasceu.
+
+As duas perguntas estão na lista **(A)**, com quem responde.
+
 ⚠️ Isto **não pega carona** no conserto do §3.1.26: aquele era número errado na tela, este é
 capacidade nova.
 
@@ -2275,6 +2308,81 @@ dado para formatar.
 `publico.origens[].referencia` o valor é **texto livre gravado na montagem**
 (*"PROVISORIO: prefixo 11"*), não um campo de centro de custo. **Não forçar descrição ali** —
 seria inventar estrutura sobre uma anotação de quem montou.
+
+### 3.1.32. ✅ As duas colisões de vocabulário, nomeadas (08/09)
+
+Item 1 da ordem de custo do levantamento — barato e independente de decidir política.
+
+**`barradosPelaRegua` → `foraDoCiclo`, em `previa-da-abertura`.** Era o mais urgente dos três: a
+conta é `!elegivel`, e `elegivel` sai de `designacao.listar`, onde *"a decisão manual SOBREPÕE a
+régua, nos dois sentidos"*. O número **inclui quem o RH tirou à mão** — e o nome afirmava a causa,
+e só uma delas. Medido no Piloto: 47 fora do ciclo, `REGRA_CICLO` 47, manual **0** — concordam
+**por acaso**, porque ninguém excluiu à mão ainda. Na primeira exclusão manual o campo passaria a
+dizer *"a régua barrou"* sobre um ato de gente, com a confiança de um número.
+
+⭐ A tela dizia o mesmo em negrito (*"fora pela régua do ciclo"*) e admitia a outra causa entre
+parênteses. Corrigida junto: afirmar no destaque e ressalvar no rodapé é a mesma mentira, só que
+onde alguém lê.
+
+⚠️ Em `publico/previa` o nome **fica** — lá ele é literal, e conta só a régua.
+
+**`adicionar` → `entramNoPublico`, em `publico/previa`.** "Adicionar" não diz **a quê**. A prévia
+conta duas coisas encadeadas — entrar na LISTA e virar AVALIAÇÃO — e entre elas está a régua; quem
+lesse `adicionar` como "quantas avaliações saem daqui" erraria exatamente em `barradosPelaRegua`.
+É o mesmo eixo do cabeçalho do ciclo (1036 montado × 989 alcançado): **público e avaliação são
+objetos diferentes e cada um precisa da sua palavra.**
+
+**E o `criar` NÃO colide** — a suspeita era falsa, conferida campo a campo. Nos dois endpoints
+significa *"não existia `Avaliacao` no ciclo → uma será criada"*; é a única palavra que os dois
+payloads já têm em comum. Registrado no fonte, ao lado dos dois campos, porque a próxima pessoa
+vai desconfiar de novo. O que diverge são os vizinhos (`atualizar`/`substituir`,
+`jaIguais`/`nadaAFazer`) e a política do §3.1.30.
+
+### 3.1.33. 🔴 A prévia prometia gravar o que o ato recusa (08/09)
+
+Item 2 da ordem de custo — e o mais grave dos três, porque não é contador errado: é a **tela
+autorizando o que a API vai negar**. O botão fica armado, a pessoa clica e leva um erro que a
+prévia tinha acabado de dizer que não viria.
+
+`efeitoDeDesignar` é pura e era compartilhada entre a prévia e o ato — e mesmo assim os dois
+divergiam, porque `designar()` rodava **mais duas guardas que o classificador não conhecia**:
+
+| Guarda | Onde estava | A prévia rodava? |
+|---|---|---|
+| autoavaliação (`avaliadoId === avaliadorId`) | inline, **antes** do classificador | ❌ |
+| troca de aplicação (`assertPodeTrocarDeAplicacao`) | método, **depois** dele | ❌ |
+
+Medido no Piloto, mesmo par: prévia `SUBSTITUIR` `{substituir: 1, recusar: 0, total: 1}` × ato
+*"Ninguém pode ser o avaliador da própria avaliação."*
+
+#### As mesmas guardas, não uma cópia delas
+
+As duas **subiram para o classificador**. Não há uma segunda implementação para manter em acordo —
+prévia e ato chamam a mesma função, e é impossível uma saber o que a outra não sabe. A DECISÃO da
+troca continua sendo a função pura de sempre (`decidirTrocaDeAplicacao`), a mesma que a cópia do
+cadastro consulta; o que mudou foi **quem a consulta**. `assertPodeTrocarDeAplicacao` deixou de
+existir — guarda que só um chamador enxerga é como as duas divergências nasceram.
+
+⚠️ **Uma mudança de ORDEM, deliberada.** A troca de aplicação passa a ser avaliada **antes** do
+`EXIGE_CONFIRMACAO`, porque a primeira é recusa **dura** (confirmação nenhuma a levanta) e a
+segunda é **confirmável**. Na ordem anterior, um ato que fosse as duas coisas pedia confirmação
+primeiro e só recusava depois de confirmado — fazia a pessoa autorizar o que seria negado de
+qualquer jeito. O desfecho final é o mesmo; o caminho deixa de ser humilhante.
+
+⚠️ Efeito colateral bom: a guarda lê `atual.respostas`, que os dois chamadores já trazem, em vez
+de recontar no banco. Uma ida a menos, pelo mesmo número.
+
+#### O teste protege o ACORDO, não a mensagem
+
+`previa-fecha-a-conta.spec.ts` ganhou oito cenários que rodam **a prévia e o ato sobre o mesmo
+estado** e exigem que decidam igual — e, quando recusam, que a **frase seja a mesma string**.
+Uma guarda nova que alguém acrescente só ao ato — que é exatamente como estas duas nasceram —
+quebra os casos sem que ninguém precise lembrar de vir aqui.
+
+**Validado por mutação**, os dois arranjos antigos reconstruídos: guarda de autoavaliação só no
+ato → 2 falhas; guarda de troca invisível à prévia → 7 falhas (com a suíte da troca junto).
+
+**537 testes.**
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
