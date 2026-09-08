@@ -562,12 +562,18 @@ function EditorDePublico({
                 ⚠️ {previa.emOutraAplicacao.length} já estão em OUTRA aplicação e não entram —
                 ninguém responde dois questionários no mesmo ciclo:
               </p>
+              {/* ⚠️ O mesmo corte de 8 do bloco de cima — que TEM indicador.
+                  Este não tinha: alguém acertou um e esqueceu o irmão, e a lista
+                  passava a mentir a partir da nona pessoa. */}
               <ul className="mt-1">
                 {previa.emOutraAplicacao.slice(0, 8).map((p) => (
                   <li key={p.colaboradorId}>
                     {p.nome} ({p.matricula}) — está em <strong>{p.aplicacao}</strong>
                   </li>
                 ))}
+                {previa.emOutraAplicacao.length > 8 && (
+                  <li>… e mais {previa.emOutraAplicacao.length - 8}</li>
+                )}
               </ul>
             </div>
           )}
