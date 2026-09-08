@@ -73,7 +73,11 @@ describe('IdentidadeService', () => {
     await service.colaboradorDoUsuario('user-1');
 
     const where = prisma.colaborador.findMany.mock.calls[0][0].where;
-    expect(where.matricula).toBe('001741');
+    // ⚠️ Afirma o FATO — a matrícula é o que se procura, e filial não entra —,
+    // não a FORMA do filtro. Ele dizia `toBe('001741')` e quebrou em 08/09 ao
+    // virar `{ in: [...] }` para aceitar as duas formas da chapa; o fato que ele
+    // protege não tinha mudado. Ver a nota de método na §6.
+    expect(where.matricula.in).toContain('001741');
     expect(where).not.toHaveProperty('filial');
   });
 
@@ -119,5 +123,63 @@ describe('IdentidadeService', () => {
       ]);
       await expect(service.colaboradorDoUsuario('user-1')).rejects.toBeInstanceOf(MatriculaAmbiguaError);
     });
+  });
+});
+
+/**
+ * ⭐⭐ A CHAPA DO PROTHEUS NÃO PODE VIRAR UM 403 (08/09).
+ *
+ * `core.usuarios` pode ter `E01981` (é o que o Protheus devolve) enquanto
+ * `rh.colaborador` guarda `001981`. Com match exato, a pessoa logava, tinha o
+ * papel certo, e lia "sua matrícula não corresponde a nenhum colaborador ativo"
+ * — um 403 que PARECE falta de permissão, e que manda quem investiga ao
+ * Configurador dar papel a quem já tem. Ver §3.1.25.
+ */
+describe('IdentidadeService.porMatricula — as duas formas da chapa', () => {
+  let prisma: ReturnType<typeof createPrismaMock>;
+  let service: IdentidadeService;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    service = new IdentidadeService(prisma as never);
+  });
+
+  const where = () => prisma.colaborador.findMany.mock.calls[0][0].where;
+
+  it('procura pelas DUAS formas quando recebe a do Protheus', async () => {
+    await service.porMatricula('E01981');
+    expect(where().matricula).toEqual({ in: ['001981', 'E01981'] });
+  });
+
+  /** ⚠️ Não inventa a forma do Protheus para quem já veio na nossa. */
+  it('recebendo a nossa forma, procura só por ela', async () => {
+    await service.porMatricula('001047');
+    expect(where().matricula).toEqual({ in: ['001047'] });
+  });
+
+  it('acha o colaborador gravado como 001981 a partir de E01981', async () => {
+    prisma.colaborador.findMany.mockResolvedValue([
+      { id: 'c1', filial: '02', matricula: '001981', nome: 'RENATA', situacao: 'ATIVO' },
+    ]);
+    await expect(service.porMatricula('E01981')).resolves.toMatchObject({ matricula: '001981' });
+  });
+
+  /**
+   * ⚠️ O filtro de situação NÃO pode ter se perdido na mudança — é a definição
+   * única de "ativo", e sem ele o login resolveria para gente demitida.
+   */
+  it('continua filtrando por SITUACOES_ELEGIVEIS', async () => {
+    await service.porMatricula('E01981');
+    expect(where().situacao.in).toEqual(expect.arrayContaining(['ATIVO', 'AFASTADO', 'FERIAS']));
+  });
+
+  it('login de posto (SUPVEN01) não é convertido em chapa nenhuma', async () => {
+    await service.porMatricula('SUPVEN01');
+    expect(where().matricula).toEqual({ in: ['SUPVEN01'] });
+  });
+
+  it('sem matrícula, nem consulta o banco', async () => {
+    await expect(service.porMatricula('   ')).resolves.toBeNull();
+    expect(prisma.colaborador.findMany).not.toHaveBeenCalled();
   });
 });

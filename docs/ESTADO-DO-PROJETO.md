@@ -143,7 +143,7 @@ nove itens desta lista não movem esse número em nada.
 | # | Item | Onde está |
 |---|---|---|
 | 1 | **Contas para os avaliadores — `46 dos 54` não têm conta.** É o que decide o piloto, e é **trabalho do Clenio no Configurador**, não daqui. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
-| 2 | 🔴 **Colisão de chapa dá 403 que PARECE falta de permissão** — ⚠️ a FONTE foi fechada no Configurador em 08/09 (`normalizarChapa`), mas o módulo segue sem defesa: `porMatricula` compara texto exato, então `E01981` (em `core.usuarios`) **não** acha `001981` (em `rh.colaborador`), e o usuário lê *"matrícula que não corresponde a nenhum colaborador ativo"*. ⚠️ **O sintoma é o que custa**, não o código: quem bater nisso vai ao Configurador **dar papel a quem já tem**. ⭐ **Precedente pronto: a Logística já normaliza pelos 5 últimos dígitos** — não é decisão nova, é aplicar o que a casa faz | §6 · §3.1.25 |
+| 2 | ✅ **FEITO em 08/09 — colisão de chapa (`E01981` × `001981`)**, dos dois lados: a **fonte** no Configurador (`normalizarChapa` ao preencher e ao salvar) e a **rede** no módulo (`porMatricula` e a importação de planilha buscam pelas duas formas). ⚠️ O sintoma era um **403 que PARECE falta de permissão**, e mandava quem investiga ao Configurador dar papel a quem já tem. 🟡 **Sobra dado legado**: `marcelojunio` = `E03942` — agora resolve pela rede, mas o cadastro segue torto | §3.1.25 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
 | 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
 | 5 | Tela de **reabertura** de avaliação (a rota existe, o botão não) | §7 · §2 |
@@ -1997,7 +1997,39 @@ alguém; **não compara formatos**.
 |---|---|
 | 🟡 **Dado antigo** | `marcelojunio` = `E03942` em `core.usuarios`, conta ATIVA, e a pessoa existe no `rh` como `003942`. **Vai dar o 403 no dia em que ele for avaliador.** É correção de cadastro, do Clenio — não se mexe em conta daqui |
 | ⚪ `admin` = `E09999` | conta de sistema, sem colaborador. Correto que não resolva |
-| 🔴 **Item 2 da (B) continua** | a fonte fechou, mas o **Gestão de Pessoas segue sem defesa**: `porMatricula` compara texto exato. Dado legado e qualquer outro caminho de escrita reabrem o buraco, e o sintoma continua sendo um 403 que parece falta de permissão |
+| ✅ **A defesa também foi feita** | ver abaixo — a fonte é a torneira, isto é a rede |
+
+#### ✅ E a REDE, no próprio módulo (08/09)
+
+`common/chapa.ts` — `normalizarChapa` e `chapasEquivalentes` —, ligada nas **duas portas** que
+casam chapa:
+
+| Onde | O que fazia | O que faz |
+|---|---|---|
+| `IdentidadeService.porMatricula` | `matricula: alvo` (exato) → **403 no login** | `matricula: { in: ['001981','E01981'] }` |
+| `distribuicao.montarPrevia` | índice por `c.matricula` cru → a linha da planilha virava *"matrícula não existe entre os colaboradores ativos"* | índice pela chapa **normalizada**, nos dois lados |
+
+⚠️ **A segunda porta não estava na conta.** Só apareceu ao varrer quem mais casa matrícula no
+módulo — e é a **importação da planilha do RH**, que é montada a partir do que o Protheus mostra,
+onde a chapa é `E…`. A recusa dela já falava do *"zero à esquerda que o Excel come"*: é a mesma
+família, e faltava metade.
+
+⚠️ **Busca pelas DUAS formas, não só pela normalizada.** Se um dia o `rh` tiver `E…` (importação
+nova, correção manual), a busca continua achando em vez de passar a falhar do outro lado. E se as
+duas existirem como pessoas diferentes, quem decide é o `escolherColaboradorUnico`, que já
+lançava `MatriculaAmbiguaError` — a função só oferece candidatos, não decide.
+
+⚠️ **Regra estreita, e há spec para isso:** `SUPVEN01`, `E0194`, `X01981` e `999888` passam
+**crus**. Prefixo novo deve falhar visivelmente, não ser adivinhado.
+
+⭐ **Um spec antigo quebrou, e a falha estava meio certa:** ele afirmava
+`expect(where.matricula).toBe('001741')` — a **forma** do filtro, não o fato que protege
+(*"busca só por matrícula, sem pedir filial"*). O fato não mudou; a forma sim. Corrigido para
+`expect(where.matricula.in).toContain('001741')`, com o motivo ao lado. É a regra 3 da §5.9 numa
+variante que ainda não tínhamos visto: **acoplamento à forma, não ao texto.**
+
+**515 testes** (25 novos). Conferido na imagem: `chapasEquivalentes('E03942')` →
+`["003942","E03942"]`.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

@@ -271,3 +271,55 @@ describe('⚠️ o que o Excel faz com a planilha', () => {
     expect(l.linhas.map((x) => x.avaliadorMatricula)).toEqual(['000010', '000011']);
   });
 });
+
+/**
+ * ⭐ A PLANILHA PODE TRAZER A CHAPA DO PROTHEUS (08/09).
+ *
+ * O RH monta a lista a partir do que o Protheus mostra, e lá a chapa é `E01981`.
+ * Com match exato, a linha era recusada com "matrícula não existe entre os
+ * colaboradores ativos" — mandando conferir um número que está certo. Mesma
+ * família do zero à esquerda que o Excel come. Ver `common/chapa.ts`.
+ */
+describe('importação: a chapa do avaliador nas duas formas', () => {
+  const colaborador = (matricula: string, nome: string, cc: string) => ({
+    id: `id-${matricula}`, filial: '02', matricula, nome,
+    centroCusto: cc, centroCustoDescricao: 'SUPERMERCADO',
+  });
+
+  const previa = (avaliadorMatricula: string) =>
+    montarPrevia({
+      linhas: [{ numero: 2, centroCusto: '21010101', filial: '02', avaliadorMatricula }],
+      recusasDaLeitura: [],
+      linhasNoArquivo: 1,
+      linhasSemAvaliador: 0,
+      colaboradores: [
+        colaborador('001981', 'RENATA', '21010101'),
+        colaborador('004000', 'AVALIADA', '21010101'),
+      ],
+      vigentes: [],
+      substituirAjustesManuais: false,
+    });
+
+  it('a forma da nossa base acha o avaliador', () => {
+    const r = previa('001981');
+    expect(r.previa.recusas).toEqual([]);
+    expect(r.aGravar.length).toBeGreaterThan(0);
+  });
+
+  /** ⭐ O CASO: a planilha veio do Protheus, com `E…`. */
+  it('a forma do Protheus TAMBÉM acha — e não vira recusa', () => {
+    const r = previa('E01981');
+    expect(r.previa.recusas).toEqual([]);
+    expect(r.aGravar.length).toBeGreaterThan(0);
+  });
+
+  it('as duas formas produzem o mesmo resultado', () => {
+    expect(previa('E01981').aGravar).toEqual(previa('001981').aGravar);
+  });
+
+  /** ⚠️ E o que não é chapa continua sendo recusado, com o motivo de sempre. */
+  it('matrícula inexistente continua recusada', () => {
+    const r = previa('E09999');
+    expect(r.previa.recusas[0]).toMatchObject({ motivo: 'AVALIADOR_NAO_ENCONTRADO' });
+  });
+});

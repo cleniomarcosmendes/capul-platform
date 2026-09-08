@@ -32,6 +32,7 @@
  * quem. Ela existe para não jogar fora o trabalho de quem preencheu a planilha,
  * e é por isso que essas linhas ficam marcadas até alguém olhar.
  */
+import { normalizarChapa } from '../common/chapa.js';
 
 export interface ColaboradorDaPrevia {
   id: string;
@@ -139,9 +140,18 @@ export function montarPrevia(entrada: {
   const conflitos: ConflitoComAjusteManual[] = [];
   const centrosCusto: CentroDeCustoDaPrevia[] = [];
 
+  /**
+   * ⚠️ Indexado pela chapa NORMALIZADA (08/09). A planilha do RH pode trazer a
+   * forma do Protheus (`E01981`) enquanto a base guarda `001981` — e o match
+   * exato recusava a linha com *"matrícula não existe entre os colaboradores
+   * ativos"*, mandando conferir um número que está certo. É a mesma família do
+   * zero à esquerda que o Excel come, já citada na recusa abaixo.
+   * Ver `common/chapa.ts`.
+   */
   const porMatricula = new Map<string, ColaboradorDaPrevia[]>();
   for (const c of entrada.colaboradores) {
-    porMatricula.set(c.matricula, [...(porMatricula.get(c.matricula) ?? []), c]);
+    const chave = normalizarChapa(c.matricula);
+    porMatricula.set(chave, [...(porMatricula.get(chave) ?? []), c]);
   }
   const vigentePorAvaliado = new Map(entrada.vigentes.map((v) => [v.avaliadoId, v]));
   const nomePorId = new Map(entrada.colaboradores.map((c) => [c.id, c.nome]));
@@ -164,7 +174,7 @@ export function montarPrevia(entrada: {
   for (const [chave, grupo] of [...grupos.entries()].sort()) {
     const responsaveis: ColaboradorDaPrevia[] = [];
     for (const linha of grupo.linhas) {
-      const achados = porMatricula.get(linha.avaliadorMatricula) ?? [];
+      const achados = porMatricula.get(normalizarChapa(linha.avaliadorMatricula)) ?? [];
       if (achados.length === 0) {
         recusas.push({
           numero: linha.numero,

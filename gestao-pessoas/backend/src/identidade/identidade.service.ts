@@ -28,6 +28,7 @@ import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { $Enums, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
+import { chapasEquivalentes } from '../common/chapa.js';
 
 export interface ColaboradorResumo {
   id: string;
@@ -96,13 +97,25 @@ export class IdentidadeService {
    * pede filial a ninguém: para o RH, matrícula identifica a pessoa.
    */
   async porMatricula(matricula: string): Promise<ColaboradorResumo | null> {
-    const alvo = (matricula ?? '').trim();
-    if (!alvo) return null;
+    /**
+     * ⚠️ Busca por TODAS as formas da chapa, não só pela digitada (08/09).
+     *
+     * O Protheus identifica como `E01981`; `rh.colaborador` guarda `001981`. O
+     * match exato transformava essa diferença num **403 que parece falta de
+     * permissão** — a pessoa loga, tem o papel certo, e é mandada de volta ao
+     * Configurador para receber o que já tem. Ver `common/chapa.ts`.
+     *
+     * ⚠️ Isto é a REDE. A fonte foi fechada no Configurador no mesmo dia, mas
+     * dado legado continua na base (`marcelojunio` = `E03942`, conta ativa).
+     */
+    const candidatas = chapasEquivalentes(matricula);
+    if (candidatas.length === 0) return null;
+    const alvo = candidatas[0];
     const encontrados = (await this.prisma.colaborador.findMany({
       // O `in` sai de SITUACOES_ELEGIVEIS — a definição única de "ativo"
       // (common/elegibilidade.ts). Não escrever o filtro à mão aqui.
       where: {
-        matricula: alvo,
+        matricula: { in: candidatas },
         situacao: { in: SITUACOES_ELEGIVEIS as unknown as $Enums.SituacaoColaborador[] },
       },
       select: { id: true, filial: true, matricula: true, nome: true, situacao: true },
