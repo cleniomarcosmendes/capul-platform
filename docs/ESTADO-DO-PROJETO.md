@@ -214,8 +214,17 @@ módulo desde que ele existe (§3.1.37, 48% das designações impossíveis), mai
 (§3.1.39). Nenhum apareceu em 537 testes nem em três rodadas de conferência de tela — só em rodar
 o processo inteiro com dado real.
 
-**Depois de §3.1.37 e §3.1.38:** a skill redistribui as 24 designações dos avaliadores sem conta
-para RENATA e LIDYANE, e aí abre e responde.
+**Depois de §3.1.37 e §3.1.38:** a skill redistribuiu, abriu e **respondeu 13 avaliações pela
+tela** — e apurou as 13. O ciclo está com 52 linhas (2 canceladas), 13 enviadas, 13 apuradas.
+
+⭐ **Saldo do ciclo de simulação até agora: 9 defeitos**, dos quais **3 graves** — 48% das
+designações impossíveis (§3.1.37), o denominador que nunca fecharia em 100% (§3.1.38/§3.1.40) e a
+tela prometendo ao avaliador um caminho que não existia (§3.1.41/§3.1.43). Nenhum apareceu em 537
+testes nem em três rodadas de conferência de tela.
+
+⚠️ **Dois deles foram achados DEPOIS de eu dizer que estava resolvido** — os três `_count` do
+§3.1.40 e a promessa do §3.1.45. O padrão vale mais que os defeitos: o que escapa não é o caso
+difícil, é a **forma que eu não procurei**.
 
 ### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
 
@@ -276,7 +285,7 @@ move esse número.
 
 | # | Item | Onde está |
 |---|---|---|
-| **0** | 🔴 **Reabrir avaliação — botão em tela.** Sobe para o topo: o diálogo de envio **promete ao avaliador** que o RH pode reabrir, e o RH não tem por onde (§3.1.41). Backend pronto; custo é de tela **+ uma decisão**: o que fazer com o `ResultadoAvaliacao` de uma avaliação já apurada | §3.1.41 |
+| ~~0~~ | ✅ **Reabrir avaliação — FEITO em 09/09.** Botão na linha da Designação, diálogo dizendo a nota que apaga, auditoria guardando o resultado apagado. A decisão foi **apagar** o `ResultadoAvaliacao` | §3.1.43 |
 | 1 | **Contas para os avaliadores — `46 dos 54` não têm conta.** É o que decide o piloto, e é **trabalho do Clenio no Configurador**, não daqui. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
 | 2 | ✅ **FEITO em 08/09 — colisão de chapa (`E01981` × `001981`)**, dos dois lados: a **fonte** no Configurador (`normalizarChapa` ao preencher e ao salvar) e a **rede** no módulo (`porMatricula` e a importação de planilha buscam pelas duas formas). ⚠️ O sintoma era um **403 que PARECE falta de permissão**, e mandava quem investiga ao Configurador dar papel a quem já tem. ✅ E o dado legado foi corrigido no mesmo dia: **nenhuma conta de pessoa real fora do formato** | §3.1.25 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
@@ -2716,6 +2725,98 @@ apuração: **mesmo nível em todas as perguntas tem de produzir nota idêntica*
 diferentes têm de ordenar como os níveis. Se divergir, o defeito está no **peso por pergunta**, não
 na faixa de conceito — a faixa é a mesma para todos. É um jeito barato de separar as duas causas
 sem instrumentar o motor, e vale para toda apuração futura.
+
+### 3.1.43. ✅ REABRIR AVALIAÇÃO — a tela que faltava, e o resultado que ela apaga (09/09)
+
+O §3.1.41 achou a promessa; este é o conserto. A decisão do Clenio sobre o `ResultadoAvaliacao`:
+**apagar**, e as três opções ficam escritas porque a rejeitada volta a parecer boa daqui a um mês.
+
+| Opção | Por que não |
+|---|---|
+| **RECUSAR** enquanto houver resultado | transformaria *"apurei cedo para conferir o cálculo"* — que a tela de Resultados **diz ser legítimo** — em porta fechada: quem apurou parcial ficaria impedido de corrigir **qualquer** avaliação daquele ciclo |
+| **MARCAR COMO VENCIDO** | um terceiro estado que ninguém pediu, com o resultado antigo **visível** em Resultados enquanto a avaliação está `EM_ANDAMENTO` — a inconsistência que se quer evitar, com um rótulo em cima |
+| ✅ **APAGAR** | é o que a reapuração **já faz** (`delete` + `create`). Não é comportamento novo: é o mesmo, disparado antes. E é coerente com o `notaAvaliacao: null` que a reabertura já fazia — a nota é do ENVIO, e o envio foi desfeito |
+
+#### A sequência do apagar saiu de dentro da apuração
+
+`ResultadoCriterio` **não tem `onDelete: Cascade`**: a memória de cálculo sai primeiro ou a FK
+barra. Isso estava escrito uma vez, dentro da reapuração. Em vez de copiar para a reabertura —
+que é exatamente o erro do §3.1.40 —, virou `apuracao/apagar-resultado.ts`, com os dois
+chamadores. ⚠️ E devolve **o que apagou**, não `void`: quem reabre precisa da nota para a
+auditoria.
+
+#### O que a tela diz, com o número
+
+O diálogo pergunta ao backend **antes** (`GET /avaliacoes/:id/efeito-da-reabertura`, mesma porta e
+mesmo papel do ato) e mostra:
+
+> **Isto apaga o resultado apurado desta pessoa.**
+> Nota **88,00** · conceito **BOM** · apurado em 09/09/2026 13:02.
+> Ele **volta quando você apurar de novo**. Até lá, esta pessoa sai da lista de Resultados e da
+> média do ciclo — que passa a ser sobre as demais.
+
+⚠️ A nota vem do **mesmo registro que o ato vai apagar**, nunca de uma conta da tela (§3.1.22).
+
+#### A auditoria guarda a nota, não só o ato
+
+`valorAnterior: { resultadoApagado: { notaFinal, conceito, apuradoEm } }`. Sem isso o resultado
+some sem rastro e *"por que a média do ciclo mudou"* fica sem resposta.
+
+#### E o que acontece com a média do ciclo — a pergunta do Clenio
+
+**Sim, passa a ser sobre 12** — e a tela já dizia isso certo, sem precisar de conserto. A média de
+Resultados é calculada sobre as linhas de `resultado_avaliacao` que existem, e o cabeçalho já traz
+a **base** desde o §3.1.8: passa de *"13 de 50 avaliações do ciclo apuradas · média sobre essas
+13"* para *"**12** de 50 · média sobre essas **12**"*, com o aviso de **apuração parcial** subindo
+de 37 para 38. ⭐ Nada a fazer: a base à vista era justamente a defesa contra este tipo de
+mudança silenciosa. E o denominador (50) é o `_count` que o §3.1.40 corrigiu hoje — antes diria 52.
+
+#### Onde o botão fica
+
+Na **linha da Designação**, ao lado de *Trocar avaliador* e *Excluir*, só para `RH_ADMIN` e só
+sobre avaliação `ENVIADA`. ⚠️ Aqui ele **some** em vez de ficar desabilitado, e a diferença tem
+regra: *"desabilite com o motivo"* vale para o que a pessoa **poderia querer fazer**; reabrir uma
+avaliação que não foi enviada é ato **sem objeto**.
+
+Isso exigiu um campo: `LinhaDaLista` trazia `avaliacaoStatus` e **não** `avaliacaoId` — a tela
+sabia QUE havia avaliação e não conseguia agir sobre ela.
+
+### 3.1.44. 🟠 "Peso 60" × "Questionário 100,0%" — o mesmo peso, dois números (09/09)
+
+A memória de cálculo mostrava **`Peso 60`**; a aba Aplicações, para a mesma aplicação, **`Questionário
+100,0%`** e *"CRITÉRIOS: Nenhum — a nota é 100% do questionário"*. A nota final não sofria
+(componente único normaliza para 1 de qualquer jeito), mas quem abrisse a memória para **conferir a
+conta** procuraria **40 pontos de critérios que não existem**.
+
+⭐ **É a família do `52 × 50`**: dois números verdadeiros, mesma tela, sem o termo que os concilia.
+E a saída é a mesma do cabeçalho do ciclo (§3.1.29) — **não trocar o número, mostrar o termo que
+falta**.
+
+A memória **mantém o peso bruto** (é o que está cadastrado e é o insumo da conta) e ganha ao lado a
+fração: `60 · 100,0%`, com a coluna virando **"Peso · da nota"** e o rodapé fechando em
+`60 · 100%`. ⚠️ Critério **sem dado** mostra `—` em vez de fração: o motor redistribui o peso dele
+(`houveRenormalizacao`), e dar-lhe uma fração faria a soma passar de 100%.
+
+⚠️ E a normalização virou **uma função só** (`lib/composicao-da-nota.ts`), usada pelas duas telas.
+Duas normalizações foi o que as fez discordar — a mesma lição do §3.1.40, aplicada antes de doer.
+
+### 3.1.45. 📌 O sistema cita a reabertura em DOIS lugares — e o segundo é o pior
+
+Confirmado pela skill em 09/09, antes de o botão existir:
+
+1. **no envio, ao avaliador** — *"Se precisar corrigir alguma coisa, será necessário pedir ao RH
+   que reabra a avaliação."*
+2. **no diálogo de trocar avaliador de quem já respondeu** — *"reabra a avaliação (ato do
+   RH_ADMIN, com motivo) e refaça-a."*
+
+⚠️ **O segundo é pior**, e vale registrar por quê: ele aparece **exatamente quando a pessoa está
+prestes a fazer a coisa errada** — trocar o nome de quem avalia por cima do julgamento de outro — e
+oferece a saída certa. Uma frase que desvia alguém de um erro só funciona se a saída existir; senão
+ela **empurra de volta** para o erro que estava evitando, com a autoridade de um conselho do
+sistema.
+
+⭐ As duas frases agora são verdade. Ficam registradas porque **texto que promete capacidade é
+dívida**: quem escrever a próxima precisa saber que ela será cobrada.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
