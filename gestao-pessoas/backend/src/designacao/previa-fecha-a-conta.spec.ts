@@ -138,8 +138,8 @@ describe('invariante: designar/previa — os baldes somam o total', () => {
  * ⭐ O CASO QUE JÁ PASSAVA — o padrão da casa, agora escrito.
  *
  * A prévia do público publica DUAS contas encadeadas, e as duas fecham:
- *   encontradas = adicionar + jaNesta + emOutraAplicacao
- *   adicionar   = geramAvaliacao + barradosPelaRegua
+ *   encontradas = entramNoPublico + jaNesta + emOutraAplicacao
+ *   entramNoPublico = geramAvaliacao + barradosPelaRegua
  * A segunda existe porque entrar no público e gerar avaliação são coisas
  * diferentes — e é por isso que ela não pode ser um número só.
  */
@@ -176,8 +176,147 @@ describe('invariante: publico/previa — as duas contas encadeadas fecham', () =
 
     const p = await service.previaDoPublico(APP, alvoCC);
 
-    expect(p.encontradas).toBe(p.adicionar + p.jaNesta + p.emOutraAplicacao.length);
-    expect(p.adicionar).toBe(p.geramAvaliacao + p.barradosPelaRegua.length);
-    expect(p).toMatchObject({ encontradas: 4, adicionar: 3, geramAvaliacao: 2 });
+    expect(p.encontradas).toBe(p.entramNoPublico + p.jaNesta + p.emOutraAplicacao.length);
+    expect(p.entramNoPublico).toBe(p.geramAvaliacao + p.barradosPelaRegua.length);
+    expect(p).toMatchObject({ encontradas: 4, entramNoPublico: 3, geramAvaliacao: 2 });
+  });
+});
+
+/**
+ * ⭐⭐ INVARIANTE — A PRÉVIA NUNCA PROMETE O QUE O ATO RECUSA.
+ *
+ * A prévia e `designar()` compartilhavam o classificador, e mesmo assim
+ * divergiam: `designar()` rodava **mais duas guardas** que ele não conhecia — a
+ * autoavaliação, inline antes; a troca de aplicação, em
+ * `assertPodeTrocarDeAplicacao`, depois. A prévia não chamava nenhuma das duas.
+ * Medido no Piloto em 08/09: prévia `{substituir: 1, recusar: 0}`, ato
+ * *"Ninguém pode ser o avaliador da própria avaliação."*
+ *
+ * Isso é pior que contador errado: é a **tela autorizando o que a API vai
+ * negar** — o botão fica armado, a pessoa clica e leva um erro que a prévia
+ * tinha acabado de dizer que não viria.
+ *
+ * ⚠️ Este arquivo NÃO testa mensagens: testa que **os dois lados decidem
+ * igual**. Uma guarda nova que alguém acrescente só ao ato — que é exatamente
+ * como as duas anteriores nasceram — quebra estes casos, mesmo que ninguém se
+ * lembre de vir aqui. É o par do teste de invariante da §5.9: a revisão caso a
+ * caso é o que já falhou duas vezes.
+ */
+describe('invariante: prévia RECUSAR ⟺ designar recusa', () => {
+  const AVALIADO = 'c-avaliado';
+  const AVALIADOR = 'c-avaliador';
+  const OUTRA_APP = 'app-origem';
+
+  /** Os cenários que percorrem as cinco ações, incluindo as duas guardas. */
+  const CENARIOS: {
+    nome: string;
+    avaliadorId: string;
+    atual: { avaliadorId: string; status: string; respostas: number; aplicacaoId: string } | null;
+    recusa: boolean;
+  }[] = [
+    { nome: 'primeira designação', avaliadorId: AVALIADOR, atual: null, recusa: false },
+    {
+      nome: 'troca comum de avaliador',
+      avaliadorId: AVALIADOR,
+      atual: { avaliadorId: 'c-outro', status: 'PENDENTE', respostas: 0, aplicacaoId: APP },
+      recusa: false,
+    },
+    {
+      nome: '⭐ autoavaliação sem avaliação (a prévia dizia CRIAR)',
+      avaliadorId: AVALIADO,
+      atual: null,
+      recusa: true,
+    },
+    {
+      nome: '⭐ autoavaliação com avaliação (a prévia dizia SUBSTITUIR)',
+      avaliadorId: AVALIADO,
+      atual: { avaliadorId: 'c-outro', status: 'PENDENTE', respostas: 0, aplicacaoId: APP },
+      recusa: true,
+    },
+    {
+      nome: '⭐ troca de aplicação de avaliação ENVIADA',
+      avaliadorId: AVALIADOR,
+      atual: { avaliadorId: 'c-outro', status: 'ENVIADA', respostas: 0, aplicacaoId: OUTRA_APP },
+      recusa: true,
+    },
+    {
+      nome: '⭐ troca de aplicação com respostas gravadas',
+      avaliadorId: AVALIADOR,
+      atual: { avaliadorId: 'c-outro', status: 'EM_ANDAMENTO', respostas: 4, aplicacaoId: OUTRA_APP },
+      recusa: true,
+    },
+    {
+      nome: 'troca de aplicação limpa',
+      avaliadorId: AVALIADOR,
+      atual: { avaliadorId: 'c-outro', status: 'PENDENTE', respostas: 0, aplicacaoId: OUTRA_APP },
+      recusa: false,
+    },
+    {
+      nome: 'avaliação CANCELADA',
+      avaliadorId: AVALIADOR,
+      atual: { avaliadorId: 'c-outro', status: 'CANCELADA', respostas: 0, aplicacaoId: APP },
+      recusa: true,
+    },
+  ];
+
+  const montar = (cenario: (typeof CENARIOS)[number]) => {
+    const prisma = createPrismaMock();
+    const service = new DesignacaoService(prisma as never, {
+      registrar: jest.fn().mockResolvedValue(undefined),
+    } as never);
+
+    prisma.aplicacao.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+      Promise.resolve(
+        where.id === APP
+          ? { id: APP, nome: 'Operação de Loja', cicloId: CICLO, ciclo: { status: 'ABERTO', encerradoEm: null } }
+          : { id: OUTRA_APP, nome: 'Aprendizes', cicloId: CICLO, ciclo: { status: 'ABERTO', encerradoEm: null } },
+      ),
+    );
+    prisma.aplicacao.findMany.mockResolvedValue([{ id: OUTRA_APP, nome: 'Aprendizes' }]);
+    prisma.colaborador.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+      Promise.resolve({ id: where.id, nome: where.id === AVALIADO ? 'JOAO' : 'MARIA', filial: '02', centroCusto: '21010101', cargoDescricao: 'REPOSITOR' }),
+    );
+    prisma.colaborador.findMany.mockResolvedValue([
+      { id: AVALIADO, nome: 'JOAO', matricula: '001' },
+    ]);
+    prisma.avaliacao.upsert.mockResolvedValue({ id: 'aval-1' });
+
+    const linha = cenario.atual && {
+      id: 'aval-1',
+      avaliadoId: AVALIADO,
+      avaliadorId: cenario.atual.avaliadorId,
+      aplicacaoId: cenario.atual.aplicacaoId,
+      status: cenario.atual.status,
+      _count: { respostas: cenario.atual.respostas },
+    };
+    prisma.avaliacao.findUnique.mockResolvedValue(linha);
+    prisma.avaliacao.findMany.mockResolvedValue(linha ? [linha] : []);
+    prisma.resposta.count.mockResolvedValue(cenario.atual?.respostas ?? 0);
+    return service;
+  };
+
+  it.each(CENARIOS)('$nome', async (cenario) => {
+    const service = montar(cenario);
+
+    const previa = await service.previaDaDesignacao(APP, [AVALIADO], cenario.avaliadorId);
+    const previaRecusa = previa.linhas[0].acao === 'RECUSAR';
+
+    let atoRecusou = false;
+    let mensagemDoAto: string | null = null;
+    try {
+      // `true` de propósito: confirmação levanta o EXIGE_CONFIRMACAO e NÃO
+      // levanta recusa — se levantasse, a prévia estaria certa e o ato frouxo.
+      await montar(cenario).designar(APP, AVALIADO, cenario.avaliadorId, 'user-rh', 'MANUAL', true);
+    } catch (e) {
+      atoRecusou = true;
+      mensagemDoAto = (e as Error).message;
+    }
+
+    expect({ previa: previaRecusa, ato: atoRecusou }).toEqual({
+      previa: cenario.recusa,
+      ato: cenario.recusa,
+    });
+    // A frase que a tela mostraria é a MESMA que a API devolveria.
+    if (cenario.recusa) expect(previa.linhas[0].frase).toBe(mensagemDoAto);
   });
 });

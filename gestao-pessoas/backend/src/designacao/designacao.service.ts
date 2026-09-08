@@ -125,8 +125,23 @@ export interface RelatorioDaCopia {
   /** false = prévia; nada foi gravado. */
   aplicado: boolean;
   substituirManuais: boolean;
+  /**
+   * ⭐ NÃO colide com o `criar` de `designar/previa` — conferido campo a campo
+   * em 08/09, e a suspeita de que colidia era falsa. Nos DOIS o significado é o
+   * mesmo: *"não existia `Avaliacao` no ciclo → uma será criada"*. É a única
+   * palavra que os dois payloads já têm em comum.
+   *
+   * ⚠️ O que de fato diverge entre eles são os dois vizinhos — aqui
+   * `atualizar`/`jaIguais`, lá `substituir`/`nadaAFazer` — e, pior, a POLÍTICA
+   * sobre avaliação já respondida: este lote **recusa** (`JA_RESPONDIDA`) o que
+   * a designação individual **permite com confirmação** (`EXIGE_CONFIRMACAO`),
+   * e só a segunda tem razão escrita. Ver
+   * `docs/LEVANTAMENTO_PREVIAS_GESTAO_PESSOAS_08SET.md`.
+   */
   criar: number;
+  /** Existia com OUTRO avaliador → troca. É o `substituir` de `designar/previa`. */
   atualizar: number;
+  /** Já é assim → nada muda. É o `nadaAFazer` de `designar/previa`. */
   jaIguais: number;
   /** Das que serão gravadas, quantas vêm de divisão automática NÃO revisada. */
   deDivisaoNaoRevisada: number;
@@ -513,9 +528,10 @@ export class DesignacaoService {
    * resultado histórico não se mover se a pessoa mudar de área depois.
    *
    * ⚠️ Quando a pessoa JÁ tem avaliação neste ciclo e a designação a manda para
-   * OUTRA aplicação, a troca passa por `assertPodeTrocarDeAplicacao` antes de
-   * qualquer escrita. Ver o comentário lá: é o defeito silencioso que nasceu
-   * dentro deste método.
+   * OUTRA aplicação, a troca é recusada por `efeitoDeDesignar` antes de
+   * qualquer escrita — junto com a autoavaliação e a avaliação cancelada, as
+   * três chegando aqui como `RECUSAR`. Ver o comentário da regra abaixo: é o
+   * defeito silencioso que nasceu dentro deste método.
    */
   async designar(
     aplicacaoId: string,
@@ -541,11 +557,11 @@ export class DesignacaoService {
     if (!avaliado) throw new NotFoundException('Colaborador não encontrado.');
     assertCicloOperavel(aplicacao.ciclo, 'designação');
 
-    if (avaliadoId === avaliadorId) {
-      // Autoavaliação não existe (decisão A2/F1), e deixar passar aqui seria a
-      // separação de funções perdendo o sentido antes mesmo de começar.
-      throw new BadRequestException('Ninguém pode ser o avaliador da própria avaliação.');
-    }
+    // ⚠️ A autoavaliação NÃO é checada aqui — mora em `efeitoDeDesignar`, com a
+    // troca de aplicação, para a prévia rodar exatamente as mesmas guardas que
+    // o ato. Ela continua barrada (a ação vem `RECUSAR`, e a linha abaixo
+    // lança); o que mudou é que agora a tela sabe disso ANTES de oferecer.
+    // Ver o cabeçalho do classificador.
 
     const existente = await this.prisma.avaliacao.findUnique({
       where: { cicloId_avaliadoId: { cicloId: aplicacao.cicloId, avaliadoId } },
@@ -561,6 +577,8 @@ export class DesignacaoService {
      * nenhuma: o `upsert` trocava o nome em silêncio. Medido em 08/09: 368
      * trocas de avaliador na auditoria do DEV, zero sobre respondida. Sorte.
      */
+    const trocaDeAplicacao = existente !== null && existente.aplicacaoId !== aplicacaoId;
+
     const efeito = efeitoDeDesignar(
       existente
         ? {
@@ -569,23 +587,27 @@ export class DesignacaoService {
             avaliadorId: existente.avaliadorId,
             avaliadorNome: await this.nomeDoColaborador(existente.avaliadorId),
             aplicacaoId: existente.aplicacaoId,
+            // Só custa uma busca quando a aplicação MUDA — e é só aí que a
+            // frase de recusa precisa dizer de onde a avaliação sairia.
+            aplicacaoNome: trocaDeAplicacao
+              ? await this.nomeDaAplicacao(existente.aplicacaoId)
+              : null,
           }
         : null,
       {
+        avaliadoId,
         nomeDoAvaliado: avaliado.nome,
         novoAvaliadorId: avaliadorId,
         novoAvaliadorNome: await this.nomeDoColaborador(avaliadorId),
         aplicacaoId,
       },
     );
+    // ⭐ UMA porta. `RECUSAR` cobre agora autoavaliação, cancelada e troca de
+    // aplicação impedida — as três vêm do classificador, então a prévia
+    // enxerga exatamente as mesmas três.
     if (efeito.acao === 'RECUSAR') throw new BadRequestException(efeito.frase!);
     if (efeito.acao === 'EXIGE_CONFIRMACAO' && !confirmarTrocaDeAvaliador) {
       throw new BadRequestException(efeito.frase!);
-    }
-
-    const trocaDeAplicacao = existente !== null && existente.aplicacaoId !== aplicacaoId;
-    if (trocaDeAplicacao) {
-      await this.assertPodeTrocarDeAplicacao(existente, avaliado.nome);
     }
 
     const avaliacao = await this.prisma.avaliacao.upsert({
@@ -648,33 +670,25 @@ export class DesignacaoService {
    *   - com N respostas   → recusa DIZENDO N, para a tela poder perguntar.
    *   - sem nada gravado  → passa, e a troca vai para a auditoria.
    *
-   * ⚠️ Trocar só o AVALIADOR, dentro da mesma aplicação, NÃO passa por aqui:
-   * não há modelo diferente envolvido e nenhuma resposta muda de instrumento.
+   * ⚠️ Trocar só o AVALIADOR, dentro da mesma aplicação, NÃO passa por esta
+   * regra: não há modelo diferente envolvido e nenhuma resposta muda de
+   * instrumento.
+   *
+   * ⚠️⚠️ **ONDE ELA MORA HOJE (08/09).** A decisão sempre foi a função pura
+   * `decidirTrocaDeAplicacao`; o que existia aqui era um método
+   * (`assertPodeTrocarDeAplicacao`) que a consultava **depois** do
+   * classificador, e que só o ATO chamava. A prévia não o chamava, e por isso
+   * prometia `SUBSTITUIR` onde o ato lançava. A consulta subiu para
+   * `efeitoDeDesignar`, que prévia e ato já compartilhavam — então **não há
+   * mais dois caminhos para manter em acordo**. A cópia do cadastro segue
+   * chamando a mesma função pura direto, porque a recusa dela não é exceção: é
+   * uma linha do relatório e o lote continua.
    */
-  private async assertPodeTrocarDeAplicacao(
-    existente: { id: string; aplicacaoId: string; status: string },
-    nomeDoAvaliado: string,
-  ) {
-    const [respostas, origem] = await Promise.all([
-      this.prisma.resposta.count({ where: { avaliacaoId: existente.id } }),
-      this.prisma.aplicacao.findUnique({
-        where: { id: existente.aplicacaoId },
-        select: { nome: true },
-      }),
-    ]);
 
-    // A DECISÃO é da função pura, compartilhada com a cópia do cadastro. Aqui
-    // só se escolhe o que fazer com ela: uma por vez, recusa é exceção.
-    const decisao = decidirTrocaDeAplicacao({ status: existente.status, respostas });
-    if (decisao.permitida) return;
-
-    throw new BadRequestException(
-      mensagemDaRecusa(decisao.motivo as MotivoDaRecusa, {
-        nomeDoAvaliado,
-        aplicacaoAtual: origem?.nome ?? 'outra aplicação',
-        respostas,
-      }),
-    );
+  /** O nome da aplicação, para a frase de recusa da troca dizer de onde ela sairia. */
+  private async nomeDaAplicacao(id: string): Promise<string | null> {
+    const a = await this.prisma.aplicacao.findUnique({ where: { id }, select: { nome: true } });
+    return a?.nome ?? null;
   }
 
   // ── COPIAR O CADASTRO PARA O CICLO ────────────────────────────────────────
@@ -1010,6 +1024,27 @@ export class DesignacaoService {
     ]);
 
     const porAvaliado = new Map(avaliacoes.map((a) => [a.avaliadoId, a]));
+    /**
+     * ⭐ Os nomes das aplicações de ORIGEM — só das que diferem desta, que são
+     * as únicas em que a frase de recusa da troca precisa dizer de onde a
+     * avaliação sairia. Uma busca para o lote inteiro, não uma por linha.
+     */
+    const nomesDeAplicacoes = new Map(
+      (
+        await this.prisma.aplicacao.findMany({
+          where: {
+            id: {
+              in: [
+                ...new Set(
+                  avaliacoes.map((a) => a.aplicacaoId).filter((id) => id !== aplicacaoId),
+                ),
+              ],
+            },
+          },
+          select: { id: true, nome: true },
+        })
+      ).map((a) => [a.id, a.nome]),
+    );
     const nomesDeAvaliadores = new Map(
       (
         await this.prisma.colaborador.findMany({
@@ -1030,9 +1065,14 @@ export class DesignacaoService {
                 avaliadorId: atual.avaliadorId,
                 avaliadorNome: nomesDeAvaliadores.get(atual.avaliadorId) ?? null,
                 aplicacaoId: atual.aplicacaoId,
+                aplicacaoNome: nomesDeAplicacoes.get(atual.aplicacaoId) ?? null,
               }
             : null,
           {
+            // ⭐ O avaliado, para a guarda da autoavaliação rodar TAMBÉM aqui.
+            // Sem ele, a prévia contava como `SUBSTITUIR` uma linha que o ato
+            // recusa — a tela autorizando o que a API nega (§3.1.32).
+            avaliadoId: pessoa.id,
             nomeDoAvaliado: pessoa.nome,
             novoAvaliadorId: avaliadorId,
             novoAvaliadorNome: avaliador?.nome ?? null,
@@ -1055,8 +1095,11 @@ export class DesignacaoService {
     return {
       avaliadorNome: avaliador?.nome ?? null,
       total: linhas.length,
+      /** ⭐ Mesmo significado do `criar` de `copiarDoCadastro` — ver o tipo lá. */
       criar: conta('CRIAR'),
+      /** O `atualizar` de `copiarDoCadastro`, com outro nome. */
       substituir: conta('SUBSTITUIR'),
+      /** O `jaIguais` de `copiarDoCadastro`, com outro nome. */
       nadaAFazer: conta('NADA_A_FAZER'),
       recusar: conta('RECUSAR'),
       /**

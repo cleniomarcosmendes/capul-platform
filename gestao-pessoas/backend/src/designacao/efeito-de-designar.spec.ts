@@ -6,6 +6,9 @@ import {
 
 const APP = 'app-1';
 const ctx = {
+  // ⭐ Entrou em 08/09 junto com a guarda da autoavaliação, que passou a morar
+  // no classificador para a prévia rodar as MESMAS guardas que o ato.
+  avaliadoId: 'cleia',
   nomeDoAvaliado: 'CLEIA',
   novoAvaliadorId: 'novo',
   novoAvaliadorNome: 'MARIA',
@@ -138,5 +141,86 @@ describe('o efeito de designar, antes de designar', () => {
     expect(e.acao).toBe('RECUSAR');
     expect(e.frase).toMatch(/CANCELADA/);
     expect(e.frase).toMatch(/não há caminho para descancelar/);
+  });
+
+  /**
+   * ⭐⭐ AS DUAS GUARDAS QUE SÓ O ATO RODAVA — 08/09.
+   *
+   * Estavam em `designar()`: a autoavaliação inline, antes do classificador; a
+   * troca de aplicação em `assertPodeTrocarDeAplicacao`, depois dele. A prévia
+   * não chamava nenhuma das duas e por isso **prometia gravar o que o ato
+   * recusa** — medido no Piloto: prévia `SUBSTITUIR`, ato *"Ninguém pode ser o
+   * avaliador da própria avaliação."*
+   *
+   * Vindo para cá, não há como uma saber o que a outra não sabe. É o que estes
+   * testes protegem: não a mensagem, mas o fato de a DECISÃO estar num lugar só.
+   */
+  describe('as guardas que a prévia não rodava', () => {
+    describe('autoavaliação', () => {
+      const paraSiMesmo = { ...ctx, novoAvaliadorId: ctx.avaliadoId };
+
+      it('recusa mesmo quando NÃO existe avaliação — o caso do CRIAR', () => {
+        const e = efeitoDeDesignar(null, paraSiMesmo);
+        expect(e.acao).toBe('RECUSAR');
+        expect(e.frase).toMatch(/própria avaliação/);
+      });
+
+      it('⭐ recusa onde a prévia dizia SUBSTITUIR — o defeito medido', () => {
+        expect(efeitoDeDesignar(atual(), ctx).acao).toBe('SUBSTITUIR');
+        expect(efeitoDeDesignar(atual(), paraSiMesmo).acao).toBe('RECUSAR');
+      });
+
+      it('vem ANTES de tudo: nem a cancelada muda a resposta', () => {
+        expect(efeitoDeDesignar(atual({ status: 'CANCELADA' }), paraSiMesmo).frase).toMatch(
+          /própria avaliação/,
+        );
+      });
+    });
+
+    describe('troca de aplicação', () => {
+      const deOutraApp = (o = {}) =>
+        atual({ aplicacaoId: 'app-origem', aplicacaoNome: 'Aprendizes', ...o });
+
+      it('ENVIADA recusa, e a frase diz de ONDE ela sairia', () => {
+        const e = efeitoDeDesignar(deOutraApp({ status: 'ENVIADA' }), ctx);
+        expect(e.acao).toBe('RECUSAR');
+        expect(e.frase).toMatch(/Aprendizes/);
+      });
+
+      it('com respostas recusa DIZENDO QUANTAS', () => {
+        const e = efeitoDeDesignar(deOutraApp({ respostas: 7 }), ctx);
+        expect(e.acao).toBe('RECUSAR');
+        expect(e.frase).toMatch(/7 resposta/);
+      });
+
+      it('sem nada gravado, a troca passa', () => {
+        expect(efeitoDeDesignar(deOutraApp(), ctx).acao).toBe('SUBSTITUIR');
+      });
+
+      /**
+       * ⚠️ A ORDEM IMPORTA, e mudou de propósito. Recusa de troca de aplicação
+       * é DURA (confirmação nenhuma a levanta); a de avaliador é CONFIRMÁVEL.
+       * Antes, um ato que fosse as duas coisas pedia confirmação primeiro e só
+       * recusava depois de confirmado — fazia a pessoa autorizar o que seria
+       * negado de qualquer jeito.
+       */
+      it('⭐ sendo as DUAS coisas, recusa vence a confirmação', () => {
+        const e = efeitoDeDesignar(deOutraApp({ status: 'ENVIADA' }), ctx);
+        expect(e.acao).toBe('RECUSAR');
+        expect(e.acao).not.toBe('EXIGE_CONFIRMACAO');
+      });
+
+      it('a MESMA aplicação não passa pela guarda — só o avaliador muda', () => {
+        expect(efeitoDeDesignar(atual({ status: 'ENVIADA' }), ctx).acao).toBe('EXIGE_CONFIRMACAO');
+      });
+
+      it('sem o nome da aplicação, a frase cai para "outra aplicação"', () => {
+        const e = efeitoDeDesignar(
+          atual({ aplicacaoId: 'app-origem', status: 'ENVIADA' }),
+          ctx,
+        );
+        expect(e.frase).toMatch(/outra aplicação/);
+      });
+    });
   });
 });

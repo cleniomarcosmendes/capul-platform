@@ -39,6 +39,12 @@
  * discordar.
  */
 
+import {
+  decidirTrocaDeAplicacao,
+  mensagemDaRecusa,
+  type MotivoDaRecusa,
+} from './troca-de-aplicacao.js';
+
 export type AcaoDaDesignacao =
   /** Não havia avaliação: o ato cria. */
   | 'CRIAR'
@@ -60,6 +66,12 @@ export interface AvaliacaoAtual {
   avaliadorId: string;
   avaliadorNome?: string | null;
   aplicacaoId: string;
+  /**
+   * Nome da aplicação em que a avaliação está HOJE — só usado quando o ato
+   * mudaria de aplicação, para a frase de recusa dizer de onde ela sairia.
+   * Ausente vira "outra aplicação", como a guarda antiga já fazia.
+   */
+  aplicacaoNome?: string | null;
 }
 
 export interface EfeitoDaDesignacao {
@@ -101,6 +113,8 @@ export function avisoDeTrocaEmRespondidas(quantas: number): string | null {
 }
 
 export interface ContextoDaDesignacao {
+  /** Quem seria avaliado — para a guarda da autoavaliação morar aqui dentro. */
+  avaliadoId: string;
   nomeDoAvaliado: string;
   novoAvaliadorId: string;
   novoAvaliadorNome?: string | null;
@@ -112,6 +126,29 @@ export function efeitoDeDesignar(
   atual: AvaliacaoAtual | null,
   ctx: ContextoDaDesignacao,
 ): EfeitoDaDesignacao {
+  /**
+   * ⭐⭐ A AUTOAVALIAÇÃO ENTROU AQUI EM 08/09 — e o motivo é o da §3.1.27.
+   *
+   * A guarda existia **inline dentro de `designar()`** e a prévia não a rodava:
+   * pedir a prévia de designar alguém para si mesmo devolvia `SUBSTITUIR`, com
+   * a linha contada nos baldes, e o ato recusava logo depois. Medido no Piloto:
+   * `{substituir: 1, recusar: 0, total: 1}` × *"Ninguém pode ser o avaliador da
+   * própria avaliação."* — **a tela autorizando o que a API nega**, que é pior
+   * que contador errado.
+   *
+   * Vindo para o classificador, ela deixa de ter duas versões: a prévia e o ato
+   * chamam a MESMA função, e é impossível uma saber o que a outra não sabe.
+   * ⚠️ Por isso não se re-implementa esta checagem em `designar()`.
+   */
+  if (ctx.avaliadoId === ctx.novoAvaliadorId) {
+    return {
+      acao: 'RECUSAR',
+      avaliadorAtual: atual?.avaliadorNome ?? null,
+      estadoAtual: atual ? estadoEmUmaLinha(atual) : null,
+      frase: 'Ninguém pode ser o avaliador da própria avaliação.',
+    };
+  }
+
   if (!atual) return { acao: 'CRIAR', frase: null, avaliadorAtual: null, estadoAtual: null };
 
   const atualNome = atual.avaliadorNome?.trim() || 'o avaliador atual';
@@ -136,6 +173,45 @@ export function efeitoDeDesignar(
   }
 
   const mudaAvaliador = atual.avaliadorId !== ctx.novoAvaliadorId;
+
+  /**
+   * ⭐⭐ TROCA DE APLICAÇÃO — a segunda guarda que a prévia não rodava.
+   *
+   * Estava em `assertPodeTrocarDeAplicacao`, chamada por `designar()` DEPOIS
+   * deste classificador; a prévia não a chamava, e prometia `SUBSTITUIR` onde o
+   * ato lançaria. A DECISÃO continua sendo a mesma função pura de sempre
+   * (`decidirTrocaDeAplicacao`), compartilhada com a cópia do cadastro — o que
+   * mudou foi **quem a consulta**: agora o classificador, e por isso os três
+   * chamadores enxergam o mesmo.
+   *
+   * ⚠️ VEM ANTES do `EXIGE_CONFIRMACAO`, e isto é deliberado: recusa de troca
+   * de aplicação é **dura** (nenhuma confirmação a levanta) e a de avaliador é
+   * **confirmável**. Na ordem anterior, um ato que fosse as duas coisas pedia
+   * confirmação primeiro e só recusava depois de confirmada — fazia a pessoa
+   * autorizar algo que ia ser negado de qualquer jeito.
+   *
+   * ⚠️ Lê `atual.respostas` em vez de recontar no banco. É o mesmo número: os
+   * dois chamadores já trazem `_count.respostas` da avaliação, e a contagem
+   * extra da guarda antiga era uma segunda ida ao banco pelo mesmo dado.
+   */
+  if (atual.aplicacaoId !== ctx.aplicacaoId) {
+    const decisao = decidirTrocaDeAplicacao({
+      status: atual.status,
+      respostas: atual.respostas,
+    });
+    if (!decisao.permitida) {
+      return {
+        acao: 'RECUSAR',
+        avaliadorAtual: atual.avaliadorNome ?? null,
+        estadoAtual: estadoEmUmaLinha(atual),
+        frase: mensagemDaRecusa(decisao.motivo as MotivoDaRecusa, {
+          nomeDoAvaliado: ctx.nomeDoAvaliado,
+          aplicacaoAtual: atual.aplicacaoNome ?? 'outra aplicação',
+          respostas: atual.respostas,
+        }),
+      };
+    }
+  }
 
   /**
    * ⭐⭐ O MESMO PRINCÍPIO DO `JA_RESPONDIDA` DO LOTE. A `Resposta` pertence à
