@@ -108,7 +108,7 @@ na seção citada.**
 
 ### 📍 ONDE O DIA PAROU — 08/09/2026
 
-> 📐 **Regras de método:** `docs/REGRAS-DE-METODO.md` — 24 regras, cada uma com o **gatilho** que
+> 📐 **Regras de método:** `docs/REGRAS-DE-METODO.md` — 25 regras, cada uma com o **gatilho** que
 > a dispara. É o que se relê daqui a um mês; esta seção é o que envelhece em semanas.
 
 > ⚠️ **Esta seção é a DONA das contas vivas** — ambientes e commits, censo de acesso, contagem
@@ -3485,7 +3485,7 @@ Nenhuma tem resposta ainda. Todas foram levantadas entre 05 e 06/09.
 por quem já sabia que existiam — e a varredura mostrou que **outras 9 lições nunca tinham chegado
 até elas**, tendo virado item numerado, comentário de código ou memória.
 
-👉 **`docs/REGRAS-DE-METODO.md` — 24 regras, cada uma com GATILHO.**
+👉 **`docs/REGRAS-DE-METODO.md` — 25 regras, cada uma com GATILHO.**
 
 ⚠️ **Esta seção continua existindo como ÂNCORA**: há comentários de código, commits e memórias que
 citam *"§5.9 regra 8"*, *"regra 12 da §5.9"*. Os **números 1 a 14 não mudaram** — as novas são

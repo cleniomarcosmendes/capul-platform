@@ -1,6 +1,6 @@
 # Regras de método
 
-**23 regras.** Cada uma nasceu de um caso concreto deste projeto e **vale além dele** — outro
+**25 regras.** Cada uma nasceu de um caso concreto deste projeto e **vale além dele** — outro
 módulo, outra pessoa, outro mês.
 
 > **Como usar:** não se lê de cabo a rabo. Cada regra começa por um **GATILHO** — o momento em que
@@ -459,6 +459,48 @@ inválida e leia o que volta. Se o texto não é o que você escreveu, alguém e
 ⚠️ **Não vale só para DTO × service.** Vale para o guard antes do service, o `disabled` do botão
 antes da recusa da API, a validação do formulário antes do backend. Toda vez que a camada de fora
 fica tão esperta quanto a de dentro, a de dentro para de falar.
+
+### 25. ⭐ Ao extrair uma constante ou função, varra os literais dela no MESMO commit
+
+> **GATILHO:** *acabei de criar uma fonte única para algo que já existia espalhado.*
+
+A extração é a parte fácil e é a que dá a sensação de pronto. O que fica para trás são os
+**chamadores anteriores**, que continuam com o valor escrito à mão: compilam, passam nos testes e
+dizem a mesma coisa — até o dia em que a constante muda e eles não.
+
+Varredura de 09/09/2026 no `gestao-pessoas`: **seis casos, todos da mesma forma** — a fonte única
+criada DEPOIS dos chamadores, e o commit que a criou não varreu. Não é distração de uma pessoa: é
+o que acontece por padrão quando o commit termina no arquivo novo.
+
+O pior deles mostra por que isto não é higiene: `encerrarCiclo` contava as avaliações pendentes com
+uma cópia da lista e as cancelava com outra — **as duas metades do mesmo ato**, escritas à mão a 30
+linhas de distância. Iguais naquele dia. Divergindo, a recusa fala de um conjunto e o encerramento
+cancela outro, sem erro nenhum, sobre avaliação de gente.
+
+⭐ **O sinal de busca importa mais do que a disposição de procurar.** Duas perguntas foram feitas no
+mesmo dia sobre o mesmo código:
+
+| Pergunta | Resultado |
+|---|---|
+| *"exportado que ninguém importa"* | 58 achados, quase todos ruído — e nenhum dos seis casos |
+| *"constante cujo valor literal aparece escrito fora dela"* | os **seis**, sem ruído |
+
+A primeira pergunta procura um **estado suspeito**; a segunda descreve **a forma exata do defeito**.
+Vale para toda varredura: gaste o tempo formulando a pergunta, não lendo os 58.
+
+⚠️ **Duas coisas que a varredura NÃO deve fazer:**
+- **Unificar por semelhança.** `normalizarChapa` (`E01981` → `001981`) e `normalizarMatricula`
+  (`1741` → `001741`, o zero que o Excel comeu) parecem a mesma função e cobrem corrupções
+  opostas. Onde duas coisas parecidas são de propósito, **escreva ao lado por quê** — a próxima
+  varredura é que vai ler, e ela pode ser sua.
+- **Trocar por equivalência aparente.** `ehProprioAvaliado(a, b)` e `a === b` divergem quando falta
+  id: o `===` responde `true` para dois nulos. Onde a função existe, ela existe por causa da borda.
+
+⭐ Quando a fonte única é do tipo que **N lugares consomem**, o fecho é a regra 23: um teste que
+varre o fonte (`common/fonte-unica.invariante.spec.ts`) e falha se o literal reaparecer. Sem ele, a
+varredura vale para o commit de hoje e para mais nenhum.
+
+---
 
 ## Descartadas, com motivo
 
