@@ -434,6 +434,32 @@ memória.*
 
 ---
 
+### 24. ⭐⭐ Guarda mais externa e mais burra sequestra a mensagem da mais interna e melhor
+
+> **GATILHO:** *a mesma condição é checada em duas camadas — e só uma delas sabe explicar.*
+
+Caso que a nomeou (09/09): reabrir o ciclo passou a exigir motivo de 15 caracteres, e o número
+foi para o `@MinLength(15)` do DTO. O service já tinha a checagem — e a mensagem que **ensina**:
+*"Ele fica registrado no ciclo e na auditoria — é o que responde, meses depois, por que um ciclo
+encerrado voltou a aceitar mudança. Escreva pelo menos 15 caracteres — faltam 12."*
+
+O class-validator responde **primeiro**. O que chega a quem chamou é *"motivo must be longer than
+or equal to 15 characters"* — em inglês, sem dizer para que serve o campo, sem dizer quantos
+faltam. A frase boa virou **código morto sem deixar rastro**: nenhum teste quebra, nenhum aviso,
+o comportamento fica "correto" e a explicação some.
+
+⭐ **A regra:** quando duas camadas checam a mesma coisa, a **externa é piso** — recusa o
+absurdo — e a **interna é a regra**, porque é ela que tem o contexto para explicar. Endurecer a
+externa até o nível da interna é o que mata a mensagem.
+
+⚠️ **O sintoma é invisível pelo lado de dentro.** A checagem interna continua lá, continua certa,
+continua testada — e nunca mais executa. Procure por ela do lado de FORA: mande a requisição
+inválida e leia o que volta. Se o texto não é o que você escreveu, alguém está respondendo antes.
+
+⚠️ **Não vale só para DTO × service.** Vale para o guard antes do service, o `disabled` do botão
+antes da recusa da API, a validação do formulário antes do backend. Toda vez que a camada de fora
+fica tão esperta quanto a de dentro, a de dentro para de falar.
+
 ## Descartadas, com motivo
 
 *Candidatas que não fecharam gatilho — e, pelo critério deste arquivo, isso é o sinal de que são
