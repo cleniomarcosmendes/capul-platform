@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, Lock, RefreshCw, Search, Send, X } from 'lucide-react';
+import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, Lock, RefreshCw, Search, Send, UserX, X } from 'lucide-react';
 import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from '../services/api';
+import { MOTIVO_MINIMO, faltamCaracteres } from '../lib/motivo';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 import { contagem, flexao } from '../lib/formato';
@@ -40,6 +41,12 @@ export default function MinhasAvaliacoesPage() {
   const [busca, setBusca] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [semPermissao, setSemPermissao] = useState(false);
+  /** O que está sendo contestado: uma linha da fila, ou "falta gente" no ciclo. */
+  const [contestando, setContestando] = useState<
+    { tipo: 'LINHA'; item: ItemDaFila } | { tipo: 'FALTA'; ciclo: ItemDaFila['ciclo'] } | null
+  >(null);
+  /** A frase que o BACKEND devolveu — é ela que diz que a avaliação continua com ele. */
+  const [confirmacao, setConfirmacao] = useState<string | null>(null);
 
   useEffect(() => {
     void carregar();
@@ -106,11 +113,157 @@ export default function MinhasAvaliacoesPage() {
         total={itens.length}
       />
 
+      {/* ⭐⭐ A confirmação fica NA TELA, não num toast que some: ela contém a
+          parte que o avaliador precisa levar — a avaliação continua com ele.
+          Aviso que desaparece sozinho é aviso que não foi lido. */}
+      {confirmacao && (
+        <div className="mt-4 flex items-start gap-2 rounded-2xl border border-capul-300 bg-capul-50 p-3 text-sm text-capul-900">
+          <CheckCircle2 size={18} className="mt-0.5 shrink-0" aria-hidden />
+          <p className="flex-1">{confirmacao}</p>
+          <button
+            type="button"
+            onClick={() => setConfirmacao(null)}
+            aria-label="Fechar aviso"
+            className="alvo-toque shrink-0 rounded-lg px-2 text-capul-700"
+          >
+            <X size={16} aria-hidden />
+          </button>
+        </div>
+      )}
+
       {porCiclo.map((grupo) => (
-        <BlocoDoCiclo key={grupo.ciclo.id} grupo={grupo} />
+        <BlocoDoCiclo
+          key={grupo.ciclo.id}
+          grupo={grupo}
+          aoContestar={(item) => setContestando({ tipo: 'LINHA', item })}
+          aoRelatarFalta={() => setContestando({ tipo: 'FALTA', ciclo: grupo.ciclo })}
+        />
       ))}
 
+      {contestando && (
+        <ModalDeContestacao
+          alvo={contestando}
+          aoFechar={() => setContestando(null)}
+          aoGravar={async (texto) => {
+            const r =
+              contestando.tipo === 'LINHA'
+                ? await avaliacoes.contestarDesignacao(contestando.item.id, texto)
+                : await avaliacoes.faltaGente(contestando.ciclo.id, texto);
+            setContestando(null);
+            setConfirmacao(r.frase);
+            // Recarrega para a MARCA da linha persistir — sem isto ela sumiria
+            // no F5 e ele clicaria de novo achando que não gravou.
+            await carregar();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      )}
+
       {buscando && filtrados.length === 0 && <NadaEncontrado termo={busca} total={itens.length} />}
+    </div>
+  );
+}
+
+
+/**
+ * ⭐ O MODAL das duas causas. Um só componente porque a decisão é a mesma —
+ * escrever o que houve e mandar para o RH —, e porque duas cópias divergiriam
+ * no texto que importa.
+ *
+ * ⚠️ O botão de gravar exige o mínimo de motivo e DIZ quantos caracteres faltam
+ * (`faltamCaracteres`), como o resto do módulo: "desabilitado sem dizer por quê"
+ * é o defeito que a §5.9 chama de silêncio.
+ */
+function ModalDeContestacao({
+  alvo,
+  aoFechar,
+  aoGravar,
+}: {
+  alvo: { tipo: 'LINHA'; item: ItemDaFila } | { tipo: 'FALTA'; ciclo: ItemDaFila['ciclo'] };
+  aoFechar: () => void;
+  aoGravar: (texto: string) => Promise<void>;
+}) {
+  const [texto, setTexto] = useState('');
+  const [gravando, setGravando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const curto = texto.trim().length < MOTIVO_MINIMO;
+
+  const daLinha = alvo.tipo === 'LINHA';
+  const titulo = daLinha ? 'Esta pessoa não é da minha equipe' : 'Falta alguém da minha equipe';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4">
+      <div className="w-full max-w-lg rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl">
+        <h2 className="text-base font-semibold text-slate-800">{titulo}</h2>
+
+        {daLinha ? (
+          <p className="mt-1 text-sm text-slate-600">
+            Sobre <strong>{alvo.item.nome}</strong> ({alvo.item.matricula}).
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-slate-600">
+            No ciclo <strong>{alvo.ciclo.nome}</strong>. Diga quem falta — nome ou matrícula, se
+            você souber.
+          </p>
+        )}
+
+        {/* ⭐⭐ O AVISO ANTES do envio, não só depois. Quem lê aqui já decide
+            sabendo que vai continuar responsável — e quem fecha o modal sem
+            enviar também levou a informação. */}
+        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {daLinha
+            ? 'Isto avisa o RH e não muda nada agora: a avaliação continua na sua fila e deve ser respondida no prazo. Quem decide trocar o avaliador é o RH.'
+            : 'Isto avisa o RH para revisar o cadastro. Quem faltar só entra na sua fila se o RH confirmar — e as avaliações que você já tem continuam valendo.'}
+        </p>
+
+        <label className="mt-3 block text-sm font-medium text-slate-700" htmlFor="motivo-contestacao">
+          {daLinha ? 'Por quê?' : 'Quem falta?'}
+        </label>
+        <textarea
+          id="motivo-contestacao"
+          rows={3}
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder={
+            daLinha
+              ? 'Ex.: saiu do meu setor em julho; hoje responde para o CD.'
+              : 'Ex.: falta o JOÃO DA SILVA (004321), que entrou na equipe em agosto.'
+          }
+          className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm"
+        />
+        {curto && texto.length > 0 && (
+          <p className="mt-1 text-xs text-slate-500">{faltamCaracteres(texto, MOTIVO_MINIMO)}</p>
+        )}
+        {erro && <p className="mt-2 text-sm text-rose-700">{erro}</p>}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={aoFechar}
+            className="alvo-toque rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={curto || gravando}
+            title={curto ? faltamCaracteres(texto, MOTIVO_MINIMO) : undefined}
+            onClick={async () => {
+              setGravando(true);
+              setErro(null);
+              try {
+                await aoGravar(texto.trim());
+              } catch (e) {
+                setErro(mensagemDoErro(e, 'Não foi possível registrar. Tente de novo.'));
+                setGravando(false);
+              }
+            }}
+            className="alvo-toque rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+          >
+            {gravando ? 'Enviando…' : 'Avisar o RH'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -258,7 +411,15 @@ function agruparPorCiclo(itens: ItemDaFila[]): GrupoDeCiclo[] {
   return [...mapa.values()].sort((a, b) => a.ciclo.prazo.localeCompare(b.ciclo.prazo));
 }
 
-function BlocoDoCiclo({ grupo }: { grupo: GrupoDeCiclo }) {
+function BlocoDoCiclo({
+  grupo,
+  aoContestar,
+  aoRelatarFalta,
+}: {
+  grupo: GrupoDeCiclo;
+  aoContestar: (item: ItemDaFila) => void;
+  aoRelatarFalta: () => void;
+}) {
   return (
     <section className="mt-6">
       <CabecalhoDoCiclo
@@ -275,7 +436,7 @@ function BlocoDoCiclo({ grupo }: { grupo: GrupoDeCiclo }) {
           <ul className="space-y-2">
             {grupo.emAndamento.map((item) => (
               <li key={item.id}>
-                <Cartao item={item} />
+                <Cartao item={item} aoContestar={aoContestar} />
               </li>
             ))}
           </ul>
@@ -290,7 +451,7 @@ function BlocoDoCiclo({ grupo }: { grupo: GrupoDeCiclo }) {
           <ul className="space-y-2">
             {grupo.aResponder.map((item) => (
               <li key={item.id}>
-                <Cartao item={item} />
+                <Cartao item={item} aoContestar={aoContestar} />
               </li>
             ))}
           </ul>
@@ -305,12 +466,25 @@ function BlocoDoCiclo({ grupo }: { grupo: GrupoDeCiclo }) {
           <ul className="space-y-2">
             {grupo.enviadas.map((item) => (
               <li key={item.id}>
-                <Cartao item={item} />
+                <Cartao item={item} aoContestar={aoContestar} />
               </li>
             ))}
           </ul>
         </>
       )}
+
+      {/* ⭐ A SEGUNDA CAUSA — "falta gente" é sobre quem NÃO está na lista, e
+          por isso não tem cartão onde clicar. Sem este caminho, metade do que o
+          avaliador tem a dizer sobre o cadastro se perderia por uma razão de
+          implementação. Fica no rodapé do bloco: quem chegou até aqui viu a
+          fila inteira e é exatamente quem sabe dizer quem falta. */}
+      <button
+        type="button"
+        onClick={aoRelatarFalta}
+        className="alvo-toque mt-3 w-full rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:border-capul-300 hover:text-capul-800"
+      >
+        Falta alguém da minha equipe nesta lista?
+      </button>
     </section>
   );
 }
@@ -415,7 +589,13 @@ function ProgressoGeral({ total, concluidas }: { total: number; concluidas: numb
   );
 }
 
-function Cartao({ item }: { item: ItemDaFila }) {
+function Cartao({
+  item,
+  aoContestar,
+}: {
+  item: ItemDaFila;
+  aoContestar: (item: ItemDaFila) => void;
+}) {
   const enviada = item.status === 'ENVIADA';
   const conteudo = (
     <>
@@ -446,6 +626,15 @@ function Cartao({ item }: { item: ItemDaFila }) {
             />
           )}
         </div>
+        {/* ⭐ A MARCA PERSISTE e diz as duas coisas: que o RH foi avisado E que
+            a avaliação continua com ele. Só "avisado" faria o cartão parecer
+            resolvido — que é o defeito que este recurso não pode ter. */}
+        {item.contestadaEm && (
+          <p className="mt-2 rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-600">
+            Você avisou o RH que esta pessoa não é da sua equipe. Enquanto ele
+            não decidir, a avaliação continua com você.
+          </p>
+        )}
       </div>
       {!item.restrita && !enviada && (
         <ChevronRight size={20} className="shrink-0 self-center text-slate-300" aria-hidden />
@@ -455,6 +644,29 @@ function Cartao({ item }: { item: ItemDaFila }) {
 
   const classe =
     'flex w-full items-start gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm alvo-toque';
+
+  /**
+   * ⭐⭐ "NÃO É MINHA EQUIPE" — o instrumento do sinal que só o piloto dá.
+   *
+   * ⚠️ FORA do `<Link>`, e não dentro: botão dentro de link é interativo
+   * aninhado — o toque no celular pega o link e abre o questionário.
+   *
+   * ⚠️ E some na ENVIADA e na RESTRITA. Na enviada é ato sem objeto (ele já
+   * julgou a pessoa; a discussão agora é do RH); na restrita, a avaliação é a
+   * dele mesmo. "Some quando falta objeto, desabilita quando falta estado" — a
+   * mesma regra do Reabrir na linha da Designação.
+   */
+  const aviso =
+    !item.restrita && !enviada ? (
+      <button
+        type="button"
+        onClick={() => aoContestar(item)}
+        className="alvo-toque mt-1 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+      >
+        <UserX size={13} aria-hidden />
+        {item.contestadaEm ? 'Avisar de novo' : 'Não é da minha equipe'}
+      </button>
+    ) : null;
 
   // A própria avaliação APARECE na lista — a gestora precisa estar designada
   // para o superior dela receber a tarefa — mas não abre.
@@ -468,12 +680,15 @@ function Cartao({ item }: { item: ItemDaFila }) {
   if (enviada) return <div className={`${classe} border-slate-200 opacity-75`}>{conteudo}</div>;
 
   return (
-    <Link
-      to={`/avaliacao/${item.id}`}
-      className={`${classe} border-slate-200 transition hover:border-capul-300 hover:shadow active:bg-slate-50`}
-    >
-      {conteudo}
-    </Link>
+    <div>
+      <Link
+        to={`/avaliacao/${item.id}`}
+        className={`${classe} border-slate-200 transition hover:border-capul-300 hover:shadow active:bg-slate-50`}
+      >
+        {conteudo}
+      </Link>
+      {aviso}
+    </div>
   );
 }
 

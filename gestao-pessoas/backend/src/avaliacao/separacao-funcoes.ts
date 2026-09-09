@@ -41,7 +41,14 @@ import { ForbiddenException } from '@nestjs/common';
 export const MOTIVO_ACESSO_RESTRITO = 'Sua própria avaliação — acesso restrito';
 
 /** Ações sobre o registro individual que a regra bloqueia. */
-export type AcaoAvaliacao = 'abrir' | 'editar' | 'reabrir' | 'recalcular' | 'responder';
+export type AcaoAvaliacao =
+  | 'abrir'
+  | 'editar'
+  | 'reabrir'
+  | 'recalcular'
+  | 'responder'
+  /** Dizer "esta pessoa não é da minha equipe" — ato do avaliador designado. */
+  | 'contestar';
 
 /**
  * ⚠️ **Não é o mesmo que `colaboradorId === avaliadoId`, e a diferença aparece
@@ -118,6 +125,14 @@ export const EXIGENCIA_POR_ACAO: Record<AcaoAvaliacao, ExigenciaDeDesignacao> = 
   editar: 'DESIGNADO',
   reabrir: 'ATO_DO_RH',
   recalcular: 'ATO_DO_RH',
+  /**
+   * ⭐ `DESIGNADO`: quem diz "esta pessoa não é da minha equipe" é quem está com
+   * ela na fila. De terceiro seria opinião sobre trabalho alheio — e o RH lê a
+   * lista como sinal de campo, então a autoria importa mais que o conteúdo.
+   * (Este `Record` recusou compilar até esta linha existir, que é o motivo de
+   * ele ser um `Record`.)
+   */
+  contestar: 'DESIGNADO',
 };
 
 export function ehAvaliadorDesignado(

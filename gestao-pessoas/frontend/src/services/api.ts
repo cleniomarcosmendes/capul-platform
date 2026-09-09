@@ -61,6 +61,12 @@ export interface ItemDaFila {
   enviadaEm: string | null;
   perguntasTotal: number;
   perguntasRespondidas: number;
+  /**
+   * ⭐ Quando ele disse "esta pessoa não é da minha equipe". A linha CONTINUA na
+   * fila e continua para responder — a marca é para ele saber que o RH foi
+   * avisado, e não é um estado da avaliação.
+   */
+  contestadaEm: string | null;
   /** true quando é a avaliação do próprio usuário — aparece, mas não abre. */
   restrita: boolean;
   motivoRestricao?: string;
@@ -102,6 +108,21 @@ export const avaliacoes = {
     rhApi.post(`/avaliacoes/${id}/respostas`, { perguntaId, alternativaId }).then((r) => r.data),
   enviar: (id: string, observacao?: string) =>
     rhApi.post<{ notaAvaliacao: number }>(`/avaliacoes/${id}/enviar`, { observacao }).then((r) => r.data),
+  /**
+   * ⭐⭐ "Esta pessoa não é da minha equipe" — registra e NÃO muda a designação.
+   * ⚠️ A `frase` vem do BACKEND e é ela que a tela mostra: é onde está escrito
+   * que a avaliação continua com ele. Compor aqui faria as duas envelhecerem
+   * separadas — e esta é a metade que impede o avaliador de achar que resolveu.
+   */
+  contestarDesignacao: (id: string, motivo: string) =>
+    rhApi
+      .post<{ ok: true; frase: string }>(`/avaliacoes/${id}/contestar-designacao`, { motivo })
+      .then((r) => r.data),
+  /** A outra metade: falta alguém na fila — não tem linha, então vai pelo ciclo. */
+  faltaGente: (cicloId: string, texto: string) =>
+    rhApi
+      .post<{ ok: true; frase: string }>('/avaliacoes/falta-gente', { cicloId, texto })
+      .then((r) => r.data),
 };
 
 // ---------------------------------------------------------------------------

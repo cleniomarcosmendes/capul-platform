@@ -11,7 +11,7 @@
  * avaliador não pode ver "Tempo de Empresa: 75 pontos" ao lado das perguntas
  * que vai responder, porque isso ancora o julgamento.
  */
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { calcularNotaAvaliacao, notaPorGrupo, type ItemRespondido } from '../calculo/nota-avaliacao.js';
@@ -19,6 +19,11 @@ import { AvaliacaoAcessoService, type ContextoAcesso } from './avaliacao-acesso.
 import { marcarRestricoes } from './separacao-funcoes.js';
 import { assertCicloAceitaReaberturaDeAvaliacao } from '../ciclo/ciclo-operavel.js';
 import { ONDE_A_AVALIACAO_CONTA } from './avaliacoes-que-contam.js';
+import {
+  ACAO_FALTA_GENTE,
+  ACAO_NAO_E_MINHA_EQUIPE,
+  fraseDeConfirmacao,
+} from './contestacao.js';
 import { apagarResultadoDe } from '../apuracao/apagar-resultado.js';
 
 @Injectable()
@@ -85,6 +90,23 @@ export class AvaliacaoService {
     });
     const porId = new Map(avaliados.map((c) => [c.id, c]));
 
+    /**
+     * ⭐ A marca de "não é minha equipe" PERSISTE — uma consulta para a fila
+     * inteira. Deixá-la só no estado da tela faria o aviso sumir no F5, e o
+     * avaliador clicaria de novo achando que não tinha gravado: a trilha
+     * encheria de repetição e ele ficaria sem saber se o RH foi avisado.
+     */
+    const contestadas = await this.prisma.auditoria.findMany({
+      where: {
+        entidade: 'Avaliacao',
+        acao: ACAO_NAO_E_MINHA_EQUIPE,
+        entidadeId: { in: linhas.map((l) => l.id) },
+      },
+      select: { entidadeId: true, criadoEm: true },
+      orderBy: { criadoEm: 'desc' },
+    });
+    const contestadaEm = new Map(contestadas.map((c) => [c.entidadeId, c.criadoEm]));
+
     const comDados = linhas.map((l) => {
       const total = l.aplicacao.modeloVersao.grupos.reduce((s, g) => s + g._count.perguntas, 0);
       const avaliado = porId.get(l.avaliadoId);
@@ -106,10 +128,76 @@ export class AvaliacaoService {
         enviadaEm: l.enviadaEm,
         perguntasTotal: total,
         perguntasRespondidas: Math.min(l._count.respostas, total),
+        /** Quando ele disse que esta pessoa não é da equipe dele. Marca, não filtra. */
+        contestadaEm: contestadaEm.get(l.id) ?? null,
       };
     });
 
     return marcarRestricoes(comDados, contexto.colaboradorId);
+  }
+
+  /**
+   * ⭐⭐ "Esta pessoa não é da minha equipe" — registra e NÃO muda nada.
+   *
+   * A avaliação continua na fila, continua para responder, e a designação fica
+   * como está: quem decide é o RH, com a lista na mão, depois. Ver
+   * `contestacao.ts` para o porquê de as duas coisas andarem juntas.
+   */
+  async contestarDesignacao(contexto: ContextoAcesso, avaliacaoId: string, motivo: string) {
+    const avaliacao = await this.acesso.carregarParaAcao(contexto, avaliacaoId, 'contestar');
+    const avaliado = await this.prisma.colaborador.findUnique({
+      where: { id: avaliacao.avaliadoId },
+      select: { nome: true, matricula: true, centroCusto: true },
+    });
+    await this.auditoria.registrar({
+      entidade: 'Avaliacao',
+      entidadeId: avaliacaoId,
+      acao: ACAO_NAO_E_MINHA_EQUIPE,
+      usuarioId: contexto.usuarioId,
+      justificativa: motivo.trim(),
+      valorNovo: {
+        avaliadoId: avaliacao.avaliadoId,
+        avaliadoNome: avaliado?.nome ?? null,
+        avaliadoMatricula: avaliado?.matricula ?? null,
+        centroCusto: avaliado?.centroCusto ?? null,
+        cicloId: avaliacao.cicloId,
+        // ⚠️ Registrado de propósito: é a prova de que o ato NÃO mexeu na
+        // designação, para quem ler a trilha meses depois não ter de deduzir.
+        designacaoAlterada: false,
+      },
+      ip: contexto.ip,
+    });
+    return { ok: true, frase: fraseDeConfirmacao('NAO_E_MINHA_EQUIPE', avaliado?.nome) };
+  }
+
+  /**
+   * ⭐ A outra metade do sinal: "falta gente na minha equipe".
+   *
+   * Não tem linha para clicar — é sobre quem NÃO está na fila —, então mora no
+   * ciclo. Sem isto, metade do que o piloto tem a dizer sobre o cadastro se
+   * perderia por uma razão de implementação, não de domínio.
+   */
+  async relatarFaltaDeGente(contexto: ContextoAcesso, cicloId: string, texto: string) {
+    // Quem relata tem de ser avaliador DESTE ciclo — senão qualquer pessoa do
+    // módulo escreve na trilha de um ciclo que não é dela.
+    const temFila = await this.prisma.avaliacao.count({
+      where: { cicloId, avaliadorId: contexto.colaboradorId ?? '', ...ONDE_A_AVALIACAO_CONTA },
+    });
+    if (temFila === 0) {
+      throw new ForbiddenException(
+        'Só quem tem avaliação designada neste ciclo pode relatar que falta gente na equipe dele.',
+      );
+    }
+    await this.auditoria.registrar({
+      entidade: 'Ciclo',
+      entidadeId: cicloId,
+      acao: ACAO_FALTA_GENTE,
+      usuarioId: contexto.usuarioId,
+      justificativa: texto.trim(),
+      valorNovo: { avaliadorId: contexto.colaboradorId, avaliacoesNaFila: temFila },
+      ip: contexto.ip,
+    });
+    return { ok: true, frase: fraseDeConfirmacao('FALTA_GENTE') };
   }
 
   /** Abre o questionário para responder. Passa pela porta (403 no próprio). */

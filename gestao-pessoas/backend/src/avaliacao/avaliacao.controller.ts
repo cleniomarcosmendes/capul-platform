@@ -15,6 +15,15 @@ export class ResponderDto {
 export class EnviarDto {
   @IsOptional() @IsString() observacao?: string;
 }
+export class ContestarDesignacaoDto {
+  /** Por que não é da equipe dele — é o que o RH vai ler para decidir. */
+  @IsString() @MinLength(MOTIVO_MINIMO) motivo!: string;
+}
+export class FaltaGenteDto {
+  @IsString() cicloId!: string;
+  /** Quem falta, com nome ou matrícula se ele souber. */
+  @IsString() @MinLength(MOTIVO_MINIMO) texto!: string;
+}
 export class ReabrirDto {
   /** Ato de UMA linha — mínimo pequeno, e é o certo aqui. Ver `common/motivo.ts`. */
   @IsString() @MinLength(MOTIVO_MINIMO) motivo!: string;
@@ -39,6 +48,46 @@ export class AvaliacaoController {
     @Query('cicloId') cicloId?: string,
   ) {
     return this.avaliacoes.minhasAvaliacoes(this.contexto(user, colaboradorId, req), cicloId);
+  }
+
+  /**
+   * ⭐⭐ "Esta pessoa não é da minha equipe." NÃO muda a designação — registra.
+   * A resposta traz a frase que a tela mostra, inclusive a parte que não pode
+   * faltar: a avaliação continua com ele. Ver `contestacao.ts`.
+   */
+  @Post(':id/contestar-designacao') @HttpCode(200)
+  contestarDesignacao(
+    @Param('id') id: string,
+    @Body() dto: ContestarDesignacaoDto,
+    @ColaboradorAtual('id') colaboradorId: string,
+    @CurrentUser() user: JwtPayload,
+    @Req() req: { ip?: string },
+  ) {
+    return this.avaliacoes.contestarDesignacao(
+      this.contexto(user, colaboradorId, req),
+      id,
+      dto.motivo,
+    );
+  }
+
+  /**
+   * ⭐ A outra metade: "falta gente na minha equipe" — sobre quem NÃO está na
+   * fila, e por isso não tem linha para clicar. Vive no ciclo.
+   * ⚠️ Rota literal ANTES de `:id` não é problema aqui (uma só via POST), mas
+   * fica antes por clareza de leitura.
+   */
+  @Post('falta-gente') @HttpCode(200)
+  faltaGente(
+    @Body() dto: FaltaGenteDto,
+    @ColaboradorAtual('id') colaboradorId: string,
+    @CurrentUser() user: JwtPayload,
+    @Req() req: { ip?: string },
+  ) {
+    return this.avaliacoes.relatarFaltaDeGente(
+      this.contexto(user, colaboradorId, req),
+      dto.cicloId,
+      dto.texto,
+    );
   }
 
   @Get(':id')

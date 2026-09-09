@@ -149,7 +149,12 @@ describe('designação — quem escreve é o avaliador designado', () => {
    * "resolver" o erro de tipo com um valor qualquer.
    */
   it('nenhuma ação fica sem exigência declarada', () => {
-    const acoes: AcaoAvaliacao[] = ['abrir', 'editar', 'reabrir', 'recalcular', 'responder'];
+    // ⚠️ Lista escrita à mão de propósito: o `Record` prova que nada FALTA, e
+    // esta lista prova que nada ENTROU sem alguém decidir. Ação nova quebra os
+    // dois — foi o que aconteceu com `contestar` em 09/09.
+    const acoes: AcaoAvaliacao[] = [
+      'abrir', 'editar', 'reabrir', 'recalcular', 'responder', 'contestar',
+    ];
     for (const acao of acoes) {
       expect(EXIGENCIA_POR_ACAO[acao]).toMatch(/^(DESIGNADO|DESIGNADO_OU_LEITOR_RH|ATO_DO_RH)$/);
     }
