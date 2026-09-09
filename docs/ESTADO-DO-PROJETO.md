@@ -137,8 +137,12 @@ leva ao lugar errado em silêncio) da lista (B). E **⭐ as regras de método do
 
 ⚠️ **Duas linhas mudaram DEPOIS de este fechamento ser escrito:**
 
-- **o censo** — **8 de 54** abrem o módulo, **187 de 894** alcançáveis, **0** contas sem
-  permissão, **46** sem conta nenhuma. **A lacuna "conta sem permissão" zerou em 08/09**;
+- **o censo** — **8 de 53** abrem o módulo, **179 de 894** alcançáveis, **0** contas sem
+  permissão, **45** sem conta nenhuma. **A lacuna "conta sem permissão" zerou em 08/09**;
+  ⚠️ **corrigido em 09/09 — o denominador estava misturado.** O que se lia (54 / 46 / 187)
+  somava o Piloto com o ciclo "Avaliação Geral 2026". **Recontado só no Piloto**, medindo no
+  banco: 53 avaliadores distintos, 8 com conta, 45 sem, 179 de 894 alcançáveis. A soma dos oito
+  fecha em 179 e o erro por pessoa era um só — `wandersonnascimento` valia 14 no Piloto, não 22;
 - **o item 2 da (B) saiu** — o `rodrigoleao` salvou, e **não houve terceiro caso do sintoma do
   Configurador**. No lugar dele entrou a **colisão de chapa** (§3.1.25), já ✅.
 
@@ -261,16 +265,22 @@ auditoria.
 
 | | Fechamento | Agora |
 |---|---|---|
-| Avaliadores do ciclo | 53 | **54** |
+| Avaliadores do ciclo | 53 | **53** |
 | Com conta | 5 | **8** |
 | **Abrem o módulo** | 5 | **8** |
 | **Conta sem permissão** | 3 | **0** ✅ |
-| Sem conta nenhuma | 48 | **46** |
-| **Avaliações alcançáveis** | ~110 | **187 de 894** |
+| Sem conta nenhuma | 48 | **45** |
+| **Avaliações alcançáveis** | ~110 | **179 de 894** |
 
-Quem entra: `adrianacaetano` 84 · `claudimaroliveira` 44 · `wandersonnascimento` 22 ·
-`renataborges` 13 · `ariellypereira` 13 (RH_ADMIN) · `vanialucia` 6 · `rodrigoleao` 4 ·
-`lidyanerocha` 1.
+⚠️ **A coluna "Agora" foi recontada em 09/09 — só o Piloto.** A anterior (54 / 46 / 187) somava
+o Piloto com o "Avaliação Geral 2026", que tem 9 avaliações e 2 avaliadores. Medido no banco:
+o Piloto tem **53 avaliadores distintos**, e a classificação não deixa resto — **45 sem conta
+nenhuma, 8 entram, 0 com conta sem permissão, 0 com conta inativa**.
+
+Quem entra, **contado no Piloto**: `adrianacaetano` 84 · `claudimaroliveira` 44 ·
+`wandersonnascimento` 14 · `renataborges` 13 · `ariellypereira` 13 (RH_ADMIN) · `vanialucia` 6 ·
+`rodrigoleao` 4 · `lidyanerocha` 1. **Soma 179.** (`admin` e `denisealves` também têm permissão,
+mas **0 avaliações no Piloto** — por isso são 10 contas com acesso e 8 avaliadores alcançados.)
 
 ⚠️ **`clenio` segue sem matrícula** em `core.usuarios` — sem ela o módulo recusa antes de olhar
 papel. **O Clenio resolve; não mexer em conta daqui.**
@@ -301,15 +311,24 @@ nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 
 ### (B) TRABALHO TÉCNICO PENDENTE — na ordem em que eu faria
 
-⭐ **O item 1 é o único que mexe no número que decide o piloto.** Em 08/09, dos **54 avaliadores
-do ciclo, 8 conseguem entrar** — e um desses oito é a conta de TESTE do Claudimar, criada por nós
-(§6). **187 das 894** avaliações do Piloto são alcançáveis hoje. Nenhum outro item desta lista
-move esse número.
+⭐ **O item 1 é o único que mexe no número que decide o piloto.** Dos **53 avaliadores do
+Piloto, 8 conseguem entrar** — e um desses oito é a conta de TESTE do Claudimar, criada por nós
+(§6). **179 das 894** avaliações do Piloto são alcançáveis. Nenhum outro item desta lista move
+esse número. (A conta viva está na §0; aqui é ponteiro.)
+
+⭐ **A curva é boa, e isso abre uma saída que não é "criar as 45"** (medido em 09/09): as
+avaliações concentram no topo. **8 contas novas** — os 8 maiores sem conta, que com os 2 do topo
+que já têm formam os 10 maiores avaliadores — levam de **179 para 551 (61,6%)**, ou **21
+avaliações por conta criada**. A cauda é o oposto: os **8 últimos avaliadores somam 14
+avaliações** (4 pessoas com 2–4, 4 pessoas com **uma só**). ⚠️ **Mas a curva é do AVALIADOR, não
+do avaliado** — parar em 61,6% deixa **343 pessoas sem avaliação**, e não é recorte aleatório: é
+quem responde a chefe de equipe pequena. Escolher quem fica de fora é **recorte de público, que
+é decisão do RH** (lista A), não da T.I.
 
 | # | Item | Onde está |
 |---|---|---|
 | ~~0~~ | ✅ **Reabrir avaliação — FEITO em 09/09.** Botão na linha da Designação, diálogo dizendo a nota que apaga, auditoria guardando o resultado apagado. A decisão foi **apagar** o `ResultadoAvaliacao` | §3.1.43 |
-| 1 | **Contas para os avaliadores — `46 dos 54` não têm conta.** É o que decide o piloto, e é **trabalho do Clenio no Configurador**, não daqui. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
+| 1 | **Contas para os avaliadores — `45 dos 53` não têm conta.** É o que decide o piloto, e é **trabalho do Clenio no Configurador**, não daqui. ⚠️ Quem recebe conta acompanha a lista real do RH, mas **quem já é avaliador no dado de hoje independe dela** | §3.1.3 |
 | 2 | ✅ **FEITO em 08/09 — colisão de chapa (`E01981` × `001981`)**, dos dois lados: a **fonte** no Configurador (`normalizarChapa` ao preencher e ao salvar) e a **rede** no módulo (`porMatricula` e a importação de planilha buscam pelas duas formas). ⚠️ O sintoma era um **403 que PARECE falta de permissão**, e mandava quem investiga ao Configurador dar papel a quem já tem. ✅ E o dado legado foi corrigido no mesmo dia: **nenhuma conta de pessoa real fora do formato** | §3.1.25 |
 | 3 | **Segundo `RH_ADMIN`** — a separação de funções exige dois; com um só, ninguém corrige a avaliação da gestora. A pessoa é escolha do RH (A); a permissão é daqui | §5 · §3.1 |
 | 4 | Cadastro de **critérios e faixas**: o painel manda cadastrar uma faixa e a tela não existe | §7 |
@@ -329,7 +348,42 @@ move esse número.
 | 18 | 🟠 **Os menores do item K**, em ordem de custo: **Enter morto no modal de vínculo** (com 108 pendências é mouse em cada uma) · **duas convenções para o mesmo botão em lote** · **dois modais irmãos com contratos diferentes** (o do cadastro tem o resumo *"X passa a avaliar Y"*, o do ciclo não) · **"Minhas avaliações" sem `<h1>`** · **escolher a si mesmo descarta a escolha válida anterior em silêncio**. ⚠️ E um de OUTRO módulo, só registrado: o **Hub mostra "Bem-vindo, !"** sem interpolar o nome | roteiro do Chrome |
 | 19 | 🟠 **`/gestao-pessoas/resultados` leva ao lugar errado EM SILÊNCIO.** Resultados vive dentro do ciclo (`/ciclos/:id/resultados`) — decisão nossa no menu, e ela está certa. O defeito é outro: `<Route path="*" element={<Navigate to="/" replace />} />` faz **qualquer URL desconhecida** cair na fila do avaliador **sem dizer nada**, como se tivesse levado a algum lugar. Alguém vai compartilhar esse link. ⚠️ **A correção não é criar a rota de topo** — é a URL desconhecida **dizer que não existe** | §3.1.6 |
 | 20 | 🔴 **A FONTE REPÕE O PROBLEMA: demissão não toca avaliação viva.** O `sincronizacao` **não está** entre os oito arquivos que escrevem em `prisma.avaliacao` — quem é demitido vira `situacao='DEMITIDO'`, sai da régua das listas NOVAS, e a avaliação criada antes fica `PENDENTE` para sempre. O cancelamento manual de 08/09 **resolve o caso, não a fonte**: com 894 avaliações abertas, o RH vai fazer isso à mão toda vez. ⚠️ **É pergunta, não conserto** — cancelar automaticamente no sync é o sistema decidindo sozinho tirar alguém do ciclo, e "afastado" não é "demitido". Medido em 08/09: **0 demitidos** com avaliação viva hoje; os 86 não-ATIVOs com avaliação são **FERIAS**, que são elegíveis por definição | §3.1.18 |
+| 22 | 🔴 **A SENHA TEMPORÁRIA NÃO É TROCADA — e isso mira a regra de desenho do módulo.** Medido em 09/09: `primeiroAcesso` existe no backend (devolvido no login, zerado no `change-password`), mas **nenhum frontend o lê** — 2 ocorrências no Hub e 2 no Configurador, ambas só declaração de tipo; 0 no Gestão de Pessoas e 0 no Gestão TI. Ninguém é levado a trocar. Evidência: `renataborges` e `wandersonnascimento` logaram em 09/09 13:35–13:36 e seguem com `primeiro_acesso = true`. ⚠️ **Em PROD isso seriam 45 pessoas com a MESMA senha** (hoje `Temp2026` no DEV), num módulo cuja regra de desenho é **separação de funções**: cada uma abriria a avaliação das outras, e a trilha de auditoria registraria o nome errado. ⚠️ **NÃO é conserto do Gestão de Pessoas** — é do **Hub/Configurador**, e **afeta todos os módulos da plataforma**; o Gestão de Pessoas só é onde dói mais. Alternativa sem código: senha individual por pessoa na criação das 45 | §6 · (B) 1 |
 | 21 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
+
+### ⛔ DESCARTADO em 09/09 — `autenticaPortal` para as 45 contas
+
+Fica escrito **com o motivo**, senão volta a parecer boa ideia daqui a um mês — a ideia é minha,
+e ela é sedutora pelo lado errado.
+
+**A proposta:** criar as 45 contas com `autenticaPortal: true` + matrícula. O service não pede
+senha (`if (!dto.autenticaPortal && !dto.senha) throw`), grava um hash inutilizável, e quem
+valida a senha é o portal RH do Protheus.
+
+**Por que foi descartada, na ordem que importa:**
+
+1. ⭐ **O custo que ela removia não existe.** Justifiquei por "inventar, distribuir e resetar 45
+   senhas" — mas a prática real é **uma senha temporária para todas** (`Temp2026`). Eu estava
+   otimizando um custo que ninguém paga. ⚠️ Isso não é detalhe: **eu inventei o custo e depois
+   propus a solução dele**. Antes de propor mudança de caminho, medir o custo do caminho atual.
+2. **Ela ACRESCENTA uma dependência externa no ato de entrar.** O próprio código devolve
+   `ServiceUnavailableException` — *"Portal de autenticação (RH) indisponível"* — quando o
+   Protheus não responde. Isso amarraria o **login de 45 pessoas** à disponibilidade do Protheus,
+   num piloto. Hoje o módulo só depende do Protheus no **sync**, que é assíncrono e pode esperar;
+   login não pode.
+3. **É caminho não exercitado: `autentica_portal = false` nas 177 contas da base.** Zero
+   evidência de produção. Some-se o `infoFuncionario` preso em HOM, já registrado como bug
+   latente em PROD.
+4. **Não é para isto que ele foi feito.** Os comentários do fonte dizem *"login do app do
+   entregador"* e *"Mesmo endpoint usado no Chamado PADRAO"* — perfil `PADRAO` e app móvel. O
+   Gestão de Pessoas é web, com contas `INDIVIDUAL`.
+
+⭐ **A regra que fica:** trocar autenticação interna (bcrypt) por externa é decisão de
+disponibilidade, não de conveniência de cadastro. Só se paga esse preço por um ganho que o
+caminho atual não dá — e aqui o caminho atual já dava.
+
+⚠️ **O que ficou aberto e é real:** a senha temporária que ninguém troca — item **22** da (B).
+Descartar o `autenticaPortal` não resolve isso, e o problema não é do Gestão de Pessoas.
 
 ---
 
