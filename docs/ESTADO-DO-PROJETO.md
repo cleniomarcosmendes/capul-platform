@@ -32,6 +32,18 @@ O Marco aplicou em 07/09, em HLG **e** em PROD, o roteiro de 04/09
 módulo**. ⚠️ Confirmar o rótulo quando for conveniente (`/health` → `versao.commit`): o que
 está acima é o declarado, e estado de ambiente é o que mais envelhece nestes registros.
 
+⏸️ **DEPLOY ADIADO (decisão de 09/09, noite).** O piloto é o teste final do **PRODUTO**, não só
+da avaliação: se o RH não consegue ver nem editar as perguntas, o piloto testa metade do sistema.
+Os dias até 15/09 vão para fechar as telas que faltam. **Nada do que foi levantado se perde** —
+muda de data:
+
+| Guardado | Onde está |
+|---|---|
+| Transporte do cadastro DEV → HLG | `gestao-pessoas/scripts/exportar-cadastro-para-hlg.sh` + `conferir-cadastro-hlg.sql` — **ensaiados** em banco limpo em 09/09 |
+| As 5 verificações do HLG antes de montar o ciclo | (1) módulo instalado · (2) `rh.colaborador` populado · (3) contas dos 5 avaliadores · (4) permissão `GESTAO_PESSOAS` de cada um · (5) dois `RH_ADMIN` — as consultas estão em `conferir-cadastro-hlg.sql` |
+| Roteiro de deploy do módulo | **por escrever** (~2h): 3 serviços, 2 `location`, 12 migrations, auth-gateway primeiro, job `*-migrate` com build próprio, reload do nginx no fim |
+| Decisão pendente do transporte | 521 das 1.384 designações têm `registrado_por_id` de um usuário do DEV, que não existe em HLG — reescrever, anular ou deixar |
+
 ✅ **O piloto de 15/09 vai para HOMOLOGAÇÃO** (Marco confirmou em 09/09/2026: *"serve sim"*,
 acesso e dado). É a opção que paga o ensaio do deploy — o roteiro do módulo estreia num servidor
 de verdade, na rede da empresa, com URL alcançável pelas 137 pessoas — **sem** pôr um ciclo de
