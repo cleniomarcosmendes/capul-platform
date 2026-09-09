@@ -15,6 +15,25 @@ remoto iguais (0 à frente, 0 atrás, árvore limpa). Publicações anteriores: 
 o módulo Gestão de Pessoas, e o roteiro de deploy do Marco segue **superado** — o alvo mudou de
 novo com a onda de hoje.
 
+### 🌙 FECHAMENTO DE 09/09/2026
+
+**21 commits locais, `origin/main` continua em `9fd4b9fb`** — o push é do Clenio e não foi feito.
+**609 testes verdes.** Ambientes: nada mudou fora do DEV.
+
+| Ciclo (DEV) | Status | Total | Enviadas | Canceladas | Apuradas |
+|---|---|---|---|---|---|
+| Avaliação Geral 2026 | ABERTO | 9 | 4 | 0 | 4 |
+| Piloto 15/09/2026 | ABERTO | 894 | 3 | 0 | 3 |
+| ZZ CONFERE 09/09 | ABERTO | 2 | 0 | 0 | 0 |
+| SIMULACAO 09/09 | ABERTO (reaberto 1×) | 52 | 13 | 39 | 13 |
+| ZZ ENCERRA 09/09 | ENCERRADO | 5 | 0 | 5 | 0 |
+| **ZZ ENCERRA2 09/09** | ENCERRADO | 6 | 1 | 5 | 0 |
+
+⚠️ **ZZ ENCERRA2 é descartável** — montado em 09/09 para a conferência de tela (encerrar com
+pendência) e usado depois como caso real de borda: ciclo encerrado, com cancelada, **sem apuração**.
+Foi ele que provou a régua de conceitos e o "apagar aplicação". Pode ser apagado quando quiser; se
+ficar, não atrapalha ninguém.
+
 ### Onde cada ambiente está (08/09)
 
 | | Commit | Tem o Gestão de Pessoas? |
