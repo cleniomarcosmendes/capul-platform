@@ -67,7 +67,20 @@ export interface EfeitoDoCancelamento {
   frase: string | null;
 }
 
-/** Só estas duas contam como avaliação viva — são as mesmas que o `encerrar` soma. */
+/**
+ * Só estas duas contam como avaliação VIVA — nem enviada, nem cancelada.
+ *
+ * ⚠️ **Fonte única, e o literal não se reescreve fora daqui.** Ela nasceu depois
+ * dos chamadores e o commit que a criou não varreu: até 09/09/2026 o
+ * `encerrarCiclo` ainda trazia `['PENDENTE', 'EM_ANDAMENTO']` escrito à mão nas
+ * DUAS METADES do mesmo ato — quantas contar para a recusa e quais cancelar na
+ * transação. Duas listas iguais hoje, e nada obrigando a continuarem iguais: o
+ * dia em que um status novo entrar aqui, a recusa fala de um conjunto e o
+ * encerramento cancela outro, **em silêncio e sobre avaliação de gente**.
+ *
+ * Quem lê este conjunto: `ciclo.service` (encerrar, e a contagem por ciclo da
+ * lista) e `painel.service` (o `aFazer` do resumo).
+ */
 export const STATUS_VIVOS = ['PENDENTE', 'EM_ANDAMENTO'] as const;
 
 function respostasEmTexto(n: number): string {

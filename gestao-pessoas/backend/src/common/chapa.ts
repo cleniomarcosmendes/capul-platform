@@ -24,7 +24,18 @@
  * null**). A regra de ambiguidade equivalente aqui é o `escolherColaboradorUnico`.
  */
 
-/** `E01981` → `001981`. Qualquer outra coisa volta como veio (só aparada e em maiúsculas). */
+/**
+ * `E01981` → `001981`. Qualquer outra coisa volta como veio (só aparada e em
+ * maiúsculas) — inclusive `1741`, que sai `1741`.
+ *
+ * ⚠️ **NÃO é cópia de `designacao-padrao/planilha.ts:normalizarMatricula`, e as
+ * duas não se fundem.** São defesas contra corrupções opostas: aqui, a chapa que
+ * veio na forma do Protheus (`E…`) e não casa com a nossa base; lá, o **zero à
+ * esquerda que o Excel comeu** (`1741` → precisa virar `001741`, com
+ * `padStart(6)`). Trocar uma pela outra quebra o outro caso em silêncio: esta
+ * não repõe zero nenhum, e a de lá não sabe o que é `E`. Quem varrer duplicação
+ * por semelhança de nome vai parar exatamente nestas duas — pare aqui.
+ */
 export function normalizarChapa(valor: string | null | undefined): string {
   const bruto = (valor ?? '').trim().toUpperCase();
   return /^E\d{5}$/.test(bruto) ? `0${bruto.slice(1)}` : bruto;

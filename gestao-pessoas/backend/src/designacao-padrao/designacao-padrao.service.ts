@@ -20,6 +20,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
+import { FRASE_AUTOAVALIACAO, ehAutoavaliacao } from '../common/autoavaliacao.js';
 import {
   conferenciaDe,
   lerPlanilhaDeAvaliadores,
@@ -222,8 +223,11 @@ export class DesignacaoPadraoService {
 
   /** Designa à mão. `MANUAL` é a origem mais forte: a importação não a sobrescreve. */
   async designar(avaliadorId: string, avaliadoId: string, usuarioId: string, observacao?: string) {
-    if (avaliadorId === avaliadoId) {
-      throw new BadRequestException('Ninguém pode ser o avaliador da própria avaliação.');
+    // ⚠️ A regra e a frase saem de `common/autoavaliacao.ts` — as mesmas que o
+    // classificador do ciclo usa. Esta cópia local era, literalmente, a
+    // re-implementação que o comentário de `efeitoDeDesignar` proibia.
+    if (ehAutoavaliacao(avaliadoId, avaliadorId)) {
+      throw new BadRequestException(FRASE_AUTOAVALIACAO);
     }
     const [avaliador, avaliado] = await Promise.all([
       this.prisma.colaborador.findUnique({ where: { id: avaliadorId }, select: { id: true, nome: true } }),

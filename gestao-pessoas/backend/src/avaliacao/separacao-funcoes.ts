@@ -43,6 +43,15 @@ export const MOTIVO_ACESSO_RESTRITO = 'Sua própria avaliação — acesso restr
 /** Ações sobre o registro individual que a regra bloqueia. */
 export type AcaoAvaliacao = 'abrir' | 'editar' | 'reabrir' | 'recalcular' | 'responder';
 
+/**
+ * ⚠️ **Não é o mesmo que `colaboradorId === avaliadoId`, e a diferença aparece
+ * justamente quando falta id**: o `===` responde `true` para dois nulos e
+ * afirmaria "é o próprio" sobre um par que sequer foi resolvido. A auditoria de
+ * `LER_RESULTADO_INDIVIDUAL` escrevia o `===` até 09/09/2026 — sem consequência
+ * hoje, porque `avaliado_id` é `NOT NULL`, mas apoiada numa garantia de schema
+ * que ela não enxerga. Use a função; "simplificar" para `===` devolve a
+ * dependência do acidente, e num campo que serve de prova.
+ */
 export function ehProprioAvaliado(
   colaboradorIdDoUsuario: string | null | undefined,
   avaliadoId: string | null | undefined,

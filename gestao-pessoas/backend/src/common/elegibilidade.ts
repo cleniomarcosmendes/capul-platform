@@ -44,7 +44,23 @@ export const SITUACOES_ELEGIVEIS: readonly Situacao[] = ['ATIVO', 'AFASTADO', 'F
 export const FILTRO_SRA010_ELEGIVEL =
   "D_E_L_E_T_ = ' ' AND RA_DEMISSA = ' ' AND RA_SITFOLH <> 'D'";
 
-/** Filtro Prisma para as consultas do módulo. Use este, não escreva o `in` à mão. */
+/**
+ * ⚠️ **A DOC AQUI DIZIA "use este, não escreva o `in` à mão" — e NINGUÉM usa.**
+ * As nove consultas do módulo escrevem `situacao: { in: SITUACOES_ELEGIVEIS as
+ * never[] }`, porque o objeto pronto não casa com o tipo que cada `where` do
+ * Prisma espera e o cast tem de ficar no ponto de uso. Instrução que o código
+ * inteiro contraria não é regra: é uma prática morta com autoridade de
+ * comentário, e quem a seguir vai brigar com o compilador achando que está
+ * errado.
+ *
+ * **O que vale**: a fonte única é `SITUACOES_ELEGIVEIS` — é ela que se importa,
+ * com o cast, e é ela que o teste cobre. Envolver isso num helper tipado foi
+ * considerado e recusado: esconderia o cast sem eliminá-lo.
+ *
+ * Esta constante fica só para quem precise do objeto inteiro para repassar
+ * adiante. ⚠️ Se continuar sem nenhum uso, apague — export sem chamador volta a
+ * atrair uma doc que promete um caminho que não existe.
+ */
 export const WHERE_ELEGIVEL = { situacao: { in: [...SITUACOES_ELEGIVEIS] } } as const;
 
 export function elegivel(situacao: Situacao | string | null | undefined): boolean {

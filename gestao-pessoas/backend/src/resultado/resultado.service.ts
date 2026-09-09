@@ -25,7 +25,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { AvaliacaoService } from '../avaliacao/avaliacao.service.js';
-import { marcarRestricoes } from '../avaliacao/separacao-funcoes.js';
+import { ehProprioAvaliado, marcarRestricoes } from '../avaliacao/separacao-funcoes.js';
 
 export interface LinhaDeResultado {
   id: string;
@@ -153,7 +153,22 @@ export class ResultadoService {
         usuarioId: contexto.usuarioId,
         valorNovo: {
           avaliadoId: r.avaliacao.avaliadoId,
-          proprioResultado: contexto.colaboradorId === r.avaliacao.avaliadoId,
+          /**
+           * ⚠️ `ehProprioAvaliado(...)` e NÃO `contexto.colaboradorId === …`.
+           * Parecem a mesma pergunta e não são: `colaboradorId` é
+           * `string | null`, e com os DOIS lados nulos o `===` responde
+           * **true** — gravaria `proprioResultado: true` no acesso de quem não é
+           * o avaliado, numa linha de auditoria que alguém vai ler meses depois
+           * como prova. A função recusa afirmar sem id.
+           *
+           * Hoje isto não chega a acontecer aqui, e é justamente o incômodo: só
+           * não acontece porque `avaliacao.avaliado_id` é `NOT NULL` no schema
+           * — uma garantia de outra camada, que um `select` novo ou um id
+           * opcional derruba sem passar por este arquivo. O acerto é a linha
+           * afirmar o fato por si. Quem "simplificar" de volta para `===` volta
+           * a depender do acidente.
+           */
+          proprioResultado: ehProprioAvaliado(contexto.colaboradorId, r.avaliacao.avaliadoId),
           leuObservacaoDoAvaliador: Boolean(r.avaliacao.observacaoAvaliador),
         },
         ip: contexto.ip,

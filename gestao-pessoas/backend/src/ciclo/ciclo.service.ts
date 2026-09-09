@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ONDE_A_AVALIACAO_CONTA } from '../avaliacao/avaliacoes-que-contam.js';
+import { STATUS_VIVOS } from '../avaliacao/cancelamento.js';
 import { MOTIVO_MINIMO_EM_MASSA, faltamCaracteres } from '../common/motivo.js';
 import {
   CicloNaoAbrivelError,
@@ -227,8 +228,14 @@ export class CicloService {
 
     // Encerrar com avaliação pendente encerraria em silêncio — a API recusa e
     // diz QUANTAS são, para a tela poder perguntar em vez de adivinhar.
+    //
+    // ⚠️ Esta contagem e o `updateMany` que cancela, mais abaixo, são as DUAS
+    // METADES DO MESMO ATO: quantas contar aqui e quais cancelar lá. Os dois
+    // conjuntos têm de ser o mesmo — por isso saem de `STATUS_VIVOS`, e não de
+    // duas listas escritas à mão. Divergindo, o número da recusa passa a falar
+    // de um conjunto e o encerramento cancela outro, sem erro nenhum.
     const pendentes = await this.prisma.avaliacao.count({
-      where: { cicloId, status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
+      where: { cicloId, status: { in: [...STATUS_VIVOS] } },
     });
     const motivo = opcoes.motivo?.trim() ?? '';
     if (pendentes > 0 && !opcoes.confirmarPendentes) {
@@ -258,7 +265,8 @@ export class CicloService {
     const encerrado = await this.prisma.$transaction(async (tx) => {
       if (pendentes > 0) {
         await tx.avaliacao.updateMany({
-          where: { cicloId, status: { in: ['PENDENTE', 'EM_ANDAMENTO'] } },
+          // A outra metade do ato — mesmo conjunto que foi contado acima.
+          where: { cicloId, status: { in: [...STATUS_VIVOS] } },
           data: {
             status: 'CANCELADA',
             canceladaEm: new Date(),
@@ -418,7 +426,7 @@ export class CicloService {
       // quantas foram canceladas para poder dizer que elas NÃO voltam.
       this.prisma.avaliacao.groupBy({
         by: ['cicloId', 'status'],
-        where: { status: { in: ['PENDENTE', 'EM_ANDAMENTO', 'CANCELADA'] } },
+        where: { status: { in: [...STATUS_VIVOS, 'CANCELADA'] } },
         _count: { _all: true },
       }),
     ]);
@@ -428,7 +436,7 @@ export class CicloService {
         .reduce((t, p) => t + p._count._all, 0);
     return ciclos.map((c) => ({
       ...c,
-      pendentes: soma(c.id, ['PENDENTE', 'EM_ANDAMENTO']),
+      pendentes: soma(c.id, [...STATUS_VIVOS]),
       /**
        * Quantas o ciclo já cancelou — reabrir NÃO as traz de volta.
        *

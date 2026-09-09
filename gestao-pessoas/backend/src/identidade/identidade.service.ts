@@ -29,6 +29,7 @@ import { $Enums, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { chapasEquivalentes } from '../common/chapa.js';
+import { MODULO } from '../common/roles-rh.js';
 import {
   classificarAcesso,
   motivoDoAcesso,
@@ -197,6 +198,11 @@ export class IdentidadeService {
     const candidatas = [...new Set(matriculas.flatMap((m) => chapasEquivalentes(m)))];
     if (candidatas.length === 0) return resultado;
 
+    // ⚠️ `${MODULO}`, e não o código escrito à mão: o dono do nome do módulo é
+    // `common/roles-rh.ts`, e SQL cru é justamente onde a cópia envelhece sem
+    // aviso — nada quebra, a consulta só passa a contar zero permissão e todo
+    // avaliador vira "sem acesso". Dentro de `Prisma.sql` ele vai como
+    // PARÂMETRO, não como texto concatenado.
     const contas = await this.prisma.$queryRaw<
       { matricula: string; usuario_id: string; username: string; status_conta: string; permissoes: bigint }[]
     >(Prisma.sql`
@@ -207,7 +213,7 @@ export class IdentidadeService {
              (SELECT count(*) FROM "core"."permissoes_modulo" p
                 JOIN "core"."modulos_sistema" m ON m.id = p.modulo_id
               WHERE p.usuario_id = u.id
-                AND m.codigo = 'GESTAO_PESSOAS'
+                AND m.codigo = ${MODULO}
                 AND p.status::text = 'ATIVO') AS permissoes
         FROM "core"."usuarios" u
        WHERE upper(trim(u.matricula)) IN (${Prisma.join(candidatas)})

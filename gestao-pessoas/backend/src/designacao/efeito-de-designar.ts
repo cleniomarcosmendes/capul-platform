@@ -39,6 +39,7 @@
  * discordar.
  */
 
+import { FRASE_AUTOAVALIACAO, ehAutoavaliacao } from '../common/autoavaliacao.js';
 import {
   decidirTrocaDeAplicacao,
   mensagemDaRecusa,
@@ -138,14 +139,17 @@ export function efeitoDeDesignar(
    *
    * Vindo para o classificador, ela deixa de ter duas versões: a prévia e o ato
    * chamam a MESMA função, e é impossível uma saber o que a outra não sabe.
-   * ⚠️ Por isso não se re-implementa esta checagem em `designar()`.
+   * ⚠️ Por isso não se re-implementa esta checagem em `designar()`. E porque a
+   * designação PADRÃO tinha a sua própria cópia — a re-implementação que este
+   * comentário proibia, um módulo adiante —, a pergunta e a frase moram agora em
+   * `common/autoavaliacao.ts`, que é o que as duas leem.
    */
-  if (ctx.avaliadoId === ctx.novoAvaliadorId) {
+  if (ehAutoavaliacao(ctx.avaliadoId, ctx.novoAvaliadorId)) {
     return {
       acao: 'RECUSAR',
       avaliadorAtual: atual?.avaliadorNome ?? null,
       estadoAtual: atual ? estadoEmUmaLinha(atual) : null,
-      frase: 'Ninguém pode ser o avaliador da própria avaliação.',
+      frase: FRASE_AUTOAVALIACAO,
     };
   }
 

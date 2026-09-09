@@ -70,6 +70,12 @@ export function conferenciaDe(conteudo: string): string {
  * filial `2` não casa com nenhuma pessoa, o que faria a linha ser recusada
  * como "centro de custo sem pessoas". A mensagem estaria errada e a gestora
  * iria conferir o código do centro de custo, que está certo.
+ *
+ * ⚠️ **NÃO é cópia de `common/chapa.ts:normalizarChapa`.** Aquela traduz a chapa
+ * na forma do Protheus (`E01981` → `001981`) e **não repõe zero**; esta repõe o
+ * zero comido pelo Excel (`1741` → `001741`) e **não sabe o que é `E`**. Os dois
+ * problemas convivem no mesmo campo e cada função cobre um — unificar por
+ * parecerem iguais devolve um dos dois defeitos, sem erro nenhum na tela.
  */
 export function normalizarMatricula(valor: string): string {
   const limpo = valor.trim();

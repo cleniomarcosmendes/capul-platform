@@ -36,6 +36,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { DesignacaoService } from '../designacao/designacao.service.js';
 import { montarListaInicial } from '../designacao/elegibilidade-ciclo.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
+import { STATUS_VIVOS } from '../avaliacao/cancelamento.js';
 import { proximoPasso, type ProximoPasso } from './proximo-passo.js';
 import { CicloService } from '../ciclo/ciclo.service.js';
 import { IdentidadeService } from '../identidade/identidade.service.js';
@@ -471,7 +472,9 @@ export class PainelService {
       canceladas: conta('CANCELADA'),
       semDesignacao,
       enviadas: conta('ENVIADA'),
-      aFazer: conta('PENDENTE') + conta('EM_ANDAMENTO'),
+      // "A fazer" é exatamente o conjunto que o encerramento contaria e
+      // cancelaria — sai de `STATUS_VIVOS` para não virar uma segunda régua.
+      aFazer: STATUS_VIVOS.reduce((t, s) => t + conta(s), 0),
       apuradas,
     };
     // ⚠️ `estado` tem `status` porque `proximoPasso` deriva dele — mas ele NÃO
