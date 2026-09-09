@@ -36,6 +36,8 @@ CONTAINER="${CONTAINER:-capul-db}"
 DB="${DB:-capul_platform}"
 USUARIO="${USUARIO:-capul_user}"
 SAIDA="${1:-cadastro-piloto-hlg.sql}"
+# Id do usuário do HLG que assume a autoria do transporte (ver o bloco abaixo).
+ADMIN_HLG_ID="${ADMIN_HLG_ID:-}"
 
 # Ordem = ordem das FKs. Não reordene sem olhar as dependências.
 TABELAS=(
@@ -45,6 +47,16 @@ TABELAS=(
   rh.colaborador_treinamento
   rh.colaborador_funcao_historico
 )
+
+if [ -z "${ADMIN_HLG_ID:-}" ]; then
+  echo "" >&2
+  echo "⛔ ADMIN_HLG_ID não informado — e sem ele a trilha das 521 designações" >&2
+  echo "   apontaria para um usuário que não existe no HLG (vira '(não encontrado)')." >&2
+  echo "   Pegue o id no HLG e rode de novo:" >&2
+  echo "     select id, username from core.usuarios where username = '<admin do HLG>';" >&2
+  echo "     ADMIN_HLG_ID=<id> $0 $SAIDA" >&2
+  exit 1
+fi
 
 echo "-- Cadastro do piloto (DEV → HLG) — gerado em $(date -Is)" > "$SAIDA"
 echo "-- ⚠️ Rodar com rh.colaborador VAZIO. Ver conferir-cadastro-hlg.sql." >> "$SAIDA"
@@ -59,6 +71,44 @@ for t in "${TABELAS[@]}"; do
     | grep -v '^--' | grep -v '^SET ' | grep -v '^SELECT pg_catalog' \
     >> "$SAIDA"
 done
+
+# ============================================================================
+# ⭐⭐ A TRILHA NÃO PODE APONTAR PARA O VAZIO.
+#
+# 521 das 1.384 linhas de `designacao_padrao` têm `registrado_por_id` com o id de
+# um usuário do DEV. **Não há FK entre schemas**, então isso copia CALADO — e no
+# HLG passa a apontar para um usuário que não existe.
+#
+# ⚠️ Por que isso não pode ficar para depois: a tela resolve o id para um nome, e
+# um id órfão vira **"(não encontrado)"**. Meses depois ninguém distingue as três
+# coisas que essa mesma frase pode significar: (a) veio da importação de outro
+# ambiente, (b) o usuário foi apagado, (c) o dado corrompeu. "Não encontrado" é
+# resposta que encerra a investigação sem responder nada.
+#
+# A escolha aqui é declarar (a) explicitamente: **tudo que veio deste transporte
+# fica no nome do admin do HLG**, e a linha diz isso. Não é fingir autoria — é
+# dizer a verdade sobre a origem: quem trouxe estes dados para o HLG foi o
+# transporte, executado por essa conta.
+#
+# ⚠️ ADMIN_HLG_ID é obrigatório de propósito. Sem ele o script PARA, em vez de
+# gerar um arquivo que envenena a trilha em silêncio — é o mesmo princípio do
+# `desconhecido` da identidade de build: rótulo ausente nunca vira palpite.
+# ============================================================================
+
+cat >> "$SAIDA" <<SQL
+
+-- ---------- trilha: quem trouxe estes dados ----------
+-- As linhas nasceram no DEV e o usuário que as registrou não existe aqui. Em vez
+-- de deixar id órfão (que a tela mostra como "(não encontrado)"), o transporte
+-- assume a autoria: foi ele que trouxe.
+UPDATE rh.designacao_padrao
+   SET registrado_por_id = '$ADMIN_HLG_ID'
+ WHERE registrado_por_id IS NOT NULL;
+
+UPDATE rh.importacao_designacao
+   SET importado_por_id = '$ADMIN_HLG_ID'
+ WHERE importado_por_id IS NOT NULL;
+SQL
 
 echo "COMMIT;" >> "$SAIDA"
 echo "" >&2

@@ -1642,6 +1642,30 @@ ela quer encerrar.
 
 ---
 
+## [Gestão de Pessoas] ⏳ As 28 faixas de critério são contíguas POR SORTE — 09/09/2026
+
+**Dívida registrada de propósito, não consertada agora.**
+
+A validação de **contiguidade** existe para as faixas de **CONCEITO do ciclo**
+(`ciclo/abertura.validator.ts`): o fim de uma faixa é o começo da próxima, inferior inclusivo
+e superior exclusivo, e a checagem é de CONTINUIDADE — foi ela que eliminou o buraco do 24,5.
+
+⚠️ **As faixas de CRITÉRIO (`rh.criterio_faixa`, 28 linhas em 4 critérios) não têm checagem
+nenhuma.** Elas são contíguas hoje porque quem escreveu o `prisma/seed.ts` as escreveu assim —
+não porque algo impeça o contrário. O que existe é a marcação de *"critério sem faixa"* no
+catálogo, que responde outra pergunta (tem faixa? × as faixas cobrem tudo?).
+
+**Por que não conserta agora:** enquanto as faixas só nascem do seed, o risco é teórico. Ele
+vira real **no dia em que a tela de critérios existir** — e é lá que a validação tem de nascer
+junto, não depois. Consertar antes da tela é escrever guarda para um caminho que ninguém
+percorre.
+
+⚠️ **Gatilho:** ao implementar a tela de Critérios e Faixas (levantamento de 09/09, 6–8h),
+a contiguidade entra no mesmo commit. Reaproveitar a função do `abertura.validator` em vez de
+escrever a segunda — é literalmente a regra 25 (`docs/REGRAS-DE-METODO.md`).
+
+---
+
 ## [Gestão de Pessoas] Auditoria: IP nulo em 13 das 14 ações — 06/09/2026
 
 Achado ao conferir o rastro do `AJUSTAR_PERIODO`, que era a justificativa inteira de ter
