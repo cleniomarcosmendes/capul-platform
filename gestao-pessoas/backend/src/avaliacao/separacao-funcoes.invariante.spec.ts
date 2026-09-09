@@ -45,6 +45,11 @@ const DISPENSADOS: Record<string, string> = {
     'só CONTA avaliações antes de tirar alguém do público da aplicação — para não deixar a ' +
     'Avaliacao órfã do recorte que a originou. Mesma frase do ciclo.service e do ' +
     'painel.service: agregado, não lê o conteúdo de ninguém.',
+  'resultado/resultado.service.ts':
+    'lê avaliação para MONTAR AS PLANILHAS (quem enviou cada resultado e a lista de canceladas com ' +
+    'motivo) — nunca abre, edita, reabre nem recalcula registro nenhum, que é o que a separação de ' +
+    'funções protege. Rota de RH_ADMIN, e a linha de quem gera o arquivo fica FORA dos dois CSV: na ' +
+    'tela a própria linha aparece marcada, mas arquivo que sai do sistema é outro ato.',
   'apuracao/apuracao.service.ts':
     'apuração em LOTE, por ciclo ou aplicação — a exceção já acordada, com escopo guardado por ' +
     'assertEscopoReapuracaoValido (nunca por colaborador)',

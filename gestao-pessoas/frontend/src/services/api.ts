@@ -737,6 +737,36 @@ export const resultados = {
   doCiclo: (cicloId: string) =>
     rhApi.get<LinhaDeResultado[]>(`/resultados/ciclo/${cicloId}`).then((r) => r.data),
   memoria: (id: string) => rhApi.get<MemoriaDeCalculo>(`/resultados/${id}`).then((r) => r.data),
+
+  /**
+   * ⭐⭐ A PLANILHA, baixada pelo NAVEGADOR e não por `<a href>`.
+   *
+   * ⚠️ Um link simples não leva o token — a rota é autenticada, e o que
+   * chegaria seria um 401 salvo como arquivo, que abre no Excel como lixo. Por
+   * isso vem como `blob` pelo mesmo cliente do resto, e o nome sai do
+   * `Content-Disposition` que o backend manda: o servidor é quem sabe o nome do
+   * ciclo e a data.
+   */
+  baixarCsv: async (cicloId: string, quais: 'resultados' | 'canceladas') => {
+    const caminho =
+      quais === 'resultados'
+        ? `/resultados/ciclo/${cicloId}/csv`
+        : `/resultados/ciclo/${cicloId}/canceladas.csv`;
+    const r = await rhApi.get<Blob>(caminho, { responseType: 'blob' });
+    const cabecalho = String(r.headers['content-disposition'] ?? '');
+    const nome = /filename="([^"]+)"/.exec(cabecalho)?.[1] ?? `${quais}.csv`;
+
+    const url = URL.createObjectURL(r.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nome;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // ⚠️ Sem o revoke, cada download deixa o arquivo inteiro na memória da aba.
+    URL.revokeObjectURL(url);
+    return nome;
+  },
 };
 
 export const apuracao = {

@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Req } from '@nestjs/common';
+import { Controller, Get, Header, Param, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -18,6 +19,42 @@ export class ResultadoController {
   @Get('ciclo/:cicloId')
   doCiclo(@Param('cicloId') cicloId: string, @ColaboradorAtual('id') colaboradorId?: string) {
     return this.resultados.doCiclo(cicloId, colaboradorId ?? null);
+  }
+
+  /**
+   * ⭐⭐ A PLANILHA DA REUNIÃO. Duas, na verdade, e separadas de propósito:
+   * quem TEM nota e quem NÃO tem e por quê. Ver `ResultadoService.csvDoCiclo`.
+   *
+   * ⚠️ As rotas vêm ANTES de `@Get(':id')` — sem isto, `/ciclo/x/csv` casaria
+   * com a rota de memória de cálculo, que trata o caminho inteiro como id.
+   *
+   * ⚠️ A memória de cálculo NÃO entra no arquivo: é dado pessoal (grau de
+   * instrução, tempo de casa) e sair por padrão numa planilha que circula por
+   * e-mail seria decidir por omissão o que é decisão do RH.
+   */
+  @Get('ciclo/:cicloId/csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  async csv(
+    @Param('cicloId') cicloId: string,
+    @ColaboradorAtual('id') colaboradorId: string | undefined,
+    @Res() res: Response,
+  ) {
+    const { nome, csv } = await this.resultados.csvDoCiclo(cicloId, colaboradorId ?? null);
+    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+    res.send(csv);
+  }
+
+  /** A que responde "por que fulano não tem nota" — com o motivo escrito. */
+  @Get('ciclo/:cicloId/canceladas.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  async csvCanceladas(
+    @Param('cicloId') cicloId: string,
+    @ColaboradorAtual('id') colaboradorId: string | undefined,
+    @Res() res: Response,
+  ) {
+    const { nome, csv } = await this.resultados.csvDeCanceladas(cicloId, colaboradorId ?? null);
+    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+    res.send(csv);
   }
 
   /**

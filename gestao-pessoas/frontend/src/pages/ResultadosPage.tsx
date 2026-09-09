@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { ChevronRight, Info, Search, Sigma, User } from 'lucide-react';
+import { ChevronRight, Download, Info, Search, Sigma, User } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { contagem, dataHora, nota } from '../lib/formato';
 import { Etiqueta } from '../components/Etiqueta';
 import {
   mensagemDoErro,
+  resultados,
   resultados as apiResultados,
   type LinhaDeResultado,
   type MemoriaDeCalculo,
@@ -88,6 +89,19 @@ export default function ResultadosPage() {
             className="alvo-toque w-full rounded-xl border border-slate-300 pl-9 pr-3 text-slate-800"
           />
         </div>
+        {/* ⭐⭐ AS DUAS PLANILHAS, e o par é o recurso — não uma o extra da outra.
+            A de resultados responde "quem tirou quanto"; a de canceladas
+            responde "por que fulano não está na lista", que é a pergunta que
+            aparece NA REUNIÃO e que a primeira planilha não tem como responder:
+            quem foi cancelado não tem resultado, então não tem linha lá. Sem o
+            segundo arquivo, a ausência da pessoa é lida como esquecimento. */}
+        <ExportarPlanilhas
+          cicloId={ciclo.id}
+          canceladas={ciclo.canceladas ?? 0}
+          restritas={linhas.filter((l) => l.restrita).length}
+          apuradas={linhas.length}
+        />
+
         {aplicacoesDisponiveis.length > 1 && (
           <label>
             <span className="sr-only">Aplicação</span>
@@ -414,6 +428,83 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
           Fechar
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * ⭐ Baixar não é ato irreversível, então não pede confirmação — mas DIZ o que
+ * cada arquivo tem antes do clique, porque "exportar" sozinho não distingue os
+ * dois. E o botão das canceladas some quando não há nenhuma: ato sem objeto
+ * some, e um arquivo de zero linhas na mão da gestora, na reunião, é pior que
+ * botão nenhum.
+ */
+function ExportarPlanilhas({
+  cicloId,
+  canceladas,
+  restritas,
+  apuradas,
+}: {
+  cicloId: string;
+  canceladas: number;
+  /** Quantas linhas desta tela são da própria pessoa — elas NÃO vão no arquivo. */
+  restritas: number;
+  apuradas: number;
+}) {
+  const [baixando, setBaixando] = useState<'resultados' | 'canceladas' | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function baixar(quais: 'resultados' | 'canceladas') {
+    setBaixando(quais);
+    setErro(null);
+    try {
+      await resultados.baixarCsv(cicloId, quais);
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível gerar a planilha.'));
+    } finally {
+      setBaixando(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => baixar('resultados')}
+        disabled={baixando !== null}
+        title="Uma linha por pessoa apurada: nota, conceito, avaliador e datas. Sem a memória de cálculo."
+        className="alvo-toque inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:opacity-60"
+      >
+        <Download size={15} aria-hidden />
+        {baixando === 'resultados' ? 'Gerando…' : 'Resultados (.csv)'}
+      </button>
+
+      {canceladas > 0 && (
+        <button
+          type="button"
+          onClick={() => baixar('canceladas')}
+          disabled={baixando !== null}
+          title="Quem ficou sem nota e por quê — com o motivo escrito no cancelamento."
+          className="alvo-toque inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:opacity-60"
+        >
+          <Download size={15} aria-hidden />
+          {baixando === 'canceladas' ? 'Gerando…' : `Canceladas (${canceladas})`}
+        </button>
+      )}
+
+      {/* ⭐⭐ O TERMO QUE CONCILIA OS DOIS NÚMEROS. A tela diz "3 apuradas" e o
+          arquivo sai com 2 — porque a própria linha não vai. Sem esta frase, a
+          diferença aparece na REUNIÃO, onde ninguém tem como explicá-la, e o
+          arquivo passa a parecer incompleto. É a mesma regra do card de ciclos
+          citando as canceladas. */}
+      {restritas > 0 && (
+        <p className="w-full text-xs text-slate-500">
+          O arquivo sai com {apuradas - restritas} de {apuradas}: a sua própria avaliação aparece
+          nesta tela, marcada, mas não vai na planilha.
+        </p>
+      )}
+
+      {erro && <p className="w-full text-sm text-rose-700">{erro}</p>}
     </div>
   );
 }

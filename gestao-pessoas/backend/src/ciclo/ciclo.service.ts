@@ -551,7 +551,21 @@ export class CicloService {
   async obter(cicloId: string) {
     const ciclo = await this.carregarParaAbertura(cicloId);
     if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
-    return ciclo;
+
+    /**
+     * ⚠️ `canceladas` VIAJA JUNTO — o tipo do cliente já prometia este campo
+     * (`CicloDetalhado` herda de `CicloDaLista`) e o endpoint nunca o mandou:
+     * quem lesse `ciclo.canceladas` recebia `undefined` com o TypeScript
+     * dizendo `number`. Tipo que mente sobre o payload é pior que campo
+     * ausente — o compilador confirma o engano.
+     *
+     * Recorte por status explícito, como a contagem do encerrar: é a própria
+     * pergunta, não um total (ver a dispensa em `avaliacoes-que-contam`).
+     */
+    const canceladas = await this.prisma.avaliacao.count({
+      where: { cicloId, status: 'CANCELADA' },
+    });
+    return { ...ciclo, canceladas };
   }
 
   private async carregarParaAbertura(cicloId: string) {

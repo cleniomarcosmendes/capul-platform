@@ -1,6 +1,6 @@
 # Regras de método
 
-**26 regras.** Cada uma nasceu de um caso concreto deste projeto e **vale além dele** — outro
+**27 regras.** Cada uma nasceu de um caso concreto deste projeto e **vale além dele** — outro
 módulo, outra pessoa, outro mês.
 
 > **Como usar:** não se lê de cabo a rabo. Cada regra começa por um **GATILHO** — o momento em que
@@ -627,6 +627,36 @@ percurso não alcança ramo não visitado. A união é o alvo; a interseção n�
 encerrado) mede um ramo só. Se o alvo é texto que varia com o estado, o roteiro precisa dizer
 **em que estados** passar — ou o relatório vem verdadeiro e incompleto, que é o mais difícil de
 perceber.
+
+---
+
+### 27. ⭐ Tela e API discordando: um dos dois mente — e o SENTIDO decide quem descobre
+
+> **GATILHO:** *escrevi a mesma regra nos dois lados.*
+
+A semana inteira foi caçando um sentido só: **a tela promete o que a API nega** — botão oferecido
+que falha no clique, prévia que autoriza o que o ato recusa. O usuário descobre, e descobre no pior
+momento.
+
+Em 09/09, ao conferir a régua de conceitos no ar, apareceu **o inverso**: a tela travava a edição
+num ciclo `ENCERRADO` e a **API aceitava**. Nenhum usuário jamais reclamaria — a tela protege.
+Quem descobre é **quem chama a API direto**: um script de carga, um roteiro de migração, uma
+sessão de suporte com `curl`. Ou seja, **quem menos espera ser barrado, no momento em que menos
+pode conferir**, e frequentemente com o ambiente de produção do outro lado.
+
+| Sentido | Quem descobre | Quando |
+|---|---|---|
+| Tela promete, API nega | o usuário | no clique, na frente de outra pessoa |
+| Tela nega, API aceita | quem integra ou dá suporte | com script rodando, longe da tela |
+
+⭐ **A regra é a mesma dos dois lados: a regra mora no service, e a tela a exibe.** Quando a tela
+tem uma condição própria (`status === 'ENCERRADO'`), pergunte de imediato se o service tem a mesma
+— e a resposta honesta não é "acho que sim", é **chamar a API sem passar pela tela**. Foi assim que
+este apareceu: um `curl` que era só para conferir o texto da recusa, e voltou `200`.
+
+⚠️ E o defeito do lado permissivo é mais silencioso por natureza: falha nenhuma aparece, teste
+nenhum quebra, e o dado errado entra sem ninguém ver — porque **a tela estava certa e ninguém
+duvidou dela**.
 
 ---
 
