@@ -319,6 +319,7 @@ nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 | A mesma pessoa em dois ciclos abertos ao mesmo tempo | Gestora de RH | §5 · §3.10 |
 | Quem é o avaliador de cada centro de custo (a lista real) — sem ela, 174 pessoas ficam fora | Gestora de RH | §5 · §7 · §11 |
 | O público real de cada aplicação — 3 das 4 estão com recorte provisório | Gestora de RH | §5 · §7 · §11 |
+| 🔴 **O mapeamento por PREFIXO de centro de custo manda 80 pessoas da FÁBRICA para o questionário de LOJA.** O recorte provisório é por prefixo (`1101…`→Administrativo 11 perguntas · `2101…`→Operação de Loja 14 · `3101…`/`4101…`→Produção 14), e na filial 18 três CCs têm prefixo `2101`: **ADMINISTRATIVO - FABRICA (49)**, **EXPEDICAO (30)** e ARMAZEM GERAL (1). ⚠️ E existem **dois CCs com o mesmo nome e prefixos diferentes** — `21011202 ADMINISTRATIVO - FABRICA` (49 pessoas → Loja) e `41010114 ADMINSTRATIVO DA FABRICA` (4 pessoas → Produção): mesma função, questionários diferentes, por causa do código contábil. **A pergunta:** o prefixo descreve o TRABALHO ou só a conta contábil? Se for só a conta, estes CCs precisam de recorte nominal. Achado ao montar o piloto de 15/09 — descoberto na avaliação oficial custa mais | Gestora de RH | §5 · §7 |
 | Quem avalia **os avaliadores do ciclo** (quantos são, na §0) — a maioria cai no Diretor Executivo pela regra provisória | Diretoria + RH | §5 · §11 |
 | Quem avalia Presidente e Vice | Diretoria | §5 |
 | Régua de escolaridade · aprendizes · afastados · enunciados das perguntas | Gestora de RH | §5 |
