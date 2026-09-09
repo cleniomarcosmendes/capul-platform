@@ -32,6 +32,15 @@ O Marco aplicou em 07/09, em HLG **e** em PROD, o roteiro de 04/09
 módulo**. ⚠️ Confirmar o rótulo quando for conveniente (`/health` → `versao.commit`): o que
 está acima é o declarado, e estado de ambiente é o que mais envelhece nestes registros.
 
+✅ **O piloto de 15/09 vai para HOMOLOGAÇÃO** (Marco confirmou em 09/09/2026: *"serve sim"*,
+acesso e dado). É a opção que paga o ensaio do deploy — o roteiro do módulo estreia num servidor
+de verdade, na rede da empresa, com URL alcançável pelas 137 pessoas — **sem** pôr um ciclo de
+teste com gente real, nota real e resultado apurado dentro da base de PRODUÇÃO. ⚠️ Rodar em DEV
+estava descartado por um motivo só, e ele decide sozinho: `https://localhost` na máquina do
+Clenio, atrás de WSL2 e de certificado autoassinado, **não é URL que se manda a um repositor no
+salão do supermercado** — e aí o piloto perderia justamente o teste do celular em pé, que é uma
+das sete coisas que só ele prova.
+
 ⚠️ **Então o módulo precisa de roteiro PRÓPRIO** — e ele é maior que uma onda comum, porque
 sobe um serviço novo em vez de atualizar um existente:
 
