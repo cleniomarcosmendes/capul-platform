@@ -589,7 +589,45 @@ export interface PreviaDaAbertura {
   aplicacoesProvisorias: number;
 }
 
+/**
+ * ⭐ O que os avaliadores disseram sobre a própria equipe — o sinal #5 do
+ * piloto (se a designação do cadastro corresponde à chefia real).
+ *
+ * ⚠️ Os dois totais SEPARADOS de propósito: "sobra gente" e "falta gente" são
+ * reclamações opostas, e somá-las esconderia qual delas o cadastro produz.
+ */
+export interface ApontamentoDeEquipe {
+  avaliacaoId: string;
+  avaliadorNome: string;
+  avaliadorMatricula: string;
+  avaliadoNome: string;
+  avaliadoMatricula: string;
+  centroCusto: string | null;
+  motivo: string;
+  em: string;
+}
+export interface ContestacoesDoCiclo {
+  totalApontamentos: number;
+  totalFaltaGente: number;
+  porAvaliador: {
+    avaliadorNome: string;
+    avaliadorMatricula: string;
+    apontamentos: ApontamentoDeEquipe[];
+  }[];
+  faltaGente: {
+    avaliadorNome: string;
+    avaliadorMatricula: string;
+    avaliacoesNaFila: number;
+    texto: string;
+    em: string;
+  }[];
+}
+
 export const painel = {
+  contestacoes: (cicloId: string) =>
+    rhApi
+      .get<ContestacoesDoCiclo>(`/painel/ciclo/${cicloId}/contestacoes`)
+      .then((r) => r.data),
   previaDaAbertura: (cicloId: string) =>
     rhApi
       .get<PreviaDaAbertura>(`/painel/ciclo/${cicloId}/previa-da-abertura`)

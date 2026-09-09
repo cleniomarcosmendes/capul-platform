@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { AlertTriangle, Calculator, UserX } from 'lucide-react';
+import { AlertTriangle, Calculator, MessageSquareWarning, UserMinus, UserX } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,12 +10,13 @@ import {
   mensagemDoErro,
   painel as apiPainel,
   type Conferencia,
+  type ContestacoesDoCiclo,
   type PainelDoCiclo,
 } from '../services/api';
 import type { ContextoDoCiclo } from './CicloPage';
 import { Modal } from '../components/Modal';
 import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
-import { contagem, flexao } from '../lib/formato';
+import { contagem, dataHora, flexao } from '../lib/formato';
 
 /**
  * PAINEL — o que falta para o ciclo fechar.
@@ -36,6 +37,8 @@ export default function PainelPage() {
   const { tem } = useAuth();
   const [dados, setDados] = useState<PainelDoCiclo | null>(null);
   const [conferencia, setConferencia] = useState<Conferencia | null>(null);
+  /** O que os avaliadores disseram sobre a própria equipe — o sinal #5 do piloto. */
+  const [contestacoes, setContestacoes] = useState<ContestacoesDoCiclo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [apurando, setApurando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -49,9 +52,14 @@ export default function PainelPage() {
   async function carregar() {
     setErro(null);
     try {
-      const [p, c] = await Promise.all([apiPainel.doCiclo(ciclo.id), apiPainel.pendencias(ciclo.id)]);
+      const [p, c, k] = await Promise.all([
+        apiPainel.doCiclo(ciclo.id),
+        apiPainel.pendencias(ciclo.id),
+        apiPainel.contestacoes(ciclo.id),
+      ]);
       setDados(p);
       setConferencia(c);
+      setContestacoes(k);
     } catch (e) {
       setErro(mensagemDoErro(e, 'Não foi possível carregar o painel.'));
     }
@@ -297,6 +305,15 @@ export default function PainelPage() {
         )}
       </section>
 
+      {/* ⭐⭐ O QUE OS AVALIADORES DISSERAM SOBRE A PRÓPRIA EQUIPE.
+          É a leitura do sinal de campo do piloto: o cadastro diz quem avalia
+          quem, e só o avaliador de carne e osso sabe se está certo. Fica no
+          Painel, e não num relatório, porque é aqui que a gestora vem ver o que
+          falta para o ciclo fechar — e um cadastro errado é o que mais atrasa.
+          ⚠️ Sem este bloco o dado existia só em `rh.auditoria`: legível por SQL,
+          e portanto invisível para quem decide. */}
+      <BlocoDeContestacoes dados={contestacoes} />
+
       <section>
         <h3 className="mb-2 text-sm font-semibold text-slate-500">Pendências cadastrais</h3>
         {!conferencia ? (
@@ -436,5 +453,112 @@ export default function PainelPage() {
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * ⭐⭐ O bloco que faz o sinal virar decisão.
+ *
+ * Agrupado por AVALIADOR, e não por apontamento solto: a decisão da gestora é
+ * sobre a lista de uma pessoa. **Seis apontamentos do mesmo avaliador é recorte
+ * de cadastro errado; um apontamento isolado é alguém que mudou de setor** — e
+ * a diferença entre os dois só aparece agrupada.
+ *
+ * ⚠️ **Não some quando está vazio.** "Nenhum apontamento" é informação: quer
+ * dizer que o cadastro se sustentou no campo, e é uma das respostas que o piloto
+ * existe para dar. Bloco que aparece só quando há problema faz a ausência de
+ * problema parecer ausência de medida.
+ */
+function BlocoDeContestacoes({ dados }: { dados: ContestacoesDoCiclo | null }) {
+  if (!dados) return <Carregando linhas={1} />;
+
+  const nada = dados.totalApontamentos === 0 && dados.totalFaltaGente === 0;
+
+  return (
+    <section>
+      <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-500">
+        <MessageSquareWarning size={15} aria-hidden />
+        O que os avaliadores disseram sobre a equipe deles
+      </h3>
+
+      {nada ? (
+        <p className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+          Nenhum avaliador apontou pessoa fora da equipe nem falta de gente. O cadastro de
+          avaliadores está batendo com o que eles veem — este bloco é o registro disso.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {/* ⚠️ Os dois números lado a lado e SEPARADOS: são reclamações
+              opostas — sobra gente × falta gente —, e o cadastro que produz uma
+              não é o mesmo que produz a outra. */}
+          <div className="flex flex-wrap gap-2 text-sm">
+            <span className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-1 font-medium text-amber-900">
+              Apontadas como fora da equipe: <strong className="tabular-nums">{dados.totalApontamentos}</strong>
+            </span>
+            <span className="rounded-xl border border-sky-300 bg-sky-50 px-3 py-1 font-medium text-sky-900">
+              Avisos de que falta gente: <strong className="tabular-nums">{dados.totalFaltaGente}</strong>
+            </span>
+          </div>
+
+          {/* ⚠️ A avaliação NÃO saiu da fila de ninguém: quem decide trocar o
+              avaliador é a gestora, aqui, e o avaliador foi avisado disso na
+              tela dele. Repetir do lado de cá evita que ela conclua que o
+              sistema já resolveu — a mesma meia-verdade, do outro lado. */}
+          <p className="text-xs text-slate-500">
+            Nada disto mudou designação: as avaliações continuam com quem está na lista. Para
+            trocar, use <em>Trocar avaliador</em> na aba Designação; para o próximo ciclo, corrija
+            em <em>Avaliadores</em>.
+          </p>
+
+          {dados.porAvaliador.map((grupo) => (
+            <div
+              key={grupo.avaliadorMatricula}
+              className="rounded-xl border border-slate-200 bg-white p-3"
+            >
+              <p className="flex items-baseline gap-2 text-sm font-semibold text-slate-800">
+                <UserMinus size={14} className="shrink-0 text-amber-600" aria-hidden />
+                {grupo.avaliadorNome}
+                <span className="text-xs font-normal text-slate-500">
+                  {grupo.avaliadorMatricula} · apontou {grupo.apontamentos.length}
+                </span>
+              </p>
+              <ul className="mt-2 space-y-2">
+                {grupo.apontamentos.map((a) => (
+                  <li key={a.avaliacaoId} className="border-l-2 border-slate-200 pl-2 text-sm">
+                    <p className="text-slate-700">
+                      {a.avaliadoNome}{' '}
+                      <span className="text-xs text-slate-500">
+                        {a.avaliadoMatricula}
+                        {a.centroCusto ? ` · CC ${a.centroCusto}` : ''}
+                      </span>
+                    </p>
+                    {/* O motivo ESCRITO é o que se lê para decidir — sem ele a
+                        linha vira um número e a gestora tem de ligar para o
+                        avaliador para saber o que ele quis dizer. */}
+                    <p className="text-xs italic text-slate-600">“{a.motivo}”</p>
+                    <p className="text-xs text-slate-400">{dataHora(a.em)}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          {dados.faltaGente.map((f, i) => (
+            <div key={`${f.avaliadorMatricula}-${i}`} className="rounded-xl border border-sky-200 bg-sky-50/50 p-3">
+              <p className="text-sm font-semibold text-slate-800">
+                {f.avaliadorNome}{' '}
+                <span className="text-xs font-normal text-slate-500">
+                  {f.avaliadorMatricula} · diz que falta gente na equipe dele
+                </span>
+              </p>
+              <p className="mt-1 text-sm italic text-slate-700">“{f.texto}”</p>
+              <p className="text-xs text-slate-400">
+                {dataHora(f.em)} · fila dele hoje: {f.avaliacoesNaFila}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

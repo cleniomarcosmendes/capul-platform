@@ -37,6 +37,7 @@ import { DesignacaoService } from '../designacao/designacao.service.js';
 import { montarListaInicial } from '../designacao/elegibilidade-ciclo.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { STATUS_VIVOS } from '../avaliacao/cancelamento.js';
+import { ACAO_FALTA_GENTE, ACAO_NAO_E_MINHA_EQUIPE } from '../avaliacao/contestacao.js';
 import { proximoPasso, type ProximoPasso } from './proximo-passo.js';
 import { CicloService } from '../ciclo/ciclo.service.js';
 import { IdentidadeService } from '../identidade/identidade.service.js';
@@ -424,6 +425,117 @@ export class PainelService {
       avaliadoresSemAcesso,
       /** Quantas avaliações estão nas mãos deles — o número que dói. */
       avaliacoesSemAvaliadorComAcesso: avaliadoresSemAcesso.reduce((t, a) => t + a.avaliacoes, 0),
+    };
+  }
+
+  /**
+   * ⭐⭐ O QUE OS AVALIADORES DISSERAM SOBRE A PRÓPRIA EQUIPE — a leitura do
+   * sinal #5 do piloto (se a designação do cadastro corresponde à chefia real).
+   *
+   * ⚠️ Sem esta tela o recurso ficaria pela metade: o dado existe em
+   * `rh.auditoria` desde 09/09, e auditoria só responde a quem já sabe perguntar
+   * — com SQL. Reclamação que só a T.I. consegue ler **não vira decisão de quem
+   * decide**, e a gestora é quem revisa o cadastro de avaliadores.
+   *
+   * Agrupado por AVALIADOR de propósito: a decisão dela é sobre a lista de uma
+   * pessoa ("o Washington aponta 6 que não são dele"), não sobre apontamentos
+   * soltos. Um avaliador com muitos apontamentos é um recorte de cadastro
+   * errado; um apontamento isolado é uma pessoa que mudou de setor.
+   */
+  async contestacoesDoCiclo(cicloId: string) {
+    const [apontamentos, faltas] = await Promise.all([
+      this.prisma.auditoria.findMany({
+        where: {
+          entidade: 'Avaliacao',
+          acao: ACAO_NAO_E_MINHA_EQUIPE,
+          // O `cicloId` foi gravado no `valorNovo` justamente para esta leitura
+          // não precisar carregar as 894 avaliações do ciclo para filtrar.
+          valorNovo: { path: ['cicloId'], equals: cicloId },
+        },
+        orderBy: { criadoEm: 'desc' },
+      }),
+      this.prisma.auditoria.findMany({
+        where: { entidade: 'Ciclo', entidadeId: cicloId, acao: ACAO_FALTA_GENTE },
+        orderBy: { criadoEm: 'desc' },
+      }),
+    ]);
+
+    // Quem AVISOU: a auditoria guarda o usuário, e o nome que a gestora conhece
+    // é o do colaborador — a ponte é a avaliação, que sabe quem é o avaliador.
+    const avaliacoes = await this.prisma.avaliacao.findMany({
+      where: { id: { in: apontamentos.map((a) => a.entidadeId) } },
+      select: { id: true, avaliadorId: true },
+    });
+    const avaliadorPorAvaliacao = new Map(avaliacoes.map((a) => [a.id, a.avaliadorId]));
+
+    const idsDeGente = [
+      ...new Set([
+        ...avaliacoes.map((a) => a.avaliadorId),
+        ...faltas.map((f) => (f.valorNovo as { avaliadorId?: string } | null)?.avaliadorId ?? ''),
+      ]),
+    ].filter(Boolean);
+    const gente = await this.prisma.colaborador.findMany({
+      where: { id: { in: idsDeGente } },
+      select: { id: true, nome: true, matricula: true },
+    });
+    const nomePorId = new Map(gente.map((c) => [c.id, c]));
+
+    const naoEMinhaEquipe = apontamentos.map((a) => {
+      const dados = (a.valorNovo ?? {}) as {
+        avaliadoNome?: string | null;
+        avaliadoMatricula?: string | null;
+        centroCusto?: string | null;
+      };
+      const avaliadorId = avaliadorPorAvaliacao.get(a.entidadeId) ?? '';
+      const avaliador = nomePorId.get(avaliadorId);
+      return {
+        avaliacaoId: a.entidadeId,
+        avaliadorNome: avaliador?.nome ?? '(avaliador não encontrado)',
+        avaliadorMatricula: avaliador?.matricula ?? '',
+        avaliadoNome: dados.avaliadoNome ?? '(não registrado)',
+        avaliadoMatricula: dados.avaliadoMatricula ?? '',
+        centroCusto: dados.centroCusto ?? null,
+        motivo: a.justificativa ?? '',
+        em: a.criadoEm,
+      };
+    });
+
+    // Agrupa por avaliador mantendo a ordem de quem tem mais a dizer primeiro.
+    const porAvaliador = [
+      ...naoEMinhaEquipe
+        .reduce((mapa, linha) => {
+          const atual = mapa.get(linha.avaliadorMatricula) ?? {
+            avaliadorNome: linha.avaliadorNome,
+            avaliadorMatricula: linha.avaliadorMatricula,
+            apontamentos: [] as typeof naoEMinhaEquipe,
+          };
+          atual.apontamentos.push(linha);
+          mapa.set(linha.avaliadorMatricula, atual);
+          return mapa;
+        }, new Map<string, { avaliadorNome: string; avaliadorMatricula: string; apontamentos: typeof naoEMinhaEquipe }>())
+        .values(),
+    ].sort((a, b) => b.apontamentos.length - a.apontamentos.length);
+
+    const faltaGente = faltas.map((f) => {
+      const dados = (f.valorNovo ?? {}) as { avaliadorId?: string; avaliacoesNaFila?: number };
+      const quem = nomePorId.get(dados.avaliadorId ?? '');
+      return {
+        avaliadorNome: quem?.nome ?? '(avaliador não encontrado)',
+        avaliadorMatricula: quem?.matricula ?? '',
+        avaliacoesNaFila: dados.avaliacoesNaFila ?? 0,
+        texto: f.justificativa ?? '',
+        em: f.criadoEm,
+      };
+    });
+
+    return {
+      // Os dois números separados: são reclamações de naturezas opostas — sobra
+      // gente na fila × falta gente na fila —, e somá-las esconderia qual das
+      // duas o cadastro está produzindo.
+      totalApontamentos: naoEMinhaEquipe.length,
+      totalFaltaGente: faltaGente.length,
+      porAvaliador,
+      faltaGente,
     };
   }
 

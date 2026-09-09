@@ -32,6 +32,15 @@ export class PainelController {
     return this.painel.resumoDoCiclo(cicloId);
   }
 
+  /**
+   * ⭐ O que os avaliadores disseram sobre a própria equipe. Existe para a
+   * gestora ler sem pedir SQL — ver `PainelService.contestacoesDoCiclo`.
+   */
+  @Get('ciclo/:cicloId/contestacoes')
+  contestacoes(@Param('cicloId') cicloId: string) {
+    return this.painel.contestacoesDoCiclo(cicloId);
+  }
+
   /** Mesma conta da apuração, sem gravar — ver `ApuracaoService.conferir`. */
   @Get('ciclo/:cicloId/pendencias') pendencias(@Param('cicloId') cicloId: string) {
     return this.apuracao.conferir({ tipo: 'CICLO', cicloId });

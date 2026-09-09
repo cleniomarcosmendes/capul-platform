@@ -3731,6 +3731,26 @@ algo, mas é bom não descobrir na hora.
 `trust proxy` nem `X-Forwarded-For`, então todo mundo tem o mesmo endereço e o campo não
 distingue ninguém. Pior que vazio: um IP que parece resposta.
 
+### 🔴 O `PATCH` de usuário do Configurador NÃO deixa rastro — e afeta todos os módulos
+
+**Mesma família do IP nulo acima, um degrau mais grave.** `core.system_logs` registra
+`USER_CREATE` (164), `PASSWORD_RESET` (51), `PASSWORD_CHANGE` (29), `PERMISSION_GRANT` (201) e
+`PERMISSION_REVOKE` (27) — mas **não existe `USER_UPDATE`**. Editar um usuário
+(`PATCH /api/v1/core/usuarios/:id`) muda nome, matrícula, cargo, e-mail e `autenticaPortal`
+**sem uma linha em lugar nenhum**.
+
+⚠️ Medido em 09/09/2026: mudei o nome do usuário `claudimaroliveira` por essa rota e **nada foi
+registrado** — a mudança está documentada nesta página porque o sistema não a documentou.
+
+⚠️ **Por que é pior que o IP nulo:** a matrícula é o que liga a conta ao colaborador
+(`chapasEquivalentes`). Uma edição errada de matrícula quebra o acesso de alguém ao Gestão de
+Pessoas — o **403 que parece falta de permissão** — e não há como descobrir **quem** mudou nem
+**quando**. Criar a conta deixa rastro; corromper a conta depois, não.
+
+⭐ É do **Configurador**, não deste módulo, e vale para toda a plataforma: quem edita usuário
+hoje edita anônimo. O conserto é uma linha de log no `UsuarioService.update`, com `valorAnterior`
+e `valorNovo` — o mesmo formato que `rh.auditoria` já usa.
+
 
 Cada uma destas já custou tempo de alguém.
 

@@ -421,6 +421,20 @@ reapareceu **quatro vezes** antes de virar teste.
 ⭐ E o varredor precisa de **um teste de que ele reconhece a forma errada** — senão um regex que
 deixou de casar passa a aprovar tudo em silêncio.
 
+── **Evidência de que eles funcionam: pegaram trabalho NOVO, sozinhos** ──
+
+Duas vezes na semana de 09/09, um invariante barrou código novo **antes de qualquer revisão**:
+
+| Quando | O que pegou |
+|---|---|
+| Ao extrair `STATUS_VIVOS` e `MODULO` | `fonte-unica.invariante` — validado por mutação: os três literais reintroduzidos, os três pegos |
+| Ao acrescentar a ação `contestar` ("não é minha equipe") | **os DOIS guardas ao mesmo tempo**: o `Record` de `EXIGENCIA_POR_ACAO` recusou COMPILAR até a ação declarar o que exige, e o spec que lista as ações quebrou em seguida |
+
+⭐ O segundo caso é o que vale citar: os dois guardas cobrem a mesma regra por caminhos
+diferentes — **tipo** e **teste** —, e nenhum dos dois foi escrito pensando em `contestar`. O
+autor da ação nova não precisou saber que a regra existia; a regra o encontrou. É a diferença
+entre uma convenção documentada e um invariante: a convenção depende de alguém lembrar.
+
 ---
 
 # Parte 3 — como trabalhamos
