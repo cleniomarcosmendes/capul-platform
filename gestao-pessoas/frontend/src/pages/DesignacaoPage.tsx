@@ -473,7 +473,8 @@ function LinhaDaLista({
               EM ANDAMENTO tem o mesmo direito de dizer onde parou. */}
           {linha.respostasDadas > 0 && linha.avaliacaoStatus !== 'ENVIADA' && (
             <Etiqueta tom="neutro">
-              {linha.respostasDadas} de {linha.perguntasNoModelo} respondidas
+              {linha.respostasDadas} de {linha.perguntasNoModelo}{' '}
+              {flexao(linha.perguntasNoModelo, 'respondida', 'respondidas')}
             </Etiqueta>
           )}
         </div>
@@ -496,7 +497,10 @@ function LinhaDaLista({
             pé — e a resposta é o que o diálogo já tinha prometido. */}
         {linha.avaliacaoStatus === 'CANCELADA' && linha.respostasDadas > 0 && (
           <p className="mt-1 text-xs text-slate-600">
-            As {linha.respostasDadas} respostas já dadas ficam registradas e não entram na
+            {/* ⚠️ Escrita como RÓTULO: eu mesmo escrevi "As 1 respostas já dadas"
+                aqui uma hora antes de listar essa classe de erro. O número entra
+                como valor, não no meio da frase. */}
+            Respostas já dadas: {linha.respostasDadas}. Ficam registradas e não entram na
             apuração — nada foi apagado.
           </p>
         )}

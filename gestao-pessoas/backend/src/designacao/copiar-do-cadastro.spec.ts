@@ -229,7 +229,11 @@ describe('DesignacaoService.copiarDoCadastro', () => {
       // "não estão na lista de ninguém e ficarão de fora" para TODO mundo sem
       // cadastro, inclusive para quem já estava no ciclo. Agora o "ficarão de
       // fora" só vale para quem também não tem avaliação — e o aviso diz isso.
-      expect(r.avisos.join(' ')).toMatch(/não têm avaliação neste ciclo: são as que ficarão de fora/);
+      // O FATO que este teste guarda: o aviso liga "sem avaliação neste ciclo" a
+      // "fica de fora" — as duas condições na MESMA frase. A redação mudou em
+      // 09/09 (o número passou a entrar como rótulo) e o fato é o mesmo.
+      const aviso = r.avisos.find((a) => a.includes('fica de fora'))!;
+      expect(aviso).toMatch(/não tem avaliação neste ciclo/);
     });
   });
 
@@ -363,7 +367,7 @@ describe('sem cadastro × já designada no ciclo — os dois eixos', () => {
     expect(r.porMotivo).toEqual({ AJUSTE_MANUAL_DO_CICLO: 1, SEM_CADASTRO_JA_DESIGNADA: 2 });
     // Nenhuma das três é contada como "vai ficar de fora do ciclo".
     expect(r.porMotivo.SEM_AVALIADOR_NO_CADASTRO).toBeUndefined();
-    expect(r.avisos.join(' ')).not.toMatch(/ficarão de fora/);
+    expect(r.avisos.join(' ')).not.toMatch(/fica de fora/);
   });
 
   /**
@@ -386,7 +390,8 @@ describe('sem cadastro × já designada no ciclo — os dois eixos', () => {
       avaliacoes: [manualNoCiclo('c1')], // c2 e c3 ficam de fora; c1 não
     });
     const r = await previa();
-    const aviso = r.avisos.find((a) => a.includes('ficarão de fora'));
-    expect(aviso).toContain('2 pessoa');
+    const aviso = r.avisos.find((a) => a.includes('fica de fora'));
+    // O número, não a redação — a frase foi reescrita para não flexionar (09/09).
+    expect(aviso).toContain('2');
   });
 });

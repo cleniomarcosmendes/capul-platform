@@ -21,7 +21,7 @@ describe('o efeito de excluir alguém do ciclo', () => {
     const f = efeitoDoExcluir({ status: 'EM_ANDAMENTO', respostas: 12, avaliadorNome: 'ADAO BATISTA' }).frase!;
     expect(f).toContain('ADAO BATISTA');
     expect(f).toContain('12');
-    expect(f).toMatch(/ficam registradas/);
+    expect(f).toMatch(/[Ff]icam registradas/);
     expect(f).toMatch(/não entram na apuração/);
   });
 

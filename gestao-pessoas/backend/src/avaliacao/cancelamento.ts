@@ -85,7 +85,8 @@ export const STATUS_VIVOS = ['PENDENTE', 'EM_ANDAMENTO'] as const;
 
 function respostasEmTexto(n: number): string {
   if (n === 0) return 'Ela ainda não foi começada — não há resposta nenhuma.';
-  return `As ${n} resposta(s) já dadas ficam registradas e não entram na apuração — nada é apagado.`;
+  // Número como valor de rótulo — ver a nota de forma em `painel/proximo-passo.ts`.
+  return `Respostas já dadas: ${n}. Ficam registradas e não entram na apuração — nada é apagado.`;
 }
 
 /**

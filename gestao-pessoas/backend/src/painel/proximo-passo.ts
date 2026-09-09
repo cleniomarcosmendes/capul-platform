@@ -65,6 +65,20 @@ export interface EstadoDoCiclo {
   apuradas: number;
 }
 
+/**
+ * ⭐⭐ O NÚMERO ENTRA COMO VALOR DE UM RÓTULO, nunca no meio da frase (09/09).
+ *
+ * Estes rótulos são texto que a API produz e a tela só exibe — a mensagem tem de
+ * existir no backend mesmo com ninguém olhando. Concordar em número exigiria um
+ * `flexao`/`contagem` do lado de cá, e aí seriam DUAS implementações da mesma
+ * regra de texto (o frontend já tem a dele em `lib/formato.ts`) — a classe de
+ * defeito que o dia inteiro de 09/09 foi gastar consertando.
+ *
+ * A saída é mais barata que o helper: **escrever de forma que o número não force
+ * concordância.** *"Designe as 1 pessoa(s)"* quebra; *"Sem avaliador neste
+ * ciclo: 1"* não quebra com nenhum número. Vale para todo texto do backend com
+ * contagem dentro.
+ */
 export function proximoPasso(e: EstadoDoCiclo): ProximoPasso | null {
   if (e.status === 'RASCUNHO') {
     if (e.aplicacoes === 0) {
@@ -84,7 +98,7 @@ export function proximoPasso(e: EstadoDoCiclo): ProximoPasso | null {
     if (e.semDesignacao > 0) {
       return {
         codigo: 'DESIGNAR',
-        rotulo: `Designe as ${e.semDesignacao} pessoa(s) sem avaliador neste ciclo`,
+        rotulo: `Sem avaliador neste ciclo: ${e.semDesignacao}. Designe antes de abrir`,
         aba: 'designacao',
       };
     }
@@ -101,7 +115,7 @@ export function proximoPasso(e: EstadoDoCiclo): ProximoPasso | null {
     if (e.semDesignacao > 0) {
       return {
         codigo: 'DESIGNAR',
-        rotulo: `Designe as ${e.semDesignacao} pessoa(s) sem avaliador neste ciclo`,
+        rotulo: `Sem avaliador neste ciclo: ${e.semDesignacao}. Designe para ninguém ficar de fora`,
         aba: 'designacao',
       };
     }
@@ -125,7 +139,7 @@ export function proximoPasso(e: EstadoDoCiclo): ProximoPasso | null {
         // esta é a frase que a gestora lê imediatamente antes de cobrar alguém:
         // o Painel mostra uma CONTAGEM por pessoa, não um veredito sobre ela.
         rotulo:
-          `Agora é com os avaliadores: ${e.aFazer} avaliação(ões) a enviar. ` +
+          `Agora é com os avaliadores — ainda não enviadas: ${e.aFazer}. ` +
           'O Painel mostra quantas faltam por avaliador',
         aba: 'painel',
       };
@@ -134,7 +148,7 @@ export function proximoPasso(e: EstadoDoCiclo): ProximoPasso | null {
     if (e.enviadas > 0 && e.apuradas < e.enviadas) {
       return {
         codigo: 'APURAR',
-        rotulo: `Apure as ${e.enviadas} avaliação(ões) enviadas`,
+        rotulo: `Apure o que já foi enviado — enviadas: ${e.enviadas}`,
         aba: 'painel',
       };
     }

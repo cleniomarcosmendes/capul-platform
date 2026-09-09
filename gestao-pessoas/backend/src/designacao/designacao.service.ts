@@ -968,8 +968,8 @@ export class DesignacaoService {
 
     if (relatorio.deDivisaoNaoRevisada > 0) {
       relatorio.avisos.push(
-        `${relatorio.deDivisaoNaoRevisada} designação(ões) vêm de linhas que a importação dividiu ` +
-          'em ordem alfabética e ninguém revisou. A ordem é arbitrária e não diz quem trabalha com ' +
+        `Vindas de divisão que ninguém revisou: ${relatorio.deDivisaoNaoRevisada}. A importação ` +
+          'dividiu em ordem alfabética. A ordem é arbitrária e não diz quem trabalha com ' +
           'quem — se este ciclo valer mérito, revise no cadastro de avaliadores antes de aplicar.',
       );
     }
@@ -978,17 +978,17 @@ export class DesignacaoService {
     // não fala em ficar de fora, porque ela não fica.
     if (relatorio.porMotivo.SEM_AVALIADOR_NO_CADASTRO) {
       relatorio.avisos.push(
-        `${relatorio.porMotivo.SEM_AVALIADOR_NO_CADASTRO} pessoa(s) não estão na lista de ninguém ` +
-          'no cadastro E não têm avaliação neste ciclo: são as que ficarão de fora. Elas aparecem ' +
-          'como pendência do cadastro e no painel.',
+        `Fora do cadastro e sem avaliação no ciclo: ${relatorio.porMotivo.SEM_AVALIADOR_NO_CADASTRO}. ` +
+          'Quem está nesta conta não aparece na lista de ninguém no cadastro, não tem avaliação ' +
+          'neste ciclo e fica de fora do ciclo. Aparece como pendência do cadastro e no painel.',
       );
     }
     if (relatorio.porMotivo.SEM_CADASTRO_JA_DESIGNADA) {
       relatorio.avisos.push(
-        `${relatorio.porMotivo.SEM_CADASTRO_JA_DESIGNADA} pessoa(s) já designadas à mão neste ` +
-          'ciclo não estão na lista de ninguém no cadastro. Elas seguem com o avaliador que têm — ' +
-          'o lote não muda nada nelas —, mas o PRÓXIMO ciclo vai encontrá-las sem avaliador. ' +
-          'Registre quem as avalia no cadastro de avaliadores.',
+        `Já designadas à mão, mas fora do cadastro: ${relatorio.porMotivo.SEM_CADASTRO_JA_DESIGNADA}. ` +
+          'Quem está nesta conta segue com o avaliador que tem — o lote não muda nada aqui —, mas o ' +
+          'PRÓXIMO ciclo vai encontrar essa pessoa sem avaliador. Registre quem a avalia no ' +
+          'cadastro de avaliadores.',
       );
     }
 

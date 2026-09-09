@@ -78,7 +78,11 @@ describe('o efeito de designar, antes de designar', () => {
     it('EM_ANDAMENTO com respostas idem, DIZENDO quantas', () => {
       const e = efeitoDeDesignar(atual({ status: 'EM_ANDAMENTO', respostas: 7 }), ctx);
       expect(e.acao).toBe('EXIGE_CONFIRMACAO');
-      expect(e.frase).toContain('7 resposta');
+      // ⚠️ O FATO — diz que há respostas e diz QUANTAS —, não a redação. A frase
+      // foi reescrita em 09/09 para o número não forçar concordância, e um
+      // `toContain('7 resposta')` teria quebrado sem nada estar errado.
+      expect(e.frase).toMatch(/respostas gravadas/);
+      expect(e.frase).toContain('7');
     });
 
     it('e o aviso diz o que ACONTECE, e quando NÃO usar isto', () => {
@@ -111,9 +115,9 @@ describe('o efeito de designar, antes de designar', () => {
     });
 
     it('em andamento diz QUANTAS respostas', () => {
-      expect(efeitoDeDesignar(atual({ status: 'EM_ANDAMENTO', respostas: 7 }), ctx).estadoAtual).toBe(
-        '7 resposta(s), por JOÃO',
-      );
+      const estado = efeitoDeDesignar(atual({ status: 'EM_ANDAMENTO', respostas: 7 }), ctx).estadoAtual!;
+      expect(estado).toContain('7');
+      expect(estado).toContain('JOÃO');
     });
 
     it('sem resposta, só quem avalia', () => {

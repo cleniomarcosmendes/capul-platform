@@ -94,7 +94,7 @@ export interface EfeitoDaDesignacao {
 function estadoEmUmaLinha(atual: AvaliacaoAtual): string {
   const quem = atual.avaliadorNome?.trim() || 'avaliador não identificado';
   if (atual.status === 'ENVIADA') return `ENVIADA por ${quem}`;
-  if (atual.respostas > 0) return `${atual.respostas} resposta(s), por ${quem}`;
+  if (atual.respostas > 0) return `respostas: ${atual.respostas}, por ${quem}`;
   return `por ${quem}`;
 }
 
@@ -224,16 +224,17 @@ export function efeitoDeDesignar(
    * passa a exibir "avaliado por" com o nome errado.
    */
   if (mudaAvaliador && (atual.status === 'ENVIADA' || atual.respostas > 0)) {
-    const oQueTem =
-      atual.status === 'ENVIADA'
-        ? 'já foi ENVIADA'
-        : `já tem ${atual.respostas} resposta(s) gravada(s)`;
+    // O número sai do meio da frase e vira rótulo em oração própria — assim ele
+    // não força concordância e o texto continua se lendo (ver a nota de forma em
+    // `painel/proximo-passo.ts`).
+    const oQueTem = atual.status === 'ENVIADA' ? 'já foi ENVIADA' : 'já tem respostas gravadas';
+    const quantas = atual.status === 'ENVIADA' ? '' : ` Respostas: ${atual.respostas}.`;
     return {
       acao: 'EXIGE_CONFIRMACAO',
       avaliadorAtual: atual.avaliadorNome ?? null,
       estadoAtual: estadoEmUmaLinha(atual),
       frase:
-        `⚠️ A avaliação de ${ctx.nomeDoAvaliado} ${oQueTem} por ${atualNome}. Trocar o avaliador ` +
+        `⚠️ A avaliação de ${ctx.nomeDoAvaliado} ${oQueTem} por ${atualNome}.${quantas} Trocar o avaliador ` +
         `agora põe o nome de ${novoNome} sobre o julgamento de ${atualNome} — a memória de ` +
         'cálculo passa a mostrar o novo nome em "avaliado por", e as respostas continuam sendo ' +
         `as de ${atualNome}. Faça isto só se o registro do avaliador é que estava errado; se o ` +

@@ -1,6 +1,6 @@
 # Regras de método
 
-**25 regras.** Cada uma nasceu de um caso concreto deste projeto e **vale além dele** — outro
+**26 regras.** Cada uma nasceu de um caso concreto deste projeto e **vale além dele** — outro
 módulo, outra pessoa, outro mês.
 
 > **Como usar:** não se lê de cabo a rabo. Cada regra começa por um **GATILHO** — o momento em que
@@ -499,6 +499,43 @@ Vale para toda varredura: gaste o tempo formulando a pergunta, não lendo os 58.
 ⭐ Quando a fonte única é do tipo que **N lugares consomem**, o fecho é a regra 23: um teste que
 varre o fonte (`common/fonte-unica.invariante.spec.ts`) e falha se o literal reaparecer. Sem ele, a
 varredura vale para o commit de hoje e para mais nenhum.
+
+---
+
+### 26. ⭐⭐ Duas varreduras do mesmo alvo podem não se cruzar em nada — e ambas estarem certas
+
+> **GATILHO:** *duas buscas pelo mesmo defeito deram listas que não se sobrepõem.*
+
+É a regra 14 pelo avesso. Lá, o perigo é **o passo que ninguém percorreu**; aqui é **o RAMO que
+ninguém percorreu** — dentro de um passo que foi percorrido inteiro.
+
+Caso que a nomeou (09/09): duas varreduras atrás do mesmo defeito de concordância no
+`gestao-pessoas`.
+
+| Método | Achou |
+|---|---|
+| Leitura de FONTE (grep por `(s)` / `(ões)`) | 17 frases, todas no backend |
+| Percurso de TELA (roteiro de 7 passos, ciclo real) | **zero** dessas 17 — e 4 outras, que o fonte não pega, do tipo *"1 de 1 enviadas"* |
+
+**Interseção: vazia.** E nenhuma das duas estava errada. As 17 moram em ramos `RASCUNHO`/`ABERTO`
+(o rótulo de "próximo passo", a confirmação do Excluir, a prévia do Designar) e o roteiro percorreu
+um ciclo **ENCERRADO**, que entra por outro ramo do mesmo `if`. As 4 da tela são texto composto em
+tempo de render, que grep nenhum acha por padrão de string.
+
+⚠️ **O erro que isso quase produziu** foi de conclusão, não de busca: *"nenhum `(s)` renderizado,
+logo essas frases não chegam à tela"*. Falso — pelo menos 10 das 17 renderizam no caminho normal;
+o que não aconteceu foi o percurso passar por elas. **"Não apareceu" é fato sobre o CAMINHO, nunca
+sobre o código.**
+
+⭐ **A regra:** interseção vazia entre dois métodos **não valida nem invalida** nenhum dos dois —
+é sinal de que eles cobrem regiões diferentes. Antes de concluir qualquer coisa da diferença,
+pergunte **o que cada método NÃO alcança**: o fonte não alcança texto composto em render; o
+percurso não alcança ramo não visitado. A união é o alvo; a interseção não é medida de nada.
+
+⚠️ Corolário para quem manda percorrer: um roteiro sobre **um estado só** (aqui, o ciclo
+encerrado) mede um ramo só. Se o alvo é texto que varia com o estado, o roteiro precisa dizer
+**em que estados** passar — ou o relatório vem verdadeiro e incompleto, que é o mais difícil de
+perceber.
 
 ---
 
