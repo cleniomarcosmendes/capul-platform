@@ -17,8 +17,12 @@ novo com a onda de hoje.
 
 ### 🌙 FECHAMENTO DE 09/09/2026
 
-**21 commits locais, `origin/main` continua em `9fd4b9fb`** — o push é do Clenio e não foi feito.
-**609 testes verdes.** Ambientes: nada mudou fora do DEV.
+✅ **PUBLICADO: `origin/main` = `eb30abcf`** (22 commits, `9fd4b9fb..eb30abcf`, pushado pelo
+Clenio no fim do dia). **609 testes verdes.**
+
+⚠️ **Publicado ≠ implantado.** HLG e PROD continuam em `6855c918`, **sem o módulo** — a distância
+entre o que está no GitHub e o que roda na empresa cresceu de novo, e agora inclui tudo de hoje.
+O que muda com o push é que o roteiro de deploy do HLG passa a ter um alvo estável para citar.
 
 | Ciclo (DEV) | Status | Total | Enviadas | Canceladas | Apuradas |
 |---|---|---|---|---|---|
