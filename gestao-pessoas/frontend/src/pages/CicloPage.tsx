@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Lock } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, Lock, SlidersHorizontal } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Carregando, Erro } from '../components/Estado';
 import { EtiquetaDeCiclo } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
-import { ciclos, mensagemDoErro, painel, type CicloDetalhado, type ResumoDoCiclo } from '../services/api';
+import {
+  ciclos as apiCiclos,
+  mensagemDoErro,
+  painel,
+  type CicloDetalhado,
+  type ResumoDoCiclo,
+} from '../services/api';
+import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
 import { data, dataHora, flexao } from '../lib/formato';
 
 /**
@@ -44,7 +51,7 @@ export default function CicloPage() {
    * a divergência que a saída do `status` do resumo acabou de fechar.
    */
   const recarregar = useCallback(async () => {
-    const [c, r] = await Promise.allSettled([ciclos.obter(cicloId), painel.resumo(cicloId)]);
+    const [c, r] = await Promise.allSettled([apiCiclos.obter(cicloId), painel.resumo(cicloId)]);
     if (c.status === 'fulfilled') setCiclo(c.value);
     else setErro(mensagemDoErro(c.reason, 'Não foi possível carregar o ciclo.'));
     // Falhar aqui NÃO derruba a tela: sem o resumo, some a linha de estado e o
@@ -90,6 +97,16 @@ export default function CicloPage() {
           </div>
 
           {resumo && <LinhaDeEstado resumo={resumo} cicloId={cicloId} />}
+
+          {/* ⭐⭐ A RÉGUA DE CONCEITOS mora AQUI — e é aqui que o modal de criar
+              ciclo aponta ("o ajuste fino fica na tela do ciclo"). Fica acima
+              das abas de propósito: não é etapa do ciclo, é propriedade dele,
+              como o nome e a data-base. */}
+          <ReguaDeConceitos
+            ciclo={ciclo}
+            apuradas={resumo?.apuradas ?? 0}
+            aoSalvar={recarregar}
+          />
           {/* ⚠️ Cada faixa decide por UMA fonte, não por duas.
               A do RASCUNHO decide pelo próprio conteúdo: `pendenciasParaAbrir`
               é `null` fora de rascunho, por construção do backend — então não
@@ -364,5 +381,188 @@ function FaixaDoEncerrado({ encerradoEm }: { encerradoEm: string | null }) {
         — é ato do RH_ADMIN, exige motivo e fica registrado.
       </p>
     </div>
+  );
+}
+
+/**
+ * ⭐⭐ A RÉGUA — o "ajuste fino" que o modal de criar ciclo prometia e que não
+ * existia em lugar nenhum. Fechada por padrão: quem abre o ciclo para trabalhar
+ * não quer ver formulário de faixa, e quem veio mexer na régua sabe o que
+ * procura.
+ *
+ * ⚠️ **A trava é a APURAÇÃO, não o status.** O conceito é gravado junto com a
+ * nota no resultado ("Supera" fica lá); mexer depois deixaria o resultado
+ * dizendo uma coisa e a régua dizendo outra. Ciclo ABERTO sem ninguém apurado
+ * ainda muda — e precisa mudar, porque ABERTO não volta para RASCUNHO e a régua
+ * ficaria congelada para sempre por um clique.
+ */
+function ReguaDeConceitos({
+  ciclo,
+  apuradas,
+  aoSalvar,
+}: {
+  ciclo: CicloDetalhado;
+  apuradas: number;
+  aoSalvar: () => Promise<void> | void;
+}) {
+  const [aberta, setAberta] = useState(false);
+  const [faixas, setFaixas] = useState(() =>
+    ciclo.conceitos.map((c) => ({
+      descricao: c.descricao,
+      limiteInferior: Number(c.limiteInferior),
+      limiteSuperior: Number(c.limiteSuperior),
+      cor: c.cor ?? undefined,
+      ordem: c.ordem,
+    })),
+  );
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvo, setSalvo] = useState(false);
+
+  const travada = apuradas > 0 || ciclo.status === 'ENCERRADO';
+  const motivoDaTrava =
+    ciclo.status === 'ENCERRADO'
+      ? motivoCicloEncerrado(ciclo)
+      : apuradas > 0
+        ? `Este ciclo já tem resultado apurado — apuradas: ${apuradas}. O conceito de cada uma foi gravado junto com a nota, e é esse texto que a pessoa recebe.`
+        : null;
+
+  return (
+    <section className="mt-3 rounded-2xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setAberta((v) => !v)}
+        aria-expanded={aberta}
+        className="alvo-toque flex w-full items-center gap-2 px-4 py-3 text-left"
+      >
+        <SlidersHorizontal size={16} className="shrink-0 text-slate-500" aria-hidden />
+        <span className="text-sm font-medium text-slate-700">Régua de conceitos</span>
+        <span className="flex flex-wrap gap-1">
+          {ciclo.conceitos.map((c) => (
+            <span
+              key={c.id}
+              className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
+              style={{ backgroundColor: c.cor ?? '#64748b' }}
+            >
+              {c.descricao}
+            </span>
+          ))}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`ml-auto shrink-0 text-slate-400 transition ${aberta ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+
+      {aberta && (
+        <div className="border-t border-slate-100 p-4">
+          {/* ⚠️ O motivo da trava aparece ANTES dos campos, não como erro depois
+              do clique: quem lê aqui entende por que os campos estão cinzas. */}
+          {travada && (
+            <p className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {motivoDaTrava}
+            </p>
+          )}
+
+          <ul className="space-y-2">
+            {faixas.map((f, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-2">
+                <input
+                  aria-label={`Nome da faixa ${i + 1}`}
+                  value={f.descricao}
+                  disabled={travada}
+                  onChange={(e) =>
+                    setFaixas((atual) =>
+                      atual.map((x, j) => (j === i ? { ...x, descricao: e.target.value } : x)),
+                    )
+                  }
+                  className="min-w-[10rem] flex-1 rounded-lg border border-slate-300 p-1.5 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+                />
+                <span className="text-xs text-slate-500">de</span>
+                <input
+                  aria-label={`Início da faixa ${i + 1}`}
+                  type="number"
+                  value={f.limiteInferior}
+                  disabled={travada}
+                  onChange={(e) =>
+                    setFaixas((atual) =>
+                      atual.map((x, j) =>
+                        j === i ? { ...x, limiteInferior: Number(e.target.value) } : x,
+                      ),
+                    )
+                  }
+                  className="w-20 rounded-lg border border-slate-300 p-1.5 text-sm tabular-nums disabled:bg-slate-100 disabled:text-slate-500"
+                />
+                <span className="text-xs text-slate-500">a</span>
+                <input
+                  aria-label={`Fim da faixa ${i + 1}`}
+                  type="number"
+                  value={f.limiteSuperior}
+                  disabled={travada}
+                  onChange={(e) =>
+                    setFaixas((atual) =>
+                      atual.map((x, j) =>
+                        j === i ? { ...x, limiteSuperior: Number(e.target.value) } : x,
+                      ),
+                    )
+                  }
+                  className="w-20 rounded-lg border border-slate-300 p-1.5 text-sm tabular-nums disabled:bg-slate-100 disabled:text-slate-500"
+                />
+                <input
+                  aria-label={`Cor da faixa ${i + 1}`}
+                  type="color"
+                  value={f.cor ?? '#64748b'}
+                  disabled={travada}
+                  onChange={(e) =>
+                    setFaixas((atual) =>
+                      atual.map((x, j) => (j === i ? { ...x, cor: e.target.value } : x)),
+                    )
+                  }
+                  className="h-8 w-10 rounded border border-slate-300 disabled:opacity-50"
+                />
+              </li>
+            ))}
+          </ul>
+
+          {/* ⚠️ A regra da contiguidade dita AQUI, no imperativo, porque é o que
+              a validação do backend cobra — e é a mesma função que a abertura
+              usa. Sem isto, ela só descobre no erro. */}
+          <p className="mt-2 text-xs text-slate-500">
+            As faixas são contíguas: o fim de uma é o começo da próxima, a primeira começa em 0
+            e a última termina em 100 — assim nota nenhuma fica sem conceito.
+          </p>
+
+          {erro && <p className="mt-2 text-sm text-rose-700">{erro}</p>}
+          {salvo && <p className="mt-2 text-sm text-capul-700">Régua salva.</p>}
+
+          {!travada && (
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                disabled={salvando}
+                onClick={async () => {
+                  setSalvando(true);
+                  setErro(null);
+                  setSalvo(false);
+                  try {
+                    await apiCiclos.ajustarConceitos(ciclo.id, faixas);
+                    setSalvo(true);
+                    await aoSalvar();
+                  } catch (e) {
+                    setErro(mensagemDoErro(e, 'Não foi possível salvar a régua.'));
+                  } finally {
+                    setSalvando(false);
+                  }
+                }}
+                className="alvo-toque rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                {salvando ? 'Salvando…' : 'Salvar régua'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

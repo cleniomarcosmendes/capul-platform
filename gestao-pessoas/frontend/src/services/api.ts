@@ -195,6 +195,15 @@ export const ciclos = {
   criar: (dados: NovoCiclo) => rhApi.post<CicloDaLista>('/ciclos', dados).then((r) => r.data),
   abrir: (id: string) => rhApi.post(`/ciclos/${id}/abrir`).then((r) => r.data),
   /**
+   * ⭐ A régua de conceitos. ⚠️ A fronteira NÃO é o status do ciclo: é a
+   * APURAÇÃO — o conceito vira snapshot no resultado, e ciclo aberto não volta
+   * para rascunho. Quem recusa é o backend, com o número de apuradas.
+   */
+  ajustarConceitos: (
+    id: string,
+    conceitos: { descricao: string; limiteInferior: number; limiteSuperior: number; cor?: string; ordem: number }[],
+  ) => rhApi.patch<Conceito[]>(`/ciclos/${id}/conceitos`, { conceitos }).then((r) => r.data),
+  /**
    * ⭐ `confirmarPendentes` é o contrato de 08/09, o mesmo do RDV na Logística:
    * a API recusa e diz QUANTAS faltam; a tela pergunta e reenvia com motivo, e
    * as pendentes viram CANCELADA com esse motivo escrito.

@@ -746,7 +746,9 @@ function DialogoNovoCiclo({
             <p className="text-sm font-medium text-slate-700">Régua de conceitos</p>
             <p className="mt-0.5 text-xs text-slate-500">
               Contígua por construção — o fim de uma faixa é o começo da próxima, então nota 24,5 tem
-              conceito. Ajuste fino do texto e das cores fica na tela do ciclo.
+              conceito. Para mudar nome, limites ou cor: abra o ciclo e use{' '}
+              <strong>Régua de conceitos</strong>, logo abaixo do nome — enquanto ninguém tiver
+              sido apurado.
             </p>
             <ul className="mt-2 flex flex-wrap gap-1.5">
               {CONCEITOS_PADRAO.map((c) => (

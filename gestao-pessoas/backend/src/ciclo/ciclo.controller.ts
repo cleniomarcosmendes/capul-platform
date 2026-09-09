@@ -63,6 +63,10 @@ export class EncerrarCicloDto {
   @IsOptional() @IsString() @MinLength(MOTIVO_MINIMO) motivo?: string;
 }
 
+export class AjustarConceitosDto {
+  @ValidateNested({ each: true }) @Type(() => ConceitoDto) @ArrayMinSize(1) conceitos!: ConceitoDto[];
+}
+
 export class AjustarPeriodoDto {
   @Type(() => Date) @IsDate() periodoInicio!: Date;
   @Type(() => Date) @IsDate() periodoFim!: Date;
@@ -93,6 +97,20 @@ export class CicloController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.ciclos.ajustarPeriodo(id, dto.periodoInicio, dto.periodoFim, user.sub);
+  }
+
+  /**
+   * ⭐ A régua de conceitos — o "ajuste fino" que o modal de criar ciclo promete.
+   * RH_ADMIN e RH_CICLO: quem monta o ciclo monta a régua dele. Quem decide ATÉ
+   * QUANDO é o service, que é o único que sabe se já houve apuração.
+   */
+  @Patch(':id/conceitos') @HttpCode(200) @Roles(ROLES.RH_ADMIN, ROLES.RH_CICLO)
+  ajustarConceitos(
+    @Param('id') id: string,
+    @Body() dto: AjustarConceitosDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.ciclos.ajustarConceitos(id, dto.conceitos, user.sub);
   }
 
   @Post(':id/abrir') @HttpCode(200) @Roles(ROLES.RH_ADMIN)

@@ -9,12 +9,14 @@ import { Prisma } from '@prisma/client';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ONDE_A_AVALIACAO_CONTA } from '../avaliacao/avaliacoes-que-contam.js';
+import { assertCicloOperavel } from './ciclo-operavel.js';
 import { STATUS_VIVOS } from '../avaliacao/cancelamento.js';
 import { MOTIVO_MINIMO_EM_MASSA, faltamCaracteres } from '../common/motivo.js';
 import {
   CicloNaoAbrivelError,
   assertCicloAbrivel,
   problemasParaAbrir,
+  validarConceitos,
   type AplicacaoParaValidar,
   type FaixaConceito,
 } from './abertura.validator.js';
@@ -365,6 +367,101 @@ export class CicloService {
    * ⚠️ Ciclo ENCERRADO não muda: o resultado já foi materializado e a memória
    * de cálculo dele fala de um período que ficaria diferente do gravado.
    */
+  /**
+   * ⭐⭐ A RÉGUA DE CONCEITOS, editável — a promessa que o modal já fazia.
+   *
+   * O modal de novo ciclo dizia, em letra: *"Ajuste fino do texto e das cores
+   * fica na tela do ciclo."* Essa tela não existia. Texto que promete
+   * capacidade é dívida (regra 19), e esta prometia à gestora.
+   *
+   * ── ATÉ QUANDO SE PODE MEXER, e por que não é "só em RASCUNHO" ────────────
+   * O critério óbvio seria RASCUNHO, e é mais simples de explicar. Dois fatos
+   * do próprio módulo dizem que ele é simples DEMAIS:
+   *
+   *   1. **O conceito é SNAPSHOT no resultado.** `resultado_avaliacao` grava
+   *      `conceitoId` **e** `conceitoDescricao` na apuração. Mexer na régua
+   *      depois disso não muda o que foi comunicado — cria uma segunda verdade:
+   *      o resultado diz "Supera" e a régua do ciclo diz outra coisa para a
+   *      mesma nota. Ninguém vê acontecer.
+   *   2. **Ciclo ABERTO não volta para RASCUNHO.** Não existe caminho. Com o
+   *      critério "só RASCUNHO", abrir o ciclo congelaria a régua para sempre —
+   *      inclusive o texto de um rótulo que ninguém ainda viu, porque ninguém
+   *      foi apurado. Recusa sem saída é o que este módulo passa o tempo
+   *      consertando.
+   *
+   * Então a fronteira é a APURAÇÃO, que é a fronteira de verdade: **a régua
+   * muda enquanto ninguém tiver sido apurado.** Cabe numa frase, como o
+   * "RASCUNHO" cabia, e é a frase certa.
+   */
+  async ajustarConceitos(cicloId: string, conceitos: FaixaConceito[], usuarioId: string) {
+    const ciclo = await this.prisma.ciclo.findUnique({ where: { id: cicloId } });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+
+    /**
+     * ⚠️ Achado ao conferir no ar (09/09): sem esta linha o backend ACEITAVA
+     * mexer na régua de um ciclo ENCERRADO — a tela travava e a API não. Tela
+     * mais restritiva que a API é o mesmo defeito do avesso: um dos dois está
+     * mentindo, e quem descobre é quem tentar pela API. Encerrado só lê, como
+     * em todo o módulo — e a saída é reabrir o ciclo, que existe e é auditada.
+     */
+    assertCicloOperavel(ciclo, 'ajuste da régua de conceitos');
+
+    const apuradas = await this.prisma.resultadoAvaliacao.count({ where: { cicloId } });
+    if (apuradas > 0) {
+      throw new BadRequestException(
+        `Este ciclo já tem resultado apurado — apuradas: ${apuradas}. O conceito de cada uma foi ` +
+          'gravado junto com a nota ("Supera", "Atende"), e é esse texto que a pessoa recebe. ' +
+          'Mudar a régua agora não mudaria o que já foi apurado: deixaria o resultado dizendo uma ' +
+          'coisa e a régua do ciclo dizendo outra, sem nada na tela denunciando. Se a régua está ' +
+          'errada, o caminho é recalcular a apuração depois de corrigi-la — fale com a T.I.',
+      );
+    }
+
+    // ⚠️ A MESMA função da abertura (`validarConceitos`), não uma segunda:
+    // contiguidade, começo em 0 e fim em 100. Escrever a segunda cópia é o
+    // defeito que o dia 09/09 inteiro passou consertando (regra 25).
+    const problemas = validarConceitos(conceitos);
+    if (problemas.length) throw new BadRequestException(problemas);
+
+    const anteriores = await this.prisma.conceitoFaixa.findMany({
+      where: { cicloId },
+      orderBy: { ordem: 'asc' },
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      // Sem resultado apurado, nenhuma linha aponta para estas faixas — a
+      // própria guarda acima é o que torna o delete seguro.
+      await tx.conceitoFaixa.deleteMany({ where: { cicloId } });
+      await tx.conceitoFaixa.createMany({
+        data: conceitos.map((c, i) => ({
+          cicloId,
+          descricao: c.descricao,
+          limiteInferior: c.limiteInferior,
+          limiteSuperior: c.limiteSuperior,
+          cor: (c as { cor?: string | null }).cor ?? null,
+          ordem: (c as { ordem?: number }).ordem ?? i + 1,
+        })),
+      });
+    });
+
+    await this.auditoria.registrar({
+      entidade: 'Ciclo',
+      entidadeId: cicloId,
+      acao: 'AJUSTAR_CONCEITOS',
+      usuarioId,
+      valorAnterior: {
+        conceitos: anteriores.map((c) => ({
+          descricao: c.descricao,
+          limiteInferior: Number(c.limiteInferior),
+          limiteSuperior: Number(c.limiteSuperior),
+        })),
+      },
+      valorNovo: { conceitos },
+    });
+
+    return this.prisma.conceitoFaixa.findMany({ where: { cicloId }, orderBy: { ordem: 'asc' } });
+  }
+
   async ajustarPeriodo(
     cicloId: string,
     periodoInicio: Date,
