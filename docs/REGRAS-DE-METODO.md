@@ -526,6 +526,34 @@ Vale para toda varredura: gaste o tempo formulando a pergunta, não lendo os 58.
 varre o fonte (`common/fonte-unica.invariante.spec.ts`) e falha se o literal reaparecer. Sem ele, a
 varredura vale para o commit de hoje e para mais nenhum.
 
+── **O gatilho não pegou. Três vezes em dois dias** (09/09, noite) ──
+
+`MOTIVO_MINIMO` (extraído, ninguém importava) · `STATUS_VIVOS` (extraído, dois chamadores com o
+literal à mão) · `flexao`/`contagem` (**importados no próprio arquivo, três linhas acima da frase
+que não os usou**). O terceiro é o que desmente a explicação fácil: não é desconhecimento da fonte
+única, é que **escrever a frase e lembrar da fonte são dois atos, e o segundo não tem gatilho
+natural.**
+
+⭐ **A conclusão tem duas metades, e elas dependem do TIPO:**
+
+| Tipo de fonte única | Dá invariante genérico? |
+|---|---|
+| **Constante com valor literal distintivo** (string, lista de strings) | **Sim, e genérico**: derivar do próprio `export` e varrer a árvore pelo valor. É mecânico e não precisa de lista escrita à mão — o que hoje é `fonte-unica.invariante` caso a caso pode virar automático |
+| **Constante numérica curta** (`3`, `15`, `100`) | Não — `15` aparece legitimamente em mil lugares. Só caso a caso, pelo CONTEXTO (foi assim no `motivo.invariante`: `@MinLength` + campo de motivo) |
+| **Função helper** (`flexao`, `normalizarChapa`) | **Não existe genérico.** "Deveria ter usado" é semântico. O que existe é um detector da FORMA ERRADA, um por helper — `texto-sem-flexao.invariante` é isso para o `flexao` |
+
+⚠️ Onde não há invariante, **a resposta é cadência escrita — e cadência sem momento é a mesma
+regra sem gatilho que este arquivo inteiro condena.** O momento é o do **roteiro de tela**: antes
+de mandar alguém percorrer a tela, rodar a varredura de forma dos helpers do módulo. É o único
+ponto do processo em que alguém já vai olhar texto com atenção, e é barato (segundos). Fora dele,
+a classe volta.
+
+⭐⭐ E o invariante que se escreve para isso **declara o próprio buraco**. A frase que ficou no
+`texto-sem-flexao.invariante.spec.ts`, e que vale para qualquer varredor: *"Um verde aqui NÃO é
+prova de que a frase está certa com 1; é prova de que as duas formas conhecidas não estão nela."*
+Varredor que não diz o que não alcança vira falsa segurança — e falsa segurança é pior que
+varredor nenhum, porque encerra a busca.
+
 ---
 
 ### 26. ⭐⭐ Duas varreduras do mesmo alvo podem não se cruzar em nada — e ambas estarem certas
