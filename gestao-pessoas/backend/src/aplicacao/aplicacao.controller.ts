@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
@@ -31,6 +31,19 @@ export class CriarAplicacaoDto {
   centrosCusto?: CentroCustoDto[];
 }
 
+/**
+ * ⭐ Editar: todo campo é opcional, e cada um tem a sua regra (ver
+ * `efeito-de-editar.ts`). ⚠️ `modeloVersaoId` NÃO entra aqui de propósito — o
+ * questionário de uma aplicação não troca, e o campo nem deve ser aceito para a
+ * recusa não parecer um detalhe de validação.
+ */
+export class EditarAplicacaoDto {
+  @IsOptional() @IsString() nome?: string;
+  @IsOptional() @IsNumber() @Min(0) pesoAvaliacao?: number;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CriterioDaAplicacaoDto)
+  criterios?: CriterioDaAplicacaoDto[];
+}
+
 export class AlvoDoPublicoDto {
   /** Como a tela montou o recorte — vira `origem` em cada linha do público. */
   @IsIn(['CENTRO_CUSTO', 'FILIAL', 'MANUAL']) origem!: 'CENTRO_CUSTO' | 'FILIAL' | 'MANUAL';
@@ -58,6 +71,39 @@ export class AplicacaoController {
 
   @Post() criar(@Body() dto: CriarAplicacaoDto, @CurrentUser() user: JwtPayload) {
     return this.aplicacoes.criar(dto, user.sub);
+  }
+
+  /**
+   * ⭐ O que abre e o que não abre nesta aplicação, com o motivo de cada recusa
+   * — a tela desabilita o campo com este texto, e o `editar` decide pela MESMA
+   * função. Traz também o efeito de apagar, com o número do público.
+   */
+  @Get(':aplicacaoId/efeito-de-editar')
+  efeitoDeEditar(@Param('aplicacaoId') id: string) {
+    return this.aplicacoes.efeitoDeEditar(id);
+  }
+
+  @Patch(':aplicacaoId')
+  editar(
+    @Param('aplicacaoId') id: string,
+    @Body() dto: EditarAplicacaoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.aplicacoes.editar(id, dto, user.sub);
+  }
+
+  /**
+   * ⚠️ `confirmarPublico` no contrato, como o `confirmarPendentes` do encerrar:
+   * a API recusa dizendo QUANTAS pessoas vão junto, e a tela só reenvia depois
+   * de perguntar. Ver `feedback_api_recusa_para_a_tela_perguntar`.
+   */
+  @Delete(':aplicacaoId')
+  apagar(
+    @Param('aplicacaoId') id: string,
+    @Query('confirmarPublico') confirmarPublico: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.aplicacoes.apagar(id, user.sub, confirmarPublico === 'true');
   }
 
   /** O público NOMINAL da aplicação — uma linha por pessoa. */

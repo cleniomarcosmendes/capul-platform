@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { AlertTriangle, Plus, Users } from 'lucide-react';
+import { AlertTriangle, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,6 +14,7 @@ import {
   type AplicacaoDoCiclo,
   type CentroCustoDoCatalogo,
   type CriterioDoCatalogo,
+  type EfeitoDeEditarAplicacao,
   type ModeloDoCatalogo,
   type PessoaDoPublico,
   type PreviaDoPublico,
@@ -178,6 +179,26 @@ function CartaoDeAplicacao({
   aoMudarPublico: () => Promise<void> | void;
 }) {
   const [editandoPublico, setEditandoPublico] = useState(false);
+  /** O que abre e o que não abre — vem do backend quando ela pede para editar. */
+  const [efeito, setEfeito] = useState<EfeitoDeEditarAplicacao | null>(null);
+  const [editando, setEditando] = useState(false);
+  const [apagando, setApagando] = useState(false);
+  const [erroAcao, setErroAcao] = useState<string | null>(null);
+
+  async function abrir(qual: 'editar' | 'apagar') {
+    setErroAcao(null);
+    try {
+      // ⚠️ Buscado NA HORA, não no carregamento da lista: entre montar a tela e
+      // clicar, alguém pode ter aberto o ciclo ou designado gente — e aí o que
+      // abre mudou. A prévia tem de valer no instante do clique.
+      const e = await apiAplicacoes.efeitoDeEditar(aplicacao.id);
+      setEfeito(e);
+      if (qual === 'editar') setEditando(true);
+      else setApagando(true);
+    } catch (e) {
+      setErroAcao(mensagemDoErro(e, 'Não foi possível abrir esta ação.'));
+    }
+  }
   const fatias = repartir(
     Number(aplicacao.pesoAvaliacao),
     aplicacao.criterios.map((c) => ({ nome: c.criterio.nome, peso: Number(c.peso) })),
@@ -191,7 +212,59 @@ function CartaoDeAplicacao({
         {aplicacao.criterios.length === 0 && (
           <Etiqueta tom="ambar">só questionário</Etiqueta>
         )}
+
+        {/* ⚠️ DESABILITA com o motivo, não esconde: ciclo encerrado é ESTADO, e
+            a pessoa precisa saber que a ação existe e o que falta para usá-la.
+            (Falta de OBJETO some — não é o caso aqui: a aplicação está lá.) */}
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => abrir('editar')}
+            disabled={!!fechado}
+            title={fechado ?? undefined}
+            className="alvo-toque rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            <Pencil size={12} className="mr-1 inline" aria-hidden />
+            Editar
+          </button>
+          <button
+            type="button"
+            onClick={() => abrir('apagar')}
+            disabled={!!fechado}
+            title={fechado ?? undefined}
+            className="alvo-toque rounded-lg border border-rose-200 px-2.5 py-1 text-xs font-medium text-rose-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            <Trash2 size={12} className="mr-1 inline" aria-hidden />
+            Apagar
+          </button>
+        </div>
       </div>
+      {erroAcao && <p className="mt-2 text-sm text-rose-700">{erroAcao}</p>}
+
+      {editando && efeito && (
+        <ModalDeEdicao
+          aplicacao={aplicacao}
+          efeito={efeito}
+          aoFechar={() => setEditando(false)}
+          aoSalvar={async (dados) => {
+            await apiAplicacoes.editar(aplicacao.id, dados);
+            setEditando(false);
+            await aoMudarPublico();
+          }}
+        />
+      )}
+      {apagando && efeito && (
+        <ModalDeExclusao
+          aplicacao={aplicacao}
+          efeito={efeito}
+          aoFechar={() => setApagando(false)}
+          aoApagar={async () => {
+            await apiAplicacoes.apagar(aplicacao.id, efeito.exclusao.publico > 0);
+            setApagando(false);
+            await aoMudarPublico();
+          }}
+        />
+      )}
 
       <BarraDeComposicao fatias={fatias} />
 
@@ -914,3 +987,169 @@ function DialogoNovaAplicacao({
   );
 }
 
+/**
+ * ⭐ EDITAR. Cada campo só abre se o BACKEND disse que abre — e quando não abre,
+ * o campo fica cinza COM o motivo, que é a frase que o `editar` usaria para
+ * recusar. A tela não decide nada; ela mostra a decisão.
+ */
+function ModalDeEdicao({
+  aplicacao,
+  efeito,
+  aoFechar,
+  aoSalvar,
+}: {
+  aplicacao: AplicacaoDoCiclo;
+  efeito: EfeitoDeEditarAplicacao;
+  aoFechar: () => void;
+  aoSalvar: (dados: { nome?: string; pesoAvaliacao?: number }) => Promise<void>;
+}) {
+  const [nome, setNome] = useState(aplicacao.nome);
+  const [peso, setPeso] = useState(Number(aplicacao.pesoAvaliacao));
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const pesoTravado = efeito.campos.pesoAvaliacao;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4">
+      <div className="w-full max-w-lg rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl">
+        <h3 className="text-lg font-semibold text-slate-800">Editar aplicação</h3>
+
+        <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="ap-nome">
+          Nome
+        </label>
+        <input
+          id="ap-nome"
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm"
+        />
+
+        <label className="mt-3 block text-sm font-medium text-slate-700" htmlFor="ap-peso">
+          Peso do questionário
+        </label>
+        <input
+          id="ap-peso"
+          type="number"
+          min={0}
+          value={peso}
+          disabled={!!pesoTravado}
+          title={pesoTravado ?? undefined}
+          onChange={(e) => setPeso(Number(e.target.value))}
+          className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm disabled:bg-slate-100 disabled:text-slate-500"
+        />
+        {pesoTravado && <p className="mt-1 text-xs text-amber-800">{pesoTravado}</p>}
+
+        {/* ⭐⭐ O QUESTIONÁRIO NÃO TROCA, e o texto diz — senão ela procura o
+            campo, não acha, e conclui que a tela está incompleta. Recusa
+            silenciosa vira busca; recusa escrita vira decisão. */}
+        <div className="mt-3 rounded-xl bg-slate-50 p-3">
+          <p className="text-sm font-medium text-slate-700">Questionário</p>
+          {/* ⚠️ Não nomeia o modelo: a listagem não traz esse dado, e escrever
+              "—" ao lado de "Questionário" diria que não há questionário, que é
+              falso. O que precisa estar aqui é POR QUE ele não troca. */}
+          <p className="mt-1 text-xs text-slate-600">{efeito.campos.modeloVersaoId}</p>
+        </div>
+
+        {erro && <p className="mt-3 text-sm text-rose-700">{erro}</p>}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={aoFechar}
+            className="alvo-toque rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={salvando || nome.trim().length === 0}
+            onClick={async () => {
+              setSalvando(true);
+              setErro(null);
+              try {
+                await aoSalvar({
+                  nome: nome.trim() !== aplicacao.nome ? nome.trim() : undefined,
+                  pesoAvaliacao:
+                    !pesoTravado && peso !== Number(aplicacao.pesoAvaliacao) ? peso : undefined,
+                });
+              } catch (e) {
+                setErro(mensagemDoErro(e, 'Não foi possível salvar.'));
+                setSalvando(false);
+              }
+            }}
+            className="alvo-toque rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:bg-slate-200 disabled:text-slate-500"
+          >
+            {salvando ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ⭐⭐ APAGAR. A frase inteira vem do backend e DIZ O QUE SE PERDE, com número —
+ * "aplicação sem avaliação" não quer dizer "aplicação vazia": o público de 32
+ * foi montado a mão, centro de custo por centro de custo.
+ */
+function ModalDeExclusao({
+  aplicacao,
+  efeito,
+  aoFechar,
+  aoApagar,
+}: {
+  aplicacao: AplicacaoDoCiclo;
+  efeito: EfeitoDeEditarAplicacao;
+  aoFechar: () => void;
+  aoApagar: () => Promise<void>;
+}) {
+  const [apagando, setApagando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const { podeApagar, frase } = efeito.exclusao;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4">
+      <div className="w-full max-w-lg rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl">
+        <h3 className="text-lg font-semibold text-slate-800">Apagar “{aplicacao.nome}”?</h3>
+        <p
+          className={`mt-3 rounded-xl p-3 text-sm ${
+            podeApagar ? 'bg-rose-50 text-rose-900' : 'bg-amber-50 text-amber-900'
+          }`}
+        >
+          {frase}
+        </p>
+        {erro && <p className="mt-3 text-sm text-rose-700">{erro}</p>}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={aoFechar}
+            className="alvo-toque rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700"
+          >
+            {podeApagar ? 'Cancelar' : 'Entendi'}
+          </button>
+          {podeApagar && (
+            <button
+              type="button"
+              disabled={apagando}
+              onClick={async () => {
+                setApagando(true);
+                setErro(null);
+                try {
+                  await aoApagar();
+                } catch (e) {
+                  setErro(mensagemDoErro(e, 'Não foi possível apagar.'));
+                  setApagando(false);
+                }
+              }}
+              className="alvo-toque rounded-xl bg-rose-600 px-4 text-sm font-semibold text-white disabled:bg-slate-200 disabled:text-slate-500"
+            >
+              {apagando ? 'Apagando…' : 'Apagar assim mesmo'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

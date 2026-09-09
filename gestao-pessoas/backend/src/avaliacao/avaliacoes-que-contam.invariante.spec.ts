@@ -61,6 +61,11 @@ const DISPENSA_COUNT: Record<string, string> = {
   'ciclo/ciclo.service.ts':
     'conta PENDENTE/EM_ANDAMENTO por status explícito antes de encerrar — recorte por status é a ' +
     'própria pergunta, não um total. ⚠️ NÃO dispensa o _count dele, que é o card da lista de ciclos',
+  'aplicacao/aplicacao.service.ts':
+    'apagar em cascata: a pergunta é do BANCO, não do negócio — a FK de rh.avaliacao bloqueia o ' +
+    'DELETE mesmo com todas canceladas, e a trilha do cancelamento (com o motivo escrito) não deve ' +
+    'ser apagada. ⚠️ O _count dele CONTINUA filtrado: "já houve trabalho de avaliador?" é outra ' +
+    'pergunta, e as duas convivem no mesmo método de propósito',
 };
 
 function arquivosTs(dir: string): string[] {

@@ -16,6 +16,11 @@ import { validarAplicacao } from '../ciclo/abertura.validator.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { marcarRestricoesPor } from '../avaliacao/separacao-funcoes.js';
 import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
+import {
+  efeitoDeApagar,
+  motivoParaNaoEditar,
+  type CampoDaAplicacao,
+} from './efeito-de-editar.js';
 // ⚠️ A MESMA função que a tela de Designação usa. A prévia não tem — e não pode
 // ter — uma segunda ideia de quem gera avaliação (§3.1.21).
 import { avaliarElegibilidade } from '../designacao/elegibilidade-ciclo.js';
@@ -47,6 +52,211 @@ export class AplicacaoService {
     private readonly prisma: PrismaService,
     private readonly auditoria: AuditoriaService,
   ) {}
+
+  /**
+   * Carrega a aplicação com o que as REGRAS precisam saber — status do ciclo,
+   * público montado e avaliações geradas. Uma consulta, três perguntas.
+   */
+  private async paraEditar(aplicacaoId: string) {
+    const aplicacao = await this.prisma.aplicacao.findUnique({
+      where: { id: aplicacaoId },
+      include: {
+        ciclo: { select: { id: true, status: true, encerradoEm: true } },
+        // A contagem que VALE — cancelada fora, como em todo o módulo.
+        _count: { select: { publico: true, avaliacoes: { where: ONDE_A_AVALIACAO_CONTA } } },
+      },
+    });
+    if (!aplicacao) throw new NotFoundException('Aplicação não encontrada.');
+
+    /**
+     * ⚠️ E a contagem TOTAL, cancelada inclusive — dispensada no invariante das
+     * contagens com este motivo: aqui a pergunta é do BANCO, não do negócio. A
+     * FK de `rh.avaliacao` bloqueia o DELETE mesmo que todas estejam canceladas,
+     * e a trilha do cancelamento (com o motivo escrito) não deve ser apagada.
+     */
+    const avaliacoesTotais = await this.prisma.avaliacao.count({ where: { aplicacaoId } });
+
+    return {
+      aplicacao,
+      regras: {
+        cicloStatus: aplicacao.ciclo.status as string,
+        publico: aplicacao._count.publico,
+        avaliacoesQueContam: aplicacao._count.avaliacoes,
+        avaliacoesTotais,
+      },
+    };
+  }
+
+  /**
+   * ⭐ O que a tela precisa saber ANTES de oferecer o formulário: quais campos
+   * abrem, quais não, e o motivo de cada recusa — derivado pela MESMA função
+   * que o `editar` usa para decidir. Regra montada na tela envelhece separada
+   * da que decide; foi o que aconteceu com o modal de aplicação, que passou
+   * dois dias mentindo.
+   */
+  async efeitoDeEditar(aplicacaoId: string) {
+    const { aplicacao, regras } = await this.paraEditar(aplicacaoId);
+    return {
+      aplicacaoId,
+      nome: aplicacao.nome,
+      cicloStatus: regras.cicloStatus,
+      publico: regras.publico,
+      avaliacoes: regras.avaliacoesQueContam,
+      avaliacoesCanceladas: regras.avaliacoesTotais - regras.avaliacoesQueContam,
+      campos: {
+        nome: motivoParaNaoEditar('nome', regras),
+        pesoAvaliacao: motivoParaNaoEditar('pesoAvaliacao', regras),
+        criterios: motivoParaNaoEditar('criterios', regras),
+        modeloVersaoId: motivoParaNaoEditar('modeloVersaoId', regras),
+      },
+      exclusao: efeitoDeApagar(regras),
+    };
+  }
+
+  /**
+   * ⭐⭐ EDITAR. Nome sempre; peso e critérios só em RASCUNHO; modelo nunca.
+   *
+   * ⚠️ Recusa campo a campo, e não "a aplicação está travada": quem mandou só o
+   * nome tem de conseguir, mesmo com o ciclo aberto. A mensagem de cada recusa
+   * vem de `motivoParaNaoEditar`, que é o que a tela já mostrou no campo cinza.
+   */
+  async editar(
+    aplicacaoId: string,
+    dados: {
+      nome?: string;
+      pesoAvaliacao?: number;
+      criterios?: { criterioId: string; peso: number; ordem?: number }[];
+      modeloVersaoId?: string;
+    },
+    usuarioId: string,
+  ) {
+    const { aplicacao, regras } = await this.paraEditar(aplicacaoId);
+    // Ciclo encerrado não muda nada — nem o nome. A frase é a do módulo inteiro.
+    assertCicloOperavel(aplicacao.ciclo, 'edição de aplicação');
+
+    const pedidos: CampoDaAplicacao[] = [];
+    if (dados.nome !== undefined) pedidos.push('nome');
+    if (dados.pesoAvaliacao !== undefined) pedidos.push('pesoAvaliacao');
+    if (dados.criterios !== undefined) pedidos.push('criterios');
+    if (dados.modeloVersaoId !== undefined) pedidos.push('modeloVersaoId');
+    if (pedidos.length === 0) throw new BadRequestException('Nada a mudar.');
+
+    for (const campo of pedidos) {
+      const motivo = motivoParaNaoEditar(campo, regras);
+      if (motivo) throw new BadRequestException(motivo);
+    }
+
+    const criterios =
+      dados.criterios !== undefined ? await this.carregarCriterios(dados.criterios) : null;
+
+    // A MESMA validação da criação — o peso novo passa pelo que o peso antigo passou.
+    if (dados.pesoAvaliacao !== undefined || criterios) {
+      const versao = await this.prisma.modeloVersao.findUnique({
+        where: { id: aplicacao.modeloVersaoId },
+        include: { modelo: true },
+      });
+      const atuais = await this.prisma.aplicacaoCriterio.findMany({
+        where: { aplicacaoId },
+        include: { criterio: true },
+      });
+      const problemas = validarAplicacao({
+        nome: dados.nome ?? aplicacao.nome,
+        pessoasNoPublico: regras.publico,
+        pesoAvaliacao: dados.pesoAvaliacao ?? Number(aplicacao.pesoAvaliacao),
+        modeloFinalidade: versao!.modelo.finalidade,
+        criterios: (criterios ?? atuais).map((c) => ({
+          peso: Number(c.peso),
+          criterio: {
+            codigo: c.criterio.codigo,
+            nome: c.criterio.nome,
+            origem: c.criterio.origem,
+            codigoCalculo: c.criterio.codigoCalculo,
+            ativo: c.criterio.ativo,
+          },
+        })),
+      });
+      if (problemas.length) throw new BadRequestException(problemas);
+    }
+
+    const atualizada = await this.prisma.$transaction(async (tx) => {
+      if (criterios) {
+        await tx.aplicacaoCriterio.deleteMany({ where: { aplicacaoId } });
+        await tx.aplicacaoCriterio.createMany({
+          // `criterios` traz o critério JÁ CARREGADO (é o que valida que ele
+          // existe); o id e a ordem vêm do pedido, na mesma posição.
+          data: criterios.map((c, i) => ({
+            aplicacaoId,
+            criterioId: c.criterio.id,
+            peso: c.peso,
+            ordem: dados.criterios![i].ordem ?? i,
+          })),
+        });
+      }
+      return tx.aplicacao.update({
+        where: { id: aplicacaoId },
+        data: {
+          ...(dados.nome !== undefined ? { nome: dados.nome } : {}),
+          ...(dados.pesoAvaliacao !== undefined ? { pesoAvaliacao: dados.pesoAvaliacao } : {}),
+        },
+        include: { criterios: { include: { criterio: true } } },
+      });
+    });
+
+    await this.auditoria.registrar({
+      entidade: 'Aplicacao',
+      entidadeId: aplicacaoId,
+      acao: 'EDITAR',
+      usuarioId,
+      valorAnterior: { nome: aplicacao.nome, pesoAvaliacao: Number(aplicacao.pesoAvaliacao) },
+      valorNovo: {
+        ...(dados.nome !== undefined ? { nome: dados.nome } : {}),
+        ...(dados.pesoAvaliacao !== undefined ? { pesoAvaliacao: dados.pesoAvaliacao } : {}),
+        ...(criterios ? { criterios: criterios.length } : {}),
+      },
+    });
+    return atualizada;
+  }
+
+  /**
+   * ⭐⭐ APAGAR. Só sem avaliação — e a confirmação já disse o que leva junto.
+   *
+   * ⚠️ `confirmarPublico` é o mesmo contrato do `confirmarPendentes` do encerrar:
+   * a API RECUSA e diz QUANTAS pessoas vão junto, para a tela poder perguntar em
+   * vez de adivinhar. Público montado a mão, centro de custo por centro de
+   * custo, é trabalho — e some sem aviso se a confirmação disser só "apagar?".
+   */
+  async apagar(aplicacaoId: string, usuarioId: string, confirmarPublico = false) {
+    const { aplicacao, regras } = await this.paraEditar(aplicacaoId);
+    assertCicloOperavel(aplicacao.ciclo, 'exclusão de aplicação');
+
+    const efeito = efeitoDeApagar(regras);
+    if (!efeito.podeApagar) throw new BadRequestException(efeito.frase);
+    if (regras.publico > 0 && !confirmarPublico) {
+      throw new BadRequestException(efeito.frase);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.aplicacaoPublico.deleteMany({ where: { aplicacaoId } });
+      await tx.aplicacaoCriterio.deleteMany({ where: { aplicacaoId } });
+      await tx.aplicacaoCentroCusto.deleteMany({ where: { aplicacaoId } });
+      await tx.aplicacao.delete({ where: { id: aplicacaoId } });
+    });
+
+    await this.auditoria.registrar({
+      entidade: 'Aplicacao',
+      entidadeId: aplicacaoId,
+      acao: 'APAGAR',
+      usuarioId,
+      valorAnterior: {
+        nome: aplicacao.nome,
+        cicloId: aplicacao.cicloId,
+        modeloVersaoId: aplicacao.modeloVersaoId,
+        // O número fica na trilha: é o que responde "o que se perdeu ali".
+        publicoRemovido: regras.publico,
+      },
+    });
+    return { ok: true, publicoRemovido: regras.publico };
+  }
 
   async criar(dados: DadosAplicacao, usuarioId: string) {
     const ciclo = await this.prisma.ciclo.findUnique({ where: { id: dados.cicloId } });

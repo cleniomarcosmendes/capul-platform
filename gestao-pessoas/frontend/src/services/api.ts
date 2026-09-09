@@ -288,10 +288,44 @@ export interface NovaAplicacao {
   centrosCusto?: { filial?: string | null; centroCusto: string }[];
 }
 
+/**
+ * ⭐ O que abre e o que não abre nesta aplicação — derivado no BACKEND, pela
+ * mesma função que o `editar` usa para decidir. Cada campo traz `null` (abre) ou
+ * o MOTIVO da recusa, que é o texto do campo desabilitado.
+ */
+export interface EfeitoDeEditarAplicacao {
+  aplicacaoId: string;
+  nome: string;
+  cicloStatus: StatusCiclo;
+  publico: number;
+  avaliacoes: number;
+  avaliacoesCanceladas: number;
+  campos: {
+    nome: string | null;
+    pesoAvaliacao: string | null;
+    criterios: string | null;
+    modeloVersaoId: string | null;
+  };
+  exclusao: { podeApagar: boolean; frase: string; publico: number; avaliacoes: number };
+}
+
 export const aplicacoes = {
   doCiclo: (cicloId: string) =>
     rhApi.get<AplicacaoDoCiclo[]>(`/aplicacoes/ciclo/${cicloId}`).then((r) => r.data),
   criar: (dados: NovaAplicacao) => rhApi.post('/aplicacoes', dados).then((r) => r.data),
+  efeitoDeEditar: (aplicacaoId: string) =>
+    rhApi
+      .get<EfeitoDeEditarAplicacao>(`/aplicacoes/${aplicacaoId}/efeito-de-editar`)
+      .then((r) => r.data),
+  editar: (aplicacaoId: string, dados: { nome?: string; pesoAvaliacao?: number }) =>
+    rhApi.patch(`/aplicacoes/${aplicacaoId}`, dados).then((r) => r.data),
+  /** ⚠️ `confirmarPublico` só depois de a tela ter PERGUNTADO, com o número. */
+  apagar: (aplicacaoId: string, confirmarPublico = false) =>
+    rhApi
+      .delete<{ ok: true; publicoRemovido: number }>(
+        `/aplicacoes/${aplicacaoId}${confirmarPublico ? '?confirmarPublico=true' : ''}`,
+      )
+      .then((r) => r.data),
 };
 
 export type MotivoExclusao =
