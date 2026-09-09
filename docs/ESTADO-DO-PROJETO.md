@@ -41,6 +41,18 @@ Clenio, atrás de WSL2 e de certificado autoassinado, **não é URL que se manda
 salão do supermercado** — e aí o piloto perderia justamente o teste do celular em pé, que é uma
 das sete coisas que só ele prova.
 
+⭐ **O cadastro vai por SQL, não por planilha** — `gestao-pessoas/scripts/`:
+`exportar-cadastro-para-hlg.sh` gera um `.sql` de 3,6 MB com as 5 tabelas que o piloto precisa
+(colaborador 1.036 · designacao_padrao 1.384 · importacao_designacao 2 · treinamento 2.268 ·
+histórico de função 14.024), na ordem das FKs, e `conferir-cadastro-hlg.sql` compara os dois
+lados. **Ensaiado em 09/09 num banco limpo** (estrutura do zero + carga): as duas pontas batem,
+inclusive a impressão md5 das matrículas. ⚠️ Questionário, critérios e faixas **não viajam** —
+vêm do `prisma db seed`, que é a fonte deles; copiar dado que tem seed cria uma segunda verdade.
+⚠️ E planilha está descartada por motivo do próprio módulo: **o Excel come o zero à esquerda**
+(é por isso que `planilha.ts` tem `normalizarMatricula`), e uma matrícula truncada vira o **403
+que parece falta de permissão** — o pior erro possível num ambiente onde 137 pessoas entram pela
+primeira vez.
+
 ⚠️ **Então o módulo precisa de roteiro PRÓPRIO** — e ele é maior que uma onda comum, porque
 sobe um serviço novo em vez de atualizar um existente:
 
