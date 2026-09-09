@@ -22,5 +22,12 @@ export function motivoCicloEncerrado(ciclo: {
 }): string | null {
   if (ciclo.status !== 'ENCERRADO') return null;
   const quando = ciclo.encerradoEm ? ` em ${data(ciclo.encerradoEm)}` : '';
-  return `Ciclo encerrado${quando}. Para voltar a mexer, reabra o ciclo na lista de Ciclos — é ato do RH_ADMIN, exige motivo e fica registrado.`;
+  /**
+   * ⚠️ CURTA, e com a ação antes do detalhe (09/09). Como `title` nativo, a
+   * frase apareceu CORTADA no meio de "RH_ADMIN" — e o que se perde num texto
+   * cortado é sempre o fim. "Exige motivo e fica registrado" saiu daqui porque
+   * o próprio diálogo de reabrir diz isso, com o campo na frente; o que não
+   * pode faltar é o que fazer e quem faz.
+   */
+  return `Ciclo encerrado${quando}. Reabra o ciclo na lista de Ciclos para voltar a mexer — é ato do RH_ADMIN.`;
 }

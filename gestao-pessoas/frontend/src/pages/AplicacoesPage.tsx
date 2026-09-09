@@ -227,10 +227,18 @@ function CartaoDeAplicacao({
               <p className="text-sm text-slate-700">
                 <strong className="tabular-nums">{aplicacao.publico.total}</strong> {flexao(aplicacao.publico.total, 'pessoa', 'pessoas')}
               </p>
+              {/* ⚠️ O FATO fica; a AÇÃO muda com o estado (09/09). Com o ciclo
+                  encerrado, "precisa da confirmação dele antes da produção"
+                  pedia um ato que a própria tela desabilita — "Montar público"
+                  está cinza duas linhas abaixo. Aviso que pede o impossível
+                  ensina a ignorar avisos; o recorte continua provisório, e é
+                  isso que ele passa a dizer. */}
               {aplicacao.publico.provisorio && (
                 <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
-                  ⚠️ RECORTE PROVISÓRIO — recorte de trabalho, não decisão do RH.
-                  Precisa da confirmação dele antes da produção.
+                  ⚠️ RECORTE PROVISÓRIO — recorte de trabalho, não decisão do RH.{' '}
+                  {fechado
+                    ? 'O ciclo está encerrado: ele fica registrado assim. Para confirmar o recorte, reabra o ciclo antes.'
+                    : 'Precisa da confirmação dele antes da produção.'}
                 </p>
               )}
               <ul className="text-xs text-slate-500">

@@ -462,6 +462,20 @@ function LinhaDaLista({
           {linha.avaliacaoStatus && linha.avaliacaoStatus !== 'PENDENTE' && (
             <Etiqueta tom="neutro">{linha.avaliacaoStatus.replace('_', ' ').toLowerCase()}</Etiqueta>
           )}
+          {/* ⭐⭐ AS RESPOSTAS PARCIAIS, que só existiam no banco (09/09).
+              O diálogo de encerrar promete que "as respostas já dadas ficam
+              registradas e não entram na apuração — nada é apagado". No
+              ZZ ENCERRA2 uma avaliação foi cancelada com 4 de 11 respondidas:
+              as 4 continuaram em `rh.resposta` e NENHUMA tela as mencionava.
+              Verdadeira no dado, falsa na tela — e a capacidade que faltava era
+              de LEITURA, o mais barato que existe.
+              ⚠️ Aparece em qualquer status com resposta, não só na cancelada: a
+              EM ANDAMENTO tem o mesmo direito de dizer onde parou. */}
+          {linha.respostasDadas > 0 && linha.avaliacaoStatus !== 'ENVIADA' && (
+            <Etiqueta tom="neutro">
+              {linha.respostasDadas} de {linha.perguntasNoModelo} respondidas
+            </Etiqueta>
+          )}
         </div>
         {linha.justificativa && (
           <p className="mt-1 text-xs italic text-slate-500">“{linha.justificativa}”</p>
@@ -476,6 +490,15 @@ function LinhaDaLista({
             nos dois campos, e repeti-lo faria a linha dizer duas vezes. */}
         {linha.motivoCancelamento && linha.motivoCancelamento !== linha.justificativa && (
           <p className="mt-1 text-xs italic text-rose-700">“{linha.motivoCancelamento}”</p>
+        )}
+        {/* A outra metade da promessa: onde as respostas foram parar. Sem esta
+            frase, "cancelada" ao lado de "4 de 11" ainda deixa a pergunta de
+            pé — e a resposta é o que o diálogo já tinha prometido. */}
+        {linha.avaliacaoStatus === 'CANCELADA' && linha.respostasDadas > 0 && (
+          <p className="mt-1 text-xs text-slate-600">
+            As {linha.respostasDadas} respostas já dadas ficam registradas e não entram na
+            apuração — nada foi apagado.
+          </p>
         )}
       </div>
       {/* ⭐⭐ "Definir avaliador" NA LINHA, e antes do "Excluir".

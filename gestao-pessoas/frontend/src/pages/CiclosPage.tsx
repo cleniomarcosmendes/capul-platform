@@ -208,9 +208,18 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               data-base <strong className="font-medium text-slate-700">{data(ciclo.dataBase)}</strong>
             </span>
           </p>
+          {/* ⭐⭐ O CARD CITA A OUTRA CONTA (09/09). `_count.avaliacoes` já vem
+              filtrado por `ONDE_A_AVALIACAO_CONTA` — canceladas fora —, e a
+              linha de estado logo abaixo mostra "1 de 1 enviadas · 5
+              canceladas". Dois números verdadeiros sobre o mesmo ciclo, sem
+              nada dizendo por que 1 ≠ 6: é o irmão do "52 avaliações × faltam
+              37" (§3.1). Quem concilia é o TERMO, e ele tem de estar na conta
+              menor, que é a que parece errada. */}
           <p className="mt-1 text-sm text-slate-500">
             {contagem(ciclo._count.aplicacoes, 'aplicação', 'aplicações')} ·{' '}
             {contagem(ciclo._count.avaliacoes, 'avaliação', 'avaliações')}
+            {ciclo.canceladas > 0 &&
+              ` (${ciclo.canceladas} ${flexao(ciclo.canceladas, 'cancelada não entra', 'canceladas não entram')} nesta conta)`}
             {ciclo.incluirAfastados && ' · inclui afastados'}
           </p>
         </div>

@@ -78,6 +78,24 @@ export interface LinhaDaLista {
    */
   motivoCancelamento: string | null;
   /**
+   * ⭐⭐ QUANTAS RESPOSTAS A AVALIAÇÃO TEM — e de quantas perguntas.
+   *
+   * O diálogo de encerrar com pendência promete, em letra: *"As N respostas já
+   * dadas ficam registradas e não entram na apuração — nada é apagado."* Em
+   * 09/09/2026 isso era **verdade no dado e mentira na tela**: o ZZ ENCERRA2
+   * cancelou uma avaliação com 4 de 11 respondidas, as 4 continuaram em
+   * `rh.resposta`, e nenhuma tela do módulo as mencionava — a linha dizia só
+   * "cancelada", o painel não conta parcial e Resultados dizia "nenhum
+   * resultado apurado". Promessa que só o banco cumpre é promessa quebrada:
+   * quem lê a tela conclui que perdeu o trabalho do avaliador.
+   *
+   * ⚠️ É leitura, e é o caso mais barato de todos — o número já vinha sendo
+   * contado para a frase do *Excluir* e era descartado na montagem da linha.
+   */
+  respostasDadas: number;
+  /** Perguntas do modelo da aplicação — o denominador de "4 de 11". */
+  perguntasNoModelo: number;
+  /**
    * ⭐ O id da avaliação, quando existe. A linha trazia só o `status`, e com ele
    * a tela sabia QUE havia avaliação mas não conseguia agir sobre ela — foi o
    * que faltava para o botão de reabrir (§3.1.41).
@@ -256,12 +274,19 @@ export class DesignacaoService {
     const decisoes = await this.decisoesVigentes(aplicacao.cicloId);
     const designadas = await this.designacoesVigentes(aplicacao.cicloId);
 
+    // O denominador de "4 de 11": uma consulta para a lista inteira, não por linha.
+    const perguntasNoModelo = await this.prisma.pergunta.count({
+      where: { grupo: { modeloVersaoId: aplicacao.modeloVersaoId } },
+    });
+
     const semDesignacao = {
       avaliadorId: null,
       avaliadorNome: null,
       avaliacaoStatus: null,
       avaliacaoId: null,
       motivoCancelamento: null,
+      respostasDadas: 0,
+      perguntasNoModelo,
       efeitoDoExcluir: efeitoDoExcluir(null),
     };
     const linhas: LinhaDaLista[] = [
@@ -293,6 +318,8 @@ export class DesignacaoService {
         avaliacaoStatus: designada?.status ?? null,
         avaliacaoId: designada?.id ?? null,
         motivoCancelamento: designada?.motivoCancelamento ?? null,
+        respostasDadas: designada?.respostas ?? 0,
+        perguntasNoModelo,
         efeitoDoExcluir: efeitoDoExcluir(
           designada
             ? {

@@ -303,6 +303,13 @@ export interface LinhaDaDesignacao {
    * do Excluir, e só esta existe quando veio do encerrar com pendência.
    */
   motivoCancelamento: string | null;
+  /**
+   * ⭐⭐ Quantas respostas a avaliação tem, de quantas perguntas. O diálogo de
+   * encerrar promete que as respostas já dadas "ficam registradas"; sem estes
+   * dois números a promessa não tinha por onde chegar à tela (09/09).
+   */
+  respostasDadas: number;
+  perguntasNoModelo: number;
   /** A linha de quem está olhando — marcada, nunca filtrada (§3.1). */
   restrita?: boolean;
   motivoRestricao?: string;

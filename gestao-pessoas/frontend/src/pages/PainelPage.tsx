@@ -100,7 +100,9 @@ export default function PainelPage() {
               ? 'Nenhuma avaliação designada'
               : dados.aFazer === 0
                 ? 'Todas enviadas'
-                : `${dados.enviadas} de ${dados.designados} enviadas`}
+                : /* ⚠️ A concordância é com o DENOMINADOR: com um designado só,
+                     "1 de 1 enviadas" põe plural onde não há. (09/09) */
+                  `${dados.enviadas} de ${dados.designados} ${flexao(dados.designados, 'enviada', 'enviadas')}`}
           </p>
           <span className="text-sm tabular-nums text-slate-500">{pct}</span>
         </div>
@@ -141,7 +143,8 @@ export default function PainelPage() {
                   fazer com ele. */}
               {dados.semDesignacaoPorOrigem.jaTemNoCadastro > 0 && (
                 <li>
-                  <strong>{dados.semDesignacaoPorOrigem.jaTemNoCadastro}</strong> já têm avaliador
+                  <strong>{dados.semDesignacaoPorOrigem.jaTemNoCadastro}</strong>{' '}
+                  {flexao(dados.semDesignacaoPorOrigem.jaTemNoCadastro, 'já tem', 'já têm')} avaliador
                   no cadastro —{' '}
                   {fechado
                     ? 'para trazê-las, reabra o ciclo primeiro; depois, Designar pelo cadastro na aba Designação.'
@@ -150,7 +153,8 @@ export default function PainelPage() {
               )}
               {dados.semDesignacaoPorOrigem.nemNoCadastro > 0 && (
                 <li>
-                  <strong>{dados.semDesignacaoPorOrigem.nemNoCadastro}</strong> não têm avaliador
+                  <strong>{dados.semDesignacaoPorOrigem.nemNoCadastro}</strong>{' '}
+                  {flexao(dados.semDesignacaoPorOrigem.nemNoCadastro, 'não tem', 'não têm')} avaliador
                   nem no cadastro —{' '}
                   {/* ⚠️ Este é MEIO possível com o ciclo fechado, e meia verdade
                       é o que se quer evitar: o cadastro de Avaliadores é da
@@ -301,7 +305,11 @@ export default function PainelPage() {
           <p className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
             {conferencia.avaliacoesApuradas === 0
               ? 'Nada a conferir ainda — a checagem roda sobre as avaliações já enviadas.'
-              : `Nenhuma pendência ${flexao(conferencia.avaliacoesApuradas, 'na', 'nas')} ${contagem(conferencia.avaliacoesApuradas, 'avaliação enviada', 'avaliações enviadas')}.`}
+              : /* "na 1 avaliação enviada" está certo e lê mal — o numeral solto
+                   no singular pede o artigo, não o algarismo. (09/09) */
+                conferencia.avaliacoesApuradas === 1
+                ? 'Nenhuma pendência na única avaliação enviada.'
+                : `Nenhuma pendência nas ${conferencia.avaliacoesApuradas} avaliações enviadas.`}
           </p>
         ) : (
           <ul className="space-y-2">
