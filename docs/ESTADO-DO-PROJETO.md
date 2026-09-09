@@ -493,8 +493,32 @@ ciclo 000006 do Protheus — a nota do questionário bate **108/108** (ver
   período é rótulo e não entra em conta nenhuma, enquanto `dataBase` e a janela de
   treinamento ancoram todo cálculo temporal — mudá-las num ciclo em andamento moveria a nota
   de quem já respondeu, em silêncio. Quem precisa de outra data-base cria outro ciclo, que é
-  a decisão que isso realmente é. Ciclo `ENCERRADO` não aceita nem o período. Fora disso não
-  há edição: errou, cria outro.
+  a decisão que isso realmente é. Ciclo `ENCERRADO` não aceita nem o período.
+- ✅ **A APLICAÇÃO passou a ter edição em 09/09** (`PATCH /aplicacoes/:id`, `DELETE`,
+  `GET :id/efeito-de-editar`): **nome sempre** · **peso e critérios só em RASCUNHO** (depois
+  mudariam a nota de quem já respondeu) · **questionário NUNCA**. O `DELETE` só sem avaliação, e
+  a confirmação diz o número de pessoas do público que vai junto.
+
+### ⛔ DECISÃO DE PRODUTO — não se troca o instrumento debaixo de um recorte já montado
+
+**Vale além da aplicação, e é por isso que está aqui e não numa nota de implementação.**
+
+Trocar o `modeloVersao` de uma aplicação seria trocar o QUESTIONÁRIO de um público que já foi
+escolhido pessoa a pessoa. O argumento, na forma que transfere: **o público continua lá, a tela
+continua idêntica, e o que aquelas pessoas vão responder passa a ser outro instrumento.** Nada
+na aparência denuncia. Com avaliação já respondida é pior — as respostas pertencem às perguntas
+do modelo antigo e ficariam órfãs, com a nota saindo errada sem acusar erro (é o mesmo raciocínio
+de `designacao/troca-de-aplicacao.ts`, escrito antes e por outro motivo).
+
+⭐ **A regra geral:** quando um recorte de PESSOAS já foi montado sobre um instrumento, o
+instrumento não troca — cria-se outro e move-se o recorte. Vale para o que vier: trocar o modelo
+de uma aplicação, trocar a versão publicada de um questionário sob um ciclo aberto, trocar a
+régua de critérios de um público já designado.
+
+⚠️ E a recusa **diz a saída**, que muda com o estado: sem avaliação, *"apague-a e crie outra com
+o questionário certo"*; com avaliação, *"nem apagar resolve — crie outra aplicação e mova o
+público"*. Recusa sem alternativa faz a pessoa procurar sozinha, e o que ela acha é criar uma
+segunda aplicação e deixar a errada no ciclo.
 - **Duas capacidades existem SÓ NA API, sem botão em tela nenhuma** — quem precisar delas em
   homologação consegue por `curl`, e é bom saber que dá:
   `POST /avaliacoes/:id/reabrir` (RH_ADMIN, motivo obrigatório) desfaz um envio, e

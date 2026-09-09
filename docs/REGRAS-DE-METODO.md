@@ -224,6 +224,29 @@ mais — é a evidência de que a busca tinha um formato e o mundo tem outros.**
 vêm em bando): as três dizem que **verificar o que você lembra não é verificar o que existe** — a 3
 sobre o que se lê, a 13 sobre o que se procura, a 5 sobre o que se conta.
 
+── ⭐⭐ **O melhor sentido da regra: o invariante que NÃO pegou um erro** (09/09) ──
+
+Primeira vez que isto acontece no projeto, e vale escrito. Ao escrever o "apagar aplicação", contei
+avaliações com **um número só** e o invariante das contagens recusou o `_count` sem filtro. Não
+havia defeito: o código funcionava. O que o invariante fez foi **obrigar uma pergunta** — *"filtrado
+ou total?"* — e a resposta revelou que as duas coisas eram perguntas diferentes:
+
+| Número | Pergunta |
+|---|---|
+| `_count` filtrado (cancelada fora) | *"já houve trabalho de avaliador?"* — a do **negócio** |
+| `count` total | *"existe linha apontando para cá?"* — a do **banco**: a FK bloqueia o DELETE de qualquer jeito |
+
+E ao separá-las apareceu **um terceiro estado que ninguém tinha nomeado**: aplicação **sem avaliação
+viva, mas com canceladas**. Não há trabalho a preservar — há **trilha**: cada cancelada guarda o
+motivo que responde, meses depois, por que aquela pessoa ficou sem nota. Com um número só, esse
+caso teria virado *"pode apagar"*, e a resposta iria junto com a aplicação. **Nenhum teste teria
+falhado**, porque nenhum teste conhecia o estado.
+
+⭐ **A lição:** um invariante bem escrito não vale só pelos erros que barra — vale pelas
+**perguntas que obriga a responder no momento de escrever**. Quem escreve está com o problema na
+cabeça; quem revisa depois, não. É o argumento mais forte a favor de gastar tempo escrevendo
+guarda, e ele não aparece na contagem de bugs pegos.
+
 ### 14. O passo que ninguém testou não é o mais simples — é o menos conhecido
 
 > **GATILHO:** *vou escolher o que testar.*
