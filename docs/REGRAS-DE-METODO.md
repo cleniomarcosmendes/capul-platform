@@ -317,6 +317,32 @@ helper.
 
 ⚠️ *Quebrei esta regra em 09/09, quatro horas depois de escrevê-la — ver o topo.*
 
+── **A regra tem DOIS lados, e o do backend não é o helper** (09/09, tarde) ──
+
+O helper resolve na TELA. No backend ele não pode existir: seria uma segunda implementação da
+mesma regra de texto (o frontend já tem `lib/formato.ts`), que é a classe de defeito da regra 25.
+E "migrar as frases para a tela" também não serve — **mensagem de recusa da API tem de existir
+mesmo quando ninguém está olhando uma tela**.
+
+A terceira saída é de FORMA, e sai mais barato que o helper: *"Designe as 1 pessoa(s)"* quebra;
+*"Sem avaliador neste ciclo: 1"* não quebra com número nenhum.
+
+⚠️⚠️ **E a receita curta não basta.** "Ponha o número num rótulo" conserta o número e deixa o
+RESTO da frase flexionando. Medido: das dez primeiras frases reescritas, **três ainda quebravam com
+1** e só apareceram depois do deploy — *"Designe para não **ficarem** de fora"* (infinitivo
+pessoal), *"dividiu **essas linhas**"*, *"**Seguem** com o avaliador que **têm** … encontrá-**las**"*.
+E a prova melhor: **eu escrevi *"As {n} respostas já dadas ficam registradas"* na tela uma hora
+antes, enquanto catalogava esta mesma classe.**
+
+⭐ **A regra, na forma que resiste:** *tire a contagem de qualquer palavra que concorde com ela —
+**verbo e pronome inclusive**.* Palavras que não flexionam com nada (`quem`, `ninguém`, `cada uma`,
+`essa pessoa`) são a saída pronta. E o teste final é ler a frase inteira **com o número 1**.
+
+⭐ Fecho mecânico: `common/texto-sem-flexao.invariante.spec.ts` recusa a forma parentética e o
+`${…}` colado a palavra que concorda. ⚠️ Ele **não** pega concordância distante (*"…e **elas ficam**
+registradas"*) — a limitação está escrita no próprio teste, porque invariante que não declara o
+buraco vira falsa segurança.
+
 ### 19. Texto que promete capacidade é dívida
 
 > **GATILHO:** *escrevi "peça a X que faça Y", "para isso use Z", "se precisar, faça W".*

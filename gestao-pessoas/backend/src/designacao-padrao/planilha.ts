@@ -47,7 +47,8 @@ const COLUNAS_OBRIGATORIAS = ['centro_custo', 'avaliador_matricula'];
 export class PlanilhaInvalidaError extends Error {
   constructor(readonly faltando: string[], readonly encontradas: string[]) {
     super(
-      `A planilha não tem a(s) coluna(s) ${faltando.join(', ')}. ` +
+      // Lista, não contagem: o rótulo serve para os dois casos e não flexiona.
+      `Colunas que faltam na planilha: ${faltando.join(', ')}. ` +
         `Encontrei: ${encontradas.join(', ') || '(nenhuma)'}. ` +
         'Use o modelo enviado pelo RH, sem renomear o cabeçalho.',
     );

@@ -243,12 +243,13 @@ export class CicloService {
       // pessoa procurar sozinha um caminho — e o que ela acha é criar outro
       // ciclo, que duplica resultado sem ninguém decidir.
       throw new BadRequestException(
-        `Não é possível encerrar: ${pendentes} avaliação(ões) ainda não foram enviadas. ` +
-          'Se elas não vão entrar (pessoa desligada, afastada, avaliador que não vai responder), ' +
-          // ⚠️ "e as 1 ficam" — a concordância quebrava com pendência única, e a
-          // frase é lida pela gestora. O número já está no começo da mensagem.
-          'encerre com pendência: exige confirmação e motivo escrito, e elas ficam ' +
-          'registradas como CANCELADAS — nada é apagado, e a contagem aparece no painel.',
+        `Não é possível encerrar — ainda não enviadas: ${pendentes}. ` +
+          'Se não vão entrar (pessoa desligada, afastada, avaliador que não vai responder), ' +
+          // ⚠️ Nem número colado em palavra que concorda, NEM pronome: "elas ficam"
+          // quebra com pendência única do mesmo jeito que "as N avaliação(ões)".
+          // Ver a nota de forma em `painel/proximo-passo.ts`.
+          'encerre com pendência: exige confirmação e motivo escrito, e cada uma fica ' +
+          'registrada como CANCELADA — nada é apagado, e a contagem aparece no painel.',
       );
     }
     // ⚠️ Mínimo MAIOR aqui do que nos atos de uma linha: esta frase vai ser a

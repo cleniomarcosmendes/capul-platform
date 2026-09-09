@@ -188,7 +188,12 @@ function LinhaDeEstado({ resumo, cicloId }: { resumo: ResumoDoCiclo; cicloId: st
      */
     { valor: resumo.foraDoCiclo, rotulo: 'fora do ciclo', soQuandoHa: true },
     { valor: resumo.semDesignacao, rotulo: 'sem avaliador neste ciclo' },
-    { valor: resumo.enviadas, rotulo: `de ${resumo.designados} enviadas` },
+    {
+                valor: resumo.enviadas,
+                // Concorda com o DENOMINADOR: com um designado só, "de 1 enviadas"
+                // põe plural onde não há. Aqui o helper existe — use-o (09/09).
+                rotulo: `de ${resumo.designados} ${flexao(resumo.designados, 'enviada', 'enviadas')}`,
+              },
     { valor: resumo.apuradas, rotulo: 'apuradas' },
     /**
      * ⭐⭐ O CUSTO DO OVERRIDE, na linha que se lê primeiro. Termo de

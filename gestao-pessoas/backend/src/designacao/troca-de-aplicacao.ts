@@ -55,9 +55,9 @@ export function mensagemDaRecusa(
     );
   }
   return (
-    `${contexto.nomeDoAvaliado} já tem ${contexto.respostas} resposta(s) gravada(s) na ` +
-    `aplicação "${contexto.aplicacaoAtual}". As respostas pertencem às perguntas daquele ` +
-    'questionário e não têm equivalente no outro — trocar a aplicação as deixaria órfãs e a ' +
-    'nota sairia errada. Apague as respostas antes de mudar de aplicação.'
+    `${contexto.nomeDoAvaliado} já tem respostas gravadas na aplicação ` +
+    `"${contexto.aplicacaoAtual}" — respostas: ${contexto.respostas}. Elas pertencem às perguntas ` +
+    'daquele questionário e não têm equivalente no outro: trocar a aplicação deixaria essas ' +
+    'respostas órfãs e a nota sairia errada. Apague as respostas antes de mudar de aplicação.'
   );
 }

@@ -74,7 +74,7 @@ describe('notaAvaliacao', () => {
       // Calcular sobre questionário pela metade daria nota mais baixa, e ela
       // pareceria desempenho em vez de formulário incompleto.
       expect(() => calcularNotaAvaliacao([item()], 3)).toThrow(AvaliacaoIncompletaError);
-      expect(() => calcularNotaAvaliacao([item()], 3)).toThrow(/3 pergunta\(s\) sem resposta/);
+      expect(() => calcularNotaAvaliacao([item()], 3)).toThrow(/perguntas sem resposta: 3/);
     });
 
     it('recusa questionário vazio', () => {

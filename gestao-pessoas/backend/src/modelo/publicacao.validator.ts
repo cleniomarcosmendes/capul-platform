@@ -96,7 +96,7 @@ export function validarModeloParaPublicacao(grupos: readonly GrupoParaPublicacao
 
       if (pergunta.alternativas.length < 2) {
         problemas.push(
-          `${qual}: tem ${pergunta.alternativas.length} alternativa(s). ` +
+          `${qual} — alternativas: ${pergunta.alternativas.length}. ` +
             'Uma pergunta com menos de duas não mede nada.',
         );
       }

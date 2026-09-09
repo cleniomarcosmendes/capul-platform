@@ -34,7 +34,7 @@ export interface NotaCalculada {
 export class AvaliacaoIncompletaError extends Error {
   constructor(readonly perguntasSemResposta: number) {
     super(
-      `A avaliação não pode ser enviada: ${perguntasSemResposta} pergunta(s) sem resposta. ` +
+      `A avaliação não pode ser enviada — perguntas sem resposta: ${perguntasSemResposta}. ` +
         'Toda pergunta é obrigatória — não existe "não se aplica".',
     );
     this.name = 'AvaliacaoIncompletaError';

@@ -97,7 +97,9 @@ export class FonteCsvService implements FonteColaboradores {
     try {
       const conteudo = await fs.readFile(caminho, 'utf8');
       const linhas = lerCsv(conteudo);
-      this.logger.log(`${arquivo}: ${linhas.length} linhas`);
+      // Rótulo também aqui: é log, mas "1 linhas" é o mesmo defeito, e um
+      // invariante sem exceção vale mais que a exceção que ele economizaria.
+      this.logger.log(`${arquivo} — linhas: ${linhas.length}`);
       return linhas;
     } catch (e) {
       const err = e as NodeJS.ErrnoException;

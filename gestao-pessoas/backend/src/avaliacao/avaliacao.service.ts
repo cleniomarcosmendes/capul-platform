@@ -232,7 +232,8 @@ export class AvaliacaoService {
     const semResposta = itens.filter((i) => i.valorRespondido === null).length;
     if (semResposta > 0) {
       throw new BadRequestException(
-        `Faltam ${semResposta} pergunta(s) para enviar. Toda pergunta é obrigatória.`,
+        // "Faltam N pergunta(s)" flexionava no verbo e no substantivo.
+        `Perguntas sem resposta: ${semResposta}. Toda pergunta é obrigatória — responda antes de enviar.`,
       );
     }
 

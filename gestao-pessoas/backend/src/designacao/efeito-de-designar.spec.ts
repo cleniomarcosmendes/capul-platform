@@ -194,7 +194,8 @@ describe('o efeito de designar, antes de designar', () => {
       it('com respostas recusa DIZENDO QUANTAS', () => {
         const e = efeitoDeDesignar(deOutraApp({ respostas: 7 }), ctx);
         expect(e.acao).toBe('RECUSAR');
-        expect(e.frase).toMatch(/7 resposta/);
+        expect(e.frase).toMatch(/respostas gravadas/);
+        expect(e.frase).toContain('7');
       });
 
       it('sem nada gravado, a troca passa', () => {

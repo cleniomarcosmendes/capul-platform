@@ -45,7 +45,9 @@ describe('CicloService.encerrar', () => {
     it('recusa — e diz QUANTAS são', async () => {
       pendentes(891);
       await expect(service.encerrar(CICLO, RH)).rejects.toThrow(BadRequestException);
-      await expect(service.encerrar(CICLO, RH)).rejects.toThrow(/891 avaliação/);
+      // O NÚMERO, não a redação: a frase foi reescrita em 09/09 para o número
+      // não forçar concordância, e um /891 avaliação/ quebraria sem defeito algum.
+      await expect(service.encerrar(CICLO, RH)).rejects.toThrow(/ainda não enviadas: 891/);
     });
 
     /**
@@ -61,11 +63,13 @@ describe('CicloService.encerrar', () => {
     });
 
     /** ⚠️ Achado da bateria ao vivo de 08/09: com UMA pendência a frase dizia
-     *  "e as 1 ficam registradas". O número já está no começo da mensagem. */
+     *  "e as 1 ficam registradas". Em 09/09 o "elas ficam" que sobrava caiu
+     *  junto — a regra é tirar a contagem de QUALQUER palavra que concorde com
+     *  ela, verbo e pronome inclusive. */
     it('a frase não quebra a concordância com pendência única', async () => {
       pendentes(1);
-      await expect(service.encerrar(CICLO, RH)).rejects.toThrow(/1 avaliação/);
-      await expect(service.encerrar(CICLO, RH)).rejects.not.toThrow(/as 1 ficam/);
+      await expect(service.encerrar(CICLO, RH)).rejects.toThrow(/ainda não enviadas: 1/);
+      await expect(service.encerrar(CICLO, RH)).rejects.not.toThrow(/as 1 ficam|elas ficam/);
     });
 
     it('nada é escrito quando recusa', async () => {

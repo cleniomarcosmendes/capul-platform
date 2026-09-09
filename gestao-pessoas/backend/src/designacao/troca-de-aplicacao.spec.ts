@@ -188,13 +188,15 @@ describe('DesignacaoService.designar — troca de aplicação', () => {
 
     it('⭐ com respostas gravadas: recusa DIZENDO QUANTAS, para a tela poder perguntar', async () => {
       jaEstaNaAplicacaoA('EM_ANDAMENTO', 7);
-      await expect(designarPara(APP_B)).rejects.toThrow(/7 resposta\(s\) gravada\(s\)/);
+      // Diz QUANTAS — o fato. A forma da frase mudou em 09/09.
+      await expect(designarPara(APP_B)).rejects.toThrow(/respostas gravadas/);
+      await expect(designarPara(APP_B)).rejects.toThrow(/respostas: 7/);
       expect(prisma.avaliacao.upsert).not.toHaveBeenCalled();
     });
 
     it('uma resposta só já basta — não há limiar', async () => {
       jaEstaNaAplicacaoA('EM_ANDAMENTO', 1);
-      await expect(designarPara(APP_B)).rejects.toThrow(/1 resposta\(s\)/);
+      await expect(designarPara(APP_B)).rejects.toThrow(/respostas: 1/);
     });
 
     it('nada é gravado em auditoria quando a troca é recusada', async () => {

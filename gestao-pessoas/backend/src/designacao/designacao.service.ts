@@ -904,7 +904,7 @@ export class DesignacaoService {
             recusar(
               linha,
               'JA_RESPONDIDA',
-              `A avaliação está ${existente.status} com ${existente._count.respostas} resposta(s). ` +
+              `A avaliação está ${existente.status} — respostas gravadas: ${existente._count.respostas}. ` +
                 'Trocar o avaliador agora atribuiria o julgamento de uma pessoa a outra.',
             );
             continue;

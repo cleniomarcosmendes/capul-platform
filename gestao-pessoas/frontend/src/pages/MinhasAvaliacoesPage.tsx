@@ -4,7 +4,7 @@ import { AlertCircle, CalendarClock, CheckCircle2, ChevronRight, Lock, RefreshCw
 import { avaliacoes, ehFaltaDePermissao, mensagemDoErro, type ItemDaFila } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
-import { contagem } from '../lib/formato';
+import { contagem, flexao } from '../lib/formato';
 
 /**
  * A FILA DO AVALIADOR — a primeira tela de quem vai avaliar.
@@ -392,7 +392,9 @@ function ProgressoGeral({ total, concluidas }: { total: number; concluidas: numb
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-lg font-semibold text-slate-800">
-          {concluidas === total ? 'Tudo enviado' : `${concluidas} de ${total} enviadas`}
+          {concluidas === total
+                ? 'Tudo enviado'
+                : `${concluidas} de ${total} ${flexao(total, 'enviada', 'enviadas')}`}
         </p>
         <span className="text-sm tabular-nums text-slate-500">{percentual}%</span>
       </div>
