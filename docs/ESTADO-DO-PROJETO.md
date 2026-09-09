@@ -3331,7 +3331,7 @@ foi exato: as que me pegaram nomeavam um momento, as que me escaparam descreviam
 
 ### ⭐⭐ A CLASSE: ferramenta que responde sem fazer o trabalho
 
-Não são cinco armadilhas soltas — são **uma classe**, e já mordeu cinco vezes em três dias.
+Não são seis armadilhas soltas — são **uma classe**, e já mordeu seis vezes em quatro dias.
 O denominador comum: **um comando dá um veredito sem ter executado a verificação que o
 veredito afirma.** Não há erro, não há log, não há nada que denuncie. O que se lê é o
 veredito; o que aconteceu é outra coisa.
@@ -3352,6 +3352,16 @@ Ela tem **dois modos**, e o segundo é o pior.
 |---|---|---|
 | **`npx tsc -b`** no frontend | *"This is not the tsc command you are looking for"*, exit 1 — parece dependência quebrada | sem `typescript` local, o `npx` foi ao registro e rodou o pacote npm literalmente chamado **`tsc`** (`tsc@2.0.4`, um decoy). O TypeScript **não rodou** |
 | **Suíte do backend** sob `mem_limit: 512m` | *"11 suítes falharam"* — parece código quebrado | os workers do Jest morreram por **SIGKILL / heap**. **Zero testes falharam de verdade** |
+| **`npx jest` no container que está RODANDO** (09/09) | *"40 suítes falharam, 40 total"* — parece o módulo inteiro quebrado | a imagem de **runtime** é build de produção e **não leva o `tsconfig.spec.json`** (o Dockerfile copia só `tsconfig.json` e `tsconfig.seed.json`). As 40 morreram em `File not found: tsconfig.spec.json`, e a linha que denuncia é **`Tests: 0 total`** — nenhum teste chegou a rodar. No estágio `builder`: **564 passaram, em 14s** |
+
+⚠️ **O remendo pela metade produziu o caso 5.** Ao achar que faltava só o arquivo, copiei o
+`tsconfig.spec.json` para dentro do container em execução (`docker cp`) e rodei de novo: **39
+falharam, 1 passou, 12 testes**, em **785s** — agora por `jest-worker … _onExit`, que é
+exatamente o falso vermelho do `mem_limit`. Dois falsos vermelhos **empilhados** no mesmo
+comando, o segundo escondido atrás do primeiro. ⚠️ E a limpeza falhou (`Permission denied` — o
+container roda como `appuser`): quem faz isso precisa de `docker exec -u root … rm` depois, ou
+deixa lixo dentro de um container em produção. **Consertar o ambiente errado custa mais que
+trocar de ambiente:** o estágio `builder` deu a resposta certa em 14 segundos.
 
 ⭐⭐ **O falso vermelho é o pior a longo prazo.** O falso verde alguém descobre quando o
 defeito aparece em tela — é uma dívida com data de vencimento. O falso vermelho não: ele faz
@@ -3369,6 +3379,7 @@ Não o que dá o veredito — o que **executa**. É isto que futuro-eu vai procu
 | ler `No pending migrations` | `docker compose build <mod>-migrate && docker compose run --rm <mod>-migrate` — e a linha que vale é **`GUARDA: ok — as N migrations … estao aplicadas`** |
 | `npx tsc -b` / `tsc --noEmit` | `docker compose build gestao-pessoas-frontend` — o Dockerfile roda `npm run build`, e o script é **`tsc -b && vite build`**. O `&&` é a garantia; erro de tipo derruba com exit 2 antes do `vite` |
 | `docker compose run … npx jest` | `docker run --rm -m 3g -e NODE_OPTIONS=--max-old-space-size=2560 -v <backend>/src:/app/src -v <backend>/tsconfig*.json:/app/ -v <backend>/package.json:/app/package.json -w /app --entrypoint npx capul-platform-gestao-pessoas-backend:latest jest --maxWorkers=2` |
+| `docker compose exec <mod>-backend npx jest` (o container que está no ar) | `cd <mod>/backend && docker build --target builder -t <mod>-test:local . && docker run --rm <mod>-test:local npx jest` — o estágio **`builder`** é o único que tem `npm ci` com devDependencies **e** os `tsconfig*.json`. Apagar a imagem depois |
 
 #### ⚠️ Teste que afirma TEXTO fossiliza o defeito junto
 
@@ -3399,7 +3410,7 @@ estorvo.** Vale ler o que ele afirmava antes de atualizá-lo — no item F, era 
 
 #### ⭐⭐ O MÉTODO, não só os casos: verificação por MUTAÇÃO
 
-As cinco só foram descobertas por acidente. O que as encontra de propósito é o mesmo método
+As seis só foram descobertas por acidente. O que as encontra de propósito é o mesmo método
 do teste de invariante do RDV: **injetar um erro e ver a ferramenta pegá-lo.** Garantia que
 ninguém tentou quebrar é garantia **suposta**.
 
