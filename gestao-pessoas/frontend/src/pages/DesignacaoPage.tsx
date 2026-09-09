@@ -23,6 +23,7 @@ import type { ContextoDoCiclo } from './CicloPage';
 import { contagem, dataHora, flexao, nota } from '../lib/formato';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
+import { MOTIVO_MINIMO } from '../lib/motivo';
 
 /**
  * DESIGNAÇÃO — quem entra no ciclo, e quem avalia quem.
@@ -661,7 +662,7 @@ function DialogoDecisao({
         </button>
         <button
           type="button"
-          disabled={salvando || bloqueado || justificativa.trim().length < 3}
+          disabled={salvando || bloqueado || justificativa.trim().length < MOTIVO_MINIMO}
           onClick={salvar}
           className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >
@@ -1228,12 +1229,12 @@ function DialogoReabrir({
             travava abaixo do mínimo sem dizer o mínimo. */}
         <span
           className={`mt-1 block text-xs ${
-            motivo.trim().length > 0 && motivo.trim().length < 3
+            motivo.trim().length > 0 && motivo.trim().length < MOTIVO_MINIMO
               ? 'font-medium text-amber-800'
               : 'text-slate-500'
           }`}
         >
-          {motivo.trim().length > 0 && motivo.trim().length < 3
+          {motivo.trim().length > 0 && motivo.trim().length < MOTIVO_MINIMO
             ? `Escreva pelo menos 3 caracteres — ${flexao(3 - motivo.trim().length, 'falta', 'faltam')} ${3 - motivo.trim().length}.`
             : 'Fica registrado com o seu nome na auditoria, junto com o resultado apagado.'}
         </span>
@@ -1251,7 +1252,7 @@ function DialogoReabrir({
         </button>
         <button
           type="button"
-          disabled={salvando || efeito === null || motivo.trim().length < 3}
+          disabled={salvando || efeito === null || motivo.trim().length < MOTIVO_MINIMO}
           onClick={() => void confirmar()}
           className="alvo-toque flex-1 rounded-xl bg-rose-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >

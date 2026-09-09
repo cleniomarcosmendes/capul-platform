@@ -340,9 +340,15 @@ function FaixaDoEncerrado({ encerradoEm }: { encerradoEm: string | null }) {
           <strong className="font-semibold">
             Ciclo encerrado{encerradoEm ? ` em ${data(encerradoEm)}` : ''}.
           </strong>{' '}
-          Designar, mexer no público e apurar estão fechados — os botões aparecem desabilitados,
-          com o motivo. <strong>Continua valendo:</strong> resultados, memória de cálculo, painel e
-          a lista de designação.
+          {/* ⚠️ A FRASE PROMETIA O QUE A TELA NÃO MOSTRA (09/09): "com o motivo"
+              dava a entender motivo VISÍVEL, e ele só existia no `title` — que
+              não aparece no toque, no teclado nem no leitor de tela. Ou a tela
+              mostra, ou a frase não promete. Aqui o motivo é o mesmo para todos
+              os botões (o ciclo está encerrado) e já está dito nesta faixa, então
+              a frase deixa de prometer uma segunda cópia dele. */}
+          Designar, mexer no público e apurar estão fechados — os botões desses atos aparecem
+          desabilitados, e o motivo é este. <strong>Continua valendo:</strong> resultados, memória
+          de cálculo, painel e a lista de designação.
         </span>
       </p>
       <p className="mt-1.5 text-sm text-slate-600">

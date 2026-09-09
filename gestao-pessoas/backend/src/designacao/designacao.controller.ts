@@ -5,12 +5,14 @@ import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { DesignacaoService } from './designacao.service.js';
+import { MOTIVO_MINIMO } from '../common/motivo.js';
 
 export class DecidirDto {
   @IsString() colaboradorId!: string;
   @IsIn(['INCLUIR', 'EXCLUIR']) decisao!: 'INCLUIR' | 'EXCLUIR';
   // Sem motivo, a linha vira "alguém decidiu algo" — inútil na contestação.
-  @IsString() @MinLength(3) justificativa!: string;
+  // Ato de UMA linha (um `colaboradorId`) — mínimo pequeno. Ver `common/motivo.ts`.
+  @IsString() @MinLength(MOTIVO_MINIMO) justificativa!: string;
 }
 
 export class DesignarDto {

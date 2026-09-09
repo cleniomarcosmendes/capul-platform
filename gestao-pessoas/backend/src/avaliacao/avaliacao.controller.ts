@@ -6,6 +6,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { QUALQUER_PAPEL_DO_MODULO, ROLES, podeVerResultados } from '../common/roles-rh.js';
 import { AvaliacaoService } from './avaliacao.service.js';
 import type { ContextoAcesso } from './avaliacao-acesso.service.js';
+import { MOTIVO_MINIMO } from '../common/motivo.js';
 
 export class ResponderDto {
   @IsString() perguntaId!: string;
@@ -15,7 +16,8 @@ export class EnviarDto {
   @IsOptional() @IsString() observacao?: string;
 }
 export class ReabrirDto {
-  @IsString() @MinLength(3) motivo!: string;
+  /** Ato de UMA linha — mínimo pequeno, e é o certo aqui. Ver `common/motivo.ts`. */
+  @IsString() @MinLength(MOTIVO_MINIMO) motivo!: string;
 }
 
 /**

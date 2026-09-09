@@ -252,6 +252,27 @@ que ninguém testou não é o mais simples, é o menos conhecido.
 O ciclo está **ABERTO, reaberto 1×, com 39 canceladas** — o único lugar onde esse estado existe.
 Não apagar.
 
+### 🔁 Quarta rodada — o ciclo ZZ ENCERRA, e 5 dos 7 passaram (09/09)
+
+Ciclo descartável montado só para percorrer o **encerramento com pendência** — o SIMULACAO tinha
+zero pendentes e não dispararia o diálogo. `ZZ ENCERRA 09/09`, 1 aplicação, público de 9,
+5 designadas. **Os consertos de 08–09/09 estão de pé**: o motivo chega às 5, os dois blocos, os
+textos do estado encerrado, os botões cinza.
+
+**Três achados novos (§3.1.52 a §3.1.54)** e **dois registrados sem fazer (§3.1.55)**. ⭐ O padrão
+do dia: **os três são de ALCANCE — regra certa aplicada a um recorte menor que o real.** O mínimo
+do motivo valia para um ato e não para o irmão dele; o `fechado ?` valia para um bloco e não para
+os vizinhos; a ressalva do reabrir valia no diálogo e não na tela onde se decide.
+
+⚠️ **E os três escaparam de 564 testes** — porque teste afirma comportamento de UM caminho, e
+alcance é sobre **quais caminhos existem**. O que pega isso é varredura de fonte: virou
+`motivo.invariante.spec.ts`. **572 testes** agora.
+
+⚠️ **`ZZ ENCERRA 09/09` fica ENCERRADO, com 5 canceladas, nunca reaberto** — é o único ciclo
+nesse estado na base. Não apagar. (Dá para apagar por SQL se um dia precisar: não existe rota
+DELETE de ciclo, e as FKs de `rh.*` são todas RESTRICT — são 11 DELETEs em ordem. A `rh.auditoria`
+não tem FK e **sobrevive**, apontando para um ciclo que deixou de existir.)
+
 ### ✅ Depois do fechamento — o acesso destravou (08/09, madrugada)
 
 O Clenio configurou `rodrigoleao`, `vanialucia` e `denisealves` no Configurador; **as três
@@ -3004,6 +3025,100 @@ não os 2 relatados: era forma, não caso (§5.9 regra 13).
 ⭐ Os três são a **mesma pergunta**: depois do encerramento, o painel fica limpo e a evidência do
 custo sai da tela. O §3.1.45 (a linha de estado ganhando *"39 canceladas"*) foi o primeiro passo;
 estes três são o resto dele.
+
+### 3.1.52. 🟠 Reabrir o ciclo pedia motivo de 3 — e é ato EM MASSA (09/09)
+
+Encerrar com pendência exige **15**; reabrir aceitava **3**. E reabrir devolve designação,
+público e apuração do ciclo inteiro — os que estavam fora voltam a poder entrar. Pela regra
+escrita em `common/motivo.ts` (*"a frase é a única explicação que sobra"*), é ato em massa.
+
+⭐⭐ **A forma do erro importa mais que o número: a analogia com o ato de mesmo NOME.** O DTO
+dizia, por escrito, *"como no reabrir avaliação"*. Mesma palavra, alcance oposto — um devolve UMA
+linha, o outro devolve o ciclo. Ao escolher o mínimo, a pergunta é **quantos registros o ato
+atinge**, nunca como ele se chama. Está na doc de `motivo.ts`, ao lado da regra.
+
+**A varredura achou a causa, que não era o número.** Os **quatro** DTOs escreviam `@MinLength(3)`
+na mão, e **`MOTIVO_MINIMO` não era importado em lugar nenhum**: a regra foi extraída para
+`common/motivo.ts` e as chamadas ficaram para trás — a família do [[feedback_extrair_regra_exige_varrer_o_fonte]].
+Com literal, o ato novo copia o vizinho e herda o número errado. Agora os quatro importam:
+
+| Ato | Alcance | Mínimo |
+|---|---|---|
+| Reabrir **avaliação** | uma linha | `MOTIVO_MINIMO` (3) ✅ já estava certo |
+| **Decidir** incluir/excluir | uma linha (um `colaboradorId`) | `MOTIVO_MINIMO` (3) ✅ já estava certo |
+| **Encerrar** com pendência | o ciclo | `MOTIVO_MINIMO_EM_MASSA` (15) ✅ já estava certo |
+| **Reabrir o ciclo** | o ciclo | `MOTIVO_MINIMO_EM_MASSA` (15) 🔴 **era 3** |
+
+⚠️ **O DTO é PISO, o service é a regra** — e isso foi conserto de segunda passada. Pôr 15 no
+`@MinLength` fez o class-validator responder primeiro com *"motivo must be longer than or equal to
+15 characters"*, e a mensagem que **ensina** (a do service, com "faltam N") virou código morto. O
+`encerrar` já era assim; o `reabrir` passou a ser. ⭐ **Guarda mais externa e mais burra
+sequestra a mensagem da mais interna e melhor.**
+
+⭐ **A tela tinha a MESMA armadilha, pior:** `CiclosPage` chamava de `MOTIVO_MINIMO` o valor
+**15** — o mesmo nome que no backend vale **3**. Nome igual com valor diferente é pior que número
+solto: quem confere um lado contra o outro lê "iguais" e segue. Virou `src/lib/motivo.ts`, com os
+dois números e **os nomes do backend**; `DesignacaoPage` tinha três literais e passou a importar.
+
+**Os dois testes que faltavam** — porque a mudança 3 → 15 **não quebrou nada** nos 564:
+`reabrir-minimo-em-massa.spec.ts` (o ato) e `motivo.invariante.spec.ts` (a forma: varre o fonte e
+recusa `@MinLength(<literal>)` em campo de motivo). ⚠️ Validados por **mutação** — repondo o
+literal e afrouxando o service, **3 testes ficam vermelhos pelos motivos certos**. Sem essa
+checagem eu teria dois testes verdes que nunca provaram nada.
+
+### 3.1.53. 🟠 A varredura dos blocos de orientação do painel — e o terceiro caso (09/09)
+
+O conserto de 08/09 pôs `fechado ? … : …` no bloco **vermelho** ("N fora de TODAS as aplicações")
+e deixou o **âmbar logo acima**, que seguia mandando *"resolvem-se com Designar pelo cadastro"* —
+botão desabilitado num ciclo encerrado. É a **regra 13**: escapou a **forma**, não o caso.
+
+⭐ **Varrer em vez de consertar os dois citados achou um terceiro**, em outra seção da página:
+*"Vale reabrir e reenviar essas"*, nas pendências cadastrais. Reabrir avaliação é recusado com o
+ciclo encerrado (`assertCicloAceitaReaberturaDeAvaliacao`) — a tela prometia o caminho que a API
+fecha. Ninguém tinha citado esse.
+
+| Bloco | Antes | Agora |
+|---|---|---|
+| âmbar · *"já têm avaliador no cadastro"* | manda usar *Designar pelo cadastro* | 🔴 → diz para reabrir o ciclo primeiro |
+| âmbar · *"nem no cadastro"* | manda ir a *Avaliadores* | 🔴 → **as duas metades**: o cadastro segue editável, trazer para ESTE ciclo exige reabrir |
+| vermelho · *"fora de TODAS"* | — | ✅ já corrigido em 08/09 |
+| vermelho · *"ENVIADAS sem nota"* | *"Vale reabrir e reenviar"* | 🔴 → diz que exige o ciclo aberto |
+
+⭐ **O NÚMERO nunca muda — muda o que se pode fazer com ele.** É a mesma frase que já estava no
+comentário do bloco vermelho, e agora vale para os quatro.
+
+### 3.1.54. 🟠 O card da lista prometia o que o diálogo desmente (09/09)
+
+O card do ciclo encerrado dizia *"designar, mexer no público e apurar estão fechados. **Reabrir
+devolve tudo isso**"*. O diálogo de reabrir desmente em bloco âmbar — *"as N canceladas continuam
+canceladas"* — mas **quem decide olhando a lista nunca chega ao diálogo**: a promessa é lida no
+card e a ressalva mora duas telas adiante.
+
+⭐ **A regra: a ressalva tem de estar onde a decisão é TOMADA, não onde o ato é confirmado.** Pôr
+a verdade só no último passo protege quem já decidiu — não quem está decidindo. O card passou a
+dizer "devolve **esses três**" e, havendo canceladas, o que reabrir **não** faz.
+
+**Dois de texto, na mesma família:**
+
+- ⭐ **O aviso do mínimo SUBSTITUÍA a explicação.** Era um ternário só: enquanto a pessoa escrevia
+  o motivo, a frase que diz **para que ele serve** sumia, e só voltava aos 15 caracteres — some
+  exatamente no instante em que ela decide o que escrever, que é quando a explicação vale mais.
+  **O contador é sobre a FORMA, a explicação é sobre o CONTEÚDO, e uma não é versão da outra.**
+  Agora convivem, no encerrar **e** no reabrir (que era mudo: o botão travava sem dizer nada).
+- **O banner prometia motivo visível.** *"Os botões aparecem desabilitados, com o motivo"* — e o
+  motivo só existia no `title`, que não aparece no toque, no teclado nem no leitor de tela. A
+  frase mudou: o motivo é o da própria faixa, e ela deixa de prometer uma segunda cópia dele.
+
+### 3.1.55. 📌 Registrado, sem fazer — dois da conferência de 09/09
+
+- **O card mostra "0 avaliações" num ciclo com 5 canceladas.** Da lista o ciclo parece vazio; as 5
+  só existem entrando nele. É o **`_count` do §3.1.40 visto de outro ângulo** — lá era a fila, aqui
+  é o card — e o mesmo do 2º item do §3.1.51. **A decisão é uma:** o card mostra *"5 canceladas"*
+  ou some com a linha. Mostrar `0` é a única opção que mente.
+- **Dois "fora" com sentidos diferentes em abas vizinhas:** o chip *"Fora do ciclo (0)"* e
+  *"980 pessoas fora de TODAS as aplicações"*. Mesma palavra, universos distintos — é a família do
+  **1036 × 989** (§3.12) e da **regra 15**: dois números verdadeiros na mesma tela precisam do
+  termo que os concilia.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

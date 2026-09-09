@@ -132,16 +132,33 @@ export default function PainelPage() {
               aparecem em nenhum status e ficam de fora dele.
             </p>
             <ul className="mt-1.5 space-y-0.5 text-sm text-amber-900/90">
+              {/* ⚠️ A INSTRUÇÃO NÃO CABE NO ESTADO — mesma correção que o bloco
+                  vermelho abaixo já tinha, e que este não recebeu (09/09).
+                  Com o ciclo encerrado, "Designar pelo cadastro" leva a um botão
+                  desabilitado: a tela manda fazer o que ela mesma proíbe, e quem
+                  segue conclui que está quebrado. ⭐ O NÚMERO continua verdadeiro
+                  e é o que diz o tamanho do buraco; o que muda é o que se pode
+                  fazer com ele. */}
               {dados.semDesignacaoPorOrigem.jaTemNoCadastro > 0 && (
                 <li>
                   <strong>{dados.semDesignacaoPorOrigem.jaTemNoCadastro}</strong> já têm avaliador
-                  no cadastro — resolvem-se com <em>Designar pelo cadastro</em>, na aba Designação.
+                  no cadastro —{' '}
+                  {fechado
+                    ? 'para trazê-las, reabra o ciclo primeiro; depois, Designar pelo cadastro na aba Designação.'
+                    : <>resolvem-se com <em>Designar pelo cadastro</em>, na aba Designação.</>}
                 </li>
               )}
               {dados.semDesignacaoPorOrigem.nemNoCadastro > 0 && (
                 <li>
                   <strong>{dados.semDesignacaoPorOrigem.nemNoCadastro}</strong> não têm avaliador
-                  nem no cadastro — precisam ser resolvidas antes, em <em>Avaliadores</em>.
+                  nem no cadastro —{' '}
+                  {/* ⚠️ Este é MEIO possível com o ciclo fechado, e meia verdade
+                      é o que se quer evitar: o cadastro de Avaliadores é da
+                      empresa e continua editável; o que não dá é trazer o
+                      resultado para ESTE ciclo. Dizer as duas metades. */}
+                  {fechado
+                    ? <>o cadastro em <em>Avaliadores</em> segue editável, mas trazê-las para este ciclo exige reabri-lo.</>
+                    : <>precisam ser resolvidas antes, em <em>Avaliadores</em>.</>}
                 </li>
               )}
               <li className="pt-1 text-xs opacity-80">
@@ -317,10 +334,17 @@ export default function PainelPage() {
           </ul>
         )}
 
+        {/* ⚠️ O TERCEIRO da mesma família, achado varrendo (09/09): reabrir
+            avaliação é recusado com o ciclo encerrado
+            (`assertCicloAceitaReaberturaDeAvaliacao`), então "vale reabrir e
+            reenviar" prometia o caminho que a API fecha. */}
         {conferencia && conferencia.semNotaDeAvaliacao > 0 && (
           <p className="mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
             {contagem(conferencia.semNotaDeAvaliacao, 'avaliação está ENVIADA', 'avaliações estão ENVIADAS')} sem nota — inconsistência de
-            estado, já que a nota é calculada no envio. Vale reabrir e reenviar essas.
+            estado, já que a nota é calculada no envio.{' '}
+            {fechado
+              ? 'Corrigir exige reabrir a avaliação, e isso só é possível com o ciclo aberto — reabra o ciclo primeiro.'
+              : 'Vale reabrir e reenviar essas.'}
           </p>
         )}
       </section>

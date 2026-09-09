@@ -15,10 +15,22 @@
  *   - `MOTIVO_MINIMO` (3) — atos de UMA linha: excluir uma pessoa, reabrir uma
  *     avaliação. Quem lê tem o contexto ao redor (o nome, o status, a data), e
  *     a frase completa o que a tela já mostra.
- *   - `MOTIVO_MINIMO_EM_MASSA` (15) — atos que atingem N registros de uma vez e
- *     não têm volta: encerrar o ciclo com pendência. Aqui a frase é a **única**
- *     explicação que vai sobrar para dezenas de pessoas, e 15 caracteres forçam
- *     uma oração em vez de um token. *"Pessoa desligada"* tem 16.
+ *   - `MOTIVO_MINIMO_EM_MASSA` (15) — atos que atingem N registros de uma vez:
+ *     **encerrar o ciclo com pendência** e **reabrir o ciclo**. Aqui a frase é a
+ *     **única** explicação que vai sobrar para dezenas de pessoas, e 15
+ *     caracteres forçam uma oração em vez de um token. *"Pessoa desligada"*
+ *     tem 16.
+ *
+ * ⚠️ **O erro é escolher o MENOR, e ele tem uma forma reconhecível: a analogia
+ * com o ato de mesmo NOME.** `reabrir` o ciclo nasceu com 3 "como no reabrir
+ * avaliação" — mesma palavra, alcance oposto: um devolve UMA linha, o outro
+ * devolve designação, público e apuração do ciclo inteiro. Ao escolher o
+ * mínimo, perguntar **quantos registros o ato atinge**, nunca como ele se chama.
+ *
+ * ⚠️ **E use a CONSTANTE, não o literal.** Até 09/09 os quatro DTOs escreviam
+ * `@MinLength(3)` na mão e `MOTIVO_MINIMO` não era importado em lugar nenhum —
+ * extraíram a regra e deixaram as chamadas para trás. Com o literal, o ato novo
+ * copia o vizinho e herda o número errado sem ninguém notar.
  *
  * ⚠️ **A tela tem de usar o MESMO número**, senão ela trava onde a API aceita
  * (ou pior, deixa clicar onde a API recusa). Onde a tela não pode importar

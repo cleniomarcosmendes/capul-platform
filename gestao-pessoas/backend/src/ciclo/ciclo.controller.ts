@@ -6,6 +6,8 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { CicloService } from './ciclo.service.js';
 
+import { MOTIVO_MINIMO, MOTIVO_MINIMO_EM_MASSA } from '../common/motivo.js';
+
 export class ConceitoDto {
   @IsString() descricao!: string;
   @IsNumber() limiteInferior!: number;
@@ -27,8 +29,23 @@ export class CriarCicloDto {
 
 /** Montar o ciclo é de RH_CICLO; abrir e encerrar, só de RH_ADMIN. */
 export class ReabrirCicloDto {
-  /** Como no reabrir avaliação: sem motivo não há reabertura. */
-  @IsString() @MinLength(3) motivo!: string;
+  /**
+   * ⭐ ATO EM MASSA, e por isso o mínimo é o GRANDE (09/09).
+   *
+   * Nasceu com o mínimo de uma linha ("como no reabrir avaliação") — e reabrir
+   * o CICLO não se parece com reabrir UMA avaliação: devolve designação,
+   * público e apuração do ciclo inteiro, e quem estava fora volta a poder
+   * entrar. É exatamente o alcance que `MOTIVO_MINIMO_EM_MASSA` descreve.
+   * Ver `common/motivo.ts`.
+   *
+   * ⚠️ **Piso do DTO, não a regra** — mesmo arranjo do `EncerrarCicloDto`. Quem
+   * exige `MOTIVO_MINIMO_EM_MASSA` é o service, porque a mensagem dele ENSINA
+   * ("é o que responde, meses depois, por que um ciclo encerrado voltou a
+   * aceitar mudança" + quantos caracteres faltam). Com o mínimo grande aqui, o
+   * class-validator responde primeiro com *"motivo must be longer than or equal
+   * to 15 characters"* e a frase útil vira código morto.
+   */
+  @IsString() @MinLength(MOTIVO_MINIMO) motivo!: string;
 }
 
 /**
@@ -38,7 +55,12 @@ export class ReabrirCicloDto {
  */
 export class EncerrarCicloDto {
   @IsOptional() @IsBoolean() confirmarPendentes?: boolean;
-  @IsOptional() @IsString() @MinLength(3) motivo?: string;
+  /**
+   * ⚠️ Piso do DTO, não a regra. Encerrar SEM pendência não cancela nada e o
+   * motivo é dispensável; com pendência, quem exige `MOTIVO_MINIMO_EM_MASSA` é
+   * o service, que é o único lugar que sabe quantas são.
+   */
+  @IsOptional() @IsString() @MinLength(MOTIVO_MINIMO) motivo?: string;
 }
 
 export class AjustarPeriodoDto {

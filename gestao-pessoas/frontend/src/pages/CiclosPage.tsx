@@ -16,14 +16,7 @@ import {
   type PreviaDaAbertura,
 } from '../services/api';
 import { Modal } from '../components/Modal';
-
-/**
- * ⚠️ Espelha `MOTIVO_MINIMO_EM_MASSA` de `backend/src/common/motivo.ts`. O ato
- * atinge N registros e não tem volta, então a frase é a única explicação que
- * sobra — 3 caracteres ("xpt") passavam e não respondem nada. Se mudar lá,
- * mude aqui: tela mais frouxa deixa clicar onde a API recusa.
- */
-const MOTIVO_MINIMO = 15;
+import { MOTIVO_MINIMO_EM_MASSA } from '../lib/motivo';
 
 /**
  * CICLOS — a lista de ciclos e a criação de um novo.
@@ -273,7 +266,18 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           </button>
           <p className="mt-2 text-xs text-slate-500">
             {ciclo.status === 'ENCERRADO'
-              ? `Encerrado${ciclo.encerradoEm ? ` em ${data(ciclo.encerradoEm)}` : ''} — designar, mexer no público e apurar estão fechados. Reabrir devolve tudo isso, com motivo registrado.`
+              ? // ⭐ O CARD NÃO PODE PROMETER O QUE O DIÁLOGO DESMENTE (09/09).
+                // Dizia "Reabrir devolve tudo isso" — e "tudo isso" lê como
+                // "volta ao que era", incluindo as avaliações canceladas. O
+                // diálogo avisa que não, em bloco âmbar, mas quem DECIDE olhando
+                // a lista nunca chega até ele: a promessa é lida aqui e a
+                // ressalva mora duas telas adiante. Com canceladas, o card diz o
+                // que reabrir NÃO faz; sem elas, não há o que ressalvar.
+                `Encerrado${ciclo.encerradoEm ? ` em ${data(ciclo.encerradoEm)}` : ''} — designar, mexer no público e apurar estão fechados. Reabrir devolve esses três, com motivo registrado.${
+                  ciclo.canceladas > 0
+                    ? ` As ${ciclo.canceladas} ${flexao(ciclo.canceladas, 'cancelada continua cancelada', 'canceladas continuam canceladas')} — reabrir devolve o ciclo, não as avaliações.`
+                    : ''
+                }`
               : ciclo.status === 'RASCUNHO'
               ? 'Abrir LIBERA os avaliadores para responder e trava a montagem: aplicações e critérios só mudam enquanto é rascunho. As avaliações já existem — quem as cria é a designação.'
               : ciclo.pendentes > 0
@@ -463,9 +467,19 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               className="mt-1 w-full rounded-xl border border-slate-300 p-2 text-sm text-slate-800"
             />
           </label>
+          {/* Mesmo par do encerrar: explicação fixa + contador só quando falta.
+              Antes o botão travava em silêncio abaixo do mínimo. */}
           <p className="text-xs text-slate-500">
-            Fica registrado no ciclo e na auditoria, com quem reabriu e quando.
+            Fica registrado no ciclo e na auditoria, com quem reabriu e quando — é o que responde,
+            meses depois, por que um ciclo encerrado voltou a aceitar mudança.
           </p>
+          {motivoReabertura.trim().length > 0 &&
+            motivoReabertura.trim().length < MOTIVO_MINIMO_EM_MASSA && (
+              <p className="mt-0.5 text-xs font-medium text-amber-800">
+                Escreva pelo menos {MOTIVO_MINIMO_EM_MASSA} caracteres — faltam{' '}
+                {MOTIVO_MINIMO_EM_MASSA - motivoReabertura.trim().length}.
+              </p>
+            )}
           <div className="mt-4 flex gap-2">
             <button
               type="button"
@@ -476,7 +490,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             </button>
             <button
               type="button"
-              disabled={ocupado || motivoReabertura.trim().length < 3}
+              disabled={ocupado || motivoReabertura.trim().length < MOTIVO_MINIMO_EM_MASSA}
               onClick={() => void reabrir()}
               className="alvo-toque flex-1 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >
@@ -538,17 +552,24 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
               mínimo, sem hint, sem contador e sem mensagem: digitar "ab" e
               clicar não produzia nada e parecia defeito. Agora a regra aparece
               ANTES de o botão travar, e o texto muda quando ela é cumprida. */}
-          <p
-            className={`text-xs ${
-              motivoPendencia.trim().length > 0 && motivoPendencia.trim().length < MOTIVO_MINIMO
-                ? 'font-medium text-amber-800'
-                : 'text-slate-500'
-            }`}
-          >
-            {motivoPendencia.trim().length > 0 && motivoPendencia.trim().length < MOTIVO_MINIMO
-              ? `Escreva pelo menos ${MOTIVO_MINIMO} caracteres — faltam ${MOTIVO_MINIMO - motivoPendencia.trim().length}.`
-              : 'Fica gravado no ciclo, na auditoria e em cada avaliação cancelada — é o que responde, meses depois, por que estas ficaram sem nota.'}
+          {/* ⭐ OS DOIS CONVIVEM — o aviso do mínimo NÃO substitui a explicação
+              (09/09). Era um ternário só: enquanto a pessoa escrevia, a frase
+              que diz PARA QUE SERVE o motivo sumia, e só voltava aos 15 — some
+              exatamente no momento em que ela decide o que escrever, e é ela
+              que faz a frase ficar boa. Vale para todo campo com mínimo: o
+              contador é sobre a FORMA, a explicação é sobre o CONTEÚDO, e uma
+              não é versão da outra. */}
+          <p className="text-xs text-slate-500">
+            Fica gravado no ciclo, na auditoria e em cada avaliação cancelada — é o que responde,
+            meses depois, por que estas ficaram sem nota.
           </p>
+          {motivoPendencia.trim().length > 0 &&
+            motivoPendencia.trim().length < MOTIVO_MINIMO_EM_MASSA && (
+              <p className="mt-0.5 text-xs font-medium text-amber-800">
+                Escreva pelo menos {MOTIVO_MINIMO_EM_MASSA} caracteres — faltam{' '}
+                {MOTIVO_MINIMO_EM_MASSA - motivoPendencia.trim().length}.
+              </p>
+            )}
           <div className="mt-4 flex gap-2">
             <button
               type="button"
@@ -559,7 +580,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             </button>
             <button
               type="button"
-              disabled={ocupado || motivoPendencia.trim().length < MOTIVO_MINIMO}
+              disabled={ocupado || motivoPendencia.trim().length < MOTIVO_MINIMO_EM_MASSA}
               onClick={() => void agir('encerrar', true)}
               className="alvo-toque flex-1 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
             >

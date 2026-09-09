@@ -300,10 +300,16 @@ export class CicloService {
    * avaliação, apuração), não para remontá-lo.
    */
   async reabrir(cicloId: string, motivo: string, usuarioId: string) {
-    if (!motivo?.trim()) {
-      // Mesma exigência do reabrir avaliação: sem motivo, a linha vira "alguém
-      // reabriu algo" — que é o mesmo que não ter registro nenhum.
-      throw new BadRequestException('Informe o motivo da reabertura.');
+    // ⭐ MESMO MÍNIMO DO ENCERRAR — reabrir o ciclo é ato EM MASSA (09/09).
+    // Nasceu com o mínimo de uma linha, por analogia com o reabrir AVALIAÇÃO. A
+    // analogia era falsa: reabrir o ciclo devolve designação, público e apuração
+    // do ciclo inteiro. A frase é a única explicação que vai sobrar.
+    if (!motivo?.trim() || motivo.trim().length < MOTIVO_MINIMO_EM_MASSA) {
+      throw new BadRequestException(
+        'Informe o motivo da reabertura. Ele fica registrado no ciclo e na auditoria — é o que ' +
+          'responde, meses depois, por que um ciclo encerrado voltou a aceitar mudança. ' +
+          faltamCaracteres(motivo?.trim() ?? '', MOTIVO_MINIMO_EM_MASSA),
+      );
     }
     const ciclo = await this.prisma.ciclo.findUnique({ where: { id: cicloId } });
     if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
