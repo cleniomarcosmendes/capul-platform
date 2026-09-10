@@ -59,6 +59,29 @@ export class AvaliacaoService {
       where: {
         avaliadorId: contexto.colaboradorId,
         ...ONDE_A_AVALIACAO_CONTA,
+        /**
+         * ⭐⭐ SÓ CICLO ABERTO — a fila é o trabalho que dá para FAZER.
+         *
+         * Não havia filtro de ciclo nenhum, e o efeito só apareceria no
+         * primeiro encerramento de verdade: encerrado o Piloto, as 53 pessoas
+         * continuariam vendo as 894 avaliações na fila, com os cartões "A
+         * responder" clicáveis — e `responder` recusando na hora, porque exige
+         * ABERTO. Fila que não esvazia quando o trabalho acaba deixa de ser
+         * fila.
+         *
+         * ⚠️ É `ABERTO`, e não `not: ENCERRADO`, porque o buraco é simétrico:
+         * designar é permitido em RASCUNHO (`assertCicloOperavel` só barra
+         * ENCERRADO), então um ciclo ainda não aberto encheria a fila de quem
+         * também não pode responder. A condição que fecha os dois é a mesma que
+         * `responder` já usa — e é a única que não precisa ser revista quando
+         * alguém acrescentar um status ao enum.
+         *
+         * ⚠️ Isto governa também o TOTAL da barra: `ProgressoGeral` recebe
+         * `total={itens.length}`, somando todos os ciclos da resposta. Sem o
+         * filtro, a barra da Arielly somava SIMULACAO com Piloto e anunciava
+         * "13 de 26 enviadas" — dois ciclos, um número, nenhum deles verdadeiro.
+         */
+        ciclo: { status: 'ABERTO' },
         ...(cicloId ? { cicloId } : {}),
       },
       orderBy: { criadoEm: 'asc' },
