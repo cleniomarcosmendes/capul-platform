@@ -3373,8 +3373,23 @@ avaliação continua existindo (voltou a `PENDENTE`).
 | `SIMULACAO 09/09` | **ENCERRADO** pela API | nada — 0 pendentes. `reabertoEm` e as 39 canceladas **preservadas**: o estado de borda continua na base, agora como *encerrado, reaberto 1×* |
 | `Avaliação Geral 2026` | **ENCERRADO com pendência** pela API | 5 `PENDENTE` → `CANCELADA`, com motivo escrito. ⚠️ Reabrir devolve o ciclo, **não as 5** |
 | `Piloto 15/09/2026` | segue **ABERTO** — o único | — |
+| `ZZ DESCARTAVEL — teste de tela (pode apagar)` | **criado** em `RASCUNHO`, para substituir o ZZ CONFERE | 1 aplicação (Administrativo v1, peso 60 + os 3 critérios ativos a 10) · público de **3** (01/11010210 AUDITORIA INTERNA) · 5 conceitos |
 
 ⚠️ **Encerrar não bastava, e é por isso que o filtro veio junto** — ver §3.1.57.
+
+⭐ **Por que o descartável nasce em `RASCUNHO`, e deve voltar para lá:** com o filtro de
+§3.1.57, ciclo em RASCUNHO **não entra na fila de ninguém** — dá para montar aplicação, público
+e designação à vontade sem que um avaliador real veja. Ele só aparece para alguém quando for
+**aberto de propósito**, e o público de 3 limita o estrago a três pessoas. Encerrá-lo depois do
+teste o tira da fila; apagá-lo são os 11 DELETEs na ordem das FKs (não existe rota `DELETE` de
+ciclo).
+
+⚠️ **Uma última varredura, 10/09 20:1x — houve escrita DEPOIS da limpeza.** A conferência não
+deu zero na primeira execução: `ARTHUR MENDES DA SILVA` apareceu ENVIADA, 11 respostas, nota
+51,66, pela conta `adrianacaetano` às 20:09:32 — teste de tela do Clenio, feito enquanto a
+limpeza rodava. Limpo na mesma disciplina (11 respostas · 1 UPDATE · 1 auditoria `ENVIAR`, por
+id). ⭐ **É o argumento a favor do ciclo descartável:** testar tela no ciclo do piloto reabre o
+problema que se acabou de fechar, e só a conferência pega.
 
 
 ### 3.1.57. 🔴 A FILA NUNCA ESVAZIAVA — ciclo encerrado seguia na mão de todo mundo (10/09)
