@@ -1189,6 +1189,11 @@ isso lá o `"(s)"` saiu de vez, enquanto aqui a saída é a voz ativa.
 
 ### 3.1.8. ✅ Apurar com 3 de 894 — a confirmação, a base e a data (07/09)
 
+> 🧾 **As três apurações foram apagadas em 10/09** (dado de teste sobre gente real, antes do
+> piloto). A memória de cálculo completa das três, com a conta refeita por fora do motor, está
+> preservada em **§3.1.56** — a prova de que a apuração roda ponta a ponta não depende mais
+> das linhas.
+
 Achado do roteiro do Chrome: **"Encerrar" tinha guarda e "Apurar" não tinha nada**. Um clique
 verde apurava 3 avaliações de 894, sem dizer, e a tela de Resultados exibia
 *"3 resultado(s) · média 62,59"* — um número com cara de oficial.
@@ -3202,6 +3207,224 @@ dizer "devolve **esses três**" e, havendo canceladas, o que reabrir **não** fa
   *"980 pessoas fora de TODAS as aplicações"*. Mesma palavra, universos distintos — é a família do
   **1036 × 989** (§3.12) e da **regra 15**: dois números verdadeiros na mesma tela precisam do
   termo que os concilia.
+
+### 3.1.56. 🧾 EVIDÊNCIA DOCUMENTAL — as três apurações do Piloto, antes de saírem da base (10/09)
+
+**Por que esta seção existe.** As três avaliações apuradas do Piloto (§3.1.8, *"Apurar com 3 de
+894"*) eram a única prova de que a apuração roda **ponta a ponta**: questionário respondido →
+nota do questionário → critérios cadastrais → ponderação → nota final → conceito. Em 10/09 elas
+foram apagadas, porque avaliação respondida sobre **gente real** não pode estar de pé quando 53
+avaliadores entrarem no dia 15 — o Wanderson encontraria quatro pessoas já respondidas por ele,
+e a aba Resultados abriria o piloto com uma média sobre ninguém.
+
+⭐ **Apagar o dado não pode apagar a prova.** A memória de cálculo completa fica aqui, com a
+conta refeita **por fora do motor** (SQL independente, sobre as mesmas linhas). É o que responde,
+daqui a meses, *"a apuração já foi verificada de verdade alguma vez?"* — sem precisar do dado.
+
+#### O questionário, pergunta a pergunta
+
+Fórmula: `nota = Σ(peso × valor/valor_máximo) ÷ Σ(peso) × 100`. Todas as alternativas valem
+0,3 · 0,6 · 0,9 · 1,2 (máximo 1,2), como o RD8010.
+
+**ANEUSO PINTO BRANDAO** — 14 perguntas
+
+| Grupo | Pergunta | Alternativa marcada | Valor | Peso | Pontos |
+|---|---|---|---:|---:|---:|
+| Assiduidade e Pontualidade | Assiduidade | Falta muito ao trabalho, com ou sem justificat… | 0.3 | 4.5 | 1.1250 |
+| Assiduidade e Pontualidade | Pontualidade | Atrasa com frequência com e sem justificativa | 0.3 | 4.5 | 1.1250 |
+| Relacionamento e Conduta | Trabalho em Equipe | Auxilia os colegas e tem facilidade para traba… | 1.2 | 3.34 | 3.3400 |
+| Relacionamento e Conduta | Respeito e Cordialidade | Não tem humildade, não respeita o outro | 0.3 | 3.33 | 0.8325 |
+| Relacionamento e Conduta | Conduta e Normas Internas | Não segue as normas e regras internas, tem con… | 0.3 | 3.33 | 0.8325 |
+| Iniciativa e Adaptabilidade | Iniciativa e Proatividade | Não realiza atividades extras e quando solicit… | 0.3 | 3 | 0.7500 |
+| Iniciativa e Adaptabilidade | Flexibilidade e Colaboração | Não havendo outra opção atua de forma momentân… | 0.6 | 3 | 1.5000 |
+| Iniciativa e Adaptabilidade | Adaptabilidade a Mudanças | Denota dificuldade para se adaptar a mudanças … | 0.3 | 3 | 0.7500 |
+| Qualidade e Organização | Organização e Conclusão de Tarefas | Deixa atividades sem finalizar, não se organiz… | 0.3 | 3 | 0.7500 |
+| Qualidade e Organização | Energia e Motivação | Revela interesse em realizar o que lhe e solic… | 0.6 | 3 | 1.5000 |
+| Qualidade e Organização | Zelo pelos Equipamentos | Apresenta cuidado e preocupação com os equipam… | 0.9 | 3 | 2.2500 |
+| Atendimento ao Cliente | Atendimento ao Cliente | Total disponibilidade e atenção ao cliente, at… | 1.2 | 13 | 13.0000 |
+| Metas e Trabalho sob Pressão | Metas e Trabalho sob Pressão | Lida bem com pressão, certa dificuldade em alc… | 0.9 | 5 | 3.7500 |
+| Apresentação Pessoal | Apresentação Pessoal | As vezes se apresenta no trabalho com aparênci… | 0.9 | 5 | 3.7500 |
+| | | **soma** | | **60** | **35.2550** |
+
+`35.2550 ÷ 60 × 100 = `**`58.76`**
+
+
+**ARIELLY APARECIDA JOSE PEREIRA** — 11 perguntas
+
+| Grupo | Pergunta | Alternativa marcada | Valor | Peso | Pontos |
+|---|---|---|---:|---:|---:|
+| Assiduidade e Pontualidade | Assiduidade | Falta ao trabalho com motivos justificados | 0.6 | 6 | 3.0000 |
+| Assiduidade e Pontualidade | Pontualidade | Raramente atrasa ao trabalho | 0.9 | 6 | 4.5000 |
+| Relacionamento e Conduta | Trabalho em Equipe | Prefere trabalhar sozinho, mas se solicita aux… | 0.6 | 5.34 | 2.6700 |
+| Relacionamento e Conduta | Respeito e Cordialidade | Entrosou-se bem com os demais, mas precisa ter… | 0.9 | 5.33 | 3.9975 |
+| Relacionamento e Conduta | Conduta e Normas Internas | Conhece e respeita as regras e normas da empre… | 1.2 | 5.33 | 5.3300 |
+| Iniciativa e Adaptabilidade | Iniciativa e Proatividade | Realiza apenas os trabalhos destinados ao seu … | 0.6 | 5.34 | 2.6700 |
+| Iniciativa e Adaptabilidade | Flexibilidade e Colaboração | Caso seja solicitado se dispõe a auxiliar por … | 0.9 | 5.33 | 3.9975 |
+| Iniciativa e Adaptabilidade | Adaptabilidade a Mudanças | Apresenta muita facilidade com o novo, gosta d… | 1.2 | 5.33 | 5.3300 |
+| Qualidade e Organização | Organização e Conclusão de Tarefas | Dificuldade em executar com qualidade e finali… | 0.6 | 5.34 | 2.6700 |
+| Qualidade e Organização | Energia e Motivação | Apresenta interesse e disponibilidade para o t… | 0.9 | 5.33 | 3.9975 |
+| Qualidade e Organização | Zelo pelos Equipamentos | Sempre zela dos equipamentos, mantém limpos e … | 1.2 | 5.33 | 5.3300 |
+| | | **soma** | | **60** | **43.4925** |
+
+`43.4925 ÷ 60 × 100 = `**`72.49`**
+
+
+**ARTHUR GARCIA CAMPOS MOTA** — 11 perguntas
+
+| Grupo | Pergunta | Alternativa marcada | Valor | Peso | Pontos |
+|---|---|---|---:|---:|---:|
+| Assiduidade e Pontualidade | Assiduidade | Falta muito ao trabalho, com ou sem justificat… | 0.3 | 6 | 1.5000 |
+| Assiduidade e Pontualidade | Pontualidade | Atrasa as vezes com motivo justificado | 0.6 | 6 | 3.0000 |
+| Relacionamento e Conduta | Trabalho em Equipe | Entrosa-se bem com os demais, mas não tem muit… | 0.9 | 5.34 | 4.0050 |
+| Relacionamento e Conduta | Respeito e Cordialidade | E educado e conseguiu boa aceitação da equipe … | 1.2 | 5.33 | 5.3300 |
+| Relacionamento e Conduta | Conduta e Normas Internas | Não segue as normas e regras internas, tem con… | 0.3 | 5.33 | 1.3325 |
+| Iniciativa e Adaptabilidade | Iniciativa e Proatividade | Realiza apenas os trabalhos destinados ao seu … | 0.6 | 5.34 | 2.6700 |
+| Iniciativa e Adaptabilidade | Flexibilidade e Colaboração | Caso seja solicitado se dispõe a auxiliar por … | 0.9 | 5.33 | 3.9975 |
+| Iniciativa e Adaptabilidade | Adaptabilidade a Mudanças | Apresenta muita facilidade com o novo, gosta d… | 1.2 | 5.33 | 5.3300 |
+| Qualidade e Organização | Organização e Conclusão de Tarefas | Deixa atividades sem finalizar, não se organiz… | 0.3 | 5.34 | 1.3350 |
+| Qualidade e Organização | Energia e Motivação | Revela interesse em realizar o que lhe e solic… | 0.6 | 5.33 | 2.6650 |
+| Qualidade e Organização | Zelo pelos Equipamentos | Apresenta cuidado e preocupação com os equipam… | 0.9 | 5.33 | 3.9975 |
+| | | **soma** | | **60** | **35.1625** |
+
+`35.1625 ÷ 60 × 100 = `**`58.60`**
+
+
+#### Os critérios cadastrais
+
+| Avaliado | Critério | Valor bruto | Pontuação | Peso |
+|---|---|---|---:|---:|
+| ANEUSO PINTO BRANDAO | Escolaridade | código 35 | 25,00 | 10 |
+| ANEUSO PINTO BRANDAO | Tempo de Empresa | 10,0972 anos | 100,00 | 10 |
+| ANEUSO PINTO BRANDAO | Tempo na Função | 0,5503 anos | 25,00 | 10 |
+| ARIELLY APARECIDA JOSE PEREIRA | Escolaridade | código 85 | 100,00 | 10 |
+| ARIELLY APARECIDA JOSE PEREIRA | Tempo de Empresa | 17,6728 anos | 100,00 | 10 |
+| ARIELLY APARECIDA JOSE PEREIRA | Tempo na Função | 0,5503 anos | 25,00 | 10 |
+| ARTHUR GARCIA CAMPOS MOTA | *(nenhum — aplicação "Aprendizes", peso 100 no questionário)* | — | — | — |
+
+#### A nota final, e a conta refeita
+
+`nota_final = (nota_avaliação × peso_avaliação + Σ(pontuação × peso)) ÷ (peso_avaliação + Σ(peso))`
+
+| Avaliado | Nota quest. | Peso quest. | Nota critérios | Σ peso crit. | Conta | Nota final | Conceito | Gravado |
+|---|---:|---:|---:|---:|---|---:|---|---|
+| ANEUSO PINTO BRANDAO | 58,76 | 60 | 50,00 | 30 | `(58,76×60 + 50,00×30) ÷ 90` | **55,84** | Atende | ✅ CONFERE |
+| ARIELLY APARECIDA JOSE PEREIRA | 72,49 | 60 | 75,00 | 30 | `(72,49×60 + 75,00×30) ÷ 90` | **73,33** | Atende | ✅ CONFERE |
+| ARTHUR GARCIA CAMPOS MOTA | 58,60 | 100 | — | 0 | `(58,60×100) ÷ 100` | **58,60** | Atende | ✅ CONFERE |
+
+⭐ **Os três verificados nos DOIS níveis** — a nota do questionário e a nota final —, por SQL
+escrito à parte, não pelo motor que produziu os números. `houve_renormalizacao = false` nos três:
+nenhum critério ficou sem dado, então a conta é a direta.
+
+⚠️ **O ARTHUR é o caso de borda que vale guardar:** aplicação *Aprendizes*, `pesoAvaliacao = 100`
+e **zero critérios**. É o caso que a regra *"`pesoAvaliacao > 0` é obrigatório"* torna trivial —
+componente único normaliza para 1 e a nota final é a do questionário, sem caso especial na
+fórmula. Ele estava na base e provava isso; agora prova daqui.
+
+
+#### O registro da limpeza — 10/09/2026
+
+Transação única, **só listas de ids explícitas** (nenhum recorte por data: `DELETE ... WHERE
+criado_em >= hoje` apagaria o que ninguém conferiu). Contagens conferidas antes e batidas depois:
+
+| Passo | Tabela | Linhas |
+|---|---|---:|
+| 1 | `rh.resultado_criterio` (das 3 apuradas) | 6 |
+| 2 | `rh.resultado_avaliacao` | 3 |
+| 3 | `rh.resposta` (das 11 avaliações) | 60 |
+| 4 | `rh.avaliacao` → `PENDENTE` | 11 |
+| 5 | `rh.ciclo_elegibilidade` (o EXCLUIR do RYAN) | 1 |
+| 6 | `rh.auditoria` (17 ids, um a um) | 17 |
+
+**As 11 avaliações** (ciclo `05842983-db39-44af-bfbb-a299ef21ebf4`):
+
+| Avaliado | id | Origem |
+|---|---|---|
+| ADRIANA DOS SANTOS BARBOSA | `c97a8741…` | 08/09 |
+| ANA CLAUDIA GOMES RODRIGUES | `3949b8ed…` | 06/09 |
+| ANEUSO PINTO BRANDAO | `eb566766…` | 06/09 · apurada |
+| ANGELO DA SILVA BRITO | `6936b189…` | 06/09 |
+| ANTONIO FABIO SOUSA AVELAR | `84f585bd…` | 10/09 · enviada e reaberta |
+| ARIELLY APARECIDA JOSE PEREIRA | `d2a25e36…` | 06/09 · apurada |
+| ARTHUR GARCIA CAMPOS MOTA | `38fdc351…` | 06/09 · apurada |
+| MATHEUS SOARES ARAUJO | `7806a3e3…` | 10/09 |
+| RYAN ITALO MOREIRA NUNES | `b8c95c89…` | 10/09 · cancelada |
+| TAMIRES BARBOZA DA COSTA | `f9dd8e5b…` | 10/09 |
+| VERONICA MENDES PEREIRA | `30a43e94…` | 10/09 |
+
+⭐ **`atualizado_em` restaurado ao carimbo do último `DESIGNAR`** de cada linha (06/09 13:22,
+13:32, 15:52 ou 16:11, conforme a linha) — o valor de antes não era recuperável, porque
+`@updatedAt` já o havia sobrescrito. Deixá-lo em 10/09 marcaria as 11 para sempre **exatamente
+na conferência que este mesmo dia criou**. SQL cru não dispara o `@updatedAt`, então dá para
+escrevê-lo.
+
+⚠️ **`DESIGNAR` ficou** (1.472 linhas na base): é como as avaliações nasceram, e é de onde veio
+o carimbo acima. Saíram os 17 de **envio, apuração, cancelamento, reabertura e as leituras que
+passariam a apontar para resultados inexistentes**. ⚠️ **Ficaram também os 4 `ACESSO_*` de
+06/09** sobre a avaliação da Arielly — são registro de um acesso que de fato aconteceu, e a
+avaliação continua existindo (voltou a `PENDENTE`).
+
+**Depois:** Piloto com **894 avaliações, 894 `PENDENTE`, 0 resultados, 0 elegibilidades**.
+
+#### Os ciclos, no mesmo dia
+
+| Ciclo | O que foi feito | Arrastou |
+|---|---|---|
+| `ZZ CONFERE 09/09` | **apagado** (11 DELETEs na ordem das FKs) | 2 avaliações · 9 público · 1 aplicação · 5 conceitos · 1 ciclo. `rh.auditoria` **preservada** (não tem FK), como em §3.1.13 |
+| `SIMULACAO 09/09` | **ENCERRADO** pela API | nada — 0 pendentes. `reabertoEm` e as 39 canceladas **preservadas**: o estado de borda continua na base, agora como *encerrado, reaberto 1×* |
+| `Avaliação Geral 2026` | **ENCERRADO com pendência** pela API | 5 `PENDENTE` → `CANCELADA`, com motivo escrito. ⚠️ Reabrir devolve o ciclo, **não as 5** |
+| `Piloto 15/09/2026` | segue **ABERTO** — o único | — |
+
+⚠️ **Encerrar não bastava, e é por isso que o filtro veio junto** — ver §3.1.57.
+
+
+### 3.1.57. 🔴 A FILA NUNCA ESVAZIAVA — ciclo encerrado seguia na mão de todo mundo (10/09)
+
+Achado ao responder *"o que cada ciclo de teste exige para sair do caminho?"*. A resposta que eu
+ia dar — *"encerrar tira da fila"* — **estava errada**, e o erro não era da tela.
+
+`minhasAvaliacoes` (`avaliacao.service.ts`) filtrava por `avaliadorId` e por `not: CANCELADA`, e
+**por nada mais**. Nenhuma condição sobre o ciclo. O `MinhasAvaliacoesPage` recebe
+`ciclo.status` no contrato (`api.ts`) e **nunca o lê** — as 10 leituras de `ciclo.status` no
+frontend estão todas nas telas do RH.
+
+⚠️ **O sintoma que já existia:** a barra da Arielly somava dois ciclos abertos e anunciava
+*"13 de 26 enviadas"* — `ProgressoGeral` recebe `total={itens.length}`, que é a resposta
+inteira. Nenhum dos dois ciclos tinha 26.
+
+⭐⭐ **O sintoma que ainda não tinha acontecido é o que decide.** Encerrado o Piloto, as 53
+pessoas continuariam vendo as **894 avaliações** na fila, com os cartões "A responder"
+clicáveis — e `responder` recusando na hora, porque exige ABERTO. **Isso apareceria no primeiro
+encerramento real**, com 53 pessoas de verdade olhando. Não é conserto de tela: é regra
+permanente, e o ciclo de teste só foi o que a fez aparecer três dias antes.
+
+**O conserto** é uma condição: `ciclo: { status: 'ABERTO' }`.
+
+⚠️ **É `ABERTO`, não `not: ENCERRADO`** — o buraco é simétrico. Designar é permitido em
+`RASCUNHO` (`assertCicloOperavel` só barra ENCERRADO), então um ciclo ainda não aberto encheria
+a fila de quem também não pode responder. A mesma condição fecha os dois lados, é a que
+`responder` já exige, e é a única que não precisa ser revista quando alguém acrescentar um
+status ao enum — o oposto da allowlist, que deixaria o status novo de fora em silêncio.
+
+**A barra fecha sozinha**, sem tocar no frontend: `itens` passa a ter só ciclo aberto. E o caso
+de zero já era curto-circuitado — `if (itens.length === 0) return <Vazio />` vem **antes** do
+`ProgressoGeral`, então não existe "Tudo enviado · 0%" sobre lista vazia.
+
+**Medido na API depois do conserto:**
+
+| Avaliador | Antes | Depois |
+|---|---|---|
+| `ariellypereira` | 26 linhas, 2 ciclos → *"13 de 26"* | **13**, só o Piloto → *"0 de 13"* |
+| `wandersonnascimento` | 22 linhas, 2 ciclos | **14**, só o Piloto → *"0 de 14"* |
+
+**Teste:** `fila-so-ciclo-aberto.spec.ts`, 5 casos, **validado por mutação nos dois sentidos** —
+sem o filtro, 4 de 5 falham; trocando por `not: ENCERRADO`, os mesmos 4 falham (é o teste do
+RASCUNHO que pega essa). O 5º é o de `CANCELADA`, que existe justamente para provar que o filtro
+novo não comeu o antigo. **614 testes** (eram 609).
+
+⭐ **A lição, que é a §5.9 de novo:** o defeito não estava num caminho difícil — estava no
+**caminho que ninguém tinha percorrido até o fim**. Nenhum ciclo com avaliação designada tinha
+sido encerrado e reaberto para conferir a fila DEPOIS. Foi preciso querer encerrar um ciclo de
+teste para descobrir o que aconteceria no encerramento do de verdade.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
