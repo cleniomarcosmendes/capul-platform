@@ -4861,3 +4861,268 @@ Três coisas garantem que ninguém confunda uma com a outra:
    `MODELO_AVALIADOR_POR_CENTRO_CUSTO.csv` é o dela, por centro de custo;
    `PREENCHER_AVALIADORES_82_PARES.csv` é o da T.I., por par filial × CC. São arquivos
    diferentes, com públicos diferentes.
+
+---
+
+### 3.1.62. ⭐⭐ ACERVO DE QUESTÕES — o levantamento, as duas correções e o desenho escolhido (11/09)
+
+Levantamento pedido pelo Clenio antes de escolher entre manter os modelos separados e virar um
+**acervo** de questões. O levantamento corrigiu duas afirmações que vinham sendo repetidas —
+uma minha, na contagem, e uma do desenho proposto. Ficam registradas aqui porque **as duas
+mudam o tamanho do trabalho**, e porque a segunda veio do DADO, não de opinião.
+
+#### ⚠️ CORREÇÃO 1 — são 39 perguntas e 3 modelos, não 44 e 4
+
+Repetido em conversa e em prompt até 11/09. A contagem certa, medida em `rh` do DEV:
+
+| Afirmação corrente | Real | Por quê |
+|---|---|---|
+| 44 perguntas | **39** em produção | as outras 5 são do `[DEMO] Modelo de Treinamento`, `finalidade = DEMONSTRACAO` |
+| 4 modelos | **3** em produção + 1 DEMO | são **4 APLICAÇÕES**: `Aprendizes` reusa a `ModeloVersao` do `Administrativo`, com `pesoAvaliacao = 100` e 0 critérios |
+| 20 grupos | **18** em produção + 2 do DEMO | idem |
+| "os 3 resultados que já apurei" | **17** no banco | 4 em `Avaliação Geral 2026` + 13 em `SIMULACAO 09/09`, ambos ENCERRADO. **O Piloto tem 0** — as três apurações de §3.1.56 foram apagadas em 10/09 |
+
+⭐ **De onde vinha o erro:** `select count(*) from rh.pergunta` dá 44, e o DEMO não se anuncia.
+Toda contagem do instrumento tem de filtrar `finalidade = 'PRODUCAO'` — o DEMO existe
+exatamente para não valer, e passa despercebido porque tem grupos e perguntas de verdade
+(reusa os códigos `004`, `005`, `006`, `007`, `011`).
+
+#### ⚠️⚠️ CORREÇÃO 2 — o peso é do GRUPO, não da questão; o 5,33/5,34 é ARREDONDAMENTO
+
+O desenho proposto era *peso na questão, dentro do perfil* (o par aplicação × pergunta). **O dado
+diz outra coisa**, e a evidência é aritmética, não interpretativa:
+
+```
+Qualidade e Organização · Administrativo    → 5,34 + 5,33 + 5,33 = 16
+Qualidade e Organização · Operação de Loja  → 3,00 + 3,00 + 3,00 =  9
+Relacionamento e Conduta · Op. de Loja      → 3,34 + 3,33 + 3,33 = 10
+```
+
+**Dentro de cada grupo, em cada modelo, todas as questões têm o MESMO peso.** As 18 somas de
+grupo são inteiras (3, 5, 9, 10, 12, 13, 16) e o total de cada modelo é **exatamente 60** — o
+mesmo 60 do `aplicacao.peso_avaliacao`.
+
+⭐ **O `5,33 / 5,34` não é intenção — é o resto da divisão.** 16 ÷ 3 = 5,333…; alguém deu um
+centavo a mais à primeira questão para a soma fechar em 16. Tratar esse centavo como decisão
+pedagógica é ler ruído como sinal. O peso por questão gravado em `rh.pergunta.peso` é uma
+**reescrita com perda** de *"60 pontos repartidos entre grupos, e cada grupo repartido
+igualmente entre suas questões"*.
+
+⚠️ **A regra de método que isto instancia:** número com aparência de precisão (duas casas,
+valores próximos mas diferentes) merece a pergunta *"isto é escolha ou é resto de conta?"*
+antes de virar requisito. A resposta estava a um `sum() group by` de distância, e teria mudado
+o desenho se ninguém perguntasse.
+
+#### O acervo tem 15 questões, não 40–50
+
+| | |
+|---|---:|
+| Linhas de `pergunta` em produção | 39 |
+| Enunciados distintos | **15** |
+| Duplicatas | **24 (62%)** |
+
+Dos 15: **11 aparecem nos 3 modelos**, 2 em dois, 2 são exclusivos (`Atendimento ao Cliente` na
+Operação de Loja, `Conhecimento Técnico do Maquinário` na Produção). O DEMO **não acrescenta
+nenhum** — reusa 5 dos mesmos códigos.
+
+Três fatos que tornam a unificação barata e sem perda de informação:
+
+1. **As alternativas são idênticas.** Para cada um dos 15, o conjunto de 4 alternativas
+   (texto + valor) é o mesmo em todo modelo onde aparece — `count(distinct assinatura) = 1`
+   nos 15. Não há "qual versão fica" a decidir.
+2. **O `codigo_origem` do SQP010 já é a chave do acervo** (`004`–`018`), estável entre modelos.
+   O Protheus já tratava isto como acervo; **foi a importação que duplicou**.
+3. **A classificação já é atributo da questão.** `count(distinct grupo) = 1` para os 15: nenhuma
+   questão muda de tema conforme o perfil. A migration não tem **um** caso ambíguo em 39 linhas.
+
+#### ✅ DESENHO ESCOLHIDO (Clenio, 11/09)
+
+| Decisão | O que fica |
+|---|---|
+| **Acervo unificado** | 15 questões, chaveadas pelo `codigo_origem` do SQP010 |
+| **Peso no GRUPO** — opção (ii) | dividido igualmente entre as questões daquele grupo **naquele perfil**. Peso por questão é **derivado**; **não** criar `aplicacao_pergunta.peso` |
+| **UMA classificação por questão** | tags de busca ficam para depois, se fizerem falta, e **não tocam no motor** |
+| **Versionamento** | `ModeloVersao` continua sendo o nome do **arranjo**; questão do acervo é **imutável enquanto referenciada por arranjo publicado**; editar cria questão nova |
+| ⛔ **(iii) peso em dois níveis** | **DESCARTADO** — não se reabre a decisão do schema (*"peso em dois níveis torna impossível prever o efeito de mudar um número na montagem"*) |
+
+**Por que (ii) e não (i):** não é só mais barato (8 números por perfil em vez de 15, e a conta
+não muda quando se acrescenta questão) — é **o que o instrumento já é**. (i) preservaria um grau
+de liberdade que ninguém usou em 39 linhas.
+
+⚠️ **O caso que (ii) não cobre:** questão que deva pesar mais que as irmãs do mesmo grupo. Hoje
+não existe nenhuma. A saída barata é dar classificação própria a ela; a cara é (iii), e (iii)
+está descartado.
+
+#### ⚠️ COMPARABILIDADE ENTRE PERFIS — hoje ela é acidente, e o acervo a entrega ao RH
+
+A nota por grupo sobrevive sem esforço: é **calculada na leitura, nunca materializada**
+(ADR-RH-02) — `notaPorGrupo` troca a chave de agrupamento de `grupoId` para `classificacaoId`,
+**uma linha**.
+
+O que quase passou batido: **hoje os 3 perfis têm a MESMA contagem de questões por grupo**
+(2/2/2, 3/3/3, 3/3/3, 3/3/3). Só o peso difere. Por isso *"Relacionamento: 78"* é hoje
+comparável entre um administrativo e um operador — mesmas 3 perguntas, mesmas âncoras.
+
+No acervo livre, um perfil pode ter 2 questões de Pontualidade e outro 5. A nota do grupo
+continua sendo um percentual válido — mas **comparável como percentual, não como medida**. E
+nada avisaria: os dois números sairiam bonitos lado a lado no relatório.
+
+⭐ **Decisão: informar, não bloquear.** Quando a montagem do arranjo for construída, a tela
+**diz quantas questões cada outro perfil tem naquela classificação**. A garantia que hoje é
+coincidência de construção passa a ser escolha consciente de quem monta.
+
+#### Ordem de execução decidida
+
+| # | Item | Custo | Por quê nesta ordem |
+|---|---|---|---|
+| **1** | **Migration de unificação** | 3–4 dias | **única peça com prazo natural** — ver abaixo |
+| 2 | Cadastro de critérios e faixas | 1–1,5 sem | destrava o `INFORMADO` (compor nota com planilha, sem T.I.); aproveita `assertCriterioSalvavel`, que já está escrito |
+| 3 | Editor do acervo | resto das 3–3,5 sem | — |
+
+⭐⭐ **Por que a migration vem primeiro, e é a única coisa com relógio:** o Piloto tem **894
+avaliações `PENDENTE` e ZERO respostas**. Uma migration que reescreve `pergunta` hoje não toca
+nenhuma delas. **Depois da primeira resposta**, a mesma migration precisa reapontar
+`resposta.pergunta_id` e `resposta.alternativa_id` e conviver com resultados apurados: sobem
+3–5 dias e muda de categoria de risco.
+
+⚠️ **Ressalva medida depois do levantamento:** já existem **214 respostas** em ciclos de
+teste/simulação (158 no Administrativo, 56 na Operação de Loja) — a migration **tem** de
+remapeá-las. A chave `(pergunta.codigo_origem, alternativa.ordem)` foi verificada e identifica
+a alternativa sem ambiguidade nas 176 linhas, DEMO incluído.
+
+#### Conferência obrigatória da migration — se qualquer número mudar, está errada
+
+1. Os 3 perfis produzem **exatamente os mesmos pesos efetivos por questão** de hoje.
+2. `pontuacao_maxima` de cada perfil continua **72,0000**.
+3. A soma de pesos de cada perfil continua **60,0000**.
+4. **Regressão do ciclo `000006` do Protheus: 108/108.** Baseline registrado antes da migration,
+   pelo FONTE atual (não pelo `dist/`, que estava de 06/09).
+
+⚠️ **`tsconfig.spec.json` não vai na imagem** do `gestao-pessoas-backend` — `npm test` dentro do
+container falha com *"File not found: tsconfig.spec.json"* em **52 suítes com 0 testes**. Isso é
+**harness quebrado, não suíte vermelha**: 0 testes executados nunca é resultado. Copiar o arquivo
+(`docker cp`) antes de rodar, ou corrigir o Dockerfile.
+
+#### 🔴 TREINAMENTO — pendência de PROCESSO do RH, não de sistema
+
+O sistema está **inteiro**: resolver `qtdeTreinamento` escrito e registrado, critério no catálogo,
+**5 faixas cadastradas** (0 / 1–2 / 3–5 / 6–8 / +8 → 0, 25, 50, 75, 100). Está `ativo = false` e
+com **0 usos** por decisão, não por falta de código — ligar é um `UPDATE` e uma linha em
+`aplicacao_criterio`.
+
+**O que falta é o RH responder por que o registro parou:**
+
+```
+2022 →     5        2024 → 1.011 (604 pessoas)
+2023 → 1.188        2025 →    64 (34 pessoas)   último registro: 14/11/2025
+```
+
+Na janela de 12 meses da `dataBase` do Piloto, **6 pessoas de 1.036 pontuariam**. Com peso 10
+contra 60, ligar assim empurraria a nota de 1.030 pessoas para baixo por uma lacuna
+administrativa — e o critério **não distingue "não fez curso" de "ninguém registrou o curso"**.
+
+#### ⚠️ ARMADILHA — `RA4_HORAS` existe, não é nulo, e é FALSO
+
+`carga_horaria` está preenchida nas **2.268 linhas** de `rh.colaborador_treinamento` — e
+`sum(carga_horaria) = 0`. Todos zeros.
+
+⭐ **É o pior formato de dado ruim:** não é nulo, então `semDado` nunca dispara e a
+renormalização não protege; não é ausente, então nenhuma validação reclama. Um critério de
+"carga horária total" passaria em qualquer teste com dado sintético e sairia **zero para todo
+mundo em produção, calado** — exatamente o modo de falha que a validação de resolver existe para
+evitar, só que vindo do dado em vez do código.
+
+**Nunca criar critério sobre `RA4_HORAS` sem antes conferir `sum()` na base real.** Os campos
+utilizáveis do `RA4010` são: `descricao` (37 distintas), `RA4_DATAIN` e `RA4_DATAFI` (2.268/2.268
+preenchidos). **Não existe tipo/categoria de curso** no contrato.
+
+---
+
+### 3.1.63. ✅ MIGRATION DO ACERVO — aplicada e conferida (11/09)
+
+`20260911230000_acervo_de_questoes`, aplicada no DEV em 11/09. É o item 1 da ordem decidida em
+§3.1.62 — o único com prazo natural, porque o Piloto ainda tem **894 avaliações `PENDENTE` e zero
+respostas**.
+
+#### O que mudou no banco
+
+| | Antes | Depois |
+|---|---:|---:|
+| Linhas de `pergunta` | 39 (+5 DEMO) | **15** (acervo) |
+| Linhas de grupo | 20 | **8** `classificacao` (global) |
+| `pergunta_alternativa` | 176 | **60** |
+| Peso por questão | coluna `pergunta.peso` | **derivado** de `arranjo_grupo.peso` |
+| Questionário da versão | grafo privado (`grupo` → `pergunta`) | `arranjo_grupo` (20) + `arranjo_pergunta` (44) |
+| Respostas | 214 | **214**, remapeadas |
+
+#### ⭐⭐ A REGRA DE DERIVAÇÃO — descoberta, não inventada
+
+A conferência nº 1 pedida pelo Clenio (*"os 3 perfis têm que produzir exatamente os mesmos pesos
+efetivos"*) **não seria satisfazível** com divisão simples: 12 das 39 questões mudariam (≤ 0,0067)
+e a nota variaria até **0,025** no Administrativo — medido, não estimado.
+
+A regra que preserva tudo saiu de olhar o dado:
+
+```
+peso(questão) = floor(peso_do_grupo ÷ n, 2 casas)
+              + 0,01 para as `resto` primeiras, por ordem
+```
+
+Reproduz **44 de 44** pesos gravados (39 produção + 5 DEMO).
+
+⭐⭐ **E não precisava ter sido descoberta: já estava escrita.** `modelo/distribuirPeso` fazia
+exatamente isto desde 05/09 — para o SEED, que sempre teve os pesos **por grupo** e os repartia na
+gravação. O comentário dele dizia, com todas as letras, *"os números vieram dos pesos que eram por
+grupo e foram redistribuídos entre as perguntas"*.
+
+**A informação nunca esteve na coluna `pergunta.peso`; a coluna é que era a camada com perda.** O
+acervo não introduziu a regra — devolveu o peso para onde o seed já o tinha.
+
+⚠️ Por isso `calculo/peso-derivado.ts` **importa** `distribuirPeso` em vez de reimplementá-lo. A
+primeira versão tinha a cópia, e cópia de regra que decide a nota de todo mundo é o erro que este
+projeto já pagou ([[feedback_regra_duplicada_envelhece_errada]]).
+
+#### As quatro conferências — todas passaram
+
+| # | Conferência | Resultado |
+|---|---|---|
+| 1 | Pesos efetivos por questão, antes × depois | ✅ **44 de 44 idênticos** (`diff` vazio) |
+| 2 | Soma dos pesos por perfil | ✅ **60,0000** nos três |
+| 3 | `pontuacao_maxima` gravada × calculada | ✅ **72,0000 = 72,0000** nos três |
+| 4 | Regressão do ciclo `000006` do Protheus | ✅ **108/108**, idêntica ao baseline |
+| + | As 214 respostas (avaliação, código, valor) | ✅ `diff` vazio; 0 órfãs, 0 incoerentes |
+| + | Suíte | ✅ **655 testes** (640 + 15 novos), 53 suítes |
+
+⭐ **Parte da conferência está DENTRO da migration**, num `DO $$` final que aborta a transação se
+o acervo não tiver 15, se algum perfil não somar 60, se sobrar resposta órfã ou se alguma questão
+do arranjo tiver classificação sem peso. Conferência que depende de alguém lembrar de rodar depois
+não é conferência.
+
+#### 🐛 O bug que a spec pegou — arredondar por questão
+
+`pontuacaoMaximaDoArranjo` arredondava **cada** produto: `5,34 × 1,2 = 6,408` virava 6,41, e três
+questões de um grupo de 16 somavam 19,21 em vez de 19,2. No Administrativo a pontuação máxima saía
+**72,03** — e toda nota do perfil sairia 0,04% menor, sem nada acusar erro.
+
+⭐ Foi pego pelo teste que compara com o instrumento herdado, não por revisão. **Arredondar uma vez
+só, no fim** — a regra vale para qualquer soma ponderada deste módulo.
+
+#### ⚠️ Dois achados silenciosos na adaptação do código
+
+1. **`designacao.service`** contava `prisma.pergunta.count()` para o denominador de *"4 de 11"*.
+   Depois do acervo isso devolveria **15 para todo perfil** — o acervo inteiro, não o questionário.
+   Passou a contar `arranjoPergunta`.
+2. **A tela do instrumento dizia "soma das perguntas"** ao lado do peso do grupo. Virou **"peso do
+   grupo"**, e o peso da questão virou **"peso derivado"** — o rótulo antigo mandaria quem quer
+   mudar o número procurar na pergunta, que é exatamente onde ele não está mais
+   ([[feedback_texto_que_promete_capacidade_e_divida]]).
+
+#### ⚠️ Armadilha de ambiente: `tsconfig.spec.json` não vai na imagem
+
+`npm test` dentro do `capul-gestao-pessoas-api` dá **52 suítes falhando com 0 testes** —
+*"File not found: tsconfig.spec.json"*. E o container tem `mem_limit: 512m`: o jest come a memória
+do app, derruba o healthcheck e às vezes morre com **exit 137**.
+
+⭐ **0 testes executados nunca é resultado** — nem verde nem vermelho. Rodar a suíte num container
+descartável (`docker run --rm --memory=6g`, montando `src`, `prisma`, `tsconfig.spec.json`, e com
+`npx prisma generate` antes) leva **14 segundos** e dá os 655.
