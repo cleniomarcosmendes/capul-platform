@@ -21,9 +21,9 @@ curl -sk https://localhost/api/v1/logistica/health | grep -o '"versao":{[^}]*}'
 
 | O que | Tem de ser |
 |---|---|
-| `commit` do backend | **`5a8271ba-sujo`** |
-| `buildEm` | 2026-09-11T19:17:21Z |
-| Bundle do frontend | **`index-BDQ-DlfN.js`** (ver no DevTools → Network, ou `ls` no container) |
+| `commit` do backend | **`4a0c5a29-sujo`** |
+| `buildEm` | 2026-09-11T21:12:38Z |
+| Bundle do frontend | **`index-Duj3HNxP.js`** (ver no DevTools → Network, ou `ls` no container) |
 
 > O sufixo **`-sujo`** é esperado: vem de arquivos não commitados do módulo
 > **gestão-pessoas**, que não tem nada a ver com a Logística. O código da Logística está
@@ -338,7 +338,7 @@ possível carregar a equipe do RDV desta filial."*
 
 | # | Pergunta | Resposta |
 |---|---|---|
-| 0 | Build confere? (`5a8271ba-sujo` / `index-BDQ-DlfN.js`) | |
+| 0 | Build confere? (`4a0c5a29-sujo` / `index-Duj3HNxP.js`) | |
 | 1.1 | O seletor de filial aparece? Quantas opções? | |
 | 1.2 | A filial 21 (zerada) é alcançável? A tarja âmbar apareceu? | |
 | 1.3 | O subtítulo ainda nomeia "Indústria de Ração"? | |
@@ -369,3 +369,75 @@ docker compose exec -T postgres psql -U capul_user -d capul_platform \
 
 > O backup é de **antes** da onda (08:38) e traz a filial 18 com os 27 planejamentos
 > originais. Restaurar desfaz também a limpeza e a equipe remontada.
+
+---
+
+# ATUALIZAÇÃO — 11/09/2026, fim do dia
+
+## ⚠️ A PARTE 2 já foi executada e a divergência foi REVERTIDA
+
+A Parte 2 rodou e **passou**: o cadastro `009112 — Teste Regua RDV` foi gravado às
+19:51 com o departamento da **AMARRAÇÃO** (*Vendas Internas e Externas*) enquanto os
+veículos da Lidyane apontavam para *Produção e Qualidade*. Defeitos 1 e 2 provados
+corrigidos no único cenário capaz de distingui-los.
+
+A lotação voltou ao normal, então **a Parte 2 não é mais reproduzível como está**. Para
+rearmar:
+
+```sql
+UPDATE logistica.veiculo SET departamento_lotacao_id='5f597542-d39b-4a8a-baa3-6db25cb56835'
+WHERE placa IN ('KELVER','LIDYANE');   -- Produção e Qualidade (FBR)
+-- reverter depois com ffaabe83-c038-4db4-8944-6b19926e8e94
+```
+
+## Resíduos de teste no banco (filial 18)
+
+| O quê | Situação |
+|---|---|
+| `009112 — Teste Regua RDV` | sem movimento → sai pelo botão **Excluir** |
+| `009113 — Teste Controle` | sem movimento → idem |
+| Planejamento **nº 65** (Kelver, RASCUNHO, 202609) | é o que mantém o Excluir do Kelver desabilitado |
+
+Não são pessoas reais. Servem para reconferir a Parte 5 (com e sem movimento); depois
+disso, podem sair.
+
+## PARTE 8 — o que entrou DEPOIS que este roteiro foi escrito
+
+### 8.1 Diálogo de exclusão (era o `confirm` nativo do navegador)
+
+Equipe → lista → **Excluir** num cadastro sem movimento.
+
+| O que | Previsão |
+|---|---|
+| Tipo de diálogo | **modal da aplicação** (ConfirmDialog), não a caixa cinza do navegador |
+| Botão de confirmação | escrito **"Excluir"**, vermelho — não "OK" |
+| Texto | um parágrafo dizendo que a matrícula fica livre, que **não** mexe no Configurador, e apontando o Inativar |
+
+### 8.2 Coluna Departamento não mostra mais id cru
+
+Bloquear `**/supervisor/departamentos-gerenciaveis*` e recarregar a Equipe.
+
+| O que | Previsão | Antes |
+|---|---|---|
+| Coluna Departamento | **"(nome não carregado)"** | `ffaabe83` — pedaço de UUID |
+| Rótulo do seletor de adicionar | **"Adicionar departamento desta filial"** (neutro) | "Adicionar o **primeiro**…", que afirmava não haver nenhum |
+
+### 8.3 Frota e RDV não vazam mais para a tela de Entregas
+
+| Onde | Previsão |
+|---|---|
+| **Rotas de Entrega**, filial 18 | **0 rotas** (antes 10: 9 da frota + 1 do RDV) |
+| **Rotas de Entrega**, filial 01 | **5 rotas**, todas de entrega (antes 27) |
+| **Painel** → "Rotas por veículo", set/2026, filial 18 | **vazio** (antes contava o `KELVER` por causa do planejamento nº 65) |
+
+Conferência no banco:
+
+```sql
+SELECT f.codigo, v.tipo, count(*) FROM logistica.viagem v
+JOIN core.filiais f ON f.id = v.filial_id GROUP BY 1,2 ORDER BY 1,2;
+-- a tela só pode mostrar as linhas tipo='ENTREGA' da filial escolhida
+```
+
+⚠️ **Contra-verificação:** a trava de "uma rota por vez" continua enxergando FROTA de
+propósito. Com um veículo em saída de frota EM_CURSO, despachar uma rota de entrega
+nesse mesmo veículo tem de ser **recusado**. Se passar, a correção foi longe demais.
