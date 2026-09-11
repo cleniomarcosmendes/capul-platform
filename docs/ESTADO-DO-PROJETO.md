@@ -162,6 +162,71 @@ Os 🔴 do dia nasceram espalhados por §3.1.1, §3.1.2, §3.1.4, §5 e §11. Aq
 mesmos itens em dois blocos, sem prosa. **Esta lista é um índice: quem decide o quê fica
 na seção citada.**
 
+### 🌙 FECHAMENTO DE 11/09/2026 — parada de desenvolvimento
+
+⚠️ **DUAS PENDÊNCIAS DE MÁQUINA, não de código:**
+
+1. **2 commits locais NÃO publicados** — `origin/main` está em `0099d1e6`, o local em
+   **`4a0c5a29`**. O push é do Clenio (não há credencial no WSL). Conferido: os 2 commits têm
+   **18 arquivos, todos `gestao-pessoas/` + `docs/`, zero de logística**.
+2. **4 arquivos de logística modificados e sem commit** — `painel.service.ts`,
+   `viagem.service.ts`, `viagem.service.spec.ts`, `SupervisoresPage.tsx`. Sessão de
+   desenvolvimento da **Logística**, interrompida. Pelo diff: o filtro `tipo: ENTREGA` nas cinco
+   consultas de viagem do Painel, para planejamento de RDV e saída de frota pararem de ser
+   contados como rota.
+
+⚠️ **Enquanto as duas coexistirem, nada de `git commit -am` nem `git add -A`** — foi assim que o
+commit de rótulo trocado nasceu neste mesmo dia (ver abaixo).
+
+#### O que o dia entregou
+
+| | |
+|---|---|
+| **Testes** | **640** · 52 suítes (eram 614 em 10/09) |
+| **Migrations** | **13** — a nova é `20260911200000_origem_do_cancelamento`, aplicada com `GUARDA: ok` |
+| **Telas** | **10** (eram 8) |
+| **Piloto no DEV** | 894 avaliações, **894 PENDENTE**, conferência de destino em **zero** |
+
+1. ✅ **Ler o instrumento** (§3.1.58) — as 44 perguntas ganham caminho. `RH_ADMIN` + `RH_MODELO`
+   **+ `RH_CICLO`** (quem monta a Aplicação escolhe o modelo). ⭐ *Ler o instrumento não é ler nota.*
+2. ✅ **URL desconhecida diz que não existe** (§3.1.59) — item **19** da lista (B).
+3. ✅ **Tela do período** (§3.1.60) — a capacidade que só existia por `curl`.
+4. ✅ **Descancelar** (§3.1.61) — as quatro decisões de política respondidas, entregue como
+   **conserto da promessa do Incluir**, não como botão novo.
+5. ✅ **Decisão de versionamento do modelo** — versão nova a cada mudança; versão em uso por ciclo
+   ABERTO é imutável. Baixou o editor de 3–4 para **2–3 semanas**, com a **duplicação dentro do
+   escopo** — sem ela, "versão nova" vira "redigite 14 perguntas".
+6. ✅ **Correção de fato:** a validação do resolver são **DOIS** momentos, não três.
+
+#### ⚠️ O incidente do dia — commit com rótulo trocado, e o meu erro em cima dele
+
+Um `commit -am` do Clenio, feito durante a sessão, varreu 12 arquivos meus em andamento para
+dentro de um commit cuja mensagem dizia *"fix(logistica)"*. Ao refazer, **eu usei `git add -A` e
+varri trabalho de logística que tinha aparecido no disco** — o mesmo erro, na direção contrária.
+
+⭐ **O que pegou:** conferir a **árvore** contra a de antes, e ela divergir. Sem essa conferência,
+eu teria publicado trabalho em curso de outro módulo dentro de um commit de Gestão de Pessoas.
+
+⭐ **A regra que fica, e é a mesma das limpezas de banco:** **caminho explícito, nunca recorte
+automático.** `git add docs/ gestao-pessoas/`, não `-A`. Nada foi publicado, nada foi perdido —
+provado por `git diff backup-antes-da-limpeza HEAD -- docs/ gestao-pessoas/` vazio. A branch
+`backup-antes-da-limpeza` pode ser apagada depois do push.
+
+#### ⏭️ Onde retomar
+
+**O que trava:** a resposta da **Arielly** sobre as 44 perguntas. A tela existe agora
+(`/questionarios`, com impressão) — é o que faltava para ela poder responder.
+
+- **Se "sim"** → aplicação editável → conceitos → editor.
+- **Se "não"** → o editor sobe para a frente: **2–3 semanas**, três atos (duplicar · editar
+  rascunho · publicar).
+
+**Não começar** o editor nem o cadastro de critérios/faixas — decisão do Clenio. Critérios e
+faixas (1 a 1,5 semana) saiu da frente da fila: não bloqueia a fase 1.
+
+**O piloto virou DUAS FASES** — a 1 valida o processo com o instrumento herdado, sem o RH poder
+editá-lo; a 2 valida o RH configurando sozinho. A data volta a ser negociada.
+
 ### 📍 ONDE O DIA PAROU — 11/09/2026
 
 > ⚠️ Esta seção é a DONA das contas vivas. Números novos se atualizam **aqui**.
