@@ -164,19 +164,21 @@ na seção citada.**
 
 ### 🌙 FECHAMENTO DE 11/09/2026 — parada de desenvolvimento
 
-⚠️ **DUAS PENDÊNCIAS DE MÁQUINA, não de código:**
+✅ **PUBLICADO — `origin/main` = `dfb5e3c3`**, árvore limpa, nada pendente.
 
-1. **2 commits locais NÃO publicados** — `origin/main` está em `0099d1e6`, o local em
-   **`4a0c5a29`**. O push é do Clenio (não há credencial no WSL). Conferido: os 2 commits têm
-   **18 arquivos, todos `gestao-pessoas/` + `docs/`, zero de logística**.
-2. **4 arquivos de logística modificados e sem commit** — `painel.service.ts`,
-   `viagem.service.ts`, `viagem.service.spec.ts`, `SupervisoresPage.tsx`. Sessão de
-   desenvolvimento da **Logística**, interrompida. Pelo diff: o filtro `tipo: ENTREGA` nas cinco
-   consultas de viagem do Painel, para planejamento de RDV e saída de frota pararem de ser
-   contados como rota.
+Os **4 commits**, cada um de um módulo só (conferido arquivo a arquivo antes do push):
 
-⚠️ **Enquanto as duas coexistirem, nada de `git commit -am` nem `git add -A`** — foi assim que o
-commit de rótulo trocado nasceu neste mesmo dia (ver abaixo).
+| Commit | Módulo | |
+|---|---|---|
+| `9242939c` | gestao-pessoas | RH_CICLO lê o instrumento + tela do período |
+| `4a0c5a29` | gestao-pessoas | descancelar |
+| `15f636ab` | **logistica** | frota e RDV vazavam na tela e no painel de Entregas — com 2 specs novos |
+| `dfb5e3c3` | docs | este fechamento |
+
+⚠️ **Publicado ≠ implantado.** PROD e HLG seguem em `6855c918`, **sem o módulo**.
+
+⚠️ **A regra que o dia deixou:** nada de `git commit -am` nem `git add -A` com mais de um módulo
+em andamento — foi assim que o commit de rótulo trocado nasceu neste mesmo dia (ver abaixo).
 
 #### O que o dia entregou
 
