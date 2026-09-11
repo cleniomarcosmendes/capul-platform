@@ -487,6 +487,10 @@ interface RespDepto {
   departamentoId: string; departamentoNome: string;
   usuarioId: string | null; responsavelNome: string | null;
   representantes: number;
+  /** Linha criada por "Adicionar" que AINDA NÃO foi para o servidor. Sem esta marca ela
+   *  ficava indistinguível de um departamento realmente gravado sem responsável — e o
+   *  Cancelar a deixava na tabela como fantasma, até alguém recarregar. */
+  pendente?: boolean;
 }
 // Representantes do RDV cadastráveis na equipe:
 // - SUPERVISOR de área  → roteia ao COORDENADOR (campo "Coordenador").
@@ -615,6 +619,12 @@ function EquipeTab() {
   // para escolher pelo NOME — quem monta o time (Supervisor de Departamento) sabe o
   // nome, não a matrícula. Matrícula e departamento vêm do cadastro do usuário.
   const representantes = usuarios.filter(ehRepresentante);
+  // Quem JÁ tem cadastro nesta filial. O `criarSupervisor` recusa matrícula repetida, e
+  // até 11/09 a pessoa só descobria isso DEPOIS de preencher o formulário e clicar.
+  // Comparação por CHAPA normalizada (E+5 dígitos), a mesma régua do backend: '005274',
+  // '5274' e 'E05274' são a mesma pessoa.
+  const chapaCurta = (m?: string | null) => (m ? `E${String(m).replace(/\D/g, '').slice(-5).padStart(5, '0')}` : '');
+  const jaCadastrados = new Set(itens.map((s) => chapaCurta(s.matricula)));
   const supSel = usuarios.find((u) => u.id === usuarioId);
   // Coordenador selecionado → roteia POR DEPARTAMENTO (sem coordenador acima).
   const selEhCoordenador = !!supSel && ehCoordenador(supSel);
@@ -635,7 +645,10 @@ function EquipeTab() {
     setSalvando(true);
     try {
       await logisticaApi.post('/supervisor/supervisores', { matricula: u.matricula.trim(), nome: nomeUser(u), departamentoId: deptId, coordenadorId: coordenadorId || undefined }, qFilial);
-      toast('success', 'Supervisor de área cadastrado.');
+      // O papel vem de quem foi escolhido — o texto fixo chamava o COORDENADOR de
+      // "supervisor de área", contradizendo a própria tela (que já o rotula assim no
+      // seletor e esconde o campo "Coordenador" para ele).
+      toast('success', ehCoordenador(u) ? 'Coordenador cadastrado.' : 'Supervisor de área cadastrado.');
       setShowForm(false); setUsuarioId(''); setDeptId(''); setCoordenadorId('');
       await carregar();
     } catch (e) { toast('error', errMsg(e, 'Falha ao cadastrar.')); } finally { setSalvando(false); }
@@ -745,8 +758,11 @@ function EquipeTab() {
             <thead><tr><th className={th}>Departamento</th><th className={th}>Representantes</th><th className={th}>Responsável</th>{ehAdmin && <th className={th}>Ações</th>}</tr></thead>
             <tbody className="divide-y divide-slate-100">
               {respDepto.map((r) => (
-                <tr key={r.departamentoId}>
-                  <td className="px-4 py-3 text-sm text-slate-700">{r.departamentoNome}</td>
+                <tr key={r.departamentoId} className={r.pendente ? 'bg-amber-50' : undefined}>
+                  <td className="px-4 py-3 text-sm text-slate-700">
+                    {r.departamentoNome}
+                    {r.pendente && <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-xs font-medium text-amber-900">não salvo — escolha o responsável e confirme</span>}
+                  </td>
                   <td className="px-4 py-3 text-sm text-slate-500">{r.representantes}</td>
                   <td className="px-4 py-3 text-sm">
                     {editRespId === r.departamentoId ? (
@@ -768,7 +784,15 @@ function EquipeTab() {
                       {editRespId === r.departamentoId ? (
                         <div className="flex gap-2">
                           <button onClick={() => void salvarResponsavel(r.departamentoId)} className="text-emerald-600 hover:text-emerald-700" title="Salvar"><Check className="h-4 w-4" /></button>
-                          <button onClick={() => { setEditRespId(null); setEditRespUser(''); }} className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
+                          <button
+                            onClick={() => {
+                              // Linha ainda não gravada: cancelar tem de TIRÁ-LA da tabela.
+                              // Antes só saía do modo de edição e ela ficava ali, igualzinha
+                              // a um departamento real sem responsável.
+                              if (r.pendente) setRespDepto((prev) => prev.filter((x) => x.departamentoId !== r.departamentoId));
+                              setEditRespId(null); setEditRespUser('');
+                            }}
+                            className="text-slate-400 hover:text-slate-600" title="Cancelar"><X className="h-4 w-4" /></button>
                         </div>
                       ) : (
                         <div className="flex gap-3">
@@ -798,7 +822,7 @@ function EquipeTab() {
               onClick={() => {
                 if (!addDeptoId) { toast('warning', 'Selecione o departamento.'); return; }
                 const dep = deptosFilial.find((d) => d.id === addDeptoId);
-                setRespDepto((prev) => [...prev, { departamentoId: addDeptoId, departamentoNome: dep?.nome ?? addDeptoId, usuarioId: null, responsavelNome: null, representantes: 0 }]);
+                setRespDepto((prev) => [...prev, { departamentoId: addDeptoId, departamentoNome: dep?.nome ?? addDeptoId, usuarioId: null, responsavelNome: null, representantes: 0, pendente: true }]);
                 setEditRespId(addDeptoId); setEditRespUser(''); setAddDeptoId('');
               }}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">Adicionar</button>
@@ -818,7 +842,16 @@ function EquipeTab() {
               <label className="mb-1 block text-sm font-medium text-slate-700">Supervisor de área ou Coordenador *</label>
               <select value={usuarioId} onChange={(e) => escolherSupervisor(e.target.value)} className={inp}>
                 <option value="">— selecione pelo nome</option>
-                {representantes.map((u) => <option key={u.id} value={u.id}>{nomeUser(u)}{ehCoordenador(u) ? ' (coordenador)' : ''}{u.matricula ? ` · ${u.matricula}` : ''}</option>)}
+                {/* Já cadastrado fica VISÍVEL e desabilitado, com o motivo no rótulo —
+                    sumir da lista faria a pessoa procurar um nome que ela sabe que existe. */}
+                {representantes.map((u) => {
+                  const ja = jaCadastrados.has(chapaCurta(u.matricula));
+                  return (
+                    <option key={u.id} value={u.id} disabled={ja}>
+                      {nomeUser(u)}{ehCoordenador(u) ? ' (coordenador)' : ''}{u.matricula ? ` · ${u.matricula}` : ''}{ja ? ' — já cadastrado' : ''}
+                    </option>
+                  );
+                })}
               </select>
               {representantes.length === 0 ? (
                 <p className="mt-1 text-xs text-amber-700">Nenhum usuário com o papel <b>Supervisor de Área</b> ou <b>Coordenador</b> nesta filial. Atribua o papel no Configurador primeiro.</p>

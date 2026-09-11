@@ -646,3 +646,33 @@ todos os rótulos por ids** — a tela parece quebrada e ninguém sabe por quê.
 `registrarFalha` nas listas de dependência (ela é estável — `useCallback` com `[]`), não
 silenciando a regra.
 Bundle servido contém as frases novas.
+
+---
+
+# ACHADOS MENORES da rodada 2 — CORRIGIDOS (11/09/2026, bundle `index-BDQ-DlfN.js`)
+
+| # | Achado | O que entrou |
+|---|---|---|
+| 1 | Linha pendente após "Adicionar" não dizia que não estava salva | Marca `pendente` no objeto + fundo âmbar + tarja **"não salvo — escolha o responsável e confirme"** |
+| 2 | **(novo, achado ao corrigir o 1)** o **Cancelar** deixava a linha fantasma na tabela | Cancelar em linha pendente **remove** a linha; antes só saía do modo de edição e ela ficava ali, idêntica a um departamento real sem responsável |
+| 3 | Toast dizia *"Supervisor de área cadastrado"* também para coordenador | Texto sai do papel de quem foi escolhido: *"Coordenador cadastrado."* |
+| 4 | Representante já cadastrado continuava escolhível; o erro só vinha depois do clique | Fica **visível e desabilitado**, com *"— já cadastrado"* no rótulo |
+
+## Detalhe do item 4
+
+A comparação usa **chapa normalizada** (`E` + 5 últimos dígitos), a mesma régua do
+backend — `005274`, `5274` e `E05274` são a mesma pessoa. Conferido:
+
+```
+005274 -> E05274    5274 -> E05274    E05274 -> E05274
+E1047  -> E01047    001047 -> E01047
+```
+
+Desabilitar em vez de esconder é deliberado: sumir da lista faria a pessoa procurar um
+nome que ela sabe que existe.
+
+## O que NÃO foi feito, e por quê
+
+Trocar de aba ainda descarta a linha pendente sem perguntar. Com a tarja "não salvo" à
+vista, o risco que o achado descrevia — **acreditar que salvou** — deixa de existir, e a
+linha se refaz em dois cliques. Guarda de saída aqui seria desproporcional.
