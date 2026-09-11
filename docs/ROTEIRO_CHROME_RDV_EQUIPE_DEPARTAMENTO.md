@@ -508,3 +508,52 @@ precisar de backfill.
 > ⚠️ O `coreMock` compartilhado da suíte não tinha `departamentoEhDaFilial` e **1 teste
 > alheio quebrou** ao adicionar a guarda. Era mock incompleto, não comportamento errado —
 > o método entrou no mock com padrão `true`.
+
+---
+
+# DEFEITO 4 — CORRIGIDO na tela do RDV em 11/09/2026 (bundle `index-CGpy4J34.js`)
+
+## O que mudou
+
+O padrão `.catch(() => ({ data: [] }))` existia para uma chamada secundária não derrubar
+a tela — intenção boa. O efeito é que **401, 403, 429, timeout e "de fato não há nada"
+viram a mesma tela**: um seletor vazio, sem uma palavra. Foi por isso que o defeito
+original levou dois dias para ser nomeado.
+
+Helper `buscaAcessoria`: a falha continua não derrubando a tela, mas fica **registrada**,
+e a tela mostra o que não carregou (banner `AvisoFalhasCarga`).
+
+**5 chamadas migradas** na `SupervisoresPage` — restam **zero** `catch` mudos nela:
+
+| Chamada | O que a falha produzia, calada |
+|---|---|
+| `departamentos-gerenciaveis` | seletor "Departamento" vazio |
+| `departamentos-responsavel` | a frase **"Nenhum departamento participa do RDV nesta filial ainda"** — afirmação FALSA sobre o banco |
+| `departamentos-filial` | o seletor "adicionar departamento" **sumia** |
+| `/veiculos` (Planejamentos) | seletor de veículo sem opção; a despesa VEÍCULO só cobra isso muito depois |
+| `/supervisor/meu-cadastro` | auto-serviço degradava sem dizer |
+
+A frase da 2ª linha agora só aparece quando a busca **deu certo**; falhando, a tela diz
+que não deu para saber — em vez de afirmar que não há nada.
+
+## ⚠️ A varredura achou MAIS 14 ocorrências, em 7 outras telas
+
+Não mexi nelas: são páginas fora do roteiro, não testadas nesta onda. Inventário para
+decidir, já separado por gravidade:
+
+**Armadilhas (lista de escolha some, e o usuário não descobre por quê) — 7:**
+
+| Arquivo | Chamada |
+|---|---|
+| `MontarViagemPage.tsx:109` | `/motoristas` |
+| `VeiculoFormPage.tsx:116` | `/departamentos` — mesma classe do defeito que acabamos de corrigir |
+| `VeiculoFormPage.tsx:120` | `/veiculos/supervisores-elegiveis` |
+| `VeiculoFormPage.tsx:122` | `/veiculos/representantes` |
+| `ViagemDetalhePage.tsx:111-113` | `/veiculos`, `/motoristas`, `/entregas` |
+
+**Cosméticas (só resolvem nome para exibir; vazio degrada rótulo para id) — 7:**
+`IndicadoresPage.tsx:58-59`, `RomaneioPage.tsx:76-77`, `PainelPage.tsx:58-59`,
+`VeiculosPage.tsx:48`.
+
+Para reaproveitar o helper nessas telas ele precisa sair da `SupervisoresPage` para um
+módulo compartilhado (`src/lib/`).

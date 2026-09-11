@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Plus, Printer, Route, Tag, Users, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
@@ -166,6 +166,13 @@ function ViagensTab() {
   // veículo (Veículos › "Coordenador / Supervisor de Área responsável") e alterável.
   // É ele que as despesas do RDV herdam — sem isso o combustível ficava sem veículo e
   // sumia do custo da frota.
+  const [falhas, setFalhas] = useState<Record<string, string>>({});
+  const registrarFalha = useCallback((chave: string, msg: string | null) => {
+    setFalhas((prev) => {
+      if (!msg) { if (!(chave in prev)) return prev; const { [chave]: _, ...resto } = prev; return resto; }
+      return prev[chave] === msg ? prev : { ...prev, [chave]: msg };
+    });
+  }, []);
   const [veiculos, setVeiculos] = useState<VeiculoOpc[]>([]);
   const [veiculoId, setVeiculoId] = useState('');
   const [meuCadastro, setMeuCadastro] = useState<{ matricula: string } | null>(null);
@@ -178,9 +185,13 @@ function ViagensTab() {
         logisticaApi.get<ViagemSup[]>('/supervisor/viagens', { params: { filialId } }),
         // Só o gestor precisa do time (o supervisor/coordenador cria o próprio, por login).
         ehSupervisorLogado ? Promise.resolve({ data: [] as Supervisor[] }) : logisticaApi.get<Supervisor[]>('/supervisor/supervisores', { params: { filialId } }),
-        logisticaApi.get<VeiculoOpc[]>('/veiculos', { params: { filialId } }).catch(() => ({ data: [] as VeiculoOpc[] })),
+        // Vazia, o seletor de veículo do planejamento fica sem opção — e a despesa de
+        // categoria VEÍCULO exige veículo, então a falha só aparece muito depois.
+        buscaAcessoria(logisticaApi.get<VeiculoOpc[]>('/veiculos', { params: { filialId } }), [] as VeiculoOpc[], 'veiculos', 'os veículos', registrarFalha),
         // Auto-serviço: preciso da MINHA matrícula para achar o veículo que é meu.
-        ehSupervisorLogado ? logisticaApi.get<{ matricula: string }>('/supervisor/meu-cadastro').catch(() => ({ data: null })) : Promise.resolve({ data: null }),
+        ehSupervisorLogado
+          ? buscaAcessoria(logisticaApi.get<{ matricula: string }>('/supervisor/meu-cadastro'), null as { matricula: string } | null, 'meuCadastro', 'o seu cadastro de representante', registrarFalha)
+          : Promise.resolve({ data: null as { matricula: string } | null }),
       ]);
       setViagens(v.data); setEquipe(eq.data); setVeiculos(ve.data ?? []); setMeuCadastro(meu.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar planejamentos.')); } finally { setLoading(false); }
@@ -231,6 +242,7 @@ function ViagensTab() {
 
   return (
     <div>
+      <AvisoFalhasCarga falhas={falhas} />
       {/* ADMIN opera a aba em qualquer filial sem trocar a da SESSÃO. Padrão = a filial
           dele; ele muda quando precisa (decisão do Clenio). Sem isto ele via só os
           planejamentos da matriz, sem nenhuma pista de por quê. */}
@@ -440,6 +452,44 @@ interface DeptItem { id: string; nome: string }
  *  mandá-lo para uma filial que ele não conseguia desfazer. */
 interface FilialItem { id: string; codigo?: string; nomeFantasia?: string; nome?: string; status?: string }
 
+/**
+ * Busca acessória que NÃO transforma falha em vazio.
+ *
+ * O padrão `.catch(() => ({ data: [] }))` existe para uma chamada secundária não derrubar
+ * a tela inteira — a intenção é boa. O efeito colateral é que 401, 403, 429, timeout e
+ * "de fato não há nada" viram a MESMA tela: um seletor vazio, sem uma palavra. Foi por
+ * isso que o defeito original ("o sistema não listou o departamento") levou dois dias
+ * para ser nomeado: nem o usuário nem eu conseguíamos dizer o que tinha acontecido.
+ *
+ * Aqui a falha continua não derrubando a tela, mas fica REGISTRADA em `falhas[chave]`,
+ * e a tela mostra o que não carregou.
+ */
+function buscaAcessoria<T>(
+  p: Promise<{ data: T }>,
+  vazio: T,
+  chave: string,
+  oQue: string,
+  registrar: (chave: string, msg: string | null) => void,
+): Promise<{ data: T }> {
+  return p
+    .then((r) => { registrar(chave, null); return r; })
+    .catch((e) => { registrar(chave, errMsg(e, `Não foi possível carregar ${oQue}.`)); return { data: vazio }; });
+}
+
+/** Banner do que não carregou. Some sozinho quando a carga seguinte dá certo. */
+function AvisoFalhasCarga({ falhas }: { falhas: Record<string, string> }) {
+  const msgs = Object.values(falhas).filter(Boolean);
+  if (msgs.length === 0) return null;
+  return (
+    <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+      <p className="text-sm font-medium text-amber-900">Parte da tela não carregou — o que estiver vazio abaixo pode ser efeito disto, não ausência de dado.</p>
+      <ul className="mt-1 list-inside list-disc text-xs text-amber-800">
+        {[...new Set(msgs)].map((m) => <li key={m}>{m}</li>)}
+      </ul>
+    </div>
+  );
+}
+
 const nomeFilial = (f: { nome?: string; nomeFantasia?: string; codigo?: string; id: string }) =>
   `${f.codigo ? `${f.codigo} · ` : ''}${f.nomeFantasia ?? f.nome ?? f.id}`;
 
@@ -512,10 +562,17 @@ function EquipeTab() {
   const [itens, setItens] = useState<Supervisor[]>([]);
   const [usuarios, setUsuarios] = useState<CoreUser[]>([]);
   const [departamentos, setDepartamentos] = useState<DeptItem[]>([]);
-  // Falha da busca de departamentos. Existe para a tela NÃO tratar "a chamada quebrou"
-  // igual a "não há departamento": eram indistinguíveis, e foi por isso que ninguém
-  // conseguia dizer por que o seletor vinha vazio.
-  const [deptErro, setDeptErro] = useState<string | null>(null);
+  // Falhas das buscas acessórias. Existe para a tela NÃO tratar "a chamada quebrou"
+  // igual a "não há dado": eram indistinguíveis, e foi por isso que ninguém conseguia
+  // dizer por que o seletor vinha vazio.
+  const [falhas, setFalhas] = useState<Record<string, string>>({});
+  const registrarFalha = useCallback((chave: string, msg: string | null) => {
+    setFalhas((prev) => {
+      if (!msg) { if (!(chave in prev)) return prev; const { [chave]: _, ...resto } = prev; return resto; }
+      return prev[chave] === msg ? prev : { ...prev, [chave]: msg };
+    });
+  }, []);
+  const deptErro = falhas['deptos'] ?? null;
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [usuarioId, setUsuarioId] = useState('');
@@ -544,11 +601,13 @@ function EquipeTab() {
         // oferecia o que o POST recusava (403) e esvaziava quando a pessoa perdia o
         // último carro, mesmo com a autoridade do RDV intacta.
         // O erro NÃO vira lista vazia: `deptErro` distingue "não pode/não há" de "falhou".
-        logisticaApi.get<DeptItem[]>('/supervisor/departamentos-gerenciaveis', qFilial)
-          .then((r) => { setDeptErro(null); return r; })
-          .catch((e) => { setDeptErro(errMsg(e, 'Não foi possível carregar os departamentos.')); return { data: [] as DeptItem[] }; }),
-        logisticaApi.get<RespDepto[]>('/supervisor/departamentos-responsavel', qFilial).catch(() => ({ data: [] as RespDepto[] })),
-        logisticaApi.get<DeptItem[]>('/supervisor/departamentos-filial', qFilial).catch(() => ({ data: [] as DeptItem[] })),
+        buscaAcessoria(logisticaApi.get<DeptItem[]>('/supervisor/departamentos-gerenciaveis', qFilial), [] as DeptItem[], 'deptos', 'os departamentos que você pode escolher', registrarFalha),
+        // ⚠️ Esta lista vazia vira a frase "Nenhum departamento participa do RDV nesta
+        // filial ainda". Se a chamada falhou, essa frase é MENTIRA — e foi exatamente o
+        // que a tela mostrou durante a investigação de 11/09.
+        buscaAcessoria(logisticaApi.get<RespDepto[]>('/supervisor/departamentos-responsavel', qFilial), [] as RespDepto[], 'resp', 'quem responde por cada departamento', registrarFalha),
+        // Vazia, ESCONDE o seletor "adicionar departamento" — sumiço mudo.
+        buscaAcessoria(logisticaApi.get<DeptItem[]>('/supervisor/departamentos-filial', qFilial), [] as DeptItem[], 'deptosFilial', 'os departamentos desta filial', registrarFalha),
       ]);
       setItens(s.data); setUsuarios(u.data); setDepartamentos(d.data); setRespDepto(r.data); setDeptosFilial(df.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a equipe.')); } finally { setLoading(false); }
@@ -660,6 +719,7 @@ function EquipeTab() {
 
   return (
     <div>
+      <AvisoFalhasCarga falhas={falhas} />
       {/* ADMIN opera a aba em qualquer filial sem trocar a da sessão. As DUAS listas
           (departamentos e representantes) seguem este seletor.
           Renderiza para TODO ADMIN — não mais só quando ele tem >1 filial vinculada.
@@ -698,7 +758,13 @@ function EquipeTab() {
           Aparecem os departamentos desta filial com representante cadastrado ou com responsável já definido.
           {ehAdmin ? '' : ' Definido pela administração — aqui é só consulta.'}
         </p>
-        {respDepto.length === 0 ? (
+        {/* A lista vazia só pode virar a AFIRMAÇÃO "nenhum departamento participa" se a
+            busca tiver dado certo. Com ela falhando, a frase é uma mentira sobre o banco
+            — e foi essa frase que a tela mostrou durante a investigação, mandando
+            "cadastre representantes abaixo" numa filial que nem estava carregada. */}
+        {falhas['resp'] ? (
+          <p className="text-sm text-amber-700">Não deu para saber quais departamentos participam do RDV nesta filial — a consulta falhou (veja o aviso acima). Recarregue antes de concluir que não há nenhum.</p>
+        ) : respDepto.length === 0 ? (
           /* O texto anterior mandava "cadastre representantes abaixo" — justamente o
              ato que a API recusa enquanto não existe amarração (403 "Departamento fora
              do seu escopo"). Texto que promete capacidade empurra de volta ao erro com
