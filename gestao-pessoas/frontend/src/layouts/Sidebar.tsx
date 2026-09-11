@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { ArrowLeft, CalendarRange, ClipboardList, LogOut, UserCheck, Users, X } from 'lucide-react';
+import { ArrowLeft, CalendarRange, ClipboardList, FileText, LogOut, UserCheck, Users, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 import type { UsuarioLogado } from '../services/api';
@@ -73,8 +73,21 @@ const itens: ItemDoMenu[] = [
    * dois. A palavra técnica — Designação — fica com a etapa do ciclo, que é onde
    * quem já está seguindo o processo a procura.
    */
-  { secao: 'CADASTROS', papeis: [ROLES.RH_ADMIN] },
+  { secao: 'CADASTROS', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO] },
   { rotulo: 'Quem avalia quem', icone: UserCheck, para: '/avaliadores', papeis: [ROLES.RH_ADMIN] },
+
+  /**
+   * ⭐ **"Questionários", não "Editar questionários"** — o rótulo nomeia o
+   * OBJETO, não uma capacidade. A tela é leitura pura: o editor é outro
+   * trabalho, de semanas, e item de menu que promete edição é a dívida do
+   * §3.1.33 de novo (*texto que promete capacidade é dívida*). Quando o editor
+   * existir, o rótulo não muda — a tela é que ganha o que fazer.
+   *
+   * ⭐ É aqui que `RH_MODELO` entra no menu pela primeira vez. Até 11/09 ele
+   * não tinha item nenhum, e estava certo: a única coisa que o papel autorizava
+   * era `GET /catalogo`, que nenhuma tela dele consumia.
+   */
+  { rotulo: 'Questionários', icone: FileText, para: '/questionarios', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO] },
 
   /**
    * CICLO — singular: a seção é sobre o objeto em que se trabalha, não sobre a
@@ -87,11 +100,13 @@ const itens: ItemDoMenu[] = [
   { rotulo: 'Ciclos', icone: CalendarRange, para: '/ciclos', papeis: [ROLES.RH_ADMIN, ROLES.RH_CICLO] },
 
   /**
-   * ⚠️ `RH_MODELO` fica SEM NENHUM ITEM, e está certo: a tela de questionários
-   * não existe (o modelo só se monta pela API). Não se inventa item de menu para
-   * tela que não existe — antes ele via "Ciclos" e levava 403, porque a rota é
-   * `RH_ADMIN`+`RH_CICLO`. **Ele volta ao menu quando a tela de questionários
-   * existir**, aí em CADASTROS, com `RH_ADMIN` + `RH_MODELO`.
+   * ✅ 11/09/2026 — `RH_MODELO` voltou ao menu, exatamente como este comentário
+   * previa: em CADASTROS, com `RH_ADMIN` + `RH_MODELO`, quando a tela de
+   * questionários passou a existir. Ela é de LEITURA; o editor ainda não existe.
+   *
+   * ⚠️ O que continua valendo daqui: **não se inventa item de menu para tela que
+   * não existe**. Antes disto ele via "Ciclos" e levava 403, porque a rota é
+   * `RH_ADMIN`+`RH_CICLO`.
    */
 ];
 

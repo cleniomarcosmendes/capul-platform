@@ -15,6 +15,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { resolverRegistrado } from '../calculo/resolvers/registry.js';
+import { pontuacaoMaxima, somatorioPorGrupo } from '../modelo/publicacao.validator.js';
+import { NotFoundException } from '@nestjs/common';
 
 export interface VersaoDeModelo {
   id: string;
@@ -62,6 +64,77 @@ export interface CentroCustoDoCatalogo {
   pessoas: number;
 }
 
+/**
+ * ⭐ O INSTRUMENTO INTEIRO, para LER — não para montar.
+ *
+ * Existe porque `modelos()` devolve `perguntas: 11`, uma CONTAGEM, e a gestora
+ * de RH precisa responder se as 44 perguntas herdadas do RD8010 servem para o
+ * ciclo. Sem isto a pergunta não tinha como ser feita: o texto das perguntas não
+ * tinha caminho nenhum, nem em tela nem em API — só no `prisma/seed.ts`.
+ *
+ * ⚠️ Leitura pura, e deliberadamente **não é o editor**. O editor é outro
+ * trabalho (semanas); esta é a peça de um dia que destrava a decisão dele.
+ */
+export interface AlternativaDoInstrumento {
+  id: string;
+  descricao: string;
+  valor: number;
+  ordem: number;
+  codigoOrigem: string | null;
+  /** A de maior valor da pergunta — é ela que define a pontuação máxima. */
+  maiorValor: boolean;
+}
+
+export interface PerguntaDoInstrumento {
+  id: string;
+  enunciado: string;
+  ordem: number;
+  peso: number;
+  codigoOrigem: string | null;
+  /** `peso × maior valor` — quanto esta pergunta vale no denominador. */
+  pontuacaoMaxima: number;
+  /** Fração do peso total do questionário, em %. */
+  percentualDoPeso: number;
+  alternativas: AlternativaDoInstrumento[];
+}
+
+export interface GrupoDoInstrumento {
+  id: string;
+  titulo: string;
+  ordem: number;
+  /**
+   * ⚠️ Grupo NÃO tem peso próprio (decisão de 05/09): isto é a SOMA dos pesos
+   * das perguntas dele. Vai junto porque é o balanço que o RH precisa enxergar
+   * para julgar o instrumento — e vem de `somatorioPorGrupo`, a mesma função
+   * que a futura tela de montagem vai usar.
+   */
+  pesoTotal: number;
+  percentual: number;
+  perguntas: PerguntaDoInstrumento[];
+}
+
+export interface InstrumentoCompleto {
+  modeloId: string;
+  modeloNome: string;
+  descricao: string | null;
+  finalidade: string;
+  ativo: boolean;
+  versaoId: string;
+  versao: number;
+  publicadoEm: Date | null;
+  /** Gravada na publicação. Fica ao lado da recalculada, para conferência. */
+  pontuacaoMaximaGravada: number | null;
+  /** Recalculada agora, sobre as perguntas que estão no banco. */
+  pontuacaoMaximaCalculada: number;
+  somaDosPesos: number;
+  totalGrupos: number;
+  totalPerguntas: number;
+  totalAlternativas: number;
+  /** Quantas aplicações usam esta versão — quem lê precisa saber se está em uso. */
+  aplicacoesQueUsam: number;
+  grupos: GrupoDoInstrumento[];
+}
+
 @Injectable()
 export class CatalogoService {
   constructor(private readonly prisma: PrismaService) {}
@@ -92,6 +165,99 @@ export class CatalogoService {
         perguntas: v.grupos.reduce((s, g) => s + g._count.perguntas, 0),
       })),
     }));
+  }
+
+  /**
+   * O instrumento inteiro de UMA versão. Ver `InstrumentoCompleto`.
+   *
+   * ⭐ A pontuação máxima vem em DUAS colunas — a gravada na publicação e a
+   * recalculada agora, pela mesma `pontuacaoMaxima()` que a publicação usa.
+   * Iguais, é conferência; diferentes, alguém mexeu no banco por fora e a nota
+   * de todo mundo está saindo sobre um denominador que não é o do instrumento.
+   * Mostrar só uma delas esconderia exatamente o caso que importa.
+   */
+  async instrumento(versaoId: string): Promise<InstrumentoCompleto> {
+    const v = await this.prisma.modeloVersao.findUnique({
+      where: { id: versaoId },
+      include: {
+        modelo: true,
+        _count: { select: { aplicacoes: true } },
+        grupos: {
+          orderBy: { ordem: 'asc' },
+          include: {
+            perguntas: {
+              orderBy: { ordem: 'asc' },
+              include: { alternativas: { orderBy: { ordem: 'asc' } } },
+            },
+          },
+        },
+      },
+    });
+    if (!v) throw new NotFoundException('Versão de modelo não encontrada.');
+
+    // A forma que `publicacao.validator` consome — os dois cálculos saem dela.
+    const paraValidador = v.grupos.map((g) => ({
+      titulo: g.titulo,
+      perguntas: g.perguntas.map((p) => ({
+        enunciado: p.enunciado,
+        peso: Number(p.peso),
+        alternativas: p.alternativas.map((a) => ({ valor: Number(a.valor) })),
+      })),
+    }));
+    const balanco = new Map(somatorioPorGrupo(paraValidador).map((g) => [g.titulo, g]));
+    const somaDosPesos = v.grupos
+      .flatMap((g) => g.perguntas)
+      .reduce((s, p) => s + Number(p.peso), 0);
+
+    return {
+      modeloId: v.modeloId,
+      modeloNome: v.modelo.nome,
+      descricao: v.modelo.descricao,
+      finalidade: v.modelo.finalidade,
+      ativo: v.modelo.ativo,
+      versaoId: v.id,
+      versao: v.versao,
+      publicadoEm: v.publicadoEm,
+      pontuacaoMaximaGravada: v.pontuacaoMaxima === null ? null : Number(v.pontuacaoMaxima),
+      pontuacaoMaximaCalculada: pontuacaoMaxima(paraValidador),
+      somaDosPesos,
+      totalGrupos: v.grupos.length,
+      totalPerguntas: v.grupos.reduce((s, g) => s + g.perguntas.length, 0),
+      totalAlternativas: v.grupos.reduce(
+        (s, g) => s + g.perguntas.reduce((t, p) => t + p.alternativas.length, 0),
+        0,
+      ),
+      aplicacoesQueUsam: v._count.aplicacoes,
+      grupos: v.grupos.map((g) => ({
+        id: g.id,
+        titulo: g.titulo,
+        ordem: g.ordem,
+        pesoTotal: balanco.get(g.titulo)?.pesoTotal ?? 0,
+        percentual: balanco.get(g.titulo)?.percentual ?? 0,
+        perguntas: g.perguntas.map((p) => {
+          const valores = p.alternativas.map((a) => Number(a.valor));
+          const maior = valores.length ? Math.max(...valores) : 0;
+          const peso = Number(p.peso);
+          return {
+            id: p.id,
+            enunciado: p.enunciado,
+            ordem: p.ordem,
+            peso,
+            codigoOrigem: p.codigoOrigem,
+            pontuacaoMaxima: peso * maior,
+            percentualDoPeso: somaDosPesos > 0 ? (peso / somaDosPesos) * 100 : 0,
+            alternativas: p.alternativas.map((a) => ({
+              id: a.id,
+              descricao: a.descricao,
+              valor: Number(a.valor),
+              ordem: a.ordem,
+              codigoOrigem: a.codigoOrigem,
+              maiorValor: Number(a.valor) === maior,
+            })),
+          };
+        }),
+      })),
+    };
   }
 
   async criterios(): Promise<CriterioDoCatalogo[]> {

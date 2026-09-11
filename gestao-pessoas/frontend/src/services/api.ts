@@ -231,6 +231,56 @@ export interface ModeloDoCatalogo {
   ativo: boolean;
   versoes: VersaoDeModelo[];
 }
+/**
+ * ⭐ O INSTRUMENTO INTEIRO, para LER. `ModeloDoCatalogo` traz `perguntas: 11`,
+ * uma contagem; isto traz o texto. Leitura pura — não existe edição.
+ */
+export interface AlternativaDoInstrumento {
+  id: string;
+  descricao: string;
+  valor: number;
+  ordem: number;
+  codigoOrigem: string | null;
+  /** A de maior valor da pergunta — é ela que define a pontuação máxima. */
+  maiorValor: boolean;
+}
+export interface PerguntaDoInstrumento {
+  id: string;
+  enunciado: string;
+  ordem: number;
+  peso: number;
+  codigoOrigem: string | null;
+  pontuacaoMaxima: number;
+  percentualDoPeso: number;
+  alternativas: AlternativaDoInstrumento[];
+}
+export interface GrupoDoInstrumento {
+  id: string;
+  titulo: string;
+  ordem: number;
+  /** ⚠️ Grupo não tem peso próprio: é a SOMA dos pesos das perguntas dele. */
+  pesoTotal: number;
+  percentual: number;
+  perguntas: PerguntaDoInstrumento[];
+}
+export interface InstrumentoCompleto {
+  modeloId: string;
+  modeloNome: string;
+  descricao: string | null;
+  finalidade: 'PRODUCAO' | 'DEMONSTRACAO';
+  ativo: boolean;
+  versaoId: string;
+  versao: number;
+  publicadoEm: string | null;
+  pontuacaoMaximaGravada: number | null;
+  pontuacaoMaximaCalculada: number;
+  somaDosPesos: number;
+  totalGrupos: number;
+  totalPerguntas: number;
+  totalAlternativas: number;
+  aplicacoesQueUsam: number;
+  grupos: GrupoDoInstrumento[];
+}
 export interface CriterioDoCatalogo {
   id: string;
   codigo: string;
@@ -263,6 +313,9 @@ export interface ColaboradorDaBusca {
 
 export const catalogo = {
   modelos: () => rhApi.get<ModeloDoCatalogo[]>('/catalogo/modelos').then((r) => r.data),
+  /** O instrumento inteiro de uma versão — RH_ADMIN e RH_MODELO. */
+  instrumento: (versaoId: string) =>
+    rhApi.get<InstrumentoCompleto>(`/catalogo/modelos/${versaoId}`).then((r) => r.data),
   criterios: () => rhApi.get<CriterioDoCatalogo[]>('/catalogo/criterios').then((r) => r.data),
   centrosCusto: () => rhApi.get<CentroCustoDoCatalogo[]>('/catalogo/centros-custo').then((r) => r.data),
   colaboradores: (busca?: string) =>
