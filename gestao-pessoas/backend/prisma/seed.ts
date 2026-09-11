@@ -546,45 +546,70 @@ async function semearModelos() {
 
     let pontuacaoMaxima = 0;
     let ordemGrupo = 0;
+    let ordemNoArranjo = 0;
 
     for (const g of def.grupos) {
       const meta = GRUPOS[g.chave];
-      const grupo = await prisma.grupo.create({
-        data: { modeloVersaoId: versaoId, titulo: meta.titulo, ordem: ordemGrupo++ },
+
+      // ⭐ A CLASSIFICAÇÃO é global — várias versões apontam para a mesma linha.
+      // Por isso `upsert` e não `create`: o segundo modelo que usa
+      // "Relacionamento e Conduta" reaproveita, não duplica. Era exatamente a
+      // duplicação que a migration do acervo desfez (18 linhas para 8 nomes).
+      const classificacao = await prisma.classificacao.upsert({
+        where: { nome: meta.titulo },
+        update: {},
+        create: { nome: meta.titulo, ordem: ordemGrupo },
       });
 
-      // O peso que era do grupo se reparte entre as perguntas dele, somando
-      // exatamente o total (sem dízima na tela).
+      // ⭐ O PESO FICA NO GRUPO. É o que este seed sempre quis dizer — os
+      // números de `def.grupos` são pesos de grupo, e antes do acervo ele os
+      // repartia na gravação porque o schema não tinha onde guardá-los.
+      await prisma.arranjoGrupo.create({
+        data: {
+          modeloVersaoId: versaoId,
+          classificacaoId: classificacao.id,
+          peso: g.peso,
+          ordem: ordemGrupo++,
+        },
+      });
+
+      // A repartição continua existindo — só que agora para CONFERIR a
+      // pontuação máxima, não para gravar. É a mesma `distribuirPeso` que o
+      // `calculo/peso-derivado.ts` usa na leitura.
       const pesos = distribuirPeso(g.peso, meta.questoes.length);
 
-      let ordemQ = 0;
       for (const [i, codigo] of meta.questoes.entries()) {
         const q = QUESTOES[codigo];
-        const peso = pesos[i];
-        const pergunta = await prisma.pergunta.create({
-          data: {
-            grupoId: grupo.id,
+
+        // A QUESTÃO é do acervo: existe uma vez só, por código do SQP010.
+        // `upsert` pelo mesmo motivo da classificação — 11 das 15 são usadas
+        // pelos três perfis.
+        const pergunta = await prisma.pergunta.upsert({
+          where: { codigo: q.codigo },
+          update: {},
+          create: {
+            codigo: q.codigo,
             enunciado: q.titulo,
-            ordem: ordemQ++,
-            peso,
-            codigoOrigem: q.codigo,
+            classificacaoId: classificacao.id,
+            alternativas: {
+              create: q.alternativas.map((a, j) => ({
+                descricao: a.descricao,
+                valor: a.valor,
+                ordem: j,
+                codigoOrigem: a.codigo,
+              })),
+            },
           },
         });
-        for (const [j, a] of q.alternativas.entries()) {
-          await prisma.perguntaAlternativa.create({
-            data: {
-              perguntaId: pergunta.id,
-              descricao: a.descricao,
-              valor: a.valor,
-              ordem: j,
-              codigoOrigem: a.codigo,
-            },
-          });
-        }
-        // Denominador da nota do questionário: Σ (maior valor × peso da pergunta).
+
+        await prisma.arranjoPergunta.create({
+          data: { modeloVersaoId: versaoId, perguntaId: pergunta.id, ordem: ordemNoArranjo++ },
+        });
+
+        // Denominador da nota do questionário: Σ (maior valor × peso derivado).
         // Calculado, nunca constante — o modelo antigo dividia por 18 fixo e
         // acrescentar uma pergunta fazia a nota passar de 100 sem acusar erro.
-        pontuacaoMaxima += Math.max(...q.alternativas.map((a) => a.valor)) * peso;
+        pontuacaoMaxima += Math.max(...q.alternativas.map((a) => a.valor)) * pesos[i];
       }
     }
 

@@ -15,7 +15,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { resolverRegistrado } from '../calculo/resolvers/registry.js';
-import { pontuacaoMaxima, somatorioPorGrupo } from '../modelo/publicacao.validator.js';
+import { carregarArranjo } from '../arranjo/carregar-arranjo.js';
 import { NotFoundException } from '@nestjs/common';
 
 export interface VersaoDeModelo {
@@ -145,7 +145,9 @@ export class CatalogoService {
       include: {
         versoes: {
           orderBy: { versao: 'desc' },
-          include: { grupos: { select: { _count: { select: { perguntas: true } } } } },
+          // Contagem pelo ARRANJO: depois do acervo a questão é global, e
+          // contar em `pergunta` devolveria o acervo inteiro para todo perfil.
+          include: { _count: { select: { grupos: true, perguntas: true } } },
         },
       },
     });
@@ -161,8 +163,8 @@ export class CatalogoService {
         versao: v.versao,
         publicadoEm: v.publicadoEm,
         pontuacaoMaxima: v.pontuacaoMaxima === null ? null : Number(v.pontuacaoMaxima),
-        grupos: v.grupos.length,
-        perguntas: v.grupos.reduce((s, g) => s + g._count.perguntas, 0),
+        grupos: v._count.grupos,
+        perguntas: v._count.perguntas,
       })),
     }));
   }
@@ -177,89 +179,61 @@ export class CatalogoService {
    * Mostrar só uma delas esconderia exatamente o caso que importa.
    */
   async instrumento(versaoId: string): Promise<InstrumentoCompleto> {
-    const v = await this.prisma.modeloVersao.findUnique({
-      where: { id: versaoId },
-      include: {
-        modelo: true,
-        _count: { select: { aplicacoes: true } },
-        grupos: {
-          orderBy: { ordem: 'asc' },
-          include: {
-            perguntas: {
-              orderBy: { ordem: 'asc' },
-              include: { alternativas: { orderBy: { ordem: 'asc' } } },
-            },
-          },
-        },
-      },
-    });
-    if (!v) throw new NotFoundException('Versão de modelo não encontrada.');
+    const a = await carregarArranjo(this.prisma, versaoId);
+    const modelo = await this.prisma.modelo.findUniqueOrThrow({ where: { id: a.modeloId } });
 
-    // A forma que `publicacao.validator` consome — os dois cálculos saem dela.
-    const paraValidador = v.grupos.map((g) => ({
-      titulo: g.titulo,
-      perguntas: g.perguntas.map((p) => ({
-        enunciado: p.enunciado,
-        peso: Number(p.peso),
-        alternativas: p.alternativas.map((a) => ({ valor: Number(a.valor) })),
-      })),
-    }));
-    const balanco = new Map(somatorioPorGrupo(paraValidador).map((g) => [g.titulo, g]));
-    const somaDosPesos = v.grupos
-      .flatMap((g) => g.perguntas)
-      .reduce((s, p) => s + Number(p.peso), 0);
+    // Agrupa as questões pela CLASSIFICAÇÃO — que agora é atributo da questão,
+    // não estrutura do modelo. A ordem de leitura vem do arranjo.
+    const porClassificacao = new Map<string, typeof a.questoes>();
+    for (const q of a.questoes) {
+      porClassificacao.set(q.classificacaoId, [...(porClassificacao.get(q.classificacaoId) ?? []), q]);
+    }
 
     return {
-      modeloId: v.modeloId,
-      modeloNome: v.modelo.nome,
-      descricao: v.modelo.descricao,
-      finalidade: v.modelo.finalidade,
-      ativo: v.modelo.ativo,
-      versaoId: v.id,
-      versao: v.versao,
-      publicadoEm: v.publicadoEm,
-      pontuacaoMaximaGravada: v.pontuacaoMaxima === null ? null : Number(v.pontuacaoMaxima),
-      pontuacaoMaximaCalculada: pontuacaoMaxima(paraValidador),
-      somaDosPesos,
-      totalGrupos: v.grupos.length,
-      totalPerguntas: v.grupos.reduce((s, g) => s + g.perguntas.length, 0),
-      totalAlternativas: v.grupos.reduce(
-        (s, g) => s + g.perguntas.reduce((t, p) => t + p.alternativas.length, 0),
-        0,
-      ),
-      aplicacoesQueUsam: v._count.aplicacoes,
-      grupos: v.grupos.map((g) => ({
-        id: g.id,
+      modeloId: a.modeloId,
+      modeloNome: a.modeloNome,
+      descricao: modelo.descricao,
+      finalidade: modelo.finalidade,
+      ativo: modelo.ativo,
+      versaoId: a.versaoId,
+      versao: a.versao,
+      publicadoEm: a.publicadoEm,
+      pontuacaoMaximaGravada: a.pontuacaoMaximaGravada,
+      pontuacaoMaximaCalculada: a.pontuacaoMaximaCalculada,
+      somaDosPesos: a.somaDosPesos,
+      totalGrupos: a.grupos.length,
+      totalPerguntas: a.questoes.length,
+      totalAlternativas: a.questoes.reduce((s, q) => s + q.alternativas.length, 0),
+      aplicacoesQueUsam: a.aplicacoesQueUsam,
+      grupos: a.grupos.map((g) => ({
+        id: g.classificacaoId,
         titulo: g.titulo,
         ordem: g.ordem,
-        pesoTotal: balanco.get(g.titulo)?.pesoTotal ?? 0,
-        percentual: balanco.get(g.titulo)?.percentual ?? 0,
-        perguntas: g.perguntas.map((p) => {
-          const valores = p.alternativas.map((a) => Number(a.valor));
-          const maior = valores.length ? Math.max(...valores) : 0;
-          const peso = Number(p.peso);
-          return {
-            id: p.id,
-            enunciado: p.enunciado,
-            ordem: p.ordem,
-            peso,
-            codigoOrigem: p.codigoOrigem,
-            pontuacaoMaxima: peso * maior,
-            percentualDoPeso: somaDosPesos > 0 ? (peso / somaDosPesos) * 100 : 0,
-            alternativas: p.alternativas.map((a) => ({
-              id: a.id,
-              descricao: a.descricao,
-              valor: Number(a.valor),
-              ordem: a.ordem,
-              codigoOrigem: a.codigoOrigem,
-              maiorValor: Number(a.valor) === maior,
-            })),
-          };
-        }),
+        // ⭐ Agora é o peso DECLARADO da classificação neste perfil, não mais a
+        // soma dos pesos das perguntas. Os dois números coincidem — a soma dos
+        // derivados fecha exata, por construção —, mas o que manda é este.
+        pesoTotal: g.peso,
+        percentual: a.somaDosPesos > 0 ? (g.peso / a.somaDosPesos) * 100 : 0,
+        perguntas: (porClassificacao.get(g.classificacaoId) ?? []).map((q) => ({
+          id: q.id,
+          enunciado: q.enunciado,
+          ordem: q.ordem,
+          peso: q.peso,
+          codigoOrigem: q.codigo,
+          pontuacaoMaxima: Math.round(q.peso * q.maiorValor * 10_000) / 10_000,
+          percentualDoPeso: a.somaDosPesos > 0 ? (q.peso / a.somaDosPesos) * 100 : 0,
+          alternativas: q.alternativas.map((alt) => ({
+            id: alt.id,
+            descricao: alt.descricao,
+            valor: alt.valor,
+            ordem: alt.ordem,
+            codigoOrigem: alt.codigoOrigem,
+            maiorValor: alt.valor === q.maiorValor,
+          })),
+        })),
       })),
     };
   }
-
   async criterios(): Promise<CriterioDoCatalogo[]> {
     const criterios = await this.prisma.criterio.findMany({
       orderBy: [{ ativo: 'desc' }, { nome: 'asc' }],

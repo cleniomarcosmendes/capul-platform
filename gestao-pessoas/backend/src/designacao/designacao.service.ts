@@ -287,8 +287,11 @@ export class DesignacaoService {
     const designadas = await this.designacoesVigentes(aplicacao.cicloId);
 
     // O denominador de "4 de 11": uma consulta para a lista inteira, não por linha.
-    const perguntasNoModelo = await this.prisma.pergunta.count({
-      where: { grupo: { modeloVersaoId: aplicacao.modeloVersaoId } },
+    // Conta pelo ARRANJO — depois do acervo a questão é global, e contar em
+    // `pergunta` devolveria o acervo inteiro (15) em vez do questionário deste
+    // perfil (11 ou 14).
+    const perguntasNoModelo = await this.prisma.arranjoPergunta.count({
+      where: { modeloVersaoId: aplicacao.modeloVersaoId },
     });
 
     const semDesignacao = {

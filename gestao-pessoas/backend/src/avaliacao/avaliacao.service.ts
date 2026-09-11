@@ -15,6 +15,7 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { calcularNotaAvaliacao, notaPorGrupo, type ItemRespondido } from '../calculo/nota-avaliacao.js';
+import { carregarArranjo } from '../arranjo/carregar-arranjo.js';
 import { AvaliacaoAcessoService, type ContextoAcesso } from './avaliacao-acesso.service.js';
 import { marcarRestricoes } from './separacao-funcoes.js';
 import { assertCicloAceitaReaberturaDeAvaliacao } from '../ciclo/ciclo-operavel.js';
@@ -100,7 +101,8 @@ export class AvaliacaoService {
         aplicacao: {
           select: {
             nome: true,
-            modeloVersao: { select: { grupos: { select: { _count: { select: { perguntas: true } } } } } },
+            // Contagem pelo ARRANJO — `pergunta` agora é o acervo global.
+            modeloVersao: { select: { _count: { select: { perguntas: true } } } },
           },
         },
         _count: { select: { respostas: true } },
@@ -131,7 +133,7 @@ export class AvaliacaoService {
     const contestadaEm = new Map(contestadas.map((c) => [c.entidadeId, c.criadoEm]));
 
     const comDados = linhas.map((l) => {
-      const total = l.aplicacao.modeloVersao.grupos.reduce((s, g) => s + g._count.perguntas, 0);
+      const total = l.aplicacao.modeloVersao._count.perguntas;
       const avaliado = porId.get(l.avaliadoId);
       return {
         id: l.id,
@@ -240,12 +242,15 @@ export class AvaliacaoService {
           include: {
             modeloVersao: {
               include: {
-                grupos: {
+                grupos: { orderBy: { ordem: 'asc' }, include: { classificacao: true } },
+                perguntas: {
                   orderBy: { ordem: 'asc' },
                   include: {
-                    perguntas: {
-                      orderBy: { ordem: 'asc' },
-                      include: { alternativas: { orderBy: { ordem: 'asc' } } },
+                    pergunta: {
+                      include: {
+                        classificacao: true,
+                        alternativas: { orderBy: { ordem: 'asc' } },
+                      },
                     },
                   },
                 },
@@ -258,7 +263,7 @@ export class AvaliacaoService {
     });
 
     const respondido = new Map(completa.respostas.map((r) => [r.perguntaId, r.alternativaId]));
-    const total = completa.aplicacao.modeloVersao.grupos.reduce((s, g) => s + g.perguntas.length, 0);
+    const total = completa.aplicacao.modeloVersao.perguntas.length;
     const avaliado = await this.prisma.colaborador.findUnique({
       where: { id: completa.avaliadoId },
       select: { nome: true, matricula: true, cargoDescricao: true },
@@ -281,17 +286,21 @@ export class AvaliacaoService {
       },
       perguntasTotal: total,
       perguntasRespondidas: respondido.size,
+      // Agrupado pela CLASSIFICAÇÃO da questão, na ordem do arranjo. O avaliador
+      // vê a mesma tela de sempre — o que mudou é de onde o agrupamento vem.
       grupos: completa.aplicacao.modeloVersao.grupos.map((g) => ({
-        id: g.id,
-        titulo: g.titulo,
-        perguntas: g.perguntas.map((p) => ({
-          id: p.id,
-          enunciado: p.enunciado,
-          // O peso NÃO vai para a tela do avaliador: saber que uma pergunta vale
-          // o triplo muda a resposta, e o que se quer é a leitura do desempenho.
-          alternativas: p.alternativas.map((a) => ({ id: a.id, descricao: a.descricao })),
-          alternativaEscolhidaId: respondido.get(p.id) ?? null,
-        })),
+        id: g.classificacaoId,
+        titulo: g.classificacao.nome,
+        perguntas: completa.aplicacao.modeloVersao.perguntas
+          .filter((ap) => ap.pergunta.classificacaoId === g.classificacaoId)
+          .map((ap) => ({
+            id: ap.pergunta.id,
+            enunciado: ap.pergunta.enunciado,
+            // O peso NÃO vai para a tela do avaliador: saber que uma pergunta vale
+            // o triplo muda a resposta, e o que se quer é a leitura do desempenho.
+            alternativas: ap.pergunta.alternativas.map((a) => ({ id: a.id, descricao: a.descricao })),
+            alternativaEscolhidaId: respondido.get(ap.pergunta.id) ?? null,
+          })),
       })),
     };
   }
@@ -484,17 +493,30 @@ export class AvaliacaoService {
 
     // O título vem junto: "Grupo 3f2a-..." não é memória de cálculo, é um id
     // impresso na tela de quem precisa explicar a nota para o avaliado.
-    const grupos = await this.prisma.grupo.findMany({
+    // ⭐ O `grupoId` da memória de cálculo agora é o id da CLASSIFICAÇÃO — que é
+    // global. A ordem de exibição, porém, é a do ARRANJO daquele perfil: a
+    // mesma classificação aparece em posição diferente em cada questionário.
+    const classificacoes = await this.prisma.classificacao.findMany({
       where: { id: { in: notas.map((n) => n.grupoId) } },
-      select: { id: true, titulo: true, ordem: true },
+      select: { id: true, nome: true },
     });
-    const porId = new Map(grupos.map((g) => [g.id, g]));
+    const nomePorId = new Map(classificacoes.map((c) => [c.id, c.nome]));
+
+    const { aplicacao } = await this.prisma.avaliacao.findUniqueOrThrow({
+      where: { id: avaliacaoId },
+      select: { aplicacao: { select: { modeloVersaoId: true } } },
+    });
+    const arranjo = await this.prisma.arranjoGrupo.findMany({
+      where: { modeloVersaoId: aplicacao.modeloVersaoId },
+      select: { classificacaoId: true, ordem: true },
+    });
+    const ordemPorId = new Map(arranjo.map((g) => [g.classificacaoId, g.ordem]));
 
     return notas
       .map((n) => ({
         ...n,
-        titulo: porId.get(n.grupoId)?.titulo ?? '(sem grupo)',
-        ordem: porId.get(n.grupoId)?.ordem ?? 0,
+        titulo: nomePorId.get(n.grupoId) ?? '(sem grupo)',
+        ordem: ordemPorId.get(n.grupoId) ?? 0,
       }))
       .sort((a, b) => a.ordem - b.ordem);
   }
@@ -504,27 +526,24 @@ export class AvaliacaoService {
     const avaliacao = await this.prisma.avaliacao.findUniqueOrThrow({
       where: { id: avaliacaoId },
       include: {
-        aplicacao: {
-          include: {
-            modeloVersao: {
-              include: { grupos: { include: { perguntas: { include: { alternativas: true } } } } },
-            },
-          },
-        },
+        aplicacao: { select: { modeloVersaoId: true } },
         respostas: true,
       },
     });
     const respostas = new Map(avaliacao.respostas.map((r) => [r.perguntaId, Number(r.valor)]));
 
-    return avaliacao.aplicacao.modeloVersao.grupos.flatMap((g) =>
-      g.perguntas.map((p) => ({
-        perguntaId: p.id,
-        grupoId: g.id,
-        peso: Number(p.peso),
-        maiorValor: Math.max(...p.alternativas.map((a) => Number(a.valor))),
-        valorRespondido: respostas.get(p.id) ?? null,
-      })),
-    );
+    // ⭐ O peso vem DERIVADO do arranjo (`carregarArranjo`), nunca de uma coluna
+    // da pergunta — a questão é do acervo e não sabe quanto vale; quanto ela
+    // vale depende do perfil que a usa.
+    const arranjo = await carregarArranjo(this.prisma, avaliacao.aplicacao.modeloVersaoId);
+
+    return arranjo.questoes.map((q) => ({
+      perguntaId: q.id,
+      grupoId: q.classificacaoId,
+      peso: q.peso,
+      maiorValor: q.maiorValor,
+      valorRespondido: respostas.get(q.id) ?? null,
+    }));
   }
 
   private async assertPodeEditar(avaliacaoId: string) {

@@ -225,11 +225,13 @@ function Instrumento({ inst }: { inst: InstrumentoCompleto }) {
           <li key={g.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h4 className="font-semibold text-slate-800">{g.titulo}</h4>
-              {/* ⚠️ Grupo NÃO tem peso próprio: isto é a soma das perguntas dele,
-                  e o rótulo diz isso para ninguém procurar onde mudar o peso do grupo. */}
+              {/* ⭐ Depois do acervo (11/09) o peso É do grupo — declarado no
+                  arranjo do perfil. O rótulo mudou junto: dizer "soma das
+                  perguntas" mandaria quem quer alterar o número procurar na
+                  pergunta, que é justamente onde ele não está mais. */}
               <span className="text-sm text-slate-500">
                 <Sigma size={13} className="mr-1 inline text-slate-400" aria-hidden />
-                soma das perguntas: <strong className="tabular-nums">{num(g.pesoTotal)}</strong> ·{' '}
+                peso do grupo: <strong className="tabular-nums">{num(g.pesoTotal)}</strong> ·{' '}
                 {pct(g.percentual)} do questionário
               </span>
             </div>
@@ -242,8 +244,11 @@ function Instrumento({ inst }: { inst: InstrumentoCompleto }) {
                       <span className="mr-1.5 text-slate-400 tabular-nums">{i + 1}.</span>
                       {p.enunciado}
                     </p>
+                    {/* "peso derivado": o número não se edita aqui nem existe no
+                        banco — vem do peso do grupo repartido entre as questões
+                        dele NESTE perfil. */}
                     <span className="text-xs text-slate-500">
-                      peso <strong className="tabular-nums">{num(p.peso)}</strong> ·{' '}
+                      peso derivado <strong className="tabular-nums">{num(p.peso)}</strong> ·{' '}
                       {pct(p.percentualDoPeso)} · vale até{' '}
                       <strong className="tabular-nums">{num(p.pontuacaoMaxima)}</strong>
                       {p.codigoOrigem && <span className="ml-1.5 text-slate-400">RD8010 {p.codigoOrigem}</span>}

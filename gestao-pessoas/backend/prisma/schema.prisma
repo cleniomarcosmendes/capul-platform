@@ -237,7 +237,11 @@ model ModeloVersao {
   criadoEm         DateTime  @default(now()) @map("criado_em")
 
   modelo           Modelo    @relation(fields: [modeloId], references: [id])
-  grupos           Grupo[]
+  /// O ARRANJO desta versão: quais classificações pesam quanto, e quais
+  /// questões do acervo entram. O questionário deixou de ser propriedade
+  /// privada da versão — a versão é o ARRANJO sobre o acervo comum.
+  grupos           ArranjoGrupo[]
+  perguntas        ArranjoPergunta[]
   aplicacoes       Aplicacao[]
 
   @@unique([modeloId, versao])
@@ -245,38 +249,159 @@ model ModeloVersao {
   @@schema("rh")
 }
 
-/// Grupo com peso. origem = MANUAL (questões respondidas pelo avaliador)
-/// ou AUTOMATICO (critério calculado sobre dado cadastral — doc 04).
-/// C2: pesos livres, normalizados no cálculo.
-/// Grupo é APENAS ORGANIZAÇÃO — agrupa questões na tela e no relatório.
-/// NÃO tem peso: todo o peso está na Pergunta. Peso em dois níveis torna
-/// impossível prever o efeito de mudar um número na montagem.
-/// A tela de montagem deve exibir o somatório de pesos por grupo, para o RH
-/// enxergar o balanço sem precisar calcular.
-model Grupo {
-  id             String       @id @default(uuid())
-  modeloVersaoId String       @map("modelo_versao_id")
-  titulo         String
-  ordem          Int
+/// ⭐⭐ CLASSIFICAÇÃO — atributo da QUESTÃO, global e única.
+///
+/// Antes disto o "grupo" era estrutura do MODELO: cada versão tinha os seus, e
+/// os mesmos temas se repetiam — 18 linhas de grupo para **8 nomes**. Pior, a
+/// repetição era invisível: nada dizia que o "Relacionamento e Conduta" do
+/// Administrativo e o da Produção eram o mesmo assunto.
+///
+/// O dado já tratava a classificação como atributo da questão e o schema é que
+/// não dizia: para os 15 enunciados do acervo, `count(distinct grupo) = 1` —
+/// **nenhuma questão muda de tema conforme o perfil**. A migration de
+/// unificação não teve um caso ambíguo em 39 linhas.
+///
+/// ⚠️ UMA por questão, de propósito (decisão de 11/09). Várias quebrariam a
+/// nota por grupo — a questão contaria em dois grupos, os pesos deixariam de
+/// somar o total, e o peso do grupo não teria como se dividir. Etiqueta de
+/// BUSCA no acervo, se um dia fizer falta, é outra tabela e não toca no motor.
+model Classificacao {
+  id        String            @id @default(uuid())
+  nome      String            @unique
+  ordem     Int
+  ativa     Boolean           @default(true)
+  criadoEm  DateTime          @default(now()) @map("criado_em")
 
-  modeloVersao   ModeloVersao @relation(fields: [modeloVersaoId], references: [id])
-  perguntas      Pergunta[]
+  perguntas Pergunta[]
+  arranjos  ArranjoGrupo[]
 
-  @@index([modeloVersaoId, ordem])
-  @@map("grupo")
+  @@map("classificacao")
   @@schema("rh")
 }
 
-/// CATÁLOGO DE CRITÉRIOS — substitui o antigo enum TipoCriterio.
-/// Permite ao RH manter os critérios sem depender de deploy.
+/// ⭐⭐ ACERVO — a questão é GLOBAL, não pertence a modelo nenhum.
 ///
-/// origem = CALCULADO  -> o valor vem de um resolver implementado no backend,
-///                        identificado por codigoCalculo. O RH edita nome,
-///                        faixas e peso, mas NÃO cria critérios novos deste
-///                        tipo: exige código.
-/// origem = INFORMADO  -> o valor é digitado ou importado por ciclo
-///                        (CriterioValorInformado). Este tipo o RH cria
-///                        sozinho, de ponta a ponta.
+/// Antes: 39 linhas para **15 enunciados**, 24 duplicatas (62%). 11 dos 15
+/// apareciam nos três modelos, com alternativas **idênticas** (`count(distinct
+/// assinatura) = 1` nos 15) — só o peso variava. Corrigir um enunciado exigia
+/// lembrar de três lugares, e nada avisava se esquecesse um.
+///
+/// `codigo` é o `SQP010` (ex-`codigo_origem`, `004`–`018`): o Protheus já
+/// tratava isto como acervo, e foi a importação que duplicou.
+///
+/// ⚠️ NÃO TEM PESO. O peso mora no ARRANJO, por classificação
+/// (`ArranjoGrupo.peso`), e o peso por questão é **derivado** — ver
+/// `calculo/peso-derivado.ts`. Questão não sabe quanto vale: quanto ela vale
+/// depende do perfil que a usa.
+///
+/// ⚠️ IMUTÁVEL enquanto referenciada por arranjo PUBLICADO (decisão de 11/09).
+/// Editar enunciado ou alternativa cria questão nova — senão o instrumento
+/// mudaria debaixo de um ciclo em curso, e agora a questão é compartilhada:
+/// mexer numa mexeria em todos os perfis de uma vez.
+model Pergunta {
+  id              String        @id @default(uuid())
+  /// Código no SQP010. É a chave natural do acervo.
+  codigo          String        @unique @db.VarChar(10)
+  enunciado       String
+  classificacaoId String        @map("classificacao_id")
+  ativa           Boolean       @default(true)
+  criadoEm        DateTime      @default(now()) @map("criado_em")
+  atualizadoEm    DateTime      @updatedAt @map("atualizado_em")
+
+  classificacao   Classificacao @relation(fields: [classificacaoId], references: [id])
+  alternativas    PerguntaAlternativa[]
+  respostas       Resposta[]
+  arranjos        ArranjoPergunta[]
+
+  @@index([classificacaoId])
+  @@map("pergunta")
+  @@schema("rh")
+}
+
+/// Alternativa âncora. valor = pontos (0,3 / 0,6 / 0,9 / 1,2 no modelo atual).
+///
+/// ⚠️ O instrumento real do Protheus NÃO usa escala compartilhada: cada questão
+/// tem suas próprias 4 alternativas com texto âncora específico (rd8.xlsx). Por
+/// isso elas vivem na PERGUNTA, não numa tabela Escala global. Escala uniforme
+/// continua possível: basta as alternativas repetirem o mesmo texto.
+model PerguntaAlternativa {
+  id            String     @id @default(uuid())
+  perguntaId    String     @map("pergunta_id")
+  descricao     String
+  valor         Decimal    @db.Decimal(10, 4)
+  ordem         Int
+  codigoOrigem  String?    @map("codigo_origem") @db.VarChar(10)
+
+  pergunta      Pergunta   @relation(fields: [perguntaId], references: [id])
+  respostas     Resposta[]
+
+  @@unique([perguntaId, ordem])
+  @@index([perguntaId, ordem])
+  @@map("pergunta_alternativa")
+  @@schema("rh")
+}
+
+/// ⭐⭐ O PESO DO PERFIL, por CLASSIFICAÇÃO — opção (ii), decidida em 11/09.
+///
+/// **Por que no grupo e não na questão.** Os pesos do instrumento herdado já
+/// eram do grupo: dentro de cada grupo, em cada modelo, todas as questões
+/// tinham o MESMO peso, e as 18 somas de grupo eram inteiras (3, 5, 9, 10, 12,
+/// 13, 16) com total exato de 60 por modelo. O `5,34 / 5,33 / 5,33` que estava
+/// gravado na questão **não era intenção — era o resto de 16 ÷ 3**, com o
+/// centavo sobrando indo para a primeira questão.
+///
+/// Guardar peso por questão era, portanto, uma reescrita com perda de
+/// *"60 pontos repartidos entre grupos, e cada grupo repartido igualmente entre
+/// suas questões"*. Aqui o peso volta para onde a informação está.
+///
+/// Ganho operacional: são **8 números por perfil em vez de 15**, e acrescentar
+/// ou tirar uma questão **não mexe em peso nenhum** — o grupo continua valendo
+/// o que valia, redividido.
+///
+/// ⛔ NÃO existe peso por questão dentro do arranjo, e não deve passar a
+/// existir: seria peso em dois níveis, que é a decisão que este módulo já
+/// rejeitou por escrito (*"torna impossível prever o efeito de mudar um número
+/// na montagem"*). Questão que precise pesar diferente das irmãs ganha
+/// classificação própria.
+model ArranjoGrupo {
+  id              String        @id @default(uuid())
+  modeloVersaoId  String        @map("modelo_versao_id")
+  classificacaoId String        @map("classificacao_id")
+  /// Quanto esta classificação vale NESTE perfil. Livre; a soma das
+  /// classificações do arranjo é a pontuação do questionário (60 no herdado).
+  peso            Decimal       @db.Decimal(10, 4)
+  ordem           Int
+
+  modeloVersao    ModeloVersao  @relation(fields: [modeloVersaoId], references: [id])
+  classificacao   Classificacao @relation(fields: [classificacaoId], references: [id])
+
+  @@unique([modeloVersaoId, classificacaoId])
+  @@index([modeloVersaoId, ordem])
+  @@map("arranjo_grupo")
+  @@schema("rh")
+}
+
+/// Quais questões do acervo entram neste arranjo, e em que ordem.
+///
+/// ⚠️ SEM PESO, de propósito. O peso da questão é derivado do peso da sua
+/// classificação dividido pelas questões daquela classificação NESTE arranjo
+/// (`calculo/peso-derivado.ts`). A classificação não se declara aqui: vem da
+/// própria questão, que é onde ela mora.
+model ArranjoPergunta {
+  id             String       @id @default(uuid())
+  modeloVersaoId String       @map("modelo_versao_id")
+  perguntaId     String       @map("pergunta_id")
+  ordem          Int
+
+  modeloVersao   ModeloVersao @relation(fields: [modeloVersaoId], references: [id])
+  pergunta       Pergunta     @relation(fields: [perguntaId], references: [id])
+
+  @@unique([modeloVersaoId, perguntaId])
+  @@index([modeloVersaoId, ordem])
+  @@map("arranjo_pergunta")
+  @@schema("rh")
+}
+
 model Criterio {
   id            String              @id @default(uuid())
   codigo        String              @unique @db.VarChar(40)
@@ -334,46 +459,6 @@ model CriterioValorInformado {
   @@unique([cicloId, criterioId, colaboradorId])
   @@index([cicloId, criterioId])
   @@map("criterio_valor_informado")
-  @@schema("rh")
-}
-
-/// IMPORTANTE — o instrumento real do Protheus NÃO usa escala compartilhada.
-/// Cada questão tem suas próprias 4 alternativas com texto âncora específico
-/// (ver rd8.xlsx). Por isso as alternativas vivem na PERGUNTA, não numa
-/// tabela Escala global. Uma escala uniforme continua possível: basta as
-/// alternativas repetirem o mesmo texto.
-model Pergunta {
-  id            String     @id @default(uuid())
-  grupoId       String     @map("grupo_id")
-  enunciado     String
-  ordem         Int
-  peso          Decimal    @default(1) @db.Decimal(10, 4)
-  /// Código original no SQP010, para rastrear a migração.
-  codigoOrigem  String?    @map("codigo_origem") @db.VarChar(10)
-
-  grupo         Grupo      @relation(fields: [grupoId], references: [id])
-  alternativas  PerguntaAlternativa[]
-  respostas     Resposta[]
-
-  @@index([grupoId, ordem])
-  @@map("pergunta")
-  @@schema("rh")
-}
-
-/// Alternativa âncora. valor = pontos (0,3 / 0,6 / 0,9 / 1,2 no modelo atual).
-model PerguntaAlternativa {
-  id            String     @id @default(uuid())
-  perguntaId    String     @map("pergunta_id")
-  descricao     String
-  valor         Decimal    @db.Decimal(10, 4)
-  ordem         Int
-  codigoOrigem  String?    @map("codigo_origem") @db.VarChar(10)
-
-  pergunta      Pergunta   @relation(fields: [perguntaId], references: [id])
-  respostas     Resposta[]
-
-  @@index([perguntaId, ordem])
-  @@map("pergunta_alternativa")
   @@schema("rh")
 }
 

@@ -13,7 +13,15 @@
 import { CatalogoService } from './catalogo.service.js';
 import { createPrismaMock } from '../common/testing/prisma-mock.js';
 
-/** Um modelo de duas perguntas, com pesos desiguais de propósito. */
+/**
+ * Um arranjo de duas questões em duas classificações, com pesos desiguais de
+ * propósito.
+ *
+ * ⭐ Depois do acervo (migration 20260911230000) o peso NÃO está na questão:
+ * está em `arranjo_grupo`, por classificação, e o peso da questão é derivado.
+ * Aqui cada classificação tem uma questão só, então o derivado é o peso inteiro
+ * do grupo — foi assim que os números deste spec continuaram valendo.
+ */
 function versaoFake(over: Record<string, unknown> = {}) {
   return {
     id: 'v1',
@@ -24,41 +32,39 @@ function versaoFake(over: Record<string, unknown> = {}) {
     modelo: { nome: 'Administrativo', descricao: null, finalidade: 'PRODUCAO', ativo: true },
     _count: { aplicacoes: 2 },
     grupos: [
+      { classificacaoId: 'c1', peso: 10, ordem: 0, classificacao: { id: 'c1', nome: 'Assiduidade' } },
+      { classificacaoId: 'c2', peso: 30, ordem: 1, classificacao: { id: 'c2', nome: 'Conduta' } },
+    ],
+    perguntas: [
       {
-        id: 'g1',
-        titulo: 'Assiduidade',
+        perguntaId: 'p1',
         ordem: 0,
-        perguntas: [
-          {
-            id: 'p1',
-            enunciado: 'Assiduidade',
-            ordem: 0,
-            peso: 10,
-            codigoOrigem: '004',
-            alternativas: [
-              { id: 'a1', descricao: 'Falta muito', valor: 0.3, ordem: 0, codigoOrigem: '1' },
-              { id: 'a2', descricao: 'Nunca falta', valor: 1.2, ordem: 1, codigoOrigem: '4' },
-            ],
-          },
-        ],
+        pergunta: {
+          id: 'p1',
+          codigo: '004',
+          enunciado: 'Assiduidade',
+          classificacaoId: 'c1',
+          classificacao: { id: 'c1', nome: 'Assiduidade' },
+          alternativas: [
+            { id: 'a1', descricao: 'Falta muito', valor: 0.3, ordem: 0, codigoOrigem: '1' },
+            { id: 'a2', descricao: 'Nunca falta', valor: 1.2, ordem: 1, codigoOrigem: '4' },
+          ],
+        },
       },
       {
-        id: 'g2',
-        titulo: 'Conduta',
+        perguntaId: 'p2',
         ordem: 1,
-        perguntas: [
-          {
-            id: 'p2',
-            enunciado: 'Respeito',
-            ordem: 0,
-            peso: 30,
-            codigoOrigem: '007',
-            alternativas: [
-              { id: 'a3', descricao: 'Não respeita', valor: 0.3, ordem: 0, codigoOrigem: '1' },
-              { id: 'a4', descricao: 'Respeita', valor: 0.9, ordem: 1, codigoOrigem: '3' },
-            ],
-          },
-        ],
+        pergunta: {
+          id: 'p2',
+          codigo: '007',
+          enunciado: 'Respeito',
+          classificacaoId: 'c2',
+          classificacao: { id: 'c2', nome: 'Conduta' },
+          alternativas: [
+            { id: 'a3', descricao: 'Não respeita', valor: 0.3, ordem: 0, codigoOrigem: '1' },
+            { id: 'a4', descricao: 'Respeita', valor: 0.9, ordem: 1, codigoOrigem: '3' },
+          ],
+        },
       },
     ],
     ...over,
@@ -68,6 +74,13 @@ function versaoFake(over: Record<string, unknown> = {}) {
 function servico(versao: unknown) {
   const prisma = createPrismaMock();
   prisma.modeloVersao.findUnique.mockResolvedValue(versao);
+  prisma.modelo.findUniqueOrThrow.mockResolvedValue({
+    id: 'm1',
+    nome: 'Administrativo',
+    descricao: null,
+    finalidade: 'PRODUCAO',
+    ativo: true,
+  });
   return new CatalogoService(prisma as never);
 }
 
@@ -103,11 +116,12 @@ describe('ler o instrumento inteiro', () => {
   });
 
   /**
-   * ⚠️ Grupo NÃO tem peso próprio — isto é a SOMA das perguntas dele, e vem de
-   * `somatorioPorGrupo`, a mesma função que a tela de montagem vai usar quando
-   * o editor existir. Até 11/09 ela não tinha chamador nenhum.
+   * ⭐ Depois do acervo isto é o peso DECLARADO da classificação no arranjo —
+   * não mais a soma das perguntas. Os dois coincidem por construção (a soma dos
+   * derivados fecha exata), mas quem manda passou a ser o declarado: é ele que
+   * o RH digita, e é ele que sobrevive a acrescentar ou tirar uma questão.
    */
-  it('o balanço por grupo é a soma dos pesos das perguntas, e fecha em 100%', async () => {
+  it('o balanço por grupo é o peso declarado da classificação, e fecha em 100%', async () => {
     const i = await servico(versaoFake()).instrumento('v1');
     expect(i.grupos[0].pesoTotal).toBe(10);
     expect(i.grupos[1].pesoTotal).toBe(30);
@@ -142,7 +156,7 @@ describe('ler o instrumento inteiro', () => {
 
   /** Modelo sem pergunta nenhuma não pode estourar a divisão por zero. */
   it('modelo vazio devolve zeros, sem dividir por zero', async () => {
-    const i = await servico(versaoFake({ grupos: [] })).instrumento('v1');
+    const i = await servico(versaoFake({ grupos: [], perguntas: [] })).instrumento('v1');
     expect(i.totalPerguntas).toBe(0);
     expect(i.somaDosPesos).toBe(0);
     expect(i.pontuacaoMaximaCalculada).toBe(0);
