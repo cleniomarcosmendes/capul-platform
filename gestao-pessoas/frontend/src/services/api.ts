@@ -178,6 +178,22 @@ export interface CicloDetalhado extends Omit<CicloDaLista, 'pendentes'> {
   }[];
 }
 
+export interface PreviaDaDevolucao {
+  cicloAberto: boolean;
+  total: number;
+  /** Quantas voltam com trabalho já feito — é o que muda a conversa. */
+  comRespostas: number;
+  /** UM motivo para todas: foi um ato só. */
+  motivoDoCancelamento: string | null;
+  pessoas: {
+    avaliacaoId: string;
+    nome: string;
+    matricula: string;
+    respostas: number;
+    estadoAoVoltar: 'PENDENTE' | 'EM_ANDAMENTO';
+  }[];
+}
+
 export interface NovoCiclo {
   nome: string;
   periodoInicio: string;
@@ -220,6 +236,25 @@ export const ciclos = {
    */
   encerrar: (id: string, opcoes?: { confirmarPendentes?: boolean; motivo?: string }) =>
     rhApi.post(`/ciclos/${id}/encerrar`, opcoes ?? {}).then((r) => r.data),
+  /**
+   * ⭐⭐ DEVOLVER as canceladas pelo ENCERRAMENTO — e ele NÃO é o Incluir.
+   *
+   * A granularidade da reversão é a do ato que causou: o encerramento foi UM
+   * ato sobre N avaliações, com UM motivo, então desfaz em massa e por ciclo.
+   * O "Excluir" da Designação foi ato por linha e se desfaz pelo Incluir.
+   *
+   * ⚠️ A prévia responde MESMO com o ciclo encerrado: ela existe para ajudar a
+   * decidir se vale reabrir. Quem exige ABERTO é o ato.
+   */
+  previaDaDevolucao: (id: string) =>
+    rhApi.get<PreviaDaDevolucao>(`/ciclos/${id}/devolucao/previa`).then((r) => r.data),
+  devolverCanceladas: (id: string, motivo: string) =>
+    rhApi
+      .post<{ devolvidas: number; emAndamento: number; pendentes: number }>(
+        `/ciclos/${id}/devolucao`,
+        { motivo },
+      )
+      .then((r) => r.data),
   /** Reabrir exige motivo — como o reabrir de avaliação. */
   reabrir: (id: string, motivo: string) =>
     rhApi.post(`/ciclos/${id}/reabrir`, { motivo }).then((r) => r.data),
@@ -430,6 +465,20 @@ export interface LinhaDaDesignacao {
    * do Excluir, e só esta existe quando veio do encerrar com pendência.
    */
   motivoCancelamento: string | null;
+  /**
+   * ⭐ SIMETRIA (11/09): a linha mostrava o motivo do CANCELAMENTO e calava o da
+   * REABERTURA. São dois atos do mesmo peso — os dois tiram a avaliação do
+   * estado em que estava, os dois exigem motivo, e os dois respondem "por que
+   * isto está assim?". Mostrar um só fazia a reabertura parecer rotina.
+   */
+  reabertaEm: string | null;
+  motivoReabertura: string | null;
+  /**
+   * ⭐⭐ O que o INCLUIR devolve, se devolver — `null` quando não há o que
+   * desfazer. A frase vem do BACKEND, da mesma função que decide: montada aqui,
+   * envelheceria separada da regra.
+   */
+  efeitoDoIncluir: { status: string; frase: string } | null;
   /**
    * ⭐⭐ Quantas respostas a avaliação tem, de quantas perguntas. O diálogo de
    * encerrar promete que as respostas já dadas "ficam registradas"; sem estes

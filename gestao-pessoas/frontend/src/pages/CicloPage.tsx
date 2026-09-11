@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarRange, CheckCircle2, ChevronDown, Lock, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarRange, CheckCircle2, ChevronDown, Lock, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Carregando, Erro } from '../components/Estado';
 import { EtiquetaDeCiclo } from '../components/Etiqueta';
@@ -11,9 +11,11 @@ import {
   mensagemDoErro,
   painel,
   type CicloDetalhado,
+  type PreviaDaDevolucao,
   type ResumoDoCiclo,
 } from '../services/api';
 import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
+import { MOTIVO_MINIMO_EM_MASSA, faltamCaracteres } from '../lib/motivo';
 import { data, dataHora, flexao } from '../lib/formato';
 
 /**
@@ -111,6 +113,10 @@ export default function CicloPage() {
               do ciclo, não etapa dele. ⚠️ Só RH_ADMIN, como o endpoint —
               a tela não pode oferecer o que a API vai recusar. */}
           {tem(ROLES.RH_ADMIN) && <PeriodoDoCiclo ciclo={ciclo} aoSalvar={recarregar} />}
+          {/* ⭐ Só aparece quando HÁ o que devolver — a prévia devolve total 0
+              e a seção some. Capacidade sem objeto some; capacidade sem
+              permissão fica cinza com o motivo (§3.1.5). */}
+          {tem(ROLES.RH_ADMIN) && <DevolverCanceladas ciclo={ciclo} aoDevolver={recarregar} />}
           {/* ⚠️ Cada faixa decide por UMA fonte, não por duas.
               A do RASCUNHO decide pelo próprio conteúdo: `pendenciasParaAbrir`
               é `null` fora de rascunho, por construção do backend — então não
@@ -419,6 +425,171 @@ function FaixaDoEncerrado({ encerradoEm }: { encerradoEm: string | null }) {
  * data-base. A segunda é a que pega na prática — é fácil encolher o período e
  * deixar a data-base do lado de fora sem perceber.
  */
+/**
+ * ⭐⭐ DEVOLVER AS CANCELADAS PELO ENCERRAMENTO — o desfazer que faltava.
+ *
+ * O encerrar com pendência cancela N avaliações de uma vez, e até 11/09 isso
+ * **não tinha volta por caminho nenhum**: o próprio diálogo do reabrir avisa que
+ * "reabrir devolve o ciclo, não as avaliações". Agora devolve — e a
+ * granularidade é a do ato que causou: foi UM ato sobre N pessoas, com UM
+ * motivo, então desfaz em massa e por ciclo.
+ *
+ * ⚠️ O que o RH excluiu linha a linha **não volta por aqui**: volta pelo
+ * Incluir, na Designação. São dois atos diferentes, e cruzar os dois faria o
+ * desfazer de um ressuscitar o que o outro cancelou.
+ *
+ * ⚠️ A prévia carrega mesmo com o ciclo ENCERRADO, de propósito: ela é o que
+ * ajuda a decidir SE vale reabrir. Quem exige ABERTO é o ato.
+ */
+function DevolverCanceladas({
+  ciclo,
+  aoDevolver,
+}: {
+  ciclo: CicloDetalhado;
+  aoDevolver: () => void;
+}) {
+  const [previa, setPrevia] = useState<PreviaDaDevolucao | null>(null);
+  const [aberta, setAberta] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [feito, setFeito] = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
+    try {
+      setPrevia(await apiCiclos.previaDaDevolucao(ciclo.id));
+    } catch {
+      // Silencioso de propósito: é um painel opcional. Se falhar, a seção
+      // simplesmente não aparece — não há ação perdida.
+      setPrevia(null);
+    }
+  }, [ciclo.id]);
+
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+
+  if (!previa || previa.total === 0) return null;
+
+  const curto = motivo.trim().length < MOTIVO_MINIMO_EM_MASSA;
+  const impedimento = !previa.cicloAberto
+    ? 'Reabra o ciclo primeiro: devolver uma avaliação para a fila de alguém num ciclo que não está aberto a deixaria viva sem que ninguém pudesse respondê-la.'
+    : curto
+      ? faltamCaracteres(motivo.trim(), MOTIVO_MINIMO_EM_MASSA)
+      : null;
+
+  async function devolver() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      const r = await apiCiclos.devolverCanceladas(ciclo.id, motivo.trim());
+      setFeito(
+        `Devolvidas: ${r.devolvidas}. Em andamento: ${r.emAndamento}. Pendentes: ${r.pendentes}.`,
+      );
+      setMotivo('');
+      await carregar();
+      aoDevolver();
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível devolver as avaliações.'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <section className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/40">
+      <button
+        type="button"
+        onClick={() => setAberta((v) => !v)}
+        aria-expanded={aberta}
+        className="alvo-toque flex w-full items-center gap-2 px-4 py-3 text-left"
+      >
+        <Undo2 size={16} className="shrink-0 text-amber-700" aria-hidden />
+        <span className="text-sm font-medium text-slate-700">
+          {/* Número como VALOR, nunca no meio de frase que concorda com ele. */}
+          Canceladas pelo encerramento: {previa.total}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`ml-auto shrink-0 text-slate-400 transition ${aberta ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+
+      {aberta && (
+        <div className="border-t border-amber-100 p-4">
+          {previa.motivoDoCancelamento && (
+            <p className="mb-3 text-sm italic text-slate-600">
+              “{previa.motivoDoCancelamento}”
+            </p>
+          )}
+
+          <p className="text-sm text-slate-600">
+            Devolver traz estas avaliações de volta para a fila dos avaliadores. Com resposta
+            gravada, cada uma volta como <strong>EM ANDAMENTO</strong>; sem, como{' '}
+            <strong>PENDENTE</strong> — nada foi apagado no cancelamento.{' '}
+            {previa.comRespostas > 0 && (
+              <>Voltam com trabalho já feito: <strong>{previa.comRespostas}</strong>.</>
+            )}
+          </p>
+
+          {/* ⚠️ A consequência que alguém tem de QUERER: elas voltam a travar o
+              encerramento. É o ponto do ato, e esconder isso seria a meia
+              verdade do §3.1.47 ao contrário. */}
+          <p className="mt-2 text-sm text-amber-900">
+            Elas voltam a contar como pendentes — e a travar o encerramento do ciclo até serem
+            enviadas ou canceladas de novo.
+          </p>
+
+          <ul className="mt-3 max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-white text-sm">
+            {previa.pessoas.map((p) => (
+              <li key={p.avaliacaoId} className="flex flex-wrap items-baseline gap-x-2 border-b border-slate-100 px-3 py-1.5 last:border-0">
+                <span className="font-medium text-slate-800">{p.nome}</span>
+                <span className="text-xs text-slate-500">{p.matricula}</span>
+                <span className="ml-auto text-xs text-slate-500">
+                  volta como {p.estadoAoVoltar.replace('_', ' ')}
+                  {p.respostas > 0 && <> · respostas: {p.respostas}</>}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <label className="mt-3 block">
+            <span className="text-sm font-medium text-slate-700">Motivo</span>
+            <span className="mt-0.5 block text-xs text-slate-500">
+              Fica na auditoria de cada avaliação devolvida — é o que responde, meses depois, por
+              que elas voltaram para a fila.
+            </span>
+            <textarea
+              value={motivo}
+              onChange={(e) => { setMotivo(e.target.value); setFeito(null); }}
+              rows={3}
+              disabled={!previa.cicloAberto}
+              className="mt-1.5 w-full rounded-xl border border-slate-300 p-3 text-slate-800 disabled:bg-slate-100"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={() => void devolver()}
+            disabled={salvando || impedimento !== null}
+            title={impedimento ?? undefined}
+            className="alvo-toque mt-3 rounded-xl bg-capul-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            {salvando ? 'Devolvendo…' : `Devolver ${previa.total}`}
+          </button>
+
+          {impedimento && !salvando && (
+            <p className="mt-2 text-sm text-amber-900">{impedimento}</p>
+          )}
+          {erro && <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{erro}</p>}
+          {feito && <p className="mt-2 text-sm text-capul-700">{feito}</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function PeriodoDoCiclo({
   ciclo,
   aoSalvar,

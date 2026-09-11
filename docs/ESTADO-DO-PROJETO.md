@@ -177,11 +177,11 @@ são 7 a 9 semanas**, e o editor de questionário sozinho vale metade. Não cabi
 
 | Conta | Valor |
 |---|---|
-| Testes | **623** (eram 614 em 10/09) · 51 suítes |
+| Testes | **640** (eram 614 em 10/09) · 52 suítes |
 | Telas | **10** (eram 8) — entraram a leitura do questionário e a de página não encontrada |
 | Ciclos no DEV | Piloto **ABERTO** (894 avaliações, 894 PENDENTE) · 3 ENCERRADOS · 1 descartável em RASCUNHO |
 | `origin/main` | ver o fim desta seção |
-| Migrations | **12** — nada de 11/09 mexeu em schema |
+| Migrations | **13** — a de 11/09 é `20260911200000_origem_do_cancelamento` (aditiva: 1 enum, 1 coluna, 1 índice, backfill estrutural) |
 
 **Feito em 11/09:**
 
@@ -194,7 +194,11 @@ são 7 a 9 semanas**, e o editor de questionário sozinho vale metade. Não cabi
 3. ✅ **Decisão de versionamento do modelo**, tomada antes do editor porque muda o tamanho dele:
    **versão nova a cada mudança; versão em uso por ciclo ABERTO é imutável**. Baixou a estimativa
    do editor de 3–4 para **2–3 semanas**. Ver §3.1.58.
-4. ✅ **Correção de fato no registro:** a validação do resolver acontece em **DOIS** momentos, não
+4. ✅ **RH_CICLO lê o instrumento** — corrigido no mesmo dia em que ficou de fora: quem monta a
+   Aplicação escolhe o modelo. ⭐ *Ler o instrumento não é ler nota.*
+5. ✅ **Tela do período** (§3.1.60) e ✅ **descancelar** (§3.1.61) — os dois curtos que tiram a T.I.
+   do meio. O segundo veio com migration e com as quatro decisões de política respondidas.
+6. ✅ **Correção de fato no registro:** a validação do resolver acontece em **DOIS** momentos, não
    três — o terceiro é do desenho e não tem código, porque não existe salvar critério. Corrigido
    aqui, no `CLAUDE.md` e na memória.
 
@@ -431,7 +435,7 @@ nada aqui é da T.I. — o que é da T.I. está em (B), porque tem dono e data.
 | **Quem é o segundo `RH_ADMIN`** (a pessoa) — dar a permissão é da T.I. e está em (B) | Gestora de RH | §5 · §3.1 |
 | 🟢 **CONFIRMAÇÃO, não bloqueio:** cancelar avaliação com respostas já dadas — implementado com **as respostas ficando registradas e fora da apuração, nunca apagadas**. Se ela preferir que o sistema recuse e obrigue o avaliador a enviar, a mudança é pequena | Gestora de RH | §5 · §3.1.18 |
 | 🟢 **CONFIRMAÇÃO, não bloqueio:** encerrar ciclo com pendência é **RH_ADMIN só**, o mesmo degrau do reabrir. Se ela quiser estender a quem monta o ciclo (`RH_CICLO`), é uma linha no controller | Gestora de RH | §5 · §3.1.18 |
-| 🔵 **POLÍTICA, não código — DESCANCELAR uma avaliação.** Hoje não existe: cancelada não volta, por nenhum caminho. Fazer custa **~30 linhas + um modal**, e trava em **três perguntas que não são da T.I.**: **(a)** a avaliação volta para `PENDENTE` ou `EM_ANDAMENTO` quando há **respostas parciais**? (é sobre o que acontece com o trabalho já feito) · **(b)** o `motivoCancelamento` é **apagado ou vira histórico**? (é sobre a trilha) · **(c)** **em massa ou uma a uma**? — 37 uma a uma é inviável, e em massa reintroduz o risco do encerrar em massa. ⚠️ A 4ª (devolver pendências que voltam a travar o encerramento) **não é decisão, é consequência**: quem descancela quer exatamente isso. ⭐ Os textos do §3.1.47 valem **de qualquer forma**, inclusive depois de descancelar existir | Gestora de RH | §3.1.47 |
+| ✅ **RESPONDIDO e FEITO em 11/09 — ver §3.1.61.** 🔵 POLÍTICA, não código — DESCANCELAR uma avaliação. Era: *não existe, cancelada não volta por nenhum caminho.* Fazer custa **~30 linhas + um modal**, e trava em **três perguntas que não são da T.I.**: **(a)** a avaliação volta para `PENDENTE` ou `EM_ANDAMENTO` quando há **respostas parciais**? (é sobre o que acontece com o trabalho já feito) · **(b)** o `motivoCancelamento` é **apagado ou vira histórico**? (é sobre a trilha) · **(c)** **em massa ou uma a uma**? — 37 uma a uma é inviável, e em massa reintroduz o risco do encerrar em massa. ⚠️ A 4ª (devolver pendências que voltam a travar o encerramento) **não é decisão, é consequência**: quem descancela quer exatamente isso. ⭐ Os textos do §3.1.47 valem **de qualquer forma**, inclusive depois de descancelar existir | Gestora de RH | §3.1.47 |
 | 🔵 **POLÍTICA, não código:** trocar o avaliador de uma avaliação **já respondida** — o **lote** do cadastro RECUSA (`JA_RESPONDIDA`) e a designação **individual** PERMITE com confirmação (`EXIGE_CONFIRMACAO`). Só a segunda tem razão escrita. Pode estar certo (em lote ninguém lê 50 avisos), mas ninguém decidiu — e **unificar as prévias está parado até isto** | Gestora de RH | §3.1.30 · levantamento |
 | 🔵 **POLÍTICA, não código:** no **cadastro** de avaliadores, o que "exige confirmação" quer dizer? No ciclo é *"já respondida"*, e o cadastro não tem resposta. **(A)** nada exige — campo 0, contrato uniforme; **(B)** sobrescrever linha provisória ou não revisada (927 e 159 hoje). Sem a resposta, o endpoint é desenhado duas vezes | Gestora de RH | §3.1.30 |
 
@@ -3678,6 +3682,92 @@ mudei o período e desfiz. O ciclo `ZZ DESCARTAVEL` existe exatamente para isso 
 por este motivo. Restaurado (01/09–30/09) e as **2 linhas de `AJUSTAR_PERIODO` de 11/09 apagadas
 por id**; a de 06/09 fica, é real. Reteste refeito no descartável. **O ciclo descartável só serve
 se for o primeiro lugar em que se pensa** — ter um não basta.
+
+
+### 3.1.61. ⭐⭐ DESCANCELAR — as quatro decisões, e o Incluir cumprindo a promessa (11/09)
+
+O item estava travado em **política, não em código** (§3.1.47): ~30 linhas de backend e quatro
+perguntas que não eram da T.I. As respostas vieram em 11/09 e estão abaixo, cada uma com o porquê,
+porque é o porquê que impede a decisão de ser refeita ao contrário daqui a meses.
+
+⭐ **Entregue como CONSERTO DE PROMESSA, não como botão novo** — decisão do Clenio, e ela mudou o
+desenho. O modal do **Excluir** sempre disse que é reversível pelo **Incluir**; o Incluir só
+registrava uma decisão nova e a avaliação continuava CANCELADA. Então o trabalho foi **fazer o
+Incluir cumprir**, e só o que ele não cobre — as canceladas pelo encerramento, que não têm linha
+de elegibilidade — ganhou caminho próprio, **na tela onde o ato aconteceu**.
+
+#### (a) Para qual estado ela volta — DERIVADO DO DADO
+
+Com resposta gravada, `EM_ANDAMENTO`; sem, `PENDENTE`. As respostas nunca foram apagadas — cancelar
+tira da CONTA, não do banco —, então devolver como `PENDENTE` uma avaliação com 4 respostas mentiria
+para o avaliador, que abriria "não começou" e encontraria trabalho feito. E um terceiro estado só
+para o pós-descancelamento seria estado que ninguém mais sabe ler.
+
+#### (b) O motivo original — APAGADO do registro, PRESERVADO na auditoria
+
+`motivoCancelamento` sai da linha: campo que descreve um estado que não vale mais é a armadilha do
+§3.1.48. O texto vai para `valorAnterior`, **e é obrigatório que vá** — sem ele a trilha guarda
+"descancelou" e perde o porquê, que é a metade que responde a pergunta de daqui a seis meses.
+Conferido no banco: `{"status":"CANCELADA","respostas":4,"motivoCancelamento":"Ciclo encerrado com
+pendência: …"}`.
+
+⭐ **Junto veio a assimetria que a varredura pegou:** a linha da Designação mostrava o motivo do
+**cancelamento** e calava o da **reabertura**. São dois atos do mesmo peso — os dois tiram a
+avaliação do estado em que estava, os dois exigem motivo, os dois respondem *"por que isto está
+assim?"*. Com um só na tela, a reabertura parecia rotina e o cancelamento parecia grave. Agora os
+dois aparecem; **em cores diferentes**, porque mesmo peso não é mesmo efeito — cancelar tira da
+conta (rosa), reabrir devolve para a fila (âmbar).
+
+#### (c) A granularidade da reversão é a do ATO QUE CAUSOU
+
+⚠️ **Aqui eu tinha proposto errado, e o Clenio corrigiu.** Eu quis "em massa por ciclo, nunca com
+recorte por colaborador", importando a regra da **reapuração**. Lá ela guarda resultado apurado
+contra a separação de funções; **aqui o Excluir já é por linha** — negar o desfazer por linha seria
+buraco, não guarda.
+
+| Ato que cancelou | Como se desfaz |
+|---|---|
+| **`DECISAO_RH`** — o Excluir, por linha, com motivo por linha | pelo **Incluir**, por linha |
+| **`ENCERRAMENTO`** — UM ato sobre N avaliações, UM motivo | **em massa, por ciclo**, com motivo e prévia |
+
+E cada caminho **recusa o que é do outro, dizendo onde ele fica** — porque o Incluir de uma pessoa
+não pode ressuscitar o que o encerramento do ciclo cancelou.
+
+#### (d) As duas origens, em transação única — e o campo de origem
+
+Desfazer um `DECISAO_RH` reverte **cancelamento e elegibilidade juntos**. Separados, sobra o estado
+partido que `decidirElegibilidade` foi escrito para fechar: avaliação viva com decisão de exclusão
+vigente, que a próxima cópia do cadastro exclui de novo, calada.
+
+⭐ **`origem_cancelamento` é COLUNA, não prefixo do motivo** (migration
+`20260911200000_origem_do_cancelamento`). Dava para distinguir por `LIKE 'Excluído do ciclo pelo
+RH:%'` — e seria errado: comportamento decidido por prefixo de frase quebra no dia em que alguém
+melhora a redação, e quebra **em silêncio**. O texto é para humano ler. Backfill **estrutural**
+(quem tem linha `EXCLUIR` em `ciclo_elegibilidade` veio do Excluir), conferido contra o texto:
+**bate 100% nas 54 linhas** — 2 `DECISAO_RH`, 52 `ENCERRAMENTO`.
+
+#### O que mais mudou por tabela cruzada
+
+- **`efeito-de-designar.ts` dizia *"hoje não há caminho para descancelar; fale com a T.I."***.
+  Virou mentira no dia em que isto subiu. ⭐ **Texto que NEGA capacidade envelhece tão errado quanto
+  o que promete** — manda a pessoa pedir socorro para o que ela resolve em dois cliques. A recusa
+  continua (cancelada não se redesigna); o que mudou é a saída que ela ensina.
+- **Três specs quebraram, e as três estavam certas em quebrar**: o invariante `texto-sem-flexao`
+  pegou um *"com as ${n} respostas"* meu (com n=1 sai "as 1 respostas" — §3.1.35, e eu o escrevi
+  numa sessão em que já tinha citado essa regra duas vezes); e dois specs afirmavam o comportamento
+  antigo (*"INCLUIR nem procura avaliação"*, *"admite que não há caminho de volta"*). **Spec que
+  quebra é informação** — os três viraram o registro do que mudou e por quê.
+
+**Conferido ao vivo no `ZZ ENCERRA2` (o ciclo descartável, desta vez):** prévia com o ciclo
+encerrado responde `total: 5, comRespostas: 1`; o ato com o ciclo encerrado **recusa** e manda
+reabrir; motivo curto **recusa** com quantos caracteres faltam; devolvidas **5 → 1 EM_ANDAMENTO +
+4 PENDENTE**, com a ENVIADA intocada. E o round-trip Excluir → Incluir: `CANCELADA/DECISAO_RH` →
+`EM_ANDAMENTO`, motivo e origem limpos, elegibilidade `EXCLUIR` **não vigente**.
+
+⚠️ **`ZZ ENCERRA2` mudou de estado** com este teste: era *encerrado com 5 canceladas*, agora está
+**ABERTO com as 5 devolvidas**. Continua descartável.
+
+**640 testes** (eram 623). Migration **13**.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

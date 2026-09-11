@@ -63,6 +63,15 @@ export class EncerrarCicloDto {
   @IsOptional() @IsString() @MinLength(MOTIVO_MINIMO) motivo?: string;
 }
 
+/**
+ * ⭐ Devolver as canceladas pelo ENCERRAMENTO. Ato em massa: o mínimo grande
+ * quem exige é o service, que é o único que sabe quantas são — aqui é só o piso
+ * do DTO, como no `EncerrarCicloDto` e no `ReabrirCicloDto`.
+ */
+export class DevolverCanceladasDto {
+  @IsString() @MinLength(MOTIVO_MINIMO) motivo!: string;
+}
+
 export class AjustarConceitosDto {
   @ValidateNested({ each: true }) @Type(() => ConceitoDto) @ArrayMinSize(1) conceitos!: ConceitoDto[];
 }
@@ -126,6 +135,32 @@ export class CicloController {
 
   /** ⚠️ RH_ADMIN só — inclusive para o encerramento com pendência, que é o
       mesmo degrau do reabrir: os dois desfazem ou atropelam uma regra do ciclo. */
+  /**
+   * ⭐⭐ O DESFAZER DO ENCERRAMENTO — e ele NÃO é o Incluir.
+   *
+   * A granularidade da reversão é a do ato que causou: o encerramento com
+   * pendência foi UM ato sobre N avaliações, com UM motivo, então desfaz em
+   * massa e por ciclo. O "Excluir" da Designação foi ato por linha e se desfaz
+   * pelo **Incluir**, que desde 11/09 reverte cancelamento e elegibilidade na
+   * mesma transação.
+   *
+   * A prévia é `@Get` e responde **mesmo com o ciclo encerrado**: ela existe
+   * para ajudar a decidir SE vale reabrir. Quem exige ABERTO é o ato.
+   */
+  @Get(':id/devolucao/previa')
+  previaDaDevolucao(@Param('id') id: string) {
+    return this.ciclos.previaDaDevolucao(id);
+  }
+
+  @Post(':id/devolucao') @HttpCode(200) @Roles(ROLES.RH_ADMIN)
+  devolverCanceladas(
+    @Param('id') id: string,
+    @Body() dto: DevolverCanceladasDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.ciclos.devolverCanceladasDoEncerramento(id, dto.motivo, user.sub);
+  }
+
   @Post(':id/encerrar') @HttpCode(200) @Roles(ROLES.RH_ADMIN)
   encerrar(
     @Param('id') id: string,

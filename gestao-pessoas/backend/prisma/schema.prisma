@@ -651,6 +651,12 @@ model Avaliacao {
   canceladaEm         DateTime?   @map("cancelada_em")
   canceladaPorId      String?     @map("cancelada_por_id")
   motivoCancelamento  String?     @map("motivo_cancelamento")
+  /// ⭐ QUAL ato cancelou — porque o desfazer tem a granularidade do ato que
+  /// causou: DECISAO_RH se desfaz por LINHA (pelo Incluir, que reverte também a
+  /// elegibilidade); ENCERRAMENTO se desfaz em MASSA, por ciclo. Coluna e não
+  /// prefixo do `motivoCancelamento`: comportamento decidido por texto quebra
+  /// quando alguém melhora a redação, e quebra calado.
+  origemCancelamento  OrigemCancelamento? @map("origem_cancelamento")
 
   /// Mitigações recomendadas (F2/F3 = "não"). Opcionais, não bloqueiam o fluxo,
   /// mas registram evidência de devolutiva e contexto da nota.
@@ -675,6 +681,7 @@ model Avaliacao {
   @@unique([cicloId, avaliadoId])
   @@index([cicloId, avaliadorId, status])
   @@index([aplicacaoId, status])
+  @@index([cicloId, origemCancelamento])
   @@map("avaliacao")
   @@schema("rh")
 }
@@ -693,6 +700,17 @@ enum StatusAvaliacao {
   EM_ANDAMENTO
   ENVIADA
   CANCELADA
+
+  @@schema("rh")
+}
+
+/// Os dois atos que produzem CANCELADA. Ver `origemCancelamento`.
+enum OrigemCancelamento {
+  /// O "Excluir" da Designação — por linha, com motivo por linha, e com uma
+  /// linha EXCLUIR em `ciclo_elegibilidade` ao lado.
+  DECISAO_RH
+  /// `encerrar` com pendência confirmada — UM ato sobre N avaliações, um motivo.
+  ENCERRAMENTO
 
   @@schema("rh")
 }

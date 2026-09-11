@@ -10,6 +10,7 @@ import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ONDE_A_AVALIACAO_CONTA } from '../avaliacao/avaliacoes-que-contam.js';
 import { assertCicloOperavel } from './ciclo-operavel.js';
+import { estadoAoVoltar } from '../avaliacao/descancelamento.js';
 import { STATUS_VIVOS } from '../avaliacao/cancelamento.js';
 import { MOTIVO_MINIMO_EM_MASSA, faltamCaracteres } from '../common/motivo.js';
 import {
@@ -275,6 +276,9 @@ export class CicloService {
             canceladaEm: new Date(),
             canceladaPorId: usuarioId,
             motivoCancelamento: `Ciclo encerrado com pendência: ${motivo}`,
+            // ⭐ UM ato sobre N avaliações — e é por isso que o desfazer dele é
+            // em massa, por ciclo, e não pelo Incluir de cada linha.
+            origemCancelamento: 'ENCERRAMENTO',
           },
         });
       }
@@ -310,6 +314,181 @@ export class CicloService {
    * Reabrir é para corrigir o que aconteceu DENTRO do ciclo (designação,
    * avaliação, apuração), não para remontá-lo.
    */
+  /**
+   * ⭐⭐ DEVOLVER as canceladas pelo ENCERRAMENTO — a prévia, e depois o ato.
+   *
+   * A granularidade é a do ato que causou (decisão de 11/09): o encerramento
+   * com pendência foi **UM ato sobre N avaliações, com UM motivo**, então o
+   * desfazer é em massa e por ciclo. O que o RH excluiu linha a linha se desfaz
+   * linha a linha, pelo **Incluir** — e esta rota recusa essas, com a frase
+   * dizendo onde elas se desfazem.
+   *
+   * ⚠️ Só `ENCERRAMENTO`, e é o filtro que a coluna `origemCancelamento` existe
+   * para permitir sem parsear o texto do motivo.
+   */
+  async previaDaDevolucao(cicloId: string) {
+    const ciclo = await this.prisma.ciclo.findUnique({
+      where: { id: cicloId },
+      select: { id: true, status: true, encerradoEm: true },
+    });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+
+    const linhas = await this.prisma.avaliacao.findMany({
+      where: { cicloId, status: 'CANCELADA', origemCancelamento: 'ENCERRAMENTO' },
+      select: {
+        id: true,
+        avaliadoId: true,
+        motivoCancelamento: true,
+        _count: { select: { respostas: true } },
+      },
+      orderBy: { criadoEm: 'asc' },
+    });
+
+    const nomes = await this.prisma.colaborador.findMany({
+      where: { id: { in: linhas.map((l) => l.avaliadoId) } },
+      select: { id: true, nome: true, matricula: true },
+    });
+    const porId = new Map(nomes.map((c) => [c.id, c]));
+
+    return {
+      /** ⚠️ ABERTO é condição do ATO, não da prévia — a prévia serve para
+       *  decidir SE vale reabrir o ciclo, e por isso responde com ele fechado. */
+      cicloAberto: ciclo.status === 'ABERTO',
+      total: linhas.length,
+      /** Quantas voltam com trabalho já feito — é o que muda a conversa. */
+      comRespostas: linhas.filter((l) => l._count.respostas > 0).length,
+      /** O motivo é UM só para todas: foi um ato. Mostrado uma vez, não N. */
+      motivoDoCancelamento: linhas[0]?.motivoCancelamento ?? null,
+      pessoas: linhas.map((l) => ({
+        avaliacaoId: l.id,
+        nome: porId.get(l.avaliadoId)?.nome ?? '(colaborador não encontrado)',
+        matricula: porId.get(l.avaliadoId)?.matricula ?? '',
+        respostas: l._count.respostas,
+        estadoAoVoltar: estadoAoVoltar(l._count.respostas),
+      })),
+    };
+  }
+
+  /**
+   * O ato. Exige ciclo ABERTO — devolver avaliação para a fila de alguém num
+   * ciclo encerrado a deixaria viva sem que ninguém pudesse respondê-la
+   * (`responder` exige ABERTO): o mesmo beco que
+   * `assertCicloAceitaReaberturaDeAvaliacao` fechou para a avaliação.
+   */
+  async devolverCanceladasDoEncerramento(cicloId: string, motivo: string, usuarioId: string) {
+    // ⭐ MESMO MÍNIMO DO ENCERRAR E DO REABRIR — é ato em massa, e o motivo é a
+    // única explicação que sobra para dezenas de pessoas voltarem à fila.
+    if (!motivo?.trim() || motivo.trim().length < MOTIVO_MINIMO_EM_MASSA) {
+      throw new BadRequestException(
+        'Informe o motivo de devolver as avaliações canceladas. Ele fica na auditoria de cada ' +
+          'uma — é o que responde, meses depois, por que elas voltaram para a fila. ' +
+          faltamCaracteres(motivo?.trim() ?? '', MOTIVO_MINIMO_EM_MASSA),
+      );
+    }
+
+    const ciclo = await this.prisma.ciclo.findUnique({
+      where: { id: cicloId },
+      select: { id: true, status: true, encerradoEm: true },
+    });
+    if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
+    if (ciclo.status !== 'ABERTO') {
+      throw new BadRequestException(
+        `O ciclo está ${ciclo.status}. Devolver uma avaliação para a fila de alguém num ciclo ` +
+          'que não está aberto a deixaria viva sem que ninguém pudesse respondê-la — responder ' +
+          'exige ciclo ABERTO. Reabra o ciclo primeiro.',
+      );
+    }
+
+    const alvo = await this.prisma.avaliacao.findMany({
+      where: { cicloId, status: 'CANCELADA', origemCancelamento: 'ENCERRAMENTO' },
+      select: {
+        id: true,
+        motivoCancelamento: true,
+        _count: { select: { respostas: true } },
+      },
+    });
+    if (alvo.length === 0) {
+      throw new BadRequestException(
+        'Não há avaliação cancelada pelo encerramento deste ciclo. ' +
+          'As que o RH excluiu uma a uma voltam pelo Incluir, na aba Designação.',
+      );
+    }
+
+    /**
+     * ⚠️ Duas passadas em vez de um `updateMany`: o estado ao voltar é DERIVADO
+     * DO DADO de cada linha (com resposta, EM_ANDAMENTO; sem, PENDENTE), e uma
+     * atualização em bloco teria de escolher um estado só para todas.
+     */
+    const comResposta = alvo.filter((a) => a._count.respostas > 0).map((a) => a.id);
+    const semResposta = alvo.filter((a) => a._count.respostas === 0).map((a) => a.id);
+
+    await this.prisma.$transaction(async (tx) => {
+      const limpa = {
+        canceladaEm: null,
+        canceladaPorId: null,
+        motivoCancelamento: null,
+        origemCancelamento: null,
+      };
+      if (comResposta.length) {
+        await tx.avaliacao.updateMany({
+          where: { id: { in: comResposta } },
+          data: { status: 'EM_ANDAMENTO', ...limpa },
+        });
+      }
+      if (semResposta.length) {
+        await tx.avaliacao.updateMany({
+          where: { id: { in: semResposta } },
+          data: { status: 'PENDENTE', ...limpa },
+        });
+      }
+
+      /**
+       * ⭐ UMA linha de auditoria POR AVALIAÇÃO, com o motivo ORIGINAL do
+       * cancelamento em `valorAnterior`. Registrar só no ciclo deixaria cada
+       * avaliação sem explicação na própria trilha — e é na trilha dela que
+       * alguém vai olhar quando perguntar por que aquela pessoa voltou.
+       */
+      for (const a of alvo) {
+        await this.auditoria.registrar({
+          entidade: 'Avaliacao',
+          entidadeId: a.id,
+          acao: 'DESCANCELAR',
+          usuarioId,
+          justificativa: motivo.trim(),
+          valorAnterior: {
+            status: 'CANCELADA',
+            respostas: a._count.respostas,
+            motivoCancelamento: a.motivoCancelamento,
+            origemCancelamento: 'ENCERRAMENTO',
+          },
+          valorNovo: {
+            status: estadoAoVoltar(a._count.respostas),
+            origem: 'DEVOLUCAO_EM_MASSA',
+          },
+        });
+      }
+
+      await this.auditoria.registrar({
+        entidade: 'Ciclo',
+        entidadeId: cicloId,
+        acao: 'DEVOLVER_CANCELADAS',
+        usuarioId,
+        justificativa: motivo.trim(),
+        valorNovo: {
+          devolvidas: alvo.length,
+          emAndamento: comResposta.length,
+          pendentes: semResposta.length,
+        },
+      });
+    });
+
+    return {
+      devolvidas: alvo.length,
+      emAndamento: comResposta.length,
+      pendentes: semResposta.length,
+    };
+  }
+
   async reabrir(cicloId: string, motivo: string, usuarioId: string) {
     // ⭐ MESMO MÍNIMO DO ENCERRAR — reabrir o ciclo é ato EM MASSA (09/09).
     // Nasceu com o mínimo de uma linha, por analogia com o reabrir AVALIAÇÃO. A

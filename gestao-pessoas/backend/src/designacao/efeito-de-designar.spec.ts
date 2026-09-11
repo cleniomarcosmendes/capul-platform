@@ -139,12 +139,23 @@ describe('o efeito de designar, antes de designar', () => {
     });
   });
 
-  /** Cancelada não se redesigna: o upsert a reviveria CANCELADA com avaliador novo. */
-  it('avaliação CANCELADA recusa, e admite que não há caminho de volta', () => {
+  /**
+   * Cancelada não se redesigna: o upsert a reviveria CANCELADA com avaliador novo.
+   *
+   * ⚠️ Este teste exigia a frase *"não há caminho para descancelar; fale com a
+   * T.I."* — verdade até 11/09, e mentira a partir dela. **A recusa continua; o
+   * que mudou é a saída que ela ensina.** Texto que NEGA capacidade envelhece
+   * tão errado quanto o que promete, e este teste é o que garante que a recusa
+   * nunca volte a ser um beco.
+   */
+  it('avaliação CANCELADA recusa — e a recusa ensina o caminho de volta', () => {
     const e = efeitoDeDesignar(atual({ status: 'CANCELADA' }), ctx);
     expect(e.acao).toBe('RECUSAR');
     expect(e.frase).toMatch(/CANCELADA/);
-    expect(e.frase).toMatch(/não há caminho para descancelar/);
+    // os dois caminhos, porque são as duas origens possíveis do cancelamento
+    expect(e.frase).toMatch(/Incluir/);
+    expect(e.frase).toMatch(/em massa|tela do ciclo/);
+    expect(e.frase).not.toMatch(/fale com a T\.I\./i);
   });
 
   /**

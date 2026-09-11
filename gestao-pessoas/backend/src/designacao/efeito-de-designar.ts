@@ -172,7 +172,12 @@ export function efeitoDeDesignar(
       frase:
         `A avaliação de ${ctx.nomeDoAvaliado} neste ciclo está CANCELADA. Designar de novo a ` +
         'reviveria cancelada, com avaliador novo — um estado que não quer dizer nada. ' +
-        'Hoje não há caminho para descancelar; se ela tem de voltar ao ciclo, fale com a T.I.',
+        // ⚠️ Este texto dizia "hoje não há caminho para descancelar; fale com a
+        // T.I." — e desde 11/09 há. Texto que NEGA capacidade envelhece tão
+        // errado quanto o que promete: manda a pessoa pedir socorro para algo
+        // que ela mesma resolve em dois cliques.
+        'Devolva-a ao ciclo primeiro — pelo Incluir, se foi o RH que a excluiu; ' +
+        'pelo devolver em massa na tela do ciclo, se foi o encerramento — e designe depois.',
     };
   }
 

@@ -22,6 +22,7 @@ import {
   type MotivoExclusao,
 } from './elegibilidade-ciclo.js';
 import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
+import { efeitoDoDescancelamento, estadoAoVoltar, fraseDoDescancelamento } from '../avaliacao/descancelamento.js';
 import { efeitoDoExcluir, type EfeitoDoCancelamento } from '../avaliacao/cancelamento.js';
 import {
   avisoDeTrocaEmRespondidas,
@@ -128,11 +129,22 @@ interface DesignacaoVigente {
   id: string;
   /** Por que a AVALIAÇÃO foi cancelada — pergunta diferente da `justificativa`. */
   motivoCancelamento: string | null;
+  /**
+   * ⭐ SIMETRIA (11/09): a linha mostrava o motivo do CANCELAMENTO e não o da
+   * REABERTURA. São dois atos do mesmo peso — os dois tiram a avaliação do
+   * estado em que ela estava, os dois exigem motivo, e os dois respondem "por
+   * que isto está assim?" meses depois. Mostrar um e calar o outro fazia a
+   * reabertura parecer rotina e o cancelamento parecer grave.
+   */
+  reabertaEm: Date | null;
+  motivoReabertura: string | null;
   avaliadorId: string;
   avaliadorNome: string;
   status: string;
   /** Quantas respostas já existem — entra na frase da confirmação do Excluir. */
   respostas: number;
+  /** ⭐ O que o INCLUIR devolve, se devolver. `null` quando não há o que desfazer. */
+  efeitoDoIncluir: { status: string; frase: string } | null;
 }
 
 
@@ -288,6 +300,9 @@ export class DesignacaoService {
       respostasDadas: 0,
       perguntasNoModelo,
       efeitoDoExcluir: efeitoDoExcluir(null),
+      reabertaEm: null as Date | null,
+      motivoReabertura: null as string | null,
+      efeitoDoIncluir: null as { status: string; frase: string } | null,
     };
     const linhas: LinhaDaLista[] = [
       ...incluidos.map((c) => ({
@@ -318,6 +333,11 @@ export class DesignacaoService {
         avaliacaoStatus: designada?.status ?? null,
         avaliacaoId: designada?.id ?? null,
         motivoCancelamento: designada?.motivoCancelamento ?? null,
+        /** ⭐ SIMETRIA: cancelamento e reabertura são dois atos do mesmo peso. */
+        reabertaEm: designada?.reabertaEm ?? null,
+        motivoReabertura: designada?.motivoReabertura ?? null,
+        /** O que o Incluir devolve — `null` quando não há o que desfazer. */
+        efeitoDoIncluir: designada?.efeitoDoIncluir ?? null,
         respostasDadas: designada?.respostas ?? 0,
         perguntasNoModelo,
         efeitoDoExcluir: efeitoDoExcluir(
@@ -505,23 +525,57 @@ export class DesignacaoService {
     // ⭐ O que o EXCLUIR faz com a avaliação viva. Decidido pela mesma função
     // que a lista devolve por linha, para a confirmação da tela e a decisão da
     // API nunca discordarem.
-    const avaliacao =
+    /**
+     * ⚠️ A avaliação é buscada nas DUAS decisões desde 11/09. Antes só o
+     * EXCLUIR olhava para ela, e por isso o INCLUIR não tinha como cumprir o
+     * que o modal do Excluir promete — que ele é reversível.
+     */
+    const avaliacao = await this.prisma.avaliacao.findUnique({
+      where: { cicloId_avaliadoId: { cicloId, avaliadoId: colaboradorId } },
+      select: {
+        id: true,
+        status: true,
+        avaliadorId: true,
+        motivoCancelamento: true,
+        origemCancelamento: true,
+        _count: { select: { respostas: true } },
+      },
+    });
+
+    const efeito =
       decisao === 'EXCLUIR'
-        ? await this.prisma.avaliacao.findUnique({
-            where: { cicloId_avaliadoId: { cicloId, avaliadoId: colaboradorId } },
-            select: { id: true, status: true, avaliadorId: true, _count: { select: { respostas: true } } },
-          })
-        : null;
-    const efeito = efeitoDoExcluir(
-      avaliacao
-        ? {
-            status: avaliacao.status,
-            respostas: avaliacao._count.respostas,
-            avaliadorNome: await this.nomeDoColaborador(avaliacao.avaliadorId),
-          }
-        : null,
-    );
+        ? efeitoDoExcluir(
+            avaliacao
+              ? {
+                  status: avaliacao.status,
+                  respostas: avaliacao._count.respostas,
+                  avaliadorNome: await this.nomeDoColaborador(avaliacao.avaliadorId),
+                }
+              : null,
+          )
+        : { acao: 'NADA_A_FAZER' as const, frase: null };
     if (efeito.acao === 'RECUSAR') throw new BadRequestException(efeito.frase!);
+
+    /**
+     * ⭐⭐ O INCLUIR DESFAZ O EXCLUIR — conserto de promessa, não botão novo.
+     * Só a origem `DECISAO_RH`: o que o encerramento do ciclo cancelou é outro
+     * ato, com outra granularidade, e se desfaz em massa na tela do ciclo.
+     */
+    const volta =
+      decisao === 'INCLUIR'
+        ? efeitoDoDescancelamento(
+            avaliacao
+              ? {
+                  status: avaliacao.status,
+                  respostas: avaliacao._count.respostas,
+                  motivoCancelamento: avaliacao.motivoCancelamento,
+                  origemCancelamento: avaliacao.origemCancelamento,
+                }
+              : null,
+            'DECISAO_RH',
+          )
+        : ({ acao: 'NADA_A_FAZER', status: null, frase: null } as const);
+    if (volta.acao === 'RECUSAR') throw new BadRequestException(volta.frase);
 
     return this.prisma.$transaction(async (tx) => {
       if (vigente) {
@@ -553,6 +607,8 @@ export class DesignacaoService {
             // O motivo do cancelamento é a justificativa da exclusão: são o
             // mesmo ato, e duas frases diferentes para ele só criariam dúvida.
             motivoCancelamento: `Excluído do ciclo pelo RH: ${justificativa.trim()}`,
+            // ⭐ QUAL ato cancelou — é o que diz, depois, o que pode desfazer.
+            origemCancelamento: 'DECISAO_RH',
           },
         });
         await this.auditoria.registrar({
@@ -562,6 +618,47 @@ export class DesignacaoService {
           usuarioId,
           valorAnterior: { status: avaliacao.status, respostas: avaliacao._count.respostas },
           valorNovo: { status: 'CANCELADA', origem: 'DECISAO_RH', justificativa },
+        });
+      }
+
+      /**
+       * ⭐⭐ A OUTRA METADE DO ATO: o INCLUIR devolve a avaliação.
+       *
+       * Dentro da MESMA transação que grava a elegibilidade, pelo motivo pelo
+       * qual o cancelamento também está: decisão registrada com avaliação no
+       * estado errado — em qualquer um dos dois sentidos — é o estado partido
+       * que este método existe para não produzir.
+       */
+      if (avaliacao && volta.acao === 'DESCANCELAR') {
+        await tx.avaliacao.update({
+          where: { id: avaliacao.id },
+          data: {
+            status: volta.status,
+            canceladaEm: null,
+            canceladaPorId: null,
+            // (b) O motivo SAI do registro: a linha volta a estar viva, e campo
+            // que descreve um estado que não vale mais faz a tela mentir.
+            motivoCancelamento: null,
+            origemCancelamento: null,
+          },
+        });
+        await this.auditoria.registrar({
+          entidade: 'Avaliacao',
+          entidadeId: avaliacao.id,
+          acao: 'DESCANCELAR',
+          usuarioId,
+          /**
+           * ⚠️ O MOTIVO ORIGINAL VAI AQUI, e é obrigatório que vá. Sem ele a
+           * trilha guarda "descancelou" e perde o porquê do cancelamento — que
+           * é justamente a metade que responde a pergunta de daqui a seis meses.
+           */
+          valorAnterior: {
+            status: 'CANCELADA',
+            respostas: avaliacao._count.respostas,
+            motivoCancelamento: avaliacao.motivoCancelamento,
+            origemCancelamento: avaliacao.origemCancelamento,
+          },
+          valorNovo: { status: volta.status, origem: 'INCLUIR', justificativa },
         });
       }
 
@@ -1024,6 +1121,9 @@ export class DesignacaoService {
         avaliadorId: true,
         status: true,
         motivoCancelamento: true,
+        origemCancelamento: true,
+        reabertaEm: true,
+        motivoReabertura: true,
         _count: { select: { respostas: true } },
       },
     });
@@ -1041,10 +1141,37 @@ export class DesignacaoService {
         {
           id: a.id,
           motivoCancelamento: a.motivoCancelamento,
+          reabertaEm: a.reabertaEm,
+          motivoReabertura: a.motivoReabertura,
           avaliadorId: a.avaliadorId,
           avaliadorNome: nomePorId.get(a.avaliadorId) ?? '(colaborador não encontrado)',
           status: a.status as string,
           respostas: a._count.respostas,
+          /**
+           * ⭐ A MESMA FUNÇÃO que o serviço usa para decidir — a tela não monta
+           * a frase sozinha, senão ela envelhece separada da regra (foi o que
+           * aconteceu com o texto do modal de aplicação, que mentiu por 2 dias).
+           */
+          efeitoDoIncluir:
+            efeitoDoDescancelamento(
+              {
+                status: a.status as string,
+                respostas: a._count.respostas,
+                motivoCancelamento: a.motivoCancelamento,
+                origemCancelamento: a.origemCancelamento,
+              },
+              'DECISAO_RH',
+            ).acao === 'DESCANCELAR'
+              ? {
+                  status: estadoAoVoltar(a._count.respostas),
+                  frase: fraseDoDescancelamento({
+                    status: a.status as string,
+                    respostas: a._count.respostas,
+                    motivoCancelamento: a.motivoCancelamento,
+                    origemCancelamento: a.origemCancelamento,
+                  }),
+                }
+              : null,
         },
       ]),
     );

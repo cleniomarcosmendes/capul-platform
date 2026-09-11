@@ -44,9 +44,18 @@ describe('DesignacaoService.decidir — EXCLUIR cancela a avaliação', () => {
     expect(r.avaliacaoCancelada).toBe(false);
   });
 
-  it('INCLUIR nem procura avaliação — não é o assunto dele', async () => {
+  /**
+   * ⭐⭐ MUDOU EM 11/09, e o teste antigo dizia o contrário: *"INCLUIR nem
+   * procura avaliação — não é o assunto dele"*. Era, sim: o modal do Excluir
+   * promete que o Incluir reverte, e ele não revertia nada. Agora o INCLUIR
+   * OLHA a avaliação — é como cumpre a promessa.
+   *
+   * ⚠️ Mas só desfaz o que ELE causou: sem avaliação cancelada por `DECISAO_RH`,
+   * não escreve nada.
+   */
+  it('INCLUIR procura a avaliação, e não escreve quando não há o que desfazer', async () => {
     await service.decidir(CICLO, PESSOA, 'INCLUIR', 'Volta pelo ciclo', RH);
-    expect(prisma.avaliacao.findUnique).not.toHaveBeenCalled();
+    expect(prisma.avaliacao.findUnique).toHaveBeenCalled();
     expect(prisma.avaliacao.update).not.toHaveBeenCalled();
   });
 

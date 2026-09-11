@@ -492,6 +492,19 @@ function LinhaDaLista({
         {linha.motivoCancelamento && linha.motivoCancelamento !== linha.justificativa && (
           <p className="mt-1 text-xs italic text-rose-700">“{linha.motivoCancelamento}”</p>
         )}
+        {/* ⭐ SIMETRIA (11/09). A linha mostrava o motivo do CANCELAMENTO e
+            calava o da REABERTURA — e os dois são atos do mesmo peso: tiram a
+            avaliação do estado em que ela estava, exigem motivo e respondem a
+            mesma pergunta meses depois. Com um só na tela, a reabertura parecia
+            rotina e o cancelamento parecia grave.
+            ⚠️ Cor DIFERENTE de propósito: cancelar tira da conta (rosa),
+            reabrir devolve para a fila (âmbar). Mesmo peso não é mesmo efeito. */}
+        {linha.motivoReabertura && (
+          <p className="mt-1 text-xs italic text-amber-700">
+            Reaberta{linha.reabertaEm ? ` em ${dataHora(linha.reabertaEm)}` : ''}: “
+            {linha.motivoReabertura}”
+          </p>
+        )}
         {/* A outra metade da promessa: onde as respostas foram parar. Sem esta
             frase, "cancelada" ao lado de "4 de 11" ainda deixa a pergunta de
             pé — e a resposta é o que o diálogo já tinha prometido. */}
@@ -643,6 +656,33 @@ function DialogoDecisao({
       <p className="mt-2 text-sm text-slate-500">
         A decisão anterior não é apagada — fica marcada como removida, e reverter é registrar outra.
       </p>
+
+      {/* ⭐⭐ O INCLUIR CUMPRE A PROMESSA DO EXCLUIR (11/09).
+          O modal do Excluir sempre disse que é reversível pelo Incluir — e até
+          aqui o Incluir só registrava uma decisão nova: a avaliação continuava
+          CANCELADA, por caminho nenhum. Agora ele devolve, e o diálogo diz o que
+          vai devolver ANTES do clique, com o estado e o número de respostas.
+          ⚠️ A frase vem do BACKEND, da mesma função que decide — montada aqui,
+          envelheceria separada da regra. */}
+      {decisao === 'INCLUIR' && linha.efeitoDoIncluir && (
+        <div className="mt-3 rounded-xl border border-capul-200 bg-capul-50 p-3 text-sm text-capul-800">
+          <p className="font-medium">O que isto devolve</p>
+          <p className="mt-1">{linha.efeitoDoIncluir.frase}</p>
+        </div>
+      )}
+      {/* Quem foi cancelado pelo ENCERRAMENTO não volta por aqui — e a tela diz
+          onde volta, em vez de deixar a pessoa clicar e levar a recusa. */}
+      {decisao === 'INCLUIR' && !linha.efeitoDoIncluir && linha.avaliacaoStatus === 'CANCELADA' && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <p className="font-medium">A avaliação não volta por aqui</p>
+          <p className="mt-1">
+            Ela foi cancelada pelo <strong>encerramento do ciclo</strong>, não por uma decisão nesta
+            linha — e aquilo foi um ato só, sobre várias pessoas. Para devolvê-las, use{' '}
+            <em>Devolver canceladas</em> na tela do ciclo. Incluir aqui só recoloca a pessoa na
+            lista.
+          </p>
+        </div>
+      )}
 
       {efeito?.frase && (
         <div
