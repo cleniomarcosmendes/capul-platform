@@ -2,6 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Printer, Loader2, ArrowLeft } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
+import { buscaAcessoria, useFalhasCarga } from '../lib/cargaAcessoria';
+import { AvisoFalhasCarga } from '../components/AvisoFalhasCarga';
 import { maskTelefone, maskCep } from '../utils/format';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
@@ -54,6 +56,7 @@ const PRINT_CSS = `
 }`;
 
 export function RomaneioPage() {
+  const { falhas, registrarFalha } = useFalhasCarga();
   const { id } = useParams();
   const navigate = useNavigate();
   // Abre em nova aba (target=_blank) → sem histórico p/ voltar; cai na origem.
@@ -73,10 +76,10 @@ export function RomaneioPage() {
 
   useEffect(() => {
     Promise.all([
-      coreApi.get<CoreItem[]>('/filiais').catch(() => ({ data: [] })),
-      coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
+      buscaAcessoria(coreApi.get<CoreItem[]>('/filiais'), [] as CoreItem[], 'filiais', 'as filiais', registrarFalha),
+      buscaAcessoria(coreApi.get<CoreItem[]>('/usuarios'), [] as CoreItem[], 'usuarios', 'os nomes dos usuários', registrarFalha),
     ]).then(([f, u]) => { setFiliais(f.data); setUsuarios(u.data); });
-  }, []);
+  }, [registrarFalha]);
 
   useEffect(() => {
     setLoading(true);
@@ -96,6 +99,7 @@ export function RomaneioPage() {
 
   return (
     <div style={{ background: '#f1f5f9', minHeight: '100vh' }}>
+      <AvisoFalhasCarga falhas={falhas} />
       <div className="rom-noprint" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 20px', background: '#fff', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
         <button onClick={voltar} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
           <ArrowLeft className="h-4 w-4" /> Voltar

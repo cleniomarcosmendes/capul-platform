@@ -3,6 +3,8 @@ import {
   Loader2, ChevronLeft, ChevronRight, DollarSign, Boxes, Receipt, RefreshCw, MapPin, Gauge,
 } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
+import { buscaAcessoria, useFalhasCarga } from '../lib/cargaAcessoria';
+import { AvisoFalhasCarga } from '../components/AvisoFalhasCarga';
 
 // Indicadores analíticos por MÊS (separados do Painel operacional em 12/06 —
 // o Painel ficou denso demais). Valor por canal, performance por motorista,
@@ -35,6 +37,7 @@ const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', cur
 const fmtPct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v * 100)}%`);
 
 export function IndicadoresPage() {
+  const { falhas, registrarFalha } = useFalhasCarga();
   const [filiais, setFiliais] = useState<CoreItem[]>([]);
   const [usuarios, setUsuarios] = useState<CoreItem[]>([]);
   const [filialId, setFilialId] = useState('');
@@ -55,12 +58,15 @@ export function IndicadoresPage() {
   useEffect(() => {
     void (async () => {
       const [f, u] = await Promise.all([
-        coreApi.get<CoreItem[]>('/filiais').catch(() => ({ data: [] })),
-        coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
+        // Resolução de NOME: falhar aqui não esvazia uma lista de escolha, mas troca
+        // todos os rótulos por ids — a tela parece quebrada e o usuário não tem como
+        // saber por quê. Por isso também fala.
+        buscaAcessoria(coreApi.get<CoreItem[]>('/filiais'), [] as CoreItem[], 'filiais', 'as filiais', registrarFalha),
+        buscaAcessoria(coreApi.get<CoreItem[]>('/usuarios'), [] as CoreItem[], 'usuarios', 'os nomes dos usuários', registrarFalha),
       ]);
       setFiliais(f.data); setUsuarios(u.data);
     })();
-  }, []);
+  }, [registrarFalha]);
 
   useEffect(() => {
     setLoading(true);
@@ -74,6 +80,7 @@ export function IndicadoresPage() {
 
   return (
     <div className="space-y-6">
+      <AvisoFalhasCarga falhas={falhas} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Indicadores de Entrega</h2>

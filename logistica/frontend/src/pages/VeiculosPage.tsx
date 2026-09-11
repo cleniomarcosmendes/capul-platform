@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, Plus } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
+import { buscaAcessoria, useFalhasCarga } from '../lib/cargaAcessoria';
+import { AvisoFalhasCarga } from '../components/AvisoFalhasCarga';
 import { useAuth } from '../contexts/AuthContext';
 
 // Frota (padrão workspace): LISTA em grid ordenável + chips de situação;
@@ -27,6 +29,7 @@ type SortKey = 'placa' | 'modelo' | 'tipo' | 'situacao' | 'supervisor' | 'kmAtua
 type SortDir = 'asc' | 'desc';
 
 export function VeiculosPage() {
+  const { falhas, registrarFalha } = useFalhasCarga();
   const { temRole } = useAuth();
   // Mesma lista do backend (POST/PATCH /veiculos) — ADMIN passa pelo guard.
   const podeGerirVeiculo = temRole('ADMIN', 'GESTOR_ENTREGA', 'GESTOR_FROTA');
@@ -45,12 +48,12 @@ export function VeiculosPage() {
       try {
         const [v, u] = await Promise.all([
           logisticaApi.get<Veiculo[]>('/veiculos', { params: { ...(situacaoSel ? { situacao: situacaoSel } : {}), ...(verInativos ? { incluirInativos: 'true' } : {}) } }),
-          coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
+          buscaAcessoria(coreApi.get<CoreItem[]>('/usuarios'), [] as CoreItem[], 'usuarios', 'os nomes dos responsáveis', registrarFalha),
         ]);
         setVeiculos(v.data); setUsuarios(u.data);
       } finally { setLoading(false); }
     })();
-  }, [situacaoSel, verInativos]);
+  }, [situacaoSel, verInativos, registrarFalha]);
 
   const nomeSupervisor = (id: string) => labelCore(usuarios.find((x) => x.id === id));
 
@@ -88,6 +91,7 @@ export function VeiculosPage() {
 
   return (
     <div className="space-y-4">
+      <AvisoFalhasCarga falhas={falhas} />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Frota</h2>

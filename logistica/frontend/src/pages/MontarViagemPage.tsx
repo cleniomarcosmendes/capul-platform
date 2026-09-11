@@ -6,6 +6,8 @@ import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { MapaRota } from '../components/MapaRota';
+import { buscaAcessoria, useFalhasCarga } from '../lib/cargaAcessoria';
+import { AvisoFalhasCarga } from '../components/AvisoFalhasCarga';
 
 // Montagem de viagem (página dedicada — redesenho 12/06 a pedido do Clenio):
 // modelo "carrinho": fila de pendentes à esquerda → rota em construção à
@@ -44,6 +46,7 @@ const SEM_BAIRRO = '__SEM__';
 const keyBairro = (b?: string | null) => (b ?? '').trim().toUpperCase() || SEM_BAIRRO;
 
 export function MontarViagemPage() {
+  const { falhas, registrarFalha } = useFalhasCarga();
   const { usuario, temRole } = useAuth();
   const navigate = useNavigate();
   const filialId = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
@@ -106,13 +109,15 @@ export function MontarViagemPage() {
       try {
         const [v, u, e] = await Promise.all([
           logisticaApi.get<Veiculo[]>('/veiculos', { params: filialId ? { filialId, situacao: 'DISPONIVEL' } : { situacao: 'DISPONIVEL' } }),
-          logisticaApi.get<CoreItem[]>('/motoristas', { params: filialId ? { filialId } : undefined }).catch(() => ({ data: [] })),
+          // Sem motorista não se monta viagem: a falha calada virava "esta filial não
+          // tem motorista", que é uma afirmação sobre o cadastro.
+          buscaAcessoria(logisticaApi.get<CoreItem[]>('/motoristas', { params: filialId ? { filialId } : undefined }), [] as CoreItem[], 'motoristas', 'os motoristas', registrarFalha),
           logisticaApi.get<Entrega[]>('/entregas', { params: filialId ? { filialId } : undefined }),
         ]);
         setVeiculos(v.data); setMotoristas(u.data); setPendentes(e.data);
       } finally { setLoading(false); }
     })();
-  }, [filialId]);
+  }, [filialId, registrarFalha]);
 
   const porId = useMemo(() => new Map(pendentes.map((e) => [e.id, e])), [pendentes]);
 
@@ -327,6 +332,7 @@ export function MontarViagemPage() {
   return (
     <div className="space-y-4">
       {DirtyDialog}
+      <AvisoFalhasCarga falhas={falhas} />
       <Link to="/viagens" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Voltar para Rotas de Entrega
       </Link>

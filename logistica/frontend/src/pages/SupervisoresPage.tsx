@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Plus, Printer, Route, Tag, Users, X } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { errMsg } from './frota-utils';
+import { buscaAcessoria, useFalhasCarga } from '../lib/cargaAcessoria';
+import { AvisoFalhasCarga } from '../components/AvisoFalhasCarga';
 import { DataInput } from '../components/DataInput';
 import { papelLabel } from './supervisor-utils';
 import { MoedaInput } from '../components/MoedaInput';
@@ -166,13 +168,7 @@ function ViagensTab() {
   // veículo (Veículos › "Coordenador / Supervisor de Área responsável") e alterável.
   // É ele que as despesas do RDV herdam — sem isso o combustível ficava sem veículo e
   // sumia do custo da frota.
-  const [falhas, setFalhas] = useState<Record<string, string>>({});
-  const registrarFalha = useCallback((chave: string, msg: string | null) => {
-    setFalhas((prev) => {
-      if (!msg) { if (!(chave in prev)) return prev; const { [chave]: _, ...resto } = prev; return resto; }
-      return prev[chave] === msg ? prev : { ...prev, [chave]: msg };
-    });
-  }, []);
+  const { falhas, registrarFalha } = useFalhasCarga();
   const [veiculos, setVeiculos] = useState<VeiculoOpc[]>([]);
   const [veiculoId, setVeiculoId] = useState('');
   const [meuCadastro, setMeuCadastro] = useState<{ matricula: string } | null>(null);
@@ -452,44 +448,6 @@ interface DeptItem { id: string; nome: string }
  *  mandá-lo para uma filial que ele não conseguia desfazer. */
 interface FilialItem { id: string; codigo?: string; nomeFantasia?: string; nome?: string; status?: string }
 
-/**
- * Busca acessória que NÃO transforma falha em vazio.
- *
- * O padrão `.catch(() => ({ data: [] }))` existe para uma chamada secundária não derrubar
- * a tela inteira — a intenção é boa. O efeito colateral é que 401, 403, 429, timeout e
- * "de fato não há nada" viram a MESMA tela: um seletor vazio, sem uma palavra. Foi por
- * isso que o defeito original ("o sistema não listou o departamento") levou dois dias
- * para ser nomeado: nem o usuário nem eu conseguíamos dizer o que tinha acontecido.
- *
- * Aqui a falha continua não derrubando a tela, mas fica REGISTRADA em `falhas[chave]`,
- * e a tela mostra o que não carregou.
- */
-function buscaAcessoria<T>(
-  p: Promise<{ data: T }>,
-  vazio: T,
-  chave: string,
-  oQue: string,
-  registrar: (chave: string, msg: string | null) => void,
-): Promise<{ data: T }> {
-  return p
-    .then((r) => { registrar(chave, null); return r; })
-    .catch((e) => { registrar(chave, errMsg(e, `Não foi possível carregar ${oQue}.`)); return { data: vazio }; });
-}
-
-/** Banner do que não carregou. Some sozinho quando a carga seguinte dá certo. */
-function AvisoFalhasCarga({ falhas }: { falhas: Record<string, string> }) {
-  const msgs = Object.values(falhas).filter(Boolean);
-  if (msgs.length === 0) return null;
-  return (
-    <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
-      <p className="text-sm font-medium text-amber-900">Parte da tela não carregou — o que estiver vazio abaixo pode ser efeito disto, não ausência de dado.</p>
-      <ul className="mt-1 list-inside list-disc text-xs text-amber-800">
-        {[...new Set(msgs)].map((m) => <li key={m}>{m}</li>)}
-      </ul>
-    </div>
-  );
-}
-
 const nomeFilial = (f: { nome?: string; nomeFantasia?: string; codigo?: string; id: string }) =>
   `${f.codigo ? `${f.codigo} · ` : ''}${f.nomeFantasia ?? f.nome ?? f.id}`;
 
@@ -565,13 +523,7 @@ function EquipeTab() {
   // Falhas das buscas acessórias. Existe para a tela NÃO tratar "a chamada quebrou"
   // igual a "não há dado": eram indistinguíveis, e foi por isso que ninguém conseguia
   // dizer por que o seletor vinha vazio.
-  const [falhas, setFalhas] = useState<Record<string, string>>({});
-  const registrarFalha = useCallback((chave: string, msg: string | null) => {
-    setFalhas((prev) => {
-      if (!msg) { if (!(chave in prev)) return prev; const { [chave]: _, ...resto } = prev; return resto; }
-      return prev[chave] === msg ? prev : { ...prev, [chave]: msg };
-    });
-  }, []);
+  const { falhas, registrarFalha } = useFalhasCarga();
   const deptErro = falhas['deptos'] ?? null;
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);

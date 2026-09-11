@@ -9,6 +9,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { DataInput } from '../components/DataInput';
 import { papelLabel } from './supervisor-utils';
 import { MoedaInput } from '../components/MoedaInput';
+import { buscaAcessoria, useFalhasCarga } from '../lib/cargaAcessoria';
+import { AvisoFalhasCarga } from '../components/AvisoFalhasCarga';
 
 // Form de veículo (padrão FormPage do workspace): /veiculos/novo e
 // /veiculos/:id/editar no MESMO componente.
@@ -34,6 +36,7 @@ const FINALIDADES: [string, string][] = [['', '—'], ['ENTREGA', 'Entrega'], ['
 const SITUACOES = ['DISPONIVEL', 'EM_USO', 'EM_MANUTENCAO', 'BAIXADO'];
 
 export function VeiculoFormPage() {
+  const { falhas, registrarFalha } = useFalhasCarga();
   const { id } = useParams<{ id: string }>();
   const modoEdicao = !!id;
   const navigate = useNavigate();
@@ -113,17 +116,19 @@ export function VeiculoFormPage() {
     if (!filialId) { setDepartamentos([]); setUsuarios([]); return; }
     void (async () => {
       const [d, u, r] = await Promise.all([
-        coreApi.get<CoreItem[]>('/departamentos', { params: { filialId } }).catch(() => ({ data: [] })),
+        // Mesma classe do defeito corrigido na aba Equipe: seletor de departamento que
+        // esvazia sem dizer se é "não há" ou "falhou".
+        buscaAcessoria(coreApi.get<CoreItem[]>('/departamentos', { params: { filialId } }), [] as CoreItem[], 'deptos', 'os departamentos desta filial', registrarFalha),
         // Só quem PODE ser Supervisor Responsável (papel de frota ativo). Antes vinha
         // a filial inteira — foi assim que um GESTOR_ENTREGA acabou no campo, sem que
         // a tela avisasse que ele não conseguiria acompanhar nem aprovar nada.
-        logisticaApi.get<SupervisorElegivel[]>('/veiculos/supervisores-elegiveis', { params: { filialId } }).catch(() => ({ data: [] })),
+        buscaAcessoria(logisticaApi.get<SupervisorElegivel[]>('/veiculos/supervisores-elegiveis', { params: { filialId } }), [] as SupervisorElegivel[], 'elegiveis', 'quem pode ser Supervisor Responsável', registrarFalha),
         // Equipe do RDV desta filial: quem pode ser o responsável pelo veículo.
-        logisticaApi.get<Representante[]>('/veiculos/representantes', { params: { filialId } }).catch(() => ({ data: [] })),
+        buscaAcessoria(logisticaApi.get<Representante[]>('/veiculos/representantes', { params: { filialId } }), [] as Representante[], 'representantes', 'a equipe do RDV desta filial', registrarFalha),
       ]);
       setDepartamentos(d.data); setUsuarios(u.data); setRepresentantes(r.data);
     })();
-  }, [filialId]);
+  }, [filialId, registrarFalha]);
 
   useEffect(() => {
     if (!id) return;
@@ -284,6 +289,7 @@ export function VeiculoFormPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4" onChange={() => setDirty(true)}>
       {DirtyDialog}
+      <AvisoFalhasCarga falhas={falhas} />
       <Link to="/veiculos" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Voltar para Frota
       </Link>

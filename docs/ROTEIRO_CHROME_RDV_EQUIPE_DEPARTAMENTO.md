@@ -604,3 +604,45 @@ devolve `movimentos`. **Validado por mutação:** desligando a guarda de movimen
 > `movimentosPorSupervisor` devolve 0, e esse 0 inclui `fechamentoRdv` — um representante
 > excluível não tem mês nenhum. Se a exclusão passar a aceitar cadastro com movimento, a
 > dispensa sai e o guard entra.
+
+---
+
+# DEFEITO 4 — VARREDURA COMPLETA do módulo (11/09/2026, bundle `index-C9qZZUnZ.js`)
+
+Os 14 `.catch(() => ({ data: [] }))` que sobraram nas outras 7 telas também caíram.
+**Zero `catch` mudo restante no frontend da Logística** (o único hit do grep hoje é o
+comentário que documenta o padrão).
+
+## Helper extraído para módulo compartilhado
+
+| Arquivo | O quê |
+|---|---|
+| `src/lib/cargaAcessoria.ts` | `useFalhasCarga()` + `buscaAcessoria()` |
+| `src/components/AvisoFalhasCarga.tsx` | o banner |
+
+Separados em dois arquivos porque a regra `react-refresh/only-export-components` não
+aceita componente e função no mesmo módulo.
+
+## Telas migradas
+
+**Armadilhas — lista de escolha que sumia sem explicação (7):**
+
+| Tela | Chamada | O que a falha parecia |
+|---|---|---|
+| `MontarViagemPage` | `/motoristas` | "esta filial não tem motorista" |
+| `VeiculoFormPage` | `/departamentos` | mesma classe do defeito da aba Equipe |
+| `VeiculoFormPage` | `/veiculos/supervisores-elegiveis` | "ninguém pode ser Supervisor Responsável" |
+| `VeiculoFormPage` | `/veiculos/representantes` | "não há equipe de RDV nesta filial" |
+| `ViagemDetalhePage` | `/veiculos`, `/motoristas`, `/entregas` | "não há nada disponível" no RASCUNHO |
+
+**Resolução de nome (7):** `IndicadoresPage`, `RomaneioPage`, `PainelPage` (`/filiais` +
+`/usuarios`) e `VeiculosPage` (`/usuarios`). Falhar ali não esvazia seletor, mas **troca
+todos os rótulos por ids** — a tela parece quebrada e ninguém sabe por quê. Também falam.
+
+## Conferido
+
+`tsc -b` e `eslint src/` **sem erro e sem aviso**. Os 7 avisos de
+`react-hooks/exhaustive-deps` que a migração gerou foram resolvidos **declarando**
+`registrarFalha` nas listas de dependência (ela é estável — `useCallback` com `[]`), não
+silenciando a regra.
+Bundle servido contém as frases novas.

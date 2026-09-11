@@ -9,6 +9,8 @@ import { BaixaDialog } from '../components/BaixaDialog';
 import { useToast } from '../components/toast-context';
 import { useAuth } from '../contexts/AuthContext';
 import { maskTelefone } from '../utils/format';
+import { buscaAcessoria, useFalhasCarga } from '../lib/cargaAcessoria';
+import { AvisoFalhasCarga } from '../components/AvisoFalhasCarga';
 
 // Detalhe da viagem (padrão workspace): paradas na ordem da rota + ações por
 // situação (despachar/concluir/descartar, baixa por parada, romaneio/etiquetas).
@@ -51,6 +53,7 @@ const SIT_META: Record<string, { label: string; cls: string }> = {
 };
 
 export function ViagemDetalhePage() {
+  const { falhas, registrarFalha } = useFalhasCarga();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [v, setV] = useState<Viagem | null>(null);
@@ -108,13 +111,15 @@ export function ViagemDetalhePage() {
     if (v?.situacao !== 'RASCUNHO') return;
     void (async () => {
       const [ve, mo, pe] = await Promise.all([
-        logisticaApi.get('/veiculos', { params: { ...(v.filialId ? { filialId: v.filialId } : {}), situacao: 'DISPONIVEL' } }).catch(() => ({ data: [] })),
-        logisticaApi.get('/motoristas', { params: v.filialId ? { filialId: v.filialId } : undefined }).catch(() => ({ data: [] })),
-        logisticaApi.get('/entregas', { params: v.filialId ? { filialId: v.filialId } : undefined }).catch(() => ({ data: [] })),
+        // As três alimentam o RASCUNHO: veículo, motorista e entregas a incluir. Falha
+        // calada em qualquer uma parecia "não há nada disponível nesta filial".
+        buscaAcessoria(logisticaApi.get('/veiculos', { params: { ...(v.filialId ? { filialId: v.filialId } : {}), situacao: 'DISPONIVEL' } }), { data: [] }.data, 'veiculos', 'os veículos disponíveis', registrarFalha),
+        buscaAcessoria(logisticaApi.get('/motoristas', { params: v.filialId ? { filialId: v.filialId } : undefined }), { data: [] }.data, 'motoristas', 'os motoristas', registrarFalha),
+        buscaAcessoria(logisticaApi.get('/entregas', { params: v.filialId ? { filialId: v.filialId } : undefined }), { data: [] }.data, 'entregas', 'as entregas pendentes', registrarFalha),
       ]);
       setVeiculos(ve.data); setMotoristas(mo.data); setPendentesAdd(pe.data);
     })();
-  }, [v?.situacao, v?.filialId]);
+  }, [v?.situacao, v?.filialId, registrarFalha]);
 
   // Salvar explícito (botão) de veículo + motorista do rascunho.
   const vmAlterado = veiculoSel !== (v?.veiculoId ?? '') || motoristaSel !== (v?.motoristaId ?? '');
@@ -293,6 +298,7 @@ export function ViagemDetalhePage() {
 
   return (
     <div className="space-y-4">
+      <AvisoFalhasCarga falhas={falhas} />
       <button onClick={voltar} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
         <ArrowLeft className="h-4 w-4" /> Voltar
       </button>

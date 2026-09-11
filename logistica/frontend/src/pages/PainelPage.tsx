@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Package, Truck, CheckCircle2, XCircle, Route, Car, Timer, ChevronLeft, ChevronRight } from 'lucide-react';
 import { coreApi, logisticaApi } from '../services/api';
+import { buscaAcessoria, useFalhasCarga } from '../lib/cargaAcessoria';
+import { AvisoFalhasCarga } from '../components/AvisoFalhasCarga';
 import { useAuth } from '../contexts/AuthContext';
 
 interface CoreItem { id: string; nome?: string; codigo?: string; nomeFantasia?: string }
@@ -34,6 +36,7 @@ const diaCurto = (iso: string) => {
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function PainelPage() {
+  const { falhas, registrarFalha } = useFalhasCarga();
   const { temRole } = useAuth();
   const podeVerOutrasFiliais = temRole('ADMIN', 'GESTOR_FROTA');
   const [data, setData] = useState<Painel | null>(null);
@@ -55,12 +58,15 @@ export function PainelPage() {
   useEffect(() => {
     void (async () => {
       const [f, u] = await Promise.all([
-        coreApi.get<CoreItem[]>('/filiais').catch(() => ({ data: [] })),
-        coreApi.get<CoreItem[]>('/usuarios').catch(() => ({ data: [] })),
+        // Resolução de NOME: falhar aqui não esvazia uma lista de escolha, mas troca
+        // todos os rótulos por ids — a tela parece quebrada e o usuário não tem como
+        // saber por quê. Por isso também fala.
+        buscaAcessoria(coreApi.get<CoreItem[]>('/filiais'), [] as CoreItem[], 'filiais', 'as filiais', registrarFalha),
+        buscaAcessoria(coreApi.get<CoreItem[]>('/usuarios'), [] as CoreItem[], 'usuarios', 'os nomes dos usuários', registrarFalha),
       ]);
       setFiliais(f.data); setUsuarios(u.data);
     })();
-  }, []);
+  }, [registrarFalha]);
 
   useEffect(() => {
     setLoading(true);
@@ -81,6 +87,7 @@ export function PainelPage() {
 
   return (
     <div className="space-y-6">
+      <AvisoFalhasCarga falhas={falhas} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">Painel</h2>
