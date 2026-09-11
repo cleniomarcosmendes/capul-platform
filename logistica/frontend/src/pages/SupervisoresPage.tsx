@@ -442,7 +442,7 @@ const sugerirVeiculo = (veiculos: VeiculoOpc[], matricula?: string | null) => {
   return meus.length === 1 ? meus[0].id : '';
 };
 
-interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; papel?: string | null; ativo: boolean }
+interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; papel?: string | null; ativo: boolean; /** Registros de RDV (planejamento/adiantamento/fechamento). >0 impede excluir. */ movimentos?: number }
 interface CoreUser { id: string; nome?: string; nomeFantasia?: string; matricula?: string | null; departamento?: { id: string; nome: string } | null; permissoes?: { modulo: { codigo: string }; roleModulo: { codigo: string } }[] }
 interface DeptItem { id: string; nome: string }
 /** Filial do catálogo (`core.filiais`). O ADMIN é GLOBAL neste módulo — o backend
@@ -691,6 +691,19 @@ function EquipeTab() {
   const salvarEdicao = async (id: string) => {
     try { await logisticaApi.patch(`/supervisor/supervisores/${id}`, { departamentoId: editDepto, coordenadorId: editCoord }, qFilial); toast('success', 'Cadastro atualizado.'); setEditId(null); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
+  };
+  // Exclusão definitiva do cadastro. Só chega aqui quem não tem movimento (a API confere
+  // de novo). O diálogo diz o que se perde E o que NÃO se perde — o cadastro some, a
+  // pessoa e a permissão dela no Configurador ficam intactas.
+  const excluir = async (s: Supervisor) => {
+    if (!window.confirm(
+      `Excluir o cadastro de ${s.nome} (${s.matricula}) no RDV desta filial?\n\n` +
+      `Isto apaga o registro do time — a matrícula fica livre para ser cadastrada de novo.\n` +
+      `NÃO mexe no usuário nem na permissão dele no Configurador.\n\n` +
+      `Se a intenção é só tirar das telas mantendo o histórico, use Inativar.`,
+    )) return;
+    try { await logisticaApi.delete(`/supervisor/supervisores/${s.id}`, qFilial); toast('success', 'Cadastro excluído.'); await carregar(); }
+    catch (e) { toast('error', errMsg(e, 'Falha ao excluir.')); }
   };
   const toggle = async (s: Supervisor) => {
     try { await logisticaApi.patch(`/supervisor/supervisores/${s.id}`, { ativo: !s.ativo }, qFilial); await carregar(); }
@@ -943,6 +956,18 @@ function EquipeTab() {
                       <div className="flex items-center gap-3">
                         <button onClick={() => { setEditId(s.id); setEditCoord(s.coordenadorId ?? ''); setEditDepto(s.departamentoId ?? ''); }} className="text-xs text-capul-600 hover:underline">Editar</button>
                         <button onClick={() => void toggle(s)} className="text-xs text-capul-600 hover:underline">{s.ativo ? 'Inativar' : 'Ativar'}</button>
+                        {/* Excluir aparece SEMPRE; quando não dá, vem desabilitado COM o
+                            motivo no title — esconder deixaria o usuário procurando uma
+                            saída que existe. Só cadastro sem movimento some de vez; com
+                            histórico, a saída é Inativar (a API recusa e explica). */}
+                        {(s.movimentos ?? 0) > 0 ? (
+                          <span
+                            className="cursor-not-allowed text-xs text-slate-300"
+                            title={`Não pode ser excluído: já tem ${s.movimentos} ${s.movimentos === 1 ? 'registro' : 'registros'} no RDV. Use Inativar — ele sai das telas e o histórico fica.`}
+                          >Excluir</span>
+                        ) : (
+                          <button onClick={() => void excluir(s)} className="text-xs text-rose-500 hover:underline">Excluir</button>
+                        )}
                       </div>
                     )}
                   </td>

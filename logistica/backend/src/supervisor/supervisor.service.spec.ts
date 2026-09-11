@@ -1962,6 +1962,11 @@ describe('SupervisorService — INVARIANTE: toda escrita do RDV respeita o mês 
     anexarComprovantes: 'helper privado — idem',
     criarSupervisor: 'cadastro do time: não pertence a um mês',
     atualizarSupervisor: 'cadastro do time: não pertence a um mês',
+    // Dispensa por CHECAGEM, não por categoria: o método só apaga quando
+    // `movimentosPorSupervisor` devolve 0, e esse 0 inclui `fechamentoRdv`. Logo um
+    // representante excluível não tem mês nenhum — nem aberto nem encerrado. Se um dia
+    // a exclusão passar a aceitar cadastro COM movimento, esta linha sai e o guard entra.
+    removerSupervisor: 'só apaga cadastro com ZERO movimento — incluindo zero fechamento de mês',
     criarAtividade: 'catálogo de atividades: não pertence a um mês',
     atualizarAtividade: 'catálogo de atividades: não pertence a um mês',
     definirSupervisorDepartamento: 'cadastro de responsável por departamento',
@@ -2318,5 +2323,94 @@ describe('SupervisorService — departamento de OUTRA filial no cadastro de repr
     await expect(
       svc.criarSupervisor({ matricula: 'E00011', nome: 'Z', departamentoId: 'd1' } as any, comRole('SUPERVISOR_FROTA')),
     ).rejects.toThrow(BadRequestException);
+  });
+});
+
+/**
+ * Defeito 5 (medido em 11/09/2026): não existia rota de exclusão de representante.
+ * `DELETE /supervisor/supervisores/:id` devolvia 404 e o front só tinha `PATCH {ativo}`.
+ *
+ * O custo não era só estético: `criarSupervisor` recusa matrícula repetida na filial, e
+ * a linha inativada CONTINUA ocupando a matrícula. Quem cadastrava errado (departamento
+ * errado, pessoa errada) ficava sem saída — inativar não liberava recadastrar.
+ *
+ * Com movimento a exclusão segue proibida, e a recusa tem de DIZER quanto existe e o que
+ * fazer: `viagem.supervisorRegistroId` é SET NULL, então apagar deixaria planejamento
+ * órfão, sem dono, em silêncio.
+ */
+describe('SupervisorService.removerSupervisor — só cadastro SEM movimento', () => {
+  let prisma: any; let svc: SupervisorService; let core: any;
+  const semMovimento = () => {
+    prisma.viagem.groupBy.mockResolvedValue([]);
+    prisma.adiantamento.groupBy.mockResolvedValue([]);
+    prisma.fechamentoRdv.groupBy.mockResolvedValue([]);
+  };
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    core = coreMock();
+    svc = new SupervisorService(prisma, condutorMock(), core, storageMock(), locaisMock());
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', departamentoId: 'd1', matricula: 'E1', nome: 'X' });
+    semMovimento();
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  it('sem movimento → apaga', async () => {
+    prisma.supervisor.delete.mockResolvedValue({ id: 's1' });
+    await expect(svc.removerSupervisor('s1', comRole('ADMIN'))).resolves.toEqual({ ok: true });
+    expect(prisma.supervisor.delete).toHaveBeenCalledWith({ where: { id: 's1' } });
+  });
+
+  it('com PLANEJAMENTO → 400, nada apagado, e a recusa diz QUANTOS e o que fazer', async () => {
+    prisma.viagem.groupBy.mockResolvedValue([{ supervisorRegistroId: 's1', _count: { _all: 27 } }]);
+    const err = await svc.removerSupervisor('s1', comRole('ADMIN')).catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.message).toContain('27');
+    expect(err.message).toContain('Inativar'); // oferece a saída, não só recusa
+    expect(prisma.supervisor.delete).not.toHaveBeenCalled();
+  });
+
+  it('com ADIANTAMENTO → 400 (é FK RESTRICT no banco; recusar antes dá mensagem legível)', async () => {
+    prisma.adiantamento.groupBy.mockResolvedValue([{ supervisorId: 's1', _count: { _all: 3 } }]);
+    await expect(svc.removerSupervisor('s1', comRole('ADMIN'))).rejects.toThrow(BadRequestException);
+    expect(prisma.supervisor.delete).not.toHaveBeenCalled();
+  });
+
+  it('com FECHAMENTO de mês → 400', async () => {
+    prisma.fechamentoRdv.groupBy.mockResolvedValue([{ supervisorId: 's1', _count: { _all: 1 } }]);
+    await expect(svc.removerSupervisor('s1', comRole('ADMIN'))).rejects.toThrow(BadRequestException);
+  });
+
+  it('soma os três tipos de movimento', async () => {
+    prisma.viagem.groupBy.mockResolvedValue([{ supervisorRegistroId: 's1', _count: { _all: 2 } }]);
+    prisma.adiantamento.groupBy.mockResolvedValue([{ supervisorId: 's1', _count: { _all: 3 } }]);
+    const err = await svc.removerSupervisor('s1', comRole('ADMIN')).catch((e) => e);
+    expect(err.message).toContain('5');
+  });
+
+  it('representante de OUTRA filial → 403 (não 404: o registro existe)', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'OUTRA', departamentoId: 'd1', matricula: 'E1' });
+    await expect(svc.removerSupervisor('s1', comRole('ADMIN'))).rejects.toThrow(ForbiddenException);
+  });
+
+  it('SUPERVISOR_FROTA só apaga em departamento SEU (mesma guarda da edição)', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'OUTRO' }]);
+    await expect(svc.removerSupervisor('s1', comRole('SUPERVISOR_FROTA'))).rejects.toThrow(ForbiddenException);
+    expect(prisma.supervisor.delete).not.toHaveBeenCalled();
+  });
+
+  it('COORDENADOR não apaga', async () => {
+    await expect(svc.removerSupervisor('s1', comRole('COORDENADOR'))).rejects.toThrow(ForbiddenException);
+  });
+
+  it('inexistente → 404', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue(null);
+    await expect(svc.removerSupervisor('nada', comRole('ADMIN'))).rejects.toThrow(NotFoundException);
+  });
+
+  it('a listagem devolve `movimentos` para a tela desabilitar o excluir com motivo', async () => {
+    prisma.supervisor.findMany.mockResolvedValue([{ id: 's1', matricula: 'E1', nome: 'X', coordenadorId: null, departamentoId: 'd1' }]);
+    prisma.viagem.groupBy.mockResolvedValue([{ supervisorRegistroId: 's1', _count: { _all: 4 } }]);
+    const r = await svc.listarSupervisores(comRole('ADMIN'));
+    expect(r[0].movimentos).toBe(4);
   });
 });

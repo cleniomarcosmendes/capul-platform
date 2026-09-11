@@ -557,3 +557,50 @@ decidir, já separado por gravidade:
 
 Para reaproveitar o helper nessas telas ele precisa sair da `SupervisoresPage` para um
 módulo compartilhado (`src/lib/`).
+
+---
+
+# DEFEITO 5 — CORRIGIDO em 11/09/2026
+
+## Por que doía mais do que parecia
+
+Não havia rota de exclusão: `DELETE /supervisor/supervisores/:id` → 404, e o front só
+tinha `PATCH {ativo}`. O custo não era estético — **`criarSupervisor` recusa matrícula
+repetida na filial, e a linha inativada continua ocupando a matrícula**. Quem cadastrava
+errado (departamento errado, pessoa errada) ficava sem saída: inativar não liberava
+recadastrar, e a tentativa dava *"Já existe um supervisor com essa matrícula nesta filial"*.
+
+## O que entrou
+
+- `DELETE /supervisor/supervisores/:id` (`@Roles('SUPERVISOR_FROTA')`, ADMIN sempre),
+  com as mesmas guardas da edição: filial e `assertPodeGerirDepartamento`.
+- **Só apaga cadastro com ZERO movimento** (planejamento + adiantamento + fechamento).
+  Com movimento, recusa dizendo **quantos** e **o que fazer** — `viagem.supervisorRegistroId`
+  é `SET NULL`: apagar deixaria planejamento órfão, sem dono, calado.
+- `listarSupervisores` passa a devolver **`movimentos`** (3 `groupBy`, não N+1), para a
+  tela **desabilitar** o Excluir com o motivo no `title` em vez de escondê-lo.
+- Diálogo de confirmação que diz o que se perde **e o que não se perde**: o cadastro some
+  e a matrícula fica livre; o usuário e a permissão dele no Configurador ficam intactos.
+
+## Verificado na API
+
+| Caso | Resultado |
+|---|---|
+| Listagem traz `movimentos` | ✅ `003448 → 0`, `005274 → 0` |
+| `DELETE` sem movimento | **200** `{ok:true}` |
+| **Recadastrar a mesma matrícula depois** | **201** — o que a inativação **não** permitia |
+| `DELETE` com 1 planejamento | **400**: *"já tem 1 registro no RDV … Use 'Inativar'"* (singular correto) |
+
+## Testes
+
+10 casos novos: soma os três tipos de movimento; outra filial → 403 (não 404, o registro
+existe); SUPERVISOR_FROTA só apaga em departamento seu; COORDENADOR não apaga; a listagem
+devolve `movimentos`. **Validado por mutação:** desligando a guarda de movimento,
+**4 reprovam**. Suíte: **209 passando**.
+
+> ⚠️ **O teste de invariante pegou o método novo**, como foi desenhado para fazer:
+> `removerSupervisor` escreve no Prisma e não tinha `assertRdvAberto`. Entrou na lista de
+> dispensados com justificativa por **CHECAGEM**, não por categoria: ele só apaga quando
+> `movimentosPorSupervisor` devolve 0, e esse 0 inclui `fechamentoRdv` — um representante
+> excluível não tem mês nenhum. Se a exclusão passar a aceitar cadastro com movimento, a
+> dispensa sai e o guard entra.

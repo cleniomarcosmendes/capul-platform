@@ -43,6 +43,14 @@ export class SupervisorController {
   atualizarSupervisor(@Param('id') id: string, @Body() dto: AtualizarSupervisorDto, @CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
     return this.svc.atualizarSupervisor(id, dto, user, filialId);
   }
+  /** Exclui um representante SEM movimento no RDV. Com movimento a recusa diz quanto
+   *  existe e manda inativar — o histórico é prestação de contas, e
+   *  `viagem.supervisorRegistroId` é SET NULL (apagar deixaria planejamento órfão). */
+  @Delete('supervisores/:id')
+  @Roles('SUPERVISOR_FROTA')
+  removerSupervisor(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.removerSupervisor(id, user, filialId);
+  }
 
   // ---- Quem responde por cada departamento no RDV (aba Equipe) ----
   // Leitura: quem já vê a aba. ESCRITA: só ADMIN (checado no serviço) — esta tabela é a

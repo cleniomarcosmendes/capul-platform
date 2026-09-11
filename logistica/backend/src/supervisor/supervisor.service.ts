@@ -154,15 +154,70 @@ export class SupervisorService {
     const coordIds = [...new Set(lista.map((s) => s.coordenadorId).filter((x): x is string => !!x))];
     // Papel vem da role no módulo (Configurador), não do cadastro do RDV — a Equipe
     // mostra "Coordenador" x "Supervisor de Área" em vez de tratar todos como supervisor.
-    const [nomes, papeis] = await Promise.all([
+    const [nomes, papeis, movimentos] = await Promise.all([
       coordIds.length ? this.core.nomesUsuarios(coordIds) : Promise.resolve(new Map<string, string>()),
       this.papeisDosRepresentantes(lista.map((s) => s.matricula)),
+      this.movimentosPorSupervisor(lista.map((s) => s.id)),
     ]);
     return lista.map((s) => ({
       ...s,
       coordenadorNome: s.coordenadorId ? (nomes.get(s.coordenadorId) ?? null) : null,
       papel: papeis.get(chapa(s.matricula)) ?? null,
+      // Quanto movimento o cadastro já tem. A tela usa para DESABILITAR o excluir com o
+      // motivo à vista, em vez de esconder o botão ou oferecer um ato que vai falhar.
+      movimentos: movimentos.get(s.id) ?? 0,
     }));
+  }
+
+  /**
+   * Quantos registros de RDV cada representante já tem (planejamento, adiantamento,
+   * fechamento). `0` = cadastro sem histórico, que pode ser EXCLUÍDO.
+   *
+   * Três `groupBy`, não um count por linha: a Equipe lista o time inteiro da filial e um
+   * count por representante seria N+1 numa tela de abertura.
+   */
+  private async movimentosPorSupervisor(ids: string[]): Promise<Map<string, number>> {
+    const mapa = new Map<string, number>();
+    if (!ids.length) return mapa;
+    const soma = (id: string | null, n: number) => { if (id) mapa.set(id, (mapa.get(id) ?? 0) + n); };
+    const [viagens, adiantamentos, fechamentos] = await Promise.all([
+      this.prisma.viagem.groupBy({ by: ['supervisorRegistroId'], where: { supervisorRegistroId: { in: ids } }, _count: { _all: true } }),
+      this.prisma.adiantamento.groupBy({ by: ['supervisorId'], where: { supervisorId: { in: ids } }, _count: { _all: true } }),
+      this.prisma.fechamentoRdv.groupBy({ by: ['supervisorId'], where: { supervisorId: { in: ids } }, _count: { _all: true } }),
+    ]);
+    for (const v of viagens) soma(v.supervisorRegistroId, v._count._all);
+    for (const a of adiantamentos) soma(a.supervisorId, a._count._all);
+    for (const f of fechamentos) soma(f.supervisorId, f._count._all);
+    return mapa;
+  }
+
+  /**
+   * Exclui um representante que NUNCA teve movimento.
+   *
+   * Até 11/09/2026 não havia rota de exclusão: um cadastro errado (departamento errado,
+   * pessoa errada) só podia ser INATIVADO, e a linha ficava no banco ocupando a matrícula
+   * na filial — o `criarSupervisor` recusa matrícula repetida, então recadastrar certo
+   * dava "Já existe um supervisor com essa matrícula nesta filial" e a pessoa ficava sem
+   * saída.
+   *
+   * Com movimento, a exclusão continua PROIBIDA e a recusa diz quanto existe e o que
+   * fazer: o histórico do RDV é prestação de contas, e `viagem.supervisorRegistroId` é
+   * `SET NULL` — apagar deixaria planejamentos órfãos, sem dono, calados.
+   */
+  async removerSupervisor(id: string, user: JwtPayload, filialIdAlvo?: string) {
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
+    const s = await this.prisma.supervisor.findUnique({ where: { id } });
+    if (!s) throw new NotFoundException('Supervisor não encontrado.');
+    if (s.filialId !== filialId) throw new ForbiddenException('Supervisor de outra filial.');
+    await this.assertPodeGerirDepartamento(s.departamentoId, user);
+    const movimentos = (await this.movimentosPorSupervisor([id])).get(id) ?? 0;
+    if (movimentos > 0) {
+      throw new BadRequestException(
+        `Este representante já tem ${movimentos} ${movimentos === 1 ? 'registro' : 'registros'} no RDV (planejamento, adiantamento ou fechamento) e não pode ser excluído — o histórico é prestação de contas. Use "Inativar": ele sai das telas e o histórico fica.`,
+      );
+    }
+    await this.prisma.supervisor.delete({ where: { id } });
+    return { ok: true };
   }
 
   /**
