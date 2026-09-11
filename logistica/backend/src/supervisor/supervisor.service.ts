@@ -165,10 +165,35 @@ export class SupervisorService {
     }));
   }
 
+  /**
+   * O departamento do representante tem de ser DESTA filial.
+   *
+   * `core.departamentos` é por filial (unique filial+nome) e "Agroveterinaria" existe em
+   * 16 delas. Sem esta guarda o cadastro aceitava, com 201 e sem reclamar, um
+   * departamento de outra filial — medido em 11/09/2026: representante gravado na filial
+   * 18 apontando para a "Agroveterinaria" da filial 21. A linha resultante nunca casa com
+   * amarração nenhuma (a amarração é por (filial, departamento)), então o representante
+   * fica sem aprovador — e em silêncio, que é o pior modo de falhar aqui.
+   *
+   * `definirSupervisorDepartamento` já barrava isto desde sempre; o cadastro do
+   * representante, não. Mesma regra, mesma mensagem, agora nos dois.
+   *
+   * ⚠️ Não substitui `assertPodeGerirDepartamento`: aquela é AUTORIDADE (posso gerir este
+   * departamento?), esta é INTEGRIDADE (este departamento pertence a esta filial?). Para
+   * o ADMIN a primeira passa direto, então esta é a única que resta.
+   */
+  private async assertDepartamentoDaFilial(departamentoId: string | null, filialId: string) {
+    if (!departamentoId) return; // representante sem departamento: só ADMIN, já barrado antes
+    if (!(await this.core.departamentoEhDaFilial(departamentoId, filialId))) {
+      throw new BadRequestException('Este departamento é de outra filial — escolha um departamento desta filial.');
+    }
+  }
+
   async criarSupervisor(dto: CriarSupervisorDto, user: JwtPayload, filialIdAlvo?: string) {
     const filialId = await this.filialAlvo(user, filialIdAlvo);
     const departamentoId = dto.departamentoId?.trim() || null;
     await this.assertPodeGerirDepartamento(departamentoId, user);
+    await this.assertDepartamentoDaFilial(departamentoId, filialId);
     const matricula = dto.matricula.trim().toUpperCase();
     const ja = await this.prisma.supervisor.findFirst({ where: { filialId, matricula } });
     if (ja) throw new BadRequestException('Já existe um supervisor com essa matrícula nesta filial.');
@@ -185,8 +210,14 @@ export class SupervisorService {
     if (s.filialId !== filialId) throw new ForbiddenException('Supervisor de outra filial.');
     // Pode mexer NESTE registro (departamento atual dele é do seu escopo)…
     await this.assertPodeGerirDepartamento(s.departamentoId, user);
-    // …e, se está movendo de departamento, o destino também precisa ser do seu escopo.
-    if (dto.departamentoId !== undefined) await this.assertPodeGerirDepartamento(dto.departamentoId?.trim() || null, user);
+    // …e, se está movendo de departamento, o destino também precisa ser do seu escopo
+    // (AUTORIDADE) e ser desta filial (INTEGRIDADE). A edição tinha o mesmo furo do
+    // cadastro: dava para mover um representante para o departamento de outra filial.
+    if (dto.departamentoId !== undefined) {
+      const destino = dto.departamentoId?.trim() || null;
+      await this.assertPodeGerirDepartamento(destino, user);
+      await this.assertDepartamentoDaFilial(destino, filialId);
+    }
     if (dto.coordenadorId) await this.core.validarUsuario(dto.coordenadorId, 'Coordenador');
     return this.prisma.supervisor.update({
       where: { id },

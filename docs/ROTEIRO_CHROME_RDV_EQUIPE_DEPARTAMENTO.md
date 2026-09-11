@@ -456,3 +456,55 @@ WHERE placa IN ('KELVER','LIDYANE');
 **4** (o `.catch` mudo ainda existe nas OUTRAS chamadas da tela), **5** (não há exclusão
 de representante), e os menores da rodada 2 (linha pendente sem aviso; toast chamando
 coordenador de "supervisor de área"; representante já cadastrado continua na lista).
+
+---
+
+# DEFEITO 3 — CORRIGIDO em 11/09/2026 (imagem `9d195310-sujo`)
+
+## O que faltava
+
+`criarSupervisor` não conferia se o departamento pertencia à filial do cadastro, e
+`atualizarSupervisor` tinha o mesmo furo na hora de MOVER de departamento.
+`definirSupervisorDepartamento` já barrava desde sempre — mesma regra, aplicada só num
+dos dois lugares.
+
+Nova guarda `assertDepartamentoDaFilial`, usada pelos dois. A distinção que ela torna
+explícita no código:
+
+| Guarda | Pergunta | Para o ADMIN |
+|---|---|---|
+| `assertPodeGerirDepartamento` | **AUTORIDADE** — posso gerir este departamento? | passa direto |
+| `assertDepartamentoDaFilial` | **INTEGRIDADE** — ele é desta filial? | **é a única que resta** |
+
+## Verificação: o MESMO `POST` que gravou 201 de manhã
+
+```
+POST /supervisor/supervisores?filialId=<filial 18>
+{ "departamentoId": "64c42da8-…" }   -- "Agroveterinaria" da filial 21
+```
+
+| Quando | Resultado |
+|---|---|
+| Manhã (antes) | **201** — representante gravado na 18 com departamento da 21 |
+| Agora | **400** — *"Este departamento é de outra filial — escolha um departamento desta filial."* |
+
+**Controle** (para o 400 não ser "agora tudo falha"): o mesmo `POST` com o departamento
+CORRETO da filial 18 passa da guarda e para no check seguinte — *"Já existe um supervisor
+com essa matrícula nesta filial"*. E repetido com matrícula inédita (`009111`) contra o
+departamento da 21: **400**, com **0 linhas** gravadas.
+
+## Testes
+
+6 casos novos, entre eles: a guarda usa a **filial alvo**, não a do token; edição que não
+mexe em departamento **não** dispara a guarda; representante sem departamento passa;
+a mesma regra vale para o SUPERVISOR_FROTA.
+**Validado por mutação:** desligando a guarda, **3 reprovam**. Suíte: **199 passando**.
+
+## Auditoria do dado existente
+
+`SELECT ... WHERE d.filial_id <> s.filial_id` → **0 violações**. A guarda entrou sem
+precisar de backfill.
+
+> ⚠️ O `coreMock` compartilhado da suíte não tinha `departamentoEhDaFilial` e **1 teste
+> alheio quebrou** ao adicionar a guarda. Era mock incompleto, não comportamento errado —
+> o método entrou no mock com padrão `true`.

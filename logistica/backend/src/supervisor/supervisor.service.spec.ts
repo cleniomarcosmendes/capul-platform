@@ -12,6 +12,10 @@ const coreMock = () => ({
   papeisLogisticaPorChapa: jest.fn().mockResolvedValue(new Map()),
   nomesDepartamentos: jest.fn().mockResolvedValue(new Map()),
   nomesUsuarios: jest.fn().mockResolvedValue(new Map()),
+  // Guarda de INTEGRIDADE do cadastro de representante (11/09/2026): o departamento
+  // tem de ser da filial. Padrão `true` para não mudar o que os testes daqui medem;
+  // o caso `false` tem describe próprio ("departamento de OUTRA filial").
+  departamentoEhDaFilial: jest.fn().mockResolvedValue(true),
 }) as any;
 // `remove` DEVOLVE PROMISE no serviço real (o código faz `.catch()` no retorno) — o
 // mock precisa refletir isso, senão o teste quebra por TypeError e não pelo motivo real.
@@ -2243,5 +2247,76 @@ describe('SupervisorService.departamentosGerenciaveis — a tela usa a MESMA ré
 
   it('COORDENADOR não monta time → seletor vazio', async () => {
     expect(await svc.departamentosGerenciaveis(comRole('COORDENADOR'))).toEqual([]);
+  });
+});
+
+/**
+ * Defeito 3 (medido em 11/09/2026 pela tela): o cadastro de representante aceitava, com
+ * 201 e sem reclamar, um departamento de OUTRA filial — gravou-se na filial 18 um
+ * representante apontando para a "Agroveterinaria" da filial 21.
+ *
+ * `core.departamentos` é por filial e "Agroveterinaria" existe em 16 delas; a amarração
+ * é por (filial, departamento). Um representante com departamento alheio nunca casa com
+ * amarração nenhuma e fica SEM APROVADOR, em silêncio.
+ *
+ * `definirSupervisorDepartamento` já barrava isso; o cadastro do representante, não.
+ * AUTORIDADE (`assertPodeGerirDepartamento`) e INTEGRIDADE (`departamentoEhDaFilial`)
+ * são guardas diferentes: para o ADMIN a primeira passa direto, então só a segunda resta.
+ */
+describe('SupervisorService — departamento de OUTRA filial no cadastro de representante', () => {
+  let prisma: any; let svc: SupervisorService; let core: any;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    core = coreMock();
+    core.validarUsuario = jest.fn();
+    core.validarFilial = jest.fn();
+    svc = new SupervisorService(prisma, condutorMock(), core, storageMock(), locaisMock());
+    prisma.supervisor.findFirst.mockResolvedValue(null);
+    prisma.supervisor.create.mockResolvedValue({ id: 'novo' });
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  it('ADMIN: criar com departamento de outra filial → 400 e NADA é gravado', async () => {
+    core.departamentoEhDaFilial.mockResolvedValue(false);
+    await expect(
+      svc.criarSupervisor({ matricula: 'E05274', nome: 'Kelver', departamentoId: 'depto-da-filial-21' } as any, comRole('ADMIN')),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.supervisor.create).not.toHaveBeenCalled();
+  });
+
+  it('a guarda é checada contra a FILIAL ALVO, não contra a do token', async () => {
+    core.departamentoEhDaFilial.mockResolvedValue(true);
+    await svc.criarSupervisor({ matricula: 'E00009', nome: 'X', departamentoId: 'd9' } as any, comRole('ADMIN'), 'f-outra');
+    expect(core.departamentoEhDaFilial).toHaveBeenCalledWith('d9', 'f-outra');
+  });
+
+  it('EDIÇÃO: mover para departamento de outra filial → 400 e nada é atualizado', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', departamentoId: 'd1', matricula: 'E1' });
+    core.departamentoEhDaFilial.mockResolvedValue(false);
+    await expect(
+      svc.atualizarSupervisor('s1', { departamentoId: 'depto-alheio' } as any, comRole('ADMIN')),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.supervisor.update).not.toHaveBeenCalled();
+  });
+
+  it('edição que NÃO mexe em departamento não dispara a guarda', async () => {
+    prisma.supervisor.findUnique.mockResolvedValue({ id: 's1', filialId: 'f1', departamentoId: 'd1', matricula: 'E1' });
+    prisma.supervisor.update.mockResolvedValue({ id: 's1' });
+    await svc.atualizarSupervisor('s1', { ativo: false } as any, comRole('ADMIN'));
+    expect(core.departamentoEhDaFilial).not.toHaveBeenCalled();
+  });
+
+  it('representante SEM departamento (só ADMIN) passa: não há filial para conferir', async () => {
+    await svc.criarSupervisor({ matricula: 'E00010', nome: 'Y' } as any, comRole('ADMIN'));
+    expect(core.departamentoEhDaFilial).not.toHaveBeenCalled();
+    expect(prisma.supervisor.create).toHaveBeenCalled();
+  });
+
+  it('a MESMA regra vale para o Supervisor de Departamento', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    core.departamentoEhDaFilial.mockResolvedValue(false);
+    await expect(
+      svc.criarSupervisor({ matricula: 'E00011', nome: 'Z', departamentoId: 'd1' } as any, comRole('SUPERVISOR_FROTA')),
+    ).rejects.toThrow(BadRequestException);
   });
 });
