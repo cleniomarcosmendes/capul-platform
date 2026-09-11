@@ -107,7 +107,11 @@ export function SupervisoresPage() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-semibold text-slate-800">Supervisores</h1>
-      <p className="mb-6 text-sm text-slate-500">Prestação de contas mensal (RDV) e catálogos das visitas — Indústria de Ração.</p>
+      {/* Não nomear filial aqui. O "— Indústria de Ração" era literal fixo: a tela serve
+          as 35 filiais e o ADMIN troca de filial na aba Equipe, então o texto afirmava
+          uma filial que a página não tinha como garantir — e, quando a Equipe mudava de
+          alvo sozinha, virava rótulo errado. Quem diz a filial é o seletor da aba. */}
+      <p className="mb-6 text-sm text-slate-500">Prestação de contas mensal (RDV) e catálogos das visitas.</p>
       <div className="mb-6 flex gap-1 border-b border-slate-200">
         {abas.map((t) => (
           <button key={t} onClick={() => setTab(t)}
@@ -154,7 +158,10 @@ function ViagensTab() {
   const filialSessao = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
   const ehAdminRdv = temRole('ADMIN');
   const filialId = ehAdminRdv ? (filialAlvo || filialSessao) : filialSessao;
-  const filiaisDoUsuario = (usuario?.filiais ?? []).slice().sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'));
+  // Mesma regra da aba Equipe (hook único): o ADMIN escolhe entre as filiais do
+  // CATÁLOGO. Antes eram `usuario.filiais` + `length > 1`, e o ADMIN de filial única
+  // não via seletor nenhum — ficava preso na filial do token sem saber que havia outras.
+  const { filiais: filiaisSelecionaveis } = useFiliaisSelecionaveis(ehAdminRdv, usuario?.filiais ?? []);
   // Veículo do planejamento: sugerido a partir de quem é o responsável no cadastro do
   // veículo (Veículos › "Coordenador / Supervisor de Área responsável") e alterável.
   // É ele que as despesas do RDV herdam — sem isso o combustível ficava sem veículo e
@@ -227,13 +234,19 @@ function ViagensTab() {
       {/* ADMIN opera a aba em qualquer filial sem trocar a da SESSÃO. Padrão = a filial
           dele; ele muda quando precisa (decisão do Clenio). Sem isto ele via só os
           planejamentos da matriz, sem nenhuma pista de por quê. */}
-      {ehAdminRdv && filiaisDoUsuario.length > 1 && (
-        <div className="mb-4 flex items-center gap-2">
+      {ehAdminRdv && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <label className="text-sm font-medium text-slate-700">Filial:</label>
           <select value={filialId} onChange={(e) => setFilialAlvo(e.target.value)} className="w-80 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500">
-            {filiaisDoUsuario.map((f) => <option key={f.id} value={f.id}>{f.nome ?? f.codigo ?? f.id}{f.id === filialSessao ? ' (sua filial)' : ''}</option>)}
+            {filiaisSelecionaveis.map((f) => <option key={f.id} value={f.id}>{nomeFilial(f)}{f.id === filialSessao ? ' (sua filial)' : ''}</option>)}
           </select>
-          <span className="text-xs text-slate-400">A filial da sua sessão não muda.</span>
+          {filialId && filialId !== filialSessao ? (
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+              Você está vendo outra filial — a da sua sessão é {nomeFilial(filiaisSelecionaveis.find((f) => f.id === filialSessao) ?? { id: filialSessao })}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400">A filial da sua sessão não muda.</span>
+          )}
         </div>
       )}
 
@@ -420,6 +433,45 @@ const sugerirVeiculo = (veiculos: VeiculoOpc[], matricula?: string | null) => {
 interface Supervisor { id: string; matricula: string; nome: string; departamentoId?: string | null; coordenadorId?: string | null; coordenadorNome?: string | null; papel?: string | null; ativo: boolean }
 interface CoreUser { id: string; nome?: string; nomeFantasia?: string; matricula?: string | null; departamento?: { id: string; nome: string } | null; permissoes?: { modulo: { codigo: string }; roleModulo: { codigo: string } }[] }
 interface DeptItem { id: string; nome: string }
+/** Filial do catálogo (`core.filiais`). O ADMIN é GLOBAL neste módulo — o backend
+ *  aceita qualquer `filialId` dele (`supervisor.service.ts:filialAlvo`, que só valida
+ *  que a filial existe). Montar o seletor a partir de `usuario.filiais` contradizia
+ *  isso: um ADMIN vinculado a UMA filial ficava sem seletor nenhum, e a tela podia
+ *  mandá-lo para uma filial que ele não conseguia desfazer. */
+interface FilialItem { id: string; codigo?: string; nomeFantasia?: string; nome?: string; status?: string }
+
+const nomeFilial = (f: { nome?: string; nomeFantasia?: string; codigo?: string; id: string }) =>
+  `${f.codigo ? `${f.codigo} · ` : ''}${f.nomeFantasia ?? f.nome ?? f.id}`;
+
+/**
+ * Filiais que o seletor desta tela oferece ao ADMIN.
+ *
+ * Fonte é o CATÁLOGO (`core.filiais`), não `usuario.filiais`: o vínculo diz onde a
+ * pessoa trabalha, e o ADMIN opera as 35 (o backend já aceita qualquer `filialId`
+ * dele). Com o vínculo, um ADMIN de filial única ficava sem seletor, e filial ainda
+ * SEM RDV era inalcançável — nenhuma filial nova saía do zero.
+ *
+ * Hook, e não cópia em cada aba: a regra estava escrita em DOIS lugares (Planejamentos
+ * e Equipe) e as duas tinham o mesmo defeito. `carregado` existe porque quem resolve
+ * filial automática precisa esperar a lista — alvo que o seletor não oferece é alvo
+ * sem volta.
+ */
+function useFiliaisSelecionaveis(ehAdmin: boolean, vinculadas: FilialItem[]) {
+  const [catalogo, setCatalogo] = useState<FilialItem[] | null>(null);
+  const [carregado, setCarregado] = useState(false);
+  useEffect(() => {
+    if (!ehAdmin) { setCarregado(true); return; }
+    coreApi.get<FilialItem[]>('/filiais')
+      .then((r) => setCatalogo(r.data ?? []))
+      .catch(() => setCatalogo(null)) // degrada para o vínculo, não fica sem nada
+      .finally(() => setCarregado(true));
+  }, [ehAdmin]);
+  const filiais = (catalogo ?? vinculadas)
+    .filter((f) => f.status !== 'INATIVO')
+    .slice()
+    .sort((a, b) => nomeFilial(a).localeCompare(nomeFilial(b), 'pt-BR'));
+  return { filiais, carregado };
+}
 /** Quem responde por um departamento no RDV — antes isso era DERIVADO dos veículos que
  *  a pessoa supervisiona (`veiculo.supervisorId`), campo que existe para dizer quem
  *  responde pelo VEÍCULO. Agora é explícito aqui. */
@@ -455,7 +507,8 @@ function EquipeTab() {
   const [filialAlvo, setFilialAlvo] = useState('');
   const filialId = ehAdmin ? (filialAlvo || filialSessao) : filialSessao;
   const qFilial = { params: { filialId } };
-  const filiaisDoUsuario = (usuario?.filiais ?? []).slice().sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR'));
+  const { filiais: filiaisSelecionaveis, carregado: filiaisCarregadas } =
+    useFiliaisSelecionaveis(ehAdmin, usuario?.filiais ?? []);
   const [itens, setItens] = useState<Supervisor[]>([]);
   const [usuarios, setUsuarios] = useState<CoreUser[]>([]);
   const [departamentos, setDepartamentos] = useState<DeptItem[]>([]);
@@ -500,22 +553,36 @@ function EquipeTab() {
   };
   // Resolve a filial inicial UMA vez (só ADMIN): última escolhida → a filial da sessão
   // se ela tiver RDV → a filial com mais representantes → a da sessão.
+  //
+  // ⚠️ INVARIANTE: o alvo automático tem de estar entre as filiais que o SELETOR
+  // oferece. Sem isso a tela levava o ADMIN para uma filial fora do alcance dele e não
+  // havia caminho de volta — medido em 11/09/2026: conta `admin` (só filial 18) aberta
+  // na filial 09, porque `filiais-rdv` faz groupBy GLOBAL e não cruza com o usuário. O
+  // caminho da preferência salva já validava; o do auto-pick, não. Agora os dois validam
+  // contra a mesma lista, e como ela é o catálogo, uma filial ZERADA é alcançável — que
+  // era a trava: nenhuma filial nova conseguia sair do zero.
   useEffect(() => {
-    if (!ehAdmin) return;
+    if (!ehAdmin || !filiaisCarregadas) return;
+    const alcancavel = (id?: string) => !!id && filiaisSelecionaveis.some((f) => f.id === id);
     const salva = localStorage.getItem(CHAVE_FILIAL);
-    if (salva && (usuario?.filiais ?? []).some((f) => f.id === salva)) { setFilialAlvo(salva); return; }
+    if (alcancavel(salva ?? undefined)) { setFilialAlvo(salva as string); return; }
     logisticaApi.get<{ filialId: string; representantes: number }[]>('/supervisor/filiais-rdv')
       .then((r) => {
         const comRdv = r.data ?? []; // já vem ordenado por representantes COM departamento
-        // "Estar na lista" não basta: a matriz aparece nela por ter representantes de
-        // seed, todos SEM departamento — abrir ali daria a mesma tela vazia. Só fica na
-        // filial da sessão se ela de fato tiver gente que aparece na tela.
-        const naSessao = comRdv.find((f) => f.filialId === filialSessao)?.representantes ?? 0;
-        setFilialAlvo(naSessao > 0 ? filialSessao : (comRdv[0]?.filialId ?? filialSessao));
+        // A FILIAL DA SESSÃO GANHA quando é alcançável — mudou aqui (11/09/2026).
+        // Antes ela só ganhava se tivesse representante COM departamento; senão a tela
+        // saltava para "onde o RDV acontece". O salto foi escrito para poupar o ADMIN da
+        // matriz (que abria numa tela vazia), mas custava caro no caso oposto: quem
+        // estava configurando a PRÓPRIA filial era mandado para outra e configurava sem
+        // perceber. Tela de configuração abre onde você está; "vazia" agora se explica
+        // sozinha (o bloco de departamentos diz que ninguém participa do RDV ainda) e o
+        // seletor está à vista. O salto continua, só que como FALLBACK.
+        const sugerida = comRdv.find((f) => alcancavel(f.filialId))?.filialId;
+        setFilialAlvo(alcancavel(filialSessao) ? filialSessao : (sugerida ?? filialSessao));
       })
       .catch(() => setFilialAlvo(filialSessao));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ehAdmin, filialSessao]);
+  }, [ehAdmin, filialSessao, filiaisCarregadas]);
 
   useEffect(() => {
     void carregar();
@@ -584,14 +651,26 @@ function EquipeTab() {
   return (
     <div>
       {/* ADMIN opera a aba em qualquer filial sem trocar a da sessão. As DUAS listas
-          (departamentos e representantes) seguem este seletor. */}
-      {ehAdmin && filiaisDoUsuario.length > 1 && (
-        <div className="mb-4 flex items-center gap-2">
+          (departamentos e representantes) seguem este seletor.
+          Renderiza para TODO ADMIN — não mais só quando ele tem >1 filial vinculada.
+          Aquela condição escondia o seletor justamente do ADMIN de filial única, que é
+          quem não tinha como voltar quando a tela mudava de filial sozinha. */}
+      {ehAdmin && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <label className="text-sm font-medium text-slate-700">Filial:</label>
           <select value={filialId} onChange={(e) => { setFilialAlvo(e.target.value); localStorage.setItem(CHAVE_FILIAL, e.target.value); }} className="w-80 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-capul-500">
-            {filiaisDoUsuario.map((f) => <option key={f.id} value={f.id}>{f.nome ?? f.codigo ?? f.id}{f.id === filialSessao ? ' (sua filial)' : ''}</option>)}
+            {filiaisSelecionaveis.map((f) => <option key={f.id} value={f.id}>{nomeFilial(f)}{f.id === filialSessao ? ' (sua filial)' : ''}</option>)}
           </select>
-          <span className="text-xs text-slate-400">A filial da sua sessão não muda.</span>
+          {/* A tela pode abrir numa filial diferente da sessão (o padrão vai para onde o
+              RDV acontece). Isso nunca pode ser SILENCIOSO: sem esta linha o ADMIN
+              configurava uma filial achando que era outra. */}
+          {filialId && filialId !== filialSessao ? (
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+              Você está vendo outra filial — a da sua sessão é {nomeFilial(filiaisSelecionaveis.find((f) => f.id === filialSessao) ?? { id: filialSessao })}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400">A filial da sua sessão não muda.</span>
+          )}
         </div>
       )}
 
