@@ -10,6 +10,8 @@ import DesignacaoPage from './pages/DesignacaoPage';
 import CadastroAvaliadoresPage from './pages/CadastroAvaliadoresPage';
 import PainelPage from './pages/PainelPage';
 import ResultadosPage from './pages/ResultadosPage';
+import InstrumentoPage from './pages/InstrumentoPage';
+import NaoEncontradaPage from './pages/NaoEncontradaPage';
 
 /**
  * ⭐⭐ A RAIZ DO MÓDULO É A FILA, PARA TODO MUNDO — sem desvio por papel.
@@ -47,6 +49,10 @@ export default function App() {
                 quem é da PLATAFORMA, não do ciclo — cada ciclo copia dele. Pendurá-lo
                 numa aba do ciclo faria parecer que se remonta a cada ano. */}
             <Route path="/avaliadores" element={<CadastroAvaliadoresPage />} />
+            {/* Leitura do instrumento. Fora de `/ciclos/:id` pelo mesmo motivo
+                do cadastro de avaliadores: o questionário é da PLATAFORMA e
+                serve a todo ciclo — cada aplicação escolhe uma versão dele. */}
+            <Route path="/questionarios" element={<InstrumentoPage />} />
             {/* As quatro telas do RH são ETAPAS do mesmo ciclo, não seções
                 soltas — por isso são rotas filhas, e o ciclo escolhido não se
                 perde ao trocar de aba. */}
@@ -57,7 +63,10 @@ export default function App() {
               <Route path="painel" element={<PainelPage />} />
               <Route path="resultados" element={<ResultadosPage />} />
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* ⭐ URL desconhecida DIZ que não existe. Era `<Navigate to="/">`:
+                qualquer caminho errado caía na fila, calado, como se tivesse
+                levado a algum lugar. Ver `NaoEncontradaPage`. */}
+            <Route path="*" element={<NaoEncontradaPage />} />
           </Route>
         </Routes>
       </AuthProvider>
