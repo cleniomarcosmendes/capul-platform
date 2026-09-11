@@ -162,6 +162,52 @@ Os 🔴 do dia nasceram espalhados por §3.1.1, §3.1.2, §3.1.4, §5 e §11. Aq
 mesmos itens em dois blocos, sem prosa. **Esta lista é um índice: quem decide o quê fica
 na seção citada.**
 
+### 📍 ONDE O DIA PAROU — 11/09/2026
+
+> ⚠️ Esta seção é a DONA das contas vivas. Números novos se atualizam **aqui**.
+
+⭐⭐ **MUDANÇA DE RUMO:** o foco deixou de ser *chegar ao piloto dia 15* e passou a ser
+**concluir a implementação**. O piloto é o instrumento de validação, e instrumento incompleto
+valida pouco. Ele vira **duas fases** — a 1 com o questionário herdado do RD8010, sem o RH poder
+editá-lo; a 2 com o RH configurando sozinho. **A data volta a ser negociada com a Arielly.**
+Recorte, contas e deploy **saíram da fila**.
+
+O que ordenou a decisão foi o levantamento de custo: **do cadastro do instrumento à devolutiva
+são 7 a 9 semanas**, e o editor de questionário sozinho vale metade. Não cabia em cinco dias.
+
+| Conta | Valor |
+|---|---|
+| Testes | **623** (eram 614 em 10/09) · 51 suítes |
+| Telas | **10** (eram 8) — entraram a leitura do questionário e a de página não encontrada |
+| Ciclos no DEV | Piloto **ABERTO** (894 avaliações, 894 PENDENTE) · 3 ENCERRADOS · 1 descartável em RASCUNHO |
+| `origin/main` | ver o fim desta seção |
+| Migrations | **12** — nada de 11/09 mexeu em schema |
+
+**Feito em 11/09:**
+
+1. ✅ **Ler o instrumento** — `GET /catalogo/modelos/:versaoId` + tela `/questionarios`, leitura
+   pura, `RH_ADMIN` + `RH_MODELO`, com impressão. **A pergunta que travava a ordem de tudo agora
+   pode ser feita.** Ver §3.1.58.
+2. ✅ **A rota que caía em silêncio** — `path="*"` deixou de ser `<Navigate to="/">` e virou uma
+   tela que **diz que não existe**, com o caminho tentado escrito e os destinos filtrados por
+   papel. Ver §3.1.59 — é o item **19** da lista (B), fechado.
+3. ✅ **Decisão de versionamento do modelo**, tomada antes do editor porque muda o tamanho dele:
+   **versão nova a cada mudança; versão em uso por ciclo ABERTO é imutável**. Baixou a estimativa
+   do editor de 3–4 para **2–3 semanas**. Ver §3.1.58.
+4. ✅ **Correção de fato no registro:** a validação do resolver acontece em **DOIS** momentos, não
+   três — o terceiro é do desenho e não tem código, porque não existe salvar critério. Corrigido
+   aqui, no `CLAUDE.md` e na memória.
+
+**Dois itens tirados da fila pelo Clenio, com razão escrita:**
+
+- *"Destravar o peso da aplicação"* **não é item**: o `PATCH` já faz, em RASCUNHO. O campo travado
+  que a varredura viu era o Piloto **ABERTO** — é regra, não lacuna.
+- **Critérios e faixas** (1 a 1,5 semana) **sai da frente da fila** — não é pequeno, e não bloqueia
+  a fase 1.
+
+⏭️ **Próximo:** fechar a lista da fase 1 com a Arielly. O editor e o cadastro de critérios **não
+começaram** — por decisão.
+
 ### 📍 ONDE O DIA PAROU — 08/09/2026
 
 > 📐 **Regras de método:** `docs/REGRAS-DE-METODO.md` — 27 regras, cada uma com o **gatilho** que
@@ -426,7 +472,7 @@ quem responde a chefe de equipe pequena. Escolher quem fica de fora é **recorte
 | 16 | ✅ **FEITO em 08/09** — a linha de Resultados passou a parecer clicável (cursor, chevron, hover de fundo, rótulo “memória de cálculo”) e a memória ganhou **“Enviada em”** ao lado de “Apurado em”, que é a comparação que responde a contestação depois de reapuração. `enviadaEm` já vinha do backend | §3.1.9 |
 | 17 | 🟠 **"Recorte provisório" não tem como confirmar** (item D do roteiro + 🟡 11 do anterior — são o mesmo). A etiqueta marca que o público veio de um atalho e não é decisão do RH, e **não existe o ato de confirmar**: nem por linha, nem por aplicação, nem por ciclo. Etiqueta que ninguém pode tirar deixa de significar alguma coisa. 🔴 **Precisa da Arielly antes do desenho: confirmar é por linha, por aplicação ou por ciclo?** — a resposta muda a tela inteira | roteiro do Chrome · §5 |
 | 18 | 🟠 **Os menores do item K**, em ordem de custo: **Enter morto no modal de vínculo** (com 108 pendências é mouse em cada uma) · **duas convenções para o mesmo botão em lote** · **dois modais irmãos com contratos diferentes** (o do cadastro tem o resumo *"X passa a avaliar Y"*, o do ciclo não) · **"Minhas avaliações" sem `<h1>`** · **escolher a si mesmo descarta a escolha válida anterior em silêncio**. ⚠️ E um de OUTRO módulo, só registrado: o **Hub mostra "Bem-vindo, !"** sem interpolar o nome | roteiro do Chrome |
-| 19 | 🟠 **`/gestao-pessoas/resultados` leva ao lugar errado EM SILÊNCIO.** Resultados vive dentro do ciclo (`/ciclos/:id/resultados`) — decisão nossa no menu, e ela está certa. O defeito é outro: `<Route path="*" element={<Navigate to="/" replace />} />` faz **qualquer URL desconhecida** cair na fila do avaliador **sem dizer nada**, como se tivesse levado a algum lugar. Alguém vai compartilhar esse link. ⚠️ **A correção não é criar a rota de topo** — é a URL desconhecida **dizer que não existe** | §3.1.6 |
+| ~~19~~ | ✅ **FEITO em 11/09 — ver §3.1.59.** 🟠 **`/gestao-pessoas/resultados` levava ao lugar errado EM SILÊNCIO.** Resultados vive dentro do ciclo (`/ciclos/:id/resultados`) — decisão nossa no menu, e ela está certa. O defeito é outro: `<Route path="*" element={<Navigate to="/" replace />} />` faz **qualquer URL desconhecida** cair na fila do avaliador **sem dizer nada**, como se tivesse levado a algum lugar. Alguém vai compartilhar esse link. ⚠️ **A correção não é criar a rota de topo** — é a URL desconhecida **dizer que não existe** | §3.1.6 |
 | 20 | 🔴 **A FONTE REPÕE O PROBLEMA: demissão não toca avaliação viva.** O `sincronizacao` **não está** entre os oito arquivos que escrevem em `prisma.avaliacao` — quem é demitido vira `situacao='DEMITIDO'`, sai da régua das listas NOVAS, e a avaliação criada antes fica `PENDENTE` para sempre. O cancelamento manual de 08/09 **resolve o caso, não a fonte**: com 894 avaliações abertas, o RH vai fazer isso à mão toda vez. ⚠️ **É pergunta, não conserto** — cancelar automaticamente no sync é o sistema decidindo sozinho tirar alguém do ciclo, e "afastado" não é "demitido". Medido em 08/09: **0 demitidos** com avaliação viva hoje; os 86 não-ATIVOs com avaliação são **FERIAS**, que são elegíveis por definição | §3.1.18 |
 | 22 | 🔴 **A SENHA TEMPORÁRIA NÃO É TROCADA — e isso mira a regra de desenho do módulo.** Medido em 09/09: `primeiroAcesso` existe no backend (devolvido no login, zerado no `change-password`), mas **nenhum frontend o lê** — 2 ocorrências no Hub e 2 no Configurador, ambas só declaração de tipo; 0 no Gestão de Pessoas e 0 no Gestão TI. Ninguém é levado a trocar. Evidência: `renataborges` e `wandersonnascimento` logaram em 09/09 13:35–13:36 e seguem com `primeiro_acesso = true`. ⚠️ **Em PROD isso seriam 45 pessoas com a MESMA senha** (hoje `Temp2026` no DEV), num módulo cuja regra de desenho é **separação de funções**: cada uma abriria a avaliação das outras, e a trilha de auditoria registraria o nome errado. ⚠️ **NÃO é conserto do Gestão de Pessoas** — é do **Hub/Configurador**, e **afeta todos os módulos da plataforma**; o Gestão de Pessoas só é onde dói mais. Alternativa sem código: senha individual por pessoa na criação das 45 | §6 · (B) 1 |
 | 21 | 🔴 **Fechar a meia rede do §3.1.9**: gerar o cliente a partir do backend **ou** teste de contrato (resposta real × o que a tela consome). ⚠️ Só a segunda pegaria o 1º dos três casos; a varredura periódica não substitui nenhuma das duas | §3.1.9 |
@@ -491,7 +537,7 @@ aprendiz ao supervisor. Daí a Aplicação existir.
 | | |
 |---|---|
 | Backend | NestJS 11 + Prisma 6, schema `rh`, porta 3004, prefixo `/api/v1/gestao-pessoas`. **42 endpoints** em 9 controllers. |
-| Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **8 telas** (8 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). |
+| Frontend | React 19 + Vite 7 + Tailwind v4, base `/gestao-pessoas/`, porta 5178. **10 telas** (10 arquivos em `pages/` — `CicloPage` é a moldura com as abas, não uma tela). As duas de 11/09: leitura do questionário e a de página não encontrada. |
 | Banco | migrations em `rh` (26 tabelas) + 2 no `auth-gateway` (módulo/roles e ativação) — **a conta está na §0** |
 | Testes | verdes, com `tsc -b` e ESLint limpos nos dois lados — **a contagem está na §0** |
 | Módulo no Hub | **ATIVO** desde 06/09 (`20260906030000_ativa_gestao_pessoas_no_hub`). |
@@ -560,14 +606,19 @@ segunda aplicação e deixar a errada no ciclo.
 ### Não existe
 
 - **Editor de questionário.** `Modelo`, `ModeloVersao`, `Grupo`, `Pergunta` e
-  `PerguntaAlternativa` **só nascem pelo seed**. A role `RH_MODELO` não tem nenhuma tela —
-  ela existe no RBAC e não leva a lugar nenhum. ⚠️ Isto **não bloqueia o piloto**: o seed já
-  publicou três modelos de PRODUÇÃO (Administrativo 11 perguntas, Operação de Loja 14,
-  Produção e Indústria 14) e um `[DEMO]` que a validação de abertura recusa de propósito.
+  `PerguntaAlternativa` **só nascem pelo seed** — não há escrita nenhuma em `src/`, só no
+  `prisma/seed.ts`. ⚠️ Isto **não bloqueia o piloto**: o seed já publicou três modelos de
+  PRODUÇÃO (Administrativo 11 perguntas, Operação de Loja 14, Produção e Indústria 14) e um
+  `[DEMO]` que a validação de abertura recusa de propósito.
+  ✅ **LER já existe desde 11/09** (`/questionarios`, `GET /catalogo/modelos/:versaoId`), e
+  `RH_MODELO` ganhou seu primeiro item de menu. O que não existe é EDITAR — ver §3.1.58,
+  inclusive a decisão de versionamento que fixa o tamanho do editor em 2–3 semanas.
 - **Cadastro de critérios e faixas.** `Criterio` e `CriterioFaixa` também só vêm do seed. O
   painel diz "cadastre a faixa no critério e reapure" — e não há tela para isso. É a maior
   incoerência do módulo hoje.
-- **Relatório e exportação.** Nada de PDF, Excel ou impressão.
+- **Relatório e exportação.** Falta **PDF/impressão de relatório**. ⚠️ O CSV **existe**:
+  `GET /resultados/ciclo/:id/csv` e `/canceladas.csv`, com os dois botões na tela de
+  Resultados — e a leitura do instrumento imprime pelo navegador.
 - **Devolutiva.** Os campos existem em `rh.avaliacao` (`devolutiva_em`,
   `devolutiva_por_id`); nenhum fluxo os preenche. Por decisão, o colaborador **não** vê a
   nota no sistema.
@@ -3441,6 +3492,134 @@ novo não comeu o antigo. **614 testes** (eram 609).
 sido encerrado e reaberto para conferir a fila DEPOIS. Foi preciso querer encerrar um ciclo de
 teste para descobrir o que aconteceria no encerramento do de verdade.
 
+
+### 3.1.58. ⭐⭐ LER o instrumento, e a decisão de como ele vai ser EDITADO (11/09)
+
+**Mudança de rumo, registrada primeiro porque explica tudo abaixo:** o foco deixou de ser
+*chegar ao piloto dia 15* e passou a ser **concluir a implementação**. O piloto é o instrumento
+de validação, e instrumento incompleto valida pouco. O piloto vira **duas fases** — a 1 valida o
+processo com o questionário herdado do RD8010, sem o RH poder editá-lo; a 2 valida o RH
+configurando sozinho. A data volta a ser discutida com a gestora de RH; recorte, contas e deploy
+saíram da fila.
+
+#### ✅ O que foi feito: ler o instrumento
+
+Levantamento de 11/09, e o número que decidiu: **do cadastro do instrumento à devolutiva são 7 a
+9 semanas**, com o editor de questionário sozinho valendo metade. Não cabia em cinco dias.
+
+Mas havia uma peça de **um dia** que destrava a decisão de todas as outras, e era a que faltava:
+**ninguém conseguia LER as 44 perguntas.** `GET /catalogo/modelos` devolve `perguntas: 11` — uma
+CONTAGEM. O enunciado só existia em `prisma/seed.ts`. A pergunta *"este questionário é o que você
+quer usar?"* não tinha como ser feita, e é ela que ordena o resto do trabalho.
+
+| | |
+|---|---|
+| `GET /catalogo/modelos/:versaoId` | o instrumento inteiro: grupos → perguntas → alternativas, com peso de cada pergunta, valor de cada alternativa e o balanço por grupo |
+| Papéis | **`RH_ADMIN` + `RH_MODELO`** (método sobrepõe a classe via `getAllAndOverride`). ⚠️ `RH_CICLO` ficou de fora: ele escolhe o modelo ao montar a Aplicação e continua vendo a LISTA. Se o RH disser que quem monta o ciclo também precisa conferir o conteúdo, é uma constante |
+| Tela | `/questionarios`, **leitura pura**, com botão de imprimir |
+| Menu | **"Questionários"** em CADASTROS — e é a primeira vez que `RH_MODELO` tem item |
+
+⭐ **O rótulo nomeia o OBJETO, não uma capacidade.** "Questionários", não "Editar
+questionários": a tela não edita, e quando o editor existir o rótulo não muda — a tela é que
+ganha o que fazer. Um aviso no topo diz que é leitura e **por onde a mudança passa hoje**
+(pela T.I.), porque "somente leitura" sozinho deixa a pessoa procurando o botão.
+
+⭐⭐ **As DUAS pontuações máximas, lado a lado.** A gravada na publicação e a recalculada agora,
+pela mesma `pontuacaoMaxima()` que a publicação usa. Iguais, é conferência; **diferentes, alguém
+mexeu no banco por fora e a nota de todo mundo está saindo sobre um denominador que não é o do
+instrumento** — e aí a tela diz isso em vermelho, com os dois números. Mostrar só uma delas
+esconderia exatamente o caso que importa. Conferido nos 4 modelos: todos CONFERE.
+
+**Lido ao vivo em 11/09** — os 4 modelos, 20 grupos, **44 perguntas**, 176 alternativas:
+
+| Modelo | Grupos | Perguntas | Alternativas | Σ pesos | Pontuação máxima |
+|---|---:|---:|---:|---:|---|
+| Administrativo | 4 | 11 | 44 | 60 | 72 ✅ |
+| Operação de Loja | 7 | 14 | 56 | 60 | 72 ✅ |
+| Produção e Indústria | 7 | 14 | 56 | 60 | 72 ✅ |
+| [DEMO] Modelo de Treinamento | 2 | 5 | 20 | 50 | 60 ✅ |
+
+#### ⭐ Os validadores já estavam escritos — e sem chamador
+
+Ao montar a leitura, `somatorioPorGrupo` e `pontuacaoMaxima` ganharam **o primeiro chamador da
+vida deles**. Vale registrar o que mais está nessa situação, porque muda a estimativa do editor:
+
+| Peça | Tamanho | Estado em 11/09 |
+|---|---:|---|
+| `modelo/publicacao.validator.ts` | 136 linhas | `validarModeloParaPublicacao` e `assertModeloPublicavel` — **ainda sem chamador**. `somatorioPorGrupo` e `pontuacaoMaxima` passaram a ter |
+| `criterio/criterio.validator.ts` | 94 linhas | `validarCriterio` / `assertCriterioSalvavel` — **sem chamador**. Só `validarCriterioEmUso` é usado (pela abertura do ciclo) |
+| `modelo/distribuir-peso.ts` | 27 linhas | usado pelo seed |
+
+Todos com spec própria e verdes. **Quando o editor vier, o miolo das regras já existe** — o que
+falta é a casca: HTTP, persistência, auditoria e tela.
+
+⚠️ **E é daí que vem a correção dos "TRÊS momentos"** de validação do resolver: são **DOIS**. O
+terceiro — *ao salvar no catálogo* — é do desenho, não do código, porque não existe salvar.
+Corrigido no `CLAUDE.md`, na §5 e na memória.
+
+#### ⭐⭐ DECISÃO — versão nova a cada mudança; modelo em uso por ciclo ABERTO é imutável
+
+Decidida em 11/09, antes de o editor começar, porque ela **muda o tamanho dele**.
+
+**Versionar, nunca editar em lugar.** Mudar enunciado, peso ou alternativa cria uma
+`ModeloVersao` nova; a anterior fica. O `@@unique([modeloId, versao])` e o `publicadoEm` já
+foram desenhados para isso.
+
+**O porquê, que é o que não pode se perder:** o Piloto tem **894 avaliações designadas** contra
+essas versões. Editar em lugar mudaria o instrumento **embaixo de um ciclo em curso** — as
+respostas já dadas pertencem às perguntas antigas, e a nota sairia errada sem acusar erro. É o
+mesmo raciocínio da ⛔ DECISÃO DE PRODUTO sobre trocar o `modeloVersao` de uma aplicação, e da
+`designacao/troca-de-aplicacao.ts`: **quando um recorte de PESSOAS já foi montado sobre um
+instrumento, o instrumento não troca.**
+
+Decorre disso a regra operacional: **versão usada por aplicação de ciclo ABERTO é imutável**, e
+a recusa precisa dizer a saída — *"crie uma versão nova; ela vale para os próximos ciclos"*.
+O `aplicacoesQueUsam` que a leitura já devolve existe para a tela poder dizer isso antes.
+
+⚠️ **Consequência que barateia o editor, e é por isso que a decisão vem antes:** não é preciso
+edição transacional sobre um grafo em uso, nem migração de respostas, nem "editar e republicar".
+O editor trabalha sempre sobre uma versão em **RASCUNHO** (`publicadoEm = null`) — e RASCUNHO
+não tem avaliação apontando para ele, por construção. Publicar é o ponto sem volta, e é onde
+`assertModeloPublicavel` finalmente é chamado.
+
+**Estimativa refinada do editor: de 3–4 semanas para 2–3 semanas.** O que saiu da conta:
+edição concorrente sobre versão em uso, migração de respostas, e a regra de "o que acontece com
+quem já respondeu" — que deixa de existir.
+
+⚠️ **O que a decisão NÃO resolve, e continua na lista:** duplicar uma versão para começar a
+seguinte (é o caminho real — ninguém remonta 14 perguntas do zero), e o que fazer com a versão
+antiga quando nenhum ciclo a usa mais.
+
+
+### 3.1.59. ✅ URL desconhecida DIZ que não existe — o item 19 da lista (B), fechado (11/09)
+
+Era `<Route path="*" element={<Navigate to="/" replace />} />`, **dentro do Layout**: qualquer
+caminho desconhecido sob `/gestao-pessoas/*` caía na fila do avaliador, **calado**, como se
+tivesse levado a algum lugar.
+
+O caso que estava na lista: `/gestao-pessoas/resultados`. Resultados vive dentro do ciclo
+(`/ciclos/:id/resultados`) — **decisão nossa no menu, e ela está certa**. O defeito era outro:
+quem abrisse aquele link via a própria fila e concluía que tinha chegado, ou que o sistema estava
+quebrado. E alguém ia compartilhar o link.
+
+⚠️ **A correção não é criar as rotas de topo** — é a URL desconhecida dizer que não existe.
+
+**O que a tela faz, e por quê:**
+
+- **escreve o caminho tentado** (`Nada responde em /resultados`). Sem ele, quem clicou num link
+  compartilhado não sabe o que estava errado nem como avisar quem mandou;
+- **diz onde as telas do ciclo moram**, que é a confusão real;
+- **oferece os destinos filtrados por papel**, com a mesma condição do `Sidebar` — não se oferece
+  porta que vai dar 403. É a regra da casa: *a recusa ensina o caminho*; dizer só "não existe"
+  faz a pessoa procurar sozinha, e o que ela acha costuma ser o errado.
+
+Reusa o `<Vazio>` de `components/Estado.tsx`. **~25 linhas e uma linha em `App.tsx`** — a
+estimativa era de 1 hora e foi isso.
+
+⚠️ **Fica mais urgente agora, não menos:** com a fase 1 anunciada ao RH, as telas que ainda não
+existem (`/questionarios` passou a existir; `/criterios` e `/sincronizacao` não) vão ser tentadas
+justamente por quem ouviu que estão vindo.
+
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 
 O cadastro (`/avaliadores`) e o painel de cada ciclo contavam ambos "sem avaliador" e nenhum
@@ -3537,9 +3716,13 @@ final = nota da avaliação" cai da fórmula, sem caso especial.
 - **Tempo na função vem da TROCA de `R7_FUNCAO`**, nunca da última linha do SR7010: o
   dissídio de 1º de novembro grava a folha inteira. `src/sincronizacao/data-ultima-funcao.ts`
   é a peça mais frágil do módulo — mexer nela sem ler os testes é pedir regressão.
-- **Critério calculado exige resolver registrado**, validado em **três momentos** (ao salvar
-  no catálogo, ao montar a aplicação, na abertura do ciclo — mesma função, três chamadas).
-  Sem isso o critério devolve vazio, em silêncio, para o ciclo inteiro.
+- **Critério calculado exige resolver registrado**, validado em **DOIS momentos** (ao montar
+  a aplicação e na abertura do ciclo — mesma função, duas chamadas). Sem isso o critério
+  devolve vazio, em silêncio, para o ciclo inteiro. ⚠️ **Corrigido em 11/09: eram três no
+  desenho e são dois no código.** O terceiro — *ao salvar no catálogo* — não tem caminho
+  porque **não existe salvar**: `assertCriterioSalvavel` está escrito, com spec, e **sem
+  chamador**. É o momento mais barato de recusar (fala com quem errou), e ele volta junto com
+  o cadastro de critérios. Ver §3.1.58.
 - **Aplicação sem nenhum critério é válida** — é o caso dos aprendizes, no piso de
   escolaridade, tempo de casa e cursos por definição.
 - **Escolaridade: os rótulos foram separados da pontuação, e a pontuação NÃO mudou.** A

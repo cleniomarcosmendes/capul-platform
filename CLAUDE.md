@@ -217,9 +217,12 @@ Plataforma corporativa modular com microservicos independentes:
   dissidio coletivo grava a folha inteira todo 1o de novembro. Ver
   `src/sincronizacao/data-ultima-funcao.ts` — e a peca mais fragil do sync.
 - **⭐ Criterio calculado exige resolver registrado** (`src/calculo/resolvers/registry.ts`),
-  validado em **TRES momentos** — ao salvar no catalogo, ao montar a Aplicacao e na abertura
-  do ciclo (mesma funcao, 3 chamadas). Sem isso o criterio devolve vazio em silencio para o
-  ciclo inteiro. O momento mais barato de recusar e o do cadastro: fala com quem errou.
+  validado em **DOIS momentos** — ao montar a Aplicacao e na abertura do ciclo (mesma funcao,
+  2 chamadas). Sem isso o criterio devolve vazio em silencio para o ciclo inteiro.
+  ⚠️ **Eram tres no desenho; sao dois no codigo** (apurado em 11/09). O terceiro — *ao salvar
+  no catalogo* — nao existe porque **nao existe salvar**: `assertCriterioSalvavel` esta
+  escrito, com spec, e sem chamador. E o momento mais barato de recusar, e volta com o
+  cadastro de criterios.
 - **⭐ Modelo e SO o questionario** (05/09): grupo e organizacao visual e **nao tem peso** —
   todo o peso esta na Pergunta. Os criterios cadastrais saem do modelo e viram
   `AplicacaoCriterio` (criterio + peso por perfil), com `Aplicacao.pesoAvaliacao` dizendo
