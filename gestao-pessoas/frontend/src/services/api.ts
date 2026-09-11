@@ -204,6 +204,16 @@ export const ciclos = {
     conceitos: { descricao: string; limiteInferior: number; limiteSuperior: number; cor?: string; ordem: number }[],
   ) => rhApi.patch<Conceito[]>(`/ciclos/${id}/conceitos`, { conceitos }).then((r) => r.data),
   /**
+   * ⭐ O PERÍODO — rótulo, e só. Não entra em conta nenhuma: quem ancora todo
+   * cálculo temporal é a `dataBase`, e ela NÃO muda (quem precisa de outra
+   * data-base cria outro ciclo). Por isso o ajuste é estreito de propósito.
+   *
+   * ⚠️ O backend recusa período que não contenha a data-base, e recusa ciclo
+   * ENCERRADO — a tela diz as duas coisas antes do clique.
+   */
+  ajustarPeriodo: (id: string, periodoInicio: string, periodoFim: string) =>
+    rhApi.patch(`/ciclos/${id}/periodo`, { periodoInicio, periodoFim }).then((r) => r.data),
+  /**
    * ⭐ `confirmarPendentes` é o contrato de 08/09, o mesmo do RDV na Logística:
    * a API recusa e diz QUANTAS faltam; a tela pergunta e reenvia com motivo, e
    * as pendentes viram CANCELADA com esse motivo escrito.

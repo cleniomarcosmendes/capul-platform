@@ -32,7 +32,7 @@ const DESTINOS: Destino[] = [
   { para: '/', rotulo: 'Minhas avaliações' },
   { para: '/ciclos', rotulo: 'Ciclos', papeis: [ROLES.RH_ADMIN, ROLES.RH_CICLO] },
   { para: '/avaliadores', rotulo: 'Quem avalia quem', papeis: [ROLES.RH_ADMIN] },
-  { para: '/questionarios', rotulo: 'Questionários', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO] },
+  { para: '/questionarios', rotulo: 'Questionários', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO, ROLES.RH_CICLO] },
 ];
 
 export default function NaoEncontradaPage() {

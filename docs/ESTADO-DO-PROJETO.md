@@ -588,11 +588,9 @@ régua de critérios de um público já designado.
 o questionário certo"*; com avaliação, *"nem apagar resolve — crie outra aplicação e mova o
 público"*. Recusa sem alternativa faz a pessoa procurar sozinha, e o que ela acha é criar uma
 segunda aplicação e deixar a errada no ciclo.
-- **Duas capacidades existem SÓ NA API, sem botão em tela nenhuma** — quem precisar delas em
-  homologação consegue por `curl`, e é bom saber que dá:
-  `POST /avaliacoes/:id/reabrir` (RH_ADMIN, motivo obrigatório) desfaz um envio, e
-  `PATCH /ciclos/:id/periodo` (RH_ADMIN) corrige as datas do ciclo. As duas gravam em
-  `rh.auditoria` com o valor anterior.
+- ✅ **As duas capacidades que existiam SÓ NA API ganharam tela.** `POST
+  /avaliacoes/:id/reabrir` em 09/09 (§3.1.43) e `PATCH /ciclos/:id/periodo` em 11/09
+  (§3.1.60). As duas seguem `RH_ADMIN` e gravando em `rh.auditoria` com o valor anterior.
 - **Sincronização** existe na API (`POST /sincronizacao`, RH_ADMIN) e **não tem tela nem
   cron**. Hoje se dispara por `curl`, e os três CSVs precisam ser extraídos do Protheus à
   mão e colocados em `RH_CSV_DIR` (padrão `/app/carga`, que não existe no container — é
@@ -3515,7 +3513,7 @@ quer usar?"* não tinha como ser feita, e é ela que ordena o resto do trabalho.
 | | |
 |---|---|
 | `GET /catalogo/modelos/:versaoId` | o instrumento inteiro: grupos → perguntas → alternativas, com peso de cada pergunta, valor de cada alternativa e o balanço por grupo |
-| Papéis | **`RH_ADMIN` + `RH_MODELO`** (método sobrepõe a classe via `getAllAndOverride`). ⚠️ `RH_CICLO` ficou de fora: ele escolhe o modelo ao montar a Aplicação e continua vendo a LISTA. Se o RH disser que quem monta o ciclo também precisa conferir o conteúdo, é uma constante |
+| Papéis | **`RH_ADMIN` + `RH_MODELO` + `RH_CICLO`** — os três papéis do RH. ⚠️ `RH_CICLO` entrou no mesmo dia em que ficou de fora: quem monta a Aplicação **escolhe o modelo**, e escolher por nome sem ver o conteúdo é decidir às cegas. ⭐ A distinção que resolve, e vale para o módulo inteiro: **ler o INSTRUMENTO não é ler NOTA** — o que a separação de funções guarda é o julgamento sobre uma pessoa (`/resultados`, só `RH_ADMIN`, com `LER_RESULTADO_INDIVIDUAL` na auditoria); o questionário em branco é a régua, não dado de ninguém. Fora ficam `AVALIADOR` e quem não tem o módulo |
 | Tela | `/questionarios`, **leitura pura**, com botão de imprimir |
 | Menu | **"Questionários"** em CADASTROS — e é a primeira vez que `RH_MODELO` tem item |
 
@@ -3586,9 +3584,32 @@ não tem avaliação apontando para ele, por construção. Publicar é o ponto s
 edição concorrente sobre versão em uso, migração de respostas, e a regra de "o que acontece com
 quem já respondeu" — que deixa de existir.
 
-⚠️ **O que a decisão NÃO resolve, e continua na lista:** duplicar uma versão para começar a
-seguinte (é o caminho real — ninguém remonta 14 perguntas do zero), e o que fazer com a versão
-antiga quando nenhum ciclo a usa mais.
+#### ⭐⭐ DUPLICAR UMA VERSÃO É PARTE DO EDITOR — não um item solto
+
+Registrado assim por decisão do Clenio em 11/09, e o motivo desarma um risco real: **eu tinha
+anotado a duplicação como "o que a decisão não resolve", como se fosse um extra.** Não é.
+
+**Sem duplicar, "versão nova a cada mudança" vira "redigite 14 perguntas".** A decisão que
+barateou o editor — versão em uso é imutável, o editor só trabalha sobre RASCUNHO — **fica
+inutilizável na prática**: mudar o peso de UMA pergunta exigiria remontar o questionário inteiro
+do zero, e quem tem esse trabalho pela frente ou desiste, ou pede para a T.I. mexer no banco —
+que é exatamente o que este módulo existe para acabar.
+
+Então o escopo do editor tem **três atos, não dois**:
+
+| Ato | O que é |
+|---|---|
+| **Criar versão a partir da anterior** | duplica grupos, perguntas, pesos e alternativas numa `ModeloVersao` nova com `publicadoEm = null`. **É o caminho normal**, não a exceção |
+| **Editar o rascunho** | o trabalho em si, sobre a cópia — sem avaliação apontando para ela, por construção |
+| **Publicar** | o ponto sem volta, onde `assertModeloPublicavel` finalmente é chamado |
+
+⚠️ **Criar do zero é o caso RARO** — só o primeiro modelo de uma família. A tela tem de tratar a
+duplicação como o botão principal, e não escondê-la atrás de "novo modelo".
+
+⚠️ **As 2–3 semanas já contam os três.** A duplicação em si é barata (uma transação que copia um
+grafo de 4 níveis); o que ela evita é caro. O que continua fora da conta e **fora do escopo desta
+fase**: o que fazer com a versão antiga quando nenhum ciclo a usa mais — hoje ela simplesmente
+fica, e ficar não machuca ninguém.
 
 
 ### 3.1.59. ✅ URL desconhecida DIZ que não existe — o item 19 da lista (B), fechado (11/09)
@@ -3619,6 +3640,44 @@ estimativa era de 1 hora e foi isso.
 ⚠️ **Fica mais urgente agora, não menos:** com a fase 1 anunciada ao RH, as telas que ainda não
 existem (`/questionarios` passou a existir; `/criterios` e `/sincronizacao` não) vão ser tentadas
 justamente por quem ouviu que estão vindo.
+
+
+### 3.1.60. ✅ Ajustar o PERÍODO pela tela — a capacidade que só existia por `curl` (11/09)
+
+`PATCH /ciclos/:id/periodo` está no ar desde 07/09: `RH_ADMIN`, auditado com o valor anterior, e
+**sem tela**. Para corrigir uma data digitada errada o RH dependia da T.I. — que é o que o módulo
+existe para acabar. É a família do §3.1.5: *capacidade sem caminho na tela*.
+
+Entrou como seção retrátil em `CicloPage`, **ao lado da régua de conceitos** e pelo mesmo motivo:
+período é **propriedade do ciclo**, não etapa dele. Só aparece para `RH_ADMIN`, como o endpoint —
+a tela não oferece o que a API vai recusar.
+
+⭐ **A tela explica por que o ajuste é ESTREITO**, em vez de deixar a pessoa procurando os outros
+campos: período é **rótulo** e não entra em conta nenhuma; quem ancora todo cálculo temporal é a
+`dataBase`, e ela não muda. Mudá-la num ciclo em andamento moveria a nota de quem já respondeu,
+em silêncio — quem precisa de outra data-base **cria outro ciclo**, que é a decisão que isso
+realmente é.
+
+⭐⭐ **As duas recusas do backend aparecem ANTES do clique**, com a mesma regra do
+`validarPeriodo` — a tela não inventa outra:
+
+| Recusa | Como aparece |
+|---|---|
+| ciclo **ENCERRADO** | campos cinza + o motivo escrito acima deles, como na régua |
+| o período novo não **contém a data-base** | aviso âmbar enquanto a pessoa digita, com a data-base no texto |
+
+A segunda é a que pega na prática: é fácil encolher o período e deixar a data-base do lado de
+fora sem perceber. Conferido ao vivo — a API recusa com *"A data-base precisa estar dentro do
+período do ciclo"*, e a tela diz o mesmo antes.
+
+⚠️ **E o botão desabilitado tem `title`** dizendo o que falta (encerrado · o impedimento · "nada
+mudou"). Botão cinza mudo faz a pessoa clicar de novo achando que não pegou — §3.1.50.
+
+⚠️ **Registro de um erro meu, porque a regra vale:** testei o endpoint no **ciclo do Piloto**,
+mudei o período e desfiz. O ciclo `ZZ DESCARTAVEL` existe exatamente para isso e foi criado ontem
+por este motivo. Restaurado (01/09–30/09) e as **2 linhas de `AJUSTAR_PERIODO` de 11/09 apagadas
+por id**; a de 06/09 fica, é real. Reteste refeito no descartável. **O ciclo descartável só serve
+se for o primeiro lugar em que se pensa** — ter um não basta.
 
 ### 3.12. "Sem avaliador" tem DOIS universos, e eles não se contêm
 

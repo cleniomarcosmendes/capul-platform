@@ -31,15 +31,24 @@ export class CatalogoController {
    * aqui não havia como ler o texto delas: `modelos()` devolve `perguntas: 11`,
    * uma contagem. A decisão não tinha como ser tomada.
    *
-   * ⚠️ `RH_CICLO` fica de fora, por decisão de 11/09. Ele escolhe o modelo ao
-   * montar a Aplicação e continua vendo a LISTA (`GET modelos`) — o conteúdo é
-   * de quem responde pelo instrumento. Se o RH disser que quem monta o ciclo
-   * também precisa conferir o que vai aplicar, é acrescentar uma constante aqui.
+   * ⭐ **`RH_CICLO` LÊ TAMBÉM** — corrigido em 11/09, no mesmo dia em que ficou
+   * de fora. Quem monta a Aplicação **escolhe o modelo**, e escolher por nome
+   * sem ver o conteúdo é decidir às cegas: ele veria *"Operação de Loja · v1 ·
+   * 14 perguntas"* e teria de confiar no rótulo.
    *
-   * ⚠️ Vem ANTES de nenhuma rota curinga, mas fica junto de `modelos` de
-   * propósito: são a lista e o item da mesma coisa.
+   * ⭐ A distinção que resolve, e que vale para o módulo inteiro:
+   * **ler o INSTRUMENTO não é ler NOTA.** O que a separação de funções guarda é
+   * o julgamento sobre uma pessoa — `/resultados` e a memória de cálculo, que
+   * seguem só de `RH_ADMIN` e com `LER_RESULTADO_INDIVIDUAL` na auditoria. O
+   * questionário em branco não é dado de ninguém: é a régua, e quem monta o
+   * ciclo precisa dela na mão.
+   *
+   * Sobram de fora `AVALIADOR` e quem não tem o módulo — que é o certo: o
+   * avaliador vê as perguntas ao responder, uma avaliação por vez.
+   *
+   * ⚠️ Fica junto de `modelos` de propósito: são a lista e o item da mesma coisa.
    */
-  @Get('modelos/:versaoId') @Roles(ROLES.RH_ADMIN, ROLES.RH_MODELO)
+  @Get('modelos/:versaoId')
   instrumento(@Param('versaoId') versaoId: string) {
     return this.catalogo.instrumento(versaoId);
   }

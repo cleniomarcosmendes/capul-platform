@@ -80,7 +80,7 @@ export default function InstrumentoPage() {
         <Erro
           mensagem={erro}
           aoTentarDeNovo={semPermissao ? undefined : () => void carregarModelos()}
-          dica={semPermissao ? 'Ver o questionário é de RH_ADMIN e RH_MODELO — peça acesso à gestora.' : undefined}
+          dica={semPermissao ? 'Ver o questionário é de quem trabalha no instrumento ou no ciclo — peça acesso à gestora de RH.' : undefined}
         />
       </div>
     );

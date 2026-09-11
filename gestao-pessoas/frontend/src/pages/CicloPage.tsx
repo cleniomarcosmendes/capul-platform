@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, Lock, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarRange, CheckCircle2, ChevronDown, Lock, SlidersHorizontal } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Carregando, Erro } from '../components/Estado';
 import { EtiquetaDeCiclo } from '../components/Etiqueta';
@@ -107,6 +107,10 @@ export default function CicloPage() {
             apuradas={resumo?.apuradas ?? 0}
             aoSalvar={recarregar}
           />
+          {/* ⭐ O PERÍODO fica ao lado da régua pelo mesmo motivo: é propriedade
+              do ciclo, não etapa dele. ⚠️ Só RH_ADMIN, como o endpoint —
+              a tela não pode oferecer o que a API vai recusar. */}
+          {tem(ROLES.RH_ADMIN) && <PeriodoDoCiclo ciclo={ciclo} aoSalvar={recarregar} />}
           {/* ⚠️ Cada faixa decide por UMA fonte, não por duas.
               A do RASCUNHO decide pelo próprio conteúdo: `pendenciasParaAbrir`
               é `null` fora de rascunho, por construção do backend — então não
@@ -396,6 +400,155 @@ function FaixaDoEncerrado({ encerradoEm }: { encerradoEm: string | null }) {
  * ainda muda — e precisa mudar, porque ABERTO não volta para RASCUNHO e a régua
  * ficaria congelada para sempre por um clique.
  */
+/**
+ * ⭐ AJUSTAR O PERÍODO — a capacidade que existia só por `curl`.
+ *
+ * `PATCH /ciclos/:id/periodo` está no ar desde 07/09, é `RH_ADMIN` e grava em
+ * `rh.auditoria` com o valor anterior. Não tinha tela: para corrigir uma data
+ * digitada errada, o RH dependia da T.I. — que é exatamente o que este módulo
+ * existe para acabar. É a família do §3.1.5 (*capacidade sem caminho na tela*).
+ *
+ * ⚠️ **O ajuste é ESTREITO de propósito, e a tela explica por quê.** Período é
+ * rótulo: não entra em conta nenhuma. Quem ancora todo cálculo temporal é a
+ * `dataBase`, e ela não muda — mudá-la num ciclo em andamento moveria a nota de
+ * quem já respondeu, em silêncio. Quem precisa de outra data-base cria outro
+ * ciclo, que é a decisão que isso realmente é.
+ *
+ * ⚠️ **As duas recusas do backend aparecem ANTES do clique**, não como erro
+ * depois: ciclo ENCERRADO não aceita, e o período novo tem de CONTER a
+ * data-base. A segunda é a que pega na prática — é fácil encolher o período e
+ * deixar a data-base do lado de fora sem perceber.
+ */
+function PeriodoDoCiclo({
+  ciclo,
+  aoSalvar,
+}: {
+  ciclo: CicloDetalhado;
+  aoSalvar: () => void;
+}) {
+  const [aberta, setAberta] = useState(false);
+  const [inicio, setInicio] = useState(ciclo.periodoInicio.slice(0, 10));
+  const [fim, setFim] = useState(ciclo.periodoFim.slice(0, 10));
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvo, setSalvo] = useState(false);
+
+  const base = ciclo.dataBase.slice(0, 10);
+  const encerrado = ciclo.status === 'ENCERRADO';
+  const travada = encerrado;
+
+  /** As MESMAS regras do `validarPeriodo` do backend — a tela não inventa outra. */
+  const foraDeOrdem = fim < inicio;
+  const baseDeFora = base < inicio || base > fim;
+  const mudou = inicio !== ciclo.periodoInicio.slice(0, 10) || fim !== ciclo.periodoFim.slice(0, 10);
+  const impedimento = foraDeOrdem
+    ? 'O fim do período é anterior ao início.'
+    : baseDeFora
+      ? `A data-base (${data(base)}) ficaria fora do período. Ela ancora todo cálculo temporal do ciclo e não muda — o período precisa contê-la.`
+      : null;
+
+  async function salvar() {
+    setSalvando(true);
+    setErro(null);
+    setSalvo(false);
+    try {
+      await apiCiclos.ajustarPeriodo(ciclo.id, inicio, fim);
+      setSalvo(true);
+      aoSalvar();
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível ajustar o período.'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <section className="mt-3 rounded-2xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setAberta((v) => !v)}
+        aria-expanded={aberta}
+        className="alvo-toque flex w-full items-center gap-2 px-4 py-3 text-left"
+      >
+        <CalendarRange size={16} className="shrink-0 text-slate-500" aria-hidden />
+        <span className="text-sm font-medium text-slate-700">Período do ciclo</span>
+        <span className="text-sm text-slate-500">
+          {data(ciclo.periodoInicio)} a {data(ciclo.periodoFim)}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`ml-auto shrink-0 text-slate-400 transition ${aberta ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+
+      {aberta && (
+        <div className="border-t border-slate-100 p-4">
+          {/* O motivo da trava vem ANTES dos campos, como na régua. */}
+          {travada && (
+            <p className="mb-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {motivoCicloEncerrado(ciclo)} O período descreve resultados já materializados.
+            </p>
+          )}
+
+          <p className="mb-3 text-sm text-slate-500">
+            O período é <strong className="font-medium text-slate-700">rótulo</strong>: não entra em
+            conta nenhuma. Quem ancora o cálculo é a data-base — {data(base)} —, e ela não muda.
+            Para outra data-base, crie outro ciclo.
+          </p>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Início</span>
+              <input
+                type="date"
+                value={inicio}
+                disabled={travada}
+                onChange={(e) => { setInicio(e.target.value); setSalvo(false); }}
+                className="alvo-toque mt-1.5 block rounded-xl border border-slate-300 px-3 text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Fim</span>
+              <input
+                type="date"
+                value={fim}
+                disabled={travada}
+                onChange={(e) => { setFim(e.target.value); setSalvo(false); }}
+                className="alvo-toque mt-1.5 block rounded-xl border border-slate-300 px-3 text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void salvar()}
+              disabled={travada || salvando || !mudou || impedimento !== null}
+              /* ⚠️ `title` no desabilitado diz o que falta — botão cinza mudo
+                 faz a pessoa clicar de novo achando que não pegou. */
+              title={
+                travada
+                  ? 'Ciclo encerrado.'
+                  : impedimento ?? (!mudou ? 'Nada mudou.' : undefined)
+              }
+              className="alvo-toque rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {salvando ? 'Salvando…' : 'Salvar período'}
+            </button>
+          </div>
+
+          {/* O impedimento aparece enquanto a pessoa digita, não depois do clique. */}
+          {!travada && impedimento && (
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">{impedimento}</p>
+          )}
+          {erro && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{erro}</p>}
+          {salvo && !erro && (
+            <p className="mt-3 text-sm text-capul-700">Período ajustado. Fica registrado na auditoria.</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ReguaDeConceitos({
   ciclo,
   apuradas,

@@ -73,7 +73,7 @@ const itens: ItemDoMenu[] = [
    * dois. A palavra técnica — Designação — fica com a etapa do ciclo, que é onde
    * quem já está seguindo o processo a procura.
    */
-  { secao: 'CADASTROS', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO] },
+  { secao: 'CADASTROS', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO, ROLES.RH_CICLO] },
   { rotulo: 'Quem avalia quem', icone: UserCheck, para: '/avaliadores', papeis: [ROLES.RH_ADMIN] },
 
   /**
@@ -86,8 +86,12 @@ const itens: ItemDoMenu[] = [
    * ⭐ É aqui que `RH_MODELO` entra no menu pela primeira vez. Até 11/09 ele
    * não tinha item nenhum, e estava certo: a única coisa que o papel autorizava
    * era `GET /catalogo`, que nenhuma tela dele consumia.
+   *
+   * ⭐ `RH_CICLO` também: quem monta a Aplicação escolhe o modelo, e escolher
+   * por nome sem ver o conteúdo é decidir às cegas. **Ler o instrumento não é
+   * ler nota** — `/resultados` segue só de `RH_ADMIN`.
    */
-  { rotulo: 'Questionários', icone: FileText, para: '/questionarios', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO] },
+  { rotulo: 'Questionários', icone: FileText, para: '/questionarios', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO, ROLES.RH_CICLO] },
 
   /**
    * CICLO — singular: a seção é sobre o objeto em que se trabalha, não sobre a
