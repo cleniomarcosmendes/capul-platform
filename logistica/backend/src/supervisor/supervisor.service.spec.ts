@@ -2163,3 +2163,85 @@ describe('SupervisorService — despesa pode ter data no mês seguinte ao do pla
     expect(prisma.despesaVeiculo.update).toHaveBeenCalled();
   });
 });
+
+/**
+ * O seletor "Departamento" da aba Equipe e a validação da escrita PRECISAM concordar.
+ *
+ * Até 11/09/2026 não concordavam: a tela vinha de `/frota/departamentos-filtro`
+ * (derivado de `veiculo.supervisorId`) e o `POST` validava contra
+ * `supervisor_departamento`. Duas réguas para a mesma decisão — a tela oferecia o que a
+ * API recusava com 403, e esvaziava quando a pessoa perdia o último veículo, mesmo com a
+ * autoridade do RDV intacta.
+ *
+ * O teste de PAREAMENTO é o que segura isso: para o mesmo usuário, tudo que
+ * `departamentosGerenciaveis` oferece tem de passar em `assertPodeGerirDepartamento`, e
+ * o que ela NÃO oferece tem de ser recusado. Régua nova que só mude um dos lados quebra
+ * a suíte.
+ */
+describe('SupervisorService.departamentosGerenciaveis — a tela usa a MESMA régua da escrita', () => {
+  let prisma: any; let svc: SupervisorService; let core: any;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    core = {
+      validarDepartamento: jest.fn(), validarUsuario: jest.fn(), validarFilial: jest.fn(),
+      departamentoEhDaFilial: jest.fn().mockResolvedValue(true),
+      nomesDepartamentos: jest.fn().mockResolvedValue(new Map([['d1', 'Vendas'], ['d2', 'Producao']])),
+      nomesUsuarios: jest.fn().mockResolvedValue(new Map()),
+      departamentosDaFilial: jest.fn().mockResolvedValue([{ id: 'd1', nome: 'Vendas' }, { id: 'd2', nome: 'Producao' }]),
+    };
+    svc = new SupervisorService(prisma, condutorMock(), core, storageMock(), locaisMock());
+  });
+  const comRole = (role: string) => ({ sub: 'u1', filialId: 'f1', modulos: [{ codigo: 'LOGISTICA', role }] }) as any;
+
+  it('SUPERVISOR_FROTA: oferece os departamentos da AMARRAÇÃO, nunca dos veículos', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    const r = await svc.departamentosGerenciaveis(comRole('SUPERVISOR_FROTA'));
+    expect(r).toEqual([{ id: 'd1', nome: 'Vendas' }]);
+    // A régua da FROTA não pode ser consultada aqui — é o acoplamento que causou o defeito.
+    expect(prisma.veiculo.findMany).not.toHaveBeenCalled();
+  });
+
+  it('PAREAMENTO: tudo que a tela oferece, a escrita aceita', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    const user = comRole('SUPERVISOR_FROTA');
+    const oferecidos = await svc.departamentosGerenciaveis(user);
+    expect(oferecidos.length).toBeGreaterThan(0); // senão o teste passaria vazio
+    for (const d of oferecidos) {
+      prisma.supervisor.findFirst.mockResolvedValue(null);
+      prisma.supervisor.create.mockResolvedValue({ id: 'novo' });
+      await expect(
+        svc.criarSupervisor({ matricula: 'E00001', nome: 'X', departamentoId: d.id } as any, user),
+      ).resolves.toBeDefined();
+    }
+  });
+
+  it('PAREAMENTO: o que a tela NÃO oferece, a escrita recusa', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([{ departamentoId: 'd1' }]);
+    const user = comRole('SUPERVISOR_FROTA');
+    const oferecidos = await svc.departamentosGerenciaveis(user);
+    const forinha = 'd2'; // existe na filial, mas não é dele
+    expect(oferecidos.some((d) => d.id === forinha)).toBe(false);
+    await expect(
+      svc.criarSupervisor({ matricula: 'E00002', nome: 'Y', departamentoId: forinha } as any, user),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('sem amarração → seletor VAZIO (e a escrita recusa tudo) — falha fechada nos dois', async () => {
+    prisma.supervisorDepartamento.findMany.mockResolvedValue([]);
+    const user = comRole('SUPERVISOR_FROTA');
+    expect(await svc.departamentosGerenciaveis(user)).toEqual([]);
+    await expect(
+      svc.criarSupervisor({ matricula: 'E00003', nome: 'Z', departamentoId: 'd1' } as any, user),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('ADMIN: departamentos DA FILIAL, não o catálogo global das 32 filiais', async () => {
+    const r = await svc.departamentosGerenciaveis(comRole('ADMIN'), 'f1');
+    expect(core.departamentosDaFilial).toHaveBeenCalledWith('f1');
+    expect(r).toHaveLength(2);
+  });
+
+  it('COORDENADOR não monta time → seletor vazio', async () => {
+    expect(await svc.departamentosGerenciaveis(comRole('COORDENADOR'))).toEqual([]);
+  });
+});

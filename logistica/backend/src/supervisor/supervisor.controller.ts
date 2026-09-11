@@ -58,6 +58,14 @@ export class SupervisorController {
   filiaisComRdv(@CurrentUser() user: JwtPayload) {
     return this.svc.filiaisComRdv(user);
   }
+  /** Departamentos em que ESTE usuário pode cadastrar representante — seletor
+   *  "Departamento" do formulário da Equipe. Mesma régua do `assertPodeGerirDepartamento`
+   *  que valida a escrita; antes a tela usava `/frota/departamentos-filtro`, que deriva
+   *  do VEÍCULO, e oferecia o que o `POST` recusava. */
+  @Get('departamentos-gerenciaveis')
+  departamentosGerenciaveis(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {
+    return this.svc.departamentosGerenciaveis(user, filialId);
+  }
   /** Departamentos DA FILIAL — seletor do "adicionar departamento" da amarração. */
   @Get('departamentos-filial')
   departamentosDaFilial(@CurrentUser() user: JwtPayload, @Query('filialId') filialId?: string) {

@@ -323,3 +323,136 @@ com a 18 presente · bundle servido `index-DEUcrB_V.js` contém a tarja nova e *
 contém mais o literal "Indústria de Ração" · nginx recarregado.
 
 **Próximo:** repetir o roteiro a partir do **PASSO 1** — a base segue no estado ZERO.
+
+---
+
+# RODADA 2 — 11/09/2026 tarde, build com a correção do defeito 0
+
+Passos 1 e 2, que a rodada 1 não conseguiu executar. Rebuild às 13:59.
+
+## PASSO 1 ✅ PASSOU — é a validação da correção do defeito 0
+
+| O que | Observado |
+|---|---|
+| Seletor de filial | **Existe**, com **35 filiais** do catálogo `/core/filiais`; abriu em *18 · INDUSTRIA DE RACAO… (sua filial)* |
+| A tela ficou na 18? | **Sim.** `filiais-rdv` ainda é chamado, mas **não troca mais a filial** |
+| Bloco vazio | *"Nenhum departamento participa do RDV nesta filial ainda — cadastre representantes abaixo."* |
+| "Adicionar outro departamento desta filial" | **3 opções**, só as FBR da filial 18 |
+| `PUT /supervisor/departamentos-responsavel/ffaabe83…` | **200** |
+| Banco | 1 linha · criado_por **Administrador** · 14:58:59 (após o rebuild) |
+
+## PASSO 2 ✅ PASSOU
+
+| O que | Observado |
+|---|---|
+| `POST` Fabricio (coordenador) / Kelver | **201** e **201** |
+| Campo "Coordenador" ao escolher o Fabricio | **Some** ✅, com o aviso de roteamento por departamento |
+| Departamento pré-preenchido | Sim, nos dois |
+| Tabela de departamentos | *Vendas Internas e Externas (FBR) · 2 · Lidyane* |
+
+> ⚠️ **Não limpa os defeitos 1 e 2.** O select continua vindo do VEÍCULO; aqui veículo e
+> amarração apontam para o mesmo departamento. Sucesso por **coincidência**, não por acerto.
+
+## Achados menores novos (tela), em aberto
+
+| Onde | O quê |
+|---|---|
+| Bloco vazio do ADMIN | Manda *"cadastre representantes abaixo"*, mas o 1º passo real é **adicionar departamento + responsável**. E "Adicionar **outro** departamento" não faz sentido quando não há nenhum |
+| Linha pendente após "Adicionar" | Fica só na tela, com ✓/✕, **sem dizer que ainda não foi salva** — trocar de aba perde a linha calado |
+| Toast do cadastro | Diz *"Supervisor de área cadastrado."* também para **coordenador** |
+| Select de representante | Quem já tem cadastro continua na lista; o erro de matrícula duplicada só vem depois do clique |
+
+## ⚠️ O estado NÃO é mais ZERO
+
+Filial 18 agora tem **1 amarração** (Vendas Internas e Externas → Lidyane) e
+**2 representantes** (Fabricio, Kelver). Passo que exigir o zero precisa restaurar o
+backup ou limpar de novo.
+
+## Ressalva do Estado ZERO — DESCARTADA (repetida na v3, fica o registro)
+
+*"filiais-rdv mostrou 0 representantes nas 4 filiais listadas"* **não é defeito.**
+`supervisor.service.ts:132` pesa só representante **com departamento**, de propósito
+(comentário nas l.129-131); os 11 de seed da matriz não têm, logo peso 0 — mas entram na
+lista pelo `quaisquer` (l.140). Conferido: filial 01 = 11 ativos / 0 com departamento;
+filiais 02, 08 e 09 = 0 representantes e 1 amarração cada.
+
+## Cenário que ainda falta: fazer as duas réguas DIVERGIREM
+
+Enquanto o veículo da Lidyane estiver lotado no mesmo departamento da amarração, os
+defeitos 1 e 2 ficam invisíveis. Para provar a correção:
+
+1. ADMIN → Veículos → `KELVER` → lotação para ***Produção e Qualidade (FBR)***.
+2. Relogar `lidyanerocha` → Equipe → Novo cadastro → abrir "Departamento".
+   - **Errado (régua da frota):** aparece *Produção e Qualidade (FBR)*, e o `POST` dá **403**.
+   - **Certo (régua do RDV):** aparece *Vendas Internas e Externas (FBR)*, e o `POST` dá **201**.
+3. Reverter a lotação do veículo.
+
+---
+
+# DEFEITOS 1 e 2 — CORRIGIDOS em 11/09/2026 (rebuild 15:23)
+
+## O que mudou
+
+**Backend** — `GET /supervisor/departamentos-gerenciaveis?filialId=` (novo).
+Devolve exatamente o que `assertPodeGerirDepartamento` aceita na escrita:
+
+| Perfil | Devolve |
+|---|---|
+| ADMIN | departamentos **DA FILIAL** alvo (não o catálogo global de 56) |
+| SUPERVISOR_FROTA | os da **amarração** (`supervisor_departamento`), nunca dos veículos |
+| Demais | vazio — não montam time |
+
+**Frontend** — o select passa a consumir esse endpoint; o `.catch` mudo virou `deptErro`,
+que separa "falhou" de "não há"; e o campo vazio agora **diz por quê**, com texto
+diferente por perfil. Os dois textos que empurravam ao erro também foram trocados:
+*"cadastre representantes abaixo"* (justamente o que a API recusa) e *"Adicionar **outro**
+departamento"* quando não existe nenhum.
+
+## Teste de PAREAMENTO (o que impede a regressão)
+
+`supervisor.service.spec.ts` — 6 casos novos. O central: para o mesmo usuário, **tudo que
+`departamentosGerenciaveis` oferece tem de passar em `criarSupervisor`, e o que ela não
+oferece tem de ser recusado**. Régua nova que mexa em um lado só quebra a suíte.
+
+**Validado por mutação:** trocando a régua do SUPERVISOR_FROTA de volta para "todos os
+departamentos da filial", **4 dos 6 testes reprovam**; revertida, os 6 passam.
+Suíte `src/supervisor` completa: **193 passando**.
+
+## Medido na API (ADMIN, filial 18)
+
+| Endpoint | Devolve |
+|---|---|
+| `supervisor/departamentos-gerenciaveis?filialId=18` | **3** — Adminstrativo (FBR), Produção e Qualidade (FBR), Vendas Internas e Externas (FBR) |
+| `frota/departamentos-filtro` (o antigo) | **56** — catálogo global |
+
+## ⚠️ CENÁRIO ARMADO — reverter depois do teste
+
+Para provar os defeitos 1 e 2 é preciso que as duas réguas DIVIRJAM, e elas foram
+separadas de propósito agora:
+
+| Régua | Aponta para |
+|---|---|
+| FROTA — lotação de `KELVER` e `LIDYANE` | **Produção e Qualidade (FBR)** |
+| RDV — amarração da Lidyane | **Vendas Internas e Externas (FBR)** |
+
+**Teste (falta executar — exige a senha de `lidyanerocha`):**
+login `lidyanerocha` → Equipe → Novo cadastro → abrir "Departamento".
+
+- **Antes da correção** apareceria *Produção e Qualidade (FBR)* e o `POST` daria **403**.
+- **Depois da correção** tem de aparecer ***Vendas Internas e Externas (FBR)*** e o
+  `POST` tem de dar **201**.
+
+**Reverter a lotação assim que terminar:**
+
+```sql
+UPDATE logistica.veiculo SET departamento_lotacao_id='ffaabe83-c038-4db4-8944-6b19926e8e94'
+WHERE placa IN ('KELVER','LIDYANE');
+```
+
+## Ainda abertos
+
+**3** (backend aceita departamento de outra filial — falta `departamentoEhDaFilial` no
+`criarSupervisor`/`atualizarSupervisor`; a metade de TELA já caiu junto com esta onda),
+**4** (o `.catch` mudo ainda existe nas OUTRAS chamadas da tela), **5** (não há exclusão
+de representante), e os menores da rodada 2 (linha pendente sem aviso; toast chamando
+coordenador de "supervisor de área"; representante já cadastrado continua na lista).

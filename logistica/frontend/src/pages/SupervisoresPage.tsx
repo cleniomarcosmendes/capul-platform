@@ -512,6 +512,10 @@ function EquipeTab() {
   const [itens, setItens] = useState<Supervisor[]>([]);
   const [usuarios, setUsuarios] = useState<CoreUser[]>([]);
   const [departamentos, setDepartamentos] = useState<DeptItem[]>([]);
+  // Falha da busca de departamentos. Existe para a tela NÃO tratar "a chamada quebrou"
+  // igual a "não há departamento": eram indistinguíveis, e foi por isso que ninguém
+  // conseguia dizer por que o seletor vinha vazio.
+  const [deptErro, setDeptErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [usuarioId, setUsuarioId] = useState('');
@@ -534,9 +538,15 @@ function EquipeTab() {
       const [s, u, d, r, df] = await Promise.all([
         logisticaApi.get<Supervisor[]>('/supervisor/supervisores', qFilial),
         filialId ? coreApi.get<CoreUser[]>('/usuarios', { params: { filialId } }) : Promise.resolve({ data: [] as CoreUser[] }),
-        // Departamentos que ESTE usuário pode escolher: o Supervisor de Departamento vê
-        // só os seus; ADMIN vê todos. Mesmo endpoint escopado da Análise de Custos.
-        logisticaApi.get<DeptItem[]>('/frota/departamentos-filtro').catch(() => ({ data: [] as DeptItem[] })),
+        // Departamentos que ESTE usuário pode escolher. Endpoint do RDV, que devolve
+        // exatamente o que `assertPodeGerirDepartamento` aceita na escrita.
+        // Antes vinha de `/frota/departamentos-filtro`, derivado do VEÍCULO: a tela
+        // oferecia o que o POST recusava (403) e esvaziava quando a pessoa perdia o
+        // último carro, mesmo com a autoridade do RDV intacta.
+        // O erro NÃO vira lista vazia: `deptErro` distingue "não pode/não há" de "falhou".
+        logisticaApi.get<DeptItem[]>('/supervisor/departamentos-gerenciaveis', qFilial)
+          .then((r) => { setDeptErro(null); return r; })
+          .catch((e) => { setDeptErro(errMsg(e, 'Não foi possível carregar os departamentos.')); return { data: [] as DeptItem[] }; }),
         logisticaApi.get<RespDepto[]>('/supervisor/departamentos-responsavel', qFilial).catch(() => ({ data: [] as RespDepto[] })),
         logisticaApi.get<DeptItem[]>('/supervisor/departamentos-filial', qFilial).catch(() => ({ data: [] as DeptItem[] })),
       ]);
@@ -689,7 +699,16 @@ function EquipeTab() {
           {ehAdmin ? '' : ' Definido pela administração — aqui é só consulta.'}
         </p>
         {respDepto.length === 0 ? (
-          <p className="text-sm text-slate-400">Nenhum departamento participa do RDV nesta filial ainda — cadastre representantes abaixo.</p>
+          /* O texto anterior mandava "cadastre representantes abaixo" — justamente o
+             ato que a API recusa enquanto não existe amarração (403 "Departamento fora
+             do seu escopo"). Texto que promete capacidade empurra de volta ao erro com
+             a autoridade do sistema. Agora diz o 1º passo REAL, e ele é DIFERENTE por
+             perfil: o ADMIN cria a amarração; os demais dependem dela. */
+          ehAdmin ? (
+            <p className="text-sm text-slate-500">Nenhum departamento participa do RDV nesta filial ainda. Comece <b>abaixo</b>: escolha o departamento e defina quem responde por ele — só depois é possível cadastrar representantes.</p>
+          ) : (
+            <p className="text-sm text-slate-500">Nenhum departamento participa do RDV nesta filial ainda. Quem define isso é a <b>administração</b>; enquanto não houver, não é possível cadastrar representantes.</p>
+          )
         ) : (
           <table className="min-w-full divide-y divide-slate-200">
             <thead><tr><th className={th}>Departamento</th><th className={th}>Representantes</th><th className={th}>Responsável</th>{ehAdmin && <th className={th}>Ações</th>}</tr></thead>
@@ -738,7 +757,7 @@ function EquipeTab() {
         {ehAdmin && deptosFilial.length > 0 && (
           <div className="mt-3 flex items-end gap-2 border-t border-slate-100 pt-3">
             <div className="w-80">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Adicionar outro departamento desta filial</label>
+              <label className="mb-1 block text-xs font-medium text-slate-600">{respDepto.length === 0 ? 'Adicionar o primeiro departamento desta filial' : 'Adicionar outro departamento desta filial'}</label>
               <select value={addDeptoId} onChange={(e) => setAddDeptoId(e.target.value)} className={inp}>
                 <option value="">— selecione</option>
                 {deptosFilial.filter((d) => !respDepto.some((r) => r.departamentoId === d.id)).map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
@@ -782,10 +801,22 @@ function EquipeTab() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Departamento *</label>
-              <select value={deptId} onChange={(e) => setDeptId(e.target.value)} className={inp}>
+              <select value={deptId} onChange={(e) => setDeptId(e.target.value)} className={inp} disabled={departamentos.length === 0}>
                 <option value="">— selecione</option>
                 {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
               </select>
+              {/* Campo vazio TEM de dizer por quê. Antes ficava só com "— selecione", e
+                  falha de rede, 403 e "não há departamento" eram a mesma tela — o motivo
+                  pelo qual o defeito original levou dois dias para ser nomeado. */}
+              {deptErro ? (
+                <p className="mt-1 text-xs text-rose-600">{deptErro}</p>
+              ) : departamentos.length === 0 ? (
+                ehAdmin ? (
+                  <p className="mt-1 text-xs text-amber-700">Esta filial não tem departamento cadastrado. Cadastre em <b>Configurador → Departamentos</b>.</p>
+                ) : (
+                  <p className="mt-1 text-xs text-amber-700">Nenhum departamento seu participa do RDV nesta filial. A administração precisa definir você como <b>responsável</b> por um departamento (bloco acima) antes de você montar o time.</p>
+                )
+              ) : null}
             </div>
             {!selEhCoordenador && (
             <div>

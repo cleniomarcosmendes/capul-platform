@@ -466,6 +466,42 @@ export class SupervisorService {
   }
 
   /**
+   * Departamentos em que o usuário pode CADASTRAR representante — o seletor
+   * "Departamento" do formulário da aba Equipe.
+   *
+   * É a MESMA régua que `assertPodeGerirDepartamento` aplica na escrita, de propósito:
+   * até 11/09/2026 a tela se alimentava de `/frota/departamentos-filtro`, que deriva
+   * dos VEÍCULOS que a pessoa supervisiona (`veiculo.supervisorId`). Eram duas réguas
+   * para a mesma decisão, e a divergência aparecia nos dois sentidos:
+   *
+   * - ganhar um veículo lotado em outro departamento fazia a tela OFERECER o que a API
+   *   recusava com 403 ("Departamento fora do seu escopo");
+   * - perder o último veículo ESVAZIAVA o seletor, embora a autoridade no RDV
+   *   continuasse intacta — o mesmo acoplamento que `SupervisorDepartamento` foi criado
+   *   para matar (ver o doc-comment do modelo e `deptosDoSupervisorDepto`).
+   *
+   * A FROTA continua derivando do veículo: lá o significado do campo é o certo.
+   *
+   * ADMIN: os departamentos DA FILIAL alvo — não o catálogo global. O catálogo trazia
+   * 56 linhas de 32 filiais, com "Agroveterinaria" repetida 16 vezes e sem dizer de qual
+   * filial era cada uma.
+   */
+  async departamentosGerenciaveis(user: JwtPayload, filialIdAlvo?: string): Promise<{ id: string; nome: string }[]> {
+    const filialId = await this.filialAlvo(user, filialIdAlvo);
+    if (this.ehAdmin(user)) return this.core.departamentosDaFilial(filialId);
+    if (this.ehSupervisorDepto(user)) {
+      const deps = await this.deptosDoSupervisorDepto(user);
+      const nomes = await this.core.nomesDepartamentos(deps);
+      return deps
+        .map((id) => ({ id, nome: nomes.get(id) ?? id.slice(0, 8) }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    }
+    // Coordenador e supervisor de área não montam o time — o seletor não existe para
+    // eles. Lista vazia em vez de 403: a tela é a mesma, só o formulário não aparece.
+    return [];
+  }
+
+  /**
    * Define (ou troca) o responsável por um departamento.
    *
    * ⚠️ Só ADMIN escreve — e isto é deliberado. Esta tabela é a FONTE da autoridade do
