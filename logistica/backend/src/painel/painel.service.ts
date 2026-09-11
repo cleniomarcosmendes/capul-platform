@@ -46,21 +46,25 @@ export class PainelService {
       this.prisma.entrega.count({ where: { ...escopo, ...periodo, status: StatusEntrega.ENTREGUE } }),
       this.prisma.entrega.count({ where: { ...escopo, ...periodo, status: StatusEntrega.NAO_ENTREGUE } }),
       this.prisma.entrega.count({ where: { ...escopo, ...periodo, status: StatusEntrega.CANCELADA } }),
-      this.prisma.viagem.count({ where: { ...escopo, situacao: StatusViagem.RASCUNHO } }),
-      this.prisma.viagem.count({ where: { ...escopo, situacao: StatusViagem.EM_CURSO } }),
-      this.prisma.viagem.count({ where: { ...escopo, situacao: StatusViagem.CONCLUIDA } }),
+      // `tipo: ENTREGA` nas CINCO consultas de viagem abaixo: a tabela guarda também a
+      // saída de frota e o container mensal do RDV, e o Painel de Entregas os contava
+      // como rota. Era assim que um planejamento de RDV aparecia em "Rotas por veículo".
+      // O KM (linha ~262) já filtrava — "só entregas, frota tem seu próprio Monitor".
+      this.prisma.viagem.count({ where: { ...escopo, tipo: TipoViagem.ENTREGA, situacao: StatusViagem.RASCUNHO } }),
+      this.prisma.viagem.count({ where: { ...escopo, tipo: TipoViagem.ENTREGA, situacao: StatusViagem.EM_CURSO } }),
+      this.prisma.viagem.count({ where: { ...escopo, tipo: TipoViagem.ENTREGA, situacao: StatusViagem.CONCLUIDA } }),
       this.prisma.veiculo.count({ where: { ...escopo, situacao: SituacaoVeiculo.DISPONIVEL } }),
       this.prisma.veiculo.count({ where: { ...escopo, situacao: SituacaoVeiculo.EM_USO } }),
       this.prisma.veiculo.count({ where: { ...escopo, situacao: SituacaoVeiculo.EM_MANUTENCAO } }),
       this.prisma.entrega.groupBy({ by: ['filialId', 'status'], where: { ...escopo, ...periodo }, _count: { _all: true } }),
       this.prisma.viagem.groupBy({
         by: ['veiculoId'],
-        where: { ...escopo, ...periodo, situacao: { not: StatusViagem.CANCELADA } },
+        where: { ...escopo, ...periodo, tipo: TipoViagem.ENTREGA, situacao: { not: StatusViagem.CANCELADA } },
         _count: { _all: true },
       }),
       this.prisma.viagem.groupBy({
         by: ['motoristaId'],
-        where: { ...escopo, ...periodo, situacao: { not: StatusViagem.CANCELADA } },
+        where: { ...escopo, ...periodo, tipo: TipoViagem.ENTREGA, situacao: { not: StatusViagem.CANCELADA } },
         _count: { _all: true },
       }),
       // Indicador de CANAL (pedido 11/06): presencial × tele-venda × outro.

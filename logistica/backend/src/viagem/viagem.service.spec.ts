@@ -212,3 +212,97 @@ describe('ViagemService.despachar — uma rota por vez', () => {
     expect(data.kmInicial).toBeUndefined();
   });
 });
+
+/**
+ * `logistica.viagem` guarda TRÊS coisas com significados diferentes: a rota de ENTREGA,
+ * a saída de veículo da FROTA e o container mensal do RDV (SUPERVISOR). Quem lê pelo
+ * lado da Entrega tem de recortar — e não recortava.
+ *
+ * Medido em 11/09/2026, pela tela: a filial 18 exibia 10 "Rotas de Entrega" das quais
+ * NENHUMA era entrega (9 da frota, 1 do RDV); a filial 01 exibia 27, com 5 entregas.
+ * A regra já existia em 14 pontos dos módulos frota/supervisor — faltava exatamente na
+ * tela que dá nome ao conceito.
+ */
+describe('ViagemService — a tela de ENTREGA só enxerga viagem de ENTREGA', () => {
+  let prisma: any; let svc: ViagemService;
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    svc = new ViagemService(prisma, coreMock());
+    prisma.viagem.findMany.mockResolvedValue([]);
+  });
+
+  it('list() filtra tipo=ENTREGA', async () => {
+    await svc.list({ filialId: 'f1' });
+    expect(prisma.viagem.findMany.mock.calls[0][0].where).toMatchObject({ tipo: 'ENTREGA', filialId: 'f1' });
+  });
+
+  it('list() mantém o filtro mesmo sem filial', async () => {
+    await svc.list({});
+    expect(prisma.viagem.findMany.mock.calls[0][0].where.tipo).toBe('ENTREGA');
+  });
+
+  it('listMinhas() (app do entregador) também filtra — não depende de a frota deixar motoristaId nulo', async () => {
+    await svc.listMinhas('m1');
+    expect(prisma.viagem.findMany.mock.calls[0][0].where).toMatchObject({ tipo: 'ENTREGA', motoristaId: 'm1' });
+  });
+});
+
+/**
+ * INVARIANTE: toda LISTAGEM de viagem neste serviço declara o `tipo` — ou está
+ * dispensada com o motivo escrito.
+ *
+ * Mesma ideia do invariante de `assertRdvAberto` no RDV: revisão caso a caso falha na
+ * consulta que ninguém revisou. Aqui o teste lê o FONTE, acha todo
+ * `prisma.viagem.findMany(` e exige `tipo:` no bloco — porque `logistica.viagem` guarda
+ * ENTREGA, FROTA e SUPERVISOR, e ler os três onde se espera um foi o defeito de 11/09.
+ *
+ * A lista de dispensados é curta de propósito, e cada item diz POR QUE ler os três tipos
+ * é o comportamento certo ali. Consulta nova sem `tipo` e sem dispensa quebra aqui.
+ */
+describe('ViagemService — INVARIANTE: listagem de viagem declara o tipo', () => {
+  // Dispensados, com o porquê. Mexer nesta lista é decisão de negócio, não limpeza.
+  const DISPENSADOS: Record<string, string> = {
+    abertas: 'trava de "uma rota por vez": o carro preso numa saída de FROTA está ocupado do mesmo jeito — filtrar aqui permitiria despachar rota num veículo já na rua, e o KM de uma sobrescreveria o da outra',
+  };
+
+  it('nenhum findMany de viagem fica sem `tipo` (fora os dispensados)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const src = fs.readFileSync(path.join(__dirname, 'viagem.service.ts'), 'utf8');
+    const linhas = src.split('\n');
+    const semTipo: string[] = [];
+    linhas.forEach((l, i) => {
+      if (!/prisma\.viagem\.findMany\(/.test(l)) return;
+      // nome da const que recebe o resultado (`const abertas = await ...`)
+      const nome = /(?:const|let)\s+([a-zA-Z][a-zA-Z0-9_]*)\s*=/.exec(l)?.[1] ?? `linha_${i + 1}`;
+      if (nome in DISPENSADOS) return;
+      const bloco = linhas.slice(i, i + 14).join('\n'); // where costuma abrir logo abaixo
+      if (!/\btipo:/.test(bloco)) semTipo.push(nome);
+    });
+    expect(semTipo).toEqual([]);
+  });
+
+  it('a lista de dispensados não guarda nome que já sumiu do serviço', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const src = fs.readFileSync(path.join(__dirname, 'viagem.service.ts'), 'utf8');
+    const orfaos = Object.keys(DISPENSADOS).filter((n) => !new RegExp(`(?:const|let)\\s+${n}\\s*=`).test(src));
+    expect(orfaos).toEqual([]);
+  });
+
+  it('a trava de veículo ocupado continua SEM filtro de tipo', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const src = fs.readFileSync(path.join(__dirname, 'viagem.service.ts'), 'utf8');
+    const i = src.indexOf('const abertas = await this.prisma.viagem.findMany(');
+    expect(i).toBeGreaterThan(-1);
+    // se alguém "uniformizar" e puser tipo aqui, a trava de KM fura — e este teste avisa
+    expect(/\btipo:/.test(src.slice(i, i + 400))).toBe(false);
+  });
+});

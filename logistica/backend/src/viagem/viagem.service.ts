@@ -122,9 +122,23 @@ export class ViagemService {
     return this.findOne(id);
   }
 
+  /**
+   * Rotas de ENTREGA da filial — alimenta a tela "Rotas de Entrega".
+   *
+   * ⚠️ `logistica.viagem` guarda TRÊS coisas diferentes: a rota de entrega, a saída de
+   * veículo da frota (`FROTA`) e o container mensal do RDV (`SUPERVISOR`). Esta consulta
+   * não filtrava `tipo`, então a tela de entregas mostrava as três. Medido em 11/09/2026:
+   * filial 18 exibia 10 "rotas de entrega" — 9 da frota e 1 do RDV, nenhuma entrega;
+   * filial 01 exibia 27, das quais só 5 eram entregas.
+   *
+   * A regra já existia no resto do módulo (frota e supervisor filtram `tipo` em 14
+   * pontos, e o KM do painel tem o comentário "só entregas — frota tem seu próprio
+   * Monitor"); faltava aqui, que é justamente a tela que dá nome ao conceito.
+   */
   async list(params: { filialId?: string; situacao?: StatusViagem; veiculoId?: string }) {
     const viagens = await this.prisma.viagem.findMany({
       where: {
+        tipo: TipoViagem.ENTREGA,
         ...(params.filialId ? { filialId: params.filialId } : {}),
         ...(params.situacao ? { situacao: params.situacao } : {}),
         ...(params.veiculoId ? { veiculoId: params.veiculoId } : {}),
@@ -156,6 +170,12 @@ export class ViagemService {
   async listMinhas(motoristaId: string, situacao?: StatusViagem) {
     const viagens = await this.prisma.viagem.findMany({
       where: {
+        // Defensivo: hoje só ENTREGA grava `motoristaId` (44/44; frota e RDV usam
+        // condutor por matrícula), então isto é no-op no dado atual. Fica explícito
+        // porque o app do entregador não pode depender de um acaso de preenchimento de
+        // outro módulo — no dia em que a frota gravar motoristaId, a saída de veículo
+        // apareceria na rota do entregador.
+        tipo: TipoViagem.ENTREGA,
         motoristaId,
         situacao: situacao ?? StatusViagem.EM_CURSO,
       },
@@ -239,6 +259,10 @@ export class ViagemService {
     // está aberta importa — "veículo indisponível" manda o operador procurar sozinho.
     // Vem ANTES da checagem de disponibilidade: o veículo em rota está EM_USO, então
     // aquela mensagem genérica venceria e esta nunca apareceria.
+    // ⚠️ Esta consulta NÃO filtra `tipo`, e é deliberado: o carro preso numa saída de
+    // FROTA está ocupado do mesmo jeito. Filtrar por ENTREGA aqui liberaria despachar
+    // uma rota num veículo que já está na rua pela frota — o KM de uma sobrescreveria o
+    // da outra, que é exatamente o que esta trava existe para impedir.
     const abertas = await this.prisma.viagem.findMany({
       where: {
         situacao: StatusViagem.EM_CURSO,

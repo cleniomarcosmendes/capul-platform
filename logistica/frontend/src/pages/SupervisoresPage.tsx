@@ -502,7 +502,7 @@ const ehCoordenador = (u: CoreUser) => temRoleLogistica(u, 'COORDENADOR');
 const ehRepresentante = (u: CoreUser) => ehSupervisorArea(u) || ehCoordenador(u);
 
 function EquipeTab() {
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const { usuario, temRole } = useAuth();
   const ehAdmin = temRole('ADMIN');
   const filialSessao = usuario?.filialAtual?.id ?? usuario?.filiais?.[0]?.id ?? '';
@@ -568,7 +568,24 @@ function EquipeTab() {
       setItens(s.data); setUsuarios(u.data); setDepartamentos(d.data); setRespDepto(r.data); setDeptosFilial(df.data);
     } catch (e) { toast('error', errMsg(e, 'Falha ao carregar a equipe.')); } finally { setLoading(false); }
   };
-  const deptNome = (id?: string | null) => (id ? (departamentos.find((d) => d.id === id)?.nome ?? id.slice(0, 8)) : null);
+  /**
+   * Nome do departamento para a COLUNA da lista.
+   *
+   * O fallback era `id.slice(0, 8)` — um pedaço de UUID, que não diz nada a ninguém e
+   * ainda parece dado. Apareceu na verificação de 11/09: com a busca de departamentos
+   * bloqueada, a coluna mostrou `ffaabe83`.
+   *
+   * `departamentos` é a lista dos GERENCIÁVEIS, então "não achou" tem dois significados
+   * diferentes, e a tela precisa dizer qual: a busca falhou, ou o departamento existe mas
+   * está fora desta filial/escopo (é assim que um cadastro cross-filial antigo aparece).
+   */
+  const deptNome = (id?: string | null) => {
+    if (!id) return null;
+    const achado = departamentos.find((d) => d.id === id);
+    if (achado) return achado.nome;
+    if (falhas['deptos']) return '(nome não carregado)';
+    return '(departamento fora desta filial)';
+  };
   // Departamento sugerido pelo coordenador escolhido (cadastro dele no core) — só vale
   // se estiver na lista que ESTE usuário pode escolher; senão devolve '' (não sugere
   // um departamento fora do escopo do Supervisor de Departamento).
@@ -657,16 +674,25 @@ function EquipeTab() {
     try { await logisticaApi.patch(`/supervisor/supervisores/${id}`, { departamentoId: editDepto, coordenadorId: editCoord }, qFilial); toast('success', 'Cadastro atualizado.'); setEditId(null); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao atualizar.')); }
   };
-  // Exclusão definitiva do cadastro. Só chega aqui quem não tem movimento (a API confere
-  // de novo). O diálogo diz o que se perde E o que NÃO se perde — o cadastro some, a
-  // pessoa e a permissão dela no Configurador ficam intactas.
+  /**
+   * Exclusão definitiva do cadastro. Só chega aqui quem não tem movimento (a API confere
+   * de novo). O diálogo diz o que se PERDE e o que NÃO se perde — o cadastro some e a
+   * matrícula fica livre; o usuário e a permissão dele no Configurador ficam intactos.
+   *
+   * Usa o `confirm` do projeto (ConfirmDialog), não o `window.confirm` do navegador: o
+   * nativo não tem o rótulo "Excluir", não tem a variante de perigo, ignora o estilo da
+   * aplicação e é o único do módulo que ainda fazia isso — as outras 7 confirmações da
+   * Logística já usavam este hook.
+   */
   const excluir = async (s: Supervisor) => {
-    if (!window.confirm(
-      `Excluir o cadastro de ${s.nome} (${s.matricula}) no RDV desta filial?\n\n` +
-      `Isto apaga o registro do time — a matrícula fica livre para ser cadastrada de novo.\n` +
-      `NÃO mexe no usuário nem na permissão dele no Configurador.\n\n` +
-      `Se a intenção é só tirar das telas mantendo o histórico, use Inativar.`,
-    )) return;
+    const ok = await confirm(
+      'Excluir cadastro do RDV',
+      `${s.nome} (${s.matricula}) sai do time desta filial e a matrícula fica livre para um novo cadastro. `
+      + `Não mexe no usuário nem na permissão dele no Configurador. `
+      + `Para apenas tirar das telas mantendo o histórico, use Inativar.`,
+      { confirmLabel: 'Excluir', variant: 'danger' },
+    );
+    if (!ok) return;
     try { await logisticaApi.delete(`/supervisor/supervisores/${s.id}`, qFilial); toast('success', 'Cadastro excluído.'); await carregar(); }
     catch (e) { toast('error', errMsg(e, 'Falha ao excluir.')); }
   };
@@ -812,7 +838,12 @@ function EquipeTab() {
         {ehAdmin && deptosFilial.length > 0 && (
           <div className="mt-3 flex items-end gap-2 border-t border-slate-100 pt-3">
             <div className="w-80">
-              <label className="mb-1 block text-xs font-medium text-slate-600">{respDepto.length === 0 ? 'Adicionar o primeiro departamento desta filial' : 'Adicionar outro departamento desta filial'}</label>
+              {/* "primeiro" é uma AFIRMAÇÃO de que não há nenhum — só pode ser dita se a
+                  busca deu certo. Com ela falhando, a lista vazia não prova nada.
+                  (Achado na verificação de 11/09, no rastro do defeito 4.) */}
+              <label className="mb-1 block text-xs font-medium text-slate-600">
+                {falhas['resp'] ? 'Adicionar departamento desta filial' : respDepto.length === 0 ? 'Adicionar o primeiro departamento desta filial' : 'Adicionar outro departamento desta filial'}
+              </label>
               <select value={addDeptoId} onChange={(e) => setAddDeptoId(e.target.value)} className={inp}>
                 <option value="">— selecione</option>
                 {deptosFilial.filter((d) => !respDepto.some((r) => r.departamentoId === d.id)).map((d) => <option key={d.id} value={d.id}>{d.nome}</option>)}
