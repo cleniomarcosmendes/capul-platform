@@ -25,9 +25,9 @@ curl -sk https://localhost/api/v1/logistica/health | grep -o '"versao":{[^}]*}'
 | `buildEm` | 2026-09-11T21:12:38Z |
 | Bundle do frontend | **`index-Duj3HNxP.js`** (ver no DevTools → Network, ou `ls` no container) |
 
-> O sufixo **`-sujo`** é esperado: vem de arquivos não commitados do módulo
-> **gestão-pessoas**, que não tem nada a ver com a Logística. O código da Logística está
-> exatamente no commit `5a8271ba`.
+> O sufixo **`-sujo`** é esperado: a imagem foi construída com a árvore contendo trabalho
+> em andamento de OUTRO módulo (gestão-pessoas), que não tem relação com a Logística.
+> O código da Logística nesta imagem corresponde ao commit `15f636ab`.
 
 ```bash
 docker compose exec -T logistica-frontend sh -c 'ls /usr/share/nginx/html/assets/*.js'
