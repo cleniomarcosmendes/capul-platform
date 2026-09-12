@@ -6309,7 +6309,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 |---|---|---|
 | **Flag de recorte** no ciclo | **6h** | desenho **aprovado** (derivar por percentual inventa limiar, e limiar arbitrário erra calado) |
 | **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
-| **Editor do acervo** | **3–3,5 semanas** | depende do item **1** da Arielly |
+| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO** — Etapa 1 (ler o acervo) **feita em 12/09**, §3.1.85. Ordem aprovada: 1 → 2 → 5 → 6 → 3 → 4 → 7 |
 
 ### (c) ⛔ Bloqueado fora — HLG e o Marco
 
@@ -6391,3 +6391,107 @@ já dadas estão gravadas; aplicar o arranjo novo sobre elas é aritmética.
 
 ⚠️ Fica registrado como previsão, não como escopo. Quando ela perguntar, a conversa começa daqui —
 e não de "não dá".
+
+---
+
+### 3.1.85. ✅ ETAPA 1 DO EDITOR — LER o acervo (12/09)
+
+A primeira das sete etapas, e a única que **não escreve nada**. Antes de dar a alguém o poder
+de mexer nas questões, é preciso existir uma tela que diga **quais existem e quem as usa** —
+senão a primeira edição é feita às cegas.
+
+#### O que ficou
+
+| Peça | Onde |
+|---|---|
+| Serviço | `backend/src/acervo/acervo.service.ts` |
+| Rota | `GET /api/v1/gestao-pessoas/acervo` · `@Roles(RH_ADMIN, RH_MODELO, RH_CICLO)` |
+| Tela | `frontend/src/pages/AcervoPage.tsx` · `/acervo` · menu **"Acervo de questões"** |
+| Testes | `acervo.spec.ts` — **9** (eram 7; duas nasceram do defeito abaixo) |
+
+**Irmã da `/questionarios`, e a diferença é o RECORTE.** O Questionário mostra **um perfil por
+vez**, com as questões na ordem dele. O Acervo mostra **cada questão uma vez**, com a lista dos
+perfis que a usam e quanto ela vale em cada um. É a pergunta que se faz antes de editar:
+*"mexer nesta questão afeta quem?"*.
+
+#### 🔴 O defeito que a etapa produziu — e o que o pegou
+
+A primeira versão calculava o peso efetivo **ali mesmo**: `peso_do_grupo ÷ n`, arredondado a
+duas casas. Parece a mesma coisa. Não é.
+
+```
+Administrativo · Relacionamento e Conduta · peso 16 · 3 questões
+  divisão ingênua → 5,33 + 5,33 + 5,33 = 15,99
+  regra do módulo → 5,34 + 5,33 + 5,33 = 16,00   (o centavo do resto vai para a 1ª, por ordem)
+```
+
+Três classificações assim no Administrativo, e a tela somava **59,97** onde o arranjo declara
+**60**. O questionário mostraria 5,34 e o acervo 5,33 para a mesma questão — e quem edita
+concluiria que **um dos dois está errado, sem saber qual**.
+
+O aviso já estava escrito, em maiúsculas, no cabeçalho do `calculo/peso-derivado.ts`:
+*"a repartição é `modelo/distribuirPeso` — **não reimplementar aqui**"*. Reimplementei mesmo
+assim, e o comentário não me deteve porque eu não fui lê-lo: escrevi a divisão que "obviamente"
+era a conta certa.
+
+**⭐⭐ Quem pegou foi a SOMA, não a leitura.** Nenhum dos 7 testes falhou — todos usavam pesos
+que dividiam exato (12 ÷ 2, 9 ÷ 1, 10 ÷ 1). Furo de arredondamento mora **onde sobra**, e
+fixture redonda é justamente o caso que não tem resto. O que denunciou foi somar os pesos
+efetivos por perfil e comparar com o peso declarado do arranjo — a mesma **conta que não bate**
+da §3.1.79.
+
+Os dois testes que nasceram disso:
+- peso **16 ÷ 3** → `[5,34; 5,33; 5,33]` e a soma fecha em 16 exato;
+- `ordem` entrou na fixture: é ela que decide **quem recebe o centavo**, e fixture sem ordem
+  esconde metade da regra.
+
+#### A conferência que vale — 44 pesos, 0 divergências
+
+Não basta a soma fechar: os dois caminhos têm de dar o **mesmo número por questão**. Cruzei
+`GET /acervo` contra `GET /catalogo/modelos/:versaoId` (o instrumento), questão por questão:
+
+| Perfil | Questões | Divergentes | Pontuação máxima gravada × calculada |
+|---|---|---|---|
+| Administrativo | 11 | **0** | 72 × 72 |
+| Operação de Loja | 14 | **0** | 72 × 72 |
+| Produção e Indústria | 14 | **0** | 72 × 72 |
+| [DEMO] Treinamento | 5 | **0** | 60 × 60 |
+| **Total** | **44** | **0** | — |
+
+Somas por perfil: **60,00 · 60,00 · 60,00 · 50,00** — exatas.
+
+#### ⚠️ Peso `null` não é peso zero
+
+`pesosDerivados()` **falha alto** quando uma questão está numa classificação sem peso — é o
+certo para a avaliação, onde a questão valeria zero em silêncio. Numa tela de LEITURA, porém,
+derrubar o acervo inteiro por causa de um rascunho meio montado é o pior desfecho: some tudo,
+e ninguém descobre por quê. Aqui a exceção é capturada **por versão**: aquele perfil devolve
+`peso: null` e a tela escreve **"sem peso"** em âmbar. Hoje não existe nenhum caso (a migration
+confere na subida); o rascunho da **Etapa 3** vai passar por aqui enquanto está sendo montado.
+
+#### Os dois comentários obsoletos do catálogo — corrigidos
+
+`catalogo.service.ts` ainda afirmava que o `pesoTotal` do grupo **é a soma dos pesos das
+perguntas** e vem de `somatorioPorGrupo`, e que a pontuação máxima recalculada sai da
+`pontuacaoMaxima()` da publicação. Nenhuma das duas é verdade desde 11/09: **inverteu** — o peso
+mora no grupo e o da questão é derivado; e quem recalcula é `pontuacaoMaximaDoArranjo()`.
+
+⚠️ Registrado no lugar: as duas funções do `publicacao.validator.ts`
+(`pontuacaoMaxima`, `somatorioPorGrupo`, `assertModeloPublicavel`) **não têm chamador de
+produção** — só specs. É a família da §3.1.82 (peça sem chamador). Elas voltam na **Etapa 4**,
+adaptadas ao arranjo.
+
+#### Guarda conferida nos dois lados
+
+| | Resultado |
+|---|---|
+| `zz.teste.rh` (RH_ADMIN) | 200, 15 questões |
+| `clenio` (AVALIADOR) | **403** — *"Perfil insuficiente…"* |
+| sem token | **401** |
+| Menu | mesmos três papéis do controller — sem o furo permissivo da §3.1.77 |
+
+#### Números reais lidos na tela
+
+**15 questões · 8 classificações · 0 fora de todo perfil.** Doze das 15 pesam **diferente**
+conforme o perfil — que é exatamente o que a tela existe para mostrar. Suíte: **58 suítes,
+735 testes**, verdes.
