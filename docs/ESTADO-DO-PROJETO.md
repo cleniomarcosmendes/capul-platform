@@ -56,6 +56,16 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 | 🟢 **ENTROU: guarda de reabrir avaliação já devolvida (~4h)** | hoje não existe, e `devolutiva_em` **não pode** morar em `resultado_avaliacao`. §3.1.138 e §3.1.147(c) |
 | 💰 **COTADO: prévia do efeito na nota — ~1,5 dia** | §3.1.146. O trabalho não é a aritmética, é a política do delta de perguntas |
 
+### (b-ter) 🟢 O QUE 13/09 DECIDIU — a fila depois das decisões do Clenio
+
+| | Custo | |
+|---|---|---|
+| ▶️ **DEVOLUTIVA presencial, conduzida pelo AVALIADOR** | **~22h ≈ 3 dias** | **4 etapas com portão** — §3.1.148. O payload já existe inteiro; falta papel, escopo, tela e o par de colunas `devolutivaLiberada*` |
+| 🟢 **Prévia do efeito na nota** | ~1,5 dia | §3.1.146, **depois** da devolutiva |
+| ✂️ ~~"não há como avisar" (4h)~~ | **minutos** | cortado: vira uma frase na prévia da abertura dizendo que avisar é presencial. §3.1.151 |
+| 🔴 **Booleano nos outros backends** | ~2h cada | **não é nosso agora** — aviso escrito em `docs/AVISO_MARCO_VALIDACAO_BOOLEANA.md`, o Marco decide a janela. §3.1.149 |
+| 🟡 **Filtro dos avaliados vem da ORIGEM** | a definir | §3.1.150 — precisa de **uma coluna de perfil** no CSV, senão o item 3 da Arielly não cai |
+
 ### (c) 🟡 HLG — acesso CONFIRMADO; falta medir e agendar
 
 ⚠️⚠️ **CORREÇÃO de 13/09 (Clenio): este bloco vinha dizendo "bloqueado esperando
@@ -9521,3 +9531,259 @@ evitar, e desta vez não evitou: a lista foi escrita à mão e um caminho faltou
 > ⭐ **A conferência que pega é comparar a ÁRVORE depois, não reler o diff** —
 > o `git status` depois do commit mostrou o arquivo sobrando. Ler o diff só
 > mostra o que ENTROU; nunca o que ficou de fora.
+
+---
+
+### 3.1.148. ⭐⭐ A DEVOLUTIVA É PRESENCIAL, CONDUZIDA PELO AVALIADOR — decisão + levantamento
+
+**Decidido em 13/09 pelo Clenio.** Não há devolutiva por e-mail — nem agora, nem
+no desenho (3 endereços em 1.039, telefone em 2 de 183, 70 de 73 CCs com zero;
+§3.1.144). A devolutiva é **conversa presencial**.
+
+#### Dois atos separados, os dois valem
+
+| Ato | Quem | |
+|---|---|---|
+| **LIBERAR** | o **RH**, explicitamente | §3.1.137 — a apuração é reversível; ninguém vê antes de ela conferir |
+| **CONDUZIR** | o **AVALIADOR**, depois de liberado | novo em 13/09 |
+
+⭐ **O motivo operacional, e ele decide sozinho:** a Arielly conduzindo **344
+conversas** no ENSAIO e **894** em produção **não acontece**. O avaliador já
+conhece a pessoa e **já emitiu o julgamento** — é dele a conversa. Centralizar a
+devolutiva no RH seria desenhar uma etapa que ninguém consegue executar.
+
+#### ⭐ O que o avaliador vê: a COMPOSIÇÃO INTEIRA
+
+Nota final · conceito · memória **pergunta a pergunta** · **e os critérios
+cadastrais** (escolaridade, tempo de empresa, tempo na função) com valor, pontos
+e peso. **Decidido — não é pendência da Arielly.** Os três motivos:
+
+1. **A nota final é o que o avaliado vai ouvir.** Sem os critérios, o avaliador
+   não explica por que a final é **69,90** quando o questionário deu **63,19** —
+   e é a primeira pergunta que o avaliado faz. Entregar a nota sem a composição
+   é entregar o avaliador desarmado na conversa que ele tem de conduzir.
+2. **Os três critérios não são dado sensível**: são fatos que o avaliado sabe
+   sobre si e que o gestor dele já conhece.
+3. *"Sua nota em Tempo na Função foi 25 porque você mudou de função há menos de
+   dois anos"* é informação **útil e verificável**. ⭐ **Esconder produz
+   desconfiança, não proteção.**
+
+#### ⛔ O que NÃO muda — a separação de funções
+
+- só as pessoas que **ELE** avaliou, nunca outras;
+- **nunca** a avaliação em que ele é o avaliado — a regra já existe
+  (`ehProprioAvaliado` / `marcarRestricoes`, §3.1.104): **reusar, não escrever
+  nova**;
+- só **depois** de o RH liberar. Antes, o avaliador não vê nota nenhuma.
+
+⚠️ **Consequência textual que não pode ser esquecida:** a tela de envio hoje diz
+*"a nota é calculada pelo sistema e não fica visível para você"*. Essa frase
+passa a ter **prazo** — vira *"…não fica visível para você até o RH liberar a
+devolutiva"*. Texto que promete e deixa de valer é dívida
+([[feedback_texto_que_promete_capacidade_e_divida]]).
+
+---
+
+#### 📋 O LEVANTAMENTO — o que existe, medido em 13/09
+
+**(a) O que o avaliador vê hoje depois de enviar**
+
+O cartão da avaliação enviada é um **`<div>`, não um `<Link>`** — inerte **de
+propósito**, com `opacity-75` e sem chevron. ⚠️ **Não é o defeito que a varredura
+de 10/09 registrou**: é decisão escrita no código. O botão *"não é da minha
+equipe"* também some na enviada (*"ato sem objeto"*).
+
+> **Estado atual: depois de enviar, o avaliador não tem caminho para nada.** A
+> avaliação vira um retângulo apagado com a palavra "Enviada".
+
+**(b) O que falta — e o quanto já está pronto**
+
+| Peça | Estado |
+|---|---|
+| **O payload** | ✅ **100% reaproveitável, sem uma linha de mudança.** `resultado.service.memoria()` já devolve `notaFinal`, `conceito`, `porGrupo`, **`porQuestao`** (pergunta a pergunta, com o texto da âncora escolhida **e todas as âncoras**) e **`criterios`** com `valorBruto`, `faixaRotulo`, `pontuacao` e `peso` |
+| **A guarda do próprio avaliado** | ✅ **já existe na rota**, por `ehProprioAvaliado` — 403 em qualquer papel, e o acesso negado vira auditoria |
+| **A auditoria de leitura** | ✅ já existe: quem não é o avaliador designado entra na trilha |
+| 🔴 **A permissão** | o controller é `@Roles(ROLES.RH_ADMIN)` **na classe**. **O avaliador não alcança a rota** |
+| 🔴 **A chave** | a memória é por `resultadoId`; o avaliador tem `avaliacaoId`. ⭐ Barato: `ResultadoAvaliacao.avaliacaoId` é **`@unique`** |
+| 🔴 **A guarda de escopo** | falta `avaliacao.avaliadorId === colaboradorId` **e** "já liberada" |
+| 🔴 **A tela** | não existe |
+
+⭐ **Resposta direta: a memória pergunta a pergunta é reaproveitável como está.**
+O endpoint é que é só de RH_ADMIN — o que falta é papel e escopo, não conteúdo.
+
+**(c) `devolutiva_em` — a restrição já está respeitada, e havia uma surpresa**
+
+⭐⭐ **`Avaliacao` JÁ TEM `devolutivaEm` e `devolutivaPorId`** — desde a migration
+inicial `20260905160000_init_rh`. A restrição do §3.1.147(c) (não pode morar em
+`resultado_avaliacao`, porque o `reabrir` apaga a linha) **já está atendida pelo
+schema**, e eu não sabia disso quando a escrevi.
+
+⚠️ **E elas nunca foram tocadas: zero leitores, zero escritores.** É a **terceira
+ocorrência do §3.1.82** — *peça sem chamador não é peça pronta, é peça não
+verificada*. Oito dias de coluna morta que ninguém notou.
+
+⭐ **E o achado melhora o desenho.** São DOIS atos, e as colunas existentes
+descrevem o segundo:
+
+| Coluna | Ato | Estado |
+|---|---|---|
+| `devolutivaLiberadaEm` / `…PorId` | **o RH liberou** | 🔴 criar |
+| `devolutivaEm` / `devolutivaPorId` | **o avaliador conduziu** | ✅ **já existem** — é o que a coluna sempre quis dizer |
+
+**(d) Reabrir uma avaliação JÁ liberada**
+
+| | |
+|---|---|
+| **Hoje** | **nada.** Não há guarda, e `efeitoDaReabertura` anuncia só a nota que vai ser apagada |
+| **Deveria** | **recusar COM O DADO e aceitar confirmação** — nunca recusar sem saída |
+
+⛔ **Não é para bloquear.** *Guarda que impede o conserto é pior que guarda
+ausente* — a razão de reabrir costuma ser exatamente que a nota estava errada, e
+o caso mais grave é justamente o de alguém que **já viu** um número errado.
+
+O desenho, no padrão da [[feedback_api_recusa_para_a_tela_perguntar]]:
+
+1. `efeitoDaReabertura` passa a dizer **"esta pessoa já viu o resultado, em
+   DD/MM"** — junto com a nota que será apagada;
+2. o `reabrir` **exige `confirmarJaDevolvida`** quando houver devolutiva;
+3. `devolutivaLiberadaEm` é **limpo** na reabertura — a nota nova não está
+   liberada, e é correto que não esteja;
+4. ⭐ **o FATO de ter sido vista sobrevive na `rh.auditoria`**, não na coluna. É o
+   que responde depois *"ela viu o 72 antes de virar 68?"*. Não precisa de tabela
+   nova: a auditoria já existe.
+
+**Custo: ~4h.** (Já estava cotado em §3.1.138 sem este detalhe.)
+
+**(e) O custo total, em etapas com portão**
+
+| | Etapa | Custo | ⛳ O portão (a conta que fecha antes da próxima) |
+|---|---|---|---|
+| **1** | **Liberar** — migration do par `devolutivaLiberada*`, rota em lote (prévia grava por **id**), auditoria | **6h** | `liberadas + não liberadas = apuradas do ciclo`, e a prévia grava exatamente quem mostrou |
+| **2** | **O avaliador vê** — rota por `avaliacaoId`, guarda tripla, reuso de `memoria()` | **5h** | matriz de 4 acessos: avaliador designado **antes** de liberar (403) · **depois** (200) · outro avaliador (403) · o próprio avaliado (403, em qualquer papel) |
+| **3** | **A tela** — cartão enviado deixa de ser inerte **quando liberado**; tela da composição inteira; o texto do envio ganha prazo | **6h** | a composição **fecha na tela**: `nota do questionário × peso + critérios = nota final`, com os centavos conciliados |
+| **4** | **Conduzir + a guarda do reabrir** — as colunas que já existem passam a ter chamador; `confirmarJaDevolvida` | **5h** | reabrir uma liberada **recusa e diz a data**; com a flag, passa e a auditoria guarda que foi vista |
+| | **Total** | **~22h ≈ 3 dias** | |
+
+⚠️ **A etapa 3 é a que eu mais erraria sozinho** — é onde a conta da tela tem de
+fechar com os dois pesos (exato para calcular, arredondado para exibir), e é
+exatamente a família de defeito que já apareceu três vezes.
+
+---
+
+### 3.1.149. ✅ FATO MEDIDO — a string `"false"` liga o bloqueio no auth-gateway
+
+O §3.1.145 marcou como **inferência** o que valia para os outros backends. O
+Clenio mandou virar fato. Medido no DEV em 13/09, nos dois piores:
+
+**auth-gateway — `bloquear`.** `PATCH /api/v1/core/varredura-matricula/config`
+com `{"bloquear":"false"}` devolveu **`modo: "BLOQUEIO"`**. A rota ecoa o estado
+gravado, então não há interpretação: **a string "false" LIGOU o modo que desativa
+usuários.**
+⚠️ Sonda revertida no mesmo comando — a linha `varredura_matricula_bloquear` foi
+**apagada** (ela não existia antes) e o status conferido de volta em `RELATORIO`.
+O cron da varredura é `0 4 * * *`; a janela foi de milissegundos e nenhuma
+execução ocorreu.
+
+**logística — `confirmarPendentes`.** `PATCH /supervisor/viagens/:id/concluir`
+contra um **id inexistente** — sonda que não escreve nada. `"false"`, `"talvez"`
+e `0` devolveram **404 do serviço**, não 400 do pipe: **passaram a validação**.
+Se o campo fosse estrito, parariam antes de tocar o banco.
+
+⭐ **O truque do id inexistente é reaproveitável**: `400` = o DTO recusou; `404` =
+o DTO aceitou e o serviço foi consultado. Prova a validação **sem exercer o ato**.
+
+#### De onde a conversão veio — a propagação por cópia
+
+| Backend | Ganhou `enableImplicitConversion` |
+|---|---|
+| **gestao-ti** | **nunca** — e nasceu no mesmo commit que o auth-gateway |
+| auth-gateway | **23/02/2026** (`f690b059`) |
+| fiscal | 17/04/2026 |
+| logística | 31/05/2026 |
+| gestão de pessoas | 05/09/2026 |
+
+⭐ `auth-gateway` e `gestao-ti` **nasceram no mesmo commit, com configurações
+diferentes** — e todo backend criado depois copiou o do auth-gateway. Não é
+descuido de ninguém: é o **modelo mental "copio do último que fiz"**, e ele
+propaga tanto o acerto quanto o defeito. O `gestao-ti`, o mais antigo, é o único
+imune **por não ter sido tocado**.
+
+⛔ **Não corrigido nos outros** por decisão do Clenio — Logística e auth-gateway
+estão em PRODUÇÃO. O aviso ao Marco está em
+**`docs/AVISO_MARCO_VALIDACAO_BOOLEANA.md`**, escrito para ele decidir **janela**,
+com a palavra **latente** em destaque: o frontend manda booleano de verdade, e
+não há indício de que tenha acontecido.
+
+---
+
+### 3.1.150. ⭐⭐ O FILTRO DOS AVALIADOS VEM PRONTO DA ORIGEM — e o que isso dissolve
+
+**Decisão de 13/09 (Clenio):** a regra de quem é avaliado passa a ser aplicada
+**FORA do módulo** — por API ou por importação de CSV. O módulo recebe a lista
+**já filtrada**.
+
+⛔ **O que NÃO muda:** a **designação continua manual** (avaliador × avaliado),
+decisão de 12/09. O filtro é sobre **quem é avaliado**, não sobre quem julga.
+
+#### (a) O que muda no `FonteCsvService` e no contrato
+
+⭐⭐ **Menos linhas não basta — precisa de UMA COLUNA A MAIS.** E a razão está no
+schema:
+
+> `AplicacaoPublico` tem `@@unique([cicloId, colaboradorId])`. Uma pessoa está em
+> **uma** aplicação por ciclo — então **estar no público JÁ É a escolha do
+> questionário**. "Quem é avaliado" e "com qual instrumento" não são duas
+> perguntas no modelo: são a mesma linha.
+
+| Cenário | O que o CSV traz | O que resolve |
+|---|---|---|
+| **Só filtrar** | `colaboradores.csv` com menos linhas | diz **quem entra**; a T.I. continua adivinhando o perfil por prefixo de CC |
+| ⭐ **Filtrar + perfil** | uma coluna `perfil_avaliacao` (ou `aplicacao`) | diz **quem entra E com qual questionário** — a adivinhação acaba |
+
+**Recomendo a segunda.** O custo é praticamente o mesmo (`opcional(l,
+'perfil_avaliacao')` no `FonteCsvService`, mais o casamento nome→aplicação ao
+montar o público) e é o que dissolve o item 3. ⚠️ Sem a coluna, o item 3
+**permanece inteiro**.
+
+#### (b) O que cai e o que fica na lista da Arielly — ⛔ nada apagado sem confirmação
+
+| Item | Veredito | Por quê |
+|---|---|---|
+| **3 — prefixo de CC manda a fábrica para o questionário de loja** | 🟡 **CAI, mas SÓ com a coluna de perfil** | O item existe porque a T.I. montou o público por prefixo: `2101…` → Operação de Loja, e na filial 18 isso pegou **ADMINISTRATIVO-FABRICA (49)**, **EXPEDIÇÃO (30)** e ARMAZÉM GERAL (1). A pergunta *"o prefixo descreve o TRABALHO ou só a conta contábil?"* **deixa de existir** se a origem disser o perfil — ninguém precisa inferir de um código contábil. ⚠️ Com só o filtro de linhas, **fica** |
+| **5 — recorte provisório: confirmar por linha, aplicação ou ciclo?** | 🟢 **CAI, e por inteiro** | A flag `provisorio` existe para marcar *"este público veio de um atalho da T.I., não é decisão do RH"*. Medido hoje: **1.422 das 1.551** linhas de público são provisórias (129 definitivas), com origens como `PROVISORIO: prefixo 21` (697) e `5 centros de custo do recorte` (257). Se o público vem **pronto da origem**, ele é decisão do RH **por construção** — e a pergunta *"o que se confirma?"* fica sem objeto. ⭐ **A granularidade da confirmação some junto com a necessidade de confirmar** |
+
+**Ficam, e não são tocados pelo filtro:** 1 (o conteúdo das 39 perguntas), 2 (a
+faixa "Menos de 1 ano"), 4 (2º RH_ADMIN), 6 (treinamento), 7 (divisão do CC), 8
+(reciprocidade) e 9 (o conceito de "está no topo"). **Sete ficam, dois saem** —
+e o 3 só sai com a coluna.
+
+⛔ **Não apaguei item nenhum da lista.** Fica registrado aqui; a lista muda quando
+o Clenio confirmar.
+
+#### Uma consequência que vale dizer agora
+
+⭐ Se o público vem pronto, a **flag de recorte de ontem (§3.1.142) fica mais
+importante, não menos**: quem monta o ciclo deixa de saber, olhando as linhas, se
+a origem mandou a empresa inteira ou um recorte. **A declaração explícita passa a
+ser a única fonte** — que é exatamente o argumento contra derivar por percentual.
+
+---
+
+### 3.1.151. ✂️ CORTADO — os ~4h do "não há como avisar"
+
+**Decisão do Clenio em 13/09, e ele desmontou a proposta com a minha própria
+regra:** *aviso que aparece sempre deixa de ser lido* — com **3 alcançáveis em
+1.039**, o aviso sinalizaria praticamente **todo mundo**, e uma tela em que toda
+linha tem alerta é uma tela sem alerta nenhum.
+
+**No lugar:** uma frase na **prévia da abertura** dizendo que avisar os
+avaliadores é **presencial**, com o número. **Minutos, não 4h.**
+
+⭐ **A fila do avaliador continua sendo a notificação, custo zero.**
+
+⚠️ Registro do erro de projeto: eu propus os 4h **no mesmo relatório** em que
+media 3 de 1.039. A régua que eu estava aplicando (*"a tela diz quem não
+consegue"*, [[feedback_designar_nao_da_acesso]]) é boa **quando a exceção é
+exceção** — lá eram 46 de 54. Com 1.036 de 1.039, a exceção é a regra, e a régua
+certa é a outra. ⭐ **Régua boa aplicada na proporção errada vira ruído** — e o
+número que dizia isso estava na mesma página.
