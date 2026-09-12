@@ -26,6 +26,10 @@
 
 A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 
+⚠️ **Quatro contas de teste agora** — `zz.teste.rh` (RH_ADMIN) · `.modelo` ·
+`.ciclo` · **`.avaliador`** (13/09, §3.1.156). As 18 contas com papel AVALIADOR
+são de **pessoas reais**; medir com uma delas é o que custou a limpeza de 12/09.
+
 | # | Item | O que a resposta destrava |
 |---|---|---|
 | ~~1~~ | **As 39 perguntas — o CONTEÚDO** | ⚠️ **deixou de bloquear a fila (13/09).** Ela decide o conteúdo, **na tela**, quando o editor existir — não a ordem do trabalho |
@@ -60,7 +64,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 
 | | Custo | |
 |---|---|---|
-| ▶️ **DEVOLUTIVA presencial, conduzida pelo AVALIADOR** | ~22h · **restam ~16h** | **Etapa 1 ✅ FEITA** (§3.1.152, portão fechado). Falta: **2** o avaliador vê (5h) · **3** a tela (6h) · **4** conduzir + guarda do reabrir (5h) |
+| ▶️ **DEVOLUTIVA presencial, conduzida pelo AVALIADOR** | ~22h · **restam ~11h** | **Etapas 1 ✅ e 2 ✅** (§3.1.152 e §3.1.153, matriz medida). Falta: **3** a tela (6h) · **4** conduzir + guarda do reabrir (5h) |
 | 🟢 **Prévia do efeito na nota** | ~1,5 dia | §3.1.146, **depois** da devolutiva |
 | ✂️ ~~"não há como avisar" (4h)~~ | **minutos** | cortado: vira uma frase na prévia da abertura dizendo que avisar é presencial. §3.1.151 |
 | 🔴 **Booleano nos outros backends** | ~2h cada | **não é nosso agora** — aviso escrito em `docs/AVISO_MARCO_VALIDACAO_BOOLEANA.md`, o Marco decide a janela. §3.1.149 |
@@ -9935,3 +9939,190 @@ a cada ajuste de texto.
 
 **861 testes.** Rastro do exercício limpo por id (3 marcas + 3 linhas de
 auditoria); `SIMULACAO` de volta a zero liberadas.
+
+---
+
+### 3.1.153. ✅ DEVOLUTIVA — ETAPA 2: O AVALIADOR VÊ (⛳ matriz medida)
+
+`GET /devolutiva/avaliacao/:avaliacaoId`, em **controller separado** do RH.
+
+#### ⛳ A MATRIZ — medida na API, não deduzida
+
+Conta **`zz.teste.avaliador`** (4ª conta de teste, criada em 13/09 no mesmo
+molde das três — senha e departamento **copiados** do `zz.teste.rh`, nunca
+digitados; colaborador `009903 ZZ CONTA DE TESTE T.I. (AVALIADOR)`).
+
+| tentativa | medido | |
+|---|---|---|
+| dele, **LIBERADA** | **200** | `nota=69,90 · Atende · 14 questões · 3 critérios` |
+| dele, apurada e **NÃO liberada** | **403** | *"O RH ainda não liberou esta devolutiva… **não é falta de permissão sua**, é etapa que ainda não aconteceu."* |
+| dele, **NÃO apurada** | **403** | **o MESMO texto**, e é decisão — ver abaixo |
+| de **OUTRO** avaliador, liberada | **403** | *"Esta avaliação não é sua. A devolutiva é conduzida por quem avaliou a pessoa."* |
+| em que **ELE é o avaliado** | **403** | *"A sua própria avaliação não fica visível para você…"* — **e a auditoria pousou** |
+| `zz.teste.ciclo` · `zz.teste.modelo` · `zz.teste.rh` | **403** | *"Esta operação é de AVALIADOR. Seu acesso é: RH_CICLO/RH_MODELO/RH_ADMIN."* |
+
+⭐ **A memória completa, medida:** nota do questionário **63,19** × peso 60 ·
+critérios **83,33** → **final 69,90 → Atende**, com 14 questões (âncora escolhida
+inclusive) e os três critérios: *Escolaridade 55 → SUPERIOR COMPLETO → 75 pts ×
+10* · *Tempo de Empresa 9,62 → Mais de 7 anos → 100 × 10* · *Tempo na Função
+4,08 → De 4 a 6 anos → 75 × 10*.
+
+⭐⭐ **É literalmente o exemplo do desenho** (§3.1.148): sem os critérios, o
+avaliador não explica por que a final é **69,90** quando o questionário deu
+**63,19** — e é a primeira pergunta que o avaliado faz.
+
+#### 1. A chave, não o conteúdo
+
+`memoria()` é reusada **sem uma linha de mudança**. O problema era de **chave**:
+a memória é por `resultadoId`, o avaliador tem `avaliacaoId`, e
+`ResultadoAvaliacao.avaliacaoId` é **`@unique`** — traduz-se e chama-se. Remontar
+faria a tela dele dizer um número diferente do da tela do RH sobre a mesma
+pessoa, no primeiro campo que mudasse.
+
+#### 2. Dois 403 que NÃO são o mesmo 403
+
+| | é | e a frase leva a |
+|---|---|---|
+| *"o RH ainda não liberou"* | **TEMPORÁRIO** | esperar |
+| *"esta avaliação não é sua"* | **DEFINITIVO** | nada a fazer |
+
+A família do **"403 que parece falta de permissão"** já custou três vezes neste
+módulo, sempre igual: a pessoa vai ao Configurador pedir acesso que já tem. Por
+isso a frase temporária diz explicitamente **"não é falta de permissão sua"**.
+
+⚠️ **Não apurada devolve o MESMO texto de "não liberada", e é decisão.** Do lado
+dele os dois estados são indistinguíveis e a ação é idêntica — esperar. Separar
+vazaria estado interno do RH (*"já apuraram, mas não liberaram"*) sem lhe dar
+nada que ele possa fazer.
+
+#### ⚠️ A ORDEM das três checagens é regra
+
+`é a própria?` → `é dele?` → `liberada?`. Invertida a primeira, quem tentasse
+abrir a própria avaliação leria *"esta avaliação não é sua"* — **falso**: ela é
+dele, e é por isso que ele não pode vê-la. E o rastro que a §8 exige não sairia.
+Coberto por dois testes que cobram a ordem, não só o resultado.
+
+---
+
+### 3.1.154. 🔴🔴 A AUDITORIA MORRIA CALADA POR UM CARACTERE — e o spec passava
+
+**O achado mais importante do dia**, e ele só apareceu porque conferi a TABELA
+depois do exercício.
+
+O 403 do "próprio avaliado" saiu certo, o spec passou verde, e **a linha de
+auditoria não existia**. Causa, no log do backend:
+
+```
+Falha ao gravar auditoria (Avaliacao/ACESSO_NEGADO_PROPRIO_AVALIADO:devolutiva):
+The provided value for the column is too long for the column's type.
+```
+
+`rh.auditoria.acao` era **`VARCHAR(40)`**. A minha ação tem **41**.
+
+#### Por que passou por todas as redes
+
+| Rede | Por que não pegou |
+|---|---|
+| A resposta HTTP | saiu **403 normal** — a trilha não é o produto |
+| `AuditoriaService.registrar` | **engole o erro DE PROPÓSITO**, e a decisão é certa: recusar leitura legítima porque o insert da trilha falhou trocaria observabilidade por disponibilidade |
+| O spec de unidade | **mocka a auditoria** e confere que ela foi **CHAMADA** — nunca que a linha **POUSOU** |
+
+⭐⭐ **É o "falso verde um nível acima do canário" outra vez** (§3.1.113): o teste
+prova a chamada; só o banco prova o efeito. **A regra que sai: trilha de
+auditoria se confere na TABELA, nunca no mock.**
+
+#### E era da CLASSE, não do meu caso
+
+A ação é composta por convenção: `` `ACESSO_NEGADO_PROPRIO_AVALIADO:${verbo}` `` —
+**31 de prefixo**. Com teto em 40 sobravam **9 letras para o verbo**, e dois
+verbos vivos estavam **exatamente no limite**:
+
+| verbo | total | |
+|---|---|---|
+| `contestar` | **40/40** | cabia por um fio |
+| `responder` | **40/40** | idem |
+| `recalcular`, `descancelar` | 41+ | **apagariam a trilha sem sintoma** |
+
+#### O conserto — os dois, porque alargar sozinho só move o abismo
+
+1. **Migration `20260913140000`**: `acao` vai a `VARCHAR(120)`, com `COMMENT`
+   contando o que aconteceu.
+2. **`auditoria-acao-cabe.invariante.spec.ts`** — lê o limite **do arquivo da
+   migration** (nunca um número repetido no teste, mesma disciplina da
+   `regua-em-sql`) e cobra três coisas: nenhuma ação literal estoura · nenhum
+   **prefixo + o maior verbo** estoura · e **sobra folga ≥ 20**.
+
+⭐ **A quarta checagem é a que importa, e a mutação provou por quê.** Voltando o
+limite a 40, a checagem de *prefixo + maior verbo* **PASSOU** — porque 31+9 dá
+exatamente 40 e "cabe". Quem reprovou foi a de **folga**. *"Cabe hoje" não é
+margem*: sem essa checagem o invariante teria dado verde sobre a configuração
+que estava a uma letra de apagar registro exigido pela especificação.
+
+✅ **Verificado depois do conserto, na tabela:** a linha pousa, com
+`acao = 'ACESSO_NEGADO_PROPRIO_AVALIADO:devolutiva'`, **41 caracteres**, entidade
+`Avaliacao`, com IP.
+
+#### ⚠️ Um segundo tropeço no mesmo exercício, e o mesmo remédio
+
+A primeira rodada da matriz devolveu **`404 Cannot GET`** nas seis linhas — eu
+não tinha rebuildado o backend depois de criar o controller. E a segunda prova da
+auditoria devolveu **502**: o IP do upstream mudou no rebuild e o nginx não foi
+recarregado ([[feedback_nginx_reload_apos_rebuild_frontend]], que vale para o
+backend também).
+
+⭐ Nos dois casos o que salvou foi **ter escrito o resultado esperado antes de
+olhar**: um 404 uniforme em toda a matriz é assinatura de **rota ausente**, não
+de lógica; e um 502 não é resposta da aplicação. Medição sem expectativa escrita
+teria lido os dois como comportamento.
+
+---
+
+### 3.1.155. ⭐⭐ PRINCÍPIO — o que desaparece sozinho também precisa dizer o que aconteceu
+
+Formulado ao antecipar o reabrir da etapa 4 e **aprovado pelo Clenio em 13/09**,
+que registrou que a frase cobre o que a pergunta dele não alcançava.
+
+> **O que some sozinho da tela precisa dizer por que sumiu — e o que a pessoa
+> tem de fazer a respeito.**
+
+É o [[feedback_dialogo_diz_o_que_se_perde]] **pelo avesso**. Aquele cuida do que
+some por um ato de quem está olhando (*"o diálogo diz o que se perde"*); este
+cuida do que some por um ato de **outra pessoa**, sem aviso nenhum.
+
+**O caso que o gerou:** o avaliador viu a nota, conversou com o avaliado, e o RH
+reabriu a avaliação. A marca é limpa e a nota some da tela dele.
+
+| Se sumir calado | O que ele conclui |
+|---|---|
+| a nota desaparece | *"eu vi errado"* ou *"o sistema perdeu"* — e **não avisa ninguém** |
+| ele já conversou | fica sem saber que **precisa conversar de novo** |
+
+⭐ A segunda linha é a que o princípio acrescenta: não basta explicar o sumiço —
+tem de dizer **a consequência no mundo**, que aqui é uma conversa que precisa
+acontecer outra vez.
+
+**Gatilho:** ao escrever qualquer coisa que LIMPE um estado que outra pessoa já
+viu, perguntar *"o que ela vai concluir quando não achar mais?"*.
+
+---
+
+### 3.1.156. 🔑 QUARTA CONTA DE TESTE — `zz.teste.avaliador`
+
+| | |
+|---|---|
+| Login / senha | `zz.teste.avaliador` / `TesteRh2026` |
+| Papel | `AVALIADOR` em `GESTAO_PESSOAS` |
+| Matrícula | `009903` · colaborador `zz-teste-avaliador-colaborador`, CC `ZZTESTE` |
+
+⚠️ **Criada porque não havia alternativa honesta:** as 18 contas com papel
+`AVALIADOR` são **de pessoas reais** — e medir a matriz com uma delas é
+exatamente o que custou a limpeza de 74 linhas de auditoria em 12/09.
+
+⭐ **Senha e departamento foram COPIADOS do `zz.teste.rh` por SELECT**, não
+digitados: hash de senha escrito à mão é hash que ninguém sabe reproduzir.
+
+⚠️ O exercício mexeu em 6 avaliações de ciclos de teste (SIMULACAO e Avaliação
+Geral 2026) para montar a matriz. **Backup em tabela antes, restauração
+conferida depois: 0 divergentes de 6**, 0 marcas de liberação no banco, 0
+avaliações apontando para a conta de teste, e a auditoria do exercício apagada
+por AÇÃO — nunca por data.
