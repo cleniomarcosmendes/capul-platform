@@ -8792,3 +8792,108 @@ No roteiro de 04/09 ele é recomendação no fim — e **não foi escrito** (§3
 No nosso ele é **passo numerado do checklist**, com o número dele.
 
 > ⭐ **Passo que não tem número não é executado.**
+
+---
+
+### 3.1.135. ✏️ CORREÇÃO — "valor informado" não bloqueia o ensaio integral
+
+Estava na lista de pré-requisitos e **não é**. Medido: **nenhuma aplicação do
+`ENSAIO PILOTO — 16 CCs` usa critério `INFORMADO`** — as três que têm critério
+usam `ESCOLARIDADE`, `TEMPO_EMPRESA` e `TEMPO_FUNCAO`, os três `CALCULADO`, e a
+quarta (`Aprendizes`) não tem critério nenhum.
+
+⭐ Era a suposição mais cara da fila: 4–6 dias na frente do portão que o portão
+não precisava. Desceu para **depois** dele.
+
+⚠️ **Pode subir de novo, e por causa de resposta que não é da T.I.:** se a
+Arielly explicar por que o registro de treinamento parou em 14/11/2025, o
+`QTDE_TREINAMENTO` volta a fazer sentido — e aí a entrada do valor é o que falta
+para ele pontuar.
+
+### 3.1.136. 🔴 A RÉGUA ERRADA EM SQL — o mesmo defeito, onde nenhum teste varre
+
+Medindo quem consegue entrar no ensaio, escrevi:
+
+```sql
+count(*) filter (where col.situacao = 'ATIVO')   -- ← ERRADO
+```
+
+e achei **2 de 16 travados**. Ia reportar como pré-requisito de acesso. Os dois
+são **FÉRIAS** e **AFASTADO** — e `SITUACOES_ELEGIVEIS = ['ATIVO','AFASTADO',
+'FERIAS']`. Com a régua certa: **16 de 16**.
+
+⚠️ **É o defeito que o comentário do próprio código afirma, e que já foi
+corrigido uma vez** (*"`situacao = 'ATIVO'` derrubaria 145 das 1.036 pessoas de
+todas as listas, calado"*). Agora cometido em **SQL de conferência**.
+
+⭐⭐ **Por que aqui engana pior que no código:**
+
+| | No código | Em SQL de conferência |
+|---|---|---|
+| A constante existe? | sim, e é importável | sim, e **não dá para importar** |
+| Algum teste varre? | `fonte-unica.invariante.spec.ts` | **nenhum** — a query nem está no repositório |
+| O sintoma | uma lista curta demais | **a conta parece medir e mede outra coisa** |
+
+A consulta não erra: ela responde **outra pergunta**, com aparência de resposta
+certa. E como é escrita para *conferir*, o resultado dela é o que decide se algo
+está pronto — é o pior lugar possível para uma régua errada.
+
+#### 🔧 A providência — dá, e são duas, com direção de verdade explícita
+
+**Pergunta: as réguas podem virar VIEW ou função no banco?** ⚠️ **Podem, mas
+sozinho isso é um segundo dono da verdade** — a `SITUACOES_ELEGIVEIS` do TS e a
+lista dentro da view envelheceriam separadas, que é exatamente a família
+[[feedback_regra_duplicada_envelhece_errada]]. Então: **view sim, mas com
+invariante amarrando as duas.**
+
+**(a) `scripts/conferir-estado.ts` — a conferência pelo CÓDIGO. ~2h. É a melhor.**
+
+Um script que **importa** `SITUACOES_ELEGIVEIS`, `STATUS_VIVOS` e
+`ONDE_A_AVALIACAO_CONTA` e imprime o estado do ciclo. A conferência passa pela
+mesma régua **por construção**, não por disciplina.
+
+⭐ E ele herda o que já existe: entra na lista do
+`ferramenta-fora-da-suite.invariante.spec.ts` (guarda `require.main` + teste de
+carga), então **não quebra em silêncio** como a regressão quebrou.
+
+**(b) `rh.v_colaborador_elegivel` por migration — para o `psql` avulso. ~2h.**
+
+Porque nem toda conferência passa por script: o Marco num deploy abre o `psql`.
+A view documenta a régua onde ela é usada.
+
+⚠️ **Com invariante:** um spec que lê o arquivo da migration e exige que a lista
+literal dentro do `CREATE VIEW` seja **exatamente** a de `SITUACOES_ELEGIVEIS`.
+É varredura de fonte, a mesma ferramenta da §3.1.88 — e é o que impede a view de
+virar o segundo dono.
+
+**As réguas que pedem isso** (as que uma consulta de estado precisa replicar):
+
+| Régua | Onde | Usos no fonte |
+|---|---|---|
+| `SITUACOES_ELEGIVEIS` | `common/elegibilidade.ts` | 28 |
+| `ONDE_A_AVALIACAO_CONTA` | `avaliacao/avaliacoes-que-contam.ts` | 16 |
+| `STATUS_VIVOS` | `avaliacao/cancelamento.ts` | 10 |
+
+**Total ~4h**, e a (a) sozinha já resolve o caso que me pegou.
+
+> ⭐ **A regra curta: consulta que decide se algo está pronto não se escreve à
+> mão no terminal.** Ou passa pelo código, ou passa por uma view que um
+> invariante prende à constante.
+
+### 3.1.137. ✅ DECISÃO — a devolutiva NÃO entrega texto por conceito
+
+Decidido em 12/09 (a Arielly ajusta depois; não se espera por ela).
+
+**A devolutiva entrega:** a **nota**, o **conceito**, e a **memória de cálculo
+pergunta a pergunta** — a que ficou pronta em §3.1.120, com o texto da âncora
+escolhida.
+
+⭐ **Escrever cinco textos é decisão de conteúdo de RH**, não de engenharia. E um
+campo que nasce vazio faz a tela prometer o que não tem: quem abre a devolutiva
+vê um espaço reservado a uma mensagem e conclui que ela existe e não veio.
+
+⚠️ Consequência prática: **`conceito_faixa` NÃO ganha coluna nova.** Hoje ela tem
+`descricao, limite_inferior, limite_superior, cor, ordem` — o `descricao` é
+rótulo ("Atende", "Supera"), e é o que a devolutiva mostra. Se um dia o RH
+quiser a mensagem longa, ela entra como cadastro **com os textos já escritos**,
+nunca como campo vazio esperando alguém.
