@@ -451,7 +451,8 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                 </h4>
                 <ul className="mt-2 space-y-1.5">
                   {memoria.porGrupo.map((g) => (
-                    <li key={g.grupoId} className="flex items-center gap-3">
+                    <li key={g.grupoId}>
+                    <div className="flex items-center gap-3">
                       <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
                         {g.titulo}
                         {/* ⭐⭐ O PESO — o número que DECIDE, e o único que a tela
@@ -474,6 +475,47 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                       <span className="w-14 shrink-0 text-right text-sm tabular-nums text-slate-800">
                         {nota(g.nota)}
                       </span>
+                    </div>
+
+                    {/* ⭐⭐ PERGUNTA A PERGUNTA — expansível, porque 14 linhas
+                        abertas onde hoje há 7 barras trocaria um problema por
+                        outro. Fechado, a leitura de conjunto continua; aberto,
+                        a devolutiva tem objeto: o texto da âncora escolhida é
+                        o que dá o que conversar. */}
+                    {memoria.porQuestao.filter((q) => q.classificacaoId === g.grupoId).length > 0 && (
+                      <details className="ml-1 mt-1">
+                        <summary className="cursor-pointer text-xs text-capul-700">
+                          as {contagem(
+                            memoria.porQuestao.filter((q) => q.classificacaoId === g.grupoId).length,
+                            'pergunta', 'perguntas',
+                          )}
+                        </summary>
+                        <ul className="mt-1 space-y-1.5 border-l-2 border-slate-100 pl-3">
+                          {memoria.porQuestao
+                            .filter((q) => q.classificacaoId === g.grupoId)
+                            .map((q) => (
+                              <li key={q.perguntaId} className="text-sm">
+                                <div className="flex items-baseline gap-2">
+                                  <span className="flex-1 text-slate-700">{q.enunciado}</span>
+                                  <span className="shrink-0 text-xs tabular-nums text-slate-400">
+                                    peso {nota(q.peso)}
+                                  </span>
+                                  <span className="w-12 shrink-0 text-right tabular-nums text-slate-800">
+                                    {q.valor === null ? '—' : nota((q.valor / q.maiorValor) * 100)}
+                                  </span>
+                                </div>
+                                {/* ⚠️ O TEXTO da âncora, não o número. "0,9" não
+                                    se conversa; "Raramente falta no trabalho" sim. */}
+                                <p className="text-xs text-slate-500">
+                                  {q.respostaEscolhida ?? (
+                                    <span className="text-amber-700">sem resposta</span>
+                                  )}
+                                </p>
+                              </li>
+                            ))}
+                        </ul>
+                      </details>
+                    )}
                     </li>
                   ))}
                 </ul>

@@ -1205,6 +1205,20 @@ export interface MemoriaDeCalculo {
   houveRenormalizacao: boolean;
   calculadoEm: string;
   porGrupo: { grupoId: string; titulo: string; nota: number; peso: number; ordem: number }[];
+  /** ⭐ Pergunta a pergunta — a devolutiva sem isto é sete barras e um total. */
+  porQuestao: {
+    perguntaId: string;
+    codigo: string;
+    enunciado: string;
+    classificacaoId: string;
+    ordem: number;
+    peso: number;
+    maiorValor: number;
+    /** `null` = ficou sem resposta. */
+    valor: number | null;
+    respostaEscolhida: string | null;
+    ancoras: { descricao: string; valor: number; escolhida: boolean }[];
+  }[];
   criterios: {
     criterioId: string;
     nome: string;

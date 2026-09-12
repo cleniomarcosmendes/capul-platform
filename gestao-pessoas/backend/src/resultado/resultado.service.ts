@@ -449,6 +449,8 @@ export class ResultadoService {
       calculadoEm: r.calculadoEm,
       // A quebra do questionário é calculada agora, sobre as respostas gravadas.
       porGrupo: await this.avaliacoes.notaPorGrupoDa(r.avaliacaoId),
+      // ⭐ Pergunta a pergunta — a devolutiva sem isto é sete barras e um total.
+      porQuestao: await this.avaliacoes.questoesRespondidasDa(r.avaliacaoId),
       criterios: r.criterios.map((c) => ({
         criterioId: c.criterioId,
         nome: c.criterioNome,

@@ -57,7 +57,9 @@ function servico() {
     { id: OUTRA, nome: 'Outra Pessoa', matricula: '000002', cargoDescricao: 'Analista' },
   ]);
   const auditoria = { registrar: jest.fn().mockResolvedValue(undefined) };
-  const avaliacoes = { notaPorGrupoDa: jest.fn().mockResolvedValue([]) };
+  const avaliacoes = { notaPorGrupoDa: jest.fn().mockResolvedValue([]),
+    // ⚠️ Fixture nova em 12/09: a memória passou a trazer pergunta a pergunta.
+    questoesRespondidasDa: jest.fn().mockResolvedValue([]) };
   return {
     svc: new ResultadoService(prisma as never, avaliacoes as never, auditoria as never),
     prisma,
