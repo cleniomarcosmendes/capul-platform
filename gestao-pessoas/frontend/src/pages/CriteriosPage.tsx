@@ -274,7 +274,14 @@ function CartaoDoCriterio({
             {c.codigoCalculo && ` · cálculo ${c.codigoCalculo}`}
             {c.unidade && ` · em ${c.unidade}`}
           </p>
-          {c.descricao && <p className="mt-1 text-sm text-slate-600">{c.descricao}</p>}
+          {/* ⚠️ SÓ QUANDO ATIVO. No inativo a mesma `descricao` é o motivo da
+              desativação, e o bloco "Desativado" abaixo já a mostra COM o
+              contexto que ela precisa. Sem esta condição o texto saía duas
+              vezes no mesmo cartão — e no QTDE_TREINAMENTO, cuja descrição é a
+              justificativa inteira, era um parágrafo longo repetido. */}
+          {c.ativo && c.descricao && (
+            <p className="mt-1 text-sm text-slate-600">{c.descricao}</p>
+          )}
         </div>
         <div className="flex shrink-0 gap-2">
           <button

@@ -310,7 +310,13 @@ const CRITERIOS = [
   {
     codigo: 'ESCOLARIDADE',
     nome: 'Escolaridade',
-    descricao: 'Grau de instrução do cadastro do Protheus (RA_GRINRAI / SX5 tabela 26).',
+    /**
+     * ⚠️ TEXTO QUE O RH LÊ NÃO CITA FONTE. Dizia "(RA_GRINRAI / SX5 tabela 26)"
+     * — nomes de campo e tabela do Protheus que só a T.I. lê, na descrição que
+     * aparece no cartão do critério. Onde o dado mora é documentação técnica;
+     * a descrição responde "o que este critério mede".
+     */
+    descricao: 'Grau de instrução registrado no cadastro do Protheus.',
     tipoValor: 'DOMINIO' as const,
     codigoCalculo: 'ESCOLARIDADE',
     unidade: null,
@@ -331,7 +337,11 @@ const CRITERIOS = [
     codigo: 'TEMPO_FUNCAO',
     nome: 'Tempo na Função',
     descricao:
-      'Anos desde a última TROCA de função (SR7010). Dissídio anual não conta como troca — ver src/sincronizacao/data-ultima-funcao.ts.',
+      // ⚠️ Citava `SR7010` e o CAMINHO DE UM ARQUIVO DO REPOSITÓRIO
+      // (`src/sincronizacao/data-ultima-funcao.ts`) na tela do RH. O fato que
+      // importa para quem lê é o que a regra FAZ — que o dissídio não conta —,
+      // não onde ela está escrita.
+      'Anos desde a última mudança de função. O reajuste anual do dissídio não conta como troca de função.',
     tipoValor: 'NUMERICO' as const,
     codigoCalculo: 'TEMPO_FUNCAO',
     unidade: 'anos',
