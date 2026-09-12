@@ -6309,7 +6309,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 |---|---|---|
 | **Flag de recorte** no ciclo | **6h** | desenho **aprovado** (derivar por percentual inventa limiar, e limiar arbitrário erra calado) |
 | **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
-| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) ✅ §3.1.98 · **D** (7). Cada bloco fecha numa CONTA, conferida antes do próximo |
+| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) ✅ §3.1.98 · **D** (7) ✅ §3.1.101 — **editor COMPLETO**. Cada bloco fecha numa CONTA, conferida antes do próximo |
 
 ### (c) ⛔ Bloqueado fora — HLG e o Marco
 
@@ -7201,3 +7201,158 @@ acusar"*.
 
 **Piloto: 894 PENDENTE, 0 respostas. ENSAIO: RASCUNHO, 325.** Órfãos de arranjo: **0**.
 Suíte: **66 suítes, 794 testes**.
+
+---
+
+### 3.1.99. ⭐⭐ FAMÍLIA DO ARREDONDAMENTO — quatro em cinco dias, e a regra
+
+| # | Onde | Dizia | Era | Causa | Quem pegou |
+|---|---|---|---|---|---|
+| 1 | `pontuacaoMaximaDoArranjo` (11/09) | 72,03 | 72 | arredondou **por item** | spec contra o instrumento herdado |
+| 2 | `assertCriterioSalvavel` (11/09) | validava | zerava antes de validar | ordem | exercitar o serviço contra o banco |
+| 3 | Peso efetivo do acervo (12/09) | 59,97 | 60 | divisão sem o centavo do resto | somar o derivado |
+| 4 | `somatorioPorGrupo` (12/09) | 100,01% | 100% | percentual **por item** | spec do validador |
+| 5 | `percentuaisQueFecham`, 1ª versão (12/09) | soma certa | **centavo no dono errado** | resto ordenado em **float** | spec, ao exigir os valores |
+
+⭐ **O nº 5 é o mais instrutivo, porque a soma estava CERTA.** As três frações de 16/10/34 sobre 60
+são a mesma — 0,666… — e o ponto flutuante as devolve diferentes na 13ª casa. O centésimo foi para
+a terceira parte em vez da primeira. Nada somava errado; **mudava quem recebia**, por ruído de
+representação. É a forma que passa por qualquer conferência de total e aparece meses depois como
+*"o número mudou sozinho"*.
+
+> ⭐⭐ **A REGRA: distribuição de resto se faz em INTEIROS, nunca em float.**
+> Converter para centésimos (ou a menor unidade que importa), dividir com `Math.floor`, tirar o
+> resto com `%`, e distribuir por ordem de resto **inteiro** — com o índice como desempate. Em
+> inteiros, empate é empate; em float, empate é sorteio.
+
+⚠️ E o corolário que vale para os cinco: **arredondar UMA vez, no fim.** Arredondar por item é o
+que produziu 72,03, 59,97 e 100,01 — três dos cinco.
+
+#### A varredura: sobrou algum lugar?
+
+| Lugar | Situação |
+|---|---|
+| `distribuirPeso` | ✅ inteiros, maior resto |
+| `percentuaisQueFecham` | ✅ inteiros, maior resto (depois da correção) |
+| `somatorioPorGrupo` (percentual por classificação) | ✅ **corrigido** |
+| `catalogo` — percentual por classificação | ✅ **corrigido** |
+| `catalogo` — `percentualDoPeso` por QUESTÃO | ✅ **corrigido** (achado nesta varredura; a coluna por questão também soma 100) |
+| `pontuacaoMaxima*`, `somaDeclarada`, `somaDerivada` | ✅ arredondam **uma vez, no fim**, sobre acumulador inteiro |
+| Barras de progresso (`PainelPage`, `MinhasAvaliacoesPage`) | ✅ não é rateio: cada uma é uma razão independente |
+| 🟡 `frontend/src/lib/composicao-da-nota.ts` → `repartirPesos` | ⚠️ **SOBROU** — ver abaixo |
+
+⚠️ **O que sobrou, e por que não foi consertado agora.** `repartirPesos` reparte 100% entre o
+questionário e os critérios da Aplicação (`BarraDeComposicao`), com uma casa decimal — e tem o
+mesmo defeito. Consertar exige uma de duas coisas, e nenhuma cabe num commit de passagem:
+1. **portar `percentuaisQueFecham` para o frontend** — que **não tem test runner** (`package.json`:
+   dev/build/lint/preview). Copiar regra de arredondamento sem teste é pior que o defeito;
+2. **o backend devolver a composição pronta**, como já faz com os grupos do arranjo — o certo, e é
+   mudança no contrato da tela de Aplicações.
+
+**Recomendo a 2, ~3h.** Até lá, o erro é de **exibição** (a legenda pode somar 100,1%), não de
+cálculo: a nota final não passa por aqui.
+
+### 3.1.100. ⭐⭐ A PONTE DOS ERROS DE DOMÍNIO — 8 erros, 3 mudos
+
+O 500 da publicação (§3.1.98) era a mesma forma da §3.1.93: **a camada que SABE não é a camada que
+RESPONDE**. E `CicloNaoAbrivelError` já fazia certo três arquivos adiante e não foi copiado.
+
+**A varredura respondeu à suspeita, e ela estava certa: não era o único.**
+
+| Erro | Payload | Estava mapeado? |
+|---|---|---|
+| `CicloNaoAbrivelError` | `problemas` | ✅ |
+| `CriterioInvalidoError` | `problemas` | ✅ |
+| `FaixasInvalidasError` | `problemas` | ✅ |
+| `PlanilhaInvalidaError` | `faltando`, `encontradas` | ✅ |
+| `ModeloNaoPublicavelError` | `problemas` | 🔴 **não** — o defeito de origem |
+| `AvaliacaoIncompletaError` | `perguntasSemResposta` | 🔴 **não** |
+| `ClassificacaoSemPesoError` | `classificacaoId` | 🔴 **não** |
+| `MatriculaAmbiguaError` | `matricula`, `encontrados` | 🔴 **não** |
+
+**8 erros, 3 mudos além do que eu já sabia.** E os três são alcançáveis:
+
+- `ClassificacaoSemPesoError` ficou alcançável **hoje**: desde a Etapa 3 existe rascunho, e um
+  arranjo a meio caminho chega ao `carregarArranjo` pela leitura do catálogo. Antes de 12/09 não
+  havia como.
+- `MatriculaAmbiguaError` é a **colisão de chapa** — o caso que a memória do projeto descreve como
+  *"um 403 que parece falta de permissão"*. Em 500 ele nem chega a parecer: some.
+- `AvaliacaoIncompletaError` é defesa em profundidade (o serviço já checa antes), mas carrega
+  **quais** perguntas faltam.
+
+#### A saída: uma ponte, não N `try/catch`
+
+Um `try/catch` por chamador é o desenho **que já falhou** — ele depende de alguém lembrar. Entrou
+`common/erro-de-dominio.ts`: uma base abstrata que declara `status` e `corpo()`, e o filtro global
+(`all-exceptions.filter.ts`) traduz **antes** do ramo do 500. Chamador novo herda a tradução sem
+escrever nada.
+
+⚠️ A tradução ficou **dentro do filtro que já existia**, e não num `@Catch(ErroDeDominio)` separado:
+a ordem entre dois filtros globais é sutileza de framework; um `if` no topo do método é ordem
+explícita, que se lê.
+
+⚠️ Dois dos três ganharam **409, não 400**: `ClassificacaoSemPesoError` (o estado do arranjo é que
+está incompleto, não o pedido) e `MatriculaAmbiguaError` (anomalia de DADO — 403 mandaria a pessoa
+ao Configurador pedir permissão que ela já tem, §3.1.93).
+
+O invariante `erro-de-dominio.invariante.spec.ts` cobra: nenhum `…Error` estende `Error` direto; a
+base continua sendo a base; todo erro com payload sobrescreve `corpo()`; e o filtro reconhece
+`ErroDeDominio` **antes** de `HttpException`. **Validado por 3 mutações**, todas reprovando com o
+nome exato.
+
+⚠️ O padrão do teste teve de casar `class X extends Y` genérico e filtrar depois — exigir o sufixo
+`Error` deixaria de fora a própria base, que se chama `ErroDeDominio`. **Padrão que só reconhece um
+jeito de nomear deixa passar exatamente a classe escrita do outro jeito.**
+
+### 3.1.101. ✅ BLOCO D — avisos de comparabilidade (12/09). **O editor está completo.**
+
+#### O gatilho é o PESO POR QUESTÃO, não a contagem
+
+Os perfis existem **para serem diferentes** — foi a melhoria que o módulo veio fazer. "O
+Administrativo tem 11 questões e a Loja 14" não é defeito: é o ponto.
+
+O que não é óbvio é a mesma classificação com o mesmo peso e **contagens diferentes**:
+
+```
+Relacionamento, peso 16, em 3 questões → 5,34 cada
+Relacionamento, peso 16, em 2 questões → 8,00 cada
+```
+
+Uma resposta vale 50% a mais num perfil, e os dois questionários continuam somando 60.
+
+⚠️ **Avisar por CONTAGEM encheria a tela de linhas em que nada muda** — 16 em 3 e 32 em 6 dão o
+mesmo 5,33. O gatilho é a diferença no peso por questão (≥ 0,01).
+
+#### 🔴 O aviso nasceu inútil, e o portão mostrou
+
+Rodando o portão: **duplicar o Administrativo sem tocar em nada já produzia 4 avisos.** Correto do
+ponto de vista do dado — o instrumento herdado do RD8010 de fato pesa diferente entre perfis
+(Assiduidade vale 6 no Administrativo, 4,5 na Loja, 5 na Indústria) — e **inútil como aviso**:
+*aviso que aparece sempre deixa de ser lido*, que é a regra escrita no próprio arquivo.
+
+⭐ Entrou o campo **`novo`**: a diferença é comparada também com a **versão publicada deste mesmo
+perfil**. Igual = herdada; diferente = **esta edição criou**. A tela lidera com as novas, marca as
+herdadas, e o diálogo de publicar mostra **só as novas** — as herdadas o RH já conhece, e repeti-las
+no último momento afogaria a que ele acabou de criar.
+
+⚠️ Também ficam de fora da comparação: rascunhos alheios (trabalho em andamento — avisar sobre um
+estado que ninguém escolheu) e o **[DEMO]** (não abre ciclo válido, então a régua dele não é régua
+de ninguém).
+
+#### 🚪 O PORTÃO
+
+Tirei uma questão de "Relacionamento e Conduta" do rascunho (3 → 2), mantendo o peso 16:
+
+| | Resultado |
+|---|---|
+| A tela diz quantas cada outro perfil tem | ✅ **aqui 2 (8,00 cada) · Loja 3 (3,33) · Indústria 3 (3,00)** |
+| Novas × herdadas | ✅ **1 nova, 3 herdadas** |
+| O aviso aparece ANTES de publicar | ✅ na montagem **e** na prévia da publicação |
+| É AVISO, não bloqueio | ✅ `problemasParaPublicar: []`, e **a publicação com 4 avisos foi concluída** |
+
+⚠️ O resíduo do portão (v2 publicada com 10 questões) foi **apagado e o rascunho recriado idêntico
+à v1** — o DEV volta a `Administrativo v2 · RASCUNHO · 4 grupos · 11 questões`.
+
+**44 pesos das publicadas: 0 divergências**, máximas 72/72/72/60, percentuais por grupo **e** por
+questão fechando 100. **Piloto: 894 PENDENTE. ENSAIO: RASCUNHO, 325.** Suíte: **68 suítes, 809
+testes**.
