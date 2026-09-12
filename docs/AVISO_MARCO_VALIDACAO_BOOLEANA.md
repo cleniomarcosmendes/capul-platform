@@ -35,17 +35,55 @@ Isso é para você **escolher a janela**, não para tratar como urgência.
 
 ## O pior caso de cada um — medido, não suposto
 
-**auth-gateway — `bloquear`** (`/api/v1/core/varredura-matricula/config`).
-É a rotina que **desativa quem saiu da empresa**. Medido no DEV em 13/09:
-enviar `{"bloquear":"false"}` deixou o modo em **`BLOQUEIO`** — a string
-"false" **liga** o bloqueio. *(Sonda revertida em seguida; o DEV voltou a
-`RELATORIO` e ficou conferido.)*
+### auth-gateway — `bloquear`, a rotina que desativa quem saiu da empresa
 
-**logística — `confirmarPendentes`** (`PATCH /supervisor/viagens/:id/concluir`).
-É o "sim, pode encerrar assim" quando há visita ainda PLANEJADA — e ele
-transforma as pendentes em **PULADA**. Medido no DEV em 13/09 contra um id
-inexistente (sem escrever nada): `"false"` e `"talvez"` **passam a validação** e
-chegam ao serviço; se o campo fosse estrito, parariam antes com 400.
+A rota **ecoa de volta o estado gravado**, então não há o que interpretar.
+Transcrição do que rodei no DEV em 13/09:
+
+```
+══ ANTES:
+    modo=RELATORIO tetoPct=20
+
+══ PATCH {"bloquear":"false"} →
+{"modo":"BLOQUEIO","tetoPct":20,"ultimaExecucao":{ ... }}   [HTTP 200]
+
+══ DEPOIS (o que ficou gravado):
+    modo=BLOQUEIO tetoPct=20
+
+══ RESTAURANDO ao estado exato (a linha não existia antes):
+    DELETE 1
+    linhas varredura% agora: 0
+
+══ CONFERIDO:
+    modo=RELATORIO tetoPct=20
+```
+
+⭐ **Leia a terceira linha:** mandei a string `"false"` e o serviço gravou
+**`BLOQUEIO`**. Não é "aceitou um valor estranho" — é **ligou o modo que
+desativa usuário**, dizendo a palavra oposta.
+
+*(A sonda foi revertida no mesmo comando: a linha `varredura_matricula_bloquear`
+não existia antes e foi apagada; o status voltou a `RELATORIO` e ficou
+conferido. O cron da varredura é `0 4 * * *` e nenhuma execução ocorreu.)*
+
+### logística — `confirmarPendentes`, que vira visita em PULADA
+
+É o "sim, pode encerrar assim" quando há visita ainda PLANEJADA. Aqui **não dava
+para sondar escrevendo**, então usei um **id inexistente** — o que não altera
+nada e ainda assim responde:
+
+```
+PATCH /api/v1/logistica/supervisor/viagens/00000000-.../concluir
+
+  {"confirmarPendentes":true}      → 404 "Planejamento não encontrado."
+  {"confirmarPendentes":"false"}   → 404 "Planejamento não encontrado."
+  {"confirmarPendentes":"talvez"}  → 404 "Planejamento não encontrado."
+  {"confirmarPendentes":0}         → 404 "Planejamento não encontrado."
+```
+
+⭐ **O 404 é a prova.** Ele vem do SERVIÇO, que só é chamado depois da validação
+passar. Se o campo fosse estrito, `"false"` teria parado antes com **400** e
+nunca teria chegado ao banco. As quatro formas passaram.
 
 Os demais campos são de menor alcance, mas da mesma família: `autenticaPortal`,
 `ativo`, `sac` no auth-gateway; `semNota`, `requerAprovacao`, `reiniciarCiclo`,
@@ -54,9 +92,13 @@ Os demais campos são de menor alcance, mas da mesma família: `autenticaPortal`
 ## De onde veio
 
 Não é descuido de ninguém: é **padrão copiado**. O `auth-gateway` e o
-`gestão de TI` nasceram no mesmo commit em **23/02/2026**, um com a conversão
-implícita e o outro sem. Todos os backends criados depois copiaram o do
-auth-gateway — fiscal (17/04), logística (31/05), gestão de pessoas (05/09).
+`gestão de TI` nasceram **no mesmo commit**, em **23/02/2026** — um com a
+conversão implícita e o outro sem. Os três backends criados depois copiaram do
+auth-gateway: fiscal (17/04), logística (31/05), gestão de pessoas (05/09).
+
+> ⭐ **"Copio do último que fiz" propaga o defeito tanto quanto o acerto.** Havia
+> uma versão certa no repositório desde o primeiro dia, e ela é justamente a que
+> ninguém copiou.
 
 ## O conserto
 

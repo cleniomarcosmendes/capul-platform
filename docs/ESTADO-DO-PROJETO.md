@@ -60,7 +60,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 
 | | Custo | |
 |---|---|---|
-| ▶️ **DEVOLUTIVA presencial, conduzida pelo AVALIADOR** | **~22h ≈ 3 dias** | **4 etapas com portão** — §3.1.148. O payload já existe inteiro; falta papel, escopo, tela e o par de colunas `devolutivaLiberada*` |
+| ▶️ **DEVOLUTIVA presencial, conduzida pelo AVALIADOR** | ~22h · **restam ~16h** | **Etapa 1 ✅ FEITA** (§3.1.152, portão fechado). Falta: **2** o avaliador vê (5h) · **3** a tela (6h) · **4** conduzir + guarda do reabrir (5h) |
 | 🟢 **Prévia do efeito na nota** | ~1,5 dia | §3.1.146, **depois** da devolutiva |
 | ✂️ ~~"não há como avisar" (4h)~~ | **minutos** | cortado: vira uma frase na prévia da abertura dizendo que avisar é presencial. §3.1.151 |
 | 🔴 **Booleano nos outros backends** | ~2h cada | **não é nosso agora** — aviso escrito em `docs/AVISO_MARCO_VALIDACAO_BOOLEANA.md`, o Marco decide a janela. §3.1.149 |
@@ -9787,3 +9787,151 @@ consegue"*, [[feedback_designar_nao_da_acesso]]) é boa **quando a exceção é
 exceção** — lá eram 46 de 54. Com 1.036 de 1.039, a exceção é a regra, e a régua
 certa é a outra. ⭐ **Régua boa aplicada na proporção errada vira ruído** — e o
 número que dizia isso estava na mesma página.
+
+---
+
+### 3.1.152. ✅ DEVOLUTIVA — ETAPA 1: O ATO DE LIBERAR (⛳ portão fechado)
+
+Primeira das quatro etapas do §3.1.148. **O RH libera; o avaliador conduz.**
+
+#### ⛳ O PORTÃO — a conta fecha, medida na API real
+
+Exercitada contra o `SIMULACAO 09/09` (13 enviadas, 13 apuradas), com as três
+contas de teste:
+
+| Momento | liberadas | não liberadas | apuradas | |
+|---|---|---|---|---|
+| antes | 0 | 13 | 13 | ✅ fecha |
+| depois de liberar 3 | 3 | 10 | 13 | ✅ fecha |
+
+⚠️ **`naoApuradas` fica FORA da conta, de propósito** — não são parte do mesmo
+todo. Somá-las é o erro do §3.1.109 (dois números verdadeiros sem o termo que os
+concilia); elas aparecem na tela com o motivo, porque a ausência delas seria
+lida como esquecimento.
+
+#### 1. DUAS MARCAS, e o nome diz qual é qual
+
+| Coluna | Ato | |
+|---|---|---|
+| `devolutiva_liberada_em` / `…_por_id` | **o RH liberou** | 🆕 migration `20260913120000` |
+| `devolutiva_conduzida_em` / `…_por_id` | **o avaliador conduziu** | ♻️ **renomeadas** de `devolutiva_em`/`devolutiva_por_id` |
+
+⭐ **Renomeei as antigas, e renomear era de graça.** Com o par novo ao lado,
+`devolutiva_em` sozinho não diz qual dos dois atos marca — e quem abrir a tabela
+em dezembro tem de saber **pelo nome**, sem ir procurar o service.
+
+> 🔴 **A TERCEIRA OCORRÊNCIA DO §3.1.82** — *peça sem chamador não é peça pronta,
+> é peça não verificada.* `devolutivaEm` e `devolutivaPorId` existiam **desde a
+> migration inicial** (`20260905160000_init_rh`), **oito dias sem um único
+> leitor ou escritor**. ⚠️ E o agravante é meu: eu **não sabia que elas
+> existiam** quando escrevi, ontem, a restrição de que `devolutiva_em` não podia
+> morar em `resultado_avaliacao`. A restrição estava certa e **já estava
+> atendida** — eu registrei como decisão futura uma coisa que o schema tinha
+> resolvido na primeira semana. **Consultar o schema custa um comando; supor
+> custou um registro errado.**
+
+#### 2. LOTE, com o padrão que já existe
+
+`GET /devolutiva/previa/:cicloId` (com `?aplicacaoId=` opcional) →
+`POST /devolutiva/liberar { avaliacaoIds }`.
+
+⭐ **A prévia grava o que mostrou:** ela devolve **ids**, o ato recebe **ids**, e
+ninguém relê nada no meio — o contrato do público depois do defeito de 07/09
+([[feedback_previa_grava_o_que_mostrou]]).
+
+Três conjuntos separados, porque cada um pede coisa diferente de quem lê:
+`liberaveis` (é o que o botão faz) · `jaLiberadas` (não é erro, é trabalho feito
+— entra na conta para o total fechar) · `naoApuradas` (**não podem**, e o motivo
+aparece).
+
+**Medido na API:**
+
+| Caso | Resposta |
+|---|---|
+| liberar 3 de 13 | `{liberadas: 3, jaEstavam: 0, recebidas: 3}` |
+| **clique repetido** nos mesmos 3 | `{liberadas: 0, jaEstavam: 3}` — nada regravado, nada re-auditado |
+| lista vazia | **400** pelo DTO |
+| id inexistente | **404**, e **derruba o lote** — gravar 1 de 2 faria a tela dizer "liberada 1" sobre um clique de 2, e ninguém procuraria a que faltou |
+
+⭐ **Uma linha de auditoria por AVALIAÇÃO**, não uma pelo lote: o que alguém vai
+perguntar em dezembro é *"quando a devolutiva DESTA pessoa foi liberada?"*, e
+"42 liberadas" não responde. **É essa linha que sobrevive à reabertura**, quando
+a coluna for limpa.
+
+#### A própria avaliação — marcada, fora do lote, e recusada no ato
+
+A separação de funções é aplicada **por conta própria, em dois pontos**: a prévia
+põe a própria em `minhas` (visível, **nunca filtrada** — filtrar faria o total
+não fechar) e o `liberar` **derruba o lote inteiro** se um id próprio chegar.
+Pelo mesmo `ehProprioAvaliado`, nunca por `===`.
+
+⭐ É mais um caso que mostra por que **`RH_ADMIN` precisa ser dado a duas
+pessoas**: a devolutiva da gestora é liberada pela outra.
+
+**Matriz medida:** `zz.teste.rh` prévia **200** · `zz.teste.ciclo` **403** ·
+`zz.teste.modelo` **403**. RH_CICLO monta o ciclo e cobra a fila, mas **liberar
+é mais que ler**: é decidir que outras pessoas passam a ler.
+
+#### 3. O que o diálogo diz — no tom do de publicar versão
+
+> **A partir de agora, cada avaliador passa a ver a nota final, o conceito e a
+> conta inteira das pessoas que ele avaliou** — para conduzir a conversa
+> presencialmente com cada uma.
+>
+> ⚠️ **Na prática isso não volta atrás.** A marca dá para limpar; a conversa que
+> o avaliador já teve, não. Libere quando os números estiverem conferidos.
+
+Depois vem **a conta** (vão ser liberadas · já estavam · a sua própria · apuradas
+no ciclo) e só então o botão — a mesma ordem do diálogo de publicar: o fato, os
+números, o botão.
+
+#### 4. A frase do envio ganhou prazo — **nesta etapa, não na próxima**
+
+Era: *"A nota é calculada pelo sistema e não fica visível para você."*
+Agora: *"…**não fica visível para você agora**. Ela aparece aqui quando o RH
+liberar a devolutiva — é com ela que você vai conversar com FULANO."*
+
+⚠️ Sem isso a tela passaria a **mentir no dia em que a etapa 2 subisse** — e
+mentir para quem confiou nela ao responder.
+
+#### ⚠️ A pergunta do reabrir, antecipada: o avaliador precisa saber
+
+**Sim, e sumir em silêncio não é aceitável.** O caso: o avaliador já mostrou a
+nota ao avaliado; o RH reabre; a marca é limpa; a tela dele **volta ao estado
+anterior**.
+
+| Se sumir calado | O que ele conclui |
+|---|---|
+| a nota desaparece da tela | *"eu vi errado"*, ou *"o sistema perdeu"* — e ele **não avisa ninguém** |
+| ele já conversou com a pessoa | fica sem saber que **precisa conversar de novo** |
+
+⭐ **O sumiço tem de vir com a frase**, e ela é a mais importante da etapa 4:
+
+> *"O RH reabriu esta avaliação — a nota que você viu não vale mais. Quando ela
+> for apurada e liberada de novo, aparece aqui. **Se você já conversou com
+> FULANO, será preciso conversar outra vez.**"*
+
+E o dado para isso **já existe**: `reabertaEm` está na `Avaliacao`, e a
+`rh.auditoria` guarda que a devolutiva chegou a ser liberada. Não é coluna nova
+— é a tela ler as duas coisas. ⚠️ Entra no custo da etapa 4 (já cotada em 5h),
+sem aumentá-lo: era tela que já ia ser escrita.
+
+É a família do [[feedback_dialogo_diz_o_que_se_perde]] pelo avesso: **o que
+desaparece sozinho também precisa dizer o que aconteceu.**
+
+#### O que as invariantes cobraram — as duas certas
+
+1. **`separacao-funcoes`** reprovou o service novo. Entrou na lista **com motivo
+   escrito**, e o motivo é forte: o service **aplica** a separação em vez de ser
+   dispensado dela.
+2. 🔴 **`texto-sem-flexao`** achou **defeito real meu**: duas mensagens diziam
+   `${n} de ${m} avaliações`, que com um só vira *"1 de 1 avaliações não
+   existem"* — errado duas vezes na mesma frase. Reescritas em forma de rótulo:
+   *"Sem apuração: 1 · selecionadas: 2"*.
+
+⚠️ E o meu **próprio spec** quebrou junto, porque cobrava a redação antiga.
+Reescrito para cobrar **o número**, não a frase: spec preso à redação vira ruído
+a cada ajuste de texto.
+
+**861 testes.** Rastro do exercício limpo por id (3 marcas + 3 linhas de
+auditoria); `SIMULACAO` de volta a zero liberadas.
