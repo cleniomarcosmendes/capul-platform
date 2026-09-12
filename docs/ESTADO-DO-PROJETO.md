@@ -6309,7 +6309,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 |---|---|---|
 | **Flag de recorte** no ciclo | **6h** | desenho **aprovado** (derivar por percentual inventa limiar, e limiar arbitrário erra calado) |
 | **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
-| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO** — Etapa 1 (ler o acervo) **feita em 12/09**, §3.1.85. Ordem aprovada: 1 → 2 → 5 → 6 → 3 → 4 → 7 |
+| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **Bloco A** (etapas 2+5) ✅ §3.1.87 · **B** (etapa 6) · **C** (3+4) · **D** (7). Cada bloco fecha numa CONTA, conferida antes do próximo |
 
 ### (c) ⛔ Bloqueado fora — HLG e o Marco
 
@@ -6546,3 +6546,115 @@ aplicada: `/acervo` × `/catalogo/modelos/:versaoId`, 44 pesos, 0 divergências 
 
 Vale ao lado da §3.1.79 (*a conta que não bate detecta furo de guarda melhor que ler código*) e da
 §3.1.82 (*peça sem chamador*).
+
+---
+
+### 3.1.87. ✅ BLOCO A DO EDITOR — duplicar versão e cadastrar classificações (12/09)
+
+Primeiro bloco da nova organização: **quatro blocos com portão**, no lugar de sete etapas
+seguidas. O portão de cada um é uma **conta**, não uma revisão de código — decisão tomada depois
+que três defeitos seguidos (§3.1.86) passaram por teste verde e foram pegos por soma que não
+fecha.
+
+#### (0) A guarda veio ANTES da peça que a exercita
+
+`validarAplicacao` ganhou `versaoPublicada`. **A tela já filtrava** — `AplicacoesPage` tem
+`.filter((v) => v.publicadoEm)` desde sempre — **e a API aceitava qualquer versão**. É a direção
+permissiva da §3.1.77, a silenciosa: ninguém reclama, nada quebra, e quem descobre é quem chama a
+API direto.
+
+Ficou inofensiva até 12/09 **só porque não existia nenhuma versão em rascunho**: as quatro
+nasceram publicadas, pelo seed. Duplicar cria a primeira. Por isso a guarda entrou antes, e não
+depois — guarda que nunca teve o que barrar é guarda que ninguém sabe se funciona.
+
+⚠️ **O teste de invariante achou um terceiro chamador que eu não tinha visto.** Escrevi a guarda
+para dois momentos (criar a aplicação, abrir o ciclo) e o `versao-publicada.invariante.spec.ts`
+apontou `aplicacao.service.ts:173` — **editar** a aplicação. `modeloVersaoId` não é editável, mas
+a versão pode ser despublicada no meio, e sem a linha editar o peso seria a porta que revalida
+tudo menos isto. Mesmo padrão do `assertRdvAberto` da Logística: o teste varre o FONTE, não a
+lista de chamadores de que alguém se lembrou.
+
+#### (1) Etapa 2 — duplicar e descartar (`modelo/versao.service.ts`)
+
+| Rota | O que faz |
+|---|---|
+| `GET /modelos/:id/versoes` | as versões, com contagens e o `efeitoDeDescartar` pronto |
+| `GET /modelos/versoes/:id/previa-duplicar` | a prévia — **a mesma função que o ato consulta** |
+| `POST /modelos/versoes/:id/duplicar` | cria o rascunho |
+| `DELETE /modelos/versoes/:id` | descarta o rascunho |
+
+⭐ **O que se duplica é o ARRANJO, não as questões.** Depois do acervo a questão é global: duas
+versões apontam para a mesma `Pergunta`. Copiar a questão recriaria a duplicação que a unificação
+desfez (39 linhas → 15).
+
+⚠️ **`publicadoEm` e `pontuacaoMaxima` nascem NULOS de propósito.** Copiar a pontuação máxima da
+origem gravaria um número que descreve outro arranjo — e ele passaria a "conferir" contra o
+recalculado errado, que é exatamente o par de números que a tela do instrumento existe para opor.
+
+**Decisão: UM rascunho por perfil.** Com dois, *"o rascunho do Administrativo"* deixa de ter
+referente; o editor perguntaria qual a cada abertura e duas pessoas editariam arranjos diferentes
+achando que estão no mesmo. A recusa oferece as três saídas (continuar, publicar, descartar) —
+recusa sem saída vira beco.
+
+#### (2) Etapa 5 — classificações (`acervo/classificacao.service.ts`)
+
+CRUD completo: criar, renomear, **reordenar a lista inteira**, desativar/reativar, apagar.
+
+⚠️ **`ativa` não filtrava NADA até hoje** — coluna decorativa, lida só pela tela do acervo. Mesma
+família do `status` do módulo no Hub (05/09), que o comentário do compose afirmava filtrar. Ela
+ganhou significado, e ele é **estreito de propósito**:
+
+> `ativa = false` → a classificação **não é oferecida** ao criar ou mover uma questão. Nada mais.
+
+Não sai dos arranjos que a usam, não tira as questões que estão nela. Se desativar mexesse em
+arranjo publicado, **a nota de gente real mudaria por um clique de cadastro** — e a frase do ato
+diz isso em voz alta, com os números ("as 3 questões continuam lá, os 4 perfis não mudam — 4 estão
+publicados, e nenhuma nota se altera").
+
+⚠️ **Reordenar é a lista INTEIRA, nunca "sobe um".** Com um `PATCH` por item, uma falha no meio
+deixa duas classificações na mesma ordem e a tela lista em ordem arbitrária — e ninguém vê, porque
+a lista continua com todos os itens.
+
+⚠️ O `@unique` do Postgres é case-**sensitive**: "Assiduidade" e "assiduidade" passariam as duas. A
+conferência é sem caixa, e é ela que produz a frase legível (409, citando o nome que já existe).
+
+#### 🚪 O PORTÃO — as quatro contas
+
+Duplicados **os quatro perfis**, conferidos, e três descartados depois.
+
+| Conta | Resultado |
+|---|---|
+| **Pesos efetivos do rascunho × da origem** | **44 comparados, 0 divergências** |
+| **Soma por perfil, no rascunho** | 60,00 · 60,00 · 60,00 · 50,00 — iguais às publicadas |
+| **Aplicações/avaliações apontando para rascunho** | **0** |
+| `POST /aplicacoes` sobre rascunho | **400**, com a frase escrita |
+| `POST /aplicacoes` sobre a publicada, mesmo ciclo | **201** — a guarda não barra demais |
+| 2º rascunho no mesmo perfil | **400**, citando a v2 e as três saídas |
+| `DELETE` de versão publicada | **400** — *"deixaria avaliação sem régua"* |
+| Apagar classificação em uso | **400**, com a contagem |
+| Reordenar pela metade | **400** — *"precisa citar as 9, uma vez cada"* |
+| Nome repetido em outra caixa | **409** |
+| Reordenar ida e volta | ordem restaurada exata |
+| Órfãos de arranjo após descartar | **0** |
+| 44 pesos das publicadas × instrumento | **0 divergências**, máximas 72/72/72/60 |
+| Piloto | **894 PENDENTE, 0 respostas** |
+| ENSAIO | RASCUNHO, 325 |
+
+Suíte: **62 suítes, 752 testes** (eram 58/735).
+
+#### O que ficou no DEV, de propósito
+
+**`Administrativo v2` continua como rascunho** — para a tela poder ser vista nos dois estados. É
+descartável em um clique, e não alcança ciclo nenhum.
+
+#### ⚠️ Duas coisas que NÃO consegui provar por requisição
+
+1. **Não existe conta `RH_CICLO` nem `RH_MODELO` no DEV.** Só `RH_ADMIN` (2) e `AVALIADOR` (52).
+   As guardas novas declaram papéis DIFERENTES entre si — `/acervo` aceita os três papéis de RH,
+   `/classificacoes` e `/modelos/*/versoes` só `RH_ADMIN` e `RH_MODELO` —, e essa diferença **não
+   foi exercitada**: o que provei foi `AVALIADOR` → 403 e sem token → 401. É pendência de T.I.
+   (criar as duas contas), não da Arielly.
+2. O aviso da tela de Questionários dizia *"não há por onde editá-lo no sistema"* e virou meia
+   verdade no minuto em que o duplicar nasceu. Reescrito para separar o que **já** dá (abrir um
+   rascunho) do que **ainda não** dá (mexer no conteúdo dele) — é a §3.1.33 pelo avesso: em vez de
+   prometer o que não existe, esconder o que passou a existir.
