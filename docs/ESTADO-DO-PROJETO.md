@@ -5648,10 +5648,25 @@ e **corrigir o rótulo**, que é o que mente.
 **53 pessoas**, mesmo trabalho, dois códigos, dois questionários. E `21010109` AGROVETERINARIA (89)
 e `21010301` POSTO (37) também caem em "Loja" pelo prefixo `21`.
 
-⭐ **O sistema NÃO tem regra de prefixo** — apurado em 12/09: o público das quatro aplicações do
-Piloto é **100% nominal** (`aplicacao_centro_custo` está vazio para todas). O prefixo foi como o
-recorte **foi montado**, não algo que o sistema imponha. Ou seja: **é livre para ela decidir**, e a
-correção é remontar o público, não mexer em código.
+#### ⭐⭐ CORREÇÃO — o sistema NÃO impõe o código contábil
+
+Como este item estava escrito antes, sugeria que o sistema obriga a seguir o prefixo do centro de
+custo. **É falso, e a diferença muda a conversa inteira.**
+
+Apurado em 12/09: o público das quatro aplicações do Piloto é **100% nominal** —
+`aplicacao_centro_custo` está **vazio para todas as quatro**. Quem decide quem entra é
+`rh.aplicacao_publico`, **uma linha por pessoa**. O prefixo foi apenas **como o recorte foi
+montado** naquela vez, por quem o montou.
+
+| | |
+|---|---|
+| O sistema impõe prefixo? | **Não.** Não existe regra de prefixo em lugar nenhum do código |
+| O que ele suporta | **lista de pares `(filial, centro de custo)` exatos**, quantos quiser — e também por filial, ou pessoa a pessoa |
+| Custo de corrigir | **remontar o público** da aplicação. Nada de código, nada de migration |
+
+⭐ **A decisão é 100% dela**, e é sobre o INSTRUMENTO: as 49 pessoas do `ADMINISTRATIVO - FABRICA`
+devem responder o questionário de Loja, o de Produção, ou um terceiro? O código contábil não tem
+opinião sobre isso — quem tinha era o atalho usado na montagem.
 
 ### 4. Segundo `RH_ADMIN` — encaminhamento: Claudimar
 
@@ -5808,7 +5823,18 @@ sem perder nenhuma das três referências.
 
 #### 7. ⚠️ O QUE ESTE ENSAIO NÃO VAI TESTAR — antes de montar
 
-1. **`Produção e Indústria`** — 1 pessoa, que é o próprio avaliador. Aplicação **não exercitada**.
+1. ⭐ **`Produção e Indústria` — DECISÃO CONSCIENTE do Clenio (12/09): testar 3 das 4.**
+   A aplicação fica com 1 pessoa, que é o próprio avaliador do CC, logo **zero avaliações
+   possíveis**.
+   **Por que é aceitável:** a composição de Produção é **idêntica** à de Operação de Loja — 14
+   perguntas, questionário 60 + 3 critérios a 10. O que deixa de ser exercitado é **o arranjo de
+   questões, não caminho de código**: nenhuma linha roda só para Produção.
+   `Aprendizes`, que é o perfil **genuinamente diferente** (sem critério cadastral,
+   `pesoAvaliacao = 100`), fica coberto com 19 pessoas.
+   ⚠️ **Ressalva que fica:** Produção e Indústria **não foi exercitada**. Se algum dia o arranjo
+   dela divergir do de Loja — outra questão, outro peso, outro critério —, esta cobertura deixa de
+   valer e o ensaio precisa de um CC de indústria com gente e um avaliador que não seja o único
+   avaliado.
 2. **Critério `INFORMADO`** — não existe entrada de valor. Os três critérios do ensaio são
    CALCULADO.
 3. **Volume** — 344 contra 894 do Piloto. Nada sobre desempenho de lista, paginação ou tempo de
