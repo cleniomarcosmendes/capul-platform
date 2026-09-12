@@ -37,6 +37,7 @@
  * que era a camada com perda.
  */
 import { distribuirPeso } from '../modelo/distribuir-peso.js';
+import { ErroDeDominio } from '../common/erro-de-dominio.js';
 
 /** Uma questão do arranjo, na ordem em que aparece. */
 export interface QuestaoDoArranjo {
@@ -58,13 +59,23 @@ export interface PesoDaQuestao {
   peso: number;
 }
 
-export class ClassificacaoSemPesoError extends Error {
+export class ClassificacaoSemPesoError extends ErroDeDominio {
+  /**
+   * ⚠️ 500 seria o certo se isto fosse só defeito nosso — mas desde a Etapa 3
+   * o RH monta arranjo, e um rascunho a meio caminho chega aqui pela leitura do
+   * catálogo. 409: o estado do arranjo é que está incompleto, não o pedido.
+   */
+  override readonly status = 409;
+  override corpo() {
+    return { message: this.message, classificacaoId: this.classificacaoId };
+  }
+
+
   constructor(readonly classificacaoId: string) {
     super(
       `Arranjo inválido: a classificação ${classificacaoId} tem questão mas não tem peso. ` +
         'A questão entraria no questionário valendo zero, em silêncio.',
     );
-    this.name = 'ClassificacaoSemPesoError';
   }
 }
 

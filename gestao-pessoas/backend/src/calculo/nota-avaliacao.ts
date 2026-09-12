@@ -13,6 +13,7 @@
  * Aqui ele sai do próprio instrumento, e por pergunta — porque o peso agora mora
  * na pergunta, não no grupo.
  */
+import { ErroDeDominio } from '../common/erro-de-dominio.js';
 
 export interface ItemRespondido {
   perguntaId: string;
@@ -31,13 +32,18 @@ export interface NotaCalculada {
   denominador: number;
 }
 
-export class AvaliacaoIncompletaError extends Error {
+export class AvaliacaoIncompletaError extends ErroDeDominio {
+  /** ⚠️ QUAIS faltam, não quantas: é o que a tela precisa para destacá-las. */
+  override corpo() {
+    return { message: this.message, perguntasSemResposta: this.perguntasSemResposta };
+  }
+
+
   constructor(readonly perguntasSemResposta: number) {
     super(
       `A avaliação não pode ser enviada — perguntas sem resposta: ${perguntasSemResposta}. ` +
         'Toda pergunta é obrigatória — não existe "não se aplica".',
     );
-    this.name = 'AvaliacaoIncompletaError';
   }
 }
 

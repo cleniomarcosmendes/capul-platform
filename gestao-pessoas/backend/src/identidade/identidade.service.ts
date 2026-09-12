@@ -24,6 +24,7 @@
  * separação de funções, e liberar por omissão significaria deixar exatamente a
  * gestora — o caso que a regra existe para cobrir — passar batido.
  */
+import { ErroDeDominio } from '../common/erro-de-dominio.js';
 import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { $Enums, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -46,7 +47,19 @@ export interface ColaboradorResumo {
 }
 
 /** Erro de DADO, não de permissão: a regra de negócio diz que não acontece. */
-export class MatriculaAmbiguaError extends Error {
+export class MatriculaAmbiguaError extends ErroDeDominio {
+  /**
+   * ⚠️ 409, não 403. É anomalia de DADO — dois colaboradores ativos com a mesma
+   * matrícula —, e devolver 403 mandaria a pessoa ao Configurador pedir uma
+   * permissão que ela já tem (§3.1.93, a família do 403 que fala de outra
+   * coisa). O payload diz QUAIS colidiram, que é o que resolve.
+   */
+  override readonly status = 409;
+  override corpo() {
+    return { message: this.message, matricula: this.matricula, encontrados: this.encontrados };
+  }
+
+
   constructor(
     readonly matricula: string,
     readonly encontrados: ColaboradorResumo[],
@@ -58,7 +71,6 @@ export class MatriculaAmbiguaError extends Error {
         `transferência, e as filiais antigas ficam com demissão preenchida. ` +
         `Corrija o cadastro antes de seguir.`,
     );
-    this.name = 'MatriculaAmbiguaError';
   }
 }
 

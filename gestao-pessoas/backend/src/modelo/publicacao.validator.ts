@@ -32,6 +32,7 @@
  */
 import { pesosDerivados, pontuacaoMaximaDoArranjo, type PesoDaQuestao } from '../calculo/peso-derivado.js';
 import { percentuaisQueFecham } from '../common/percentual.js';
+import { ErroDeDominio } from '../common/erro-de-dominio.js';
 
 export interface GrupoDoArranjo {
   classificacaoId: string;
@@ -56,10 +57,14 @@ export interface ArranjoParaPublicacao {
   questoes: readonly QuestaoDoArranjo[];
 }
 
-export class ModeloNaoPublicavelError extends Error {
+export class ModeloNaoPublicavelError extends ErroDeDominio {
+  /** A lista É a resposta: a tela renderiza item a item. */
+  override corpo() {
+    return { message: this.problemas };
+  }
+
   constructor(readonly problemas: string[]) {
     super(`Versão não pode ser publicada:\n- ${problemas.join('\n- ')}`);
-    this.name = 'ModeloNaoPublicavelError';
   }
 }
 

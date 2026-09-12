@@ -6,6 +6,7 @@
  * PESO (`AplicacaoCriterio`). Logo, é aqui que se confere se a apuração tem como
  * acontecer.
  */
+import { ErroDeDominio } from '../common/erro-de-dominio.js';
 import {
   validarCriterioEmUso,
   type CriterioValidavel,
@@ -69,10 +70,14 @@ export interface FaixaConceito {
   limiteSuperior: number;
 }
 
-export class CicloNaoAbrivelError extends Error {
+export class CicloNaoAbrivelError extends ErroDeDominio {
+  /** A lista É a resposta: a tela renderiza item a item. */
+  override corpo() {
+    return { message: this.problemas };
+  }
+
   constructor(readonly problemas: string[]) {
     super(`Ciclo não pode ser aberto:\n- ${problemas.join('\n- ')}`);
-    this.name = 'CicloNaoAbrivelError';
   }
 }
 

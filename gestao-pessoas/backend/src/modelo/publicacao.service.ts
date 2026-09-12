@@ -19,6 +19,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
+import { ArranjoService } from './arranjo.service.js';
+import type { AvisoDeComparabilidade } from './comparabilidade.js';
 import {
   ModeloNaoPublicavelError,
   assertArranjoPublicavel,
@@ -30,6 +32,8 @@ import {
 } from './publicacao.validator.js';
 
 export interface PreviaDaPublicacao {
+  /** ⭐ AVISOS, nunca bloqueio — o botão continua habilitado. */
+  avisosDeComparabilidade: AvisoDeComparabilidade[];
   versaoId: string;
   modeloNome: string;
   versao: number;
@@ -49,6 +53,12 @@ export class PublicacaoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditoria: AuditoriaService,
+    /**
+     * ⚠️ Reusa o `ArranjoService` em vez de recalcular os avisos aqui. Duas
+     * cópias divergem no primeiro caso novo, e aí a montagem avisa uma coisa e
+     * o diálogo de publicar avisa outra — sobre a mesma versão.
+     */
+    private readonly arranjos: ArranjoService,
   ) {}
 
   async previa(versaoId: string): Promise<PreviaDaPublicacao> {
@@ -68,8 +78,10 @@ export class PublicacaoService {
 
     const declarada = somaDeclarada(arranjo.grupos);
     const maxima = pontuacaoMaximaDoArranjoCompleto(arranjo);
+    const { avisosDeComparabilidade } = await this.arranjos.ler(versaoId);
 
     return {
+      avisosDeComparabilidade,
       versaoId,
       modeloNome: versao.modelo.nome,
       versao: versao.versao,

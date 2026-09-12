@@ -19,6 +19,7 @@
  * função — regra duplicada envelhece errada.
  */
 import { codigosRegistrados, resolverRegistrado } from '../calculo/resolvers/registry.js';
+import { ErroDeDominio } from '../common/erro-de-dominio.js';
 
 export type OrigemValorCriterio = 'CALCULADO' | 'INFORMADO';
 
@@ -31,10 +32,14 @@ export interface CriterioValidavel {
   ativo: boolean;
 }
 
-export class CriterioInvalidoError extends Error {
+export class CriterioInvalidoError extends ErroDeDominio {
+  /** A lista É a resposta: a tela renderiza item a item. */
+  override corpo() {
+    return { message: this.problemas };
+  }
+
   constructor(readonly problemas: string[]) {
     super(problemas.join('\n- '));
-    this.name = 'CriterioInvalidoError';
   }
 }
 

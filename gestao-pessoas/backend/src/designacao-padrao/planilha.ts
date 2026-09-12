@@ -16,6 +16,7 @@
  */
 import { createHash } from 'node:crypto';
 import { lerCsv } from '../sincronizacao/csv.js';
+import { ErroDeDominio } from '../common/erro-de-dominio.js';
 
 /** Uma linha aproveitável da planilha, já normalizada. */
 export interface LinhaDaPlanilha {
@@ -44,7 +45,13 @@ export interface LeituraDaPlanilha {
 
 const COLUNAS_OBRIGATORIAS = ['centro_custo', 'avaliador_matricula'];
 
-export class PlanilhaInvalidaError extends Error {
+export class PlanilhaInvalidaError extends ErroDeDominio {
+  /** As colunas que faltam e as que vieram — sem isso a pessoa adivinha. */
+  override corpo() {
+    return { message: this.message, faltando: this.faltando, encontradas: this.encontradas };
+  }
+
+
   constructor(readonly faltando: string[], readonly encontradas: string[]) {
     super(
       // Lista, não contagem: o rótulo serve para os dois casos e não flexiona.
@@ -52,7 +59,6 @@ export class PlanilhaInvalidaError extends Error {
         `Encontrei: ${encontradas.join(', ') || '(nenhuma)'}. ` +
         'Use o modelo enviado pelo RH, sem renomear o cabeçalho.',
     );
-    this.name = 'PlanilhaInvalidaError';
   }
 }
 

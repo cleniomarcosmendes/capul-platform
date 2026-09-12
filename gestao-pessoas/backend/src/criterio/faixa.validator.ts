@@ -31,6 +31,7 @@
  * DOMINIO — não há intervalo; o que mata é código repetido (mesma decisão
  * dependendo da ordem) ou código vazio (faixa que nunca casa com nada).
  */
+import { ErroDeDominio } from '../common/erro-de-dominio.js';
 
 export type TipoFaixa = 'NUMERICA' | 'DOMINIO';
 
@@ -46,10 +47,14 @@ export interface FaixaValidavel {
   ordem: number;
 }
 
-export class FaixasInvalidasError extends Error {
+export class FaixasInvalidasError extends ErroDeDominio {
+  /** A lista É a resposta: a tela renderiza item a item. */
+  override corpo() {
+    return { message: this.problemas };
+  }
+
   constructor(readonly problemas: string[]) {
     super(problemas.join('\n- '));
-    this.name = 'FaixasInvalidasError';
   }
 }
 
