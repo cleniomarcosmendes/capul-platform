@@ -42,6 +42,25 @@ export interface AplicacaoParaValidar {
   criterios: readonly CriterioDaAplicacao[];
   /** Modelo de demonstração não abre ciclo válido (§4.6). */
   modeloFinalidade?: 'PRODUCAO' | 'DEMONSTRACAO';
+  /**
+   * ⭐⭐ A versão do modelo está PUBLICADA?
+   *
+   * Rascunho não é instrumento — é o que alguém está montando. Enquanto ele é
+   * rascunho, questão entra e sai e peso muda; uma aplicação amarrada a ele
+   * responderia um questionário que muda debaixo de quem responde, e a nota
+   * sairia sobre um denominador que já não existe.
+   *
+   * ⚠️ **A tela já filtrava (`.filter((v) => v.publicadoEm)`), a API não.** É a
+   * direção PERMISSIVA da §3.1.77 — a silenciosa: ninguém reclama, nada quebra,
+   * e quem descobre é quem chama a API direto. Ficou inofensivo até hoje só
+   * porque **não existe nenhuma versão em rascunho**; a Etapa 2 (duplicar) cria
+   * a primeira. Por isso a guarda entra ANTES dela, não depois.
+   *
+   * `undefined` = quem chamou não informou. Tratado como publicado, para não
+   * inventar problema em chamador antigo — mas os dois chamadores de produção
+   * informam, e há teste que varre o fonte cobrando isso.
+   */
+  versaoPublicada?: boolean;
 }
 
 export interface FaixaConceito {
@@ -100,6 +119,14 @@ export function validarAplicacao(aplicacao: AplicacaoParaValidar): string[] {
     }
 
     problemas.push(...validarCriterioEmUso(item.criterio, onde));
+  }
+
+  if (aplicacao.versaoPublicada === false) {
+    problemas.push(
+      `${onde}: a versão do modelo é um RASCUNHO, não um instrumento publicado. ` +
+        'Enquanto ela é rascunho, questão e peso ainda mudam — a avaliação sairia sobre um ' +
+        'questionário que muda debaixo de quem responde. Publique a versão antes de usá-la.',
+    );
   }
 
   if (aplicacao.modeloFinalidade === 'DEMONSTRACAO') {

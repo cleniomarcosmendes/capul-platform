@@ -176,6 +176,7 @@ export class CicloService {
       pessoasNoPublico: a._count.publico,
       pesoAvaliacao: Number(a.pesoAvaliacao),
       modeloFinalidade: a.modeloVersao.modelo.finalidade,
+      versaoPublicada: a.modeloVersao.publicadoEm !== null,
       criterios: a.criterios.map((ac) => ({
         peso: Number(ac.peso),
         valoresInformadosNoCiclo: valoresPorCriterio.get(ac.criterioId) ?? 0,

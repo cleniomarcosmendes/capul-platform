@@ -171,6 +171,13 @@ export class AplicacaoService {
         pessoasNoPublico: regras.publico,
         pesoAvaliacao: dados.pesoAvaliacao ?? Number(aplicacao.pesoAvaliacao),
         modeloFinalidade: versao!.modelo.finalidade,
+        /**
+         * ⚠️ Terceiro chamador, achado pelo teste de invariante e não por mim.
+         * `modeloVersaoId` não é editável, então a versão aqui é a mesma da
+         * criação — mas ela pode ter sido DESPUBLICADA no meio, e sem esta
+         * linha editar o peso seria a porta que revalida tudo menos isto.
+         */
+        versaoPublicada: versao!.publicadoEm !== null,
         criterios: (criterios ?? atuais).map((c) => ({
           peso: Number(c.peso),
           criterio: {
@@ -291,6 +298,7 @@ export class AplicacaoService {
       pessoasNoPublico: 0,
       pesoAvaliacao: dados.pesoAvaliacao,
       modeloFinalidade: versao.modelo.finalidade,
+      versaoPublicada: versao.publicadoEm !== null,
       criterios: criterios.map((c) => ({
         peso: c.peso,
         criterio: {
