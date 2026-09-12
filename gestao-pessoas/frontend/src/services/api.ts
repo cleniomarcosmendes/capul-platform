@@ -1034,6 +1034,12 @@ export interface ResumoDoCiclo {
   aplicacoes: number;
   /** TODAS as linhas de público montadas, inclusive as já tiradas do ciclo. */
   noPublico: number;
+  /** Pessoas no público que nunca tiveram avaliação criada. */
+  noPublicoSemAvaliacao: number;
+  /** Das canceladas: as que o "Devolver canceladas" alcança. */
+  canceladasPeloEncerramento: number;
+  /** Das canceladas: as que voltam por Designação › Incluir. */
+  excluidasPeloRh: number;
   /**
    * ⭐ Quantas dessas o RH tirou do ciclo. Sem este termo o cabeçalho não fecha:
    * designados + sem avaliador não somam `noPublico`, e quem lê procura o erro.

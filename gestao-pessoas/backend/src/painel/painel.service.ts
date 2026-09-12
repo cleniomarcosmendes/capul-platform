@@ -154,6 +154,28 @@ export interface ResumoDoCiclo {
    */
   noPublico: number;
   /**
+   * ⭐ Pessoas que entraram no público e **nunca tiveram avaliação criada**.
+   *
+   * ⚠️ Não é "fora do ciclo" (essas a régua excluiu) nem "sem avaliador"
+   * (essas têm avaliação e falta quem responda) — as duas palavras já
+   * significam outra coisa neste módulo, e a varredura de 10/09 achou dois
+   * "fora" com sentidos diferentes em abas vizinhas. É o termo que faltava
+   * entre `noPublico` (54) e as avaliações que existem (52).
+   */
+  noPublicoSemAvaliacao: number;
+  /**
+   * Das canceladas: as que o **"Devolver canceladas"** alcança (origem
+   * `ENCERRAMENTO`).
+   *
+   * ⭐⭐ A REGRA DO RÓTULO, e vale para todo par deste tipo: **origem e caminho
+   * de recuperação no mesmo rótulo**. Foi o que faltou quando o "Excluir"
+   * produzia "cancelada" e ninguém sabia desfazer — o estado estava na tela e
+   * a saída não.
+   */
+  canceladasPeloEncerramento: number;
+  /** Das canceladas: as que voltam por **Designação › Incluir** (`DECISAO_RH`). */
+  excluidasPeloRh: number;
+  /**
    * ⭐⭐ O TERMO QUE FALTAVA. `noPublico` responde "quanto foi montado" e os
    * números seguintes respondem "quem o ciclo ainda alcança" — dois registros
    * diferentes na mesma linha. Sem este campo a conta não fechava na tela:
@@ -578,10 +600,25 @@ export class PainelService {
     });
     if (!ciclo) throw new NotFoundException('Ciclo não encontrado.');
 
-    const [porStatus, noPublico, apuradas] = await Promise.all([
+    const [porStatus, noPublico, apuradas, canceladasPorOrigem] = await Promise.all([
       this.prisma.avaliacao.groupBy({ by: ['status'], where: { cicloId }, _count: { _all: true } }),
       this.prisma.aplicacaoPublico.count({ where: { cicloId } }),
       this.prisma.resultadoAvaliacao.count({ where: { cicloId } }),
+      /**
+       * ⭐⭐ AS CANCELADAS POR ORIGEM — porque o caminho de RECUPERAÇÃO é
+       * diferente para cada uma, e o rótulo tem de dizer qual.
+       *
+       * O cabeçalho contava 39 e a seção abaixo 37, sem nada conciliando: as
+       * outras 2 foram excluídas pelo RH uma a uma, e o "Devolver canceladas"
+       * **não as alcança** (ele só reverte origem `ENCERRAMENTO`). Elas voltam
+       * pelo "Incluir", na aba Designação — e ninguém tinha como saber disso
+       * lendo a tela.
+       */
+      this.prisma.avaliacao.groupBy({
+        by: ['origemCancelamento'],
+        where: { cicloId, status: 'CANCELADA' },
+        _count: { _all: true },
+      }),
     ]);
     const conta = (s: string) => porStatus.find((l) => l.status === s)?._count._all ?? 0;
     /**
@@ -591,6 +628,12 @@ export class PainelService {
      */
     const designados = somarQueContam(porStatus);
 
+    /**
+     * ⭐ Pessoas no público que nunca tiveram avaliação criada. Sai da MESMA
+     * varredura de `semDesignacao` e `foraDoCiclo` — uma segunda conta de
+     * "quem está no público" divergiria da primeira listagem que mudasse.
+     */
+    let noPublicoSemAvaliacao = 0;
     let semDesignacao = 0;
     // ⭐ Sai da MESMA varredura de `semDesignacao`, e da mesma régua: uma segunda
     // conta de "quem o ciclo tirou" divergiria da primeira listagem que mudasse.
@@ -605,6 +648,20 @@ export class PainelService {
         ).map((x) => x.avaliadoId),
       );
       semDesignacao += elegiveis.filter((e) => !comAvaliacao.has(e.colaboradorId)).length;
+      /**
+       * ⚠️ Sobre TODAS as linhas, elegíveis ou não.
+       *
+       * A primeira versão filtrava por `elegivel`, "para não contar duas vezes
+       * com `foraDoCiclo`" — e o número deu **0** no SIMULACAO, onde há 2
+       * pessoas sem avaliação. Elas eram justamente as que a régua excluiu.
+       *
+       * ⭐ Os dois números respondem perguntas DIFERENTES e podem se sobrepor:
+       * `foraDoCiclo` é *"a régua tirou"*; este é *"não existe avaliação"*. No
+       * SIMULACAO, 4 estão fora do ciclo e 2 delas têm avaliação (cancelada) —
+       * somar os dois nunca foi a conta. A conta que fecha é
+       * **`noPublico` = avaliações + estas**, e é ela que a linha precisa.
+       */
+      noPublicoSemAvaliacao += linhas.filter((l) => !comAvaliacao.has(l.colaboradorId)).length;
     }
 
     const estado = {
@@ -614,6 +671,11 @@ export class PainelService {
       foraDoCiclo,
       designados,
       canceladas: conta('CANCELADA'),
+      noPublicoSemAvaliacao,
+      canceladasPeloEncerramento:
+        canceladasPorOrigem.find((c) => c.origemCancelamento === 'ENCERRAMENTO')?._count._all ?? 0,
+      excluidasPeloRh:
+        canceladasPorOrigem.find((c) => c.origemCancelamento === 'DECISAO_RH')?._count._all ?? 0,
       semDesignacao,
       enviadas: conta('ENVIADA'),
       // "A fazer" é exatamente o conjunto que o encerramento contaria e

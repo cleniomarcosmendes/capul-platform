@@ -1,3 +1,4 @@
+import { ROTULO_DEVOLVER, ROTULO_INCLUIR } from '../lib/rotulos';
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, ArrowRight, CalendarRange, CheckCircle2, ChevronDown, Lock, SlidersHorizontal, Undo2 } from 'lucide-react';
@@ -206,6 +207,25 @@ function LinhaDeEstado({ resumo, cicloId }: { resumo: ResumoDoCiclo; cicloId: st
     { valor: resumo.aplicacoes, rotulo: flexao(resumo.aplicacoes, 'aplicação', 'aplicações') },
     { valor: resumo.noPublico, rotulo: 'no público' },
     /**
+     * ⭐⭐ O TERMO ENTRE `noPublico` e as avaliações que existem. Medido no
+     * SIMULACAO: 54 no público, 52 avaliações — e as 2 de diferença não tinham
+     * nome, então a linha somava 56 e ninguém sabia por quê.
+     *
+     * ⚠️ NÃO se chama "fora" nem "sem avaliador": as duas palavras já
+     * significam outra coisa aqui — "fora do ciclo" é quem a régua excluiu e
+     * "sem avaliador" é quem tem avaliação e falta quem responda. A varredura
+     * de 10/09 achou dois "fora" com sentidos diferentes em abas vizinhas, e
+     * repetir a palavra seria a terceira.
+     *
+     * ⭐ Só quando há: num ciclo montado inteiro ele não concilia nada, como o
+     * "fora do ciclo".
+     */
+    {
+      valor: resumo.noPublicoSemAvaliacao,
+      rotulo: 'no público, sem avaliação criada',
+      soQuandoHa: true,
+    },
+    /**
      * ⭐ SÓ APARECE QUANDO EXISTE. Os outros números são de ESTADO — "0
      * apuradas" e "0 sem avaliador" dizem em que passo o ciclo está, e valem
      * zerados. Este é um termo de CONCILIAÇÃO: existe para a soma fechar
@@ -229,7 +249,26 @@ function LinhaDeEstado({ resumo, cicloId }: { resumo: ResumoDoCiclo; cicloId: st
      * as canceladas saíram do denominador para o ciclo poder fechar em 100%, e
      * é justamente por isso que elas precisam aparecer ao lado.
      */
-    { valor: resumo.canceladas, rotulo: 'canceladas', soQuandoHa: true },
+    /**
+     * ⭐⭐ ORIGEM E CAMINHO DE RECUPERAÇÃO NO MESMO RÓTULO — a regra que faltou
+     * quando "Excluir" produzia "cancelada" e ninguém sabia desfazer. O estado
+     * estava na tela; a saída, não.
+     *
+     * ⚠️ O cabeçalho contava 39 e a seção abaixo 37, sem nada conciliando: as
+     * outras 2 vieram do "Excluir" do RH, e o "Devolver canceladas" **não as
+     * alcança** — ele só reverte origem ENCERRAMENTO.
+     */
+    { valor: resumo.canceladas, rotulo: 'canceladas (todas as origens)', soQuandoHa: true },
+    {
+      valor: resumo.canceladasPeloEncerramento,
+      rotulo: `canceladas pelo encerramento — recuperáveis em ${ROTULO_DEVOLVER}`,
+      soQuandoHa: true,
+    },
+    {
+      valor: resumo.excluidasPeloRh,
+      rotulo: `excluídas por decisão do RH — recuperáveis em ${ROTULO_INCLUIR}`,
+      soQuandoHa: true,
+    },
   ];
   const numeros = todos.filter((n) => !n.soQuandoHa || n.valor > 0);
 
@@ -507,7 +546,9 @@ function DevolverCanceladas({
         <Undo2 size={16} className="shrink-0 text-amber-700" aria-hidden />
         <span className="text-sm font-medium text-slate-700">
           {/* Número como VALOR, nunca no meio de frase que concorda com ele. */}
-          Canceladas pelo encerramento: {previa.total}
+          {/* ⚠️ O mesmo nome que a legenda da linha de estado cita — pela
+              constante, para renomear um renomear os dois. */}
+          {ROTULO_DEVOLVER}: {previa.total}
         </span>
         <ChevronDown
           size={16}
