@@ -6495,3 +6495,54 @@ adaptadas ao arranjo.
 **15 questões · 8 classificações · 0 fora de todo perfil.** Doze das 15 pesam **diferente**
 conforme o perfil — que é exatamente o que a tela existe para mostrar. Suíte: **58 suítes,
 735 testes**, verdes.
+
+---
+
+### 3.1.86. ⭐⭐ REGRA — fixture redonda não testa arredondamento, e o aviso não é contramedida
+
+**Terceira vez da mesma família**, e as três em quatro dias:
+
+| # | Defeito | O que dizia | O que era | Quem pegou |
+|---|---|---|---|---|
+| 1 | `pontuacaoMaximaDoArranjo` (11/09) | 72,03 | 72 | arredondava por questão em vez de uma vez no fim |
+| 2 | `assertCriterioSalvavel` (11/09) | validava | zerava `codigoCalculo` **antes** de validar — a regra escrita nunca era alcançada | exercitar o serviço contra o banco |
+| 3 | Peso efetivo do acervo (12/09) | 59,97 | 60 | `peso ÷ n` arredondado, sem o centavo do resto | somar o derivado e comparar com o declarado |
+
+**Nenhum dos três falharia em teste.** Os três foram pegos por **uma conta que não fecha**, ao fim
+de uma etapa curta. É a razão de o editor ir por blocos com portão, e não em uma entrega só.
+
+#### (a) Fixture redonda não testa arredondamento
+
+Os 7 testes do acervo passavam com o defeito dentro. Não por descuido de asserção: os pesos das
+fixtures eram **12 ÷ 2, 9 ÷ 1, 10 ÷ 1** — todos exatos. **Furo de arredondamento mora onde SOBRA.**
+Fixture com número redondo é justamente o caso em que não há resto, então ela é cega para a única
+coisa que a regra de repartição faz de não trivial.
+
+⚠️ **Gatilho:** ao escrever teste de qualquer conta com divisão, arredondamento ou rateio, a
+primeira fixture tem de ter **resto** (`16 ÷ 3`, `10 ÷ 3`, `7 ÷ 2`). A redonda entra depois, se
+entrar.
+
+⚠️ Corolário que apareceu junto: a fixture do `usoEm` não tinha `ordem`. Ordem parece decoração —
+é ela que decide **quem recebe o centavo**. Campo ausente na fixture esconde metade da regra.
+
+#### (b) ⭐⭐ O aviso em maiúsculas NÃO é a contramedida
+
+O cabeçalho do `calculo/peso-derivado.ts` já dizia, em negrito: *"a repartição é
+`modelo/distribuirPeso` — **não reimplementar aqui**"*. Escrito por mim, seis dias antes.
+Reimplementei mesmo assim, porque **não fui ler o arquivo**: escrevi a divisão que "obviamente"
+era a conta certa, e um aviso só protege quem já abriu o arquivo onde ele está.
+
+É o mesmo achado das REGRAS-DE-METODO: *regra sem gatilho não pega nem quem a escreveu*.
+
+**A contramedida é uma CONTA, não um texto:**
+
+> ⭐⭐ **Toda tela que mostra peso soma o derivado e compara com o declarado.**
+> A soma dos pesos efetivos de um perfil tem de bater com a soma dos `ArranjoGrupo.peso` daquele
+> perfil. Se não bater, alguém repartiu por conta própria.
+
+É verificação de dois números que **já existem** em lugares diferentes — não precisa de fixture,
+não precisa de intenção declarada, e vale para tela que ainda não foi escrita. Onde já está
+aplicada: `/acervo` × `/catalogo/modelos/:versaoId`, 44 pesos, 0 divergências (§3.1.85).
+
+Vale ao lado da §3.1.79 (*a conta que não bate detecta furo de guarda melhor que ler código*) e da
+§3.1.82 (*peça sem chamador*).
