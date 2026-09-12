@@ -6309,7 +6309,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 |---|---|---|
 | **Flag de recorte** no ciclo | **6h** | desenho **aprovado** (derivar por percentual inventa limiar, e limiar arbitrário erra calado) |
 | **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
-| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **Bloco A** (etapas 2+5) ✅ §3.1.87 · **B** (etapa 6) · **C** (3+4) · **D** (7). Cada bloco fecha numa CONTA, conferida antes do próximo |
+| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) · **D** (7). Cada bloco fecha numa CONTA, conferida antes do próximo |
 
 ### (c) ⛔ Bloqueado fora — HLG e o Marco
 
@@ -6739,3 +6739,142 @@ tela escreve *"ainda não publicada"*, que é o que de fato se sabe. A máxima �
 arredondar por item; aqui viria de copiar um valor que descreve outra coisa. A mesma família —
 *número com aparência de precisão que não é o que parece* — resolvida antes de existir, porque
 desta vez a pergunta foi feita na hora de escrever o `create`.
+
+---
+
+### 3.1.90. 🔑 CONTAS DE TESTE DOS TRÊS PAPÉIS — e o 403 que não era de papel
+
+Criadas em 12/09, no DEV. **`RH_MODELO` existe no RBAC desde 05/09 e ninguém nunca a teve** — o
+papel que o `roles-rh.ts` descreve como *"monta o INSTRUMENTO: perguntas, grupos, pesos"* nunca
+havia sido exercitado contra o editor que estava sendo escrito para ele.
+
+| Login | Papel | Matrícula | Senha |
+|---|---|---|---|
+| `zz.teste.rh` | RH_ADMIN | 009900 | `TesteRh2026` |
+| `zz.teste.modelo` | RH_MODELO | 009901 | `TesteRh2026` |
+| `zz.teste.ciclo` | RH_CICLO | 009902 | `TesteRh2026` |
+
+Nome inequívoco nos três: **"ZZ CONTA DE TESTE T.I. (papel) — NAO E PESSOA"**.
+
+#### ⚠️ O que a criação revelou: conta de módulo NÃO basta
+
+As duas contas novas tomaram **403 em TODAS as rotas**, inclusive nas que declaram os papéis
+delas. E a mensagem não falava de papel:
+
+> *"A matrícula 009901 do seu usuário não corresponde a nenhum colaborador ativo."*
+
+**Toda rota do módulo exige que a matrícula resolva num colaborador ATIVO** (`identidade.service`)
+— ler o acervo inclusive. É a família do **403 que parece falta de permissão** e manda a pessoa ao
+Configurador dar papel a quem já tem ([[feedback_chapa_colide_5_digitos]]). Só voltou a funcionar
+depois de criar os dois `rh.colaborador` correspondentes (CC `ZZTESTE`, fora de qualquer recorte).
+
+⚠️ **Vale para HLG e PROD**: dar papel a alguém no Configurador **não é suficiente** para essa
+pessoa entrar no módulo — a matrícula tem de existir em `rh.colaborador` e estar ativa.
+
+#### A matriz medida — e o desenho está certo
+
+| Rota | RH_ADMIN | RH_MODELO | RH_CICLO |
+|---|---|---|---|
+| `GET /acervo` | 200 | **200** | **200** |
+| `GET /catalogo/modelos` · `/modelos/:versao` | 200 | 200 | 200 |
+| `GET /classificacoes` | 200 | 200 | **403** |
+| `GET /modelos/:id/versoes` · `previa-duplicar` | 200 | 200 | **403** |
+| `POST duplicar` · `DELETE versão` | ok | ok | **403** |
+| `POST/PATCH/DELETE /classificacoes` | ok | ok | **403** |
+| `GET/POST /acervo/questoes` (Etapa 6) | ok | **ok** | **403** |
+| `GET /ciclos` | 200 | **403** | 200 |
+
+⭐ **Lê-se em duas linhas:** LER o instrumento é dos três (*ler o instrumento não é ler nota*);
+**MEXER** no instrumento é de `RH_ADMIN` + `RH_MODELO`; **montar CICLO** é de `RH_ADMIN` +
+`RH_CICLO`. Os dois papéis se cruzam só na leitura, que é exatamente a separação escrita em
+`roles-rh.ts`. Nada a corrigir no desenho.
+
+### 3.1.91. ✅ BLOCO B DO EDITOR — criar e editar questão (12/09)
+
+#### A medição que desenhou o formulário — e as duas metades vão em direções opostas
+
+| | |
+|---|---|
+| Conjuntos de **VALORES** distintos entre as 15 | **1** — `0,3 · 0,6 · 0,9 · 1,2`, sem exceção |
+| **Maior valor** | **1,2** nas 15 |
+| Textos de âncora distintos | **60 de 60** |
+
+⚠️ **Eu resumi isto errado na conversa** ("escala reutilizável não se paga") — a §3.1.83 já dizia o
+contrário para o VALOR. A conclusão correta separa as duas: o **valor** é universal e **deve ser
+imposto**; o **texto** nunca se repete e é o trabalho real.
+
+**Por que o maior valor é invariante, e não preferência:**
+
+```
+pontuação máxima do perfil = Σ (peso da questão × MAIOR valor da questão)
+com maior = 1,2 e Σpesos = 60  →  72
+```
+
+Uma questão com maior ≠ 1,2 muda a máxima daquele perfil e **desloca toda nota dele** — e a conta
+continua fechando, sobre outro denominador. É o 72,03 da §3.1.86 por outra porta.
+
+⚠️ Por isso a escala é **derivada do acervo em tempo de execução** (`acervo/escala.ts`), não escrita
+como constante: constante seria uma segunda verdade, que continuaria compilando e imporia a escala
+de ontem. A `ESCALA_INICIAL` só serve ao acervo VAZIO. E quando o acervo **não** é uniforme, a peça
+**recusa criar qualquer questão** e lista quem foge — escolher a majoritária em silêncio congelaria
+a escala errada.
+
+#### O formulário diz o tamanho ANTES do primeiro campo
+
+> **Uma questão são cinco textos:** o enunciado e as quatro alternativas — uma para cada nível, do
+> pior ao melhor. A **pontuação já vem pronta** (0,3 · 0,6 · 0,9 · 1,2) e é a mesma de todas.
+
+Cada linha tem o rótulo do nível ("A pior situação", "O esperado"…) e um exemplo. O botão mostra
+**"Faltam 3 textos"** em vez de "preencha os campos obrigatórios" — o número diz de quanto é o
+resto do trabalho.
+
+#### As duas recusas duras têm causas DIFERENTES
+
+| Recusa | Causa | O que trava |
+|---|---|---|
+| **resposta gravada** | alguém já respondeu aquele texto | o **TEXTO**. A nota não muda (`Resposta.valor` está gravado); o REGISTRO é que passaria a dizer outra coisa |
+| **está em arranjo** | o peso é derivado da classificação | a **CLASSIFICAÇÃO**. Mover a questão muda o peso de **duas** classificações em cada perfil que a usa |
+
+⭐ **E não se confundem**: questão com resposta e sem arranjo pode ser reclassificada; questão em
+arranjo e sem resposta pode ter o texto corrigido. Um `podeEditar` único trataria "trocar de
+classificação" como se fosse "corrigir um acento".
+
+Apagar recusa nos dois casos e **manda desativar** — a saída que tira da montagem e deixa o
+histórico de pé.
+
+#### ⭐ Código novo é `C###`, não `019`
+
+`codigo` é a chave natural e veio do **SQP010**. Gerar `019` colidiria no dia em que o Protheus
+tiver o dele, e a colisão apareceria como violação de unicidade numa sincronização, longe daqui.
+`C###` separa as origens de forma legível na própria tela: **número puro veio do Protheus, `C` veio
+daqui** — e o rótulo do cartão acompanha (dizia "RD8010 004" para todas; agora diz *"criada aqui ·
+C001"* nas locais, porque atribuir ao Protheus uma decisão do RH é rótulo errado).
+
+#### 🚪 O PORTÃO
+
+| Conta | Resultado |
+|---|---|
+| Questão nova existe no acervo | ✅ **C001**, 16 questões |
+| Não entra em perfil nenhum | ✅ `usos: []`, `foraDeTodoPerfil: 1` |
+| A tela diz isso explicitamente | ✅ aviso vem do BACKEND com a questão + tarja âmbar no cartão |
+| **Os 44 pesos dos perfis existentes** | ✅ **44 conferidos, 0 divergências**, máximas 72/72/72/60 |
+| Somas por perfil | 60 · 60 · 60 · 50 |
+| Escala com maior 1,5 | **400**, explicando o deslocamento da nota |
+| Dois textos iguais · texto faltando | **400** |
+| Reclassificar a 004 (5 perfis) | **400** |
+| Apagar a 004 (**19 respostas** reais, do ciclo SIMULACAO) | **400**, mandando desativar |
+| Piloto | **894 PENDENTE, 0 respostas** |
+| ENSAIO | RASCUNHO, 325 |
+
+Suíte: **64 suítes, 768 testes**.
+
+⚠️ **Um invariante meu me pegou de novo, e é o terceiro em dois dias.** O
+`texto-sem-flexao.invariante.spec.ts` reprovou `${esperadas} alternativas` — com 1 sairia
+*"1 alternativas"*. Ao corrigir, achei o mesmo erro em outra frase que eu tinha escrito no Bloco A
+(*"citar as ${n} classificações"*) e que a rede não pegou. **Um verde ali não é prova; é prova de
+que as duas formas conhecidas não estão na frase.**
+
+#### O que ficou no DEV, de propósito
+
+`C001 — ZZ TESTE — Cuidado com o EPI`, para a tarja *"não está em nenhum perfil"* poder ser vista.
+Apagável em um clique, e sem resposta nenhuma.
