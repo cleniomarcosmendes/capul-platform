@@ -29,8 +29,16 @@
 --
 -- ── COMO RODAR ──────────────────────────────────────────────────────────────
 --
---   docker compose exec -T postgres psql -U capul_user -d capul_platform \
---     < gestao-pessoas/scripts/resetar-senhas-ensaio.sql
+-- ⚠️ NO POWERSHELL (5.1) — o terminal do Clenio. **Não use `<`**: o PS 5.1 não
+-- tem redireção de entrada, e o `|` dele REENCODA o texto, o que estragaria os
+-- acentos e o hash. Copiar o arquivo para dentro do container evita as duas
+-- coisas, porque `docker cp` copia BYTES:
+--
+--   docker cp gestao-pessoas\scripts\resetar-senhas-ensaio.sql capul-db:/tmp/reset.sql
+--   docker compose exec postgres psql -U capul_user -d capul_platform -f /tmp/reset.sql
+--   docker compose exec postgres rm /tmp/reset.sql
+--
+-- (No bash/WSL o `< arquivo` funciona igual.)
 --
 -- ⚠️ Transação única, com a lista ANTES e a conferência DEPOIS. `COMMIT` na
 -- última linha — troque por `ROLLBACK` se algum número surpreender.
@@ -59,9 +67,11 @@ INSERT INTO alvo VALUES
   ('005380');  -- liciaversiani     · AVALIADOR · fila 1   (AFASTADO — entra na régua)
 
 -- ── ANTES: confira que são 16 e que nenhuma autentica pelo portal ──────────
+-- ⚠️ Nomes de coluna em ASCII PURO, de propósito: o `⚠_` que estava aqui
+--    quebraria no PowerShell 5.1, que reencoda o texto ao passar por um pipe.
 SELECT count(*) AS contas_encontradas,
-       count(*) FILTER (WHERE u.autentica_portal) AS ⚠_autenticam_pelo_portal,
-       count(*) FILTER (WHERE u.status <> 'ATIVO') AS ⚠_inativas
+       count(*) FILTER (WHERE u.autentica_portal) AS ATENCAO_autenticam_pelo_portal,
+       count(*) FILTER (WHERE u.status <> 'ATIVO') AS ATENCAO_inativas
   FROM core.usuarios u JOIN alvo a ON a.matricula = u.matricula;
 
 -- ⚠️ Se `autenticam_pelo_portal` não for 0, PARE: nessas contas a senha local é

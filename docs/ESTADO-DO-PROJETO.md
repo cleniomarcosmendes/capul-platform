@@ -10857,3 +10857,52 @@ pergunta *"o que falta programar?"* e incompleta para a pergunta que importava,
 | dado | ✅ ENSAIO montado, 325 de 326, conta fechada |
 | **acesso** | 🔴 **as 16 senhas** — achado só agora, e é o comando do §3.1.172 |
 | gente | ✅ a skill; o ensaio de HLG com pessoas é outro, e depende do Marco |
+
+---
+
+### 3.1.174. 🔴 ERRO MEU — entreguei comando de bash para um terminal PowerShell
+
+O Clenio tentou rodar o reset e o PowerShell recusou:
+
+```
+Operador '<' reservado para uso futuro.
+```
+
+⚠️ **O PS 5.1 não tem redireção de entrada**, e isso está registrado na memória
+do projeto (`feedback_powershell_heredoc`) desde antes deste módulo existir. Eu
+escrevi o comando no formato do terminal em que EU trabalho.
+
+⭐ **É a mesma classe de 13/09 num terceiro lugar** (§3.1.169): *o comando é
+escrito com o ambiente que quem escreve tem na cabeça.* Não foi
+desconhecimento — a regra estava escrita; foi o modelo mental de quem digitava.
+
+#### E havia um segundo defeito, pior, que o primeiro escondia
+
+Se ele tivesse contornado com um `|`, teria falhado de novo — e de forma mais
+confusa: **eu usei `⚠_autenticam_pelo_portal` como NOME DE COLUNA.** O pipe do
+PS 5.1 **reencoda** o texto, e o alias não-ASCII quebraria o SQL depois de o
+comando parecer certo.
+
+⚠️ Trocado por ASCII puro (`ATENCAO_autenticam_pelo_portal`). **Enfeite em
+comentário é enfeite; enfeite em identificador é dependência de encoding.**
+
+#### A saída, e ela vale para todo SQL entregue daqui em diante
+
+```
+docker cp <arquivo> capul-db:/tmp/x.sql
+docker compose exec postgres psql -U capul_user -d capul_platform -f /tmp/x.sql
+docker compose exec postgres rm /tmp/x.sql
+```
+
+⭐ **`docker cp` copia BYTES** — não passa por pipe, não reencoda, e funciona
+igual nos dois terminais. ⚠️ E o container é **`capul-db`**, não
+`capul-postgres`: conferido com `docker compose ps`, porque nome de container
+lembrado de cabeça é a próxima linha que falha.
+
+**Testado nesta forma exata, com ROLLBACK**, antes de reentregar: `16 contas ·
+0 pelo portal · 0 inativas · UPDATE 16 · senhas_trocadas 16`. Os dois SQL de
+ensaio (reset e limpeza) trazem as duas formas no cabeçalho.
+
+⚠️ **A conferência dos logins fica comigo, e é divisão de propósito:** o ATO é
+do Clenio (é mutação, e autoria importa); a MEDIÇÃO é minha (é leitura, não tem
+autoria, e o `.sh` não roda no PowerShell dele).

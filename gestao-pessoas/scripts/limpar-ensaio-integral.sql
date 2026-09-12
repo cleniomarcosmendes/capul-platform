@@ -11,8 +11,16 @@
 -- se os dois retratos baterem, a limpeza fechou.
 --
 -- ── COMO RODAR ──────────────────────────────────────────────────────────────
---   docker compose exec -T postgres psql -U capul_user -d capul_platform \
---     -f /dev/stdin < gestao-pessoas/scripts/limpar-ensaio-integral.sql
+--
+-- ⚠️ NO POWERSHELL (5.1): **não use `<`** — ele não tem redireção de entrada, e
+-- o `|` dele REENCODA o texto (estragaria acentos). `docker cp` copia BYTES:
+--
+--   docker cp gestao-pessoas\scripts\limpar-ensaio-integral.sql capul-db:/tmp/limpar.sql
+--   docker compose exec postgres psql -U capul_user -d capul_platform -f /tmp/limpar.sql
+--   docker compose exec postgres rm /tmp/limpar.sql
+--
+-- (No bash/WSL: `docker compose exec -T postgres psql -U capul_user \
+--  -d capul_platform < gestao-pessoas/scripts/limpar-ensaio-integral.sql`)
 --
 -- ⚠️ Ela é uma TRANSAÇÃO ÚNICA e imprime as contagens antes de confirmar. Se
 -- algum número surpreender, dê ROLLBACK em vez de COMMIT.
