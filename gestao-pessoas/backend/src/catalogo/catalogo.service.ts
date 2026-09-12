@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { resolverRegistrado } from '../calculo/resolvers/registry.js';
 import { carregarArranjo } from '../arranjo/carregar-arranjo.js';
+import { percentuaisQueFecham } from '../common/percentual.js';
 import { NotFoundException } from '@nestjs/common';
 
 export interface VersaoDeModelo {
@@ -200,6 +201,8 @@ export class CatalogoService {
       porClassificacao.set(q.classificacaoId, [...(porClassificacao.get(q.classificacaoId) ?? []), q]);
     }
 
+    const percentuaisDosGrupos = percentuaisQueFecham(a.grupos.map((g) => g.peso));
+
     return {
       modeloId: a.modeloId,
       modeloNome: a.modeloNome,
@@ -216,7 +219,11 @@ export class CatalogoService {
       totalPerguntas: a.questoes.length,
       totalAlternativas: a.questoes.reduce((s, q) => s + q.alternativas.length, 0),
       aplicacoesQueUsam: a.aplicacoesQueUsam,
-      grupos: a.grupos.map((g) => ({
+      // ⚠️ `percentuaisQueFecham`, não `(peso / soma) × 100` por item: com
+      // 16/10/34 sobre 60 a coluna somava 100,01. Achado ao escrever o
+      // validador do arranjo em 12/09, e valia aqui desde sempre — a mesma
+      // função serve as duas telas, senão elas divergem no primeiro perfil novo.
+      grupos: a.grupos.map((g, i) => ({
         id: g.classificacaoId,
         titulo: g.titulo,
         ordem: g.ordem,
@@ -224,7 +231,7 @@ export class CatalogoService {
         // soma dos pesos das perguntas. Os dois números coincidem — a soma dos
         // derivados fecha exata, por construção —, mas o que manda é este.
         pesoTotal: g.peso,
-        percentual: a.somaDosPesos > 0 ? (g.peso / a.somaDosPesos) * 100 : 0,
+        percentual: percentuaisDosGrupos[i],
         perguntas: (porClassificacao.get(g.classificacaoId) ?? []).map((q) => ({
           id: q.id,
           enunciado: q.enunciado,
