@@ -1,5 +1,4 @@
 import {
-  IsBoolean,
   IsEnum,
   IsInt,
   IsNumber,
@@ -13,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { BooleanoEstrito } from '../common/booleano-estrito.js';
 
 export class CriterioDto {
   /**
@@ -45,14 +45,14 @@ export class CriterioDto {
   @IsOptional() @IsString() @MaxLength(40) codigoCalculo?: string | null;
 
   @IsOptional() @IsString() @MaxLength(20) unidade?: string;
-  @IsOptional() @IsBoolean() ativo?: boolean;
+  @IsOptional() @BooleanoEstrito() ativo?: boolean;
 }
 
 export class FaixaDto {
   @IsOptional() @IsNumber() limiteInferior?: number | null;
   @IsOptional() @IsNumber() limiteSuperior?: number | null;
-  @IsOptional() @IsBoolean() inclusivoInf?: boolean;
-  @IsOptional() @IsBoolean() inclusivoSup?: boolean;
+  @IsOptional() @BooleanoEstrito() inclusivoInf?: boolean;
+  @IsOptional() @BooleanoEstrito() inclusivoSup?: boolean;
   @IsOptional() @IsString() @MaxLength(20) valorDominio?: string | null;
 
   @IsNumber() @Min(0) @Max(100) pontuacao!: number;
@@ -76,5 +76,5 @@ export class FaixasDto {
    * A API recusa e diz o que se perde; a tela pergunta e reenvia com este campo.
    * Ver `feedback_api_recusa_para_a_tela_perguntar` — recusa COM o dado.
    */
-  @IsOptional() @IsBoolean() confirmarSemFaixas?: boolean;
+  @IsOptional() @BooleanoEstrito() confirmarSemFaixas?: boolean;
 }

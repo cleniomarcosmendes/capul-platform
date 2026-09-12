@@ -1,11 +1,12 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Delete } from '@nestjs/common';
-import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { DesignacaoService } from './designacao.service.js';
 import { MOTIVO_MINIMO } from '../common/motivo.js';
+import { BooleanoEstrito } from '../common/booleano-estrito.js';
 
 export class DecidirDto {
   @IsString() colaboradorId!: string;
@@ -19,7 +20,7 @@ export class DesignarDto {
   @IsString() avaliadoId!: string;
   @IsString() avaliadorId!: string;
   /** Trocar o avaliador de avaliação já respondida — só com confirmação. */
-  @IsOptional() @IsBoolean() confirmarTrocaDeAvaliador?: boolean;
+  @IsOptional() @BooleanoEstrito() confirmarTrocaDeAvaliador?: boolean;
 }
 
 export class PreviaDaDesignacaoDto {
@@ -33,12 +34,12 @@ export class CopiarDoCadastroDto {
    * importação da planilha — mil linhas conferidas depois de gravadas não são
    * conferidas.
    */
-  @IsOptional() @IsBoolean() aplicar?: boolean;
+  @IsOptional() @BooleanoEstrito() aplicar?: boolean;
   /**
    * Sem isto, quem o RH já designou À MÃO dentro do ciclo não é tocado: a linha
    * vira `AJUSTE_MANUAL_DO_CICLO` no relatório, com nome. O padrão PRESERVA.
    */
-  @IsOptional() @IsBoolean() substituirManuais?: boolean;
+  @IsOptional() @BooleanoEstrito() substituirManuais?: boolean;
 }
 
 @Controller('designacao')

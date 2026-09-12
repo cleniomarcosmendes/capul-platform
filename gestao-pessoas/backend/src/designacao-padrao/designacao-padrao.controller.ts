@@ -5,11 +5,12 @@
  */
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
-import { ArrayNotEmpty, IsArray, IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { DesignacaoPadraoService } from './designacao-padrao.service.js';
+import { BooleanoEstrito } from '../common/booleano-estrito.js';
 
 export class DesignarDto {
   @IsString() avaliadorId!: string;
@@ -30,7 +31,7 @@ export class PlanilhaDto {
    * prévia com nome e as duas pontas, para ela decidir. Ligar é dizer "pode
    * passar por cima do que foi ajustado à mão".
    */
-  @IsOptional() @IsBoolean() substituirAjustesManuais?: boolean;
+  @IsOptional() @BooleanoEstrito() substituirAjustesManuais?: boolean;
 }
 
 export class ImportarDto extends PlanilhaDto {
@@ -40,7 +41,7 @@ export class ImportarDto extends PlanilhaDto {
    * Padrão `true`. Passar `false` é afirmar que esta lista é a decisão do RH
    * sobre quem avalia quem — não o palpite de quem conhece a estrutura.
    */
-  @IsOptional() @IsBoolean() provisorio?: boolean;
+  @IsOptional() @BooleanoEstrito() provisorio?: boolean;
 }
 
 @Controller('designacao-padrao')

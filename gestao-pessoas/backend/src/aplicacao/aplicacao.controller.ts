@@ -1,11 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { AplicacaoService } from './aplicacao.service.js';
+import { BooleanoEstrito } from '../common/booleano-estrito.js';
 
 export class CriterioDaAplicacaoDto {
   @IsString() criterioId!: string;
@@ -57,7 +58,7 @@ export class AlvoDoPublicoDto {
    * Padrão `true`, como na importação de avaliadores: recorte montado por quem
    * conhece a estrutura não é o público que o RH confirmou.
    */
-  @IsOptional() @IsBoolean() provisorio?: boolean;
+  @IsOptional() @BooleanoEstrito() provisorio?: boolean;
 }
 
 @Controller('aplicacoes')
