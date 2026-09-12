@@ -8728,6 +8728,20 @@ para isso.
 
 ⛔ **O `Piloto 15/09` continua em 894 PENDENTE, 0 respostas, e NÃO participa.**
 
+#### 1-bis. ⭐⭐ O ROTEIRO DO ENSAIO TERMINA NA DEVOLUTIVA — a skill APERTA O BOTÃO
+
+Decidido em 12/09 (§3.1.138): **a devolutiva é ato do RH, nunca automática na
+apuração.** Logo ela é um **passo numerado do roteiro do ensaio**, não um efeito
+que acontece sozinho:
+
+> **… → apurar → conferir o resultado → LIBERAR A DEVOLUTIVA (a skill clica) →
+> abrir como o colaborador e ver o que ele vê.**
+
+⚠️ Sem esse passo o ensaio **termina no resultado**, e o último trecho do
+processo — o único que o colaborador enxerga — seria percorrido pela primeira
+vez por gente real. É a [[feedback_passo_nunca_percorrido]] com nome e data: em
+09/09 a única etapa nunca percorrida rendeu **9 dos 18 defeitos**.
+
 #### 2. ⭐⭐ O que o ensaio da skill NÃO valida — são DOIS ensaios, não um
 
 > **O da skill valida o SISTEMA. O de HLG valida as PESSOAS.**
@@ -8897,3 +8911,173 @@ vê um espaço reservado a uma mensagem e conclui que ela existe e não veio.
 rótulo ("Atende", "Supera"), e é o que a devolutiva mostra. Se um dia o RH
 quiser a mensagem longa, ela entra como cadastro **com os textos já escritos**,
 nunca como campo vazio esperando alguém.
+
+---
+
+### 3.1.138. ⭐⭐ DECISÃO — A DEVOLUTIVA É ATO DO RH, nunca automática na apuração
+
+**Decidido em 12/09/2026 pelo Clenio.** A apuração calcula; **quem libera para o
+colaborador ver é a Arielly, num ato explícito.** Dois motivos, e o segundo é o
+que fecha a questão:
+
+1. Ela precisa **conferir antes** de o colaborador ver.
+2. **A apuração é REVERSÍVEL** — reapurar é rotina (mudou peso, corrigiu
+   critério). Devolutiva automática entregaria número que ainda vai mudar, e
+   *retirar* o que a pessoa já viu não existe.
+
+#### Consequência para o portão de liberação (§3.1.134)
+
+⚠️ **O roteiro do ensaio integral ganha um passo: a skill APERTA O BOTÃO da
+devolutiva.** Sem ele o ensaio termina no resultado e não na devolutiva — e o
+último passo do processo, o único que o colaborador enxerga, ficaria sendo
+percorrido pela primeira vez por gente real. É exatamente a
+[[feedback_passo_nunca_percorrido]]: o passo nunca percorrido rendeu 9 dos 18
+defeitos de 09/09.
+
+#### As duas perguntas que decorrem — respondidas
+
+**(a) Libera em LOTE ou uma a uma?** → **Em lote, e cabe no padrão que já
+existe.** A prévia de aplicação e a devolução da fila (`devolverParaFila`) já
+são "mostra o recorte → confirma → grava por id", com a regra da
+[[feedback_previa_grava_o_que_mostrou]]: **o `Aplicar` grava os ids que a prévia
+MOSTROU**, nunca recalcula o alvo no clique. A devolutiva entra igual: prévia
+por ciclo/aplicação, confirmação, gravação por id.
+
+⚠️ Uma a uma **também** precisa existir, mas não como modo principal: é para a
+correção pontual (uma pessoa cuja apuração foi refeita depois da liberação).
+
+**(b) O que acontece se uma avaliação já devolvida for REABERTA depois?**
+
+| | |
+|---|---|
+| **O que o sistema deveria fazer** | Recusar, ou reabrir **avisando que a pessoa já viu o resultado** — e registrar que viu. |
+| **O que ele faz hoje** | **Nada. Não há guarda.** |
+
+E há um obstáculo de modelagem que precisa estar escrito antes de alguém
+implementar:
+
+> ⛔ **`devolutiva_em` NÃO pode morar em `resultado_avaliacao`.** O `reabrir`
+> **APAGA** o `ResultadoAvaliacao` (é o que o `efeitoDaReabertura` anuncia: a
+> nota que vai ser apagada). O fato *"ela já viu"* seria deletado junto com a
+> linha — e some justamente no ato contra o qual ele existe para avisar.
+
+Colunas de hoje: `id, ciclo_id, avaliacao_id, colaborador_id, nota_avaliacao,
+peso_avaliacao, nota_criterios, nota_final, conceito_id, conceito_descricao,
+houve_renormalizacao, calculado_em`. **Nenhuma de devolutiva.** O carimbo tem de
+ficar em `Avaliacao` (que sobrevive à reabertura) ou numa tabela de eventos.
+
+**Custo da guarda: ~4h** — coluna em `Avaliacao` + migration, o carimbo no ato de
+liberar, e a recusa/aviso no `reabrir` dizendo **quantas** das alvo já foram
+devolvidas (o padrão da [[feedback_api_recusa_para_a_tela_perguntar]]).
+
+---
+
+### 3.1.139. ⭐⭐ A REGRA CURTA — consulta que decide se algo está pronto não se escreve à mão no terminal
+
+> **Consulta que decide se algo está pronto não se escreve à mão no terminal.**
+> Ou passa pelo `conferir-estado.ts`, ou passa por uma view que um invariante
+> prende à constante.
+
+**Gatilho:** toda vez que eu for medir estado para dizer "pode abrir", "está
+pronto", "N pessoas conseguem entrar". Nasceu do §3.1.136 — escrevi
+`situacao = 'ATIVO'` num terminal e quase reportei 2 de 16 avaliadores travados;
+eram férias e afastado, que `SITUACOES_ELEGIVEIS` inclui. **16 de 16.**
+
+O que torna o SQL de terminal pior que o mesmo erro no código: a constante
+existe e **não dá para importar**; **nenhum teste varre**, porque a query nem
+está no repositório; e o sintoma é a conta **parecer** medir.
+
+As duas peças construídas (~4h, 12/09):
+
+| Peça | O que garante |
+|---|---|
+| `src/scripts/conferir-estado.ts` | Importa `SITUACOES_ELEGIVEIS`, `STATUS_VIVOS`, `MODULO` e `avaliacaoConta`. Mora em `src/` e roda do `dist/` — **sem `ts-node`**: import quebrado quebra o BUILD. Só leitura. |
+| `rh.v_colaborador_elegivel` + `regua-em-sql.invariante.spec.ts` | A view carrega a régua em SQL; o invariante **lê o arquivo da migration** e exige que a lista literal seja igual a `SITUACOES_ELEGIVEIS`. Validado por mutação (tirar `FERIAS` reprova). |
+
+Estado medido pelo script no `ENSAIO PILOTO`: **344 no público · 344 elegíveis ·
+325 avaliações · 19 sem avaliação criada · 16/16 avaliadores entram · 5
+conceitos.**
+
+---
+
+### 3.1.140. ✅ SMTP — EXISTE e está configurado. A notificação NÃO depende do Marco
+
+**Pergunta do Clenio, antes de gastar 3–5 dias:** o ambiente tem servidor de
+e-mail? Algum módulo envia? Há variável de ambiente?
+
+**Resposta: sim, sim e sim.**
+
+| | |
+|---|---|
+| Variáveis | `SMTP_HOST=smtp.capul.com.br`, `SMTP_PORT=587`, `SMTP_USER=clenio@capul.com.br`, `SMTP_FROM` — mais `SAC_SMTP_*` (greenmail no DEV) |
+| Quem já envia | `auth-gateway/src/email/email.service.ts` (nodemailer), com `POST /api/v1/internal/email/send`; e o Fiscal |
+| `gestao-pessoas/backend` | **não tem nodemailer** — é o que falta escrever |
+
+⚠️ Duas coisas para decidir na hora de construir, não agora:
+
+1. **Enviar direto ou pelo auth-gateway?** A rota interna dele está `@Public()`.
+   Reusar é mais barato; mandar direto do módulo evita depender de uma rota
+   aberta. **A recomendação é reusar** — o auth-gateway já resolve credencial e
+   `SMTP_FROM`, e duplicar configuração de e-mail é a fonte-única pelo avesso.
+2. **Endereço de quem recebe.** É o gargalo real, não o SMTP: o
+   `rh.colaborador` vem do Protheus e **o e-mail nem sempre existe**. Medir
+   quantos dos avaliadores do ensaio têm e-mail é pré-requisito da notificação
+   — mandar para 60% e não dizer isso é o mesmo defeito do
+   [[feedback_designar_nao_da_acesso]].
+
+**Conclusão: a notificação não está bloqueada por dependência externa.** O que
+ela precisa é da medição do item 2.
+
+---
+
+### 3.1.141. 🔴 A DISPENSA É POR NOME DE ARQUIVO — e o texto dela envelhece sozinho
+
+Ao pôr o `conferir-estado.ts` em `src/`, ele entrou na varredura de dois
+invariantes e **reprovou nos dois** — as guardas funcionaram. ⚠️ Registre o
+motivo de a suíte estar verde antes: o script morava em `scripts/`, **fora da
+raiz varrida**. Ferramenta fora de `src/` é ferramenta fora de toda invariante
+do módulo.
+
+O reparo do segundo abriu um achado maior:
+
+> **A lista de dispensados da separação de funções dispensa por NOME DE
+> ARQUIVO. O arquivo cresce; o texto da dispensa fica dizendo o que era verdade
+> no dia em que foi escrito.**
+
+Três casos da mesma família, e o próprio arquivo já documentava o primeiro:
+
+| Arquivo | O que a dispensa afirmava | O que o arquivo faz |
+|---|---|---|
+| `resultado.service.ts` | "na tela a própria linha aparece marcada" (11/09) | o CSV omitia e a tela mostrava nota, conceito e memória |
+| `ciclo.service.ts` | **"só CONTA avaliações pendentes"** | `previaDaDevolucao` e `devolverParaFila` — **leem e REABREM** |
+| `painel.service.ts` | **"só CONTA — groupBy…"** | um `findMany` buscando `avaliadorId` |
+
+**Nenhum dos dois novos é furo**, e as duas dispensas foram reescritas dizendo o
+que o código faz:
+
+- **`ciclo.service`** — a devolução é **em LOTE, por ciclo, sem recorte por
+  pessoa** (mesma forma da `apuracao.service`, a exceção já acordada). Ninguém
+  consegue MIRAR a própria linha: o alvo é `CANCELADA + origem=ENCERRAMENTO` do
+  ciclo inteiro. E devolver a avaliação de quem é o **avaliado** não lhe dá
+  acesso a nada — devolve o trabalho para a fila do **avaliador** dele.
+- **`painel.service`** — lê `avaliadorId` para pôr NOME em quem apontou "não é
+  minha equipe": chave estrangeira virando pessoa, não conteúdo de avaliação.
+
+#### A contramedida: a frase virou conta
+
+⭐ *"agregado, não lê o conteúdo de ninguém"* é a frase mais repetida da lista —
+e era **afirmação sobre o código que nada conferia**. Agora a lista tem duas
+categorias:
+
+| | |
+|---|---|
+| **`SO_AGREGA`** | quem se justifica pela frase. **A máquina cobra**: em `prisma.avaliacao`, só `count`/`groupBy`/`aggregate`. Hoje: `aplicacao.service` e `conferir-estado`. |
+| Lista em prosa | quem lê linha, com o motivo escrito por extenso — honesto, e **continua sem verificação**. |
+
+Canário incluído (a forma distingue `findMany` de `groupBy`) e validado por
+mutação: pôr `ciclo.service` em `SO_AGREGA` reprova, e a mutação foi conferida
+como entrada antes de ler o resultado (§3.1.113).
+
+É a mesma lição do §3.1.85 num lugar novo: **a contramedida não é o aviso — é a
+conta.** Aqui o "aviso" era o texto da própria dispensa, que é o lugar mais
+persuasivo possível para uma afirmação falsa morar.
