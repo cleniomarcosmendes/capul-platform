@@ -10906,3 +10906,66 @@ ensaio (reset e limpeza) trazem as duas formas no cabeçalho.
 ⚠️ **A conferência dos logins fica comigo, e é divisão de propósito:** o ATO é
 do Clenio (é mutação, e autoria importa); a MEDIÇÃO é minha (é leitura, não tem
 autoria, e o `.sh` não roda no PowerShell dele).
+
+---
+
+### 3.1.175. ✅ AS 16 SENHAS RESETADAS — e um FALSO VERMELHO meu no caminho
+
+O Clenio aplicou `resetar-senhas-ensaio.sql` na conta dele em 13/09:
+`16 contas · 0 pelo portal · 0 inativas · UPDATE 16 · senhas_trocadas 16 ·
+COMMIT`. **A autoria da mutação é dele**, como manda a regra.
+
+#### 🔴 A primeira conferência disse "6 NÃO ENTRAM" — e era mentira
+
+Meu script disparou os 16 logins seguidos. `/auth/login` é limitado a **10 por
+minuto** (`@Throttle` no controller): **10 passaram e as 6 últimas tomaram 429**.
+O script leu "sem token" e imprimiu **NÃO ENTRA**.
+
+⚠️ **`feedback_throttle_smoke_login` já estava escrito na memória do projeto.**
+É a segunda regra registrada que eu quebro no mesmo dia — a outra foi o
+PowerShell.
+
+⭐⭐ **E o custo do falso vermelho é o pior de todos**: eu ia reportar *"6 das 16
+contas do ensaio estão quebradas"*. Isso mandaria o Clenio investigar 6 contas
+boas, ou pior — mandaria refazer o reset que tinha acabado de funcionar.
+*Falso vermelho destrói a ferramenta*, e desta vez a ferramenta era a confiança
+no reset que ele mesmo acabara de rodar.
+
+**O que salvou:** eu não reportei. A discrepância (`UPDATE 16` mas 6 falhando)
+não fechava, e conferir **uma sozinha** deu `429` na cara.
+
+> ⭐ **A regra que sai: 429 não é "não entra" — é "não perguntei direito".** O
+> script agora tem rótulo próprio (`⏳ THROTTLE`), separado de `⛔`, para que o
+> número nunca mais se confunda com o fato.
+
+#### A conferência com ritmo — 16 de 16
+
+7s entre logins (≈2 min no total). **Todas entram, e todas passam o
+`IdentidadeGuard`** — o script não para no `/auth/login`: chama
+`GET /avaliacoes/minhas` e só conta como ✅ quem recebe 200.
+
+#### ⚠️ E a fila expôs o próximo pré-requisito
+
+As filas que apareceram **não são do ENSAIO**: são do `Piloto 15/09` e do
+`ZZ ENCERRA2`. Cinco contas aparecem com **fila vazia**.
+
+> **O `ENSAIO PILOTO — 16 CCs` está em RASCUNHO, e a fila só mostra ciclo
+> ABERTO.** Enquanto ele não for aberto, as 325 avaliações não existem para
+> ninguém — o ensaio integral **começa por abrir o ciclo**, e isso é ato do
+> RH_ADMIN.
+
+⚠️ Some-se a isso o que já estava dito: **o Piloto 15/09 tem 894 avaliações nas
+mesmas filas.** A skill vai ver as duas listas misturadas quando o ENSAIO abrir,
+e o cartão traz o nome do ciclo justamente para isso (§3.1 do cartão). ⛔ **O
+roteiro precisa dizer, em cada passo, que o ciclo é o ENSAIO** — responder no
+Piloto por engano é o único estrago que a limpeza do ensaio **não** desfaz.
+
+⭐ Aplicando a régua das quatro colunas do §3.1.173 outra vez:
+
+| | |
+|---|---|
+| código | ✅ |
+| dado | ✅ 325 de 326 |
+| acesso | ✅ **16 de 16, medido** |
+| gente | ✅ a skill |
+| ⚠️ **estado** | 🔴 o ENSAIO está em **RASCUNHO** — abrir é o passo 1 do roteiro, e é ato do RH |
