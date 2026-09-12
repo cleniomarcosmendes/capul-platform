@@ -457,6 +457,47 @@ export const criterios = {
       .then((r) => r.data),
 };
 
+// ---------------------------------------------------------------------------
+// O ACERVO — as questões que existem, e onde cada uma é usada.
+// Diferente de `catalogo.instrumento`, que lê UM arranjo por vez: ali as 15
+// questões aparecem como 39 linhas, uma por perfil que as usa.
+// ---------------------------------------------------------------------------
+export interface UsoDaQuestao {
+  modeloVersaoId: string;
+  modeloNome: string;
+  versao: number;
+  publicado: boolean;
+  /**
+   * Peso EFETIVO naquele perfil — o do grupo repartido entre as questões dele
+   * (a mesma regra da avaliação). `null` = arranjo incompleto, não zero.
+   */
+  peso: number | null;
+}
+
+export interface QuestaoDoAcervo {
+  id: string;
+  codigo: string;
+  enunciado: string;
+  ativa: boolean;
+  classificacaoId: string;
+  classificacaoNome: string;
+  alternativas: { id: string; descricao: string; valor: number; ordem: number }[];
+  maiorValor: number;
+  /** Vazio é INFORMAÇÃO: a questão existe e não está em perfil nenhum. */
+  usos: UsoDaQuestao[];
+}
+
+export interface AcervoCompleto {
+  totalQuestoes: number;
+  foraDeTodoPerfil: number;
+  classificacoes: { id: string; nome: string; ordem: number; ativa: boolean; questoes: number }[];
+  questoes: QuestaoDoAcervo[];
+}
+
+export const acervo = {
+  listar: () => rhApi.get<AcervoCompleto>('/acervo').then((r) => r.data),
+};
+
 export interface AplicacaoDoCiclo {
   id: string;
   nome: string;

@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CalendarRange,
   ClipboardList,
+  FileStack,
   FileText,
   LogOut,
   SlidersHorizontal,
@@ -102,6 +103,16 @@ const itens: ItemDoMenu[] = [
    * ler nota** — `/resultados` segue só de `RH_ADMIN`.
    */
   { rotulo: 'Questionários', icone: FileText, para: '/questionarios', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO, ROLES.RH_CICLO] },
+
+  /**
+   * ⭐ IRMÃ da de cima, e a diferença é o RECORTE: "Questionários" mostra UM
+   * perfil por vez (as questões dele, na ordem dele); "Acervo" mostra cada
+   * questão UMA vez, com os perfis que a usam e o peso em cada um.
+   *
+   * ⚠️ Mesmos papéis: ler o instrumento não é ler nota. E o rótulo nomeia o
+   * OBJETO — quando o editor existir, ele não muda.
+   */
+  { rotulo: 'Acervo de questões', icone: FileStack, para: '/acervo', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO, ROLES.RH_CICLO] },
 
   /**
    * ⭐ **Só `RH_ADMIN`** — e a diferença para "Questionários" logo acima é

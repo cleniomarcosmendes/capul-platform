@@ -12,6 +12,7 @@ import PainelPage from './pages/PainelPage';
 import ResultadosPage from './pages/ResultadosPage';
 import InstrumentoPage from './pages/InstrumentoPage';
 import CriteriosPage from './pages/CriteriosPage';
+import AcervoPage from './pages/AcervoPage';
 import NaoEncontradaPage from './pages/NaoEncontradaPage';
 
 /**
@@ -54,6 +55,10 @@ export default function App() {
                 do cadastro de avaliadores: o questionário é da PLATAFORMA e
                 serve a todo ciclo — cada aplicação escolhe uma versão dele. */}
             <Route path="/questionarios" element={<InstrumentoPage />} />
+            {/* O ACERVO — as questões que existem. Irmã da /questionarios, que
+                mostra UM perfil por vez; aqui a questão aparece uma vez só,
+                com os perfis que a usam. */}
+            <Route path="/acervo" element={<AcervoPage />} />
             {/* Cadastro do CATÁLOGO de critérios. Fora de `/ciclos/:id` pelo
                 mesmo motivo dos outros dois cadastros: a régua vale para todo
                 ciclo, e cada aplicação escolhe o PESO dela. */}
