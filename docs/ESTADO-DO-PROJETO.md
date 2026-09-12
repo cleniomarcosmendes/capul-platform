@@ -10969,3 +10969,119 @@ Piloto por engano é o único estrago que a limpeza do ensaio **não** desfaz.
 | acesso | ✅ **16 de 16, medido** |
 | gente | ✅ a skill |
 | ⚠️ **estado** | 🔴 o ENSAIO está em **RASCUNHO** — abrir é o passo 1 do roteiro, e é ato do RH |
+
+---
+
+### 3.1.176. ⭐⭐ REGRA — 429 não é "não entra", é "não perguntei direito"
+
+Generalizada a pedido do Clenio, **para qualquer medição em lote**:
+
+> **Quando uma medição em lote falha, separe o que o ALVO respondeu do que a
+> MEDIÇÃO provocou.** Resposta que a própria pressa produziu não é fato sobre o
+> alvo.
+
+**O caso:** 16 logins seguidos, `/auth/login` limitado a 10/min, e as 6 últimas
+tomaram **429**. O script leu "sem token" e escreveu **NÃO ENTRA** — sobre seis
+contas perfeitas.
+
+⚠️ A família é maior que o throttle. **Toda medição em lote tem respostas que
+falam da medição, não do medido:**
+
+| Resposta | O que ela diz |
+|---|---|
+| **429** | pedi rápido demais |
+| **502 / 503** | o serviço estava subindo — aconteceu duas vezes hoje, no rebuild sem `nginx -s reload` |
+| **404 uniforme em toda a matriz** | a rota não existe (esqueci de rebuildar), não a lógica |
+| timeout | a rede, ou uma consulta cara — não uma recusa |
+
+⭐ **Cada uma precisa de RÓTULO PRÓPRIO no relatório**, nunca do mesmo `⛔` do
+alvo. O script agora imprime `⏳ THROTTLE` separado de `⛔`.
+
+⚠️ **E o sinal barato que pega tudo isso: a conta não fechar.** `UPDATE 16` com
+6 falhando não bate — foi essa aritmética, e não a leitura do erro, que me fez
+conferir uma sozinha. *Conta que não bate detecta ruído de medição tão bem
+quanto detecta furo de guarda.*
+
+---
+
+### 3.1.177. 🔀 A CONVIVÊNCIA ENSAIO × PILOTO — quatro opções, e o que cada uma arrasta
+
+**O problema, e ele é de desenho:** ao abrir o ENSAIO, a Adriana passa a ver
+**84 do Piloto + 91 do ENSAIO** na mesma tela. Responder no Piloto por engano é
+**o único estrago que a limpeza do ensaio NÃO desfaz**. ⭐ O Clenio recusou
+resolver por disciplina da skill — *conferir o nome do ciclo 325 vezes é apostar
+em atenção*.
+
+#### ⛔ Opção 1 — ENCERRAR o Piloto: **descartada, e a razão é decisiva**
+
+**Não existe encerrar sem cancelar.** `encerrar` conta as vivas por
+`STATUS_VIVOS` e recusa; o único caminho adiante é `confirmarPendentes`, que
+**cancela as 894** — as duas metades do mesmo ato, de propósito.
+
+⭐⭐ **O argumento que fecha a questão:** para proteger as 894, essa opção
+**escreve nas 894**. O estado que se quer preservar vira o estado que se muta —
+duas vezes (cancelar e devolver).
+
+E a volta **não é limpa**:
+
+| | |
+|---|---|
+| as 894 voltam a PENDENTE? | ✅ sim — `devolverParaFila` mira `CANCELADA + origem=ENCERRAMENTO` e restaura; com **0 respostas**, todas voltam a **PENDENTE** e as marcas de cancelamento são limpas |
+| o ciclo volta ao estado atual? | ⛔ **não.** `reabrir` grava `reabertoEm`, `reabertoPorId`, `motivoReabertura` — e **NÃO limpa `encerradoEm`**. O Piloto ficaria com cicatriz permanente de "foi encerrado" |
+| a trilha | ganha `ENCERRAR` + `REABRIR` no ciclo, e o motivo escrito em cada uma das 894 |
+| ⚠️ o risco | se a devolução falhar no meio, ou ninguém a rodar, **894 ficam CANCELADAS** — exatamente o estado protegido há três dias |
+
+#### 🟡 Opção 2 — filtro por ciclo na fila: **funciona, mas mexe no que vamos medir**
+
+⭐ **Meia surpresa: o backend JÁ aceita `?cicloId=`** (`GET /avaliacoes/minhas`),
+e **a tela nunca passa** — capacidade sem caminho, de novo.
+
+| | |
+|---|---|
+| custo | ~2h (um `<select>` de ciclo na fila) |
+| ⛔ o que arrasta | **é código novo na tela que o ensaio existe para testar.** Medir a fila logo depois de mexer nela é o que o Clenio recusou, e com razão |
+| ⚠️ e mais | um filtro que **esconde** trabalho é decisão de produto — a fila hoje mostra todos os ciclos de propósito (§3.1 do cartão: com dois ciclos abertos, o nome do ciclo no cartão existe justamente para isso) |
+
+#### ⭐ Opção 3 — Piloto volta a RASCUNHO: **a mais barata, e a que menos toca**
+
+| | |
+|---|---|
+| existe caminho pela API? | ⛔ **não.** Só `abrir` (RASCUNHO→ABERTO) e `reabrir` (ENCERRADO→ABERTO). **É SQL** |
+| o que ela escreve | **uma linha**: `rh.ciclo.status`. ⭐ **Zero escrita nas 894** |
+| o que arrasta | `responder` exige ABERTO → as 894 ficam **inacessíveis** durante o ensaio (é o efeito desejado). `designar` continua permitido (RASCUNHO é operável) — inofensivo |
+| a volta | `UPDATE status='ABERTO'` — ⚠️ **por SQL também**, porque `abrir` pela API sobrescreveria `abertoEm` (hoje `06/09 16:12`) com a data de hoje |
+| ⚠️ o preço | **não deixa trilha.** SQL não passa por `rh.auditoria`: o Piloto some da fila de 53 pessoas e volta, e nada no sistema conta que houve |
+| a mitigação | registrar no ESTADO antes e depois, e conferir com `conferir-estado.js` — que é como as outras mexidas de bancada foram tratadas |
+
+#### 🟢 Opção 4 — **não fazer nada, e ordenar o roteiro** *(a que eu recomendo)*
+
+⚠️ Antes de tudo: **hoje o problema não existe.** O ENSAIO está em RASCUNHO, e
+o conflito só nasce **no instante em que ele for aberto** — que é o passo 1 do
+roteiro, e é seu.
+
+⭐ **A skill não precisa conferir 325 cartões.** A fila é **agrupada por ciclo**,
+com cabeçalho próprio (`agruparPorCiclo`), e o cartão traz o nome do ciclo. O
+roteiro pode dizer **uma vez**: *"trabalhe apenas dentro do bloco `ENSAIO PILOTO
+— 16 CCs`"* — uma verificação por tela, não por cartão.
+
+| | |
+|---|---|
+| custo | **zero** |
+| o que escreve | **nada** |
+| ⚠️ o que arrasta | continua sendo disciplina — mas **de bloco, não de item**, e o agrupamento já existe e vai ser exercitado pelo ensaio |
+
+#### O quadro, para decidir
+
+| | escreve nas 894 | código novo | cicatriz | risco se falhar no meio |
+|---|---|---|---|---|
+| 1 encerrar/reabrir | **sim, 2×** | não | `encerradoEm` + trilha | ⛔ **894 CANCELADAS** |
+| 2 filtro na fila | não | **sim, na tela medida** | não | baixo |
+| 3 → RASCUNHO | **não** | não | nenhuma no dado; **nenhuma trilha** | Piloto fica invisível até alguém voltar |
+| 4 roteiro por bloco | não | não | nenhuma | erro humano, mitigado pelo agrupamento |
+
+⭐ **Minha recomendação: 4, com 3 como rede** — se durante o ensaio a convivência
+se mostrar confusa na prática, o `UPDATE` de uma linha resolve na hora, e é
+reversível na hora. Fazer 3 **antes** de saber que é preciso é pagar
+invisibilidade e ausência de trilha por um risco que talvez não apareça.
+
+⛔ **Nada executado.** A decisão é do Clenio.
