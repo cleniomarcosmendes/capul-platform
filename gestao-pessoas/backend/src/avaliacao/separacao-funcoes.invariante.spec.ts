@@ -52,6 +52,13 @@ const DISPENSADOS: Record<string, string> = {
     '`avaliadorId` das avaliações apontadas como "não é minha equipe", para pôr NOME em quem ' +
     'avisou: é chave estrangeira virando pessoa, não o conteúdo da avaliação. ' +
     '⚠️ Até 12/09/2026 dizia "só CONTA", e esse findMany já existia.',
+  'scripts/conferir-email.ts':
+    'mesma frase do `conferir-estado.ts`, e pelo mesmo motivo: ferramenta de CONFERÊNCIA, só ' +
+    'leitura. Um `groupBy` de `avaliadorId` para saber QUEM avalia no ciclo — precisa da lista ' +
+    'de pessoas, nunca do conteúdo da avaliação de ninguém. Está em SO_AGREGA, então a frase é ' +
+    'cobrada pela máquina. ' +
+    '⚠️ Ele reprovou esta invariante ao nascer, como o irmão — e é assim que tem de ser: ' +
+    'ferramenta que mora em `src/` é ferramenta que as varreduras LEEM (§3.1.147a).',
   'scripts/conferir-estado.ts':
     'ferramenta de CONFERÊNCIA, só leitura: dois groupBy (por status e por avaliador) para dizer ' +
     'quantas existem. Agregado, não lê o conteúdo de ninguém — e não há requisitante para a porta ' +
@@ -90,7 +97,11 @@ const DISPENSADOS: Record<string, string> = {
  * só formas de contagem. Quem lê linha fica na lista de cima, com o motivo
  * escrito por extenso — o que é honesto, e continua sem verificação.
  */
-const SO_AGREGA = ['aplicacao/aplicacao.service.ts', 'scripts/conferir-estado.ts'];
+const SO_AGREGA = [
+  'aplicacao/aplicacao.service.ts',
+  'scripts/conferir-estado.ts',
+  'scripts/conferir-email.ts',
+];
 
 /** Formas de `prisma.avaliacao.X` que NÃO são contagem. */
 const LE_OU_ESCREVE = /prisma\.avaliacao\.(?!count\b|groupBy\b|aggregate\b)([a-zA-Z]+)/g;
