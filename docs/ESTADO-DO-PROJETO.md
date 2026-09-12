@@ -10767,3 +10767,93 @@ estava incompleto.** O ensaio precisa de ACESSO, e acesso não é implementaçã
 
 ⛔ **Não resetei nada** — mexer em 16 contas é decisão do Clenio. É o **único
 item aberto** entre o estado de hoje e o ensaio integral.
+
+---
+
+### 3.1.172. 🔑 RESET DAS 16 SENHAS DO ENSAIO — decisão do Clenio, 13/09
+
+**Decisão dele, e o porquê registrado por ele:**
+
+> contas do **DEV**, senha **local** (`autentica_portal = false`), **não tocam
+> Protheus nem produção** — e **o ensaio integral não roda sem acesso**.
+
+⚠️ **São 16, não 17.** O Clenio pediu *"as 16 + a da Arielly"*; a **Arielly já
+está entre as 16** — ela é `RH_ADMIN` **e** a avaliadora designada de 5 pessoas
+do ENSAIO. Medido antes de escrever o comando: `16 avaliadores distintos, e a
+arielly é um deles`.
+
+⭐ **Ela é o caso mais interessante do ensaio**, e é bom que esteja lá: a mesma
+pessoa libera (como RH) e conduz (como avaliadora) — e **não pode liberar a
+própria**, que é a razão de o segundo `RH_ADMIN` existir.
+
+#### O comando ficou para ELE executar
+
+`gestao-pessoas/scripts/resetar-senhas-ensaio.sql` — *montagem de coisa que fica
+vai na conta de quem decidiu*, a mesma regra do `ehRecorte` e das 348
+designações.
+
+| | |
+|---|---|
+| Senha | `Temp2026` |
+| Hash | gerado **dentro do container do auth-gateway**, com a mesma `bcryptjs` e o mesmo custo 12, conferido com `compareSync` → `true` |
+| `primeiro_acesso` | posto em **`false`** — o reset do Configurador marca `true`, e isso só faria a skill tropeçar num fluxo de troca de senha |
+| Lista | **explícita, por matrícula**, com o nome e o tamanho da fila em comentário |
+
+⚠️ **Lista explícita e não `WHERE avaliador do ciclo`**: um comando que se
+redefine sozinho muda de tamanho quando a designação muda, e este vai ser lido
+meses depois para responder *"quais contas foram mexidas?"*.
+
+⚠️ **Nunca escrever hash "equivalente" à mão**: custo ou algoritmo diferente
+produz login que falha **sem dizer por quê**.
+
+**Ensaiado com ROLLBACK antes de entregar:** `16 contas encontradas · 0
+autenticam pelo portal · 0 inativas · UPDATE 16 · senhas_trocadas 16`.
+
+⚠️ A checagem de `autentica_portal` está no comando **antes** do UPDATE, com a
+instrução de PARAR se não for zero: nessas contas a senha local é ignorada e o
+reset não teria efeito nenhum — o login iria ao Protheus.
+
+#### E a conferência é por LOGIN, não pelo hash
+
+`gestao-pessoas/scripts/conferir-login-ensaio.sh` — roda as 16 e imprime uma
+linha por conta.
+
+⭐ **Ele não para no `/auth/login`.** Entrar no auth não é entrar no módulo: o
+`IdentidadeGuard` ainda exige matrícula que case com colaborador ATIVO. O script
+chama `GET /avaliacoes/minhas` e imprime **o tamanho da fila** — prova de ponta a
+ponta. **Hash certo com conta inativa, sem permissão ou sem colaborador tem o
+mesmo aspecto de sucesso no banco e falha na hora do ensaio.**
+
+---
+
+### 3.1.173. ⭐⭐ LIÇÃO — a lista de pré-requisitos de um portão não é a lista de código
+
+> **"O ensaio precisa de ACESSO, e acesso não é implementação."**
+
+Em §3.1.163 eu respondi *"não falta implementação nenhuma"* — e estava **certo
+sobre implementação e incompleto sobre o portão**. O ensaio integral não rodava,
+e não por falta de código: por falta de **senha**.
+
+⭐ O que torna esta lição diferente das outras do dia: as outras eram portões
+escritos no código com o escopo errado (§3.1.169). Esta é um portão **do
+processo** cuja lista de requisitos eu montei olhando só para o que se
+constrói — e um ensaio precisa de coisas que ninguém compila: **acesso, dados,
+permissão, uma janela, uma pessoa disponível.**
+
+⚠️ **É a mesma forma do §3.1.161 num nível acima**: a lista estava certa para a
+pergunta *"o que falta programar?"* e incompleta para a pergunta que importava,
+*"o que falta para RODAR?"*.
+
+> **Gatilho:** ao declarar um portão desimpedido, listar o que ele precisa em
+> **quatro** colunas — código · **dado** · **acesso** · **gente** — e dizer
+> explicitamente quando alguma está vazia. Três das quatro não se descobrem
+> lendo o repositório.
+
+**O que sobrou depois de aplicar isso ao ensaio integral:**
+
+| | |
+|---|---|
+| código | ✅ nada falta (as 4 etapas da devolutiva) |
+| dado | ✅ ENSAIO montado, 325 de 326, conta fechada |
+| **acesso** | 🔴 **as 16 senhas** — achado só agora, e é o comando do §3.1.172 |
+| gente | ✅ a skill; o ensaio de HLG com pessoas é outro, e depende do Marco |
