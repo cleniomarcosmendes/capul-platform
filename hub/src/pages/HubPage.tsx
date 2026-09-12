@@ -54,6 +54,26 @@ export default function HubPage() {
 
   if (!usuario) return null;
 
+  /**
+   * ⭐ O PRIMEIRO NOME, à prova do dado que vem do Protheus.
+   *
+   * ⚠️ `nome.split(' ')[0]` devolvia STRING VAZIA — "Bem-vindo, !" — para 14 de
+   * 183 contas. Não é bug de código: `core.usuarios.nome` veio do `RA_NOME`,
+   * que é CHAR de largura fixa, e essas 14 entraram com **espaço à esquerda**
+   * (` Arielly Aparecida Jose Pereira    `). O `split(' ')[0]` de uma string
+   * que começa com espaço é `''`.
+   *
+   * Terceira aparição do mesmo sintoma (Rodrigo · Arielly em 10/09 · Arielly em
+   * 12/09), e as duas primeiras foram tratadas como caso isolado porque
+   * `clenio` e `admin` — criadas à mão — nunca reproduzem.
+   *
+   * ⚠️ Os dados foram limpos, mas a defesa fica: a próxima carga em lote pode
+   * trazer o espaço de novo, e o `?? username` garante que a saudação nunca
+   * mais fica sem sujeito.
+   */
+  const primeiroNome =
+    (usuario.nome ?? '').trim().split(/\s+/)[0] || usuario.username || '';
+
   async function handleSwitchFilial(filialId: string) {
     setSwitching(true);
     try {
@@ -120,7 +140,7 @@ export default function HubPage() {
       <main className="max-w-5xl mx-auto px-4 py-12">
         <div className="text-center mb-10">
           <h2 className="text-2xl font-bold text-slate-800">
-            Bem-vindo, {usuario.nome.split(' ')[0]}!
+            Bem-vindo{primeiroNome ? `, ${primeiroNome}` : ''}!
           </h2>
           <p className="text-slate-500 mt-1">
             Selecione o modulo que deseja acessar
