@@ -240,3 +240,78 @@ describe('o efeito de designar, antes de designar', () => {
     });
   });
 });
+
+describe('⭐⭐ INELEGÍVEL não se designa — a guarda que faltava na API (12/09)', () => {
+  const ctx = (over: Record<string, unknown> = {}) => ({
+    avaliadoId: 'p1',
+    nomeDoAvaliado: 'FULANO DE TAL',
+    novoAvaliadorId: 'chefe',
+    novoAvaliadorNome: 'A CHEFE',
+    aplicacaoId: 'app1',
+    ...over,
+  });
+
+  /**
+   * A TELA já impedia — checkbox `disabled={!linha.elegivel}` e o botão
+   * "Definir avaliador" só dentro de `{linha.elegivel && …}`. A API não
+   * checava, e criava avaliação para quem a régua do ciclo excluiu: pessoa
+   * marcada "fora do ciclo" com avaliação viva na fila de alguém.
+   */
+  it('recusa quem a régua do ciclo excluiu, e diz o motivo dela', () => {
+    const e = efeitoDeDesignar(
+      null,
+      ctx({
+        elegibilidadeDoAvaliado: {
+          elegivel: false,
+          justificativa: 'Afastado na data-base do ciclo, e este ciclo está configurado para não incluir afastados.',
+        },
+      }),
+    );
+    expect(e.acao).toBe('RECUSAR');
+    expect(e.frase).toMatch(/está FORA deste ciclo/);
+    expect(e.frase).toMatch(/Afastado na data-base/);
+  });
+
+  /** A recusa aponta o caminho: incluir por decisão registrada, e designar depois. */
+  it('a frase diz COMO avaliar essa pessoa mesmo assim', () => {
+    const e = efeitoDeDesignar(null, ctx({ elegibilidadeDoAvaliado: { elegivel: false } }));
+    expect(e.frase).toMatch(/inclua-a no ciclo pela Designação/);
+    expect(e.frase).toMatch(/justificativa/);
+  });
+
+  it('elegível segue passando', () => {
+    expect(efeitoDeDesignar(null, ctx({ elegibilidadeDoAvaliado: { elegivel: true } })).acao).toBe('CRIAR');
+  });
+
+  /**
+   * ⚠️ `undefined` = quem chamou não resolveu a elegibilidade. A guarda recusa
+   * o que SABE estar fora, nunca o que não conferiu — senão um chamador novo
+   * que esquecesse o campo passaria a barrar todo mundo.
+   */
+  it('sem a elegibilidade resolvida, não opina', () => {
+    expect(efeitoDeDesignar(null, ctx()).acao).toBe('CRIAR');
+  });
+
+  /**
+   * ⭐ A ordem importa: "esta pessoa não está no ciclo" é anterior a "quem
+   * avalia quem". Designar um inelegível para si mesmo é duas coisas erradas, e
+   * a que se diz primeiro é a que se resolve primeiro.
+   */
+  it('inelegível vence a autoavaliação na ordem das recusas', () => {
+    const e = efeitoDeDesignar(
+      null,
+      ctx({ novoAvaliadorId: 'p1', elegibilidadeDoAvaliado: { elegivel: false } }),
+    );
+    expect(e.acao).toBe('RECUSAR');
+    expect(e.frase).toMatch(/FORA deste ciclo/);
+  });
+
+  it('recusa também quando já existe avaliação (o upsert não revive inelegível)', () => {
+    const e = efeitoDeDesignar(
+      { status: 'PENDENTE', respostas: 0, avaliadorId: 'outro', avaliadorNome: 'OUTRO', aplicacaoId: 'app1' },
+      ctx({ elegibilidadeDoAvaliado: { elegivel: false } }),
+    );
+    expect(e.acao).toBe('RECUSAR');
+    expect(e.avaliadorAtual).toBe('OUTRO');
+  });
+});

@@ -95,10 +95,31 @@ export function proximoPasso(e: EstadoDoCiclo): ProximoPasso | null {
         aba: 'aplicacoes',
       };
     }
+    /**
+     * ⭐⭐ "Designe ANTES DE ABRIR" PEDIA O IMPOSSÍVEL — corrigido em 12/09.
+     *
+     * O texto tratava a designação como pré-requisito da abertura. **Não é**:
+     * `problemasParaAbrir` não olha `semDesignacao`, e o ciclo abre com gente
+     * sem avaliador. Ela simplesmente não é avaliada.
+     *
+     * ⚠️ E há um caso em que o passo era **incumprível**: alguém no TOPO da
+     * hierarquia — no ensaio de 12/09, o diretor executivo, que avalia 15
+     * pessoas e não é avaliado por ninguém, porque o presidente não está no
+     * cadastro. O painel mandava designá-lo para sempre, e o único caminho que
+     * o sistema oferece para tirá-lo da conta é a EXCLUSÃO manual, que declara
+     * "foi retirado do ciclo" — que não é o fato. Ver a lista de pendências da
+     * Arielly: falta o conceito de "não avaliado por estar no topo".
+     *
+     * ⭐ O passo passou a dizer as DUAS coisas: o que designar resolve, e o que
+     * acontece se abrir assim. Aviso que pede o impossível ensina a ignorar
+     * avisos — e este é lido em todas as abas do ciclo.
+     */
     if (e.semDesignacao > 0) {
       return {
         codigo: 'DESIGNAR',
-        rotulo: `Sem avaliador neste ciclo: ${e.semDesignacao}. Designe antes de abrir`,
+        rotulo:
+          `Sem avaliador neste ciclo: ${e.semDesignacao}. Designe, ou abra assim — ` +
+          'quem ficar sem avaliador não é avaliado neste ciclo',
         aba: 'designacao',
       };
     }

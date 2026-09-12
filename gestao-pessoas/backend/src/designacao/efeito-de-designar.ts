@@ -121,6 +121,13 @@ export interface ContextoDaDesignacao {
   novoAvaliadorNome?: string | null;
   /** A aplicação para a qual se está designando. */
   aplicacaoId: string;
+  /**
+   * ⭐⭐ A ELEGIBILIDADE DO AVALIADO no ciclo — a régua do ciclo já resolvida,
+   * COM a decisão manual do RH aplicada por cima (ela sobrepõe nos dois
+   * sentidos). `undefined` significa "quem chamou não resolveu", e aí a guarda
+   * não opina: ela recusa o que SABE estar fora, nunca o que não conferiu.
+   */
+  elegibilidadeDoAvaliado?: { elegivel: boolean; justificativa?: string | null };
 }
 
 export function efeitoDeDesignar(
@@ -144,6 +151,47 @@ export function efeitoDeDesignar(
    * comentário proibia, um módulo adiante —, a pergunta e a frase moram agora em
    * `common/autoavaliacao.ts`, que é o que as duas leem.
    */
+  /**
+   * ⭐⭐ INELEGÍVEL NÃO SE DESIGNA — e esta guarda nasceu de um achado, não de
+   * revisão (12/09).
+   *
+   * A TELA já impedia: na Designação o checkbox da linha inelegível é
+   * `disabled={!linha.elegivel}` e o botão "Definir avaliador" só existe dentro
+   * de `{linha.elegivel && …}`. **A API não checava.** `POST …/designar` criava
+   * a avaliação de quem a régua do ciclo tinha excluído, e o resultado era um
+   * estado que a tela não sabe produzir: pessoa marcada "fora do ciclo" com
+   * avaliação viva na fila de alguém.
+   *
+   * ⚠️ É a direção PERMISSIVA de tela × API, que é a silenciosa: ninguém
+   * reclama, nada quebra, e só aparece para quem chama a API direto. Foi assim
+   * que a montagem do ensaio criou 18 delas — e o sintoma que denunciou não foi
+   * um erro, foi a LINHA DE ESTADO parar de fechar (344 − 18 − 1 ≠ 343).
+   *
+   * ⭐ A saída existe e a frase aponta para ela: quem o RH quer avaliar apesar
+   * da régua entra por DECISÃO REGISTRADA (`decidir` → INCLUIR, com
+   * justificativa), não por designar direto. A régua deixa de barrar e a
+   * designação passa a valer — sem estado inventado no caminho.
+   *
+   * ⚠️ Vem ANTES da autoavaliação de propósito: "esta pessoa não está no ciclo"
+   * é anterior a "quem avalia quem". Designar um inelegível para si mesmo é
+   * duas coisas erradas, e a que se diz primeiro é a que se resolve primeiro.
+   */
+  const eleg = ctx.elegibilidadeDoAvaliado;
+  if (eleg && !eleg.elegivel) {
+    return {
+      acao: 'RECUSAR',
+      avaliadorAtual: atual?.avaliadorNome ?? null,
+      estadoAtual: atual ? estadoEmUmaLinha(atual) : null,
+      frase:
+        `${ctx.nomeDoAvaliado} está FORA deste ciclo` +
+        (eleg.justificativa?.trim() ? `: ${eleg.justificativa.trim()}` : '.') +
+        ' Designar criaria uma avaliação para quem a régua do ciclo excluiu — ela entraria na ' +
+        'fila do avaliador e o total do ciclo deixaria de fechar. Para avaliar esta pessoa ' +
+        'mesmo assim, inclua-a no ciclo pela Designação (decisão registrada, com justificativa) ' +
+        'e designe depois.',
+    };
+  }
+
   if (ehAutoavaliacao(ctx.avaliadoId, ctx.novoAvaliadorId)) {
     return {
       acao: 'RECUSAR',

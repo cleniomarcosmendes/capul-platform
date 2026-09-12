@@ -155,7 +155,10 @@ describe('invariante: publico/previa — as duas contas encadeadas fecham', () =
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    service = new AplicacaoService(prisma as never, { registrar: jest.fn() } as never);
+    service = new AplicacaoService(prisma as never, { registrar: jest.fn() } as never,
+      // A régua do cartão — não exercitada por estas specs, que testam
+      // o público e a prévia, não a conciliação.
+      { listar: jest.fn().mockResolvedValue([]) } as never);
     prisma.aplicacao.findUnique.mockResolvedValue({
       id: APP, nome: 'Operação de Loja', cicloId: CICLO, ciclo: { incluirAfastados: false },
     });

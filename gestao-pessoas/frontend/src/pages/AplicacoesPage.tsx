@@ -300,6 +300,32 @@ function CartaoDeAplicacao({
               <p className="text-sm text-slate-700">
                 <strong className="tabular-nums">{aplicacao.publico.total}</strong> {flexao(aplicacao.publico.total, 'pessoa', 'pessoas')}
               </p>
+              {/* ⭐⭐ O CARTÃO CONCILIA — 12/09. Ele mostrava "66 avaliações" e
+                  "67 pessoas" lado a lado e calava sobre a diferença; o painel
+                  dizia, e a aba onde se OLHA o público, não. Família do achado
+                  15 de 10/09.
+                  ⚠️ Os DOIS números, nunca a subtração: `total − avaliações`
+                  mistura quem a régua tirou (correto) com quem ficou sem
+                  avaliador (pendência). Na Operação de Loja do ensaio a
+                  diferença é 14 e as 14 são afastadas — "14 sem avaliador"
+                  inventaria uma pendência que não existe. */}
+              {(aplicacao.publico.foraDoCiclo > 0 || aplicacao.publico.semAvaliador > 0) && (
+                <p className="flex flex-wrap items-center gap-x-2 text-sm">
+                  {aplicacao.publico.foraDoCiclo > 0 && (
+                    <span className="text-slate-500">
+                      <strong className="tabular-nums">{aplicacao.publico.foraDoCiclo}</strong>{' '}
+                      fora do ciclo pela régua — {flexao(aplicacao.publico.foraDoCiclo, 'não é', 'não são')}{' '}
+                      pendência
+                    </span>
+                  )}
+                  {aplicacao.publico.semAvaliador > 0 && (
+                    <span className="text-amber-800">
+                      <strong className="tabular-nums">{aplicacao.publico.semAvaliador}</strong>{' '}
+                      sem avaliador — {flexao(aplicacao.publico.semAvaliador, 'não será avaliada', 'não serão avaliadas')}
+                    </span>
+                  )}
+                </p>
+              )}
               {/* ⚠️ O FATO fica; a AÇÃO muda com o estado (09/09). Com o ciclo
                   encerrado, "precisa da confirmação dele antes da produção"
                   pedia um ato que a própria tela desabilita — "Montar público"

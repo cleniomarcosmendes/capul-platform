@@ -708,6 +708,45 @@ export class DesignacaoService {
    * três chegando aqui como `RECUSAR`. Ver o comentário da regra abaixo: é o
    * defeito silencioso que nasceu dentro deste método.
    */
+  /**
+   * ⭐ A ELEGIBILIDADE DE UMA PESSOA no ciclo — a régua do ciclo com a decisão
+   * manual do RH por cima, que sobrepõe nos dois sentidos.
+   *
+   * ⚠️ Reusa `avaliarElegibilidade`, a MESMA função que a listagem da tela usa.
+   * Uma segunda leitura da régua aqui divergiria da listagem no primeiro
+   * critério novo — e o sintoma seria a tela mostrar a linha como elegível
+   * enquanto o ato a recusa, ou o contrário.
+   */
+  private async elegibilidadeNoCiclo(
+    cicloId: string,
+    avaliado: { id: string; situacao: string },
+  ): Promise<{ elegivel: boolean; justificativa?: string | null }> {
+    const [ciclo, decisao] = await Promise.all([
+      this.prisma.ciclo.findUnique({ where: { id: cicloId }, select: { incluirAfastados: true } }),
+      this.prisma.cicloElegibilidade.findFirst({
+        where: { cicloId, colaboradorId: avaliado.id, removidoEm: null },
+        select: { decisao: true, justificativa: true },
+      }),
+    ]);
+    // A decisão manual SOBREPÕE a régua, nos dois sentidos — a mesma frase do
+    // `listar`, e o mesmo comportamento.
+    if (decisao?.decisao === 'INCLUIR') return { elegivel: true };
+    if (decisao?.decisao === 'EXCLUIR') {
+      return { elegivel: false, justificativa: decisao.justificativa ?? 'Excluído do ciclo pelo RH.' };
+    }
+    const regua = avaliarElegibilidade(
+      {
+        colaboradorId: avaliado.id,
+        matricula: '',
+        nome: '',
+        categoriaFuncional: null,
+        situacaoNaDataBase: avaliado.situacao as never,
+      },
+      { incluirAfastados: ciclo?.incluirAfastados ?? false },
+    );
+    return { elegivel: regua.elegivel, justificativa: regua.justificativa };
+  }
+
   async designar(
     aplicacaoId: string,
     avaliadoId: string,
@@ -772,6 +811,9 @@ export class DesignacaoService {
       {
         avaliadoId,
         nomeDoAvaliado: avaliado.nome,
+        // ⭐ A guarda de elegibilidade mora no classificador, com as outras
+        // três — e por isso a prévia a roda também, sem uma segunda cópia.
+        elegibilidadeDoAvaliado: await this.elegibilidadeNoCiclo(aplicacao.cicloId, avaliado),
         novoAvaliadorId: avaliadorId,
         novoAvaliadorNome: await this.nomeDoColaborador(avaliadorId),
         aplicacaoId,
@@ -1220,7 +1262,11 @@ export class DesignacaoService {
     const [pessoas, avaliacoes, avaliador] = await Promise.all([
       this.prisma.colaborador.findMany({
         where: { id: { in: avaliadoIds } },
-        select: { id: true, nome: true, matricula: true },
+        // ⭐ `situacao` entra para a guarda de ELEGIBILIDADE rodar também na
+        // prévia. Sem ela, a prévia contaria como CRIAR/SUBSTITUIR uma linha
+        // que o ato recusa — a tela autorizando o que a API nega, que é o
+        // defeito do §3.1.32 se repetindo num caso novo.
+        select: { id: true, nome: true, matricula: true, situacao: true },
       }),
       this.prisma.avaliacao.findMany({
         where: { cicloId: aplicacao.cicloId, avaliadoId: { in: avaliadoIds } },
@@ -1263,6 +1309,46 @@ export class DesignacaoService {
       ).map((c) => [c.id, c.nome]),
     );
 
+    /**
+     * A elegibilidade das N pessoas, em DUAS consultas — não uma por pessoa.
+     * A régua é a mesma função da listagem (`avaliarElegibilidade`) e a decisão
+     * manual sobrepõe, como em todo o resto do módulo.
+     */
+    const [cicloDaPrevia, decisoes] = await Promise.all([
+      this.prisma.ciclo.findUnique({
+        where: { id: aplicacao.cicloId },
+        select: { incluirAfastados: true },
+      }),
+      this.prisma.cicloElegibilidade.findMany({
+        where: { cicloId: aplicacao.cicloId, colaboradorId: { in: avaliadoIds }, removidoEm: null },
+        select: { colaboradorId: true, decisao: true, justificativa: true },
+      }),
+    ]);
+    const decisaoPorPessoa = new Map(decisoes.map((d) => [d.colaboradorId, d]));
+    const elegibilidadePorPessoa = new Map(
+      pessoas.map((pessoa) => {
+        const d = decisaoPorPessoa.get(pessoa.id);
+        if (d?.decisao === 'INCLUIR') return [pessoa.id, { elegivel: true }];
+        if (d?.decisao === 'EXCLUIR') {
+          return [
+            pessoa.id,
+            { elegivel: false, justificativa: d.justificativa ?? 'Excluído do ciclo pelo RH.' },
+          ];
+        }
+        const r = avaliarElegibilidade(
+          {
+            colaboradorId: pessoa.id,
+            matricula: pessoa.matricula,
+            nome: pessoa.nome,
+            categoriaFuncional: null,
+            situacaoNaDataBase: pessoa.situacao as never,
+          },
+          { incluirAfastados: cicloDaPrevia?.incluirAfastados ?? false },
+        );
+        return [pessoa.id, { elegivel: r.elegivel, justificativa: r.justificativa }];
+      }),
+    );
+
     const linhas = pessoas
       .map((pessoa) => {
         const atual = porAvaliado.get(pessoa.id);
@@ -1283,6 +1369,7 @@ export class DesignacaoService {
             // recusa — a tela autorizando o que a API nega (§3.1.32).
             avaliadoId: pessoa.id,
             nomeDoAvaliado: pessoa.nome,
+            elegibilidadeDoAvaliado: elegibilidadePorPessoa.get(pessoa.id),
             novoAvaliadorId: avaliadorId,
             novoAvaliadorNome: avaliador?.nome ?? null,
             aplicacaoId,

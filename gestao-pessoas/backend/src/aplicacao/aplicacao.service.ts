@@ -24,6 +24,7 @@ import {
 // ⚠️ A MESMA função que a tela de Designação usa. A prévia não tem — e não pode
 // ter — uma segunda ideia de quem gera avaliação (§3.1.21).
 import { avaliarElegibilidade } from '../designacao/elegibilidade-ciclo.js';
+import { DesignacaoService } from '../designacao/designacao.service.js';
 import { ONDE_A_AVALIACAO_CONTA } from '../avaliacao/avaliacoes-que-contam.js';
 
 export interface DadosAplicacao {
@@ -51,6 +52,12 @@ export class AplicacaoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditoria: AuditoriaService,
+    /**
+     * ⭐ A régua do ciclo vem de quem é dono dela. Sem ciclo de dependência:
+     * `DesignacaoService` não conhece `AplicacaoService` (conferido em 12/09), e
+     * é o mesmo arranjo que o `PainelService` já usa.
+     */
+    private readonly designacao: DesignacaoService,
   ) {}
 
   /**
@@ -348,6 +355,24 @@ export class AplicacaoService {
    * provisório aparecer como provisório na tela, em vez de a gestora achar que
    * a divisão foi decisão de alguém.
    */
+  /**
+   * ⭐⭐ O CARTÃO CONCILIA O PÚBLICO — 12/09.
+   *
+   * Ele mostrava *"66 avaliações"* e *"67 pessoas"* lado a lado e calava sobre
+   * a diferença. Quem lê o público lê AQUI; o painel dizia, e a aba de
+   * Aplicações não. É a família do achado 15 de 10/09 (o cartão calado sobre
+   * canceladas).
+   *
+   * ⚠️ **`público − avaliações` NÃO é "sem avaliador"** — e é por isso que a
+   * conta não podia ser feita na tela. A diferença mistura duas coisas de
+   * naturezas opostas: quem a régua do ciclo tirou (correto, não é pendência) e
+   * quem ficou sem avaliador (pendência de verdade). Na `Operação de Loja` do
+   * ensaio a diferença é 14, e **as 14 são afastadas** — dizer "14 sem
+   * avaliador" seria inventar uma pendência inexistente.
+   *
+   * Então vêm os DOIS números, da MESMA régua que o painel usa
+   * (`designacao.listar`), nunca de uma conta paralela.
+   */
   async listarDoCiclo(cicloId: string) {
     const aplicacoes = await this.prisma.aplicacao.findMany({
       where: { cicloId },
@@ -367,12 +392,27 @@ export class AplicacaoService {
       _count: { _all: true },
     });
 
+    // A régua, uma aplicação por vez — a MESMA `designacao.listar` do painel.
+    const conciliacao = new Map<string, { foraDoCiclo: number; semAvaliador: number }>();
+    for (const a of aplicacoes) {
+      const linhas = await this.designacao.listar(a.id);
+      conciliacao.set(a.id, {
+        foraDoCiclo: linhas.filter((l) => !l.elegivel).length,
+        semAvaliador: linhas.filter((l) => l.elegivel && !l.avaliadorId).length,
+      });
+    }
+
     return aplicacoes.map((a) => {
       const doPublico = origens.filter((o) => o.aplicacaoId === a.id);
+      const c = conciliacao.get(a.id) ?? { foraDoCiclo: 0, semAvaliador: 0 };
       return {
         ...a,
         publico: {
           total: a._count.publico,
+          /** Tirados pela régua do ciclo. NÃO é pendência — é a régua agindo. */
+          foraDoCiclo: c.foraDoCiclo,
+          /** Elegíveis que ninguém avalia. ESTA é a pendência. */
+          semAvaliador: c.semAvaliador,
           origens: doPublico
             .map((o) => ({
               origem: o.origem as string,

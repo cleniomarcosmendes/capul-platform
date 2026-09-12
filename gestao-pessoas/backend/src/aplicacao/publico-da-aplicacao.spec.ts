@@ -50,7 +50,9 @@ describe('AplicacaoService — público nominal', () => {
   beforeEach(() => {
     prisma = createPrismaMock();
     auditoria = { registrar: jest.fn().mockResolvedValue(undefined) };
-    service = new AplicacaoService(prisma as never, auditoria as never);
+    service = new AplicacaoService(prisma as never, auditoria as never,
+      // A régua do cartão — não exercitada aqui.
+      { listar: jest.fn().mockResolvedValue([]) } as never);
   });
 
   describe('prévia do atalho', () => {
@@ -242,7 +244,10 @@ describe('prévia: entrar no público ≠ gerar avaliação', () => {
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    service = new AplicacaoService(prisma as never, { registrar: jest.fn() } as never);
+    service = new AplicacaoService(prisma as never, { registrar: jest.fn() } as never,
+      // A régua do cartão — não exercitada por estas specs, que testam
+      // o público e a prévia, não a conciliação.
+      { listar: jest.fn().mockResolvedValue([]) } as never);
   });
 
   it('todos ativos: os dois números batem', async () => {

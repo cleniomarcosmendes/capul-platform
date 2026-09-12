@@ -468,6 +468,12 @@ export interface AplicacaoDoCiclo {
   /** O público NOMINAL, com a quebra de onde cada pedaço veio. */
   publico: {
     total: number;
+    /**
+     * ⚠️ Os DOIS, e não a diferença: `total − avaliações` mistura quem a régua
+     * do ciclo tirou (correto) com quem ficou sem avaliador (pendência).
+     */
+    foraDoCiclo: number;
+    semAvaliador: number;
     origens: { origem: string; referencia: string | null; provisorio: boolean; pessoas: number }[];
     /** true quando alguma referência se declara provisória. */
     provisorio: boolean;
