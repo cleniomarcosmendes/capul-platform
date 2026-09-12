@@ -130,8 +130,11 @@ export class ClassificacaoService {
     const faltando = existentes.length !== ids.length || ids.some((i) => !conhecidos.has(i));
     if (faltando) {
       throw new BadRequestException(
-        `A nova ordem precisa citar as ${existentes.length} classificações, uma vez cada. ` +
-          `Vieram ${ids.length}. Reordenar pela metade deixaria duas na mesma posição.`,
+        // ⚠️ Lido com 1: "citar as 1 classificações" quebraria. O número sai
+        // do meio da frase e vira rótulo.
+        'A nova ordem precisa citar cada classificação uma vez. ' +
+          `No cadastro: ${existentes.length}. Vieram: ${ids.length}. ` +
+          'Reordenar pela metade deixaria duas na mesma posição.',
       );
     }
     if (new Set(ids).size !== ids.length) {
