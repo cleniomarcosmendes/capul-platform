@@ -5429,12 +5429,28 @@ para montar a aplicação inteira sobre um modelo de demonstração e descobrir 
 | Checagem | Momento | Chega a tempo? |
 |---|---|---|
 | conferência de pendências (`SEM_FAIXA`, `SEM_VALOR_INFORMADO`, `SEM_DADO_CADASTRAL`) | sobre `ENVIADA` | 🔴 **era a única restante** — agora pareada com o aviso da abertura |
-| guarda do `[DEMO]` | abertura **+ criar/editar aplicação** | ✅ `validarAplicacao` roda nos três, com `modeloFinalidade` |
+| guarda do `[DEMO]` | abertura **+ criar/editar aplicação** | ⚠️ **CORRIGIDO EM 12/09 — ver abaixo** |
 | resolver registrado | montagem da Aplicação **+** abertura | ✅ dois momentos, por desenho |
 | peso, público vazio, critério duplicado | criar/editar **+** abertura | ✅ |
 
 **Nenhuma outra.** Registrado como tabela porque a pergunta *"quais chegam a tempo"* vale mais que
 a correção: a próxima varredura começa daqui.
+
+> ### ⚠️ CORREÇÃO DESTE REGISTRO (12/09/2026)
+>
+> A linha do `[DEMO]` estava **errada pela metade**, e o erro é de método: eu varri os **momentos
+> da API** e escrevi "chega a tempo" a partir deles. A pergunta é *"chega a tempo para QUEM?"* — e
+> quem precisa da resposta é a pessoa na tela.
+>
+> A guarda de fato roda em três pontos da API. **Na TELA ela chega tarde:** o `<option>` do modelo
+> de DEMONSTRAÇÃO continuava **selecionável**, com o aviso escrito sob o rótulo do campo. A pessoa
+> escolhia o [DEMO], nomeava a aplicação, distribuía os pesos entre os critérios — e a recusa
+> chegava no **Salvar**. O aviso existia; o clique não era impedido.
+>
+> ⭐ **Aviso que não impede o clique não chega antes: chega junto com o trabalho perdido.** Uma
+> varredura de "chega a tempo" que só olha o backend responde a pergunta errada — e passou por
+> revisão minha em 11/09 sem que eu notasse, porque eu estava contando pontos de validação em vez
+> de percorrer a tela. Corrigido em 12/09 (§3.1.105): a opção é `disabled`, e o rótulo diz por quê.
 
 #### O que foi feito
 
@@ -7516,3 +7532,117 @@ quatro últimas). **Nenhuma descartável.**
 **Os 44 pesos dos perfis reais: 0 divergências.** Máximas 72 · 72 · 72 · 60, somas 60 · 60 · 60 · 50.
 
 **Piloto: 894 PENDENTE, 0 respostas. ENSAIO: RASCUNHO, 325 — não abrir.**
+
+---
+
+### 3.1.104. ⭐⭐ DIVERGÊNCIA TELA × API — as DUAS direções, e qual delas é silenciosa
+
+Os dois achados são da mesma família e chegaram com dois dias de diferença. **Registrados juntos
+porque separados eles parecem casos isolados, e juntos eles descrevem uma classe.**
+
+| | Direção | Caso | O que acontece | Quem descobre |
+|---|---|---|---|---|
+| **A** | **tela protege, API não** (permissiva) | aplicação sobre versão em rascunho (§3.1.87) | o dado errado **entra** | ninguém, até a nota sair errada |
+| **B** | **API protege, tela não** (restritiva) | Editar/Apagar habilitados sobre a `005`, que tem 19 respostas (12/09) | o clique é **recusado** | a pessoa, na hora |
+
+⭐ **A diferença que importa não é a gravidade — é o SINAL.**
+
+- A **A é silenciosa**: nada quebra, ninguém reclama, e quem descobre é quem chama a API direto (ou
+  o auditor, meses depois). Foi por isso que ela sobreviveu desde 05/09 sem ninguém notar: não
+  havia rascunho nenhum para o furo alcançar.
+- A **B é barulhenta**, e por isso *parece* menor. Não é: ela **gasta o trabalho de quem confia na
+  tela**. A pessoa lê "Editar" habilitado sobre uma questão respondida por 19 pessoas, clica,
+  escreve, e recebe a recusa depois. O sistema disse que dava.
+
+⚠️ **E a B tem uma agravante que a A não tem: ela é a tela DESMENTINDO a si mesma.** Na direção A a
+tela está certa e a API está frouxa; na B a tela **afirma uma capacidade** que a mesma tela, meio
+segundo depois, retira. Quem vê os dois estados não sabe qual acreditar.
+
+> ⭐⭐ **A regra: o estado de bloqueio viaja com a LISTA, não numa segunda busca.**
+
+#### Como o defeito B nasceu — e é uma decisão minha, escrita e argumentada
+
+O comentário que eu deixei no código dizia:
+
+> *"Os efeitos são buscados por questão, sob demanda — 15 chamadas na abertura seriam 15 consultas
+> para desabilitar botões que talvez ninguém clique. Buscar no primeiro hover/foco é o meio-termo:
+> o botão nasce habilitado e a API recusa se for o caso."*
+
+Cada frase é verdadeira e a conclusão é errada. **A API decide o que ACONTECE; a tela decide o que
+a pessoa TENTA.** E o custo que eu estava evitando era imaginário: os dados já estavam na mesma
+consulta — bastou um `_count: { respostas: true }` no `include` que já existia. **Zero consultas a
+mais.**
+
+⚠️ Além disso: o `hover` não existe no celular, e o `efeito?.` opcional deixava o tipo mentir para
+o compilador. O campo agora é **obrigatório** — é o tipo que garante que o dado venha junto.
+
+#### A varredura: que outras telas decidem com dado que chega depois?
+
+| Forma | Resultado |
+|---|---|
+| Tela que segura o render inteiro até o dado (`if (!x) return <Carregando/>`) | **13 de 13 páginas** — a forma segura, e é a norma do módulo |
+| Controle acionável governado por dado opcional (`disabled={x?.…}`, `efeito={x?.…}`) | **1 caso, o do Acervo** — corrigido |
+| Estado que ESCONDE até chegar (`podeEditar`) | seguro por direção: nunca oferece o que será recusado, só demora a oferecer |
+
+**Nenhum outro.** O `previa` das telas de Aplicação, Arranjo, Ciclo e Cadastro é buscado **no
+clique** e o diálogo só abre depois dele chegar — a ordem certa.
+
+### 3.1.105. 🔎 OS ONZE DA VARREDURA DE 12/09 — o que cada um ensinou
+
+⚠️ **A varredura rodou como `ariellypereira`**, conta de pessoa real — exatamente o que as três
+contas de teste existiam para evitar. Duas consequências: a auditoria registrou a Arielly criando
+questão e publicando versão (**7 linhas, removidas por id**), e **`RH_MODELO` e `RH_CICLO`
+continuam sem percurso**. O que foi percorrido vale como `RH_ADMIN`, e falta metade.
+
+| # | Defeito | A lição |
+|---|---|---|
+| **2.1** | bloqueio chega depois do primeiro render | §3.1.104 — as duas direções da divergência tela × API |
+| **2.2** | diálogo de Apagar com o texto do BLOQUEIO e botão vermelho ativo | **diálogo bloqueado não oferece ação destrutiva** — só o motivo e um "Entendi". Pedir confirmação de algo que o próprio sistema recusa é a tela contra si mesma |
+| **2.3 · 2.4** | depois de duplicar, a tela pulava para o Administrativo e a versão nova não aparecia | recarregar a lista **repunha o padrão** ("primeiro de PRODUÇÃO"), que é certo na 1ª carga e errado em toda recarga depois de um ato. E jogava a pessoa num perfil **protegido**, com Montar e Descartar à mão |
+| **2.5** | banner de recusa **e** "+ Novo ciclo" habilitado | conferido: o servidor **recusa com 403 e não grava nada** (`zz.teste.ciclo` sem colaborador ativo). Não é risco de dado — é trabalho perdido: o diálogo abria inteiro e pré-preenchido |
+| **2.6** | uso que só existe em rascunho invisível no cartão | "usada em 1 perfil" e "usada em 1 perfil, **só em rascunho**" são fatos diferentes: o segundo quer dizer que ninguém responde ainda |
+| **2.7 · 2.8** | dois textos negando capacidade existente | ⭐ **texto que nega capacidade existente faz alguém deixar de usar o que já funciona** — e é pior que prometer o que não existe, porque **ninguém reclama de uma função que acredita não existir**. Um deles eu reescrevi de manhã e envelheceu à tarde |
+| **2.9** | criar classificação sem retorno | o campo esvaziava e o item ia para o fim de uma lista longa, **abaixo da dobra** — indistinguível de "não aconteceu nada". Criar questão já dava banner: duas telas do mesmo editor, dois comportamentos para o mesmo ato |
+| **2.10** | "Bem-vindo, !" | ver abaixo — **terceira aparição** |
+| **2.11** | "3 classificações" e "Grupos 3" na mesma tela | o mesmo número com dois nomes, e um deles é o nome de um cadastro no menu. **O termo da tela é o termo do cadastro** |
+| **2.12** | 22,22% + 22,21% e "vale até" somando 72,01 | §3.1.99 — a família do arredondamento, agora na tela |
+| **3** | opção DEMONSTRAÇÃO selecionável | ver a correção do registro de 11/09 acima |
+
+#### ⭐ 2.10 — por que "Bem-vindo, !" acontece com alguns e não com outros
+
+**Não é bug de código: é dado.** `HubPage` fazia `usuario.nome.split(' ')[0]`.
+
+`core.usuarios.nome` veio do **`RA_NOME` do Protheus, que é CHAR de largura fixa** — e essas contas
+entraram com **espaço à ESQUERDA**:
+
+```
+[ Arielly Aparecida Jose Pereira    ]     ← 35 chars, começa com espaço
+[Clenio Mendes]                            ← criada à mão
+```
+
+`" Arielly …".split(' ')[0]` é `""`. **14 de 183 contas** começavam com espaço; **74** tinham
+espaço sobrando de alguma forma. `clenio` e `admin` — criadas à mão — nunca reproduzem, e é por
+isso que as duas aparições anteriores (Rodrigo, e a Arielly em 10/09) foram tratadas como caso
+isolado: quem investigava testava com a própria conta.
+
+**Corrigido nos dois lados**, porque um só não basta:
+1. **Dado** — `UPDATE core.usuarios SET nome = btrim(regexp_replace(nome,'\s+',' ','g'))`, 74 linhas
+   no DEV. ⚠️ **Vale para HLG e PROD, e entra no roteiro de deploy.**
+2. **Exibição** — `(nome ?? '').trim().split(/\s+/)[0] || username`. A próxima carga em lote pode
+   trazer o espaço de novo, e a saudação nunca mais fica sem sujeito.
+
+### 3.1.106. 🧪 VITEST NO FRONTEND — e por que a estimativa de 3h estava errada
+
+Eu tinha registrado (§3.1.99) que o `repartirPesos` do frontend se resolveria com *"~3h, o backend
+devolve a composição pronta"*. **Errado**, e o motivo aparece ao abrir a tela: a composição é
+recalculada **enquanto a pessoa digita os pesos** no modal da Aplicação. Um round-trip por tecla é
+o desenho errado, não a solução.
+
+O que faltava de verdade era o que eu tinha dado como impedimento: **o frontend não tinha test
+runner**. Entrou `vitest` (uma devDependency, um script, ~1h), e com ele o gêmeo
+`lib/reparticao.ts` — cópia declarada de `backend/common/percentual.ts`, com **os mesmos casos no
+spec**, inclusive o que reprovou a primeira versão do backend. Se as duas divergirem, um dos dois
+specs cai.
+
+⚠️ Isso destrava a classe inteira: até aqui, "não dá para testar no frontend" era razão para não
+consertar. Não é mais.
