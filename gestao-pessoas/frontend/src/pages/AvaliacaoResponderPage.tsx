@@ -411,8 +411,17 @@ function DialogoDeEnvio({
           Depois de enviar, <strong>você não consegue mais alterar as respostas</strong>. Se precisar
           corrigir alguma coisa, será necessário pedir ao RH que reabra a avaliação.
         </p>
+        {/* ⚠️ A FRASE TEM PRAZO desde 13/09, e o prazo precisa estar NELA.
+            Antes ela dizia só "não fica visível para você" — verdade absoluta
+            enquanto ninguém via nota nenhuma. Com a devolutiva (etapa 2), o
+            avaliador PASSA a ver a nota de quem ele avaliou assim que o RH
+            liberar. Deixar o texto como estava faria a tela mentir a partir do
+            dia em que a etapa 2 subisse — e mentir para quem confiou nela ao
+            responder. Texto que promete e deixa de valer é dívida. */}
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          A nota é calculada pelo sistema e não fica visível para você.
+          A nota é calculada pelo sistema e <strong>não fica visível para você agora</strong>. Ela
+          aparece aqui quando o RH liberar a devolutiva — é com ela que você vai conversar com{' '}
+          {nome}.
         </p>
 
         {erro && (

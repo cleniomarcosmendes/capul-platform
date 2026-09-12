@@ -27,6 +27,7 @@ import { ResultadoModule } from './resultado/resultado.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 import { IdentidadeGuard } from './common/guards/identidade.guard.js';
+import { DevolutivaModule } from './devolutiva/devolutiva.module.js';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { IdentidadeGuard } from './common/guards/identidade.guard.js';
     ModeloModule,
     PainelModule,
     ResultadoModule,
+    DevolutivaModule,
   ],
   providers: [
     // Ordem: rate-limit → autenticação (JWT) → autorização (papel) → IDENTIDADE.

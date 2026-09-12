@@ -1638,3 +1638,63 @@ export interface UsuarioLogado {
 export const usuarioLogado = {
   carregar: () => authApi.get<UsuarioLogado>('/me').then((r) => r.data),
 };
+
+
+/**
+ * ⭐⭐ DEVOLUTIVA — ETAPA 1: o RH LIBERA; o AVALIADOR CONDUZ.
+ *
+ * A liberação não manda nada a ninguém e não muda nota: ela faz o avaliador
+ * passar a ver a nota das pessoas que ELE avaliou. ⚠️ Na prática é
+ * irreversível — a marca dá para limpar, a conversa não.
+ */
+export interface LinhaDaLiberacao {
+  avaliacaoId: string;
+  avaliadoNome: string;
+  avaliadoMatricula: string;
+  avaliadorNome: string;
+  notaFinal: number | null;
+  conceito: string | null;
+  /** A avaliação em que QUEM ESTÁ OLHANDO é o avaliado. Marcada, nunca filtrada. */
+  ehMinha: boolean;
+}
+
+export interface PreviaDaLiberacao {
+  ciclo: { id: string; nome: string; status: StatusCiclo };
+  /**
+   * ⛳ A CONTA DO PORTÃO: `liberadas + naoLiberadas = apuradas`.
+   * ⚠️ `naoApuradas` fica FORA dela — não são parte do mesmo todo, e somá-las é
+   * o erro de conciliação que o módulo já cometeu.
+   */
+  conta: {
+    enviadas: number;
+    apuradas: number;
+    liberadas: number;
+    naoLiberadas: number;
+    naoApuradas: number;
+  };
+  liberaveis: LinhaDaLiberacao[];
+  jaLiberadas: LinhaDaLiberacao[];
+  naoApuradas: LinhaDaLiberacao[];
+  /** A própria — fora do lote, e visível. Ver `previaDaLiberacao` no backend. */
+  minhas: LinhaDaLiberacao[];
+}
+
+export const devolutiva = {
+  previa: (cicloId: string, aplicacaoId?: string) =>
+    rhApi
+      .get<PreviaDaLiberacao>(`/devolutiva/previa/${cicloId}`, {
+        params: aplicacaoId ? { aplicacaoId } : undefined,
+      })
+      .then((r) => r.data),
+  /**
+   * ⭐ Manda os IDS QUE A PRÉVIA MOSTROU — nunca um filtro para o servidor
+   * reexecutar. Em 07/09 o `Aplicar` do público recalculava o alvo no clique e
+   * a tela conferia um recorte e gravava outro.
+   */
+  liberar: (avaliacaoIds: string[]) =>
+    rhApi
+      .post<{ liberadas: number; jaEstavam: number; recebidas: number }>('/devolutiva/liberar', {
+        avaliacaoIds,
+      })
+      .then((r) => r.data),
+};

@@ -78,6 +78,15 @@ const DISPENSADOS: Record<string, string> = {
     '⚠️ Até 11/09/2026 esta dispensa afirmava que "na tela a própria linha aparece marcada" e ' +
     'parava aí — o CSV omitia e a tela mostrava a nota, o conceito e a memória. Era a mesma regra ' +
     'em duas superfícies, com uma esquecida, e o texto da dispensa é que a legitimava.',
+  'devolutiva/devolutiva.service.ts':
+    'LIBERA A LEITURA em LOTE, por ciclo ou aplicação — não abre, não edita, não reabre e não ' +
+    'recalcula, que é o que a porta protege. Escreve UMA coluna (`devolutivaLiberadaEm`) e não ' +
+    'toca em nota nenhuma. ' +
+    '⭐ E a separação de funções é aplicada AQUI, por conta própria e em dois pontos, não ' +
+    'dispensada: a prévia põe a própria avaliação FORA do lote (marcada, nunca filtrada) e o ' +
+    '`liberar` recusa o lote inteiro se um id próprio chegar — pelo mesmo `ehProprioAvaliado`, ' +
+    'nunca por `===`. É por isto que RH_ADMIN precisa ser dado a duas pessoas. ' +
+    'Coberto por `devolutiva/liberar-devolutiva.spec.ts`.',
   'apuracao/apuracao.service.ts':
     'apuração em LOTE, por ciclo ou aplicação — a exceção já acordada, com escopo guardado por ' +
     'assertEscopoReapuracaoValido (nunca por colaborador)',

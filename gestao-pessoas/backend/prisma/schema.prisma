@@ -752,8 +752,18 @@ model Avaliacao {
   /// Mitigações recomendadas (F2/F3 = "não"). Opcionais, não bloqueiam o fluxo,
   /// mas registram evidência de devolutiva e contexto da nota.
   observacaoAvaliador String?     @map("observacao_avaliador")
-  devolutivaEm        DateTime?   @map("devolutiva_em")
-  devolutivaPorId     String?     @map("devolutiva_por_id")
+  /// ⭐ ATO 1 — **o RH LIBEROU**. A partir daqui o AVALIADOR passa a ver a nota
+  /// das pessoas que ELE avaliou. Nulo = ninguém vê, em papel nenhum.
+  /// ⚠️ **Limpo na reabertura** — a nota nova não está liberada. O fato de a
+  /// pessoa TER VISTO sobrevive em `rh.auditoria`, nunca nesta coluna: aqui ele
+  /// sumiria justamente no ato contra o qual existe para avisar.
+  devolutivaLiberadaEm     DateTime? @map("devolutiva_liberada_em")
+  devolutivaLiberadaPorId  String?   @map("devolutiva_liberada_por_id")
+  /// ⭐ ATO 2 — **o AVALIADOR CONDUZIU** a conversa presencial com o avaliado.
+  /// Só existe depois do ato 1. ⚠️ Chamava-se `devolutivaEm`; renomeada em 13/09
+  /// porque, com o par de cima ao lado, o nome antigo não dizia qual ato era.
+  devolutivaConduzidaEm    DateTime? @map("devolutiva_conduzida_em")
+  devolutivaConduzidaPorId String?   @map("devolutiva_conduzida_por_id")
 
   /// Nota do QUESTIONÁRIO, 0 a 100, calculada no envio.
   /// É a nota da avaliação propriamente dita — isolada, sem critérios

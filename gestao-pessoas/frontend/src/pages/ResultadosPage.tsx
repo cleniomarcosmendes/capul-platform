@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { ChevronRight, Download, Info, Search, Sigma, User } from 'lucide-react';
+import { ChevronRight, Download, Info, Search, Sigma, Unlock, User } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { contagem, dataHora, nota } from '../lib/formato';
 import { Etiqueta } from '../components/Etiqueta';
 import {
+  devolutiva as apiDevolutiva,
   mensagemDoErro,
   resultados,
   resultados as apiResultados,
   type LinhaDeResultado,
   type MemoriaDeCalculo,
+  type PreviaDaLiberacao,
 } from '../services/api';
+import { Modal } from '../components/Modal';
 import type { ContextoDoCiclo } from './CicloPage';
 import { fracao } from '../lib/composicao-da-nota';
 
@@ -134,6 +137,11 @@ export default function ResultadosPage() {
           </label>
         )}
       </div>
+
+      {/* ⭐⭐ LIBERAR A DEVOLUTIVA — o ato que faz o AVALIADOR ver a nota.
+          Fica aqui, na tela onde as notas moram: quem decide que a devolutiva
+          pode começar é quem acabou de conferir os números. */}
+      <LiberarDevolutiva cicloId={ciclo.id} />
 
       {/* ⭐⭐ A BASE FICA À VISTA, SEMPRE — não só na hora de apurar.
           "3 resultado(s) · média 62,59" é um número com cara de oficial: a
@@ -638,6 +646,152 @@ function ExportarPlanilhas({
       )}
 
       {erro && <p className="w-full text-sm text-rose-700">{erro}</p>}
+    </div>
+  );
+}
+
+
+/**
+ * ⭐⭐ LIBERAR A DEVOLUTIVA — o ato do RH que abre a nota para o AVALIADOR.
+ *
+ * Dois atos, e este é o primeiro: **o RH libera, o avaliador conduz** a conversa
+ * presencialmente. A liberação não manda nada a ninguém — ela faz o avaliador
+ * passar a ver a nota das pessoas que ele avaliou.
+ *
+ * ⚠️ Mostra a CONTA antes do botão (`liberadas + não liberadas = apuradas`), e
+ * não só o número do botão: é a conta que deixa o RH ver que ninguém sumiu.
+ */
+function LiberarDevolutiva({ cicloId }: { cicloId: string }) {
+  const [previa, setPrevia] = useState<PreviaDaLiberacao | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [feito, setFeito] = useState<string | null>(null);
+
+  async function abrir() {
+    setErro(null);
+    setCarregando(true);
+    try {
+      setPrevia(await apiDevolutiva.previa(cicloId));
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível carregar a prévia da devolutiva.'));
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  async function liberar() {
+    if (!previa) return;
+    setErro(null);
+    setCarregando(true);
+    try {
+      // ⭐ Os ids que a prévia MOSTROU — não um filtro reexecutado no clique.
+      const r = await apiDevolutiva.liberar(previa.liberaveis.map((l) => l.avaliacaoId));
+      setPrevia(null);
+      setFeito(
+        `${contagem(r.liberadas, 'devolutiva liberada', 'devolutivas liberadas')}` +
+          (r.jaEstavam > 0 ? ` · ${r.jaEstavam} já estava${r.jaEstavam > 1 ? 'm' : ''}` : ''),
+      );
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível liberar a devolutiva.'));
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void abrir()}
+          disabled={carregando}
+          className="alvo-toque inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-3 text-sm font-medium text-emerald-900 disabled:opacity-50"
+        >
+          <Unlock size={15} aria-hidden /> Liberar a devolutiva
+        </button>
+        {feito && <span className="text-sm text-emerald-800">{feito}</span>}
+      </div>
+      {erro && (
+        <p className="mt-2 rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">
+          {erro}
+        </p>
+      )}
+
+      {previa && (
+        <Modal titulo={`Liberar a devolutiva de ${previa.ciclo.nome}?`} aoFechar={() => setPrevia(null)}>
+          {/* ⭐ O QUE MUDA NO MUNDO, primeiro e sem rodeio — o tom do diálogo de
+              publicar versão: o fato, depois os números, depois o botão. */}
+          <p className="text-sm text-slate-700">
+            A partir de agora, <strong>cada avaliador passa a ver a nota final, o conceito e a
+            conta inteira</strong> das pessoas que ele avaliou — para conduzir a conversa
+            presencialmente com cada uma.
+          </p>
+          <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm text-amber-900">
+            ⚠️ <strong>Na prática isso não volta atrás.</strong> A marca dá para limpar; a conversa
+            que o avaliador já teve, não. Libere quando os números estiverem conferidos.
+          </p>
+
+          {/* ⛳ A CONTA — mostrada, não só o número do botão. */}
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+            <dt className="text-slate-600">Vão ser liberadas agora</dt>
+            <dd className="text-right font-semibold text-slate-800">{previa.liberaveis.length}</dd>
+            <dt className="text-slate-600">Já estavam liberadas</dt>
+            <dd className="text-right text-slate-800">{previa.conta.liberadas}</dd>
+            {previa.minhas.length > 0 && (
+              <>
+                <dt className="text-slate-600">A sua própria avaliação</dt>
+                <dd className="text-right text-slate-800">{previa.minhas.length}</dd>
+              </>
+            )}
+            <dt className="border-t border-slate-200 pt-1 text-slate-600">Apuradas no ciclo</dt>
+            <dd className="border-t border-slate-200 pt-1 text-right font-semibold text-slate-800">
+              {previa.conta.apuradas}
+            </dd>
+          </dl>
+
+          {previa.minhas.length > 0 && (
+            <p className="mt-2 rounded-lg bg-sky-50 px-2.5 py-1.5 text-sm text-sky-900">
+              A <strong>sua própria avaliação</strong> está no ciclo e fica de fora deste lote —
+              quem libera a devolutiva de quem responde pelo RH é o segundo RH_ADMIN. Ela aparece
+              aqui para a conta fechar, não por engano.
+            </p>
+          )}
+
+          {/* ⚠️ Não apuradas NÃO entram na conta acima — não são parte do mesmo
+              todo. Aparecem porque a ausência delas seria lida como esquecimento. */}
+          {previa.naoApuradas.length > 0 && (
+            <p className="mt-2 rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm text-slate-700">
+              {contagem(previa.naoApuradas.length, 'avaliação enviada', 'avaliações enviadas')}{' '}
+              ainda <strong>não foi apurada</strong> e não tem nota para mostrar. Elas não entram
+              nesta liberação — apure o ciclo e volte aqui.
+            </p>
+          )}
+
+          {previa.liberaveis.length === 0 && (
+            <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-sm text-red-800">
+              Não há nada a liberar agora.
+            </p>
+          )}
+
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setPrevia(null)}
+              className="alvo-toque rounded-xl border border-slate-300 px-4 text-sm text-slate-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={previa.liberaveis.length === 0 || carregando}
+              onClick={() => void liberar()}
+              className="alvo-toque rounded-xl bg-emerald-700 px-4 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Liberar {previa.liberaveis.length > 0 ? previa.liberaveis.length : ''}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
