@@ -63,6 +63,7 @@ export default function DesignacaoPage() {
   const [designando, setDesignando] = useState(false);
   /** Designar UMA pessoa, pela linha — sem passar pela seleção. */
   const [designandoUm, setDesignandoUm] = useState<LinhaDaDesignacao | null>(null);
+  const [desfazendo, setDesfazendo] = useState<LinhaDaDesignacao | null>(null);
   const [reabrindo, setReabrindo] = useState<LinhaDaDesignacao | null>(null);
   const [copia, setCopia] = useState<RelatorioDaCopia | null>(null);
   const [copiando, setCopiando] = useState(false);
@@ -457,6 +458,7 @@ export default function DesignacaoPage() {
                 }}
                 aoDecidir={() => setDecidindo(l)}
                 aoDesignar={() => setDesignandoUm(l)}
+              aoDesfazer={() => setDesfazendo(l)}
                 aoReabrir={() => setReabrindo(l)}
                 podeReabrir={tem(ROLES.RH_ADMIN)}
               />
@@ -488,6 +490,21 @@ export default function DesignacaoPage() {
           aoFechar={() => setReabrindo(null)}
           aoReabrir={async () => {
             setReabrindo(null);
+            await gravou();
+          }}
+        />
+      )}
+
+      {/* ⭐ O ato diz o que se PERDE e o que NÃO muda. A frase vem do BACKEND
+          (`efeitoDeDesfazer`), da mesma função que a API usa para decidir —
+          então o diálogo não pode prometer algo que o ato recuse. */}
+      {desfazendo && (
+        <DialogoDesfazer
+          linha={desfazendo}
+          cicloId={ciclo.id}
+          aoFechar={() => setDesfazendo(null)}
+          aoConcluir={async () => {
+            setDesfazendo(null);
             await gravou();
           }}
         />
@@ -565,6 +582,7 @@ function LinhaDaLista({
   aoSelecionar,
   aoDecidir,
   aoDesignar,
+  aoDesfazer,
   aoReabrir,
   podeReabrir,
 }: {
@@ -575,6 +593,7 @@ function LinhaDaLista({
   aoSelecionar: (v: boolean) => void;
   aoDecidir: () => void;
   aoDesignar: () => void;
+  aoDesfazer: () => void;
   aoReabrir: () => void;
   /** RH_ADMIN — só ele reabre, e a API cobra o mesmo. */
   podeReabrir: boolean;
@@ -760,6 +779,27 @@ function LinhaDaLista({
             className="alvo-toque rounded-lg border border-amber-400 px-3 text-sm font-medium text-amber-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
           >
             Reabrir
+          </button>
+        )}
+        {/* ⭐⭐ DESFAZER A DESIGNAÇÃO — o conserto do erro mais comum de uma tela
+            de designação manual, que até 12/09 exigia T.I. no banco.
+            ⚠️ NÃO é o "Excluir" ao lado, e a diferença é o que se DECLARA:
+            excluir diz "esta pessoa não é avaliada neste ciclo" (decisão do RH,
+            com justificativa, que fica no histórico); desfazer diz "o avaliador
+            estava errado" — a pessoa continua no ciclo, esperando avaliador.
+            ⚠️ SOME quando não há designação (ato sem objeto), e DESABILITA com
+            o motivo quando há trabalho dentro — a mesma distinção do Reabrir
+            logo acima. `efeitoDeDesfazer` vem do backend, da mesma função que a
+            API usa no ato: a tela não recalcula a regra. */}
+        {linha.efeitoDeDesfazer.acao !== 'NADA_A_FAZER' && (
+          <button
+            type="button"
+            onClick={aoDesfazer}
+            disabled={!!fechado || linha.efeitoDeDesfazer.acao === 'RECUSAR'}
+            title={fechado ?? linha.efeitoDeDesfazer.frase ?? undefined}
+            className="alvo-toque rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+          >
+            Tirar avaliador
           </button>
         )}
         <button
@@ -1497,6 +1537,75 @@ function DialogoReabrir({
           className="alvo-toque flex-1 rounded-xl bg-rose-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >
           {salvando ? 'Reabrindo…' : 'Reabrir'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * ⭐⭐ TIRAR O AVALIADOR — e a tela precisa deixar claro que NÃO é excluir.
+ *
+ * Os dois botões ficam lado a lado na linha, e é exatamente aí que se confunde:
+ * "Excluir" declara que a pessoa não é avaliada neste ciclo (decisão do RH, com
+ * justificativa, que fica no histórico); "Tirar avaliador" diz que o avaliador
+ * estava errado. Usar o primeiro para consertar o segundo registra uma decisão
+ * que ninguém tomou.
+ */
+function DialogoDesfazer({
+  linha,
+  cicloId,
+  aoFechar,
+  aoConcluir,
+}: {
+  linha: LinhaDaDesignacao;
+  cicloId: string;
+  aoFechar: () => void;
+  aoConcluir: () => Promise<void>;
+}) {
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  return (
+    <Modal titulo={`Tirar o avaliador de ${linha.nome}`} aoFechar={aoFechar}>
+      <p className="text-sm text-slate-700">{linha.efeitoDeDesfazer.frase}</p>
+
+      {/* A distinção, dita onde a confusão acontece. */}
+      <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+        <strong className="font-medium text-slate-700">Isto não é excluir do ciclo.</strong>{' '}
+        {linha.nome.split(' ')[0]} continua no ciclo e volta para a lista de quem espera avaliador.
+        Para dizer que esta pessoa <strong>não deve ser avaliada</strong>, use{' '}
+        <strong>Excluir</strong> — que pede justificativa e fica registrado.
+      </p>
+
+      {erro && <p className="mt-3 text-sm text-rose-700">{erro}</p>}
+
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={aoFechar}
+          className="alvo-toque rounded-xl border border-slate-300 px-4 text-sm text-slate-700"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          disabled={salvando}
+          onClick={async () => {
+            setSalvando(true);
+            setErro(null);
+            try {
+              await designacao.desfazerDesignacao(cicloId, linha.colaboradorId);
+              await aoConcluir();
+            } catch (e) {
+              setErro(mensagemDoErro(e, 'Não foi possível tirar o avaliador.'));
+            } finally {
+              setSalvando(false);
+            }
+          }}
+          className="alvo-toque rounded-xl bg-slate-800 px-4 text-sm font-medium text-white disabled:opacity-40"
+        >
+          {salvando ? 'Tirando…' : 'Tirar avaliador'}
         </button>
       </div>
     </Modal>

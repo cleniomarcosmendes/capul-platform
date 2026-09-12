@@ -30,6 +30,7 @@ const pessoa = (id: string, nome: string): LinhaDaLista => ({
   // Sem avaliação, o Excluir não tem o que cancelar — é o que `efeitoDoExcluir`
   // devolve para linha nenhuma designada.
   efeitoDoExcluir: { acao: 'NADA_A_FAZER', frase: null },
+  efeitoDeDesfazer: { acao: 'NADA_A_FAZER', frase: null },
 });
 
 const PUBLICO = [pessoa('c1', 'ANA'), pessoa('c2', 'BRUNO'), pessoa('c3', 'CARLA')];

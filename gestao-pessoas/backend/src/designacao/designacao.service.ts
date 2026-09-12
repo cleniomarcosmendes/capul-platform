@@ -24,6 +24,7 @@ import {
 import { assertCicloOperavel } from '../ciclo/ciclo-operavel.js';
 import { efeitoDoDescancelamento, estadoAoVoltar, fraseDoDescancelamento } from '../avaliacao/descancelamento.js';
 import { efeitoDoExcluir, type EfeitoDoCancelamento } from '../avaliacao/cancelamento.js';
+import { efeitoDeDesfazer, type EfeitoDoDesfazer } from './desfazer-designacao.js';
 import {
   avisoDeTrocaEmRespondidas,
   efeitoDeDesignar,
@@ -134,6 +135,12 @@ export interface LinhaDaLista {
    * o texto do modal de aplicação, que passou 2 dias mentindo.
    */
   efeitoDoExcluir: EfeitoDoCancelamento;
+  /**
+   * ⭐ O que DESFAZER a designação faria — a mesma função que o ato usa, para a
+   * tela mostrar o efeito antes do clique e nunca oferecer o que a API recusa.
+   * `NADA_A_FAZER` quando não há designação.
+   */
+  efeitoDeDesfazer: EfeitoDoDesfazer;
 }
 
 interface DesignacaoVigente {
@@ -321,6 +328,7 @@ export class DesignacaoService {
       respostasDadas: 0,
       perguntasNoModelo,
       efeitoDoExcluir: efeitoDoExcluir(null),
+      efeitoDeDesfazer: efeitoDeDesfazer(null),
       reabertaEm: null as Date | null,
       motivoReabertura: null as string | null,
       efeitoDoIncluir: null as { status: string; frase: string } | null,
@@ -362,6 +370,15 @@ export class DesignacaoService {
         respostasDadas: designada?.respostas ?? 0,
         perguntasNoModelo,
         efeitoDoExcluir: efeitoDoExcluir(
+          designada
+            ? {
+                status: designada.status,
+                respostas: designada.respostas,
+                avaliadorNome: designada.avaliadorNome,
+              }
+            : null,
+        ),
+        efeitoDeDesfazer: efeitoDeDesfazer(
           designada
             ? {
                 status: designada.status,
@@ -745,6 +762,60 @@ export class DesignacaoService {
       { incluirAfastados: ciclo?.incluirAfastados ?? false },
     );
     return { elegivel: regua.elegivel, justificativa: regua.justificativa };
+  }
+
+  /**
+   * ⭐⭐ DESFAZER A DESIGNAÇÃO — tira o avaliador, mantém a pessoa no ciclo.
+   *
+   * Ver `desfazer-designacao.ts` para a diferença entre isto e EXCLUIR, que é a
+   * parte que se erra. As guardas vivem lá, no classificador, para a lista da
+   * tela mostrar o efeito ANTES do clique com a mesma função que o ato usa.
+   *
+   * ⚠️ O ciclo encerrado barra aqui como barra em tudo (`assertCicloOperavel`):
+   * mexer na designação de um ciclo fechado mudaria a base de um resultado já
+   * comunicado.
+   */
+  async desfazerDesignacao(cicloId: string, avaliadoId: string, usuarioId: string) {
+    const avaliacao = await this.prisma.avaliacao.findUnique({
+      where: { cicloId_avaliadoId: { cicloId, avaliadoId } },
+      include: {
+        ciclo: { select: { status: true, encerradoEm: true } },
+        _count: { select: { respostas: true } },
+      },
+    });
+    if (!avaliacao) {
+      throw new NotFoundException('Esta pessoa não tem avaliador designado neste ciclo.');
+    }
+    assertCicloOperavel(avaliacao.ciclo, 'designação');
+
+    const efeito = efeitoDeDesfazer({
+      status: avaliacao.status,
+      respostas: avaliacao._count.respostas,
+      avaliadorNome: await this.nomeDoColaborador(avaliacao.avaliadorId),
+    });
+    if (efeito.acao !== 'DESFAZER') {
+      throw new BadRequestException(efeito.frase ?? 'Não há designação a desfazer.');
+    }
+
+    await this.prisma.avaliacao.delete({ where: { id: avaliacao.id } });
+
+    // ⚠️ A auditoria guarda QUEM avaliava — é o que permite refazer o caminho
+    // depois. Sem o avaliador anterior, a linha diria apenas que algo sumiu.
+    await this.auditoria.registrar({
+      entidade: 'Avaliacao',
+      entidadeId: avaliacao.id,
+      acao: 'DESFAZER_DESIGNACAO',
+      usuarioId,
+      valorAnterior: {
+        cicloId,
+        avaliadoId,
+        avaliadorId: avaliacao.avaliadorId,
+        aplicacaoId: avaliacao.aplicacaoId,
+        status: avaliacao.status,
+      },
+    });
+
+    return { desfeita: true, frase: efeito.frase };
   }
 
   async designar(

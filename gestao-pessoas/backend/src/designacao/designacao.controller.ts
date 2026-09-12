@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Delete } from '@nestjs/common';
 import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
@@ -58,6 +58,21 @@ export class DesignacaoController {
   @Post('ciclo/:cicloId/decisao') @HttpCode(200)
   decidir(@Param('cicloId') cicloId: string, @Body() dto: DecidirDto, @CurrentUser() user: JwtPayload) {
     return this.designacao.decidir(cicloId, dto.colaboradorId, dto.decisao, dto.justificativa, user.sub);
+  }
+
+  /**
+   * ⭐ DESFAZER a designação — tira o avaliador, mantém a pessoa no ciclo.
+   * Não confundir com o EXCLUIR (`/decisao`), que declara que ela está fora.
+   *
+   * `DELETE` porque o que sai é a designação; a pessoa continua onde estava.
+   */
+  @Delete('ciclo/:cicloId/designacao/:avaliadoId') @HttpCode(200)
+  desfazerDesignacao(
+    @Param('cicloId') cicloId: string,
+    @Param('avaliadoId') avaliadoId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.designacao.desfazerDesignacao(cicloId, avaliadoId, user.sub);
   }
 
   @Post('aplicacao/:aplicacaoId/designar') @HttpCode(200)

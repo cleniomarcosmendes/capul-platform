@@ -601,11 +601,22 @@ export interface LinhaDaDesignacao {
     acao: 'CANCELAR' | 'NADA_A_FAZER' | 'RECUSAR';
     frase: string | null;
   };
+  /**
+   * ⭐ O que DESFAZER a designação faria — mesma função que a API usa no ato.
+   * `NADA_A_FAZER` sem avaliador; `RECUSAR` quando há trabalho dentro.
+   */
+  efeitoDeDesfazer: { acao: 'DESFAZER' | 'NADA_A_FAZER' | 'RECUSAR'; frase: string | null };
 }
 
 export const designacao = {
   listar: (aplicacaoId: string) =>
     rhApi.get<LinhaDaDesignacao[]>(`/designacao/aplicacao/${aplicacaoId}`).then((r) => r.data),
+  /**
+   * ⭐ Tira o AVALIADOR, mantém a pessoa no ciclo. Não confundir com `decidir`
+   * com EXCLUIR, que declara que ela está fora — são atos diferentes.
+   */
+  desfazerDesignacao: (cicloId: string, avaliadoId: string) =>
+    rhApi.delete(`/designacao/ciclo/${cicloId}/designacao/${avaliadoId}`).then((r) => r.data),
   decidir: (cicloId: string, colaboradorId: string, decisao: 'INCLUIR' | 'EXCLUIR', justificativa: string) =>
     rhApi
       .post(`/designacao/ciclo/${cicloId}/decisao`, { colaboradorId, decisao, justificativa })
