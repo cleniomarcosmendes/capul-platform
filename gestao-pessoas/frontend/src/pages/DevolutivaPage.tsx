@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronDown, ChevronUp, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronUp, RotateCcw, TriangleAlert } from 'lucide-react';
 import { Carregando, Erro } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import { dataHora, nota as fmtNota } from '../lib/formato';
@@ -12,6 +12,7 @@ import {
   type QuestaoDaMemoria,
 } from '../lib/devolutiva';
 import { devolutivaDoAvaliador, mensagemDoErro, type DevolutivaDoAvaliador } from '../services/api';
+import { dataHora as dh } from '../lib/formato';
 
 /**
  * ⭐⭐ A DEVOLUTIVA — a tela que o AVALIADOR abre COM A PESSOA DO LADO.
@@ -45,6 +46,26 @@ export default function DevolutivaPage() {
   const { id = '' } = useParams();
   const [dados, setDados] = useState<DevolutivaDoAvaliador | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [marcando, setMarcando] = useState(false);
+
+  /**
+   * ⚠️ Recarrega em vez de mexer no estado local: a tela lê
+   * `conversaSobreNotaAnterior`, que é DERIVADA das duas datas no servidor.
+   * Atualizar só o booleano local faria a tela afirmar uma coisa que o servidor
+   * pode ter respondido diferente.
+   */
+  async function alternarConduzida(conduzida: boolean) {
+    setErro(null);
+    setMarcando(true);
+    try {
+      await devolutivaDoAvaliador.marcarConduzida(id, conduzida);
+      setDados(await devolutivaDoAvaliador.obter(id));
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível registrar a conversa.'));
+    } finally {
+      setMarcando(false);
+    }
+  }
 
   useEffect(() => {
     setDados(null);
@@ -82,6 +103,21 @@ export default function DevolutivaPage() {
           Liberada pelo RH em {dataHora(dados.devolutivaLiberadaEm)}.
         </p>
       </header>
+
+      {/* ⭐⭐ CONVERSOU SOBRE A NOTA ANTERIOR — derivado das duas datas.
+          A marca de conduzida NÃO é apagada na reabertura (a conversa
+          aconteceu; apagar seria reescrever o passado). O que muda é que outra
+          conversa é necessária — e é a tela que diz isso. */}
+      {dados.conversaSobreNotaAnterior && (
+        <div className="mt-3 flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <TriangleAlert size={18} className="mt-0.5 shrink-0" aria-hidden />
+          <p>
+            <strong>Esta avaliação foi reaberta depois da sua conversa.</strong> A nota que você
+            mostrou não vale mais — esta aqui é a nova.{' '}
+            <strong>Será preciso conversar com {dados.avaliado.nome} outra vez.</strong>
+          </p>
+        </div>
+      )}
 
       {/* ⚠️ A tela CONFERE a própria conta. Se alguma das quatro somas não
           fechar, ela DIZ — em vez de exibir um número que não se sustenta na
@@ -221,6 +257,48 @@ export default function DevolutivaPage() {
           {conf.detalhe.somaDosGrupos}.
         </p>
       </details>
+      {/* ⭐⭐ REGISTRAR A CONVERSA — declaração, não prova, e por isso o texto
+          fala na primeira pessoa: "já conversei". O sistema não tem como saber
+          se aconteceu, e um rótulo como "conversa realizada" faria o número do
+          RH afirmar mais do que ele sabe.
+          ⚠️ Reversível, e sem trava de status: a devolutiva vive num ciclo já
+          encerrado, então travar por status tornaria o desfazer impossível
+          justamente no caso normal. */}
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        {dados.devolutivaConduzidaEm && !dados.conversaSobreNotaAnterior ? (
+          <>
+            <p className="flex items-center gap-2 text-sm font-medium text-emerald-800">
+              <Check size={16} aria-hidden /> Você registrou que conversou com{' '}
+              {dados.avaliado.nome.split(' ')[0]} em {dh(dados.devolutivaConduzidaEm)}.
+            </p>
+            <button
+              type="button"
+              onClick={() => void alternarConduzida(false)}
+              disabled={marcando}
+              className="alvo-toque mt-2 inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 text-sm text-slate-700 disabled:opacity-50"
+            >
+              <RotateCcw size={14} aria-hidden />
+              {marcando ? 'Salvando…' : 'Marquei sem querer — desfazer'}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-slate-700">
+              Depois de conversar com {dados.avaliado.nome.split(' ')[0]}, registre aqui. O RH
+              acompanha por este registro quais conversas já foram feitas.
+            </p>
+            <button
+              type="button"
+              onClick={() => void alternarConduzida(true)}
+              disabled={marcando}
+              className="alvo-toque mt-2 inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-medium text-white disabled:opacity-50"
+            >
+              <Check size={16} aria-hidden />
+              {marcando ? 'Salvando…' : 'Já conversei com esta pessoa'}
+            </button>
+          </>
+        )}
+      </section>
     </ComVoltar>
   );
 }

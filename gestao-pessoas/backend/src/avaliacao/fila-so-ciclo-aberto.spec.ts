@@ -62,13 +62,15 @@ async function ramos() {
     or,
     porCiclo: or.find((r) => r.ciclo),
     porDevolutiva: or.find((r) => r.devolutivaLiberadaEm),
+    porConduzida: or.find((r) => (r as { devolutivaConduzidaEm?: unknown }).devolutivaConduzidaEm),
   };
 }
 
 describe('a fila do avaliador: ciclo ABERTO OU devolutiva liberada', () => {
-  it('a consulta tem exatamente os dois ramos, e nada mais', async () => {
-    const { or, porCiclo, porDevolutiva } = await ramos();
-    expect(or).toHaveLength(2);
+  it('a consulta tem exatamente os três ramos, e nada mais', async () => {
+    const { or, porCiclo, porDevolutiva, porConduzida } = await ramos();
+    expect(porConduzida).toEqual({ devolutivaConduzidaEm: { not: null } });
+    expect(or).toHaveLength(3);
     expect(porCiclo).toEqual({ ciclo: { status: 'ABERTO' } });
     expect(porDevolutiva).toEqual({ devolutivaLiberadaEm: { not: null } });
   });
@@ -105,10 +107,16 @@ describe('a fila do avaliador: ciclo ABERTO OU devolutiva liberada', () => {
    * O recorte por ciclo é do CLIENTE (a tela pede um ciclo). Ele estreita,
    * nunca amplia: pedir um ciclo encerrado pelo id não pode devolver nada.
    */
-  it('o recorte por cicloId não substitui os dois ramos', async () => {
+  it('⭐ conduzida e NÃO liberada continua na fila — senão a frase do reaberto some junto', async () => {
+    // §3.1.155: o que desaparece sozinho precisa dizer o que aconteceu.
+    const { porConduzida } = await ramos();
+    expect(porConduzida).toBeDefined();
+  });
+
+  it('o recorte por cicloId não substitui os ramos', async () => {
     const where = await whereDaFila('ciclo-encerrado');
     expect(where.cicloId).toBe('ciclo-encerrado');
-    expect(where.OR).toHaveLength(2);
+    expect(where.OR).toHaveLength(3);
     // ⚠️ Estreita, nunca amplia: o `cicloId` entra em AND com o OR, então pedir
     //    um ciclo encerrado sem devolutiva continua devolvendo nada.
     expect(where.OR[0]).toEqual({ ciclo: { status: 'ABERTO' } });

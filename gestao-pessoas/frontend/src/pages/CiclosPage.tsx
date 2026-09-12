@@ -403,6 +403,24 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
                 </ul>
               </div>
             )}
+            {/* ⭐⭐ COMO OS AVALIADORES FICAM SABENDO — a resposta é PRESENCIAL,
+                e ela precisa estar aqui porque é aqui que alguém pergunta.
+
+                ⚠️ Medido em 13/09: e-mail alcança 3 pessoas em 1.039, e o
+                telefone 2 contas em 183. Não há aviso automático, e não vai
+                haver — a fila do avaliador É a notificação.
+
+                ⚠️ E NÃO é um alerta por avaliador: com 1.036 de 1.039 sem
+                endereço, um aviso por linha marcaria todo mundo, e aviso que
+                aparece sempre deixa de ser lido. É uma frase, uma vez, no
+                momento em que a pergunta aparece. */}
+            <p className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700">
+              Abrir o ciclo <strong>não avisa ninguém</strong>. O trabalho aparece na fila de cada
+              avaliador quando ele entra — combine o aviso pessoalmente, como o RH já faz.{' '}
+              {contagem(previaAbertura.designados, 'avaliação designada', 'avaliações designadas')}{' '}
+              {previaAbertura.designados === 1 ? 'entra' : 'entram'} na fila.
+            </p>
+
             {previaAbertura.avaliadoresSemAcesso.length > 0 && (
               <div className="mt-2 rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
                 <p className="font-semibold">

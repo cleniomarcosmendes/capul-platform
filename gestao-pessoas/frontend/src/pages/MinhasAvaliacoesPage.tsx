@@ -421,6 +421,9 @@ function agruparPorCiclo(itens: ItemDaFila[]): GrupoDeCiclo[] {
      * que o avaliador aprendeu a ignorar.
      */
     if (item.status === 'ENVIADA' && item.devolutivaLiberadaEm) g.devolutivas.push(item);
+    // Reaberta depois da conversa: volta a ser trabalho (a nota mudou), e por
+    // isso NÃO vai para "Enviadas" — ela nem está mais enviada.
+    else if (item.conversaDesfeitaPelaReabertura) g.devolutivas.push(item);
     else if (item.status === 'ENVIADA') g.enviadas.push(item);
     else if (item.perguntasRespondidas > 0) g.emAndamento.push(item);
     else g.aResponder.push(item);
@@ -688,6 +691,18 @@ function Cartao({
         {/* ⭐ A MARCA PERSISTE e diz as duas coisas: que o RH foi avisado E que
             a avaliação continua com ele. Só "avisado" faria o cartão parecer
             resolvido — que é o defeito que este recurso não pode ter. */}
+        {/* ⭐⭐ O QUE DESAPARECEU, E POR QUÊ (§3.1.155).
+            Ele conversou; o RH reabriu; a nota sumiu da tela dele. Sem esta
+            frase ele conclui "eu vi errado" ou "o sistema perdeu" — e não avisa
+            ninguém. Pior: já conversou, e ficaria sem saber que precisa
+            conversar de novo. */}
+        {item.conversaDesfeitaPelaReabertura && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-900">
+            O RH reabriu esta avaliação — a nota que você viu não vale mais. Quando ela for apurada
+            e liberada de novo, aparece aqui. <strong>Se você já conversou com {item.nome.split(' ')[0]},
+            será preciso conversar outra vez.</strong>
+          </p>
+        )}
         {item.contestadaEm && (
           <p className="mt-2 rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-600">
             Você avisou o RH que esta pessoa não é da sua equipe. Enquanto ele
@@ -695,7 +710,7 @@ function Cartao({
           </p>
         )}
       </div>
-      {!item.restrita && (!enviada || item.devolutivaLiberadaEm) && (
+      {!item.restrita && (!enviada || Boolean(item.devolutivaLiberadaEm)) && (
         <ChevronRight size={20} className="shrink-0 self-center text-slate-300" aria-hidden />
       )}
     </>
@@ -749,7 +764,12 @@ function Cartao({
    */
   if (enviada) {
     if (!item.devolutivaLiberadaEm) {
-      return <div className={`${classe} border-slate-200 opacity-75`}>{conteudo}</div>;
+      // ⚠️ Sem liberação não há devolutiva para abrir — nem quando ele já
+      //    conversou. O cartão fica, para a frase acima ter onde morar.
+      const tom = item.conversaDesfeitaPelaReabertura
+        ? 'border-amber-200 bg-amber-50/30'
+        : 'border-slate-200 opacity-75';
+      return <div className={`${classe} ${tom}`}>{conteudo}</div>;
     }
     return (
       <Link

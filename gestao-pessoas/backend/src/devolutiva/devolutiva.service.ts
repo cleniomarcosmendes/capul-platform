@@ -116,6 +116,7 @@ export class DevolutivaService {
         avaliadoId: true,
         avaliadorId: true,
         devolutivaLiberadaEm: true,
+        devolutivaConduzidaEm: true,
       },
       orderBy: { criadoEm: 'asc' },
     });
@@ -182,6 +183,15 @@ export class DevolutivaService {
         liberadas: jaLiberadas.length,
         naoLiberadas: liberaveis.length + minhas.length,
         naoApuradas: naoApuradas.length,
+        /**
+         * ⭐⭐ **DECLARADAS**, não "conversas realizadas".
+         *
+         * O avaliador marca; o sistema não tem como saber se a conversa
+         * aconteceu, e não finge que sabe. Ele pode marcar sem conversar e
+         * conversar sem marcar. O nome do campo carrega isso para que a tela
+         * não tenha como rotular errado por descuido.
+         */
+        conduzidasDeclaradas: avaliacoes.filter((a) => a.devolutivaConduzidaEm).length,
       },
       liberaveis,
       jaLiberadas,
@@ -330,7 +340,13 @@ export class DevolutivaService {
   ) {
     const avaliacao = await this.prisma.avaliacao.findUnique({
       where: { id: avaliacaoId },
-      select: { id: true, avaliadoId: true, avaliadorId: true, devolutivaLiberadaEm: true },
+      select: {
+        id: true,
+        avaliadoId: true,
+        avaliadorId: true,
+        devolutivaLiberadaEm: true,
+        devolutivaConduzidaEm: true,
+      },
     });
     if (!avaliacao) throw new NotFoundException('Avaliação não encontrada.');
 
@@ -388,6 +404,125 @@ export class DevolutivaService {
      * trilhas para o mesmo acesso fariam a contagem de leituras mentir.
      */
     const memoria = await this.resultados.memoria(resultado.id, contexto);
-    return { ...memoria, devolutivaLiberadaEm: avaliacao.devolutivaLiberadaEm };
+    /**
+     * ⭐⭐ AS DUAS DATAS, e a comparação entre elas — o ganho de guardar as duas.
+     *
+     * Quando o RH reabre e libera de novo, a marca de CONDUZIDA **fica** (a
+     * conversa aconteceu; apagar seria reescrever o passado). Mas ela passa a
+     * ser sobre uma nota que não vale mais — e comparar as datas responde isso
+     * sozinho, sem coluna nova:
+     *
+     *   `conduzidaEm < liberadaEm` → **ele já conversou, sobre a nota ANTERIOR**.
+     *
+     * Nem apagar nem manter às cegas daria essa resposta.
+     */
+    const conduzidaEm = avaliacao.devolutivaConduzidaEm;
+    return {
+      ...memoria,
+      devolutivaLiberadaEm: avaliacao.devolutivaLiberadaEm,
+      devolutivaConduzidaEm: conduzidaEm,
+      conversaSobreNotaAnterior:
+        conduzidaEm !== null && conduzidaEm < avaliacao.devolutivaLiberadaEm,
+    };
+  }
+
+  /**
+   * ⭐⭐ ETAPA 4 — O AVALIADOR DECLARA QUE CONDUZIU a conversa.
+   *
+   * ── ISTO É DECLARAÇÃO, NÃO PROVA ─────────────────────────────────────────
+   *
+   * Ele pode marcar sem ter conversado, e pode conversar sem marcar. **Está
+   * bem assim** — o sistema não tem como saber, e fingir que sabe seria pior.
+   * ⚠️ O que NÃO pode é a tela do RH chamar isso de "conversas realizadas": o
+   * número é **"avaliadores que declararam ter conversado"**, e é assim que ele
+   * é rotulado. Rótulo honesto vale mais que número preciso sobre outra coisa —
+   * mesma disciplina do *"a conferir"* da caixa de setor (§3.1.144).
+   *
+   * ── REVERSÍVEL, E SEM TRAVA DE CICLO ──────────────────────────────────────
+   *
+   * Marcar por engano tem de ter volta: guarda que impede o conserto é pior que
+   * guarda ausente, e uma declaração errada e permanente estragaria o número do
+   * RH para sempre.
+   *
+   * ⚠️ **E a volta NÃO é limitada a "enquanto o ciclo não fecha"** — que era a
+   * trava intuitiva. A etapa 3 mostrou por quê: **a devolutiva acontece com o
+   * ciclo JÁ ENCERRADO** (o RH encerra, apura, confere, libera). Uma trava por
+   * status tornaria o desfazer impossível no caso normal. É o mesmo raciocínio
+   * do `marcarRecorte`: rótulo não se governa pelo estado que governa nota.
+   *
+   * ⭐ Os DOIS atos vão para a auditoria. É lá que fica "marcou, desmarcou,
+   * marcou de novo" — a coluna guarda só o estado atual.
+   */
+  async marcarConduzida(
+    avaliacaoId: string,
+    conduzida: boolean,
+    contexto: { colaboradorId: string | null; usuarioId: string },
+  ) {
+    const avaliacao = await this.prisma.avaliacao.findUnique({
+      where: { id: avaliacaoId },
+      select: {
+        id: true,
+        avaliadorId: true,
+        avaliadoId: true,
+        devolutivaLiberadaEm: true,
+        devolutivaConduzidaEm: true,
+      },
+    });
+    if (!avaliacao) throw new NotFoundException('Avaliação não encontrada.');
+
+    /**
+     * ⚠️ MESMA ORDEM da leitura (§3.1.153): a própria antes do escopo. Aqui ela
+     * não deveria acontecer — ninguém é designado para avaliar a si mesmo — mas
+     * a garantia não pode depender disso: se um dia uma designação furada
+     * existir, a mensagem tem de ser a certa e o rastro tem de sair.
+     */
+    if (ehProprioAvaliado(contexto.colaboradorId, avaliacao.avaliadoId)) {
+      await this.auditoria.registrar({
+        entidade: 'Avaliacao',
+        entidadeId: avaliacaoId,
+        acao: 'ACESSO_NEGADO_PROPRIO_AVALIADO:conduzir',
+        usuarioId: contexto.usuarioId,
+        valorNovo: { avaliadoId: avaliacao.avaliadoId },
+      });
+      throw new ForbiddenException('A sua própria avaliação não fica visível para você.');
+    }
+
+    if (!contexto.colaboradorId || avaliacao.avaliadorId !== contexto.colaboradorId) {
+      throw new ForbiddenException(
+        'Esta avaliação não é sua. Quem registra a conversa é quem avaliou a pessoa.',
+      );
+    }
+
+    /**
+     * ⚠️ A ORDEM IMPORTA: não se conduz o que não foi liberado. Sem isto, o
+     * avaliador poderia declarar uma conversa sobre uma nota que ele nem viu —
+     * e o número do RH contaria conversas impossíveis.
+     */
+    if (!avaliacao.devolutivaLiberadaEm) {
+      throw new ForbiddenException(
+        'O RH ainda não liberou esta devolutiva, então não há o que conversar. ' +
+          'Quando liberar, a nota aparece aqui e o registro da conversa fica disponível.',
+      );
+    }
+
+    const jaEstava = avaliacao.devolutivaConduzidaEm !== null;
+    if (jaEstava === conduzida) {
+      return { conduzida, devolutivaConduzidaEm: avaliacao.devolutivaConduzidaEm };
+    }
+
+    const agora = conduzida ? new Date() : null;
+    await this.prisma.avaliacao.update({
+      where: { id: avaliacaoId },
+      data: { devolutivaConduzidaEm: agora, devolutivaConduzidaPorId: conduzida ? contexto.usuarioId : null },
+    });
+    await this.auditoria.registrar({
+      entidade: 'Avaliacao',
+      entidadeId: avaliacaoId,
+      acao: conduzida ? 'DEVOLUTIVA_CONDUZIDA' : 'DEVOLUTIVA_DESMARCADA',
+      usuarioId: contexto.usuarioId,
+      valorAnterior: { devolutivaConduzidaEm: avaliacao.devolutivaConduzidaEm },
+      valorNovo: { devolutivaConduzidaEm: agora },
+    });
+    return { conduzida, devolutivaConduzidaEm: agora };
   }
 }

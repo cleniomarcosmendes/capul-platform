@@ -75,6 +75,7 @@ describe('liberar a devolutiva', () => {
         liberadas: 1,
         naoLiberadas: 2,
         naoApuradas: 1,
+        conduzidasDeclaradas: 0,
       });
     });
 
@@ -85,6 +86,17 @@ describe('liberar a devolutiva', () => {
       const { conta } = await service.previaDaLiberacao({ cicloId: CICLO }, null);
       expect(conta.apuradas).toBe(1);
       expect(conta.enviadas).toBe(conta.apuradas + conta.naoApuradas);
+    });
+
+    it('⭐ conta as CONDUZIDAS — e o nome do campo carrega que é declaração', async () => {
+      // "conversas realizadas" faria o numero afirmar o que o sistema nao sabe:
+      // o avaliador marca, e pode marcar sem ter conversado.
+      cenario(
+        [av('a', { devolutivaLiberadaEm: new Date(), devolutivaConduzidaEm: new Date() }), av('b')],
+        ['a', 'b'],
+      );
+      const { conta } = await service.previaDaLiberacao({ cicloId: CICLO }, null);
+      expect(conta.conduzidasDeclaradas).toBe(1);
     });
 
     it('a conta fecha também quando não há nada a liberar', async () => {

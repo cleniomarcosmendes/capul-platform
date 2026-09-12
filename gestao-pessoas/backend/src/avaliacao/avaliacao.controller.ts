@@ -7,6 +7,7 @@ import { QUALQUER_PAPEL_DO_MODULO, ROLES, podeVerResultados } from '../common/ro
 import { AvaliacaoService } from './avaliacao.service.js';
 import type { ContextoAcesso } from './avaliacao-acesso.service.js';
 import { MOTIVO_MINIMO } from '../common/motivo.js';
+import { BooleanoEstrito } from '../common/booleano-estrito.js';
 
 export class ResponderDto {
   @IsString() perguntaId!: string;
@@ -27,6 +28,12 @@ export class FaltaGenteDto {
 export class ReabrirDto {
   /** Ato de UMA linha — mínimo pequeno, e é o certo aqui. Ver `common/motivo.ts`. */
   @IsString() @MinLength(MOTIVO_MINIMO) motivo!: string;
+  /**
+   * ⭐ "Eu sei que esta pessoa JÁ VIU o resultado" — exigido só quando a
+   * devolutiva foi liberada. Ver `reabrir`: a API recusa COM O DADO (a data em
+   * que foi liberada) para a tela poder perguntar.
+   */
+  @IsOptional() @BooleanoEstrito() confirmarJaDevolvida?: boolean;
 }
 
 /**
@@ -146,7 +153,12 @@ export class AvaliacaoController {
     @CurrentUser() user: JwtPayload,
     @Req() req: { ip?: string },
   ) {
-    return this.avaliacoes.reabrir(this.contexto(user, colaboradorId, req), id, dto.motivo);
+    return this.avaliacoes.reabrir(
+      this.contexto(user, colaboradorId, req),
+      id,
+      dto.motivo,
+      dto.confirmarJaDevolvida ?? false,
+    );
   }
 
   /**

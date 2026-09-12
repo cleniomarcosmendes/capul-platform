@@ -726,6 +726,12 @@ function LiberarDevolutiva({ cicloId }: { cicloId: string }) {
             conta inteira</strong> das pessoas que ele avaliou — para conduzir a conversa
             presencialmente com cada uma.
           </p>
+          {previa.conta.conduzidasDeclaradas > 0 && (
+            <p className="mt-2 text-xs text-slate-500">
+              O número de conversas é <strong>declaração do avaliador</strong>, não prova: ele marca
+              quando conversa, e pode esquecer de marcar ou marcar sem ter conversado.
+            </p>
+          )}
           <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-sm text-amber-900">
             ⚠️ <strong>Na prática isso não volta atrás.</strong> A marca dá para limpar; a conversa
             que o avaliador já teve, não. Libere quando os números estiverem conferidos.
@@ -743,6 +749,11 @@ function LiberarDevolutiva({ cicloId }: { cicloId: string }) {
                 <dd className="text-right text-slate-800">{previa.minhas.length}</dd>
               </>
             )}
+            {/* ⭐⭐ RÓTULO HONESTO: é DECLARAÇÃO do avaliador, não prova de que a
+                conversa aconteceu. Ele pode marcar sem ter conversado e
+                conversar sem marcar — e chamar isso de "conversas realizadas"
+                faria o número afirmar mais do que o sistema sabe. Mesma
+                disciplina do "a conferir" da caixa de setor. */}
             <dt className="border-t border-slate-200 pt-1 text-slate-600">Apuradas no ciclo</dt>
             <dd className="border-t border-slate-200 pt-1 text-right font-semibold text-slate-800">
               {previa.conta.apuradas}

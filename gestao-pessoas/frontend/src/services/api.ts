@@ -76,6 +76,13 @@ export interface ItemDaFila {
    * ⚠️ **Não é permissão** — quem decide o acesso é o servidor, por registro.
    */
   devolutivaLiberadaEm: string | null;
+  /** Quando ELE declarou ter conversado. ⚠️ Declaração, nunca prova. */
+  devolutivaConduzidaEm: string | null;
+  /**
+   * ⭐ Conversou, e a avaliação foi REABERTA depois. A nota que ele mostrou não
+   * vale mais — e sumir calado faria ele concluir "eu vi errado". §3.1.155.
+   */
+  conversaDesfeitaPelaReabertura: boolean;
 }
 
 export interface Alternativa {
@@ -1677,6 +1684,8 @@ export interface PreviaDaLiberacao {
     liberadas: number;
     naoLiberadas: number;
     naoApuradas: number;
+    /** ⚠️ **Declaradas** pelo avaliador — não é prova de que a conversa ocorreu. */
+    conduzidasDeclaradas: number;
   };
   liberaveis: LinhaDaLiberacao[];
   jaLiberadas: LinhaDaLiberacao[];
@@ -1707,7 +1716,12 @@ export const devolutiva = {
 
 
 /** A devolutiva que o AVALIADOR abre — a mesma memória do RH, mais a data. */
-export type DevolutivaDoAvaliador = MemoriaDeCalculo & { devolutivaLiberadaEm: string };
+export type DevolutivaDoAvaliador = MemoriaDeCalculo & {
+  devolutivaLiberadaEm: string;
+  devolutivaConduzidaEm: string | null;
+  /** Conduzida ANTES da liberação atual: a conversa foi sobre a nota anterior. */
+  conversaSobreNotaAnterior: boolean;
+};
 
 export const devolutivaDoAvaliador = {
   /**
@@ -1718,5 +1732,16 @@ export const devolutivaDoAvaliador = {
   obter: (avaliacaoId: string) =>
     rhApi
       .get<DevolutivaDoAvaliador>(`/devolutiva/avaliacao/${avaliacaoId}`)
+      .then((r) => r.data),
+  /**
+   * ⭐ "Já conversei" — DECLARAÇÃO, e reversível. O sistema não tem como saber
+   * se a conversa aconteceu e não finge que sabe.
+   */
+  marcarConduzida: (avaliacaoId: string, conduzida: boolean) =>
+    rhApi
+      .patch<{ conduzida: boolean; devolutivaConduzidaEm: string | null }>(
+        `/devolutiva/avaliacao/${avaliacaoId}/conduzida`,
+        { conduzida },
+      )
       .then((r) => r.data),
 };

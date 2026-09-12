@@ -97,7 +97,24 @@ export class AvaliacaoService {
          * trabalho que dá para fazer — em ciclo encerrado inclusive, que é onde
          * ele quase sempre estará.
          */
-        OR: [{ ciclo: { status: 'ABERTO' } }, { devolutivaLiberadaEm: { not: null } }],
+        /**
+         * ⭐⭐ O TERCEIRO RAMO — *o que desaparece sozinho precisa dizer o que
+         * aconteceu* (§3.1.155), aplicado a si mesmo.
+         *
+         * Reabrir LIMPA `devolutivaLiberadaEm`. Com só os dois primeiros ramos,
+         * o cartão de quem **já conversou** simplesmente sumiria da fila — e a
+         * frase que explica o sumiço ficaria sem onde morar. Ele concluiria "eu
+         * vi errado" ou "o sistema perdeu", e não avisaria ninguém.
+         *
+         * ⚠️ Este ramo só ACRESCENTA o caso "conduzida e não liberada" — isto é,
+         * **reaberta depois da conversa**. Antes de conversar não há o que
+         * explicar; depois de re-liberada, o segundo ramo já a traz.
+         */
+        OR: [
+          { ciclo: { status: 'ABERTO' } },
+          { devolutivaLiberadaEm: { not: null } },
+          { devolutivaConduzidaEm: { not: null } },
+        ],
         ...(cicloId ? { cicloId } : {}),
       },
       orderBy: { criadoEm: 'asc' },
@@ -115,6 +132,8 @@ export class AvaliacaoService {
          * booleano obrigaria uma segunda consulta para dizer desde quando.
          */
         devolutivaLiberadaEm: true,
+        /** Para a frase do reaberto-depois-de-conversar. Ver o OR acima. */
+        devolutivaConduzidaEm: true,
         // ⚠️ O CICLO vem junto porque a fila NÃO é de um ciclo só: podem existir
         // dois abertos ao mesmo tempo (a produção abre por ondas de unidade), e
         // sem dizer de qual é cada linha a pessoa vê um total que não bate com
@@ -185,6 +204,15 @@ export class AvaliacaoService {
          * *gate de leitura não se escreve na fila* (§ regra do módulo).
          */
         devolutivaLiberadaEm: l.devolutivaLiberadaEm,
+        /** Quando ELE declarou ter conversado. Declaração, nunca prova. */
+        devolutivaConduzidaEm: l.devolutivaConduzidaEm,
+        /**
+         * ⭐ Conversou, e a avaliação foi REABERTA depois: a nota que ele
+         * mostrou não vale mais, e ele precisa saber — inclusive que vai ter de
+         * conversar outra vez. Derivado, não coluna nova.
+         */
+        conversaDesfeitaPelaReabertura:
+          l.devolutivaConduzidaEm !== null && l.devolutivaLiberadaEm === null,
       };
     });
 
@@ -410,7 +438,12 @@ export class AvaliacaoService {
   }
 
   /** Reabertura — ato do RH, com motivo, e nunca na própria avaliação. */
-  async reabrir(contexto: ContextoAcesso, avaliacaoId: string, motivo: string) {
+  async reabrir(
+    contexto: ContextoAcesso,
+    avaliacaoId: string,
+    motivo: string,
+    confirmarJaDevolvida = false,
+  ) {
     if (!motivo?.trim()) throw new BadRequestException('Informe o motivo da reabertura.');
     const alvo = await this.acesso.carregarParaAcao(contexto, avaliacaoId, 'reabrir');
 
@@ -422,6 +455,35 @@ export class AvaliacaoService {
       select: { status: true, encerradoEm: true },
     });
     assertCicloAceitaReaberturaDeAvaliacao(ciclo);
+
+    /**
+     * ⭐⭐ A GUARDA DA DEVOLUTIVA JÁ LIBERADA — recusa COM O DADO, nunca bloqueia.
+     *
+     * ⛔ **Bloquear seria o erro.** A razão de reabrir costuma ser justamente
+     * que a nota estava errada — e o caso mais grave é o de alguém que **já
+     * viu** um número errado. Guarda que impede o conserto é pior que guarda
+     * ausente.
+     *
+     * Então: recusa uma vez, dizendo **desde quando** ela está liberada e se o
+     * avaliador já declarou ter conversado; com `confirmarJaDevolvida`, passa.
+     * É o padrão do módulo — a API recusa para a tela poder perguntar.
+     */
+    const marcas = await this.prisma.avaliacao.findUniqueOrThrow({
+      where: { id: avaliacaoId },
+      select: { devolutivaLiberadaEm: true, devolutivaConduzidaEm: true },
+    });
+    if (marcas.devolutivaLiberadaEm && !confirmarJaDevolvida) {
+      const quando = marcas.devolutivaLiberadaEm.toLocaleDateString('pt-BR');
+      throw new BadRequestException(
+        'A devolutiva desta avaliação já foi liberada, então o avaliador já pode ter mostrado a ' +
+          `nota para a pessoa. Liberada em: ${quando}.` +
+          (marcas.devolutivaConduzidaEm
+            ? ' E o avaliador já declarou ter conversado com ela.'
+            : '') +
+          ' Reabrir apaga a nota e tira a devolutiva do ar; se você seguir, será preciso apurar, ' +
+          'liberar e conversar de novo. Confirme para reabrir assim.',
+      );
+    }
 
     /**
      * ⭐⭐ REABRIR APAGA O RESULTADO APURADO — decisão de 09/09, e as três
@@ -458,6 +520,19 @@ export class AvaliacaoService {
           motivoReabertura: motivo.trim(),
           // A nota volta a ser indefinida: ela é do envio, e o envio foi desfeito.
           notaAvaliacao: null,
+          /**
+           * ⭐ A LIBERAÇÃO É LIMPA — a nota nova não está liberada, e é correto
+           * que não esteja: o avaliador para de ver um número que deixou de
+           * valer.
+           *
+           * ⛔ **`devolutivaConduzidaEm` NÃO é limpa.** A conversa aconteceu —
+           * é fato histórico, e apagar seria reescrever o passado. O que muda é
+           * que outra conversa é necessária, e quem diz isso é a TELA: com as
+           * duas datas guardadas, `conduzidaEm < liberadaEm` responde sozinho
+           * "você já conversou, mas sobre a nota anterior".
+           */
+          devolutivaLiberadaEm: null,
+          devolutivaLiberadaPorId: null,
         },
       });
       return removido;
@@ -474,6 +549,15 @@ export class AvaliacaoService {
       // consegue reconstruir por que a média do ciclo caiu.
       valorAnterior: apagado
         ? {
+            /**
+             * ⚠️ O FATO "ela já tinha visto" sobrevive AQUI, não na coluna — a
+             * coluna acabou de ser limpa pela reabertura. São estes campos que
+             * respondem, meses depois, *"ela viu o 72 antes de virar 68?"*.
+             * Estruturados, e não dentro do texto da justificativa: quem for
+             * procurar vai filtrar, não ler.
+             */
+            devolutivaLiberadaEm: marcas.devolutivaLiberadaEm,
+            devolutivaConduzidaEm: marcas.devolutivaConduzidaEm,
             resultadoApagado: {
               notaFinal: apagado.notaFinal,
               conceito: apagado.conceitoDescricao,
@@ -502,11 +586,24 @@ export class AvaliacaoService {
       where: { avaliacaoId },
       select: { notaFinal: true, conceitoDescricao: true, calculadoEm: true },
     });
+    /**
+     * ⭐ A PRÉVIA DIZ O QUE SE PERDE — e desde 13/09 diz também **quem já viu**.
+     * Sem isto o RH decidiria reabrir sem saber que a pessoa já recebeu a nota,
+     * que é justamente a informação que muda a decisão.
+     */
+    const marcas = await this.prisma.avaliacao.findUniqueOrThrow({
+      where: { id: avaliacaoId },
+      select: { devolutivaLiberadaEm: true, devolutivaConduzidaEm: true },
+    });
     return {
       apagaResultado: resultado !== null,
       notaFinal: resultado ? Number(resultado.notaFinal) : null,
       conceito: resultado?.conceitoDescricao ?? null,
       apuradoEm: resultado?.calculadoEm ?? null,
+      /** Nulo = ninguém viu. Com data, reabrir exige `confirmarJaDevolvida`. */
+      devolutivaLiberadaEm: marcas.devolutivaLiberadaEm,
+      /** O avaliador DECLAROU ter conversado — declaração, não prova. */
+      devolutivaConduzidaEm: marcas.devolutivaConduzidaEm,
     };
   }
 

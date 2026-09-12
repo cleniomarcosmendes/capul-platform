@@ -1,9 +1,14 @@
-import { Controller, Get, Param, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Req } from '@nestjs/common';
+import { BooleanoEstrito } from '../common/booleano-estrito.js';
 import { ColaboradorAtual } from '../common/decorators/colaborador-atual.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { DevolutivaService } from './devolutiva.service.js';
+
+export class MarcarConduzidaDto {
+  @BooleanoEstrito() conduzida!: boolean;
+}
 
 /**
  * ⭐⭐ A DEVOLUTIVA DO LADO DO AVALIADOR — controller SEPARADO, de propósito.
@@ -38,6 +43,27 @@ export class DevolutivaDoAvaliadorController {
       colaboradorId: colaboradorId ?? null,
       usuarioId: user.sub,
       ip: req.ip,
+    });
+  }
+
+  /**
+   * ⭐ "Já conversei com esta pessoa" — DECLARAÇÃO do avaliador, e reversível.
+   *
+   * ⚠️ O sistema não tem como saber se a conversa aconteceu, e não finge que
+   * sabe: o número que o RH lê é **"avaliadores que declararam ter
+   * conversado"**. Marcar por engano tem volta — e sem trava de status de
+   * ciclo, porque a devolutiva vive num ciclo já encerrado.
+   */
+  @Patch('avaliacao/:avaliacaoId/conduzida') @HttpCode(200)
+  conduzida(
+    @Param('avaliacaoId') avaliacaoId: string,
+    @Body() dto: MarcarConduzidaDto,
+    @ColaboradorAtual('id') colaboradorId: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.devolutiva.marcarConduzida(avaliacaoId, dto.conduzida, {
+      colaboradorId: colaboradorId ?? null,
+      usuarioId: user.sub,
     });
   }
 }
