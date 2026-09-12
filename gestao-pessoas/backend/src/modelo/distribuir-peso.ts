@@ -15,6 +15,32 @@
  * Somar exato importa mais do que parecer justo: se a soma escorregar, o balanço
  * entre grupos que o RH definiu deixa de valer, e ninguém percebe olhando.
  */
+/**
+ * ── ⚠️ QUANDO MEXER AQUI: RODE AS MUTAÇÕES ──────────────────────────────────
+ *
+ * Este arquivo decide NOTA. Os testes de cálculo do módulo pegam as reversões
+ * conhecidas — **medido em 12/09**, não suposto —, mas isso só continua verdade
+ * enquanto alguém confere.
+ *
+ * **~15 minutos, e é a aferição que substitui escrever a contraparte explícita
+ * de cada teste** (§3.1.126). Rode ao mexer em qualquer cálculo:
+ *
+ *   1. `arredondar` com 1 casa em vez de 2        → esperado: ~8 testes caem
+ *   2. fronteira inferior da faixa EXCLUSIVA      → esperado: ~1 teste cai
+ *   3. critério sem dado ENTRANDO no denominador  → esperado: ~7 testes caem
+ *   4. `pesoExato` trocado por `peso` no
+ *      `itensRespondidos`                          → esperado: as permutações
+ *                                                    de `ordem-nao-muda-a-nota`
+ *                                                    passam a divergir
+ *
+ * ⚠️⚠️ **Toda mutação tem de PROVAR QUE ENTROU.** Na primeira medição, duas
+ * delas não pegaram no fonte (o padrão não batia) e o resultado leu como *"o
+ * teste não pega"* — falso verde um nível acima do canário. Use `assert` no
+ * script de mutação, ou confira o diff antes de rodar.
+ *
+ * ⚠️ Verde sem mutação responde "nada mudou desde a última vez", não "está
+ * certo" — é a mesma distinção da §3.1.127 sobre baseline.
+ */
 export function distribuirPeso(total: number, quantidade: number): number[] {
   if (quantidade <= 0) throw new Error('distribuirPeso: quantidade precisa ser maior que zero.');
   if (!(total > 0)) throw new Error(`distribuirPeso: total precisa ser maior que zero (recebi ${total}).`);
