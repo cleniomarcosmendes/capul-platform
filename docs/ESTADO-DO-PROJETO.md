@@ -5517,3 +5517,97 @@ fixo: **11 ocorrências, todas em comentário, `.md` ou spec como texto explicat
 
 ⚠️ O que **muda de valor** é a distribuição de §3.1.70 (1.037 em vez de 1.036) e qualquer contagem
 populacional lida da tela — por isso a conta de teste está registrada com o SQL de remoção.
+
+---
+
+### 3.1.73. 🔴 PENDÊNCIA DA ARIELLY — a faixa "Menos de 1 ano" não alcança ninguém
+
+**Não é bug para a T.I. consertar. É decisão de RH, e mexer arrasta três coisas.**
+
+`TEMPO_EMPRESA` e `TEMPO_FUNCAO` têm, cada um, uma faixa `0 ≤ x ≤ 0` rotulada **"Menos de 1 ano"**,
+valendo **0 pontos**. Ela só casa com **exatamente zero** — admissão na própria data-base. Medido
+com a distribuição (§3.1.70), sobre 1.037 ativos:
+
+| Critério | Faixa `[0,0]` "Menos de 1 ano" | Faixa seguinte |
+|---|---:|---|
+| TEMPO_EMPRESA | **0 pessoas** | `(0,3]` "Até 3 anos" → **418 pessoas**, 25 pontos |
+| TEMPO_FUNCAO | **0 pessoas** | `(0,2]` "Até 2 anos" → **755 pessoas**, 25 pontos |
+
+⭐ **Consequência hoje:** quem tem menos de 1 ano de casa é pontuado como *"Até 3 anos"* e recebe
+**25 pontos**, não 0. O rótulo "Menos de 1 ano" descreve uma intenção que a faixa não implementa.
+
+#### ⚠️ O que se arrasta ao "consertar" — e é por isso que isto está escrito
+
+1. **Muda a nota de gente.** Corrigir o limite (por exemplo `[0,1)` → 0 pontos) tira 25 pontos do
+   critério de quem tem menos de um ano. Com peso 10 contra 60, mexe na nota final delas.
+2. **O Protheus tem o MESMO `CASE WHEN`.** O select antigo pontua igual. Corrigir aqui faz o módulo
+   **divergir do sistema que o RH conhece** — e a diferença apareceria como "o sistema novo deu
+   nota diferente", sem ninguém lembrar desta linha.
+3. **Quebra a regressão do ciclo `000006` como baseline.** Os 108/108 do
+   `docs/REGRESSAO_PROTHEUS_GESTAO_PESSOAS.md` valem porque as faixas reproduzem o select original.
+   Mudar a faixa e manter o teste verde exigiria mudar o esperado — isto é, **perder a referência
+   externa** que prova que o motor novo reproduz o antigo.
+
+⛔ **Não corrigir por conta própria.** É o tipo de coisa que alguém "arruma" numa tarde por parecer
+um limite errado óbvio — e arrasta os três de uma vez, sem que nada acuse.
+
+**O que decidir:** manter como está (e então **corrigir o rótulo**, que é o que mente), ou mudar a
+régua (e aí decidir junto o que fazer com a regressão como baseline).
+
+### 3.1.74. ✅ VARREDURA DAS FAIXAS INALCANÇÁVEIS — e a diferença entre escassez e limite errado
+
+Pergunta levantada por o `[0,0]` ter aparecido: **alguma outra faixa é logicamente inalcançável?**
+
+#### As três faixas de ponto único — e por que uma delas está certa
+
+| Critério | Faixa | Pessoas | Domínio | Veredito |
+|---|---|---:|---|---|
+| `QTDE_TREINAMENTO` | `[0,0]` "Nenhum curso" | **1.031** | **DISCRETO** (contagem) | ✅ legítima — "exatamente 0 cursos" é o caso mais comum |
+| `TEMPO_EMPRESA` | `[0,0]` "Menos de 1 ano" | **0** | **CONTÍNUO** (`anosEntre` → float) | 🔴 §3.1.73 |
+| `TEMPO_FUNCAO` | `[0,0]` "Menos de 1 ano" | **0** | **CONTÍNUO** | 🔴 §3.1.73 |
+
+⭐⭐ **A regra que sai daqui:** faixa de ponto único (`inf == sup`) é legítima sobre domínio
+**discreto** e praticamente inalcançável sobre domínio **contínuo** — acertar um float exato é
+conjunto de medida zero. As três têm a mesma FORMA e não são o mesmo caso; o que decide é o que o
+resolver devolve, não o formato da faixa.
+
+⚠️ `faixa.validator` **aceita** ponto único de propósito, e continua aceitando: recusar quebraria
+`QTDE_TREINAMENTO`, que está certo. O validador não conhece o domínio do resolver — quem responde
+essa pergunta é a **distribuição**, e é por isso que ela precisava existir.
+
+#### ESCOLARIDADE — escassez, não limite errado
+
+`[3, 9, 27, 95, 68, 138, 480, 74, 108, 1, 0, 33, 1]` sobre 13 códigos do SX5 tabela 26.
+
+| Faixa | Pessoas | Veredito |
+|---|---:|---|
+| `65` MESTRADO COMPLETO | 1 | **escassez** |
+| `75` DOUTORADO COMPLETO | **0** | **escassez** — o código é válido no SX5, ninguém o tem hoje |
+| `95` PÓS-DOUTORADO | 1 | **escassez** |
+
+Faixa de DOMÍNIO só é inalcançável se o código **não existe no domínio**. Os três existem e têm a
+descrição real do SX5. **Nenhuma correção a fazer** — e cadastrar quem falta é o certo: no dia em
+que a Capul contratar um doutor, a faixa já está lá.
+
+#### As faixas de CONCEITO — a pergunta de 10/09, respondida
+
+*"Nota exatamente 25, 50, 75 ou 90 cai em qual?"* Medido rodando `conceitoDaNota` sobre a régua
+0 · 25 · 50 · 75 · 90 · 100:
+
+| Nota | Conceito | | Nota | Conceito |
+|---:|---|---|---:|---|
+| 24,99 | Insuficiente | | 75,00 | **Supera** |
+| **25,00** | **Abaixo do esperado** | | 89,99 | Supera |
+| 49,99 | Abaixo do esperado | | **90,00** | **Excelente** |
+| **50,00** | **Atende** | | 100,00 | Excelente |
+
+⭐ **No valor exato do encontro, a nota vai para a faixa DE CIMA.** Inferior inclusivo, superior
+exclusivo — exceto a última, que fecha em 100 para a nota máxima ter conceito.
+
+**Nenhuma faixa de conceito é inalcançável:** varridas as 10.001 notas possíveis de `Decimal(6,2)`
+entre 0,00 e 100,00, as 5 faixas são alcançadas.
+
+⚠️ **O que faltava não era a regra — era a TELA dizer.** A régua de conceitos informava *"as faixas
+são contíguas: o fim de uma é o começo da próxima"* e **calava sobre o valor do encontro**. Quem
+define os limites decide o conceito que a pessoa recebe e não tinha como saber para que lado o
+empate vai. Corrigido: a tela agora diz, com o exemplo da régua padrão.

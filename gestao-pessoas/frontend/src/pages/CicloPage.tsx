@@ -856,6 +856,19 @@ function ReguaDeConceitos({
             As faixas são contíguas: o fim de uma é o começo da próxima, a primeira começa em 0
             e a última termina em 100 — assim nota nenhuma fica sem conceito.
           </p>
+          {/* ⭐ DE QUEM É A FRONTEIRA. A frase acima diz que as faixas se
+              encostam e cala sobre o valor do encontro — e a pergunta "nota
+              exatamente 25 cai em qual?" ficou sem resposta na varredura de
+              10/09. Ela tem resposta no código desde sempre
+              (`conceitoDaNota`: inferior inclusivo, superior exclusivo, e a
+              última fecha em 100); o que faltava era a tela dizer.
+              ⚠️ É a régua que decide o conceito que a PESSOA recebe: quem
+              define os limites precisa saber para que lado o empate vai. */}
+          <p className="mt-1 text-xs text-slate-500">
+            No valor exato do encontro, a nota vai para a faixa <strong>de cima</strong>: com a
+            régua 0 · 25 · 50 · 75 · 90 · 100, a nota 25 é da segunda faixa, e 90 é da última.
+            Só a última inclui os dois extremos — nota 100 tem conceito.
+          </p>
 
           {erro && <p className="mt-2 text-sm text-rose-700">{erro}</p>}
           {salvo && <p className="mt-2 text-sm text-capul-700">Régua salva.</p>}
