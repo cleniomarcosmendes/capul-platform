@@ -6326,3 +6326,68 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 
 ⚠️ **PROD segue em `6855c918` e sem o Gestão de Pessoas.** Estado de ambiente envelhece: conferir
 `/health` → `versao.commit` antes de afirmar.
+
+---
+
+### 3.1.82. ⭐⭐ REGRA — peça sem chamador não é peça pronta, é peça não verificada
+
+**Segunda vez em três dias**, e por isso vira regra:
+
+| Peça | O que parecia | O que era |
+|---|---|---|
+| `assertModeloPublicavel` (136 linhas, spec verde, 05/09) | pronta para o editor | ⚠️ valida `GrupoParaPublicacao { titulo, perguntas: [{ peso, alternativas }] }` — **forma que a migration do acervo acabou**. Adaptar: **~4h** |
+| A "validação de continuidade que já existe" (11/09) | servia para faixa de critério | era a de **`ConceitoFaixa`** (0–100 fechado). Aplicá-la reprovaria `TEMPO_EMPRESA` e `ESCOLARIDADE` |
+
+⭐ **A regra:** código sem chamador não é exercitado por nada — nem pelo compilador contra a forma
+real, nem por uso. A spec dele prova que ele faz o que ele diz; **não prova que o que ele diz ainda
+é o que se precisa**. Ao planejar com uma peça assim, o custo honesto é **adaptação, nunca zero**.
+
+⚠️ **Como conferir em um minuto**, antes de prometer reuso: comparar a INTERFACE da peça com o
+schema/dado de hoje. `GrupoParaPublicacao` tem `peso` na pergunta; `rh.pergunta` não tem coluna
+`peso` desde 11/09. Um `grep` responde.
+
+Vale ao lado de [[feedback_extrair_regra_exige_varrer_o_fonte]] e de §3.1.65 (*"já existe" e
+"serve" são perguntas separadas*): aquela é sobre reaproveitar o que serve; esta é sobre o custo de
+descobrir que **não serve**.
+
+### 3.1.83. 📐 MEDIÇÃO PARA A ETAPA 6 — a escala, e a questão fora de arranjo
+
+#### (a) Escala: os VALORES se repetem sempre; os TEXTOS, nunca
+
+| | |
+|---|---|
+| Questões no acervo | 15 |
+| **Conjuntos de 4 âncoras distintos** | **15** — nenhuma questão repete o conjunto de outra |
+| Âncoras (textos) distintas | **60 de 60** — nenhum texto se repete |
+| **Conjuntos de VALORES distintos** | **1** — `0,3 · 0,6 · 0,9 · 1,2` nas 15, sem exceção |
+
+⭐ **A conclusão separa as duas coisas:** escala reutilizável de **valor** já é a realidade (e deve
+ser imposta); escala reutilizável de **texto** não existe, e não deveria — o padrão é **semântico**
+(ruim → insuficiente → bom → excelente), com as palavras da própria questão. É o instrumento real
+do Protheus, e foi por isso que as alternativas vivem na PERGUNTA, não numa tabela de escala.
+
+**O que isso faz na Etapa 6:** o formulário **pré-preenche os 4 valores** e pede só os **4 textos**
+— metade dos campos, e some a chance de alguém digitar uma escala diferente por acidente.
+⚠️ Não muda o tamanho da etapa (continuam 4 textos por questão); muda o **erro possível**.
+
+#### (b) Questão nova antes de existir arranjo — segura por construção
+
+**Nenhuma consulta do módulo lê `prisma.pergunta` diretamente** — as quatro leituras passam pelo
+ARRANJO. Uma questão fora de arranjo é **invisível** para avaliação, contagem, apuração e memória
+de cálculo. Não quebra nada.
+
+⚠️ **Mas a tela precisa dizer.** *"Questão criada"* e *"questão criada, e ainda não está em nenhum
+perfil"* são frases diferentes, e a primeira deixa quem criou achando que já vale. Entra no cartão
+da questão na Etapa 1 (o `usada em N perfis`, que com N = 0 vira o aviso).
+
+### 3.1.84. 📌 PENDÊNCIA CONHECIDA — a prévia do efeito na nota
+
+**Não vai existir ao fim do editor**, e é a **primeira pergunta que a Arielly vai fazer**:
+*"se eu mudar este peso, a nota de quem já respondeu muda quanto?"*.
+
+⭐ **Hoje a resposta é que versão em uso é IMUTÁVEL** — então a pergunta dela não é bem essa. Vira:
+*"quanto mudaria se eu publicasse uma versão nova?"*. E essa tem resposta calculável: as respostas
+já dadas estão gravadas; aplicar o arranjo novo sobre elas é aritmética.
+
+⚠️ Fica registrado como previsão, não como escopo. Quando ela perguntar, a conversa começa daqui —
+e não de "não dá".
