@@ -5707,6 +5707,24 @@ e a distribuição agora **mostra isso na tela**: `[1031, 4, 2, 0, 0]`. O sistem
 (resolver, critério, 5 faixas); está desligado por decisão, com o motivo gravado no próprio dado.
 **Falta o RH dizer por que o registro parou.**
 
+### 7. Divisão do CC `11010219` entre Jaicler e Laís
+
+Os dois avaliam o **mesmo** centro de custo (DEPARTAMENTO CADASTRO, 7 pessoas), como já era no
+Protheus. **Segue assim** — a designação é manual e aceita isso sem nenhum tratamento especial.
+Formalizar a divisão é decisão dela.
+### 8. Reciprocidade — "eu avalio quem me avalia" é decisão de política
+
+O sistema **permite** A avaliar B e B avaliar A: não é autoavaliação, a separação de funções não
+barra, e nada avisa. Já acontece no Piloto — **ADRIANA CAETANO (003113) ↔ WANDERSON NASCIMENTO
+(002749)**, mesmo centro de custo, avaliando um ao outro (levantado em 10/09).
+
+⭐ **O ensaio de 12/09 NÃO tem nenhuma reciprocidade** — e isso não é o sistema impedindo: é
+consequência do desenho de duas passadas, em que os 16 responsáveis são avaliados pelo Claudimar e
+não uns pelos outros. O mesmo par Adriana ↔ Wanderson aparece no ensaio em **uma direção só**.
+
+⚠️ **Se ela escolher outra hierarquia, A↔B volta a ser possível e ninguém é avisado.** Num ciclo
+que conta para mérito, isso é decisão de política — não de montagem.
+
 ### 9. Falta o conceito de "está no topo, e por isso não é avaliado"
 
 O diretor executivo avalia 15 pessoas e **não é avaliado por ninguém** — o presidente não está no
@@ -5725,24 +5743,6 @@ seja mentir no histórico.
 ⚠️ **Decisão dela**, porque é de política: existe alguém que avalia o diretor (conselho,
 presidente), ou o topo simplesmente não é avaliado?
 
-### 8. Reciprocidade — "eu avalio quem me avalia" é decisão de política
-
-O sistema **permite** A avaliar B e B avaliar A: não é autoavaliação, a separação de funções não
-barra, e nada avisa. Já acontece no Piloto — **ADRIANA CAETANO (003113) ↔ WANDERSON NASCIMENTO
-(002749)**, mesmo centro de custo, avaliando um ao outro (levantado em 10/09).
-
-⭐ **O ensaio de 12/09 NÃO tem nenhuma reciprocidade** — e isso não é o sistema impedindo: é
-consequência do desenho de duas passadas, em que os 16 responsáveis são avaliados pelo Claudimar e
-não uns pelos outros. O mesmo par Adriana ↔ Wanderson aparece no ensaio em **uma direção só**.
-
-⚠️ **Se ela escolher outra hierarquia, A↔B volta a ser possível e ninguém é avisado.** Num ciclo
-que conta para mérito, isso é decisão de política — não de montagem.
-
-### 7. Divisão do CC `11010219` entre Jaicler e Laís
-
-Os dois avaliam o **mesmo** centro de custo (DEPARTAMENTO CADASTRO, 7 pessoas), como já era no
-Protheus. **Segue assim** — a designação é manual e aceita isso sem nenhum tratamento especial.
-Formalizar a divisão é decisão dela.
 
 ---
 
@@ -6222,3 +6222,102 @@ ele, a linha diria apenas que algo sumiu.
 
 ⚠️ **A guarda de ENVIADA não foi exercitada ao vivo** — o único ciclo com envio está encerrado, e
 essa guarda vem antes. Coberta por spec.
+
+---
+
+### 3.1.81. 🔧 CONTEXTO OPERACIONAL — avaliador de licença é gestão do RH, não pendência
+
+**Não é item da Arielly** (decisão do Clenio, 12/09), e nunca entrou na lista dela. Ela tem gestão
+do departamento e **o sistema já dá a flexibilidade**: aponta outro avaliador — subgerente, por
+exemplo — e resolve sozinha.
+
+**Medido no Piloto real (12/09):** 10 avaliadores de licença com **264 das 894 avaliações**. Na
+prévia da abertura aparecem **2 (94 avaliações)**; os outros 8 já estão na lista de **sem acesso**,
+que é o impedimento mais fundamental — sem dupla contagem.
+
+⭐ **A rotina, ao abrir um ciclo:** ler a lista *"avaliadores de licença"* da prévia e redesignar o
+que fizer sentido. Quem voltar de férias responde normalmente; quem não for voltar a tempo, o RH
+troca — e agora tem por onde: **Tirar avaliador** na linha (§3.1.80) e designar outro.
+
+⚠️ **A prévia INFORMA; quem decide é o RH.** É aviso, nunca bloqueio — e é por isso que a lista é
+separada da de acesso: "sem conta" pede o Configurador e outra pessoa; "de licença" pede uma
+decisão de gestão, que é dela.
+
+---
+
+## 🌙 FECHAMENTO DE 12/09/2026
+
+### O que ficou de pé
+
+| | |
+|---|---|
+| **`ENSAIO PILOTO — 16 CCs`** | **RASCUNHO**, 325 avaliações · período **01/11–30/11/2026**, data-base **30/11** |
+| ⛔ | **NÃO ABRIR** até o Clenio falar com a Arielly — abrir começa a gravar resposta, e a conversa pode mudar o recorte, a divisão do `11010219` e a hierarquia. Remontar rascunho é grátis |
+| **Piloto 15/09** | intacto: **894 PENDENTE, 0 respostas** |
+| Suíte | **726 testes, 57 suítes** |
+
+### O que foi construído hoje
+
+1. **A guarda que faltava na API** — `efeitoDeDesignar` ganhou a **4ª recusa**: inelegível não se
+   designa. A tela já impedia (`disabled={!linha.elegivel}` e botão dentro de
+   `{linha.elegivel && …}`); a API aceitava, e criava avaliação para quem a régua excluiu.
+   ⭐ **A varredura tela × API fechou com só essa aberta** — as outras sete regras (ciclo
+   encerrado, aplicação só em RASCUNHO, apagar com público, motivo mínimo, peso > 0, própria nota,
+   prévia velha) já tinham guarda. Tabela completa em §3.1.78.
+
+2. **Desfazer designação** (§3.1.80) — a rota que faltava. ⚠️ **Excluir declara *"esta pessoa não
+   é avaliada"*; desfazer diz *"o avaliador estava errado"*.** Usar o primeiro para consertar o
+   segundo registra uma decisão que ninguém tomou.
+
+3. **Um fato FALSO corrigido** em `acesso-do-avaliador.ts`: dizia que o afastado *"continua sem
+   conseguir entrar"*. **Afastado e férias ENTRAM** — `SITUACOES_ELEGIVEIS` inclui os dois. Daí
+   saiu o 4º degrau do acesso, `SEM_VINCULO` (DEMITIDO: tem conta, tem permissão, leva 403 — e a
+   prévia dizia "OK").
+
+4. **Avaliador de licença** — lista separada na prévia (§3.1.81), como contexto operacional.
+
+5. **O método**: *conta que não bate detecta furo de guarda melhor que ler código* (§3.1.79).
+
+---
+
+## ▶️ A FILA DE AMANHÃ (13/09, 08:00) — abrir por aqui
+
+### (a) 🔴 Esperando a Arielly — 9 itens, e um deles reordena tudo
+
+A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
+
+| # | Item | O que a resposta destrava |
+|---|---|---|
+| **1** | **As 39 perguntas — usar ou revisar?** | ⭐ **é a que reordena a fila.** *"Usar"* → a entrada do INFORMADO segue como próxima frente. *"Revisar"* → **o editor do acervo passa na frente** (3–3,5 semanas) |
+| 2 | A faixa "Menos de 1 ano" (são DUAS) | manter e corrigir o rótulo, ou mudar a régua — e aí decidir o que fazer com a regressão do `000006` como baseline |
+| 3 | Prefixo de CC × fábrica | remontar o público das 49 do `ADMINISTRATIVO - FABRICA`. **Não precisa de código** |
+| 4 | 2º `RH_ADMIN` (Claudimar) | destrava quem corrige a avaliação da própria gestora |
+| 5 | Recorte provisório — granularidade | define o ato de confirmar: linha, aplicação ou ciclo |
+| 6 | Treinamento parado em 14/11/2025 | destrava ligar (ou não) o `QTDE_TREINAMENTO` |
+| 7 | Divisão do `11010219` | formalizar a divisão Jaicler/Laís — hoje segue como está |
+| 8 | Reciprocidade A↔B | política: vale ou não, num ciclo que conta para mérito |
+| 9 | "Está no topo, não é avaliado" | falta o CONCEITO; hoje o único caminho mente no histórico |
+
+### (b) 🟢 Pronto para código — desenho fechado, é só executar
+
+| Frente | Custo | Estado |
+|---|---|---|
+| **Flag de recorte** no ciclo | **6h** | desenho **aprovado** (derivar por percentual inventa limiar, e limiar arbitrário erra calado) |
+| **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
+| **Editor do acervo** | **3–3,5 semanas** | depende do item **1** da Arielly |
+
+### (c) ⛔ Bloqueado fora — HLG e o Marco
+
+**O roteiro de deploy NÃO EXISTE**, e a onda cresceu. Medido em 12/09:
+
+| | Medido | ⚠️ |
+|---|---|---|
+| Migrations do `gestao-pessoas` | **13** | eram 11; entraram o **acervo** (`20260911230000`) e o **motivo do critério inativo** (`20260912020000`) |
+| Migrations do `auth-gateway` na onda | **2** | número do registro anterior — **não remedido contra PROD** |
+| **Total da onda** | **15** | não 13, e não 14 |
+| Serviços novos no compose | **3** | `gestao-pessoas-migrate`, `-backend`, `-frontend` |
+| `location` no nginx | **2** | `/gestao-pessoas/` e `/api/v1/gestao-pessoas/` (+ 2 upstreams) |
+| Jobs `*-migrate` com `migrate-guarda` | **6 de 7** | ⚠️ **já estão trocados** — o único fora é o `inventario-migrate`, que roda SQL próprio e não usa Prisma |
+
+⚠️ **PROD segue em `6855c918` e sem o Gestão de Pessoas.** Estado de ambiente envelhece: conferir
+`/health` → `versao.commit` antes de afirmar.
