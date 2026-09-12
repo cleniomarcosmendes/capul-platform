@@ -5707,6 +5707,24 @@ e a distribuição agora **mostra isso na tela**: `[1031, 4, 2, 0, 0]`. O sistem
 (resolver, critério, 5 faixas); está desligado por decisão, com o motivo gravado no próprio dado.
 **Falta o RH dizer por que o registro parou.**
 
+### 9. Falta o conceito de "está no topo, e por isso não é avaliado"
+
+O diretor executivo avalia 15 pessoas e **não é avaliado por ninguém** — o presidente não está no
+cadastro. O sistema aceita isso sem reclamar (ser avaliador e ser avaliado são independentes), mas
+**não tem como registrar o fato**.
+
+O painel o conta em *"sem avaliador"* para sempre, e o único caminho que o sistema oferece para
+tirá-lo dessa conta é a **EXCLUSÃO manual**, que grava *"foi retirado do ciclo"* — **que não é a
+verdade**. Ele está dentro, no topo, e ninguém acima para avaliá-lo.
+
+⭐ Em 12/09 o texto do próximo passo foi consertado (*"Designe, ou abra assim — quem ficar sem
+avaliador não é avaliado neste ciclo"*), então **não pede mais o impossível**. O que continua
+faltando é o CONCEITO: uma forma de dizer *"esta pessoa não é avaliada por estar no topo"* que não
+seja mentir no histórico.
+
+⚠️ **Decisão dela**, porque é de política: existe alguém que avalia o diretor (conselho,
+presidente), ou o topo simplesmente não é avaliado?
+
 ### 8. Reciprocidade — "eu avalio quem me avalia" é decisão de política
 
 O sistema **permite** A avaliar B e B avaliar A: não é autoavaliação, a separação de funções não
@@ -6050,3 +6068,93 @@ público com a quebra por origem, e o aviso de público vazio.
 - **Os filtros novos** trazem `centroCustoDescricao` e `cargoDescricao` na linha — conferido em
   697 linhas do Piloto, 8 CCs no seletor, 294 cargos como sugestão.
 - **A designação atravessa aplicação**: o Claudimar avalia gente das três.
+
+---
+
+### 3.1.78. ⭐⭐ A GUARDA QUE FALTAVA NA API, E A VARREDURA DA FAMÍLIA SILENCIOSA (12/09)
+
+#### A guarda
+
+`efeitoDeDesignar` ganhou a **quarta recusa**: inelegível não se designa. Antes recusava três
+casos (troca de aplicação, autoavaliação, avaliação cancelada) e elegibilidade não era um deles.
+
+Entrou no **classificador**, com as outras — e por isso a **prévia do lote a roda também**, sem
+segunda cópia. Provado contra dado real: `designar` devolve **400**, a prévia devolve
+`recusar: 1` (não `criar: 1`), e o elegível continua passando.
+
+⚠️ Vem **antes** da autoavaliação: *"esta pessoa não está no ciclo"* é anterior a *"quem avalia
+quem"*. E a frase aponta a saída — incluir por decisão registrada, e designar depois.
+
+#### ⭐⭐ A VARREDURA — que regras a tela impõe e a API não checa
+
+A pergunta certa: *"o que a tela impede por `disabled` ou por não renderizar, e a API aceita?"*.
+Nenhum teste de tela encontra, porque **a tela está certa**.
+
+| Regra que a tela impõe | A API checa? | Onde |
+|---|---|---|
+| **Linha inelegível não se designa** | 🔴 **não** → **corrigido hoje** | `efeitoDeDesignar` |
+| Ciclo encerrado trava tudo | ✅ | `assertCicloOperavel` / `assertCicloDaAplicacaoOperavel` |
+| Aplicação só se cria em RASCUNHO | ✅ | `criar` recusa explicitamente |
+| Apagar aplicação com público | ✅ | `efeitoDeApagar` — **mesma função** dos dois lados |
+| Motivo mínimo (3 lugares) | ✅ | DTO, `@MinLength(MOTIVO_MINIMO)` |
+| `pesoAvaliacao > 0` | ✅ | `validarAplicacao` |
+| Própria nota / memória | ✅ | corrigido em 11/09 (§3.1.67) |
+| Prévia velha não se aplica | ✅ n/a | a API **recomputa do alvo**; não existe "aplicar prévia salva" |
+
+⚠️ **`ocupado`, `salvando`, `enviando`, `baixando` não são regras** — são "espere a requisição".
+Entram no `disabled` e não pertencem a esta varredura; confundi-los com regra inflaria a lista e
+esconderia a única que importava.
+
+⭐ **Só uma estava aberta**, e não foi achada por revisão: o sintoma foi a **linha de estado parar
+de fechar**. Uma conta que não bate é melhor detector de furo de guarda que ler o código.
+
+#### Os dois consertos que a varredura pediu
+
+**1. O próximo passo pedia o impossível.** *"Designe antes de abrir"* tratava designação como
+pré-requisito — não é: `problemasParaAbrir` não olha `semDesignacao`. E havia o caso incumprível,
+o diretor no topo. Virou: *"Designe, ou abra assim — quem ficar sem avaliador não é avaliado neste
+ciclo"*. ⚠️ **Aviso que pede o impossível ensina a ignorar avisos**, e este é lido em todas as abas.
+
+**2. O cartão da aplicação não conciliava.** Mostrava *"66 avaliações"* e *"67 pessoas"* lado a
+lado, calado sobre a diferença. Família do achado 15 de 10/09.
+
+⚠️⚠️ **A subtração seria MENTIRA.** `total − avaliações` mistura duas coisas de naturezas opostas:
+quem a régua tirou (correto) e quem ficou sem avaliador (pendência). Na `Operação de Loja` a
+diferença é **14 — e as 14 são afastadas**. Um cartão dizendo *"14 sem avaliador"* inventaria uma
+pendência inexistente e mandaria o RH resolver o que já está resolvido.
+
+Vêm os **dois** números, da mesma `designacao.listar` do painel. Conferido no ensaio:
+
+```
+Aprendizes      19 público  18 avaliações   1 fora do ciclo  0 sem avaliador   19−1   = 18 ✅
+Administrativo  67          63              3                1                67−3−1 = 63 ✅
+Op. de Loja    257         243             14                0               257−14  = 243 ✅
+Produção         1           1              0                0                        =  1 ✅
+```
+
+#### As 18 desfeitas — e a lacuna que isso revelou
+
+Removidas por **desfazer a designação**, não por exclusão do ciclo: elas já estavam fora **por
+direito da régua**, e a exclusão manual é para decisão do RH — usá-la aqui registraria uma decisão
+que ninguém tomou. Recorte explícito (este ciclo · avaliado AFASTADO · PENDENTE · zero respostas).
+
+⚠️ **Não existe rota para desfazer designação.** Foi preciso SQL. A ausência é coerente com o
+modelo (quem não deve ser avaliado, exclui-se), e deixa de importar agora que a guarda impede o
+estado de nascer — mas fica registrado: se aparecer de novo, não há caminho de tela.
+
+**A linha de estado voltou a fechar:** `344 − 18 − 1 = 325 = designados`.
+
+#### 🔎 O que a Lícia respondeu — elegibilidade é sobre ser AVALIADO, não sobre AVALIAR
+
+`liciaversiani` (005380) está **AFASTADA** e é uma das 16 responsáveis. Depois da limpeza:
+
+| | |
+|---|---|
+| É avaliada? | **não** — a régua a tirou, e a avaliação dela foi desfeita |
+| Continua avaliadora? | **sim, de 1 pessoa** (Luana, ativa) |
+| A fila do Claudimar | caiu de 16 para **15** (ela saiu dos avaliados) |
+
+⭐ **As duas coisas são independentes, e é assim que deve ser** — estar afastado não desfaz a linha
+de reporte. ⚠️ **Mas ninguém sinaliza que a avaliadora está afastada**: a Luana fica esperando uma
+avaliação de quem não está trabalhando, e nada na tela diz. A prévia da abertura confere
+`avaliadoresSemAcesso` — **não confere avaliador afastado**. Candidato à próxima varredura.
