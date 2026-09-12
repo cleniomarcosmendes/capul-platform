@@ -5408,3 +5408,112 @@ DELETE FROM rh.colaborador WHERE matricula = '009900';   -- e o usuário, no Con
 ⭐ **Duas personas da varredura de 10/09 não rodaram por falta de conta** — este é o mesmo
 gargalo que [[feedback_designar_nao_da_acesso]] registra do lado do avaliador: *designar não dá
 acesso*, e **testar também exige conta que exista**.
+
+---
+
+### 3.1.69. ⭐⭐ A CHECAGEM QUE EXISTE E É INALCANÇÁVEL QUANDO SERVIRIA (11/09)
+
+A conferência de pendências do painel roda sobre `status: 'ENVIADA'`. Com zero enviadas — que é o
+estado do ciclo **no dia em que ele abre** — ela responde *"Nada a conferir ainda"*. A checagem
+existia, estava certa, e **só falava depois que as notas já tinham saído sem o critério**.
+
+⭐ **A forma do defeito:** a pré-condição de existência do dado coincide com o momento em que a
+checagem já não serve. Não é checagem faltando nem errada — é checagem **fora de hora**, e por isso
+não aparece em revisão: quem lê o código vê uma verificação correta.
+
+**A família:** é o mesmo desenho da guarda do `[DEMO]` (§3.1.30), que vivia só na abertura — dava
+para montar a aplicação inteira sobre um modelo de demonstração e descobrir na última porta.
+
+**Varredura das outras com essa forma** (11/09):
+
+| Checagem | Momento | Chega a tempo? |
+|---|---|---|
+| conferência de pendências (`SEM_FAIXA`, `SEM_VALOR_INFORMADO`, `SEM_DADO_CADASTRAL`) | sobre `ENVIADA` | 🔴 **era a única restante** — agora pareada com o aviso da abertura |
+| guarda do `[DEMO]` | abertura **+ criar/editar aplicação** | ✅ `validarAplicacao` roda nos três, com `modeloFinalidade` |
+| resolver registrado | montagem da Aplicação **+** abertura | ✅ dois momentos, por desenho |
+| peso, público vazio, critério duplicado | criar/editar **+** abertura | ✅ |
+
+**Nenhuma outra.** Registrado como tabela porque a pergunta *"quais chegam a tempo"* vale mais que
+a correção: a próxima varredura começa daqui.
+
+#### O que foi feito
+
+- **Escopo CALCULADO** (`escopoAgregado`): `SEM_VALOR_INFORMADO` e `SEM_DADO_CADASTRAL` sobem para
+  `CONFIGURACAO` quando atingem **todo mundo**. *"Resolve-se caso a caso"* para 894 pessoas manda
+  fazer 894 correções onde cabe uma importação — e ainda ordenava o alerta **abaixo** dos de
+  configuração. O texto muda junto: *"NINGUÉM tem valor informado… Importe os valores e reapure."*
+- **Aviso na abertura** (`avisosParaAbrir`): critério `INFORMADO` sem nenhum valor no ciclo. Lista
+  **separada** da de problemas — juntas, o aviso pareceria impedimento e a tela diria "não pode
+  abrir" para algo que pode.
+
+### 3.1.70. ⭐⭐ DISTRIBUIÇÃO REAL POR FAIXA — a régua passa a mostrar o que mede (11/09)
+
+`GET /criterios/:id/distribuicao`. O cadastro mostrava os limites e escondia o tamanho: dava para
+apagar a faixa de 480 pessoas sem que nada na tela dissesse que eram 480.
+
+- **Reusa os RESOLVERS e a `localizarFaixa`** — o número da tela tem de ser o mesmo que a apuração
+  vai produzir. Uma segunda forma de calcular "em que faixa esta pessoa cai" divergiria da
+  primeira, e o sintoma seria a tela prometendo uma distribuição que a nota não confirma.
+- **DOMÍNIO e NUMÉRICO.** `INFORMADO` responde `aplicavel: false` **com o motivo** (o valor é por
+  ciclo) — zeros pareceriam "ninguém se encaixa", que é afirmação falsa.
+- **Ancorada em HOJE, e a tela diz.** Tempo de empresa e de função mudam com a data-base; número
+  sem a data que o ancora envelhece calado.
+- Carrega **uma vez, na abertura do diálogo**: a distribuição é do que está GRAVADO, não do que
+  está sendo digitado.
+
+**Medido em produção (1.037 ativos):**
+
+| Critério | Distribuição |
+|---|---|
+| ESCOLARIDADE | `[3, 9, 27, 95, 68, 138, **480**, 74, 108, 1, 0, 33, 1]` — o 480 é o código 45 |
+| TEMPO_EMPRESA | `[**0**, 418, 133, 100, 386]` |
+| QTDE_TREINAMENTO | `[**1031**, 4, 2, 0, 0]` — 6 pontuariam, e o argumento de mantê-lo desligado ficou **visível na tela** |
+
+#### 🔎 Achado de brinde — a faixa `[0,0]` de TEMPO_EMPRESA rotulada "Menos de 1 ano" tem ZERO pessoas
+
+Ela é `0 ≤ x ≤ 0`: só casa com **exatamente zero anos**, isto é, admitido hoje. Quem tem 6 meses
+cai na faixa seguinte, `(0,3]` — *"Até 3 anos"*, 25 pontos. **O rótulo promete um intervalo que a
+faixa não tem.**
+
+⚠️ **Não mexi**: ela reproduz o `CASE WHEN` do select do Protheus, e a regressão do ciclo `000006`
+depende dela. Mudar o limite mudaria a nota de quem tem menos de 1 ano — decisão do RH, não da T.I.
+O que a distribuição fez foi **tornar visível** o que estava escrito havia meses e ninguém tinha
+como ver: uma faixa com zero pessoas, num cadastro que agora mostra o tamanho.
+
+### 3.1.71. ⭐⭐ FAMÍLIA — o sistema AFIRMANDO que está certo quando não está
+
+Três defeitos de 11/09, e os três são o mesmo. Não são "faltou validar": são **afirmação errada**.
+
+| | Onde | O que o sistema AFIRMAVA | O que era |
+|---|---|---|---|
+| **1** | `conferirFaixas` com conjunto vazio | `{"problemas": []}` — *está tudo certo* | apagaria as 13 faixas de ESCOLARIDADE, 5 aplicações, e o critério pararia de pontuar 1.037 pessoas |
+| **2** | `assertSalvavel` zerando `codigoCalculo` antes de validar | o cadastro **passou** — logo, é válido | a regra escrita manda RECUSAR `INFORMADO` com código de cálculo; ela nunca era alcançada |
+| **3** | `RA4_HORAS` no `RA4010` | coluna **preenchida**, não nula — logo, tem dado | 2.268 linhas, **todas zero**. Um critério sobre ela daria 0 para todos, calado |
+
+**O que os une:**
+
+- ⭐ **Não é silêncio — é aval.** Silêncio deixa a pessoa desconfiada; afirmação errada encerra a
+  investigação com a resposta trocada. Nos três, o sistema respondeu *"ok"* a uma pergunta que ele
+  não tinha como responder.
+- **Passam em qualquer teste de forma.** `[]` é uma lista válida; `null` é um valor válido; `0` é
+  um número válido. Nenhum quebra tipo, schema ou contrato.
+- **A camada que afirma não é a camada que sabe.** A conferência não sabia que o critério estava em
+  uso; o validador não recebeu o campo cru; o resolver não sabia que a coluna vinha zerada da
+  origem.
+- ⭐⭐ **Os três só apareceram com DADO REAL.** Nenhum foi achado por spec — e não seria: dado
+  sintético confirma a implementação, dado real confirma a intenção
+  ([[feedback_numero_preciso_pode_ser_resto_de_conta]], §3.1.66).
+
+**A contramedida:** antes de uma camada responder *"está certo"*, perguntar **o que ela não sabe**.
+Se a resposta depende de um fato que ela não carregou (o critério está em uso? o campo veio cru? a
+coluna tem valor de verdade?), ela não pode afirmar — só pode dizer *"não vi problema no que eu
+olhei"*, que é outra frase. Foi assim que o `conferir` ganhou `avisos` além de `problemas`.
+
+### 3.1.72. ✅ O `1.036` conferido — só prosa, nada compara
+
+Com a conta de teste (§3.1.68) `rh.colaborador` foi para **1.037**. Varredura do número como valor
+fixo: **11 ocorrências, todas em comentário, `.md` ou spec como texto explicativo**. Nenhum
+`toBe(1036)`, nenhuma comparação, nenhum limite de consulta. Nada passa a divergir.
+
+⚠️ O que **muda de valor** é a distribuição de §3.1.70 (1.037 em vez de 1.036) e qualquer contagem
+populacional lida da tela — por isso a conta de teste está registrada com o SQL de remoção.
