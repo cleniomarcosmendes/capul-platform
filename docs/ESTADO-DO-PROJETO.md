@@ -11085,3 +11085,80 @@ reversível na hora. Fazer 3 **antes** de saber que é preciso é pagar
 invisibilidade e ausência de trilha por um risco que talvez não apareça.
 
 ⛔ **Nada executado.** A decisão é do Clenio.
+
+---
+
+### 3.1.178. ✅ DECISÃO — opção 4 (roteiro por bloco), com a 3 como rede
+
+**Decidido pelo Clenio em 13/09**, com o argumento que fecha a questão:
+
+> **Para proteger as 894, encerrar escreve nas 894 — duas vezes. O estado que eu
+> quero preservar vira o que se muta.**
+
+⛔ Encerrar/reabrir descartado. A opção 3 (Piloto → RASCUNHO, um `UPDATE` de uma
+linha, zero escrita nas 894) fica **como rede**: se a convivência se mostrar
+confusa na prática, resolve na hora e reverte na hora.
+
+#### ✏️ E uma suposição do Clenio, corrigida por ele mesmo
+
+> **"Eu achava a fila uma lista plana."**
+
+Ela é **agrupada por ciclo, com cabeçalho próprio** (`agruparPorCiclo`). Isso
+muda o tamanho do problema: é **uma verificação por TELA**, não 325 por cartão.
+O roteiro dirá uma vez: *"trabalhe apenas dentro do bloco `ENSAIO PILOTO — 16
+CCs`"*.
+
+⭐⭐ **E a decisão dele reenquadra o risco:** *a convivência dos dois ciclos passa
+a ser MATÉRIA DO ENSAIO, não acidente.* Se confundir na prática, **é achado** —
+e é achado sobre uma tela que vai existir com dois ciclos abertos em produção.
+
+---
+
+### 3.1.179. 🔁 CAPACIDADE SEM CAMINHO — terceira ocorrência: `?cicloId=` na fila
+
+`GET /avaliacoes/minhas` **aceita `?cicloId=`** desde sempre. **A tela nunca
+passa.** O filtro que resolveria a convivência dos dois ciclos já existe no
+backend e não tem botão.
+
+| # | Capacidade | Faltava |
+|---|---|---|
+| 1 | papel `RH_MODELO` | tela que o exercitasse |
+| 2 | `devolutivaEm` / `devolutivaPorId` | **escritor** — 8 dias de coluna morta (§3.1.152) |
+| 3 | **`?cicloId=` na fila** | **a tela nunca passa o parâmetro** |
+
+⚠️ **Não construído, e a razão é a mesma da opção 2 recusada:** é código novo na
+tela que o ensaio existe para medir. ⭐ Fica registrado como a saída pronta, se
+a convivência incomodar: **~2h e o backend já está feito.**
+
+---
+
+### 3.1.180. 🔴 FALSO VERDE MEU — inventei uma rota e li o corpo do 404
+
+Ao conferir se a abertura do ENSAIO passaria, chamei
+`GET /ciclos/:id/previa-abertura`. **A rota não existe** — a real é
+`GET /painel/ciclo/:id/previa-da-abertura`.
+
+⚠️ **E o script imprimiu `problemas: 0 · avisos: 0 · avaliadoresSemAcesso: 0`.**
+Ele fez `d.get('problemas', [])` sobre o **corpo do 404** — que não tem a chave —
+e o `.get` devolveu lista vazia. **Zero por não haver a chave, não por não haver
+problema.**
+
+⭐⭐ **É exatamente a regra que eu tinha acabado de registrar** (§3.1.176: *404
+uniforme = a rota não existe, não a lógica*), e caí nela na hora seguinte.
+
+⭐ **O que salvou:** eu não confiei no resultado limpo demais e pedi o **corpo
+cru** — `avaliadoresDeLicenca = 0` não batia com a Lícia estar AFASTADO, e essa
+incoerência é que fez olhar. **Conta que não bate, de novo.**
+
+> ⚠️ **A lição concreta, para todo parser de resposta:** `.get(chave, padrão)`
+> transforma **ausência** em **valor** — e num relatório de conferência,
+> ausência e zero significam coisas opostas. **Ou se checa o HTTP antes de
+> parsear, ou se acessa a chave sem `default`.**
+
+**Com a rota certa**, e aí sim medido: `problemas: 0` (a abertura passa) ·
+`avisos: 0` · `totalAplicacoes 4 · noPublico 344 · designados 325 ·
+semAvaliador 1` (o Claudimar) · `avaliadoresSemAcesso: 0` · **`avaliadoresDeLicenca: 2`**
+— MARCIO ANTONIO (FÉRIAS, 33 avaliações) e LÍCIA VERSIANI (AFASTADO, 1).
+
+⚠️ Os dois **têm acesso e vão avaliar** — é aviso, não impedimento, e o ensaio
+vai exercitá-lo.
