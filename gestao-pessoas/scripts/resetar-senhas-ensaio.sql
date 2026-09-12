@@ -34,9 +34,14 @@
 -- acentos e o hash. Copiar o arquivo para dentro do container evita as duas
 -- coisas, porque `docker cp` copia BYTES:
 --
---   docker cp gestao-pessoas\scripts\resetar-senhas-ensaio.sql capul-db:/tmp/reset.sql
+--   docker cp C:\meus_projetos\capul-platform\gestao-pessoas\scripts\resetar-senhas-ensaio.sql capul-db:/tmp/reset.sql
 --   docker compose exec postgres psql -U capul_user -d capul_platform -f /tmp/reset.sql
 --   docker compose exec postgres rm /tmp/reset.sql
+--
+-- ⚠️ CAMINHO ABSOLUTO, de propósito. O relativo falha se quem roda não estiver
+--    na raiz do repo — e falha com uma mensagem que parece outra coisa
+--    ("O sistema não pode encontrar o arquivo"), mandando procurar o arquivo em
+--    vez de olhar o diretório.
 --
 -- (No bash/WSL o `< arquivo` funciona igual.)
 --

@@ -15,7 +15,7 @@
 -- ⚠️ NO POWERSHELL (5.1): **não use `<`** — ele não tem redireção de entrada, e
 -- o `|` dele REENCODA o texto (estragaria acentos). `docker cp` copia BYTES:
 --
---   docker cp gestao-pessoas\scripts\limpar-ensaio-integral.sql capul-db:/tmp/limpar.sql
+--   docker cp C:\meus_projetos\capul-platform\gestao-pessoas\scripts\limpar-ensaio-integral.sql capul-db:/tmp/limpar.sql
 --   docker compose exec postgres psql -U capul_user -d capul_platform -f /tmp/limpar.sql
 --   docker compose exec postgres rm /tmp/limpar.sql
 --
