@@ -6158,3 +6158,67 @@ estado de nascer — mas fica registrado: se aparecer de novo, não há caminho 
 de reporte. ⚠️ **Mas ninguém sinaliza que a avaliadora está afastada**: a Luana fica esperando uma
 avaliação de quem não está trabalhando, e nada na tela diz. A prévia da abertura confere
 `avaliadoresSemAcesso` — **não confere avaliador afastado**. Candidato à próxima varredura.
+
+---
+
+### 3.1.79. ⭐⭐ MÉTODO — conta que não bate detecta furo de guarda melhor que ler código
+
+A guarda de elegibilidade que faltava na API (§3.1.78) **não foi achada por revisão**. Ninguém
+leu `efeitoDeDesignar`, contou três recusas e notou a quarta faltando. O que denunciou foi a
+**linha de estado parar de fechar**:
+
+```
+ENSAIO:  344 − 18 − 1 = 325   …e o painel dizia "de 343"
+PILOTO: 1036 − 47 − 95 = 894  …e dizia 894   ✅
+```
+
+⭐ **A regra:** uma conta que não bate é um detector melhor que a leitura do código, porque ela
+**não depende de saber o que procurar**. Revisão encontra o que o revisor imagina; a aritmética
+encontra o que ninguém imaginou — inclusive furos de guarda, que por definição são caminhos que
+ninguém pensou em fechar.
+
+**Como usar isso de propósito:**
+
+- Toda tela que mostra vários números do mesmo universo deve ter **uma identidade que feche**
+  (`público − fora − sem avaliador = designados`). Ela é a asserção de invariante mais barata que
+  existe, e roda toda vez que alguém abre a tela.
+- ⚠️ **Fechar num ambiente não é fechar.** A identidade fechava no Piloto e não no ensaio, porque
+  o Piloto nunca exercitou o caminho da API direta. Uma conta que fecha prova o caminho testado,
+  não a regra.
+- Quando ela não fechar, **a primeira hipótese é furo de guarda**, não erro de conta.
+
+Vale ao lado de [[feedback_numero_preciso_pode_ser_resto_de_conta]] (§3.1.66): lá o número
+revelou uma intenção mal lida; aqui, uma porta aberta.
+
+### 3.1.80. ✅ DESFAZER A DESIGNAÇÃO — a rota que faltava (12/09)
+
+Designar a pessoa errada é o erro mais comum de uma tela de designação **manual**, e o conserto
+era T.I. no banco. As 18 do ensaio saíram por SQL porque não havia rota.
+
+`DELETE /designacao/ciclo/:cicloId/designacao/:avaliadoId`.
+
+#### ⚠️ Não é EXCLUIR, e a diferença é o que se DECLARA
+
+| | O que registra |
+|---|---|
+| **Excluir do ciclo** | *"esta pessoa não é avaliada neste ciclo"* — decisão do RH, com justificativa, que fica no histórico |
+| **Desfazer** | *"o avaliador estava errado"*. A pessoa **continua** no ciclo, elegível, esperando avaliador |
+
+Usar o primeiro para consertar o segundo **registraria uma decisão que ninguém tomou**.
+
+#### As guardas, no classificador
+
+| Estado | Efeito |
+|---|---|
+| PENDENTE, sem resposta | ✅ desfaz |
+| **ENVIADA** | recusa — há nota, e pode haver resultado apurado. Manda **reabrir** primeiro |
+| **Com respostas** | recusa — e oferece **trocar** o avaliador. Resposta é julgamento de alguém |
+| **CANCELADA** | recusa — é registro de decisão do RH; apagar sumiria com o motivo. Use o **Incluir** |
+| Ciclo encerrado | `assertCicloOperavel`, como em tudo |
+
+Na tela: **some** quando não há designação (ato sem objeto) e **desabilita com o motivo** quando
+há trabalho dentro — a mesma distinção do Reabrir. A auditoria grava o **avaliador anterior**: sem
+ele, a linha diria apenas que algo sumiu.
+
+⚠️ **A guarda de ENVIADA não foi exercitada ao vivo** — o único ciclo com envio está encerrado, e
+essa guarda vem antes. Coberta por spec.
