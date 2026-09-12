@@ -6323,7 +6323,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 
 | Frente | Custo | Estado |
 |---|---|---|
-| **Flag de recorte** no ciclo | **6h** | desenho **aprovado** (derivar por percentual inventa limiar, e limiar arbitrário erra calado) |
+| ~~**Flag de recorte** no ciclo~~ | ~~6h~~ | ✅ **FEITA em 13/09** — §3.1.142. ⚠️ Não confundir com o **item 5 da Arielly** (`aplicacao_publico.provisorio`, por linha), que segue aberto |
 | **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
 | **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) ✅ §3.1.98 · **D** (7) ✅ §3.1.101 — **editor COMPLETO**. Cada bloco fecha numa CONTA, conferida antes do próximo |
 
@@ -9081,3 +9081,137 @@ como entrada antes de ler o resultado (§3.1.113).
 É a mesma lição do §3.1.85 num lugar novo: **a contramedida não é o aviso — é a
 conta.** Aqui o "aviso" era o texto da própria dispensa, que é o lugar mais
 persuasivo possível para uma afirmação falsa morar.
+
+---
+
+### 3.1.142. ✅ A FLAG DE RECORTE — o mesmo número, duas leituras opostas (6h)
+
+Primeiro item da ordem acordada. ⚠️ **Antes de escrever, desfiz uma confusão de
+nome**: o doc tinha *duas* coisas chamadas "recorte", e uma delas está com a
+Arielly.
+
+| | O que é | Estado |
+|---|---|---|
+| `aplicacao_publico.provisorio` (por LINHA) | *"este público veio de um atalho, não é decisão do RH"* | 🔴 **espera a Arielly** — item 5: confirmar é por linha, aplicação ou ciclo? |
+| **`ciclo.ehRecorte`** (por CICLO) | *"este ciclo alcança só parte da empresa"* | ✅ **feito** — desenho aprovado, sem dependência dela |
+
+⭐ Se eu tivesse tomado uma pela outra, teria construído em cima de uma decisão
+que não existe. O desenho estava fora do ESTADO — só a conclusão de uma linha
+tinha sido registrada, e o resto morava na conversa.
+
+#### O que o problema era
+
+O painel só sabia contar: **"N pessoas fora de TODAS as aplicações deste ciclo"**,
+em vermelho, com *"monte o público que falta"*. Num ciclo que **nunca teve a
+intenção** de alcançar essas pessoas — um piloto de 16 centros de custo — o
+número é verdadeiro e a leitura é falsa: mostra como buraco a decisão de recortar.
+
+⚠️ E o custo disso não é só o aviso errado: **aviso que pede para desfazer uma
+decisão treina quem lê a ignorar** — e junto com ele some o vermelho que era de
+verdade.
+
+#### Por que COLUNA e não inferência
+
+A alternativa de ~3h era derivar do público (`< X% dos elegíveis`). Recusada:
+**limiar arbitrário erra calado** — o ciclo de 49% viraria recorte e o de 51%
+não, sem ninguém ter decidido nada. Quem monta o ciclo **sabe** se é recorte.
+
+#### O que ficou
+
+| Peça | |
+|---|---|
+| `20260913000000_ciclo_eh_recorte` | coluna + `COMMENT` com o porquê. Aplicada: **GUARDA: ok — 15 migrations** |
+| `PATCH /ciclos/:id/recorte` | RH_ADMIN + RH_CICLO. Audita com o valor **anterior** — é o que responde "desde quando" |
+| `lib/alcance-do-ciclo.ts` | ⭐ a regra das duas leituras é **função pura com spec**, no idioma do módulo. A tela só pinta o que ela decidiu |
+| Botão no painel | ao lado do número que ele muda — rota sem caminho na tela é capacidade que ninguém usa |
+
+⭐⭐ **A coluna não filtra ninguém.** Medido na API real: o `ZZ DESCARTAVEL` tinha
+**989** fora antes e **989** depois de marcar. O spec cobra isso explicitamente —
+se um dia a flag passar a esconder gente, o teste quebra.
+
+#### Uma decisão dentro do trabalho: vale com o ciclo ENCERRADO
+
+O `marcarRecorte` **não afere status**, e isso é escolha. Encerrado trava
+designação, público e apuração — coisas que mudam nota. Isto é **rótulo**, e
+travá-lo deixaria um ciclo fechado dizendo *"664 pessoas fora"* em vermelho para
+sempre, sem caminho de conserto: *guarda que impede o conserto é pior que guarda
+ausente*. O caso que obriga é o **`ENSAIO PILOTO`, que nasceu antes da coluna**.
+
+⚠️ A guarda de escrita reprovou o método — funcionando como deve — e a exceção
+entrou na lista **com o motivo escrito**, mais a condição que a derruba: *"se um
+dia ele passar a escrever qualquer outro campo, esta linha deixa de valer"*.
+
+**Matriz medida na API:** `zz.teste.rh` 200 · `zz.teste.ciclo` 200 ·
+`zz.teste.modelo` **403**. Idempotente não escreve nem audita; ciclo inexistente
+é 404.
+
+⛔ **Nenhum ciclo de verdade foi marcado.** Se o `ENSAIO PILOTO` é um recorte —
+e ele é, 16 CCs — quem declara isso é o Clenio, num clique. **Montagem de coisa
+que fica vai na conta de quem decidiu, não na de teste.**
+
+---
+
+### 3.1.143. 🔴 A STRING `"false"` LIGAVA A FLAG — e três delas autorizam ato
+
+Achado ao sondar a rota nova com corpo inválido. **Não é do campo novo: é do
+módulo inteiro, e é anterior a este trabalho.**
+
+O `ValidationPipe` roda com `enableImplicitConversion: true` — é o que faz
+`?pagina=2` chegar como número. Em BOOLEANO o efeito é `Boolean(valor)`, e a
+validação não pega **porque roda depois da conversão**: quando o `@IsBoolean()`
+olha, o valor já é um booleano legítimo.
+
+Medido contra a API real, antes da correção:
+
+| Enviado | Chegava como |
+|---|---|
+| `"false"` (string) | **`true`** |
+| `"talvez"` | **`true`** |
+| `0` | `false` |
+| `null` | 400 ✅ |
+
+⚠️ **São 15 campos booleanos no módulo, e três são flags de CONFIRMAÇÃO** —
+`confirmarPendentes`, `confirmarSemFaixas`, `confirmarTrocaDeAvaliador`. Elas
+existem porque *[[feedback_api_recusa_para_a_tela_perguntar]]*: quem manda a
+flag está dizendo "eu vi o aviso e assumo". Um cliente que mandasse `"false"` —
+**o jeito mais natural de escrever "não confirmei" fora do nosso frontend** —
+autorizaria o ato em vez de recusá-lo. E o `confirmarPendentes` **CANCELA as
+avaliações não enviadas do ciclo**.
+
+⭐ **Buraco latente, não incidente.** Nosso frontend manda booleano de verdade
+(TypeScript + JSON), então nunca aconteceu. É a família do
+[[feedback_tela_e_api_discordam_dois_sentidos]] no sentido silencioso: **a tela
+nunca exercita essa forma; quem descobriria é quem chama a API direto.**
+
+#### A correção — e a primeira tentativa que não funcionou
+
+`@BooleanoEstrito()`: um `@Transform` próprio + `@IsBoolean()`.
+
+⚠️ **A primeira versão devolvia `value` intocado e não consertou nada** — a API
+seguiu aceitando `"false"`. Antes de concluir que a abordagem estava errada,
+**provei que o código novo estava no container** (`dist/common/booleano-estrito.js`
+presente, 5 usos no controller compilado). Estava. O erro era outro: com
+`enableImplicitConversion`, a conversão de tipo acontece **antes** das
+transformações próprias — `value` já chega convertido.
+
+⭐ A saída é `obj[key]`: `obj` é o objeto **plano da requisição**, do jeito que
+veio, e é a única referência ao valor original que sobra depois da conversão.
+
+Depois da correção, medido na API: `true`/`false` passam; `"false"`, `"true"`,
+`"talvez"`, `0` e `1` devolvem **400 `must be a boolean value`**. E a sonda de
+contrato confirma que o caminho normal não quebrou: encerrar um ciclo já
+encerrado com `confirmarPendentes: true` recusa **pelo ESTADO**, não pelo DTO.
+
+⚠️ Os 15 campos são todos de CORPO. O único booleano de query
+(`confirmarPublico`) é parseado à mão como `string` e não foi tocado — **o
+decorator não serve para query string**, onde o valor legítimo É a string.
+
+#### Invariante
+
+`booleano-estrito.invariante.spec.ts` varre o fonte e cobra três coisas: nenhum
+DTO usa `@IsBoolean()` cru; o decorator estrito está em uso em pelo menos 4
+arquivos (zero usos seria verde por não haver o que conferir); e **as três flags
+de confirmação estão nomeadas**, não contadas. Canário incluído.
+
+⭐ É a terceira vez que a mesma pergunta rende achado: *o que acontece se o
+cliente mandar uma forma que a nossa tela nunca manda?*
