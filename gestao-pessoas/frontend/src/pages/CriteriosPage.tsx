@@ -242,6 +242,22 @@ function CartaoDoCriterio({
         </p>
       )}
 
+      {/* ⚠️⚠️ A METADE QUE AINDA NÃO EXISTE, dita em voz alta.
+          Cadastrar um INFORMADO é só metade do caminho: sem o VALOR de cada
+          pessoa ele não pontua ninguém — a apuração o marca "sem valor
+          informado" e o tira da nota pela renormalização, sem erro. A tela de
+          importar/digitar valor é a próxima frente, e enquanto ela não existe
+          esta aqui estaria prometendo uma capacidade pela metade se ficasse
+          calada. Dizer é mais barato que o vaivém de descobrir depois. */}
+      {c.origem === 'INFORMADO' && c.ativo && c.valoresInformados === 0 && !semFaixa && (
+        <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-sky-50 px-2.5 py-1.5 text-sm text-sky-900">
+          <Info size={14} className="mt-0.5 shrink-0" aria-hidden />
+          O critério está pronto, mas <strong>ainda não há como informar o valor de cada
+          pessoa</strong> — a tela de importar planilha é a próxima entrega. Até lá ele não
+          pontua ninguém: entra na apuração como "sem valor" e sai da nota.
+        </p>
+      )}
+
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
         <span>
           {c.aplicacoesQueUsam === 0
