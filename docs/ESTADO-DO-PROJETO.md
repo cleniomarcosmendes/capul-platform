@@ -7774,3 +7774,68 @@ Veio do `seed.ts`, junto com os outros três — não é sobra de teste de ningu
 ⚠️ **Não confundir com `ZZ MODELO DESCARTAVEL`**, que é área de varredura e tem SQL de limpeza
 próprio (§3.1.103). O critério: **`[DEMO]` nasce do seed e fica; `ZZ` é criado para um percurso e
 sai depois dele.**
+
+---
+
+### 3.1.111. 🧪 ÁREA DESCARTÁVEL — recriada em 12/09, estado de partida da 2ª varredura
+
+Recriada idêntica à anterior depois da limpeza. ⚠️ **O SQL de limpeza é o da §3.1.103** e continua
+valendo sem mudança — inclusive para a `C001` nova, que cai no critério `codigo LIKE 'C%'` + fora
+de todo arranjo + sem resposta.
+
+| | |
+|---|---|
+| Família | `ZZ MODELO DESCARTAVEL — varredura de telas (pode apagar)` · `zz-modelo-descartavel` |
+| Versão | v1 **publicada** · `zz-versao-descartavel-1` · máxima **72** |
+| Arranjo | Assiduidade **20 ÷ 2 = 10 · 10** · Relacionamento **40 ÷ 3 = 13,34 · 13,33 · 13,33** · soma **60** |
+| Questão nova | **`C001`** — *ZZ DESCARTAVEL — Cuidado com o EPI (pode apagar)* · em **0** perfis, **0** respostas |
+
+⭐ O **40 ÷ 3** é deliberado: a área tem resto, para que qualquer coisa que a varredura faça nela
+exercite a regra de repartição em vez de esconder o caso (§3.1.86). Só a família e a linha de
+versão vazia nasceram de SQL — o arranjo e a publicação passaram **pela API do editor**.
+
+#### 📋 O ESTADO DE PARTIDA
+
+**Acervo: 16 questões.** Uma descartável.
+
+| | Código | Perfis | Respostas |
+|---|---|---|---|
+| ✅ **descartável** | `C001` | **0** | **0** |
+| ❌ não | `004`–`018` (15, do SQP010) | 1 a 6 | 0 a 19 |
+
+⚠️ `016` (Conhecimento Técnico do Maquinário) tem **0 respostas** mas está em **1 perfil** — não é
+descartável. É a armadilha da lista: "sem resposta" sozinho não basta.
+
+**Classificações: 8, todas ativas, todas em uso.** Nenhuma descartável. As quatro primeiras com 3
+questões, as quatro últimas com 1.
+
+**Versões: 6.**
+
+| Modelo | Fin. | v | Estado | Máx. | Grupos | Questões | Soma | Aplicações |
+|---|---|---|---|---|---|---|---|---|
+| Administrativo | PRODUCAO | 1 | publicada 05/09 | 72 | 4 | 11 | 60 | **8** |
+| Administrativo | PRODUCAO | 2 | **RASCUNHO** | — | 4 | 11 | 60 | 0 |
+| Operação de Loja | PRODUCAO | 1 | publicada 05/09 | 72 | 7 | 14 | 60 | 3 |
+| Produção e Indústria | PRODUCAO | 1 | publicada 05/09 | 72 | 7 | 14 | 60 | 3 |
+| [DEMO] Treinamento | DEMONSTRACAO | 1 | publicada 05/09 | 60 | 2 | 5 | 50 | 0 |
+| **ZZ DESCARTAVEL** | DEMONSTRACAO | 1 | publicada 12/09 | 72 | 2 | 5 | 60 | 0 |
+
+**Os 44 pesos dos perfis reais: 0 divergências.** Máximas gravada × calculada iguais nos quatro, e
+a coluna "vale até" agora **fecha na máxima** (72 · 72 · 60 · 72) — era o 72,01 da §3.1.105.
+
+**As três contas de teste** — senha **`TesteRh2026`** nas três:
+
+| Login | Papel | Matrícula | Colaborador |
+|---|---|---|---|
+| `zz.teste.rh` | **RH_ADMIN** | 009900 | ATIVO |
+| `zz.teste.modelo` | **RH_MODELO** | 009901 | ATIVO |
+| `zz.teste.ciclo` | **RH_CICLO** | 009902 | ATIVO |
+
+⚠️ As três precisam do `rh.colaborador` ATIVO, e não é detalhe: sem ele **toda** rota do módulo
+devolve 403 falando de matrícula (§3.1.93). Se a varredura tomar esse 403, é isto — não é papel.
+
+**Piloto: 894 PENDENTE, 0 respostas. ENSAIO: RASCUNHO, 325 — não abrir.**
+
+⚠️ **Rodar a varredura com as três contas, nunca com conta de pessoa real.** A de 12/09 rodou como
+`ariellypereira` e custou 7 linhas de auditoria a remover — e, pior, deixou `RH_MODELO` e
+`RH_CICLO` sem percurso, que era o motivo dela (§3.1.108).
