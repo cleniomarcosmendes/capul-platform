@@ -5707,6 +5707,19 @@ e a distribuição agora **mostra isso na tela**: `[1031, 4, 2, 0, 0]`. O sistem
 (resolver, critério, 5 faixas); está desligado por decisão, com o motivo gravado no próprio dado.
 **Falta o RH dizer por que o registro parou.**
 
+### 8. Reciprocidade — "eu avalio quem me avalia" é decisão de política
+
+O sistema **permite** A avaliar B e B avaliar A: não é autoavaliação, a separação de funções não
+barra, e nada avisa. Já acontece no Piloto — **ADRIANA CAETANO (003113) ↔ WANDERSON NASCIMENTO
+(002749)**, mesmo centro de custo, avaliando um ao outro (levantado em 10/09).
+
+⭐ **O ensaio de 12/09 NÃO tem nenhuma reciprocidade** — e isso não é o sistema impedindo: é
+consequência do desenho de duas passadas, em que os 16 responsáveis são avaliados pelo Claudimar e
+não uns pelos outros. O mesmo par Adriana ↔ Wanderson aparece no ensaio em **uma direção só**.
+
+⚠️ **Se ela escolher outra hierarquia, A↔B volta a ser possível e ninguém é avisado.** Num ciclo
+que conta para mérito, isso é decisão de política — não de montagem.
+
 ### 7. Divisão do CC `11010219` entre Jaicler e Laís
 
 Os dois avaliam o **mesmo** centro de custo (DEPARTAMENTO CADASTRO, 7 pessoas), como já era no
