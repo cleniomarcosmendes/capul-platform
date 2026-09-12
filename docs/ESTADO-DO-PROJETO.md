@@ -7356,3 +7356,163 @@ Tirei uma questão de "Relacionamento e Conduta" do rascunho (3 → 2), mantendo
 **44 pesos das publicadas: 0 divergências**, máximas 72/72/72/60, percentuais por grupo **e** por
 questão fechando 100. **Piloto: 894 PENDENTE. ENSAIO: RASCUNHO, 325.** Suíte: **68 suítes, 809
 testes**.
+
+---
+
+### 3.1.102. 🔴 LACUNA DO EDITOR — ele não cria FAMÍLIA de perfil
+
+Descoberta ao preparar a área descartável da varredura, e é uma lacuna de verdade.
+
+**O editor versiona e monta, mas não cria um perfil novo.** Não existe rota nem tela: nenhum
+`prisma.modelo.create` no fonte inteiro. As quatro famílias (`Administrativo`, `Operação de Loja`,
+`Produção e Indústria`, `[DEMO]`) nasceram todas do `seed.ts`.
+
+O que **falta**, por inteiro:
+
+| Ato | Existe? |
+|---|---|
+| Criar família (`Modelo`) | 🔴 **não** |
+| Renomear / mudar descrição | 🔴 **não** |
+| Ativar / desativar família | 🔴 **não** |
+| Mudar `finalidade` (PRODUÇÃO ↔ DEMONSTRAÇÃO) | 🔴 **não** |
+| Duplicar versão · montar arranjo · publicar · descartar | ✅ Blocos A–D |
+
+⚠️ **O que isso significa na prática:** o dia em que o RH quiser um perfil novo — "Transporte",
+"Agroveterinária", "Escritório Regional" — **precisa da T.I.**, e a mudança é `INSERT` a mão em
+duas tabelas. É a mesma classe do que o cadastro de critérios resolveu em 11/09 (*"cadastre a
+faixa e reapure" não tinha para onde mandar*).
+
+⚠️ **Não é bloqueio de nada hoje**: os quatro perfis cobrem o recorte do piloto, e criar família é
+raro. Registro porque é **capacidade que a tela sugere ter e não tem** — quem abre "Questionários"
+e vê versões nascendo e sendo publicadas conclui, razoavelmente, que dá para criar um perfil ali.
+
+**Custo estimado: ~1 dia** (CRUD do `Modelo` + tela + a guarda que falta — *família com versão
+publicada não se apaga*, mesma forma do descartar da Etapa 2).
+
+### 3.1.103. 🧪 ÁREA DESCARTÁVEL DA VARREDURA — e o SQL que a limpa
+
+⚠️ **Por que ela existe.** O editor **escreve**, e **publicar não se desfaz**: descartar uma versão
+recém-publicada devolve 400 por desenho, e o resíduo do portão do Bloco C saiu por SQL. Percorrer o
+fluxo completo sobre os perfis reais publicaria versão nos modelos que o **Piloto** usa.
+
+#### O que foi montado
+
+| | |
+|---|---|
+| Família | `ZZ MODELO DESCARTAVEL — varredura de telas (pode apagar)` · id `zz-modelo-descartavel` |
+| Finalidade | **DEMONSTRACAO** — não abre ciclo válido (§4.6) **e** fica fora da comparabilidade dos perfis reais, então o descartável não polui o aviso de quem trabalha |
+| Versão | v1, **publicada** 12/09 · id `zz-versao-descartavel-1` |
+| Arranjo | 2 classificações · 5 questões · soma **60** · máxima **72** |
+| Pesos | Assiduidade 20 ÷ 2 = **10 · 10** · Relacionamento 40 ÷ 3 = **13,34 · 13,33 · 13,33** |
+
+⭐ O 40 ÷ 3 é deliberado: a área descartável tem **resto**, para que qualquer coisa que a varredura
+faça nela exercite a regra de repartição em vez de esconder o caso (§3.1.86).
+
+⚠️ O arranjo foi montado e publicado **pela API do editor**, não por SQL — só a família e a linha
+de versão vazia exigiram SQL, pela lacuna da §3.1.102.
+
+#### 🧹 O SQL DE LIMPEZA — tudo que a varredura pode produzir
+
+⚠️ Rode **em ordem**, dentro da transação. Ele apaga a família descartável inteira (com quantas
+versões tiverem nascido), a questão de teste `C001`, e **qualquer** questão/classificação criada
+pela varredura — pelo critério *"não está em perfil nenhum e nunca foi respondida"*, que é o único
+seguro.
+
+```sql
+BEGIN;
+
+-- 1. A FAMÍLIA DESCARTÁVEL, com todas as versões (publicadas inclusive).
+--    ⚠️ Só a descartável: o `id` é literal de propósito, para um `LIKE 'ZZ%'`
+--    não levar junto algo que alguém batize parecido.
+DELETE FROM rh.arranjo_pergunta WHERE modelo_versao_id IN
+  (SELECT id FROM rh.modelo_versao WHERE modelo_id = 'zz-modelo-descartavel');
+DELETE FROM rh.arranjo_grupo WHERE modelo_versao_id IN
+  (SELECT id FROM rh.modelo_versao WHERE modelo_id = 'zz-modelo-descartavel');
+DELETE FROM rh.modelo_versao WHERE modelo_id = 'zz-modelo-descartavel';
+DELETE FROM rh.modelo WHERE id = 'zz-modelo-descartavel';
+
+-- 2. RASCUNHOS que a varredura tenha deixado nos perfis REAIS.
+--    ⚠️ `publicado_em IS NULL` e mais nada: versão publicada NUNCA entra aqui.
+--    ⚠️ Deixa de fora a `Administrativo v2`, que é rascunho de propósito —
+--    tire o `AND versao <> 2` se quiser limpar ela também.
+DELETE FROM rh.arranjo_pergunta WHERE modelo_versao_id IN
+  (SELECT id FROM rh.modelo_versao WHERE publicado_em IS NULL AND versao <> 2);
+DELETE FROM rh.arranjo_grupo WHERE modelo_versao_id IN
+  (SELECT id FROM rh.modelo_versao WHERE publicado_em IS NULL AND versao <> 2);
+DELETE FROM rh.modelo_versao WHERE publicado_em IS NULL AND versao <> 2;
+
+-- 3. QUESTÕES criadas pela varredura: código com prefixo `C`, fora de todo
+--    arranjo e sem resposta. As três condições juntas — nenhuma sozinha basta.
+DELETE FROM rh.pergunta_alternativa WHERE pergunta_id IN (
+  SELECT p.id FROM rh.pergunta p
+  WHERE p.codigo LIKE 'C%'
+    AND NOT EXISTS (SELECT 1 FROM rh.arranjo_pergunta ap WHERE ap.pergunta_id = p.id)
+    AND NOT EXISTS (SELECT 1 FROM rh.resposta r WHERE r.pergunta_id = p.id));
+DELETE FROM rh.pergunta p
+  WHERE p.codigo LIKE 'C%'
+    AND NOT EXISTS (SELECT 1 FROM rh.arranjo_pergunta ap WHERE ap.pergunta_id = p.id)
+    AND NOT EXISTS (SELECT 1 FROM rh.resposta r WHERE r.pergunta_id = p.id);
+
+-- 4. CLASSIFICAÇÕES criadas pela varredura: sem questão e sem arranjo.
+--    ⚠️ Nome com `ZZ` — as oito herdadas não têm, e apagar por "sem uso"
+--    sozinho levaria junto uma classificação legítima recém-cadastrada.
+DELETE FROM rh.classificacao c
+  WHERE c.nome LIKE 'ZZ%'
+    AND NOT EXISTS (SELECT 1 FROM rh.pergunta p WHERE p.classificacao_id = c.id)
+    AND NOT EXISTS (SELECT 1 FROM rh.arranjo_grupo g WHERE g.classificacao_id = c.id);
+
+-- 5. A questão de teste da Etapa 6, se ainda estiver solta.
+DELETE FROM rh.pergunta_alternativa WHERE pergunta_id IN
+  (SELECT id FROM rh.pergunta WHERE codigo = 'C001');
+DELETE FROM rh.pergunta WHERE codigo = 'C001'
+  AND NOT EXISTS (SELECT 1 FROM rh.arranjo_pergunta ap
+                  WHERE ap.pergunta_id = (SELECT id FROM rh.pergunta WHERE codigo = 'C001'));
+
+-- 6. CONFERÊNCIA — tem de voltar 15 questões, 8 classificações, 5 versões
+--    (4 publicadas reais + Administrativo v2 rascunho) e 0 órfãos.
+SELECT (SELECT count(*) FROM rh.pergunta)        AS questoes,
+       (SELECT count(*) FROM rh.classificacao)   AS classificacoes,
+       (SELECT count(*) FROM rh.modelo_versao)   AS versoes,
+       (SELECT count(*) FROM rh.arranjo_grupo g
+         WHERE NOT EXISTS (SELECT 1 FROM rh.modelo_versao v WHERE v.id = g.modelo_versao_id))
+     + (SELECT count(*) FROM rh.arranjo_pergunta p
+         WHERE NOT EXISTS (SELECT 1 FROM rh.modelo_versao v WHERE v.id = p.modelo_versao_id))
+                                                 AS orfaos;
+
+COMMIT;
+```
+
+⚠️ **O que este SQL NÃO apaga, de propósito:** versão publicada de perfil REAL. Se a varredura
+publicar uma (não deveria — a área descartável existe para isso), a limpeza **não** a remove: é
+decisão de quem viu o que aconteceu, não de um script. O sintoma seria a conferência do passo 6
+devolvendo mais de 5 versões.
+
+#### 📋 ESTADO DE PARTIDA — para conferir depois
+
+**Acervo: 16 questões** (15 herdadas do SQP010 + 1 descartável).
+
+| Descartável | Código | Em perfis | Respostas |
+|---|---|---|---|
+| ✅ sim | `C001` — ZZ TESTE — Cuidado com o EPI | **0** | **0** |
+| ❌ não | `004`–`018` (15) | 1 a 6 cada | 0 a 19 cada |
+
+⚠️ `016` (Conhecimento Técnico do Maquinário) tem **0 respostas** mas está em **1 perfil** — não é
+descartável.
+
+**Classificações: 8, todas ativas, todas em uso** (3 questões cada nas quatro primeiras; 1 nas
+quatro últimas). **Nenhuma descartável.**
+
+**Versões: 6.**
+
+| Modelo | Finalidade | v | Estado | Máx. | Grupos | Questões | Aplicações |
+|---|---|---|---|---|---|---|---|
+| Administrativo | PRODUCAO | 1 | publicada 05/09 | 72 | 4 | 11 | **8** |
+| Administrativo | PRODUCAO | 2 | **RASCUNHO** | — | 4 | 11 | 0 |
+| Operação de Loja | PRODUCAO | 1 | publicada 05/09 | 72 | 7 | 14 | 3 |
+| Produção e Indústria | PRODUCAO | 1 | publicada 05/09 | 72 | 7 | 14 | 3 |
+| [DEMO] Treinamento | DEMONSTRACAO | 1 | publicada 05/09 | 60 | 2 | 5 | 0 |
+| **ZZ DESCARTAVEL** | DEMONSTRACAO | 1 | publicada 12/09 | 72 | 2 | 5 | 0 |
+
+**Os 44 pesos dos perfis reais: 0 divergências.** Máximas 72 · 72 · 72 · 60, somas 60 · 60 · 60 · 50.
+
+**Piloto: 894 PENDENTE, 0 respostas. ENSAIO: RASCUNHO, 325 — não abrir.**
