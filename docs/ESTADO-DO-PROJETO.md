@@ -7998,3 +7998,126 @@ que dá para tomar com segurança:
 aberta para `Joao` e `joao` coexistirem depois — e aí a ambiguidade vira erro de autenticação, que
 é o pior lugar para ela. O par certo é **`ILIKE` + índice único**, e o índice é migration no schema
 `core`, que toca PROD. **Custo ~2h**, e é decisão de quem manda no cadastro.
+
+---
+
+### 3.1.115. 🔴 A MEMÓRIA DE CÁLCULO NEGAVA A PRÓPRIA CONTA — e o efeito do centavo, medido
+
+O mais grave da varredura de 12/09. A tela mostrava as notas por grupo em barras e escrevia no
+rodapé:
+
+> *"Grupo é organização visual: o peso está em cada pergunta."*
+
+**Era verdade até 10/09.** A unificação do acervo (11/09) **inverteu**: o peso mora na
+CLASSIFICAÇÃO e o da questão é derivado dele. A varredura reconstruiu o 63,19 de uma avaliação
+justamente pelos pesos de classificação — `(25,00×9 + 66,65×10 + 83,33×9 + 83,33×9 + 50,00×13 +
+100,00×5 + 50,00×5) ÷ 60 = 63,19`, exato — e o rodapé mandava procurar o peso onde ele não está
+mais.
+
+⚠️ **As barras SÃO os insumos ponderados, e o ponderador era o único número ausente.** Quem
+precisa explicar a nota de um colaborador na devolutiva não conseguia refazer a conta.
+
+**Corrigido:** cada linha mostra `peso N · N%`, o título virou *"Questionário, por classificação"*
+(termo do cadastro), e o rodapé agora escreve a fórmula: `Σ(nota × peso) ÷ soma = nota`.
+
+#### 📐 MEDIDO — o centavo do arredondamento ENTRA na nota
+
+A varredura viu `66,65` onde a divisão exata dá `66,67` e suspeitou do resto. **Procede**, e o
+efeito é maior no grupo do que no total:
+
+| Cenário | Resultado |
+|---|---|
+| Pesos `3,34 / 3,33 / 3,33`, respostas `0,9 / 0,9 / 0,6` | grupo **66,68** |
+| As MESMAS respostas, com o centavo na 3ª questão | grupo **66,65** |
+| Pior caso construído, no **grupo** | **0,08 ponto** |
+| Pior caso construído, na **nota final** | **0,01 ponto** |
+| Com peso **exato** (`3,333333…`) | **66,67**, e **não depende da ordem** |
+
+⭐ **Quem decide o desvio é a ORDEM das questões no arranjo** — o centavo vai para a primeira —,
+e essa ordem é escolha de quem monta, não do RH que avalia. Não é exibição: é cálculo.
+
+⚠️ **NÃO CONSERTEI, porque é decisão e não defeito.** As duas saídas:
+
+| | O que muda | Custo | Risco |
+|---|---|---|---|
+| **(A) Calcular no peso EXATO**, arredondar só para exibir | o artefato desaparece; a nota deixa de depender da ordem | **~4h** | as notas passam a divergir levemente do instrumento herdado — a regressão `108/108` compara com o `÷18` do Protheus e **precisa ser re-rodada** |
+| **(B) Manter e declarar** | nada; a tela explica que o peso exibido é arredondado e que a diferença é ≤0,08 no grupo | ~1h | o desvio continua, e quem conferir na mão vai reencontrá-lo |
+
+**Recomendo (A).** O peso de duas casas existe porque veio de uma coluna do Protheus; o cálculo não
+tem razão para herdar essa limitação, e "a nota depende de qual questão ficou em primeiro" é
+indefensável numa devolutiva.
+
+#### Pergunta a pergunta na memória de cálculo — custo
+
+**Dá.** `itensRespondidos(avaliacaoId)` já devolve enunciado, alternativa escolhida, valor e peso —
+é o que alimenta o `notaPorGrupo`. Falta expor e desenhar: **~4h** (2h backend + tela expansível
+por classificação, para não virar uma lista de 14 linhas onde hoje há 7).
+
+### 3.1.116. ✅ `RH_MODELO` PUBLICA — a decisão de 12/09 revê a do Bloco C
+
+Nasceu `RH_ADMIN` e só, com o argumento *"monta, não publica"*. A varredura mostrou o que esse
+desenho produz: o `RH_MODELO` percorre o editor inteiro — duplicar, montar, mudar peso, ler a
+análise de impacto completa — e **toma 403 no confirmar**.
+
+⭐ **Papel que produz rascunho para outra pessoa apertar o botão precisa dessa outra pessoa no
+fluxo.** Ela não existe: quem apertaria é o `RH_ADMIN`, que é quem monta CICLO. Sem ela a separação
+não separa nada — só interrompe. E o papel se chama "monta o instrumento", o menu lhe dá
+Questionários, Acervo e Classificações, e a tela oferece o botão.
+
+Junto, dois defeitos da recusa:
+- **o botão continuava habilitado depois do 403**, e dava para repetir indefinidamente. Erro de
+  ESTADO se tenta de novo; erro de PERMISSÃO não — nada mudou entre um clique e o outro. Agora
+  desabilita, com o motivo no lugar do aviso de "não salvo";
+- **a recusa não dizia de quem é a permissão.** O `RolesGuard` respondia *"Perfil insuficiente"*, e
+  quem lê é o RH, que não conhece a tabela de papéis. Agora: *"Esta operação é de RH_ADMIN ou
+  RH_MODELO. Seu acesso ao Gestão de Pessoas é: RH_CICLO."*
+
+### 3.1.117. 📐 RENOMEAR CLASSIFICAÇÃO — o aviso mentia por omissão, e o Apagar está seguro
+
+**A decisão de 11/09 (renomear é permitido) continua valendo.** O que estava errado era o aviso:
+dizia *"o nome aparece no acervo e no questionário impresso"*, e o alcance real inclui **versão
+publicada** e **memória de cálculo de resultado apurado, em ciclo encerrado**.
+
+O modal agora lista os três lugares e fecha com a saída: *"se o conceito for outro, crie uma
+classificação nova em vez de renomear esta"*.
+
+⚠️ **A postura oposta da tela vizinha é deliberada, e vale escrever:** Critérios PROTEGE o que
+Classificações permite. **Critério carrega RÉGUA** (mudar a faixa muda a pontuação de quem já foi
+apurado); **classificação carrega RÓTULO** (o peso está no arranjo, que é imutável depois de
+publicado). As duas estão no mesmo menu com posturas opostas porque as coisas são diferentes — e é
+isso que o texto de cada uma precisa deixar claro.
+
+#### Medido: classificação em versão publicada NÃO fica apagável
+
+A pergunta era se, depois de mover as questões, a guarda cederia. **Não cede** — e é a segunda
+guarda que segura:
+
+```
+efeitoDeApagar:  questões > 0        → RECUSA  (a que a mensagem ensina a zerar)
+                 arranjos > 0        → RECUSA  ← esta
+```
+
+`arranjos` conta `ArranjoGrupo`, **incluindo versões publicadas** — e arranjo de versão publicada
+não se edita, então o contador nunca chega a zero. Uma classificação citada em versão publicada é
+**permanentemente não-apagável**, que é o certo. Conferido nas 8 do acervo.
+
+### 3.1.118. 🔢 OS CONTADORES — o que era defeito, o que era termo faltando
+
+| Achado | Veredito |
+|---|---|
+| *"USADA EM 7 PERFIS (5 publicados)"* para a `004` | 🔴 **defeito** — são **5 perfis** em **7 versões**. Contava versão e chamava de perfil, inflando justamente o número que responde *"mexer nisto afeta quem?"*. Corrigido: conta perfis distintos e mostra as versões entre parênteses |
+| *"1 fora de todo perfil"* × cartão *"usada em 1 perfil — só em rascunho"* | 🟡 **termo faltando** — "fora de todo perfil" conta quem não está em arranjo NENHUM, rascunho inclusive. Não discordavam; faltava o que os concilia. Agora: *"1 fora de todo perfil (nem em rascunho)"* |
+| SIMULACAO: *"39 canceladas"* × *"canceladas pelo encerramento: 37"* | 🟡 **termo faltando** — são **39 no total: 37 pelo ENCERRAMENTO + 2 por DECISÃO DO RH**. O cabeçalho conta todas; a seção conta só as que o "Devolver canceladas" alcança |
+| SIMULACAO: *"54 no público"* × `0+13+39+4 = 56` | 🟡 **medido**: público **54 pessoas distintas**, **52 avaliações** (39 CANCELADA + 13 ENVIADA) e **2 pessoas no público sem avaliação nenhuma**. `13+39 = 52` são as avaliações; a diferença de 2 é a que a tela não nomeia |
+| Barra: *"Soma declarada"* mostrando o valor antigo enquanto digita | 🔴 **defeito** — a legenda diz "é o que foi digitado" e o número era o gravado. Corrigido: declarada acompanha a digitação; distribuída e máxima ficam **explicitamente paradas** ("do último salvo"), porque só o backend as recalcula |
+| Máxima calculada sobre a DISTRIBUÍDA sem dizer | 🟡 **termo faltando** — quem lê "declarada 75" espera 90 e vê 78. Agora: *"(= distribuída 65 × 1,2)"* |
+
+#### As duas estratégias de arredondamento — unificadas
+
+| Onde | Era | Agora |
+|---|---|---|
+| Questionários / editor | redistribui em 2 casas, exibe 2 | ✅ mantido |
+| Composição da nota | repartia em **2** casas e exibia **1** — três critérios a 33,3% somavam **99,9%** | ✅ **reparte na precisão em que EXIBE** (`repartirExato(·, 100, 1)`) |
+
+⭐ **A regra que faltava estar escrita: repartir na precisão em que se exibe.** Arredondar depois de
+repartir é arredondar por item de novo, e desfaz a repartição.
