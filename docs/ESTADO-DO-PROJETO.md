@@ -8350,3 +8350,162 @@ renomeia os dois no mesmo commit, por construção.
 ⚠️ Só entram ali nomes que **aparecem na tela e são citados em outro lugar**.
 Rótulo usado num sítio só continua onde está — constante sem segundo leitor é
 indireção sem ganho.
+
+---
+
+### 3.1.126. ⭐⭐ REQUISITO — todo teste de cálculo precisa do CASO QUE FALHA
+
+Irmão do canário (§3.1.97), e a mesma forma: **prova de que a verificação está
+medindo alguma coisa.**
+
+O teste das permutações (§3.1.123) passaria mesmo se alguém trocasse `pesoExato`
+de volta por `peso` — as seis permutações continuariam dando resultados, e nada
+diria que eram os errados. O que o faz valer é o teste ao lado, que exige que
+**com o peso arredondado as permutações DIVIRJAM**.
+
+> ⭐⭐ **Todo teste de cálculo precisa de um caso que falhe quando deveria
+> falhar** — a implementação errada, escrita de propósito, com o resultado
+> diferente exigido. Sem ele, "verde" pode significar "não estou olhando".
+
+#### Os outros testes de cálculo têm? — MEDIDO POR MUTAÇÃO, não por leitura
+
+Não dá para responder isso contando `toThrow` no fonte. A pergunta é *"se a
+implementação voltasse a estar errada, algum teste cairia?"* — e o único jeito
+honesto é **reverter e ver**:
+
+| Mutação | Resultado |
+|---|---|
+| `arredondar` passa a usar 1 casa | ✅ **8 testes caem** |
+| `localizarFaixa` com a fronteira inferior EXCLUSIVA | ✅ **1 teste cai** |
+| Critério sem dado volta a entrar no denominador | ✅ **7 testes caem** |
+
+**Os três são pegos.** A contraparte existe *de fato* nos testes de cálculo —
+via valores esperados exatos, que discriminam a implementação errada. O que
+falta em vários é a contraparte **explícita e nomeada**, aquela que documenta
+*por que* o número esperado é aquele.
+
+⭐ **Recomendação: NÃO escrever os explícitos.** Custo ~2h, ganho baixo — a
+mutação mostra que o efeito já existe. Vale mais **institucionalizar a mutação
+como aferição**: rodar as três (ou novas) quando se mexer no cálculo, ~15min.
+
+#### 🔴 E um erro meu na própria medição, que vale mais que o resultado
+
+Na primeira rodada, duas das três mutações deram **"159 passed"** e eu quase
+reportei que os testes eram cegos. **As mutações não tinham pegado no fonte** —
+os padrões não batiam (`faixa.ts` usa `const { limiteInferior: inf }`, não
+`f.limiteInferior`).
+
+⚠️ **Mutação que não aplica lê exatamente como "o teste não pega".** É o falso
+verde do canário, um nível acima: a ferramenta de aferição afere a si mesma
+errado. **Toda mutação tem de provar que ENTROU** — um `assert s != antes` no
+script, que é o que passei a fazer.
+
+### 3.1.127. ⭐⭐ FRASE — "passou na regressão" é continuidade, não correção
+
+> **"Passou na regressão" responde: o cálculo continua igual PARA OS DADOS QUE
+> ELA TEM.** É uma pergunta sobre continuidade, não sobre correção.
+
+Vale para **todo baseline externo** — a regressão do Protheus, a comparação com
+o relatório antigo, o "bateu com a planilha". O baseline prova que não se mudou
+o que ele cobre; não prova que o que ele cobre está certo, nem diz nada sobre o
+que ele não cobre.
+
+⚠️ E o que ele não cobre é invisível: o `108/108` ficou verde durante a
+correção do centavo porque o ciclo `000006` tinha pesos **iguais**. Nada na
+saída diz "este caso não é exercitado aqui" — quem lê vê `108/108` e conclui
+mais do que está escrito.
+
+**Gatilho:** ao usar um baseline para aprovar uma mudança, escrever junto **o
+que ele não mede**. Se não der para escrever, o baseline não serve para aquela
+decisão.
+
+### 3.1.128. 🔢 A QUINTA CONTA QUE PEGOU DEFEITO — e o erro era evitar dupla contagem
+
+| # | A conta | O que pegou |
+|---|---|---|
+| 1 | pontuação máxima gravada × calculada | 72,03 (§3.1.86) |
+| 2 | soma dos pesos derivados × declarada | 59,97 (§3.1.85) |
+| 3 | soma dos percentuais = 100 | 100,01 (§3.1.99) |
+| 4 | `Σ(nota × peso) ÷ soma` = nota gravada | o rodapé que negava a conta (§3.1.115) |
+| **5** | **`noPublico` = avaliações + sem avaliação** | **o filtro por `elegivel`, que zerava o termo** |
+
+⭐ **O erro da 5ª foi tentar evitar dupla contagem entre números que NÃO são
+partes do mesmo todo.** Filtrei `noPublicoSemAvaliacao` por `elegivel` "para não
+contar duas vezes com `foraDoCiclo`" — e deu **0** onde eu mesmo tinha medido
+**2**, porque as duas eram justamente as que a régua excluiu.
+
+`foraDoCiclo` responde *"a régua tirou"*; `noPublicoSemAvaliacao` responde *"não
+existe avaliação"*. **Perguntas diferentes, conjuntos que se sobrepõem** — no
+SIMULACAO, 4 estão fora do ciclo e **2 delas têm avaliação cancelada**.
+
+> ⚠️ **Antes de "não contar duas vezes", perguntar de que TOTAL cada número é
+> parte.** Se não forem partes do mesmo total, subtrair um do outro não corrige
+> nada — inventa um terceiro número que não responde pergunta nenhuma.
+
+### 3.1.129. ✅ O BLOCO DE ~7,5h — os seis achados de tela da varredura
+
+#### 1. "peso ao salvar" apagava os pesos que a mudança não tocou (2h)
+
+Com alteração pendente, a tela escrevia *"peso ao salvar"* e **apagava o número
+de TODAS as questões** — inclusive as que ninguém tocou —, exatamente no momento
+de decidir se a alteração está certa.
+
+⭐ **Dá para prever com confiança, e é o que se faz agora.** A regra é uma só
+(`distribuirPeso`), e ganhou gêmeo testado no frontend (`distribuirIgual`, com
+os mesmos casos do spec do backend). A linha mostra o **peso que vai resultar**,
+em âmbar, com o antigo riscado ao lado quando muda. A barra do topo idem:
+declarada, distribuída e máxima todas previstas, marcadas *(previsto)*.
+
+⚠️ **O número nunca some.** Tirá-lo para dizer "não sei ainda" é pior que
+mostrar o antigo: a pessoa perde a referência de onde estava. E quem GRAVA
+continua sendo o servidor — isto é previsão, e o número volta dele ao salvar.
+
+#### 2. Duas versões publicadas: é DESENHO, e faltava o rótulo (1,5h)
+
+**Não é resíduo do percurso e não falta guarda.** A Aplicação aponta para uma
+versão **específica** — as 8 do Administrativo apontam para a v1. Se publicar a
+v2 despublicasse a v1, **essas 8 ficariam sem instrumento** e as notas já
+calculadas sobre ela, sem régua. Versão publicada é permanente, pela mesma razão
+que `efeitoDeDescartar` recusa apagá-la.
+
+O que faltava era **dizer qual vale**: entrou `vigente`, e a lista marca
+`vigente · publicada em …` × `anterior · publicada em …`, com *"ainda em uso por
+N aplicações"* — porque a anterior não é lixo, é a régua de quem a usa.
+
+⚠️ A vigente é a de **maior NÚMERO** entre as publicadas, não a de data mais
+recente: a varredura viu duas publicadas **no mesmo dia**, e data não desempata.
+
+#### 3. O banner ensinava um caminho que o RH_CICLO não tem (1h)
+
+O aviso dizia *"Duplicar cria um rascunho, Montar abre o editor, Publicar…"* —
+e o bloco de versões **some inteiro** para quem não pode versionar. O RH_CICLO
+lia a instrução, procurava os botões e não achava; a conclusão razoável é que a
+tela está quebrada. **Texto que ensina um caminho tem de saber se a pessoa tem o
+caminho** — agora o banner pergunta ao backend e troca o texto.
+
+#### 4. "Abrir" nomeando dois atos (1h)
+
+Na **mesma tela**: `Abrir ciclo` é o ato irreversível que libera os avaliadores,
+e `Abrir` era o link que só navega para o detalhe. Quem já ouviu *"não abra o
+ciclo"* hesita em clicar no que só mostra. O link virou **"Ver"**; "Abrir" ficou
+reservado ao ato.
+
+#### 5. "avise a T.I." numa situação que o RH resolve (30min)
+
+A divergência entre as somas é **quase sempre de cadastro**: classificação com
+peso e sem questão, que o RH resolve em dois cliques. Mandar chamar a T.I.
+transforma um ajuste em chamado. A mensagem agora diz o que procurar — e mantém
+o "avise a T.I." só para o caso em que todas as classificações têm questão, que
+aí é defeito mesmo.
+
+#### 6. Plurais (parte de 1,5h)
+
+`{n} avaliações` em dois pontos do painel → `contagem(...)`.
+
+#### ⚠️ O que NÃO consegui reproduzir
+
+**"caminho de código exposto em tela de RH".** Varri as strings renderizadas
+procurando identificadores (`assert*`, `*.service.ts`, `prisma.*`, `efeitoDe*`,
+`§3.1.x`) e **todas as ocorrências estão em comentários**, não em texto de tela.
+Preciso de **em que tela e em que momento** apareceu — pode ser mensagem de erro
+vinda do backend, que não sai de uma string do frontend.
