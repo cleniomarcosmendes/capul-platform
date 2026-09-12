@@ -5126,3 +5126,113 @@ do app, derruba o healthcheck e às vezes morre com **exit 137**.
 ⭐ **0 testes executados nunca é resultado** — nem verde nem vermelho. Rodar a suíte num container
 descartável (`docker run --rm --memory=6g`, montando `src`, `prisma`, `tsconfig.spec.json`, e com
 `npx prisma generate` antes) leva **14 segundos** e dá os 655.
+
+---
+
+### 3.1.64. ✅ CADASTRO DE CRITÉRIOS E FAIXAS — o catálogo deixa de ser só leitura (11/09)
+
+Item 2 da ordem de §3.1.62. Até aqui `rh.criterio` e `rh.criterio_faixa` só nasciam pelo seed:
+não havia um `create`/`update` em lugar nenhum do `src/`. O efeito prático era que
+*"cadastre a faixa no critério e reapure"* — que o motor manda quando um valor não cai em faixa
+nenhuma — **não tinha para onde mandar**: a saída era T.I. no banco.
+
+#### ⚠️ A validação de continuidade que existia NÃO servia
+
+A ordem dizia *"a validação de continuidade já existe — use"*. Existe, mas é outra:
+`ciclo/abertura.validator → validarConceitos` é de **`ConceitoFaixa`** (0–100 fechado, no ciclo).
+
+| | ConceitoFaixa | CriterioFaixa |
+|---|---|---|
+| Domínio | 0 a 100, fechado | ponta **aberta** ("mais de 7 anos") |
+| Tipo | só numérica | numérica **ou** DOMINIO (código exato, sem limite nenhum) |
+| Exigência | começar em 0, terminar em 100 | nenhuma das duas |
+
+⭐ **Aplicar a regra dos conceitos aqui reprovaria `TEMPO_EMPRESA` e `ESCOLARIDADE`** — os dois
+critérios que rodam hoje. `criterio/faixa.validator.ts` é nova, modelada na existente, e o
+**primeiro bloco da spec trava os dois critérios reais**: se ele quebrar, a validação está
+reprovando o instrumento em produção e o erro é dela.
+
+O que ela checa, e o caso que ninguém vê:
+
+- **buraco** → o valor não cai em faixa nenhuma, o critério vira `semDado` e sai da nota pela
+  renormalização, **sem erro**, para todos naquela faixa;
+- **sobreposição** → `localizarFaixa` devolve a primeira por `ordem`, então a pontuação passa a
+  depender da ordem de cadastro;
+- ⭐ **a FRONTEIRA** — `(0,3]` seguido de `[3,5]` não tem buraco nem sobreposição de intervalo,
+  mas o valor 3 cai nas duas. Não aparece olhando a lista de limites. A checagem é sobre a
+  INCLUSIVIDADE: exatamente uma das duas pontas fecha.
+
+#### ⭐⭐ A regra da tela é a MESMA função do backend — literalmente
+
+A recusa aparece **antes do clique** por `POST /criterios/:id/faixas/conferir`, que roda o mesmo
+`validarFaixasDoCriterio` do `PUT`, sem gravar e sem auditar. A alternativa era portar ~100 linhas
+de regra para o frontend — duas cópias que envelhecem diferente, com sintoma mudo nos dois
+sentidos (a tela libera o que a API recusa, ou recusa o que ela aceita).
+
+#### 🐛 DEFEITO MEU — sanitizar em silêncio o que a regra manda recusar
+
+`assertSalvavel` zerava o `codigoCalculo` por origem **antes** de validar:
+
+```ts
+codigoCalculo: dto.origem === 'CALCULADO' ? dto.codigoCalculo : null   // ERRADO
+```
+
+Com isso a regra escrita em `criterio.validator` — *"INFORMADO com código de cálculo: recuse"* —
+**nunca era alcançada**: o service limpava o campo e o validador não via nada errado.
+
+⭐ **Sanitizar em silêncio o que a regra recusa é pior que não validar**: some com o sintoma e
+deixa quem trocou a origem achando que o cálculo continua valendo. Corrigido, com spec de
+regressão.
+
+⚠️ **Foi pego exercitando o serviço contra o BANCO, não pela suíte** — que estava verde com 676.
+É o mesmo padrão de 09/09: percorrer o caminho inteiro acha o que o teste unitário não vê.
+
+#### ⚠️⚠️ O INFORMADO está PELA METADE, e a tela diz isso
+
+Cadastrar o critério é metade do caminho: **sem o VALOR de cada pessoa ele não pontua ninguém** —
+a apuração o marca `SEM_VALOR_INFORMADO` e o tira da nota pela renormalização, sem erro.
+`rh.criterio_valor_informado` existe e tem **0 linhas**; a tela de importar/digitar **não existe**.
+
+O cartão do critério INFORMADO ativo, com faixas e zero valores, avisa. Calada, a tela prometeria
+capacidade pela metade e a descoberta viria na apuração — quando não há mais o que fazer. O aviso
+some sozinho quando a tela existir: a condição é o próprio contador.
+
+**A entrada de valor é FRENTE SEPARADA** — estimativa 4–6 dias (upload de planilha + casamento por
+matrícula + prévia do que vai entrar + o que fazer com quem está na planilha e não no ciclo).
+
+#### As duas correções de tela da varredura
+
+1. **O aviso do painel agora LEVA ao critério.** *"Cadastre a faixa no critério"* era instrução sem
+   destino. Virou link para `/criterios#criterio-<codigo>` — ⚠️ **só para `RH_ADMIN`**: link que
+   leva a 403 troca *"não é com você"* por *"o sistema quebrou"*.
+2. **A memória de cálculo mostrava `Superior completo (35)`.** O 35 é código de cadastro e lia como
+   nota, três colunas antes da pontuação real (75). Virou `(código 35)`. **Só em DOMINIO** — em
+   NUMERICO o bruto já vem com unidade ("5,4 anos"), que o distingue sozinho.
+
+#### O que a fronteira RH × T.I. virou, na prática
+
+| Ato | Quem faz |
+|---|---|
+| Criar critério **INFORMADO**, faixas, rótulos, ativar/desativar | **RH sozinho** |
+| Criar critério **CALCULADO** escolhendo um cálculo existente | **RH sozinho** — `<select>` de `codigosRegistrados()`, com quem já usa cada um ao lado |
+| Criar um **cálculo novo** | **T.I.** — resolver é código |
+| Informar o VALOR de um INFORMADO | **ninguém ainda** — próxima frente |
+
+⭐ `assertCriterioSalvavel` (94 linhas, spec verde desde 05/09) ganhou o **primeiro chamador da
+vida dele**. O comentário do arquivo fala em "TRÊS momentos" e só dois existiam; agora são três.
+
+#### Verificação
+
+Exercitado contra o banco de DEV com um critério descartável — criado, percorrido em **11 passos**
+e **apagado por código explícito**: resolvers, as 3 recusas de cadastro, buraco, fronteira nas
+duas, conferir-sem-gravar (e a prova de que não gravou), salvar, troca de tipo com faixas.
+
+⚠️ Na primeira rodada a limpeza dependia de uma variável que o passo 3 ainda não tinha preenchido,
+e **uma linha ficou no banco**. Recorte de limpeza é por **chave explícita**, sempre — a mesma
+regra dos commits.
+
+**Piloto intacto: 894 PENDENTE, 0 respostas.** Suíte: **681 testes, 55 suítes**.
+
+⚠️ **Não há conta de teste com `RH_ADMIN` no DEV** — só `ariellypereira`, que é pessoa real. Por
+isso a verificação foi no serviço contra o banco, e **a tela em si não foi percorrida por
+ninguém logado**. Criar a conta de teste é pré-requisito do roteiro de tela desta frente.
