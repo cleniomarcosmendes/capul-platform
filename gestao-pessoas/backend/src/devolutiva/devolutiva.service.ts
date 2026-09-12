@@ -37,6 +37,11 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { ResultadoService } from '../resultado/resultado.service.js';
 import { ehProprioAvaliado } from '../avaliacao/separacao-funcoes.js';
+import {
+  ACAO_DEVOLUTIVA_CONDUZIDA,
+  ACAO_DEVOLUTIVA_DESMARCADA,
+  ACAO_LIBERAR_DEVOLUTIVA,
+} from './acoes.js';
 
 /** Escopo do lote. Um dos dois, nunca os dois. */
 export interface EscopoDaLiberacao {
@@ -283,7 +288,7 @@ export class DevolutivaService {
         await this.auditoria.registrar({
           entidade: 'Avaliacao',
           entidadeId: id,
-          acao: 'LIBERAR_DEVOLUTIVA',
+          acao: ACAO_LIBERAR_DEVOLUTIVA,
           usuarioId: contexto.usuarioId,
           valorNovo: { devolutivaLiberadaEm: agora, noLote: aGravar.length },
         });
@@ -518,7 +523,7 @@ export class DevolutivaService {
     await this.auditoria.registrar({
       entidade: 'Avaliacao',
       entidadeId: avaliacaoId,
-      acao: conduzida ? 'DEVOLUTIVA_CONDUZIDA' : 'DEVOLUTIVA_DESMARCADA',
+      acao: conduzida ? ACAO_DEVOLUTIVA_CONDUZIDA : ACAO_DEVOLUTIVA_DESMARCADA,
       usuarioId: contexto.usuarioId,
       valorAnterior: { devolutivaConduzidaEm: avaliacao.devolutivaConduzidaEm },
       valorNovo: { devolutivaConduzidaEm: agora },

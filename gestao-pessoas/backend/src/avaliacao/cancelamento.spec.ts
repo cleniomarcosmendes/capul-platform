@@ -96,7 +96,11 @@ describe('a fila do avaliador não mostra avaliação cancelada', () => {
       { registrar: jest.fn() } as never,
     );
     await service.minhasAvaliacoes({ colaboradorId: 'c-avaliador' } as never);
-    const where = prisma.avaliacao.findMany.mock.calls[0][0].where;
+    // ⚠️ Pela consulta que tem `OR` — a fila faz duas desde 13/09, e um spec
+    //    preso ao índice quebra a cada consulta nova sem a regra ter mudado.
+    const where = prisma.avaliacao.findMany.mock.calls.find(
+      (c: unknown[]) => (c[0] as { where?: { OR?: unknown } })?.where?.OR,
+    )![0].where;
     expect(where.status).toEqual({ not: 'CANCELADA' });
     expect(JSON.stringify(where)).not.toContain('ENVIADA');
   });

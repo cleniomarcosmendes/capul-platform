@@ -83,6 +83,12 @@ export interface ItemDaFila {
    * vale mais — e sumir calado faria ele concluir "eu vi errado". §3.1.155.
    */
   conversaDesfeitaPelaReabertura: boolean;
+  /**
+   * ⭐ Foi liberada, ele NÃO marcou conversa, e a liberação sumiu — reaberta.
+   * ⚠️ Distinto do campo acima: lá ele DECLAROU a conversa; aqui não se sabe se
+   * houve, e a frase diz "se você chegou a conversar".
+   */
+  devolutivaRetiradaSemConversa: boolean;
 }
 
 export interface Alternativa {

@@ -10660,3 +10660,110 @@ contas e permissões · **a auditoria da montagem** · a auditoria de outros cic
 ⚠️ E o que ela **não consegue** desfazer: a memória de quem participou. Se a
 skill rodar com contas de pessoas reais, o rastro nas filas delas existiu — por
 isso o ensaio usa `zz.teste.*` onde for possível.
+
+---
+
+### 3.1.168. ✅ A METADE QUE FALTAVA — liberada, não conversou, reaberta
+
+Construída em 13/09 (a ~1h que eu tinha registrado sem fazer). O caso: o RH
+libera, o avaliador **lê a nota e não marca a conversa**, o RH reabre. As duas
+marcas ficam nulas e o cartão sumia **sem uma palavra**.
+
+⭐ **Sem coluna nova: a auditoria guarda.** `LIBERAR_DEVOLUTIVA` é a prova de que
+a devolutiva existiu, e a fila passou a consultá-la — do mesmo jeito que já
+consulta o *"não é minha equipe"*. A fila ganhou o **quarto ramo**
+(`id IN (as que já foram liberadas)`).
+
+| campo | quando | a frase diz |
+|---|---|---|
+| `conversaDesfeitaPelaReabertura` | ele **declarou** a conversa | *"Se você **já conversou** com FULANO…"* |
+| `devolutivaRetiradaSemConversa` | ele **não** declarou | *"**Se você chegou a conversar** com FULANO…"* |
+
+⚠️ **A diferença nas duas palavras é o ponto:** no segundo caso o sistema **não
+sabe** se houve conversa. Afirmar que houve seria inventar; não dizer nada seria
+deixá-lo sem saber. *"Se você chegou a"* é a forma honesta.
+
+⚠️ E `LIBERAR_DEVOLUTIVA` virou **constante** (`devolutiva/acoes.ts`): o literal
+passou a ser lido em dois lugares distantes — quem grava e a fila, que descobre
+por ele o que a coluna já esqueceu. Duas grafias divergentes fariam a fila parar
+de achar o que existe, **sem erro nenhum**.
+
+#### 🔴 E um spec meu preso à ORDEM das chamadas
+
+A consulta nova fez `minhasAvaliacoes` chamar `avaliacao.findMany` **duas
+vezes**, e dois specs liam `mock.calls[0]` — que passou a ser a consulta errada.
+Oito testes vermelhos **sem a regra ter mudado**.
+
+⭐ Corrigido achando a chamada **pelo CONTEÚDO** (a que tem `OR`), não pelo
+índice. *Spec preso à ordem das chamadas quebra a cada consulta nova* — e quem
+lê o vermelho perde tempo procurando uma regressão que não existe.
+
+---
+
+### 3.1.169. ⭐⭐⭐ O PORTÃO É ESCRITO COM O FLUXO QUE QUEM ESCREVE TEM NA CABEÇA
+
+A frase que explica a classe do §3.1.161, e o Clenio pediu que ela ficasse com o
+peso que tem. **Os dois lados da conversa erraram o mesmo erro, no mesmo dia:**
+
+| Quem | O portão | O fluxo na cabeça | O que existia |
+|---|---|---|---|
+| **Eu** | `@Roles(AVALIADOR)` na devolutiva | *"o avaliador conduz a devolutiva"* | a **Arielly é RH_ADMIN** e conduz **5** |
+| **O Clenio** | *"desfazer só enquanto o ciclo não fecha"* | *"ciclo aberto = período de trabalho"* | a devolutiva acontece com o ciclo **encerrado** |
+
+⚠️ **O agravante do meu caso:** escrevi `@Roles(AVALIADOR)` num controller cujo
+próprio comentário avisa que *"pôr o avaliador debaixo do `@Roles` do RH o
+deixaria inalcançável"* — **no mesmo dia** em que documentei a classe a partir de
+um defeito idêntico no `ResultadoController`. **Ver a classe, escrever a lição e
+repetir a forma dela ao lado, tudo no mesmo dia.**
+
+⭐ Isso diz o que a classe É: **não é falta de atenção.** Atenção eu tinha —
+tinha acabado de escrever sobre isso. O portão sai do modelo mental de quem o
+escreve, e o modelo mental é sempre o fluxo que a pessoa está pensando **naquele
+momento**, não o fluxo inteiro.
+
+> ⚠️ **O GATILHO, e ele vale para os dois lados da conversa:**
+> ao propor uma trava por status **ou por papel**, perguntar
+> **“em que status / com que papel isto é USADO?”** — e não
+> *“em que status / para que papel isto deveria ser permitido?”*.
+>
+> A primeira pergunta se responde olhando o DADO. A segunda se responde
+> olhando a própria cabeça, e é por isso que ela erra.
+
+---
+
+### 3.1.170. ✏️ CORREÇÃO DO CLENIO — as 19, e a conta do ensaio
+
+> **"Você está certo nas 19 e eu estava errado."**
+
+18 são AFASTADO com `incluirAfastados = false`, e a 19ª é o **Claudimar** (item 9
+da Arielly). **Designar seria contornar a régua do ciclo.**
+
+⭐ **A conta do ensaio é 325 de 326** — não 325 de 344. Ver §3.1.166.
+
+⭐ E o método que produziu a correção é o que vale guardar: ele mandou designar
+**pedindo antes o porquê**. A pergunta *"por que ficaram de fora?"* custou uma
+consulta e evitou 18 designações erradas. **Ordem que vem com a pergunta junto
+não vira erro.**
+
+---
+
+### 3.1.171. ⛔ O QUE FALTA PARA A SKILL RODAR — não é código, e eu não tinha medido
+
+⚠️ **Eu disse em §3.1.163 que não faltava implementação. Continua verdade — e
+estava incompleto.** O ensaio precisa de ACESSO, e acesso não é implementação.
+
+> 🔴 **A skill NÃO CONSEGUE ENTRAR como os 16 avaliadores.** As contas são de
+> pessoas reais, com senha local (`autentica_portal = false`), e eu não tenho —
+> nem devo ter — a senha delas. Testado com as quatro senhas conhecidas do DEV:
+> nenhuma entra.
+
+**O que dá para fazer, em ordem de preferência:**
+
+| Opção | Custo | |
+|---|---|---|
+| ⭐ **Resetar a senha das 16 contas NO DEV** para uma senha de ensaio | **minutos** | São contas do **DEV**; as pessoas reais não as usam. `autentica_portal = false` nas quatro que conferi, então a senha é local — resetar não toca o Protheus nem produção |
+| Repontar avaliações para `zz.teste.avaliador` | ⛔ não | Seria **mexer na designação**, que é montagem — e o ensaio deixaria de exercitar 16 filas de tamanhos diferentes (de 1 a 91) |
+| Um "entrar como" de ADMIN | dias | Não existe, e criar autenticação nova para um ensaio é a troca errada |
+
+⛔ **Não resetei nada** — mexer em 16 contas é decisão do Clenio. É o **único
+item aberto** entre o estado de hoje e o ensaio integral.

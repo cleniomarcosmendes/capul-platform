@@ -423,7 +423,8 @@ function agruparPorCiclo(itens: ItemDaFila[]): GrupoDeCiclo[] {
     if (item.status === 'ENVIADA' && item.devolutivaLiberadaEm) g.devolutivas.push(item);
     // Reaberta depois da conversa: volta a ser trabalho (a nota mudou), e por
     // isso NÃO vai para "Enviadas" — ela nem está mais enviada.
-    else if (item.conversaDesfeitaPelaReabertura) g.devolutivas.push(item);
+    else if (item.conversaDesfeitaPelaReabertura || item.devolutivaRetiradaSemConversa)
+      g.devolutivas.push(item);
     else if (item.status === 'ENVIADA') g.enviadas.push(item);
     else if (item.perguntasRespondidas > 0) g.emAndamento.push(item);
     else g.aResponder.push(item);
@@ -703,6 +704,20 @@ function Cartao({
             será preciso conversar outra vez.</strong>
           </p>
         )}
+        {/* ⚠️ A METADE QUE FALTAVA (13/09): liberada, ele NÃO marcou conversa, e
+            a avaliação foi reaberta. Ele pode ter LIDO a nota, ou conversado
+            sem marcar — e o cartão sumiria sem uma palavra.
+            A frase é a mesma do caso acima, com o "SE você chegou a conversar":
+            aqui o sistema não sabe se houve conversa, e afirmar que houve seria
+            inventar. */}
+        {item.devolutivaRetiradaSemConversa && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs text-amber-900">
+            O RH reabriu esta avaliação — a nota que estava liberada não vale mais. Quando ela for
+            apurada e liberada de novo, aparece aqui.{' '}
+            <strong>Se você chegou a conversar com {item.nome.split(' ')[0]}, será preciso
+            conversar outra vez.</strong>
+          </p>
+        )}
         {item.contestadaEm && (
           <p className="mt-2 rounded-lg bg-slate-100 px-2 py-1 text-xs text-slate-600">
             Você avisou o RH que esta pessoa não é da sua equipe. Enquanto ele
@@ -766,7 +781,7 @@ function Cartao({
     if (!item.devolutivaLiberadaEm) {
       // ⚠️ Sem liberação não há devolutiva para abrir — nem quando ele já
       //    conversou. O cartão fica, para a frase acima ter onde morar.
-      const tom = item.conversaDesfeitaPelaReabertura
+      const tom = item.conversaDesfeitaPelaReabertura || item.devolutivaRetiradaSemConversa
         ? 'border-amber-200 bg-amber-50/30'
         : 'border-slate-200 opacity-75';
       return <div className={`${classe} ${tom}`}>{conteudo}</div>;

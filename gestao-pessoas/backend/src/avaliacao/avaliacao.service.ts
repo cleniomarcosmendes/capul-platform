@@ -26,6 +26,7 @@ import {
   fraseDeConfirmacao,
 } from './contestacao.js';
 import { apagarResultadoDe } from '../apuracao/apagar-resultado.js';
+import { ACAO_LIBERAR_DEVOLUTIVA } from '../devolutiva/acoes.js';
 
 @Injectable()
 export class AvaliacaoService {
@@ -44,6 +45,35 @@ export class AvaliacaoService {
    * diferença entre retomar e recomeçar.
    */
   async minhasAvaliacoes(contexto: ContextoAcesso, cicloId?: string) {
+    /**
+     * ⭐⭐ AS QUE JÁ FORAM LIBERADAS ALGUMA VEZ — e a coluna não sabe disso.
+     *
+     * Reabrir LIMPA `devolutivaLiberadaEm`. Quem foi liberado, **não marcou a
+     * conversa** e teve a avaliação reaberta some da fila sem uma palavra — e
+     * pode ter LIDO a nota, ou conversado sem marcar. É a mesma lacuna que o
+     * §3.1.155 fecha para quem marcou; esta é a metade que faltava.
+     *
+     * ⚠️ Sem coluna nova: **a auditoria guarda**, e é exatamente o que ela
+     * existe para responder. Uma consulta a mais, do mesmo tipo que a fila já
+     * faz para o "não é minha equipe".
+     */
+    const jaLiberadas = await this.prisma.auditoria.findMany({
+      where: {
+        entidade: 'Avaliacao',
+        acao: ACAO_LIBERAR_DEVOLUTIVA,
+        entidadeId: {
+          in: (
+            await this.prisma.avaliacao.findMany({
+              where: { avaliadorId: contexto.colaboradorId ?? '—' },
+              select: { id: true },
+            })
+          ).map((a) => a.id),
+        },
+      },
+      select: { entidadeId: true },
+    });
+    const idsJaLiberadas = [...new Set(jaLiberadas.map((a) => a.entidadeId))];
+
     const linhas = await this.prisma.avaliacao.findMany({
       /**
        * ⚠️ **CANCELADA sai da fila** — e isto é metade do conserto, não um
@@ -114,6 +144,12 @@ export class AvaliacaoService {
           { ciclo: { status: 'ABERTO' } },
           { devolutivaLiberadaEm: { not: null } },
           { devolutivaConduzidaEm: { not: null } },
+          /**
+           * ⭐ O QUARTO RAMO — as que já foram liberadas alguma vez, mesmo sem
+           * marca nenhuma hoje. É o que dá lugar à frase de quem foi liberado,
+           * NÃO marcou a conversa, e teve a avaliação reaberta.
+           */
+          { id: { in: idsJaLiberadas } },
         ],
         ...(cicloId ? { cicloId } : {}),
       },
@@ -213,6 +249,16 @@ export class AvaliacaoService {
          */
         conversaDesfeitaPelaReabertura:
           l.devolutivaConduzidaEm !== null && l.devolutivaLiberadaEm === null,
+        /**
+         * ⭐ Foi liberada, ele NÃO marcou conversa, e a liberação sumiu — ou
+         * seja, reaberta. Ele pode ter lido a nota, ou conversado sem marcar.
+         * ⚠️ Distinto do campo acima: lá ele DECLAROU a conversa; aqui não se
+         * sabe, e a frase precisa dizer "se você chegou a conversar".
+         */
+        devolutivaRetiradaSemConversa:
+          l.devolutivaConduzidaEm === null &&
+          l.devolutivaLiberadaEm === null &&
+          idsJaLiberadas.includes(l.id),
       };
     });
 

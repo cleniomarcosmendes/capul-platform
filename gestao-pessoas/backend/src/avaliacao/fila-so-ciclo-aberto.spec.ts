@@ -50,7 +50,17 @@ function servico() {
 async function whereDaFila(cicloId?: string) {
   const { prisma, service } = servico();
   await service.minhasAvaliacoes({ colaboradorId: 'c-avaliador' } as never, cicloId);
-  return prisma.avaliacao.findMany.mock.calls[0][0].where;
+  /**
+   * ⚠️ A consulta da FILA é achada pelo CONTEÚDO (a que tem `OR`), não pelo
+   * índice. Desde 13/09 `minhasAvaliacoes` faz duas consultas a `avaliacao`: a
+   * primeira levanta os ids para procurar na auditoria quais já foram liberadas
+   * alguma vez. `calls[0]` passou a ser a errada — e um spec preso à ORDEM das
+   * chamadas quebra a cada consulta nova, sem que a regra tenha mudado.
+   */
+  const chamada = prisma.avaliacao.findMany.mock.calls.find(
+    (c: unknown[]) => (c[0] as { where?: { OR?: unknown } })?.where?.OR,
+  );
+  return chamada[0].where;
 }
 
 /** O ramo do OR que fala de ciclo, e o que fala de devolutiva. */
@@ -70,7 +80,7 @@ describe('a fila do avaliador: ciclo ABERTO OU devolutiva liberada', () => {
   it('a consulta tem exatamente os três ramos, e nada mais', async () => {
     const { or, porCiclo, porDevolutiva, porConduzida } = await ramos();
     expect(porConduzida).toEqual({ devolutivaConduzidaEm: { not: null } });
-    expect(or).toHaveLength(3);
+    expect(or).toHaveLength(4);
     expect(porCiclo).toEqual({ ciclo: { status: 'ABERTO' } });
     expect(porDevolutiva).toEqual({ devolutivaLiberadaEm: { not: null } });
   });
@@ -107,6 +117,13 @@ describe('a fila do avaliador: ciclo ABERTO OU devolutiva liberada', () => {
    * O recorte por ciclo é do CLIENTE (a tela pede um ciclo). Ele estreita,
    * nunca amplia: pedir um ciclo encerrado pelo id não pode devolver nada.
    */
+  it('⭐ o QUARTO ramo: já liberada alguma vez (pela auditoria) — a metade que faltava', async () => {
+    // Liberada, NAO conversou, e reaberta: sem este ramo o cartao sumiria sem
+    // uma palavra, e ele pode ter LIDO a nota. §3.1.155 na metade que faltava.
+    const { or } = await ramos();
+    expect(or.some((r) => (r as { id?: unknown }).id)).toBe(true);
+  });
+
   it('⭐ conduzida e NÃO liberada continua na fila — senão a frase do reaberto some junto', async () => {
     // §3.1.155: o que desaparece sozinho precisa dizer o que aconteceu.
     const { porConduzida } = await ramos();
@@ -116,7 +133,7 @@ describe('a fila do avaliador: ciclo ABERTO OU devolutiva liberada', () => {
   it('o recorte por cicloId não substitui os ramos', async () => {
     const where = await whereDaFila('ciclo-encerrado');
     expect(where.cicloId).toBe('ciclo-encerrado');
-    expect(where.OR).toHaveLength(3);
+    expect(where.OR).toHaveLength(4);
     // ⚠️ Estreita, nunca amplia: o `cicloId` entra em AND com o OR, então pedir
     //    um ciclo encerrado sem devolutiva continua devolvendo nada.
     expect(where.OR[0]).toEqual({ ciclo: { status: 'ABERTO' } });
