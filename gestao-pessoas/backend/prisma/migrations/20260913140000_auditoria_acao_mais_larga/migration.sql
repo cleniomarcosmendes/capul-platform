@@ -21,8 +21,8 @@
 --
 -- 120 não é generosidade: é tirar o limite do caminho de uma coluna cujo valor é
 -- composto por convenção. E um invariante passa a cobrar que caiba
--- (`auditoria-acao-cabe.invariante.spec.ts`), porque alargar só move o abismo.
+-- (`auditoria-cabe-na-coluna.invariante.spec.ts`), porque alargar só move o abismo.
 ALTER TABLE "rh"."auditoria" ALTER COLUMN "acao" TYPE VARCHAR(120);
 
 COMMENT ON COLUMN "rh"."auditoria"."acao" IS
-  'Verbo do evento. Composto por convenção (PREFIXO:verbo), então o limite é folgado de proposito: em VARCHAR(40) a acao ACESSO_NEGADO_PROPRIO_AVALIADO:devolutiva estourava e a trilha sumia em silencio. Coberto por auditoria-acao-cabe.invariante.spec.ts.';
+  'Verbo do evento. Composto por convenção (PREFIXO:verbo), então o limite é folgado de proposito: em VARCHAR(40) a acao ACESSO_NEGADO_PROPRIO_AVALIADO:devolutiva estourava e a trilha sumia em silencio. Coberto por auditoria-cabe-na-coluna.invariante.spec.ts.';
