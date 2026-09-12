@@ -5236,3 +5236,60 @@ regra dos commits.
 ⚠️ **Não há conta de teste com `RH_ADMIN` no DEV** — só `ariellypereira`, que é pessoa real. Por
 isso a verificação foi no serviço contra o banco, e **a tela em si não foi percorrida por
 ninguém logado**. Criar a conta de teste é pré-requisito do roteiro de tela desta frente.
+
+---
+
+### 3.1.65. ⭐⭐ REGRA — antes de reaproveitar, conferir se a peça existente SERVE
+
+Duas vezes no mesmo dia (11/09), nas **duas direções opostas**, e é isso que faz a regra:
+
+| | O que aconteceu | O que teria custado |
+|---|---|---|
+| **`distribuirPeso`** | quase **reimplementei** o que já existia — escrevi a repartição em centavos do zero, e só depois achei a original em `modelo/distribuir-peso.ts`, escrita em 05/09 para o seed | duas cópias da regra que decide a nota de todo mundo, envelhecendo diferente |
+| **`validarConceitos`** | quase **usei** o que não servia — a ordem dizia *"a validação de continuidade já existe"*, e existe: mas é a de `ConceitoFaixa` (0–100 fechado, sem ponta aberta, sem DOMÍNIO) | reprovaria `TEMPO_EMPRESA` e `ESCOLARIDADE` — os dois critérios que rodam hoje |
+
+**A regra:** *"já existe" e *"serve"* são perguntas SEPARADAS, e as duas precisam de resposta antes
+de escrever a primeira linha.
+
+- **Antes de escrever**, procurar. O sinal que teria achado o `distribuirPeso`: a regra que eu ia
+  escrever produz um número que **já está gravado no banco** — alguém o gravou, e esse alguém é
+  código.
+- **Antes de reaproveitar**, ler o DOMÍNIO da peça, não o nome dela. Duas funções chamadas
+  "validar continuidade de faixas" checavam coisas diferentes porque as faixas são diferentes:
+  uma fecha em 0–100, a outra tem ponta aberta e tipo de domínio.
+- **O teste que separa as duas:** rodar a peça candidata contra o DADO REAL antes de adotá-la.
+  `validarConceitos` aplicada às faixas de `TEMPO_EMPRESA` reprova na hora — a resposta custava
+  um minuto e vinha antes de qualquer decisão.
+- Quando a peça existente **não** serve, a nova nasce **modelada nela** e com o comentário dizendo
+  por que não é a mesma. `criterio/faixa.validator.ts` abre com essa comparação, para o próximo
+  não refazer a pergunta.
+
+### 3.1.66. ⭐⭐ FAMÍLIA DE DEFEITO — o que passa no teste e sai errado em produção, calado
+
+Dois defeitos de 11/09, achados **exercitando contra o banco**, com a suíte verde nos dois casos:
+
+| | Defeito | Por que a spec não pegou | Como sairia em produção |
+|---|---|---|---|
+| **1** | `pontuacaoMaximaDoArranjo` arredondava **por questão** (`5,34 × 1,2 = 6,408 → 6,41`) | a spec só existiu quando comparei com o **instrumento herdado**; com dado sintético de pesos redondos o erro não aparece | Administrativo com pontuação máxima **72,03** em vez de 72 — toda nota do perfil 0,04% menor, e o número gravado deixando de bater com o calculado |
+| **2** | `assertSalvavel` zerava o `codigoCalculo` por origem **antes** de validar | a regra recusada nunca era **alcançada**: o service limpava o campo e o validador não via nada errado. Um teste do VALIDADOR passa; o defeito está na casca | INFORMADO com código de cálculo entra no banco "limpo" — quem trocou a origem segue achando que o cálculo vale |
+
+**O que os dois têm em comum, e é a família:**
+
+1. **Nenhum quebra.** Não há exceção, não há log, não há linha vermelha. O sistema responde 200 e
+   grava um número.
+2. **O erro é de MAGNITUDE ou de OMISSÃO**, não de tipo — 72,03 em vez de 72; um campo `null` em
+   vez de uma recusa. Passa por qualquer validação de forma.
+3. **A camada onde o defeito mora não é a camada que tem spec.** A regra estava certa nos dois
+   casos: o arredondamento na função de soma, a validação no validador. O erro estava em **quem
+   chama** — a ordem da conta, e o que se entrega ao validador.
+4. ⭐ **Os dois foram pegos percorrendo com DADO REAL**, não por revisão nem por teste unitário. O
+   primeiro por comparar com o instrumento que já existia; o segundo por exercitar o serviço
+   inteiro contra o banco, criando e apagando um critério descartável.
+
+⭐ **A contramedida que funcionou nos dois:** *escrever um teste que compara com o que JÁ EXISTE
+em produção* (os 44 pesos gravados; as recusas que a regra escrita promete). Dado sintético
+confirma a implementação; **dado real confirma a intenção**.
+
+⚠️ **Corolário para a casca.** Service que "normaliza" antes de validar tem de provar que a
+normalização não apaga um caso que a regra recusaria. **Sanitizar em silêncio o que a regra manda
+recusar é pior que não validar**: some com o sintoma e deixa a pessoa com a crença errada.
