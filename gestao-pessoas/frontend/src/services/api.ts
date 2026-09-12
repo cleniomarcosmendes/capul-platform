@@ -561,6 +561,23 @@ export interface QuestaoDoArranjoEdicao {
   maiorValor: number;
 }
 
+export interface AvisoDeComparabilidade {
+  classificacaoId: string;
+  titulo: string;
+  aqui: { peso: number; questoes: number; porQuestao: number };
+  /** ⭐ `true` = esta edição criou a diferença; `false` = já vinha da publicada. */
+  novo: boolean;
+  outros: {
+    modeloNome: string;
+    versao: number;
+    publicado: boolean;
+    peso: number | null;
+    questoes: number;
+    porQuestao: number | null;
+  }[];
+  frase: string;
+}
+
 export interface ArranjoDeEdicao {
   versaoId: string;
   modeloId: string;
@@ -575,9 +592,12 @@ export interface ArranjoDeEdicao {
   grupos: GrupoDoArranjoEdicao[];
   questoes: QuestaoDoArranjoEdicao[];
   problemasParaPublicar: string[];
+  /** ⭐ AVISO, nunca bloqueio: a decisão é do RH. */
+  avisosDeComparabilidade: AvisoDeComparabilidade[];
 }
 
 export interface PreviaDaPublicacao {
+  avisosDeComparabilidade: AvisoDeComparabilidade[];
   versaoId: string;
   modeloNome: string;
   versao: number;

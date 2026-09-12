@@ -24,6 +24,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Check,
+  Info,
   Plus,
   Save,
   Send,
@@ -383,6 +384,95 @@ export default function ArranjoPage() {
         </ol>
       </section>
 
+      {/* ⭐⭐ COMPARABILIDADE — AVISO, e a diferença para o bloco de baixo é o
+          desenho inteiro da Etapa 7. Problema IMPEDE publicar; aviso não toca no
+          botão. Os perfis existem para serem diferentes — foi a melhoria que o
+          módulo veio fazer. O que o sistema deve é mostrar o número ANTES de
+          publicar, não depois, quando a nota já saiu. */}
+      {!sujo && dados.avisosDeComparabilidade.length > 0 && (
+        <section className="mt-6 rounded-2xl border border-sky-300 bg-sky-50 p-3">
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-sky-900">
+            <Info size={15} aria-hidden />
+            Comparação com os outros perfis
+            {/* ⭐⭐ O NÚMERO QUE IMPORTA É O DAS NOVAS. Duplicar sem tocar em
+                nada já produz avisos — o instrumento herdado do RD8010 pesa
+                diferente entre perfis. Contar tudo junto faria o cabeçalho
+                dizer o mesmo sempre, e aviso que aparece sempre deixa de ser
+                lido. */}
+            {(() => {
+              const novas = dados.avisosDeComparabilidade.filter((a) => a.novo).length;
+              const herdadas = dados.avisosDeComparabilidade.length - novas;
+              return (
+                <span className="font-normal">
+                  {novas > 0 && (
+                    <strong className="text-sky-900">
+                      {' '}
+                      — {contagem(novas, 'diferença nova', 'diferenças novas')}
+                    </strong>
+                  )}
+                  {herdadas > 0 && (
+                    <span className="text-sky-700">
+                      {novas > 0 ? ' e ' : ' — '}
+                      {herdadas} que já vinha{herdadas === 1 ? '' : 'm'} da versão publicada
+                    </span>
+                  )}
+                </span>
+              );
+            })()}
+          </h3>
+          <p className="mt-1 text-xs text-sky-800">
+            Não impede publicar. A decisão é do RH — perfis diferentes são o motivo de existirem.
+          </p>
+          {/* As novas primeiro: é onde a atenção tem de cair. */}
+          <ul className="mt-2 space-y-2">
+            {[...dados.avisosDeComparabilidade]
+              .sort((a, b) => Number(b.novo) - Number(a.novo))
+              .map((a) => (
+              <li key={a.classificacaoId} className="text-sm text-sky-900">
+                <strong>{a.titulo}</strong>
+                {a.novo ? (
+                  <span className="ml-1.5 rounded bg-sky-200 px-1.5 py-0.5 text-xs font-semibold">
+                    novo
+                  </span>
+                ) : (
+                  <span className="ml-1.5 text-xs text-sky-700">já vinha da publicada</span>
+                )}
+                {/* ⚠️ A TABELA, não só a frase: o RH decide comparando números,
+                    e o número de cada perfil é o que ele veio ver. */}
+                <table className="mt-1 w-full text-left text-xs">
+                  <thead className="text-sky-700">
+                    <tr>
+                      <th className="font-medium">Perfil</th>
+                      <th className="font-medium">Peso</th>
+                      <th className="font-medium">Questões</th>
+                      <th className="font-medium">Por questão</th>
+                    </tr>
+                  </thead>
+                  <tbody className="tabular-nums">
+                    <tr className="font-semibold">
+                      <td>este ({dados.modeloNome})</td>
+                      <td>{num(a.aqui.peso)}</td>
+                      <td>{a.aqui.questoes}</td>
+                      <td>{num(a.aqui.porQuestao)}</td>
+                    </tr>
+                    {a.outros.map((o) => (
+                      <tr key={`${o.modeloNome}-${o.versao}`}>
+                        <td>
+                          {o.modeloNome} <span className="text-sky-600">v{o.versao}</span>
+                        </td>
+                        <td>{o.peso === null ? '—' : num(o.peso)}</td>
+                        <td>{o.questoes}</td>
+                        <td>{o.porQuestao === null ? '—' : num(o.porQuestao)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* ── O QUE FALTA PARA PUBLICAR ──────────────────────────────────────── */}
       {!sujo && dados.problemasParaPublicar.length > 0 && (
         <section className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-3">
@@ -622,6 +712,42 @@ function DialogoDePublicar({
           normalizada, então a escala não muda a nota — mas os dois questionários deixam de ser
           lidos na mesma régua.
         </p>
+      )}
+
+      {/* ⭐ Os mesmos avisos, no último momento em que ainda mudam algo — e o
+          botão continua habilitado. Aviso que bloqueia é problema mal
+          classificado. */}
+      {previa.avisosDeComparabilidade.length > 0 && (
+        <div className="mt-2 rounded-lg bg-sky-50 px-2.5 py-2 text-sm text-sky-900">
+          {/* ⭐ No último momento em que ainda muda algo, só as NOVAS: as
+              herdadas o RH já conhece, e repeti-las aqui afogaria a que ele
+              acabou de criar. */}
+          {(() => {
+            const novas = previa.avisosDeComparabilidade.filter((a) => a.novo);
+            const herdadas = previa.avisosDeComparabilidade.length - novas.length;
+            return (
+              <>
+                <p className="font-semibold">
+                  {novas.length > 0
+                    ? `${contagem(novas.length, 'diferença nova', 'diferenças novas')} em relação aos outros perfis — não impede publicar:`
+                    : 'Nenhuma diferença nova em relação aos outros perfis.'}
+                </p>
+                {novas.length > 0 && (
+                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                    {novas.map((a) => (
+                      <li key={a.classificacaoId}>{a.frase}</li>
+                    ))}
+                  </ul>
+                )}
+                {herdadas > 0 && (
+                  <p className="mt-1 text-xs text-sky-700">
+                    Outras {herdadas} diferenças já vinham da versão publicada deste perfil.
+                  </p>
+                )}
+              </>
+            );
+          })()}
+        </div>
       )}
 
       {previa.problemas.length > 0 && (
