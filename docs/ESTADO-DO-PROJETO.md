@@ -6658,3 +6658,84 @@ descartável em um clique, e não alcança ciclo nenhum.
    verdade no minuto em que o duplicar nasceu. Reescrito para separar o que **já** dá (abrir um
    rascunho) do que **ainda não** dá (mexer no conteúdo dele) — é a §3.1.33 pelo avesso: em vez de
    prometer o que não existe, esconder o que passou a existir.
+
+---
+
+### 3.1.88. ⭐⭐ REGRA — a contramedida para "cinco certos, dois esquecidos" é um TESTE QUE VARRE O FONTE
+
+**O que aconteceu, e é o exemplo curto da regra.** Escrevi `versaoPublicada` para os chamadores
+que eu sabia que existiam: criar a aplicação e abrir o ciclo. Escrevi junto um teste de invariante,
+mais por hábito do que por dúvida. Ele reprovou apontando `aplicacao/aplicacao.service.ts:173` —
+**editar** a aplicação, um terceiro chamador que eu não tinha visto.
+
+Não foi descuido de leitura: eu tinha feito o `grep`. O `grep` acha onde a regra **foi escrita**;
+o que faltava era onde ela **deveria estar** — e isso nenhuma busca por nome encontra, porque a
+linha ausente não tem nome.
+
+⭐ **A forma da contramedida.** Em vez de conferir à mão os lugares em que a regra deve aparecer,
+escrever um teste que **exige que ela apareça em todos**. Duas formas funcionam, e o que muda entre
+elas é o SINAL que o teste procura no fonte:
+
+| Forma | Sinal no fonte | Onde já está |
+|---|---|---|
+| **(A) campo companheiro** | um objeto literal que traz `modeloFinalidade` tem de trazer `versaoPublicada` | `aplicacao/versao-publicada.invariante.spec.ts` |
+| **(B) guarda obrigatória** | método que chama `.create/.update/.delete` tem de chamar a guarda do agregado | `assertRdvAberto` na Logística |
+
+⚠️ **O campo é opcional de propósito, e é isso que exige o teste.** `versaoPublicada?: boolean` com
+`undefined` = publicado evita que chamador antigo passe a inventar problema — e pela mesma razão
+**esquecer o campo desliga a guarda em silêncio**, sem erro de compilação e sem teste vermelho.
+Campo opcional numa guarda é uma dívida que só o teste de fonte cobra.
+
+#### Dá para aplicar às outras regras do classificador? Dá — e o custo é o da LISTA DE EXCEÇÕES
+
+Medi os métodos que escrevem, por serviço:
+
+| Serviço | Métodos que escrevem | Classificador que deveria ser consultado |
+|---|---|---|
+| `ciclo.service` | **7** (criar, abrir, encerrar, devolverCanceladas, reabrir, ajustarConceitos, ajustarPeriodo) | `problemasParaAbrir` / ciclo operável |
+| `aplicacao.service` | **5** (criar, editar, apagar, adicionar/removerDoPublico) | `motivoParaNaoEditar`, `validarAplicacao` |
+| `classificacao.service` | **5** | `efeitoDeApagar/Desativar/Reativar` |
+| `designacao.service` | **3** (designar, decidir, desfazer) | `efeitoDeDesignar`, `efeitoDeDesfazer` |
+| `criterio.service` | **3** (criar, atualizar, salvarFaixas) | `assertCriterioSalvavel`, `assertFaixasValidas` |
+| `avaliacao.service` | **3** (responder, enviar, reabrir) | separação de funções (**já tem invariante**) |
+| `versao.service` | **2** | `efeitoDeDuplicar`, `efeitoDeDescartar` |
+| **Total** | **28** | |
+
+⚠️ **Escrever o teste é a parte barata** (~40 linhas cada, o padrão já existe em 6 arquivos). O que
+custa é decidir a **lista de exceções**: `devolverCanceladasDoEncerramento` escreve e legitimamente
+não passa pela guarda de abertura; `removerDoPublico` também não. Exceção mal escolhida produz
+**falso vermelho**, e falso vermelho destrói a ferramenta (regra 1 da §5.9) — a suíte passa a ser
+ignorada, e aí ela não protege mais nada.
+
+**Custo honesto, por prioridade:**
+
+| Agregado | Custo | Por que nesta ordem |
+|---|---|---|
+| `designacao` + `criterio` | **~6h** | escrita que decide **quem julga quem** e a **régua** — erro aqui chega em nota de gente |
+| `ciclo` | **~4h** | 7 métodos, e é onde mora a maior lista de exceções |
+| `aplicacao` | **~3h** | metade já coberta pelo invariante de 12/09 |
+| `classificacao` + `versao` | **~1h**, e **não recomendo agora** | 2 dias de idade, um chamador cada, guarda no topo de todo método: o teste passaria trivialmente hoje e só pagaria depois |
+
+**Total do que vale a pena: ~1,5 dia** (designação, critério, ciclo, aplicação). Não é bloqueio de
+nada — cabe em qualquer intervalo entre blocos do editor.
+
+### 3.1.89. ⭐ O 72,03 EVITADO POR DESENHO — `pontuacaoMaxima` nasce NULA no rascunho
+
+Ao duplicar uma versão, `publicadoEm` **e** `pontuacaoMaxima` ficam nulos. O `publicadoEm` é
+óbvio; o outro é a decisão que importa.
+
+**Copiar a máxima da origem gravaria um número que descreve OUTRO arranjo.** No instante da cópia
+os dois arranjos são idênticos e o número estaria certo — mas o rascunho existe justamente para ser
+mexido. Na primeira questão acrescentada, a máxima gravada passa a descrever o arranjo de ontem, e
+**nada acusa**: a tela do instrumento mostra as duas colunas (gravada × recalculada) lado a lado
+esperando que divirjam quando alguém mexeu no banco por fora, e passaria a mostrar divergência
+como se fosse isso.
+
+Pior que o número errado é o número errado **com aparência de conferência**. Vazio é honesto: a
+tela escreve *"ainda não publicada"*, que é o que de fato se sabe. A máxima é calculada e gravada
+**na publicação** (Etapa 4), sobre o arranjo final.
+
+⭐ É o **72,03 evitado por desenho**, e não por teste: lá (§3.1.86 nº 1) o número errado veio de
+arredondar por item; aqui viria de copiar um valor que descreve outra coisa. A mesma família —
+*número com aparência de precisão que não é o que parece* — resolvida antes de existir, porque
+desta vez a pergunta foi feita na hora de escrever o `create`.
