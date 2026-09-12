@@ -873,9 +873,14 @@ export interface LinhaDeResultado {
   centroCusto: string | null;
   filial: string | null;
   aplicacao: string;
-  notaAvaliacao: number;
+  /**
+   * ⚠️ NULO na própria linha — o servidor zera antes de responder. A separação
+   * de funções vale para LER: a linha aparece (o total tem de fechar), o
+   * conteúdo não. Não é a tela que esconde; é a API que não manda.
+   */
+  notaAvaliacao: number | null;
   notaCriterios: number | null;
-  notaFinal: number;
+  notaFinal: number | null;
   conceito: string | null;
   houveRenormalizacao: boolean;
   calculadoEm: string;

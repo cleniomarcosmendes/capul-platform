@@ -65,7 +65,21 @@ export default function ResultadosPage() {
     );
   }
 
-  const media = visiveis.reduce((s, l) => s + l.notaFinal, 0) / (visiveis.length || 1);
+  /**
+   * ⭐⭐ A MÉDIA EXCLUI A PRÓPRIA LINHA — e é obrigatório que exclua.
+   *
+   * Esconder a nota e manter a linha dentro da média não esconde nada: com N
+   * linhas visíveis e N−1 notas na tela, a própria sai de
+   * `média × N − Σ(outras)`. Uma subtração. A omissão só vale se a média for
+   * dos OUTROS — e o rótulo tem de dizer sobre quantos ela é, senão o número
+   * fica sem termo que o concilie com a contagem ao lado.
+   *
+   * ⚠️ As CONTAGENS continuam sobre tudo (quantas apuradas, quantas em
+   * exibição): elas não permitem deduzir nota nenhuma.
+   */
+  const comNota = visiveis.filter((l): l is typeof l & { notaFinal: number } => l.notaFinal !== null);
+  const media = comNota.reduce((s, l) => s + l.notaFinal, 0) / (comNota.length || 1);
+  const mediaOmiteAPropria = comNota.length !== visiveis.length;
   /** A base do ciclo — quantas avaliações existem, apuradas ou não. */
   const totalDoCiclo = ciclo._count?.avaliacoes ?? linhas.length;
   const parcial = totalDoCiclo > linhas.length;
@@ -141,7 +155,15 @@ export default function ResultadosPage() {
           <span>
             média{' '}
             <strong className="font-semibold tabular-nums text-slate-800">{nota(media)}</strong>{' '}
-            {filtrando ? (
+            {/* ⚠️ O denominador da média é `comNota`, não `visiveis`: a própria
+                linha sai da conta. Dizer sobre QUANTAS ela é não é detalhe —
+                sem isso ficariam dois números verdadeiros lado a lado (a média
+                e a contagem) sem o termo que os concilia. */}
+            {mediaOmiteAPropria ? (
+              <>
+                sobre <strong className="tabular-nums">{comNota.length}</strong>, sem a sua
+              </>
+            ) : filtrando ? (
               <>
                 sobre <strong className="tabular-nums">{visiveis.length}</strong> em exibição
               </>
@@ -168,6 +190,32 @@ export default function ResultadosPage() {
       <ul className="mt-3 space-y-2">
         {visiveis.map((l) => (
           <li key={l.id}>
+            {/* ⭐⭐ A PRÓPRIA LINHA NÃO É BOTÃO — 11/09.
+                Sem nota, sem conceito e sem caminho para a memória de cálculo,
+                em qualquer papel. Fica como TEXTO: botão que abre um 403 é pior
+                que ausência de botão — convida ao clique e responde com erro,
+                que a pessoa lê como defeito do sistema.
+                A linha permanece para o total da tela fechar com o do ciclo. */}
+            {l.restrita ? (
+              <div className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50/50 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2 truncate font-medium text-slate-800">
+                    {l.nome}
+                    <Etiqueta tom="azul">você</Etiqueta>
+                  </p>
+                  <p className="truncate text-sm text-slate-500">
+                    {l.matricula} · {l.cargo ?? 'sem cargo'} · {l.aplicacao}
+                  </p>
+                </div>
+                {/* Mesmo tom que o módulo já usa com o avaliador ("a nota é
+                    calculada pelo sistema e não fica visível para você"). */}
+                <p className="max-w-[16rem] shrink-0 text-right text-xs text-slate-500">
+                  A sua própria avaliação não fica visível para você. A devolutiva vem pelo seu
+                  superior.
+                </p>
+              </div>
+            ) : (
+            <>
             {/* ⭐⭐ A LINHA TEM DE PARECER CLICÁVEL (08/09).
                 A memória de cálculo é a peça que responde "por que 58,60?" — é o
                 que o RH leva para o feedback e para a contestação — e estava
@@ -185,7 +233,6 @@ export default function ResultadosPage() {
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 truncate font-medium text-slate-800">
                   {l.nome}
-                  {l.restrita && <Etiqueta tom="azul">você</Etiqueta>}
                 </p>
                 <p className="truncate text-sm text-slate-500">
                   {l.matricula} · {l.cargo ?? 'sem cargo'} · {l.aplicacao}
@@ -197,12 +244,16 @@ export default function ResultadosPage() {
                 )}
               </div>
               <div className="shrink-0 text-right">
-                <p className="text-lg font-semibold tabular-nums text-slate-800">{nota(l.notaFinal)}</p>
+                <p className="text-lg font-semibold tabular-nums text-slate-800">
+                  {l.notaFinal === null ? '—' : nota(l.notaFinal)}
+                </p>
                 {l.conceito && <p className="text-xs text-slate-500">{l.conceito}</p>}
                 <p className="mt-0.5 text-[11px] text-capul-700">memória de cálculo</p>
               </div>
               <ChevronRight size={20} className="shrink-0 text-slate-300" aria-hidden />
             </button>
+            </>
+            )}
           </li>
         ))}
         {visiveis.length === 0 && (

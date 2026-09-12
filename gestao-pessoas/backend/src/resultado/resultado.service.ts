@@ -21,7 +21,7 @@
  * abre: esconder de alguém o próprio número não protege nada, e faria o total
  * da lista não fechar.
  */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
 import { AvaliacaoService } from '../avaliacao/avaliacao.service.js';
@@ -45,9 +45,19 @@ export interface LinhaDeResultado {
   centroCusto: string | null;
   filial: string | null;
   aplicacao: string;
-  notaAvaliacao: number;
+  /**
+   * ⚠️ NULO na própria linha. A separação de funções vale para LER, não só para
+   * AGIR (decisão de 11/09): a linha continua aparecendo — com nome, matrícula e
+   * o motivo — para o total da tela não divergir do total do ciclo sem
+   * explicação, mas **sem nota, sem conceito e sem memória de cálculo**.
+   *
+   * ⭐ Zerado no SERVIDOR, não escondido na tela: esconder no cliente deixaria o
+   * número viajando no JSON, e quem chamasse a API direto o leria — que é o modo
+   * silencioso de tela e API discordarem.
+   */
+  notaAvaliacao: number | null;
   notaCriterios: number | null;
-  notaFinal: number;
+  notaFinal: number | null;
   conceito: string | null;
   houveRenormalizacao: boolean;
   calculadoEm: Date;
@@ -74,9 +84,10 @@ export class ResultadoService {
    * quiser, pede — e aí é escolha registrada, não descuido.
    *
    * ⚠️ E **não** traz a linha de quem está gerando: a separação de funções vale
-   * aqui como vale na tela. A pessoa aparece marcada na TELA (nunca filtrada,
-   * para o total fechar), mas um arquivo que sai do sistema com a própria nota
-   * dentro é outro ato.
+   * aqui como vale na tela. Na TELA a linha aparece — marcada e **sem nota,
+   * conceito ou memória** —, para o total fechar; num ARQUIVO que sai do
+   * sistema a linha não entra, porque arquivo circula e não tem como avisar
+   * quem o abrir.
    */
   async csvDoCiclo(cicloId: string, colaboradorId: string | null) {
     const ciclo = await this.prisma.ciclo.findUnique({
@@ -262,7 +273,26 @@ export class ResultadoService {
 
     // Sem colaborador resolvido (RH que não é funcionário) ninguém tem linha
     // própria para marcar — e a lista sai inteira, como deve.
-    return colaboradorId ? marcarRestricoes(resultado, colaboradorId) : resultado;
+    if (!colaboradorId) return resultado;
+
+    // ⭐⭐ MARCAR **e** OMITIR. Até 11/09 a própria linha era só marcada, e a
+    // dispensa do invariante dizia que na tela bastava — o CSV é que omitia. Era
+    // a mesma regra em duas superfícies, com uma esquecida: a gestora abria a
+    // aba Resultados e via a própria nota, o conceito e a memória de cálculo.
+    //
+    // A marcação continua (o total tem de fechar); o que sai é o CONTEÚDO.
+    return marcarRestricoes(resultado, colaboradorId).map((l) =>
+      l.restrita
+        ? {
+            ...l,
+            notaAvaliacao: null,
+            notaCriterios: null,
+            notaFinal: null,
+            conceito: null,
+            houveRenormalizacao: false,
+          }
+        : l,
+    );
   }
 
   /** Memória de cálculo de um resultado. */
@@ -303,6 +333,38 @@ export class ResultadoService {
       },
     });
     if (!r) throw new NotFoundException('Resultado não encontrado.');
+
+    /**
+     * ⭐⭐ A PRÓPRIA MEMÓRIA DE CÁLCULO — 403, em qualquer papel.
+     *
+     * A separação de funções vale para **LER**, não só para AGIR (decisão de
+     * 11/09). Até aqui esta rota apenas REGISTRAVA `proprioResultado: true` na
+     * auditoria e devolvia tudo: a gestora abria a própria memória — nota do
+     * questionário, cada critério, o valor bruto de escolaridade e tempo de
+     * casa, a ponderação inteira. Registrar não é impedir; a trilha provava o
+     * acesso depois de ele ter acontecido.
+     *
+     * ⚠️ Verificação por REGISTRO, nunca por papel — `RH_ADMIN` e o `ADMIN` da
+     * plataforma incluídos. E o mesmo `ehProprioAvaliado`, não `===`: com dois
+     * ids nulos o `===` diria "é o próprio" sobre um par não resolvido.
+     *
+     * O acesso NEGADO também vira linha de auditoria, como em
+     * `avaliacao-acesso.service`: tentativa é informação.
+     */
+    if (contexto && ehProprioAvaliado(contexto.colaboradorId, r.avaliacao.avaliadoId)) {
+      await this.auditoria.registrar({
+        entidade: 'ResultadoAvaliacao',
+        entidadeId: resultadoId,
+        acao: 'ACESSO_NEGADO_PROPRIO_AVALIADO:memoria',
+        usuarioId: contexto.usuarioId,
+        valorNovo: { avaliadoId: r.avaliacao.avaliadoId },
+        ip: contexto.ip,
+      });
+      throw new ForbiddenException(
+        'A sua própria avaliação não fica visível para você — nem a nota, nem a memória de ' +
+          'cálculo. Quem responde por ela é o seu superior; a devolutiva vem por ele.',
+      );
+    }
 
     // Quem é o avaliador designado lê sem rastro — é o trabalho dele. Todo o
     // resto entra na trilha, com quem leu o quê e quando.

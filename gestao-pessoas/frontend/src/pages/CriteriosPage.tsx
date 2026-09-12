@@ -19,6 +19,7 @@
  * ou recusa o que ela aceita.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Check,
@@ -65,6 +66,9 @@ export default function CriteriosPage() {
   const [semPermissao, setSemPermissao] = useState(false);
   const [editando, setEditando] = useState<CriterioDoCadastro | 'novo' | null>(null);
   const [faixasDe, setFaixasDe] = useState<CriterioDoCadastro | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [destacado, setDestacado] = useState<string | null>(null);
+  const jaAbriu = useRef(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -81,6 +85,36 @@ export default function CriteriosPage() {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  /**
+   * ⭐⭐ CHEGAR, e não só navegar. O painel manda *"cadastre a faixa no critério"*
+   * e linka para cá com `?faixas=<codigo>`.
+   *
+   * ⚠️ A primeira versão usava `#âncora` — e **não funcionava**: o React Router
+   * não rola para hash, e mesmo o comportamento nativo do browser não pegaria,
+   * porque no instante da navegação a lista ainda é `null` e o elemento não
+   * existe. A pessoa caía no TOPO da lista, sem nada destacado, e tinha de
+   * procurar o critério a olho — que é o mesmo trabalho que o link deveria ter
+   * poupado. Link que navega mas não chega é pior que texto sem link: promete
+   * ter levado.
+   *
+   * Aqui o parâmetro é lido DEPOIS de a lista carregar, rola até o cartão,
+   * destaca por alguns segundos e **abre direto o editor de faixas** — que é o
+   * ato que o aviso nomeia. `jaAbriu` impede que voltar do diálogo reabra.
+   */
+  useEffect(() => {
+    const codigo = params.get('faixas');
+    if (!codigo || !lista || jaAbriu.current) return;
+    const alvo = lista.find((c) => c.codigo === codigo);
+    jaAbriu.current = true;
+    // Some da URL: recarregar a página não deve reabrir o diálogo, e o link
+    // colado num chat não deve levar alguém a um estado que ele não pediu.
+    setParams({}, { replace: true });
+    if (!alvo) return;
+    setDestacado(alvo.id);
+    document.getElementById(`criterio-${codigo}`)?.scrollIntoView({ block: 'center' });
+    setFaixasDe(alvo);
+  }, [params, lista, setParams]);
 
   if (semPermissao) {
     return (
@@ -124,6 +158,7 @@ export default function CriteriosPage() {
           <li key={c.id} id={`criterio-${c.codigo}`} className="scroll-mt-20">
             <CartaoDoCriterio
               criterio={c}
+              destacado={destacado === c.id}
               aoEditar={() => setEditando(c)}
               aoAbrirFaixas={() => setFaixasDe(c)}
             />
@@ -190,16 +225,24 @@ function ExplicacaoDasOrigens() {
 
 function CartaoDoCriterio({
   criterio: c,
+  destacado,
   aoEditar,
   aoAbrirFaixas,
 }: {
   criterio: CriterioDoCadastro;
+  destacado: boolean;
   aoEditar: () => void;
   aoAbrirFaixas: () => void;
 }) {
   const semFaixa = c.faixas.length === 0;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div
+      className={`rounded-2xl border bg-white p-4 shadow-sm ${
+        // O destaque fica: quem veio do painel precisa reconhecer o cartão
+        // DEPOIS de fechar o diálogo, para conferir que mexeu no certo.
+        destacado ? 'border-sky-400 ring-2 ring-sky-200' : 'border-slate-200'
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

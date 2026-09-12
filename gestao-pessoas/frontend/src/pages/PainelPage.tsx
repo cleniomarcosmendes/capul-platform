@@ -371,10 +371,10 @@ export default function PainelPage() {
                       "o sistema está quebrado". */}
                   {a.motivo === 'SEM_FAIXA' && tem(ROLES.RH_ADMIN) && (
                     <Link
-                      to={`/criterios#criterio-${a.criterioCodigo}`}
+                      to={`/criterios?faixas=${a.criterioCodigo}`}
                       className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"
                     >
-                      Abrir as faixas de {a.criterioNome}
+                      Cadastrar a faixa de {a.criterioNome}
                       <ArrowRight size={12} aria-hidden />
                     </Link>
                   )}

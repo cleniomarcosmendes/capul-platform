@@ -47,9 +47,14 @@ const DISPENSADOS: Record<string, string> = {
     'painel.service: agregado, não lê o conteúdo de ninguém.',
   'resultado/resultado.service.ts':
     'lê avaliação para MONTAR AS PLANILHAS (quem enviou cada resultado e a lista de canceladas com ' +
-    'motivo) — nunca abre, edita, reabre nem recalcula registro nenhum, que é o que a separação de ' +
-    'funções protege. Rota de RH_ADMIN, e a linha de quem gera o arquivo fica FORA dos dois CSV: na ' +
-    'tela a própria linha aparece marcada, mas arquivo que sai do sistema é outro ato.',
+    'motivo) — nunca abre, edita, reabre nem recalcula registro nenhum, que é o que a porta protege. ' +
+    'A separação de funções é aplicada aqui na LEITURA, por conta própria e em três pontos: a ' +
+    'própria linha sai dos dois CSV; na tela ela aparece marcada e com nota, conceito e ' +
+    'renormalização ZERADOS no servidor; e a memória de cálculo da própria avaliação devolve 403. ' +
+    'Coberto por `resultado/propria-nota.spec.ts`. ' +
+    '⚠️ Até 11/09/2026 esta dispensa afirmava que "na tela a própria linha aparece marcada" e ' +
+    'parava aí — o CSV omitia e a tela mostrava a nota, o conceito e a memória. Era a mesma regra ' +
+    'em duas superfícies, com uma esquecida, e o texto da dispensa é que a legitimava.',
   'apuracao/apuracao.service.ts':
     'apuração em LOTE, por ciclo ou aplicação — a exceção já acordada, com escopo guardado por ' +
     'assertEscopoReapuracaoValido (nunca por colaborador)',
