@@ -46,6 +46,18 @@ export interface LinhaDaLista {
   matricula: string;
   nome: string;
   centroCusto: string | null;
+  /** Descrição do CC — é o que a pessoa reconhece; o código, ela não decora. */
+  centroCustoDescricao: string | null;
+  /**
+   * ⭐ Cargo, para a tela poder FILTRAR por ele.
+   *
+   * ⚠️ É TEXTO LIVRE do Protheus, com sufixo de nível ("GERENTE FINANCEIRO 3B"),
+   * e `rh.cargo` está vazia — não há classificação nenhuma por trás. Serve para
+   * BUSCAR, nunca para decidir: "GER" pega `GER GADO CORTE E LEITE`, que não é
+   * gerente de departamento. A tela precisa dizer isso, senão promete uma
+   * categoria que o cadastro não tem.
+   */
+  cargoDescricao: string | null;
   filial: string;
   elegivel: boolean;
   motivo: MotivoExclusao | null;
@@ -266,8 +278,12 @@ export class DesignacaoService {
       orderBy: [{ filial: 'asc' }, { nome: 'asc' }],
     });
 
-    const candidatos: (CandidatoDesignacao & { centroCusto: string | null; filial: string })[] =
-      colaboradores.map((c) => ({
+    const candidatos: (CandidatoDesignacao & {
+      centroCusto: string | null;
+      centroCustoDescricao: string | null;
+      cargoDescricao: string | null;
+      filial: string;
+    })[] = colaboradores.map((c) => ({
         colaboradorId: c.id,
         matricula: c.matricula,
         nome: c.nome,
@@ -276,6 +292,8 @@ export class DesignacaoService {
         categoriaFuncional: null,
         situacaoNaDataBase: c.situacao,
         centroCusto: c.centroCusto,
+        centroCustoDescricao: c.centroCustoDescricao,
+        cargoDescricao: c.cargoDescricao,
         filial: c.filial,
       }));
 
@@ -1328,12 +1346,21 @@ export class DesignacaoService {
     return new Map(linhas.map((l) => [l.colaboradorId, l]));
   }
 
-  private paraLinha(c: CandidatoDesignacao & { centroCusto?: string | null; filial?: string }) {
+  private paraLinha(
+    c: CandidatoDesignacao & {
+      centroCusto?: string | null;
+      centroCustoDescricao?: string | null;
+      cargoDescricao?: string | null;
+      filial?: string;
+    },
+  ) {
     return {
       colaboradorId: c.colaboradorId,
       matricula: c.matricula,
       nome: c.nome,
       centroCusto: c.centroCusto ?? null,
+      centroCustoDescricao: c.centroCustoDescricao ?? null,
+      cargoDescricao: c.cargoDescricao ?? null,
       filial: c.filial ?? '',
     };
   }

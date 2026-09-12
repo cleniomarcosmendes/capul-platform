@@ -46,6 +46,16 @@ export default function DesignacaoPage() {
   const [linhas, setLinhas] = useState<LinhaDaDesignacao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [filtro, setFiltro] = useState('');
+  /** Centro de custo escolhido. '' = todos. */
+  const [cc, setCc] = useState('');
+  /**
+   * ⚠️ BUSCA POR TEXTO no cargo, não classificação. `cargoDescricao` é texto
+   * livre do Protheus com sufixo de nível, e `rh.cargo` está vazia: não existe
+   * "gerentes" como categoria. Prometer isso na tela seria inventar um dado que
+   * o cadastro não tem — "GER" pega `GER GADO CORTE E LEITE`, que não é gerente
+   * de departamento. O rótulo e o texto de ajuda dizem exatamente isso.
+   */
+  const [cargo, setCargo] = useState('');
   const { tem } = useAuth();
   const [so, setSo] = useState<'TODOS' | 'SEM_AVALIADOR' | 'EXCLUIDOS'>('TODOS');
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
@@ -140,6 +150,35 @@ export default function DesignacaoPage() {
     };
   }, [linhas]);
 
+  /**
+   * As opções dos dois `<select>` saem das LINHAS CARREGADAS, não de um cadastro
+   * — só aparece o que existe nesta aplicação. Lista de 74 centros de custo num
+   * seletor onde 5 têm gente é rolagem, não escolha.
+   */
+  const centrosDaLista = useMemo(() => {
+    const m = new Map<string, { codigo: string; rotulo: string; pessoas: number }>();
+    for (const l of linhas ?? []) {
+      if (!l.centroCusto) continue;
+      const atual = m.get(l.centroCusto) ?? {
+        codigo: l.centroCusto,
+        rotulo: l.centroCustoDescricao?.trim() || l.centroCusto,
+        pessoas: 0,
+      };
+      atual.pessoas += 1;
+      m.set(l.centroCusto, atual);
+    }
+    return [...m.values()].sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
+  }, [linhas]);
+
+  /** Sugestões de cargo — `<datalist>`, então o campo continua livre. */
+  const cargosDaLista = useMemo(
+    () =>
+      [...new Set((linhas ?? []).map((l) => l.cargoDescricao?.trim()).filter(Boolean))].sort((a, b) =>
+        (a as string).localeCompare(b as string, 'pt-BR'),
+      ) as string[],
+    [linhas],
+  );
+
   const visiveis = (linhas ?? [])
     .filter((l) =>
       so === 'SEM_AVALIADOR'
@@ -148,10 +187,28 @@ export default function DesignacaoPage() {
           ? !l.elegivel
           : true,
     )
+    .filter((l) => !cc || l.centroCusto === cc)
+    .filter((l) => {
+      const t = cargo.trim().toLowerCase();
+      return !t || (l.cargoDescricao ?? '').toLowerCase().includes(t);
+    })
     .filter((l) => {
       const t = filtro.trim().toLowerCase();
-      return !t || l.nome.toLowerCase().includes(t) || l.matricula.includes(t);
+      return (
+        !t ||
+        l.nome.toLowerCase().includes(t) ||
+        l.matricula.includes(t) ||
+        // ⭐ A busca passou a cobrir o CC: o código e a descrição estão na linha
+        // e não eram alcançáveis por texto — quem procura "FISCAL" não achava.
+        (l.centroCusto ?? '').includes(t) ||
+        (l.centroCustoDescricao ?? '').toLowerCase().includes(t)
+      );
     });
+
+  /** Elegíveis entre os visíveis — só esses podem ser designados em lote. */
+  const selecionaveis = visiveis.filter((l) => l.elegivel);
+  const todosSelecionados =
+    selecionaveis.length > 0 && selecionaveis.every((l) => selecao.has(l.colaboradorId));
 
   if (!apls) return <Carregando />;
   if (apls.length === 0) {
@@ -185,7 +242,7 @@ export default function DesignacaoPage() {
           <input
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
-            placeholder="Nome ou matrícula"
+            placeholder="Nome, matrícula ou centro de custo"
             aria-label="Filtrar pessoas"
             className="alvo-toque w-full rounded-xl border border-slate-300 pl-9 pr-3 text-slate-800"
           />
@@ -219,6 +276,80 @@ export default function DesignacaoPage() {
         />
       )}
 
+      {/* ⭐⭐ OS DOIS RECORTES QUE TORNAM O APONTAMENTO MANUAL VIÁVEL.
+          A designação é MANUAL por decisão — "avaliador = responsável do CC" não
+          é regra, é a visão que cobre quase todos os casos. Com 344 pessoas no
+          ensaio (1.037 em produção), apontar sem recorte é rolar a lista.
+          O de CC resolve a designação por área; o de cargo é o do Claudimar,
+          que avalia os gerentes de vários CCs — o caso que regra nenhuma
+          cobriria. */}
+      {linhas && (centrosDaLista.length > 1 || cargosDaLista.length > 1) && (
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          {centrosDaLista.length > 1 && (
+            <label className="min-w-52 flex-1">
+              <span className="text-sm font-medium text-slate-700">Centro de custo</span>
+              <select
+                value={cc}
+                onChange={(e) => setCc(e.target.value)}
+                className="alvo-toque mt-1.5 w-full rounded-xl border border-slate-300 px-3 text-slate-800"
+              >
+                <option value="">Todos ({linhas.length})</option>
+                {centrosDaLista.map((c) => (
+                  <option key={c.codigo} value={c.codigo}>
+                    {c.rotulo} ({c.pessoas})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="min-w-52 flex-1">
+            {/* ⚠️ "Cargo contém", não "Cargos" nem "Gerentes": é BUSCA POR TEXTO.
+                `cargoDescricao` é texto livre do Protheus com sufixo de nível, e
+                `rh.cargo` está vazia — não existe a categoria "gerente". Rótulo
+                que prometesse classificação inventaria um dado que o cadastro
+                não tem, e quem confiasse nele perderia gente. */}
+            <span className="text-sm font-medium text-slate-700">Cargo contém</span>
+            <input
+              value={cargo}
+              onChange={(e) => setCargo(e.target.value)}
+              list="cargos-da-lista"
+              placeholder="ex.: GERENTE, SUPERVISOR"
+              aria-label="Filtrar por texto do cargo"
+              className="alvo-toque mt-1.5 w-full rounded-xl border border-slate-300 px-3 text-slate-800"
+            />
+            <datalist id="cargos-da-lista">
+              {cargosDaLista.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </label>
+          {(cc || cargo) && (
+            <button
+              type="button"
+              onClick={() => {
+                setCc('');
+                setCargo('');
+              }}
+              className="alvo-toque rounded-xl border border-slate-300 px-3 text-sm text-slate-700"
+            >
+              Limpar recortes
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ⚠️ O cargo é texto livre — dizer isso onde a pessoa está usando o campo,
+          não num documento. Sem esta linha, "GER" parece filtrar gerentes e traz
+          `GER GADO CORTE E LEITE` junto, sem nada explicar. */}
+      {cargo.trim() && (
+        <p className="mt-1.5 text-xs text-slate-500">
+          O cargo vem do Protheus como texto livre, com o nível no fim
+          (&quot;GERENTE FINANCEIRO 3B&quot;). Isto busca o texto — não é uma lista de gerentes:
+          &quot;GER&quot; também traz &quot;GER GADO CORTE E LEITE&quot;. Confira a lista antes de
+          designar em lote.
+        </p>
+      )}
+
       {linhas && (
         <div className="mt-3 flex flex-wrap gap-2">
           <Filtro atual={so} valor="TODOS" aoEscolher={setSo}>
@@ -244,10 +375,52 @@ export default function DesignacaoPage() {
         </div>
       )}
 
+      {/* ⭐⭐ SELECIONAR TODOS OS VISÍVEIS — sem isto, filtrar não resolve nada:
+          98 pessoas do supermercado eram 98 cliques. Age sobre o RECORTE
+          APLICADO, que é o ponto: a pessoa filtra e marca o que sobrou.
+          ⚠️ Só os ELEGÍVEIS entram. Quem está fora do ciclo aparece na lista
+          (para o total fechar) e não pode ser designado — marcá-lo criaria uma
+          seleção que o botão de designar recusaria depois, sem dizer por quê. */}
+      {selecionaveis.length > 0 && (
+        <label className="mt-3 flex w-fit items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={todosSelecionados}
+            onChange={(e) => {
+              const marcar = e.target.checked;
+              setSelecao((atual) => {
+                const nova = new Set(atual);
+                for (const l of selecionaveis) {
+                  if (marcar) nova.add(l.colaboradorId);
+                  else nova.delete(l.colaboradorId);
+                }
+                return nova;
+              });
+            }}
+            className="h-4 w-4"
+          />
+          Selecionar {contagem(selecionaveis.length, 'pessoa', 'pessoas')} desta lista
+          {visiveis.length !== selecionaveis.length && (
+            <span className="text-slate-500">
+              ({visiveis.length - selecionaveis.length} fora do ciclo não entram)
+            </span>
+          )}
+        </label>
+      )}
+
       {selecao.size > 0 && (
         <div className="sticky top-0 z-10 mt-4 flex items-center gap-3 rounded-xl border border-capul-200 bg-capul-50 p-3">
           <p className="flex-1 text-sm font-medium text-capul-800">
             {contagem(selecao.size, 'selecionada', 'selecionadas')}
+            {/* ⚠️ A seleção SOBREVIVE ao filtro — de propósito: dá para marcar
+                um CC, trocar o recorte, marcar outro e designar os dois juntos.
+                Mas então o número da barra pode ser maior que a lista na tela, e
+                sem esta frase a diferença lê como defeito. */}
+            {selecao.size > selecionaveis.filter((l) => selecao.has(l.colaboradorId)).length && (
+              <span className="ml-1 font-normal text-capul-700">
+                — inclui pessoas fora do recorte atual
+              </span>
+            )}
           </p>
           <button
             type="button"

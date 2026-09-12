@@ -22,6 +22,7 @@ const RH = 'user-rh';
 
 const pessoa = (id: string, nome: string): LinhaDaLista => ({
   colaboradorId: id, matricula: id.slice(-3), nome, centroCusto: '21010101', filial: '02',
+  centroCustoDescricao: 'SUPERMERCADO', cargoDescricao: 'OPERADOR DE CAIXA 1A',
   elegivel: true, motivo: null, justificativa: null, decididoManualmente: false,
   avaliadorId: null, avaliadorNome: null, avaliacaoStatus: null, avaliacaoId: null, motivoCancelamento: null,
   // Ninguém designado: sem resposta, e o denominador é o do modelo da aplicação.

@@ -538,6 +538,13 @@ export interface LinhaDaDesignacao {
   matricula: string;
   nome: string;
   centroCusto: string | null;
+  centroCustoDescricao: string | null;
+  /**
+   * ⚠️ TEXTO LIVRE do Protheus, com sufixo de nível ("GERENTE FINANCEIRO 3B") —
+   * `rh.cargo` está vazia e não há classificação por trás. Serve para BUSCAR,
+   * nunca para decidir.
+   */
+  cargoDescricao: string | null;
   filial: string;
   elegivel: boolean;
   motivo: MotivoExclusao | null;
