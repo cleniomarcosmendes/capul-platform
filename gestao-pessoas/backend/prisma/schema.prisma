@@ -901,7 +901,10 @@ model Auditoria {
   id           String   @id @default(uuid())
   entidade     String   @db.VarChar(60)
   entidadeId   String   @map("entidade_id")
-  acao         String   @db.VarChar(40)
+  /// Verbo do evento, composto por convenção (`PREFIXO:verbo`). ⚠️ O teto era
+  /// 40 e a trilha SUMIA EM SILÊNCIO ao estourar — ver migration
+  /// `20260913140000`. Cobrado por `auditoria-acao-cabe.invariante.spec.ts`.
+  acao         String   @db.VarChar(120)
   usuarioId    String   @map("usuario_id")
   valorAnterior Json?   @map("valor_anterior")
   valorNovo    Json?    @map("valor_novo")
