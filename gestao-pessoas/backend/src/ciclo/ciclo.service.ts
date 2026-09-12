@@ -32,6 +32,8 @@ export interface DadosCiclo {
   janelaTreinamentoMeses?: number;
   incluirAfastados?: boolean;
   valeParaMerito?: boolean;
+  /** Alcança só parte da empresa? Ver `marcarRecorte`. */
+  ehRecorte?: boolean;
   conceitos: (FaixaConceito & { cor?: string | null; ordem: number })[];
 }
 
@@ -54,6 +56,7 @@ export class CicloService {
         janelaTreinamentoMeses: dados.janelaTreinamentoMeses ?? 12,
         incluirAfastados: dados.incluirAfastados ?? false,
         valeParaMerito: dados.valeParaMerito ?? false,
+        ehRecorte: dados.ehRecorte ?? false,
         conceitos: {
           create: dados.conceitos.map((c) => ({
             descricao: c.descricao,
@@ -72,7 +75,50 @@ export class CicloService {
       entidadeId: ciclo.id,
       acao: 'CRIAR',
       usuarioId,
-      valorNovo: { nome: ciclo.nome, dataBase: ciclo.dataBase, valeParaMerito: ciclo.valeParaMerito },
+      valorNovo: {
+        nome: ciclo.nome,
+        dataBase: ciclo.dataBase,
+        valeParaMerito: ciclo.valeParaMerito,
+        ehRecorte: ciclo.ehRecorte,
+      },
+    });
+    return ciclo;
+  }
+
+  /**
+   * ⭐ DECLARA O ALCANCE do ciclo: empresa inteira ou recorte.
+   *
+   * Muda o que o painel AFIRMA sobre quem ficou fora de todas as aplicações —
+   * pendência a montar, ou informação sobre gente que este ciclo nunca quis
+   * alcançar. Não toca em público, designação nem nota.
+   *
+   * ⚠️ Sem guarda de status, e isso é decisão: ver o comentário da rota no
+   * controller. O ato é registrado na auditoria com o valor ANTERIOR, que é o
+   * que responde depois "desde quando este ciclo é recorte".
+   */
+  async marcarRecorte(cicloId: string, ehRecorte: boolean, usuarioId: string) {
+    const antes = await this.prisma.ciclo.findUnique({
+      where: { id: cicloId },
+      select: { id: true, ehRecorte: true },
+    });
+    if (!antes) throw new NotFoundException('Ciclo não encontrado.');
+
+    // Nada a fazer, e nada a registrar: auditoria de não-mudança é ruído que
+    // atrapalha justamente quem foi ler a auditoria para achar a mudança.
+    if (antes.ehRecorte === ehRecorte) return { id: cicloId, ehRecorte };
+
+    const ciclo = await this.prisma.ciclo.update({
+      where: { id: cicloId },
+      data: { ehRecorte },
+      select: { id: true, ehRecorte: true },
+    });
+    await this.auditoria.registrar({
+      entidade: 'Ciclo',
+      entidadeId: cicloId,
+      acao: 'MARCAR_RECORTE',
+      usuarioId,
+      valorAnterior: { ehRecorte: antes.ehRecorte },
+      valorNovo: { ehRecorte },
     });
     return ciclo;
   }

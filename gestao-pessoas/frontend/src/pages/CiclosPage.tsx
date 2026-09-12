@@ -713,6 +713,7 @@ function DialogoNovoCiclo({
   const [janela, setJanela] = useState(12);
   const [incluirAfastados, setIncluirAfastados] = useState(false);
   const [valeParaMerito, setMerito] = useState(false);
+  const [ehRecorte, setRecorte] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -728,6 +729,7 @@ function DialogoNovoCiclo({
         janelaTreinamentoMeses: janela,
         incluirAfastados,
         valeParaMerito,
+        ehRecorte,
         conceitos: CONCEITOS_PADRAO,
       });
     } catch (e) {
@@ -810,6 +812,15 @@ function DialogoNovoCiclo({
             aoMudar={setMerito}
             rotulo="Vale para mérito"
             ajuda="Marca o ciclo como base de decisão salarial. Não muda o cálculo — muda o que ele significa."
+          />
+          {/* ⚠️ Fica aqui, e não numa tela de ajuste depois, porque quem monta o
+              ciclo é quem SABE se é recorte. Derivar isso do tamanho do público
+              obrigaria a inventar um limiar — e limiar arbitrário erra calado. */}
+          <Opcao
+            marcado={ehRecorte}
+            aoMudar={setRecorte}
+            rotulo="Alcança só parte da empresa (piloto ou recorte)"
+            ajuda="Marque quando o ciclo é de propósito parcial. Sem isso o painel mostra quem ficou fora como pendência a resolver, em vermelho — e num piloto isso é a decisão de recortar aparecendo como buraco."
           />
 
           <div className="rounded-xl bg-slate-50 p-3">

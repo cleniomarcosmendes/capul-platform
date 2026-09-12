@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 import {
   apuracao,
+  ciclos as ciclosApi,
   mensagemDoErro,
   painel as apiPainel,
   type Conferencia,
@@ -24,6 +25,7 @@ import type { ContextoDoCiclo } from './CicloPage';
 import { Modal } from '../components/Modal';
 import { motivoCicloEncerrado } from '../lib/ciclo-encerrado';
 import { contagem, dataHora, flexao } from '../lib/formato';
+import { leituraDoAlcance } from '../lib/alcance-do-ciclo';
 
 /**
  * PAINEL — o que falta para o ciclo fechar.
@@ -50,6 +52,29 @@ export default function PainelPage() {
   const [apurando, setApurando] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [resultadoApuracao, setResultado] = useState<string | null>(null);
+  const [marcando, setMarcando] = useState(false);
+
+  /** Quem monta o ciclo declara o alcance dele — mesma dupla da rota. */
+  const podeDeclararAlcance = tem(ROLES.RH_ADMIN) || tem(ROLES.RH_CICLO);
+
+  /**
+   * ⚠️ Recarrega o painel inteiro em vez de mexer no estado local: o bloco lê
+   * `dados.ciclo.ehRecorte`, e atualizar só a flag deixaria a tela afirmando um
+   * fato que o servidor pode ter recusado. É a regra da prévia — mostrar o que
+   * de fato ficou gravado, não o que se pediu.
+   */
+  async function alternarRecorte(ehRecorte: boolean) {
+    setErro(null);
+    setMarcando(true);
+    try {
+      await ciclosApi.marcarRecorte(ciclo.id, ehRecorte);
+      await carregar();
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível declarar o alcance do ciclo.'));
+    } finally {
+      setMarcando(false);
+    }
+  }
 
   useEffect(() => {
     void carregar();
@@ -187,36 +212,54 @@ export default function PainelPage() {
             </ul>
           </div>
         )}
-        {dados.foraDeTodasAsAplicacoes.total > 0 && (
-          <div className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3">
-            <p className="text-sm text-red-900">
-              <strong className="font-semibold">
-                {contagem(dados.foraDeTodasAsAplicacoes.total, 'pessoa', 'pessoas')} fora de TODAS as aplicações deste
-                ciclo.
-              </strong>{' '}
-              Elegíveis que não entraram em público nenhum — não aparecem sequer como &quot;sem
-              avaliador&quot;, porque essa conta é por aplicação.{' '}
-              {/* ⚠️ Instrução que não cabe no estado: num ciclo encerrado,
-                  "monte o público" manda a pessoa a uma tela onde o botão está
-                  desabilitado. O número continua verdadeiro e útil (é ele que
-                  diz o tamanho do buraco); o que muda é o que se pode fazer. */}
-              {fechado
-                ? 'O ciclo está encerrado — para incluí-las, reabra o ciclo primeiro.'
-                : 'Monte o público que falta, em Aplicações.'}
-            </p>
-            <p className="mt-1 text-xs text-red-900/80">
-              {dados.foraDeTodasAsAplicacoes.pessoas
-                .slice(0, 6)
-                // ⭐ A DESCRIÇÃO, não o código: esta lista existe para alguém
-                // AGIR sobre ela, e "02/21010101" não diz a ninguém de que área
-                // é a pessoa. O campo já vinha do backend (§3.1.9).
-                .map((p) => `${p.nome} (${p.filial}/${p.centroCustoDescricao ?? p.centroCusto ?? '—'})`)
-                .join(' · ')}
-              {dados.foraDeTodasAsAplicacoes.pessoas.length > 6 &&
-                ` … e mais ${dados.foraDeTodasAsAplicacoes.pessoas.length - 6}`}
-            </p>
-          </div>
-        )}
+        {dados.foraDeTodasAsAplicacoes.total > 0 &&
+          (() => {
+            // ⭐ A regra das duas leituras mora em `lib/alcance-do-ciclo.ts`,
+            //    com spec. Aqui só se pinta o que ela decidiu.
+            const leitura = leituraDoAlcance({
+              total: dados.foraDeTodasAsAplicacoes.total,
+              ehRecorte: dados.ciclo.ehRecorte,
+              // `motivoCicloEncerrado` devolve o MOTIVO (string) ou null; aqui só importa se há um.
+              cicloFechado: Boolean(fechado),
+              contagem: contagem(dados.foraDeTodasAsAplicacoes.total, 'pessoa', 'pessoas'),
+            });
+            const cor =
+              leitura.tom === 'pendencia'
+                ? 'border-red-300 bg-red-50 text-red-900'
+                : 'border-slate-300 bg-slate-50 text-slate-700';
+            return (
+              <div className={`mt-3 rounded-xl border p-3 ${cor}`}>
+                <p className="text-sm">
+                  <strong className="font-semibold">{leitura.titulo}</strong> {leitura.explicacao}
+                </p>
+                <p className="mt-1 text-xs opacity-80">
+                  {dados.foraDeTodasAsAplicacoes.pessoas
+                    .slice(0, 6)
+                    // ⭐ A DESCRIÇÃO, não o código: esta lista existe para alguém
+                    // AGIR sobre ela, e "02/21010101" não diz a ninguém de que área
+                    // é a pessoa. O campo já vinha do backend (§3.1.9).
+                    .map((p) => `${p.nome} (${p.filial}/${p.centroCustoDescricao ?? p.centroCusto ?? '—'})`)
+                    .join(' · ')}
+                  {dados.foraDeTodasAsAplicacoes.pessoas.length > 6 &&
+                    ` … e mais ${dados.foraDeTodasAsAplicacoes.pessoas.length - 6}`}
+                </p>
+                {/* ⚠️ A rota existe desde 13/09; sem este botão ela não teria
+                    caminho na tela, e capacidade sem caminho é capacidade que
+                    ninguém usa. Fica AQUI, ao lado do número que ela muda —
+                    quem lê "664 fora" é quem sabe dizer se é recorte. */}
+                {podeDeclararAlcance && (
+                  <button
+                    type="button"
+                    onClick={() => void alternarRecorte(!dados.ciclo.ehRecorte)}
+                    disabled={marcando}
+                    className="alvo-toque mt-2 rounded-lg border border-current/30 px-2 py-1 text-xs font-medium hover:bg-black/5 disabled:opacity-50"
+                  >
+                    {marcando ? 'Salvando…' : leitura.rotuloDoBotao}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
       </section>
 
       <section>

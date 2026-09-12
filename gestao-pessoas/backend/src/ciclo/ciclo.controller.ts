@@ -1,12 +1,13 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsBoolean, IsDate, IsInt, IsNumber, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsDate, IsInt, IsNumber, IsOptional, IsString, Min, MinLength, ValidateNested } from 'class-validator';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { CicloService } from './ciclo.service.js';
 
 import { MOTIVO_MINIMO, MOTIVO_MINIMO_EM_MASSA } from '../common/motivo.js';
+import { BooleanoEstrito } from '../common/booleano-estrito.js';
 
 export class ConceitoDto {
   @IsString() descricao!: string;
@@ -22,9 +23,14 @@ export class CriarCicloDto {
   @Type(() => Date) @IsDate() periodoFim!: Date;
   @Type(() => Date) @IsDate() dataBase!: Date;
   @IsOptional() @IsInt() @Min(1) janelaTreinamentoMeses?: number;
-  @IsOptional() @IsBoolean() incluirAfastados?: boolean;
-  @IsOptional() @IsBoolean() valeParaMerito?: boolean;
+  @IsOptional() @BooleanoEstrito() incluirAfastados?: boolean;
+  @IsOptional() @BooleanoEstrito() valeParaMerito?: boolean;
+  @IsOptional() @BooleanoEstrito() ehRecorte?: boolean;
   @ValidateNested({ each: true }) @Type(() => ConceitoDto) @ArrayMinSize(1) conceitos!: ConceitoDto[];
+}
+
+export class MarcarRecorteDto {
+  @BooleanoEstrito() ehRecorte!: boolean;
 }
 
 /** Montar o ciclo é de RH_CICLO; abrir e encerrar, só de RH_ADMIN. */
@@ -54,7 +60,7 @@ export class ReabrirCicloDto {
  * a tela só reenvia depois de perguntar.
  */
 export class EncerrarCicloDto {
-  @IsOptional() @IsBoolean() confirmarPendentes?: boolean;
+  @IsOptional() @BooleanoEstrito() confirmarPendentes?: boolean;
   /**
    * ⚠️ Piso do DTO, não a regra. Encerrar SEM pendência não cancela nada e o
    * motivo é dispensável; com pendência, quem exige `MOTIVO_MINIMO_EM_MASSA` é
@@ -120,6 +126,31 @@ export class CicloController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.ciclos.ajustarConceitos(id, dto.conceitos, user.sub);
+  }
+
+  /**
+   * ⭐ MARCAR (ou desmarcar) o ciclo como RECORTE — declaração de alcance.
+   *
+   * Não move dado nenhum: muda o que o painel AFIRMA sobre quem ficou fora de
+   * todas as aplicações — pendência a resolver, ou informação sobre um ciclo
+   * que nunca teve a intenção de alcançar aquela gente.
+   *
+   * ⚠️ **Vale inclusive com o ciclo ENCERRADO, de propósito.** Encerrado trava
+   * designação, público e apuração — coisas que mudam nota. Isto é rótulo, e
+   * travá-lo deixaria um ciclo fechado dizendo "664 pessoas fora" em vermelho
+   * para sempre, sem caminho de conserto: *guarda que impede o conserto é pior
+   * que guarda ausente* (§3.1.94). O caso que obriga é o `ENSAIO PILOTO`, que
+   * já existe e nasceu antes da coluna.
+   *
+   * RH_ADMIN e RH_CICLO: quem monta o ciclo declara o alcance dele.
+   */
+  @Patch(':id/recorte') @HttpCode(200) @Roles(ROLES.RH_ADMIN, ROLES.RH_CICLO)
+  marcarRecorte(
+    @Param('id') id: string,
+    @Body() dto: MarcarRecorteDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.ciclos.marcarRecorte(id, dto.ehRecorte, user.sub);
   }
 
   @Post(':id/abrir') @HttpCode(200) @Roles(ROLES.RH_ADMIN)

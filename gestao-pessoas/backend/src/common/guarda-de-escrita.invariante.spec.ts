@@ -118,6 +118,17 @@ const ALVOS: Alvo[] = [
           criar:
             'Não há ciclo ainda — este é o método que o cria. Não existe estado a aferir, e o ' +
             'que precisa ser validado (o período) é validado por `validarPeriodo`.',
+          marcarRecorte:
+            'Escreve RÓTULO, não dado: `ehRecorte` declara se o ciclo alcança a empresa inteira ' +
+            'ou só um recorte, e não move avaliação, designação, público nem nota — muda o que o ' +
+            'painel AFIRMA sobre quem ficou fora de todas as aplicações. O estado do ciclo é a ' +
+            'guarda errada para ele: encerrado trava o que altera resultado, e travar isto ' +
+            'deixaria um ciclo fechado dizendo "664 pessoas fora" em vermelho para sempre, sem ' +
+            'caminho de conserto — *guarda que impede o conserto é pior que guarda ausente*. ' +
+            'O caso que obriga é o `ENSAIO PILOTO`, que nasceu antes da coluna. ' +
+            '⚠️ Escrever sem aferir estado é aceitável AQUI porque o método faz uma coisa só e ' +
+            'a coluna é dele: se um dia ele passar a escrever qualquer outro campo, esta linha ' +
+            'deixa de valer e a exceção tem de cair. Coberto por `ciclo/alcance-do-ciclo.spec.ts`.',
         },
       },
     ],

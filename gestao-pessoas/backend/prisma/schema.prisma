@@ -531,6 +531,12 @@ model Ciclo {
   status            StatusCiclo  @default(RASCUNHO)
   /// Piloto não vale para mérito.
   valeParaMerito    Boolean      @default(false) @map("vale_para_merito")
+  /// ⭐ O ciclo alcança a EMPRESA INTEIRA ou só um recorte (piloto, uma área)?
+  /// Quando `true`, quem ficou fora de todas as aplicações é **informação**, não
+  /// pendência — o painel para de pedir "monte o público que falta".
+  /// ⚠️ Declarado por quem monta, nunca derivado de percentual: limiar
+  /// arbitrário erra calado. Ver migration `20260913000000`.
+  ehRecorte         Boolean      @default(false) @map("eh_recorte")
   /// Afastados entram no ciclo? Resolvido pela situação na DATA-BASE, não na
   /// data em que a lista é montada. Padrão do RH: não incluir.
   /// ⚠️ Férias NÃO é afastamento e entra sempre — são 98 pessoas, e confundir

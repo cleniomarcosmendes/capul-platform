@@ -94,6 +94,12 @@ export interface PainelDoCiclo {
     periodoInicio: Date;
     periodoFim: Date;
     dataBase: Date;
+    /**
+     * ⭐ O ciclo alcança a empresa inteira ou só um recorte? É o que decide se
+     * `foraDeTodasAsAplicacoes` é **pendência** ou **informação** — o mesmo
+     * número, com duas leituras opostas. Ver migration `20260913000000`.
+     */
+    ehRecorte: boolean;
   };
   designados: number;
   enviadas: number;
@@ -292,6 +298,7 @@ export class PainelService {
         periodoInicio: ciclo.periodoInicio,
         periodoFim: ciclo.periodoFim,
         dataBase: ciclo.dataBase,
+        ehRecorte: ciclo.ehRecorte,
       },
       designados: aplicacoes.reduce((t, a) => t + a.designados, 0),
       enviadas: aplicacoes.reduce((t, a) => t + a.enviadas, 0),
