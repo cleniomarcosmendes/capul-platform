@@ -5956,3 +5956,97 @@ contra esta plataforma precisa de ritmo.
 Ver §3.1.75 §7 — e vale reler antes de tirar conclusão dele. Em resumo: **Produção e Indústria não
 é exercitada** (1 pessoa, que é o próprio avaliador — decisão consciente), não há critério
 `INFORMADO`, o volume é 344 contra 894, e nenhum avaliador está sem acesso ao módulo.
+
+---
+
+### 3.1.77. 🔎 VARREDURA DAS TELAS DO RH SOBRE O ENSAIO EM RASCUNHO (12/09)
+
+Percorrido com `zz.teste.rh` (RH_ADMIN) sobre o `ENSAIO PILOTO — 16 CCs`, **RASCUNHO**. Primeiro
+ciclo em rascunho percorrido de verdade.
+
+#### O inventário — todo número com o rótulo ao lado
+
+| Tela | Número | Rótulo | Confere com os 343? |
+|---|---:|---|---|
+| Lista de ciclos | 4 · 343 · 343 · 0 | aplicações · avaliações · pendentes · canceladas | ✅ |
+| Linha de estado | 344 · 18 · 1 · 0 de 343 · 0 | no público · fora do ciclo · sem avaliador · enviadas · apuradas | ⚠️ ver abaixo |
+| Painel | 343 · 0 · 343 · 1 | designados · enviadas · a fazer · sem designação | ✅ |
+| Painel — por aplicação | 19 / 66 / 257 / 1 | designados | ✅ |
+| Painel — fora de todas | **664** | pessoas fora de todas as aplicações | ✅ (990 elegíveis pela régua − 326 no público) |
+| Prévia da abertura | 344 · 343 · 1 · 18 · 0 · 0 | público · designados · sem avaliador · fora do ciclo · sem acesso · avaliações sem acesso | ✅ |
+| Pendências cadastrais | 0 · 0 · 0 | apuradas · sem nota · alertas | ✅ |
+| Resultados | `[]` | — | ✅ |
+
+#### 🔴 A LINHA DE ESTADO NÃO FECHA — e o Piloto esconde isso
+
+```
+ENSAIO:  344 no público − 18 fora do ciclo − 1 sem avaliador = 325   …e "de 343 enviadas"
+PILOTO: 1036 no público − 47 fora do ciclo − 95 sem avaliador = 894  …e "de 894 enviadas"  ✅
+```
+
+A linha foi desenhada e conferida no Piloto, onde **fecha**. Ela assume, sem dizer, que
+*"fora do ciclo"* e *"designado"* são **conjuntos disjuntos**. No ensaio não são: **18 pessoas que
+a régua excluiu estão designadas**, e entram nos 343.
+
+⭐⭐ **A causa: a TELA protege, a API não.** Na Designação o checkbox de linha inelegível é
+`disabled={!linha.elegivel}` e o botão *"Definir avaliador"* está dentro de `{linha.elegivel && …}`
+— **não há caminho de tela** para designar quem a régua excluiu. `POST /designacao/…/designar`
+aceita: `efeitoDeDesignar` recusa três casos (troca de aplicação, autoavaliação, avaliação
+cancelada) e **elegibilidade não é um deles**.
+
+É [[feedback_tela_e_api_discordam_dois_sentidos]] na direção **permissiva** — a silenciosa:
+ninguém reclama, nada quebra, e quem descobre é quem chama a API direto.
+
+⚠️ **Consequência para o ensaio:** ele carrega hoje um estado que uma montagem pela tela **não
+produziria**. As 18 avaliações existem, ficariam nas filas ao abrir, e a régua do ciclo diz que
+essas pessoas não deveriam ser avaliadas. **Decidir antes de abrir:** excluí-las do ciclo (decisão
+registrada, e o `efeitoDoExcluir` já explica o que acontece) ou desfazer a designação.
+
+⭐ **O que NÃO é defeito:** a linha da Designação é honesta. Ela mostra `elegivel: false`, o
+motivo (`REGRA_CICLO`), a justificativa por extenso, **e** o avaliador designado, **e** o efeito de
+excluir. Os dois fatos estão lá — o que falta é a linha de estado conciliá-los.
+
+#### ⚠️ 664 "fora de todas as aplicações" — correto, e enganoso num recorte estreito
+
+A conta fecha (990 elegíveis pela régua − 326 do público que são elegíveis = 664). Mas num ciclo
+que é **deliberadamente um recorte de 16 CCs**, esse é o maior número do painel e ele descreve
+**o desenho, não uma pendência**. O painel não tem como distinguir "de propósito" de "esquecido" —
+e num ensaio a leitura errada é imediata.
+
+#### 🔵 O próximo passo pede o impossível
+
+`proximoPasso: DESIGNAR — "Sem avaliador neste ciclo: 1. Designe antes de abrir"`. O 1 é o
+**Claudimar**, que por desenho não é avaliado (o diretor-presidente não está no cadastro). A
+abertura **não está bloqueada** (`problemas: []`), mas o passo sugerido não tem como ser cumprido.
+
+A saída existe — excluí-lo do ciclo com justificativa —, e o próximo passo não a menciona.
+
+#### 🔵 O cartão da aplicação não concilia público × avaliações
+
+`Administrativo` mostra **"66 avaliações"** e **"67 pessoas"** no público, lado a lado, e **não diz
+que 1 ficou sem avaliador**. O painel diz; a aba de Aplicações, que é onde se olha o público, não.
+
+É a família do achado 15 de 10/09 (o cartão calado sobre canceladas). ⚠️ **Não deu para observar
+canceladas aqui**: o ensaio tem 0.
+
+✅ O que o cartão acerta: etiqueta **"só questionário"** no Aprendizes (`criterios.length === 0`),
+público com a quebra por origem, e o aviso de público vazio.
+
+#### ✅ Ciclo em RASCUNHO — o que oferece, e não oferece
+
+| | |
+|---|---|
+| **Faixa do rascunho** | ✅ diz o que só se faz agora, que **abrir é definitivo** e que não há volta. E lista *"o que falta para abrir"* pela **mesma função** que a API roda |
+| Montar público, criar aplicação, mudar peso | ✅ abertos, e é o momento certo |
+| Resultados | ✅ `[]` — sem tela quebrada |
+| Pendências cadastrais | ✅ 0 alertas, sem erro |
+| **Aviso de critério `INFORMADO`** | ✅ `avisos: []` — a checagem **roda e não se aplica**: as 4 aplicações usam só critérios CALCULADO. Confirmado que responde vazio, não erro |
+| **Não achei nada oferecido que não deveria** | o encerrar e o reabrir não aparecem em RASCUNHO |
+
+#### O que o ensaio confirmou do que foi construído nos últimos dias
+
+- **A ordem da montagem** (público nominal antes do por CC) funcionou: Loja encontrou 276 e
+  adicionou 257, pulando sozinha os 19 aprendizes.
+- **Os filtros novos** trazem `centroCustoDescricao` e `cargoDescricao` na linha — conferido em
+  697 linhas do Piloto, 8 CCs no seletor, 294 cargos como sugestão.
+- **A designação atravessa aplicação**: o Claudimar avalia gente das três.
