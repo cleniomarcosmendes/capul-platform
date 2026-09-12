@@ -84,12 +84,20 @@ export class VersaoController {
   }
 
   /**
-   * ⭐ Publicar é o ato com consequência: dele saem notas. `RH_MODELO` monta e
-   * `RH_ADMIN` decide que aquilo vale — o `@Roles` do método restringe o do
-   * controller, não o amplia.
+   * ⭐⭐ PUBLICAR — `RH_ADMIN` **e `RH_MODELO`**, decidido em 12/09.
+   *
+   * ⚠️ Nasceu só `RH_ADMIN`, com o argumento "monta, não publica". A varredura
+   * mostrou o que esse desenho produz: o `RH_MODELO` percorre o editor inteiro
+   * — duplicar, montar, mudar peso, ler a análise de impacto — e **toma 403 no
+   * confirmar**. E não havia para quem entregar o rascunho: o papel que
+   * apertaria o botão é o `RH_ADMIN`, que é quem monta CICLO, não instrumento.
+   *
+   * ⭐ **Papel que produz rascunho para outra pessoa apertar o botão precisa
+   * dessa outra pessoa no fluxo.** Sem ela, a separação não separa nada — só
+   * interrompe. O papel se chama "monta o instrumento", o menu lhe dá
+   * Questionários, Acervo e Classificações, e a tela oferece o botão.
    */
   @Post('versoes/:versaoId/publicar')
-  @Roles(ROLES.RH_ADMIN)
   publicar(@Param('versaoId') versaoId: string, @CurrentUser() user: JwtPayload) {
     return this.publicacoes.publicar(versaoId, user.sub);
   }

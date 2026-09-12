@@ -27,6 +27,16 @@ export class RolesGuard implements CanActivate {
     const roles = rolesRh(user);
     if (roles.length === 0) throw new ForbiddenException('Sem acesso ao módulo Gestão de Pessoas.');
     if (roles.includes(ROLES.ADMIN) || roles.some((r) => exigidas.includes(r))) return true;
-    throw new ForbiddenException('Perfil insuficiente para esta operação no módulo Gestão de Pessoas.');
+    /**
+     * ⚠️ A recusa DIZ de quem é a permissão. "Perfil insuficiente" sozinho
+     * manda a pessoa adivinhar — e quem lê é o RH, que não conhece a tabela de
+     * papéis. Achado na varredura de 12/09: o `RH_MODELO` tomou 403 ao publicar
+     * e a mensagem não dizia quem poderia.
+     */
+    const seu = roles.length ? roles.join(', ') : 'nenhum papel no módulo';
+    throw new ForbiddenException(
+      `Esta operação é de ${exigidas.join(' ou ')}. Seu acesso ao Gestão de Pessoas é: ${seu}. ` +
+        'Peça a quem administra o módulo.',
+    );
   }
 }
