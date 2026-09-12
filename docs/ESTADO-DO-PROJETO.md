@@ -64,7 +64,8 @@ são de **pessoas reais**; medir com uma delas é o que custou a limpeza de 12/0
 
 | | Custo | |
 |---|---|---|
-| ▶️ **DEVOLUTIVA presencial, conduzida pelo AVALIADOR** | ~22h · **restam ~11h** | **Etapas 1 ✅ e 2 ✅** (§3.1.152 e §3.1.153, matriz medida). Falta: **3** a tela (6h) · **4** conduzir + guarda do reabrir (5h) |
+| ▶️ **DEVOLUTIVA presencial, conduzida pelo AVALIADOR** | ~22h · **restam ~5h** | **Etapas 1 ✅ · 2 ✅ · 3 ✅** (§3.1.152, §3.1.153, §3.1.157 — as quatro somas fecham nos 17 apurados). Falta só a **4**: conduzir + guarda do reabrir (5h) |
+| 📌 **Apontar erro de cadastro** (novo) | ~6h | §3.1.159 — o avaliador passa a VER escolaridade/tempo errados e não tem onde dizer. ⛔ Depois da devolutiva |
 | 🟢 **Prévia do efeito na nota** | ~1,5 dia | §3.1.146, **depois** da devolutiva |
 | ✂️ ~~"não há como avisar" (4h)~~ | **minutos** | cortado: vira uma frase na prévia da abertura dizendo que avisar é presencial. §3.1.151 |
 | 🔴 **Booleano nos outros backends** | ~2h cada | **não é nosso agora** — aviso escrito em `docs/AVISO_MARCO_VALIDACAO_BOOLEANA.md`, o Marco decide a janela. §3.1.149 |
@@ -10126,3 +10127,180 @@ Geral 2026) para montar a matriz. **Backup em tabela antes, restauração
 conferida depois: 0 divergentes de 6**, 0 marcas de liberação no banco, 0
 avaliações apontando para a conta de teste, e a auditoria do exercício apagada
 por AÇÃO — nunca por data.
+
+---
+
+### 3.1.157. ✅ DEVOLUTIVA — ETAPA 3: A TELA (⛳ as quatro somas fecham)
+
+#### ⛳ O PORTÃO — medido ANTES de escrever a tela, e depois no payload entregue
+
+Varri **os 17 apurados do DEV** (Avaliação Geral 2026 + SIMULACAO) com as quatro
+contas:
+
+| # | conta | resultado |
+|---|---|---|
+| 1 | percentuais somam exatamente 100 | **0 falhas em 17** |
+| 2 | soma dos pesos = declarado | `60 + 10 + 10 + 10 = 90` |
+| 3 | nota final refeita na mão × exibida | **0 divergências · maior 0** |
+| 4 | Σ(nota do grupo × peso) ÷ soma × nota do questionário | **0 divergências · maior 0** |
+
+E no payload que a rota do avaliador **de fato entregou**: `66,7 + 11,1 + 11,1 +
+11,1 = 1000/1000` (somado em inteiros) · `90` · `69,90 = 69,90` · `63,19 =
+63,19`.
+
+⚠️ **Descartei o primeiro caso que peguei** — todas as respostas iguais, nota 100
+em tudo. É o cenário que o §3.1.115 já registrou como **incapaz de distinguir
+implementações**: com respostas uniformes, o peso exato e o arredondado dão o
+mesmo número.
+
+#### A tela CONFERE a própria conta
+
+`conferirComposicao` roda as quatro na tela e, se alguma falhar, um bloco
+vermelho diz **qual** e manda avisar o RH — em vez de exibir um número que não
+se sustenta **na frente do avaliado**, que é o pior lugar possível para
+descobrir isso.
+
+⚠️ Nada é recalculado: os números vêm prontos do backend; a tela **reparte para
+exibir** (`repartirPesos`, na precisão em que exibe) e **confere**.
+
+#### 🔴 Dois defeitos meus, achados pelo próprio spec
+
+1. **Somar percentuais em float não dá 100 nem com a repartição CERTA.** A
+   primeira asserção somava `66.7 + 11.1 + 11.1 + 11.1` e recebia
+   **`99.99999999999999`**. ⭐ O teste passou a somar **em inteiros** (`×10`) —
+   a mesma disciplina do `repartirExato`, que distribui o resto em inteiros
+   justamente por isso. *Teste que soma em float reprova o acerto e não
+   distingue o erro.*
+2. **Errei a conta do fixture**: escrevi `notaFinal: 67,72` onde
+   `(63,19×60 + 75×10 + 100×10) ÷ 80` dá **69,27**. Quem pegou foi a própria
+   `conferirComposicao`. ⭐ **O número do fixture também precisa ser conferido** —
+   fixture escrito à mão é conta feita à mão.
+
+#### O layout — é roteiro de conversa, não relatório
+
+1. **nota e conceito** em cima: é o que o avaliado quer ouvir, e adiar faz a
+   conversa inteira acontecer com a pessoa esperando o número;
+2. **pergunta a pergunta com a âncora escolhida** e o **próximo nível**;
+3. **a composição com os critérios** por último — ela responde a UMA pergunta
+   (*"por que a final é 69,90 se o questionário deu 63,19?"*), e pôr isso em
+   cima faria a conversa começar por aritmética;
+4. a quebra **por grupo** fica recolhida num `<details>`: serve para quem
+   perguntar *"de onde saiu 63,19?"*, a menos frequente.
+
+⛔ **Sem "enviar", "exportar" ou "marcar como feita"** — conduzir é a etapa 4.
+
+#### As âncoras: sim, e medidas
+
+O payload traz **56 âncoras em 14 questões** (4 por questão, ordenadas por valor,
+com a escolhida marcada). ⚠️ **Mostrar as quatro de cada uma dá 56 linhas** — a
+tela vira documento e quem conduz perde o fio.
+
+⭐ A tela mostra **duas**: *"Você marcou: …"* e *"Próximo nível: …"* — que são
+exatamente as que a conversa usa. A escala inteira fica atrás de um toque.
+
+⚠️ **4 das 14 estavam no topo** (sem próximo nível), e isso virou frase: *"É o
+nível mais alto desta pergunta."* Deixar em branco desperdiçaria a única coisa
+boa que a tela tem a dizer.
+
+#### 🔴 O buraco que só o percurso real achou: a fila voltou VAZIA
+
+Com a devolutiva liberada e a rota funcionando, `GET /avaliacoes/minhas`
+devolveu **zero itens**.
+
+> **A fila filtrava `ciclo: { status: 'ABERTO' }` — e a devolutiva acontece
+> justamente com o ciclo ENCERRADO.** O RH encerra, apura, confere e libera.
+> O cartão nunca apareceria, e a tela ficaria sem caminho.
+
+⭐ **O princípio não mudou; a aplicação dele é que estava incompleta.** A regra
+continua sendo *"a fila é o trabalho que dá para FAZER"* — e **conduzir uma
+devolutiva liberada É trabalho que dá para fazer**. O filtro virou
+`ciclo ABERTO` **OU** `devolutiva liberada`.
+
+⚠️ Tudo o que o filtro antigo protegia continua protegido, e o spec reescrito
+prova caso a caso: **ENCERRADO sem devolutiva continua fora**, RASCUNHO
+continua fora, e o `cicloId` continua estreitando sem substituir.
+
+⚠️ **E a barra teve de ser corrigida junto** — `ProgressoGeral` somava
+`itens.length`, e as devolutivas de um ciclo encerrado entrariam no total do
+ciclo aberto: exatamente o *"13 de 26 enviadas"* que o filtro original tinha
+vindo consertar. Agora ela conta só itens de ciclo ABERTO.
+
+⭐ E **"Devolutivas liberadas" é seção PRÓPRIA, acima de "Enviadas"**: são dois
+trabalhos diferentes, e "Enviadas" é o bloco que o avaliador aprendeu a não
+olhar. Pôr a conversa que ele ainda precisa ter lá dentro seria escondê-la.
+
+---
+
+### 3.1.158. ⚠️ A CEGUEIRA DO MOCK DE AUDITORIA — varredura pedida pelo Clenio
+
+**21 specs mockam a auditoria; 14 afirmam que ela funcionou.** Todos com a mesma
+cegueira do §3.1.154: provam que `registrar` foi **chamado**, nunca que a linha
+**pousou**.
+
+| | |
+|---|---|
+| `avaliacao/avaliacao-acesso.service.spec` | 6 asserções |
+| `designacao/troca-de-aplicacao.spec` | 5 |
+| `avaliacao/contestar-designacao.spec` · `ciclo/alcance-do-ciclo.spec` · `ciclo/encerrar-com-pendencia.spec` · `devolutiva/liberar-devolutiva.spec` | 3 cada |
+| `aplicacao/publico-da-aplicacao` · `avaliacao/reabrir-apaga-resultado` · `ciclo/ajustar-conceitos` · `designacao/excluir-cancela-avaliacao` · `devolutiva/devolutiva-do-avaliador` | 2 cada |
+| `ciclo/ajustar-periodo` · `designacao-padrao` · `resultado/propria-nota` | 1 cada |
+
+⚠️ **Não adianta reescrever os 14.** A cegueira é estrutural: mock não escreve no
+banco, e trocar todos por teste de integração custaria caro e deixaria a suíte
+lenta. **O que fecha o buraco é o invariante sobre os VALORES** — que é o que o
+§3.1.154 construiu.
+
+> ⭐ **A regra: trilha de auditoria se confere na TABELA, nunca no mock.** Os 14
+> specs continuam válidos para o que provam (*"o ato registra"*); o que eles
+> **não** provam é que o registro cabe — e isso agora é uma conta.
+
+#### E as outras colunas de texto com limite? — medido
+
+Varri as **30 colunas `VARCHAR`** do schema `rh`:
+
+| Grupo | Colunas | Dá para um invariante de folga? |
+|---|---|---|
+| **Nascem de LITERAL do código** | `auditoria.acao` (120) · `auditoria.entidade` (60, maior literal 20) | ✅ **sim, e está feito** — o invariante agora cobre as duas |
+| Vêm do **Protheus** | `matricula`, `filial`, `centro_custo`, `cpf`, `grau_instrucao_codigo`… | ❌ **não** — invariante sobre o FONTE não alcança dado que chega de fora |
+| **Formato fixo** | `conceito_faixa.cor` (`#RRGGBB`, 7 em 10) · `auditoria.ip` (45 = o máximo de um IPv6) | ❌ não faz sentido |
+
+⚠️ **Por isso o invariante genérico tem DUAS colunas e não trinta.** Cobrir as do
+Protheus daria falsa sensação de conta fechada sobre a metade que ele não mede —
+e falsa sensação de cobertura é pior que cobertura ausente.
+
+---
+
+### 3.1.159. 📌 PENDÊNCIA — o avaliador vai VER erro de cadastro, e não tem onde apontar
+
+Levantada pelo Clenio em 13/09 a partir da consequência que a etapa 2 expôs.
+
+**O caso:** o avaliador abre a devolutiva e lê *"Escolaridade: SUPERIOR
+COMPLETO"* de alguém que tem **mestrado**. Os valores vêm do **snapshot da
+apuração** (`resultado_criterio`), que veio do sync do Protheus — e o chefe
+direto costuma saber mais sobre a pessoa que o cadastro.
+
+⭐ **Isso é bom, e é ganho novo:** mais um par de olhos sobre dado que ninguém
+conferia. Mas precisa de caminho.
+
+**O que existe hoje — e não serve:** o *"Não é da minha equipe"* da fila. Ele é
+outra coisa: fala de **designação** (quem avalia quem), grava
+`NAO_E_MINHA_EQUIPE` na auditoria, e a tela dele diz *"você avisou o RH que esta
+pessoa não é da sua equipe"*. Usar esse botão para erro de escolaridade poria
+duas causas na mesma trilha, e o RH leria a lista de contestações sem saber do
+que cada uma trata. ⚠️ Além disso ele **some na avaliação ENVIADA** ("ato sem
+objeto") — que é exatamente quando a devolutiva acontece.
+
+⛔ **NÃO construído** por decisão do Clenio: *a devolutiva fecha primeiro.*
+
+**Custo estimado, quando entrar: ~6h**
+
+| | |
+|---|---|
+| Rota + auditoria com ação própria (`APONTAR_DADO_DE_CADASTRO`), com o critério e o que ele diz que está errado | 2h |
+| Botão discreto ao lado de cada critério na tela da devolutiva | 1,5h |
+| Lista para o RH ver os apontamentos, com o CC e o critério | 2h |
+| Specs | 0,5h |
+
+⚠️ **O que NÃO fazer:** deixar o avaliador CORRIGIR o dado. O cadastro é do
+Protheus; escrever aqui criaria uma segunda verdade que o próximo sync apaga —
+e sem ninguém entender por quê. É **apontar**, não corrigir.
