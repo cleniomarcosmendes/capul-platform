@@ -33,12 +33,15 @@ const av = (id: string, over: Partial<Record<string, unknown>> = {}) => ({
 describe('liberar a devolutiva', () => {
   let prisma: ReturnType<typeof createPrismaMock>;
   let auditoria: { registrar: jest.Mock };
+  /** A memória é do `ResultadoService` — aqui só se prova que NÃO é chamada. */
+  let resultados: { memoria: jest.Mock };
   let service: DevolutivaService;
 
   beforeEach(() => {
     prisma = createPrismaMock();
     auditoria = { registrar: jest.fn().mockResolvedValue(undefined) };
-    service = new DevolutivaService(prisma as never, auditoria as never);
+    resultados = { memoria: jest.fn() };
+    service = new DevolutivaService(prisma as never, auditoria as never, resultados as never);
     prisma.ciclo.findUnique.mockResolvedValue({ id: CICLO, nome: 'ENSAIO', status: 'ABERTO' });
     prisma.colaborador.findMany.mockResolvedValue([]);
   });

@@ -8,5 +8,8 @@ import { ResultadoService } from './resultado.service.js';
   imports: [AvaliacaoModule, AuditoriaModule],
   controllers: [ResultadoController],
   providers: [ResultadoService],
+  // ⭐ Exportado para a DEVOLUTIVA reusar `memoria()` — o payload é o mesmo,
+  //    e uma segunda montagem divergiria no primeiro campo novo.
+  exports: [ResultadoService],
 })
 export class ResultadoModule {}

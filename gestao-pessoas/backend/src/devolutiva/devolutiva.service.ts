@@ -35,6 +35,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditoriaService } from '../auditoria/auditoria.service.js';
+import { ResultadoService } from '../resultado/resultado.service.js';
 import { ehProprioAvaliado } from '../avaliacao/separacao-funcoes.js';
 
 /** Escopo do lote. Um dos dois, nunca os dois. */
@@ -60,6 +61,15 @@ export class DevolutivaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditoria: AuditoriaService,
+    /**
+     * ⭐ A memória é REUSADA, não reimplementada. O payload que o RH lê é o
+     * mesmo que o avaliador precisa — nota final, conceito, pergunta a pergunta
+     * com as âncoras, e os critérios com valor, faixa, pontos e peso. Uma
+     * segunda montagem divergiria no primeiro campo novo, e a tela do avaliador
+     * passaria a dizer um número diferente do da tela do RH sobre a mesma
+     * pessoa.
+     */
+    private readonly resultados: ResultadoService,
   ) {}
 
   /**
@@ -271,5 +281,113 @@ export class DevolutivaService {
     }
 
     return { liberadas: aGravar.length, jaEstavam, recebidas: ids.length };
+  }
+
+  /**
+   * ⭐⭐ ETAPA 2 — O AVALIADOR VÊ a devolutiva de quem ELE avaliou.
+   *
+   * ── O QUE ESTA ROTA RESOLVE, E O QUE ELA NÃO DUPLICA ──────────────────────
+   *
+   * A memória é chaveada por `resultadoId`; o avaliador tem `avaliacaoId` — é o
+   * que a fila dele carrega. ⭐ `ResultadoAvaliacao.avaliacaoId` é **`@unique`**,
+   * então o problema é de **CHAVE, não de conteúdo**: traduz-se a chave e
+   * chama-se `memoria()`. **Nenhum campo é remontado aqui** — remontar faria a
+   * tela dele dizer um número diferente do da tela do RH sobre a mesma pessoa,
+   * no primeiro campo que mudasse.
+   *
+   * ── OS TRÊS PORTÕES, NESTA ORDEM E POR ESTE MOTIVO ────────────────────────
+   *
+   *   1. **é a avaliação em que ELE é o avaliado?** → 403 **e auditoria**
+   *   2. **ele é o avaliador designado?**           → 403 *"não é sua"*
+   *   3. **o RH já liberou?**                       → 403 *"ainda não liberou"*
+   *
+   * ⚠️ **A ORDEM É REGRA.** A da própria vem primeiro porque é a única que
+   * precisa deixar rastro — e porque, invertida, quem tentasse abrir a própria
+   * avaliação receberia *"esta avaliação não é sua"*, **falso e confuso**: ela é
+   * dele, e é exatamente por isso que ele não pode vê-la.
+   *
+   * ── ⭐⭐ DOIS 403 QUE NÃO SÃO O MESMO 403 ───────────────────────────────────
+   *
+   * | | é |
+   * |---|---|
+   * | *"o RH ainda não liberou"* | **TEMPORÁRIO** — vai mudar sozinho, e ele só espera |
+   * | *"esta avaliação não é sua"* | **DEFINITIVO** — nunca vai mudar |
+   *
+   * Dar o mesmo texto aos dois é a família do **"403 que parece falta de
+   * permissão"**, que já apareceu três vezes neste módulo e sempre com o mesmo
+   * custo: a pessoa vai ao Configurador pedir um acesso que ela já tem — ou que
+   * não resolveria nada. A mensagem tem de dizer **o que fazer em seguida**, e
+   * "espere o RH" e "não é sua" levam a lugares opostos.
+   *
+   * ⚠️ **Não apurada devolve a MESMA mensagem de "não liberada"**, e é decisão.
+   * Do lado dele os dois estados são indistinguíveis e a ação é idêntica —
+   * esperar. Separar as frases vazaria estado interno do RH ("já apuraram, mas
+   * não liberaram") sem lhe dar nada que ele possa fazer.
+   */
+  async paraOAvaliador(
+    avaliacaoId: string,
+    contexto: { colaboradorId: string | null; usuarioId: string; ip?: string },
+  ) {
+    const avaliacao = await this.prisma.avaliacao.findUnique({
+      where: { id: avaliacaoId },
+      select: { id: true, avaliadoId: true, avaliadorId: true, devolutivaLiberadaEm: true },
+    });
+    if (!avaliacao) throw new NotFoundException('Avaliação não encontrada.');
+
+    // ── PORTÃO 1: a própria. `ehProprioAvaliado`, nunca `===` (§3.1.104).
+    if (ehProprioAvaliado(contexto.colaboradorId, avaliacao.avaliadoId)) {
+      await this.auditoria.registrar({
+        entidade: 'Avaliacao',
+        entidadeId: avaliacaoId,
+        acao: 'ACESSO_NEGADO_PROPRIO_AVALIADO:devolutiva',
+        usuarioId: contexto.usuarioId,
+        valorNovo: { avaliadoId: avaliacao.avaliadoId },
+        ip: contexto.ip,
+      });
+      throw new ForbiddenException(
+        'A sua própria avaliação não fica visível para você — nem a nota, nem a memória de ' +
+          'cálculo. Quem responde por ela é o seu superior; a devolutiva vem por ele.',
+      );
+    }
+
+    // ── PORTÃO 2: é dele? Definitivo.
+    if (!contexto.colaboradorId || avaliacao.avaliadorId !== contexto.colaboradorId) {
+      throw new ForbiddenException(
+        'Esta avaliação não é sua. A devolutiva é conduzida por quem avaliou a pessoa.',
+      );
+    }
+
+    // ── PORTÃO 3: o RH liberou? Temporário.
+    if (!avaliacao.devolutivaLiberadaEm) {
+      throw new ForbiddenException(
+        'O RH ainda não liberou esta devolutiva. Quando liberar, a nota e a conta inteira ' +
+          'aparecem aqui — não é falta de permissão sua, é etapa que ainda não aconteceu.',
+      );
+    }
+
+    /**
+     * ⚠️ Só agora se busca o resultado. Se a devolutiva está liberada, ele
+     * existe — `liberar` recusa avaliação sem apuração. Um nulo aqui é
+     * **incoerência de estado**, não caminho normal: por isso 404 com o texto
+     * que manda procurar o RH, e não a frase de "aguarde".
+     */
+    const resultado = await this.prisma.resultadoAvaliacao.findUnique({
+      where: { avaliacaoId },
+      select: { id: true },
+    });
+    if (!resultado) {
+      throw new NotFoundException(
+        'A devolutiva está liberada mas o resultado não existe mais — a avaliação deve ter sido ' +
+          'reaberta. Procure o RH.',
+      );
+    }
+
+    /**
+     * ⭐ A auditoria de leitura é a do `memoria()`, não uma nova: ela já isenta
+     * o avaliador designado ("é o trabalho dele") e registra todo o resto. Duas
+     * trilhas para o mesmo acesso fariam a contagem de leituras mentir.
+     */
+    const memoria = await this.resultados.memoria(resultado.id, contexto);
+    return { ...memoria, devolutivaLiberadaEm: avaliacao.devolutivaLiberadaEm };
   }
 }
