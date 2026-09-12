@@ -5611,3 +5611,204 @@ entre 0,00 e 100,00, as 5 faixas são alcançadas.
 são contíguas: o fim de uma é o começo da próxima"* e **calava sobre o valor do encontro**. Quem
 define os limites decide o conceito que a pessoa recebe e não tinha como saber para que lado o
 empate vai. Corrigido: a tela agora diz, com o exemplo da régua padrão.
+
+---
+
+## 📋 PENDÊNCIAS DA ARIELLY — a lista para levar (12/09/2026)
+
+Sete itens. Cada um é decisão **dela**, não da T.I. Onde há número, ele foi medido no DEV em
+12/09 e está aqui para a conversa não depender de memória.
+
+### 1. As 39 perguntas — usar como estão, ou revisar?
+
+O instrumento veio transcrito do RD8010 e **ninguém do RH escolheu enunciado, peso ou
+alternativa**. A tela `/questionarios` existe e imprime — dá para ler tudo antes de decidir.
+
+⚠️ **A resposta muda a ordem do trabalho.** "Usar como estão" libera a entrada do valor INFORMADO
+(4–6 dias) como próxima frente. "Revisar" põe o **editor do acervo na frente: 3–3,5 semanas**.
+
+### 2. A faixa "Menos de 1 ano" — são DUAS, e mexer arrasta três coisas
+
+`TEMPO_EMPRESA` e `TEMPO_FUNCAO`, ambas `[0,0]`, **zero pessoas** (§3.1.73/§3.1.74). Hoje quem tem
+menos de um ano é pontuado como *"Até 3 anos"* / *"Até 2 anos"* — **25 pontos, não 0**.
+
+Corrigir: muda a nota dessas pessoas · faz o módulo **divergir do Protheus**, que tem o mesmo
+`CASE WHEN` · **quebra a regressão do `000006` como baseline**. Alternativa barata: manter a régua
+e **corrigir o rótulo**, que é o que mente.
+
+### 3. Prefixo de centro de custo mandando a fábrica para o questionário de loja
+
+**Medido — os dois CCs com o mesmo nome:**
+
+| CC | Descrição | Pessoas | Questionário pelo prefixo |
+|---|---|---:|---|
+| `21011202` | ADMINISTRATIVO - FABRICA | **49** | 🔴 Operação de Loja |
+| `41010114` | ADMINSTRATIVO DA FABRICA | 4 | Produção e Indústria |
+
+**53 pessoas**, mesmo trabalho, dois códigos, dois questionários. E `21010109` AGROVETERINARIA (89)
+e `21010301` POSTO (37) também caem em "Loja" pelo prefixo `21`.
+
+⭐ **O sistema NÃO tem regra de prefixo** — apurado em 12/09: o público das quatro aplicações do
+Piloto é **100% nominal** (`aplicacao_centro_custo` está vazio para todas). O prefixo foi como o
+recorte **foi montado**, não algo que o sistema imponha. Ou seja: **é livre para ela decidir**, e a
+correção é remontar o público, não mexer em código.
+
+### 4. Segundo `RH_ADMIN` — encaminhamento: Claudimar
+
+**Medido:** hoje só `ariellypereira` tem `RH_ADMIN`. `claudimaroliveira` (001079, DIRETOR EXECUTIVO)
+tem **`AVALIADOR`**.
+
+⚠️ Duas coisas faltam, e a segunda é a que costuma ser esquecida: **confirmar o Claudimar** e
+**decidir quem cobre a avaliação dele** — pela separação de funções, um `RH_ADMIN` não mexe na
+própria avaliação, então com ele no papel alguém precisa poder corrigir a dele.
+
+### 5. Recorte provisório — o que se confirma: linha, aplicação ou ciclo?
+
+A tela já distingue público **provisório** de confirmado e mostra a quebra por origem. Falta a
+decisão sobre a **granularidade do ato**: confirmar pessoa a pessoa, a aplicação inteira, ou o
+ciclo todo de uma vez.
+
+### 6. Treinamento — pendência de PROCESSO do RH, não de sistema
+
+O registro no Protheus parou em **14/11/2025**. Na janela do Piloto, **6 de 1.036** pontuariam —
+e a distribuição agora **mostra isso na tela**: `[1031, 4, 2, 0, 0]`. O sistema está inteiro
+(resolver, critério, 5 faixas); está desligado por decisão, com o motivo gravado no próprio dado.
+**Falta o RH dizer por que o registro parou.**
+
+### 7. Divisão do CC `11010219` entre Jaicler e Laís
+
+Os dois avaliam o **mesmo** centro de custo (DEPARTAMENTO CADASTRO, 7 pessoas), como já era no
+Protheus. **Segue assim** — a designação é manual e aceita isso sem nenhum tratamento especial.
+Formalizar a divisão é decisão dela.
+
+---
+
+### 3.1.75. 📏 MEDIÇÃO DO RECORTE DE 16 CENTROS DE CUSTO (12/09) — só leitura, nada montado
+
+⚠️ **CORREÇÃO DE RUMO registrada pelo Clenio:** *"avaliador = responsável do CC"* **não é regra de
+designação**. A designação é **MANUAL**. O responsável do CC é uma VISÃO que cobre quase todos os
+casos e serve para facilitar o apontamento. O Claudimar avaliando gerentes de vários CCs é o caso
+que uma regra por CC **nunca cobriria** — e é por isso que o que falta são **filtros**, não regra.
+
+#### 1. População — 344 pessoas, e uma aplicação fica com UMA
+
+| Aplicação (pelo prefixo) | Pessoas | CCs |
+|---|---:|---:|
+| Operação de Loja (`21`) | **257** | 5 |
+| Administrativo (`11`) | **67** | 10 |
+| Aprendizes (cargo `APRENDIZ%`) | **19** | 4 |
+| Produção e Indústria (`41`) | **1** | 1 |
+| **Total** | **344** | 16 |
+
+⭐⭐ **As 4 aplicações NÃO ficam exercitadas.** `Produção e Indústria` teria **uma pessoa**:
+`washingtondonato` (003268, GERENTE INDUSTRIAL, CC `41010121`) — **que é o próprio responsável do
+CC**. Ele não pode avaliar a si mesmo (separação de funções), então a aplicação fica com **zero
+avaliações possíveis**.
+
+✅ `Aprendizes` fica exercitada (19 pessoas) — o perfil sem critério cadastral e
+`pesoAvaliacao = 100` é testado.
+
+**Para exercitar Produção**, o recorte precisa de mais um CC de indústria com gente, e de um
+avaliador que não seja o único avaliado.
+
+#### 2. As 16 contas — 3 erros de grafia e 1 falta real
+
+| Na lista | No banco | Conta | Colaborador | CC bate | Acesso ao módulo |
+|---|---|---|---|---|---|
+| `lidianyrocha` | **`lidyanerocha`** | ✅ | ✅ | ✅ | AVALIADOR |
+| `washigtondonato` | **`whashigtondonato`** | ✅ | ✅ | ✅ | AVALIADOR |
+| `liciaversiane` | **`liciaversiani`** | ✅ | ✅ | ✅ | AVALIADOR |
+| `cleniomarcos` | **`clenio`** | ✅ | ✅ | ✅ | 🔴 **SEM ACESSO** |
+| outros 13 | — | ✅ | ✅ | ✅ | AVALIADOR (Arielly: RH_ADMIN) |
+
+⭐ **`clenio` é o caso da Esmeralda outra vez** (§ [[feedback_designar_nao_da_acesso]]): a conta
+existe, o colaborador existe, a matrícula bate — e **não há permissão em `GESTAO_PESSOAS`**.
+Designá-lo criaria avaliações que ninguém consegue abrir. Resolve-se no Configurador.
+
+⚠️ **Uma divergência de CC:** `renataborges` (001981) responde por `21012501` (SUPERMERCADO 25, 3
+pessoas) mas **está lotada em `21010101`** (SUPERMERCADO, 98). Não impede designar — só significa
+que ela avalia um CC que não é o dela.
+
+#### 3. FILTROS DA DESIGNAÇÃO — o que existe, o que falta
+
+**Já existe em `DesignacaoPage`:**
+
+| Recurso | Estado |
+|---|---|
+| Filtrar por **aplicação** (`<select>`) | ✅ é o recorte primário |
+| **Sem avaliador**, com contador | ✅ |
+| Excluídos do ciclo | ✅ |
+| Busca por **nome ou matrícula** | ✅ |
+| **Seleção múltipla + designar em lote** para o mesmo avaliador | ✅ |
+
+**Falta, e é o que dói com 344 linhas:**
+
+| Falta | Por quê | Custo |
+|---|---|---|
+| **Filtrar por centro de custo** | `centroCusto` **já vem na linha** e não é filtrável nem entra na busca. É o filtro que transforma 257 em 98 | **~4h** — `<select>` alimentado pelos CCs presentes + contador |
+| **Selecionar todos os visíveis** | a seleção é uma a uma. Designar 98 pessoas = 98 cliques | **~2h** — caixa no cabeçalho, sobre o filtro aplicado |
+| **Filtrar/buscar por cargo** | é como o Claudimar acha "os gerentes". `cargoDescricao` **não vem** em `LinhaDaDesignacao` | **~4h** — campo no backend + busca cobrindo cargo |
+| Busca cobrir o CC | hoje só nome e matrícula | incluído nos 4h acima |
+
+**Total ~1,5 dia**, e os dois primeiros sozinhos (**6h**) já tornam o apontamento viável.
+
+⚠️ **Nenhum deles é regra** — são recortes de exibição sobre uma lista que já existe. Não tocam
+designação, elegibilidade nem separação de funções.
+
+#### 4. Avaliador que NÃO é avaliado — o sistema aceita, e ele aparece numa lista
+
+O `claudimaroliveira` (DIRETOR EXECUTIVO, único no CC `11010105`) vai avaliar e não será avaliado.
+
+- **Aceita sem reclamar.** Ser avaliador é fato da designação (`avaliacao.avaliadorId`); ser
+  avaliado é estar no público. São independentes, e nada exige reciprocidade.
+- ⚠️ **Mas ele aparece em `foraDeTodasAsAplicacoes`** no painel — "elegíveis do ciclo que não estão
+  no público de nenhuma aplicação", que vem **com os nomes**. Não é tela vermelha nem bloqueio: é
+  uma lista de conferência. **Ele vai figurar ali, e é correto que figure** — o painel não tem como
+  distinguir "de propósito" de "esquecido".
+- **Para não aparecer**, ele precisa sair da elegibilidade do ciclo (exclusão manual com
+  justificativa) — o que é uma decisão registrada, e é o comportamento certo.
+
+#### 5. "Gerente" não é identificável no cadastro — a designação do Claudimar é manual
+
+`rh.cargo` está **vazia** e `cargo_descricao` é texto livre com sufixo de nível.
+
+**Medido nos 16 CCs:** **38 pessoas** em cargos com `GER`/`DIRET`/`SUPERV`/`COORD`, em **38
+descrições distintas** — `GERENTE FINANCEIRO 3B`, `GER GADO CORTE E LEITE 2A`, `SUB GERENTE 3B`,
+`SUPERVISOR DE CAIXA 4D`…
+
+⭐ Dá para **filtrar candidatos**, não para **decidir**: "GER" pega `GER GADO CORTE E LEITE` (3
+pessoas), que não é gerente de departamento; e "gerente de departamento" não tem marca no texto.
+
+**Conclusão: a designação do Claudimar é 100% manual** — e é por isso que o filtro por cargo (item
+3) vale as 4h: reduz de 344 para ~38 a lista em que ele aponta à mão.
+
+#### 6. Mecânica — dá para montar sem tocar em nada
+
+- ✅ **Público por LISTA de centros de custo é suportado nativamente.** `AplicacaoCentroCusto` é
+  `(filial, centroCusto)` — pares **exatos**, quantos quiser. **Não existe prefixo no sistema**
+  (§Pendências, item 3). `AlvoDoPublico` aceita ainda `filiais[]` e `colaboradorIds[]`.
+- ✅ **Ciclo novo em RASCUNHO, sem tocar em nada.** Ciclo é a raiz de tudo: aplicações, público,
+  designação e conceitos penduram nele. Um ciclo novo **não vê** o Piloto, e ciclo em RASCUNHO não
+  entra na fila de ninguém (é o que o `ZZ DESCARTAVEL` já faz).
+- ✅ **Nada do que precisa ser preservado é tocado:** a regressão do `000006` roda sobre CSV e
+  funções puras; os 17 resultados apurados são de outros ciclos; as distribuições leem
+  `rh.colaborador`, que não muda.
+
+⛔ **Não limpar o cadastro** — confirmado como desnecessário: restringir o CICLO alcança o mesmo
+sem perder nenhuma das três referências.
+
+#### 7. ⚠️ O QUE ESTE ENSAIO NÃO VAI TESTAR — antes de montar
+
+1. **`Produção e Indústria`** — 1 pessoa, que é o próprio avaliador. Aplicação **não exercitada**.
+2. **Critério `INFORMADO`** — não existe entrada de valor. Os três critérios do ensaio são
+   CALCULADO.
+3. **Volume** — 344 contra 894 do Piloto. Nada sobre desempenho de lista, paginação ou tempo de
+   apuração em escala real.
+4. **Multi-filial** — 15 dos 16 CCs são de uma filial só (`21010109` tem 2). A régua
+   `(filial, CC)` não é exercitada.
+5. **O caminho de quem não tem conta** — o `clenio` é o único, e será resolvido antes. Fica de fora
+   justamente o cenário dos 46 sem conta do Piloto.
+6. **Reabertura, devolução e encerramento com pendência** — a menos que o roteiro os inclua de
+   propósito; não saem do recorte sozinhos.
+7. **A régua de conceitos em faixa extrema** — com 344 pessoas reais, `Insuficiente` e `Excelente`
+   podem simplesmente não ocorrer, e aí as faixas ficam sem exercício (não por defeito, por dado).
