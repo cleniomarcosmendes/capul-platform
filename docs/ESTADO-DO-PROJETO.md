@@ -65,7 +65,7 @@ são de **pessoas reais**; medir com uma delas é o que custou a limpeza de 12/0
 | | Custo | |
 |---|---|---|
 | ✅ ~~**DEVOLUTIVA presencial**~~ | ~22h | **FECHADA** — as 4 etapas (§3.1.152, §3.1.153, §3.1.157, §3.1.160). O ciclo do módulo fica completo de ponta a ponta pela 1ª vez |
-| 🚦 **ENSAIO INTEGRAL** | — | ⭐ **NÃO falta implementação** (§3.1.163). Faltam 3 decisões do Clenio: as 19 sem avaliação · o roteiro incluir *liberar* e *conduzir* · e o ensaio ESCREVE |
+| 🚦 **ENSAIO INTEGRAL** | — | ⭐ **PREPARADO** (§3.1.167): ENSAIO marcado como recorte · estado de partida em `estado-de-partida.js` · limpeza escrita e ensaiada com ROLLBACK. ⛔ As 19 **NÃO** são designadas (§3.1.166 — 18 pela régua do ciclo, 1 é o Claudimar). **Falta só o roteiro da skill** |
 | 📌 **Apontar erro de cadastro** (novo) | ~6h | §3.1.159 — o avaliador passa a VER escolaridade/tempo errados e não tem onde dizer. ⛔ Depois da devolutiva |
 | 🟢 **Prévia do efeito na nota** | ~1,5 dia | §3.1.146, **depois** da devolutiva |
 | ✂️ ~~"não há como avisar" (4h)~~ | **minutos** | cortado: vira uma frase na prévia da abertura dizendo que avisar é presencial. §3.1.151 |
@@ -10495,3 +10495,168 @@ supermercado só aparecem em **HLG** — e HLG depende de medir o commit e agend
 a janela com o Marco (bloco (c) da fila).
 
 ⭐ **São dois ensaios, e o primeiro está desimpedido.**
+
+---
+
+### 3.1.164. ✏️ CORREÇÃO DO CLENIO — a trava que anularia a funcionalidade
+
+Registrada a pedido dele, em 13/09:
+
+> **"Eu propus uma trava que anularia a funcionalidade."**
+
+A proposta era limitar o desfazer da conduzida a *"enquanto o ciclo não fecha"*.
+⚠️ **A devolutiva acontece com o ciclo JÁ ENCERRADO** (§3.1.157) — o RH encerra,
+apura, confere e libera. A trava tornaria o desfazer impossível **no caso
+normal**, que é o único caso.
+
+⭐ **O padrão que fica:** a trava veio de um modelo mental em que *"ciclo aberto
+= período de trabalho"*. Era verdade enquanto o único trabalho era responder. A
+devolutiva mudou isso — e é a **mesma classe do §3.1.161** aparecendo na CABEÇA
+de quem decide, e não só no código: *o escopo da regra ficou incompleto quando
+surgiu um caso novo.*
+
+⚠️ **Gatilho:** ao propor uma trava por status, perguntar *"em que status esta
+funcionalidade é USADA?"* — e não *"em que status ela deveria ser permitida?"*.
+
+#### E a frase do reabrir usa o caso específico — confirmado
+
+| Onde | Condição | Específica? |
+|---|---|---|
+| Tela da devolutiva | `conversaSobreNotaAnterior` = `conduzidaEm < liberadaEm` | ✅ só quando ele conversou, e sobre nota vencida |
+| Cartão da fila | `conversaDesfeitaPelaReabertura` = conduzida ≠ null **e** liberada = null | ✅ só quando ele conversou |
+
+⚠️ **Uma lacuna que essa conferência expôs, e que NÃO construí:** quem foi
+**liberado mas não conversou** e teve a avaliação reaberta **perde o cartão em
+silêncio**. Ele pode ter lido a nota. As colunas não guardam "esteve liberada
+alguma vez" — só a auditoria. **Custo ~1h** (a fila já faz uma consulta de
+auditoria, para o "não é minha equipe"). Fica registrado, não feito.
+
+---
+
+### 3.1.165. 🔴 TERCEIRA OCORRÊNCIA DA CLASSE — e fui eu, no mesmo dia em que a escrevi
+
+O `estado-de-partida.js` reprovou a **ARIELLY** como avaliadora que não consegue
+entrar, e o `conferir-estado.js` dizia **16 de 16**. Duas ferramentas minhas,
+divergindo em um dia.
+
+**A investigação achou dois defeitos, um em cada lado:**
+
+**1. O meu script estava errado.** Exigia o papel `AVALIADOR`; a Arielly é
+`RH_ADMIN` e é a **avaliadora designada de 5 pessoas** do ENSAIO. ⭐ *Ser
+avaliador é FATO DO DADO* — a frase está escrita no `AvaliacaoController` desde
+sempre. Escrevi uma **segunda implementação** de "quem consegue entrar" e ela
+divergiu no primeiro caso de borda: [[feedback_regra_duplicada_envelhece_errada]].
+
+**2. 🔴 E o script apontou um defeito REAL que eu tinha criado ontem.** A rota
+`GET /devolutiva/avaliacao/:id` nasceu com **`@Roles(AVALIADOR)`** — então a
+Arielly tomaria **403** na devolutiva **das pessoas que ela mesma avaliou**.
+
+> ⚠️ **É a terceira ocorrência do §3.1.161, e eu a criei no mesmo dia em que
+> escrevi a classe** — num controller cujo comentário diz *"pôr o avaliador
+> debaixo do `@Roles` do RH o deixaria inalcançável"*. Eu vi o defeito no
+> `ResultadoController`, escrevi a lição, e repeti a forma dela ao lado.
+
+⭐ **O que isso ensina sobre a classe:** ela não é falta de atenção — é o portão
+sendo escrito com **o fluxo que quem escreve tem na cabeça**. Eu tinha "avaliador
+conduz a devolutiva" na cabeça, e a Arielly conduz **cinco** sem ser AVALIADOR.
+
+**Corrigido** para `QUALQUER_PAPEL_DO_MODULO`, a mesma constante da fila e do
+responder — o escopo continua sendo por REGISTRO, no service.
+
+**Medido depois:** `zz.teste.rh` (RH_ADMIN) na rota → **404 do serviço**, não
+403 do RolesGuard. O portão de papel abriu; o de registro decide. E as duas
+ferramentas passaram a concordar: **16 de 16**.
+
+---
+
+### 3.1.166. 📋 DECISÃO 1 REVISTA — as 19 NÃO devem ser designadas
+
+O Clenio mandou designar as 19, **pedindo antes o porquê de estarem fora**. O
+porquê muda a decisão:
+
+| Quantas | Quem | Por quê |
+|---|---|---|
+| **18** | AFASTADO em 8 centros de custo | ⭐ **A régua do próprio ciclo**: `incluirAfastados = false`. Elas estão no público (o público é por CC, e `SITUACOES_ELEGIVEIS` inclui AFASTADO) e o **ciclo** não as avalia |
+| **1** | **CLAUDIMAR DIAS DE OLIVEIRA** (ATIVO, DIRETOR EXECUTIVO) | ⭐ É o **item 9 da lista da Arielly**: *"está no topo, e por isso não é avaliado"*. Designá-lo exigiria inventar um superior para o Diretor Executivo |
+
+**A conta fecha exatamente:**
+
+```
+   344 no público
+ −  18 afastados (incluirAfastados = false)
+ = 326 elegíveis pela régua do CICLO
+ − 325 avaliações
+ =   1  → o Claudimar
+```
+
+⛔ **Não designei.** Designar os 18 seria **contornar a régua do ciclo** — e o
+ensaio existe para exercitar o sistema como ele vai ser usado, não para produzir
+um estado que a regra proíbe. Designar o Claudimar seria inventar hierarquia.
+
+⭐ **A conta do ensaio muda de "325 de 344" para "325 de 326"** — e o 1 que falta
+é conhecido, nomeado e já está na lista da Arielly.
+
+---
+
+### 3.1.167. 📸 O ESTADO DE PARTIDA E A LIMPEZA — escritos ANTES do ensaio
+
+#### (a) O ENSAIO está marcado como RECORTE
+
+Declarado pelo Clenio em 13/09. `eh_recorte = true`, auditado
+(`MARCAR_RECORTE`, `false → true`).
+
+⚠️ **A auditoria registra `zz.teste.rh` como executor.** A regra do módulo é que
+*montagem de coisa que fica vai na conta de quem decidiu, não na de teste* — e
+eu não tenho a senha do Clenio. **A decisão é dele e está registrada aqui**; se
+ele quiser a autoria certa na trilha, desmarcar e marcar de novo na própria
+conta resolve em dois cliques.
+
+#### (b) `dist/scripts/estado-de-partida.js` — o retrato do que NÃO deve mudar
+
+Imprime: ciclo (período, data-base, janela, `incluirAfastados`, `ehRecorte`) ·
+régua de conceitos **com a checagem de contiguidade** · cada aplicação com
+público, avaliações por status, **o instrumento pela mesma `carregarArranjo` que
+a avaliação usa** (grupos, soma declarada × soma derivada, pontuação máxima),
+critérios com peso e origem · as 16 contas com papel, status e tamanho da fila ·
+e a **conta que tem de fechar**.
+
+⭐ **Ele imprime só o que o ensaio NÃO deveria mudar.** O que o ensaio produz
+fica de fora de propósito: misturar as duas coisas faria o retrato mudar por
+motivo legítimo e perder a serventia. **Rode antes e depois; diferença é achado.**
+
+⚠️ **Achado do próprio retrato:** a aplicação **Aprendizes** tem
+`pesoAvaliacao = 100` e **zero critérios** — a nota final dela é o questionário
+puro, e a soma dos pesos é 100, não 90. É coerente (aprendiz não tem tempo de
+função a pontuar), mas é um caminho de cálculo diferente dos outros três, e o
+ensaio vai exercitá-lo com 18 pessoas.
+
+#### (c) `gestao-pessoas/scripts/limpar-ensaio-integral.sql`
+
+Transação única, com **prévia antes e conferência depois**, e `COMMIT` na última
+linha para poder virar `ROLLBACK`.
+
+⭐⭐ **Ensaiada com ROLLBACK antes de existir estrago — e o ensaio achou dois
+defeitos nela:**
+
+1. 🔴 **Apagaria 331 linhas de auditoria da MONTAGEM** (329 `DESIGNAR`, o
+   `CRIAR` e o `MARCAR_RECORTE`). O filtro era só por entidade. **O rastro de
+   como o ensaio foi montado é justamente o que não pode sumir** — é a resposta
+   a *"quem designou quem, e quando"*, pergunta que sobrevive ao ensaio. Agora o
+   filtro é **por ação E por entidade**.
+2. ⚠️ **A prévia anunciava 92 onde o DELETE fazia 0** — a linha de diagnóstico
+   ficou sem o escopo de entidade e contava o banco inteiro. **Prévia que não é
+   o ato é prévia que mente**, o mesmo defeito que a tela de público corrigiu em
+   07/09. Agora os dois têm o filtro idêntico.
+
+**Ensaio final (ROLLBACK):** apaga 0 · preserva **331 de montagem** · mantém
+**325 avaliações** e **344 no público**.
+
+**O que ela deliberadamente NÃO apaga**, com o porquê de cada um: as 325
+avaliações e o público (montagem) · a designação · `ciclo.eh_recorte`
+(declaração do Clenio) · o instrumento inteiro · critérios e régua de conceitos ·
+contas e permissões · **a auditoria da montagem** · a auditoria de outros ciclos
+· e `rh.colaborador` e o que vem do sync.
+
+⚠️ E o que ela **não consegue** desfazer: a memória de quem participou. Se a
+skill rodar com contas de pessoas reais, o rastro nas filas delas existiu — por
+isso o ensaio usa `zz.teste.*` onde for possível.

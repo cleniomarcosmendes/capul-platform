@@ -52,6 +52,10 @@ const DISPENSADOS: Record<string, string> = {
     '`avaliadorId` das avaliações apontadas como "não é minha equipe", para pôr NOME em quem ' +
     'avisou: é chave estrangeira virando pessoa, não o conteúdo da avaliação. ' +
     '⚠️ Até 12/09/2026 dizia "só CONTA", e esse findMany já existia.',
+  'scripts/estado-de-partida.ts':
+    'ferramenta de CONFERÊNCIA, só leitura: groupBy por aplicação/status, groupBy de avaliadorId ' +
+    'para listar quem avalia, e count com `ONDE_A_AVALIACAO_CONTA`. Agregado, não lê o conteúdo ' +
+    'de ninguém — mesma frase dos irmãos. Está em SO_AGREGA, então é cobrada pela máquina.',
   'scripts/conferir-email.ts':
     'mesma frase do `conferir-estado.ts`, e pelo mesmo motivo: ferramenta de CONFERÊNCIA, só ' +
     'leitura. Um `groupBy` de `avaliadorId` para saber QUEM avalia no ciclo — precisa da lista ' +
@@ -110,6 +114,7 @@ const SO_AGREGA = [
   'aplicacao/aplicacao.service.ts',
   'scripts/conferir-estado.ts',
   'scripts/conferir-email.ts',
+  'scripts/estado-de-partida.ts',
 ];
 
 /** Formas de `prisma.avaliacao.X` que NÃO são contagem. */
