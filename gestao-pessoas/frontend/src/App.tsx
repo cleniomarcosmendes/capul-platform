@@ -11,6 +11,7 @@ import CadastroAvaliadoresPage from './pages/CadastroAvaliadoresPage';
 import PainelPage from './pages/PainelPage';
 import ResultadosPage from './pages/ResultadosPage';
 import InstrumentoPage from './pages/InstrumentoPage';
+import CriteriosPage from './pages/CriteriosPage';
 import NaoEncontradaPage from './pages/NaoEncontradaPage';
 
 /**
@@ -53,6 +54,10 @@ export default function App() {
                 do cadastro de avaliadores: o questionário é da PLATAFORMA e
                 serve a todo ciclo — cada aplicação escolhe uma versão dele. */}
             <Route path="/questionarios" element={<InstrumentoPage />} />
+            {/* Cadastro do CATÁLOGO de critérios. Fora de `/ciclos/:id` pelo
+                mesmo motivo dos outros dois cadastros: a régua vale para todo
+                ciclo, e cada aplicação escolhe o PESO dela. */}
+            <Route path="/criterios" element={<CriteriosPage />} />
             {/* As quatro telas do RH são ETAPAS do mesmo ciclo, não seções
                 soltas — por isso são rotas filhas, e o ciclo escolhido não se
                 perde ao trocar de aba. */}

@@ -367,6 +367,75 @@ export const catalogo = {
     rhApi.get<ColaboradorDaBusca[]>('/catalogo/colaboradores', { params: { busca } }).then((r) => r.data),
 };
 
+// ---------------------------------------------------------------------------
+// CADASTRO de critérios e faixas (RH_ADMIN). Diferente de `catalogo.criterios`,
+// que é a LISTA de apoio para montar aplicação — aqui se ESCREVE a régua.
+// ---------------------------------------------------------------------------
+export interface FaixaDeCriterio {
+  id?: string;
+  tipo?: 'NUMERICA' | 'DOMINIO';
+  limiteInferior: number | null;
+  limiteSuperior: number | null;
+  inclusivoInf: boolean;
+  inclusivoSup: boolean;
+  valorDominio: string | null;
+  pontuacao: number;
+  rotulo: string | null;
+  ordem: number;
+}
+
+export interface CriterioDoCadastro {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao: string | null;
+  origem: 'CALCULADO' | 'INFORMADO';
+  tipoValor: 'NUMERICO' | 'DOMINIO';
+  codigoCalculo: string | null;
+  unidade: string | null;
+  ativo: boolean;
+  /** Em quantas aplicações ele pesa — o que impede desativar às cegas. */
+  aplicacoesQueUsam: number;
+  valoresInformados: number;
+  faixas: FaixaDeCriterio[];
+}
+
+/** Um `codigoCalculo` que EXISTE no backend. A tela nunca aceita digitação. */
+export interface ResolverDisponivel {
+  codigo: string;
+  emUsoPor: string[];
+}
+
+export interface CriterioEntrada {
+  codigo: string;
+  nome: string;
+  descricao?: string | null;
+  origem: 'CALCULADO' | 'INFORMADO';
+  tipoValor: 'NUMERICO' | 'DOMINIO';
+  codigoCalculo?: string | null;
+  unidade?: string | null;
+  ativo?: boolean;
+}
+
+export const criterios = {
+  listar: () => rhApi.get<CriterioDoCadastro[]>('/criterios').then((r) => r.data),
+  resolvers: () => rhApi.get<ResolverDisponivel[]>('/criterios/resolvers').then((r) => r.data),
+  criar: (dto: CriterioEntrada) => rhApi.post<CriterioDoCadastro>('/criterios', dto).then((r) => r.data),
+  atualizar: (id: string, dto: CriterioEntrada) =>
+    rhApi.patch<CriterioDoCadastro>(`/criterios/${id}`, dto).then((r) => r.data),
+  /** Substitui o conjunto INTEIRO — a validade é do conjunto, não da faixa. */
+  salvarFaixas: (id: string, faixas: Omit<FaixaDeCriterio, 'id' | 'tipo'>[]) =>
+    rhApi.put<CriterioDoCadastro>(`/criterios/${id}/faixas`, { faixas }).then((r) => r.data),
+  /**
+   * ⭐ Confere sem gravar. É como a tela mostra a recusa ANTES do clique sem
+   * reimplementar a regra: chama a MESMA função que o `salvarFaixas` chama.
+   */
+  conferirFaixas: (id: string, faixas: Omit<FaixaDeCriterio, 'id' | 'tipo'>[]) =>
+    rhApi
+      .post<{ problemas: string[] }>(`/criterios/${id}/faixas/conferir`, { faixas })
+      .then((r) => r.data.problemas),
+};
+
 export interface AplicacaoDoCiclo {
   id: string;
   nome: string;

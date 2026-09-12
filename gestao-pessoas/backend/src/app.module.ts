@@ -18,6 +18,7 @@ import { AplicacaoModule } from './aplicacao/aplicacao.module.js';
 import { DesignacaoModule } from './designacao/designacao.module.js';
 import { DesignacaoPadraoModule } from './designacao-padrao/designacao-padrao.module.js';
 import { ApuracaoModule } from './apuracao/apuracao.module.js';
+import { CriterioModule } from './criterio/criterio.module.js';
 import { CatalogoModule } from './catalogo/catalogo.module.js';
 import { PainelModule } from './painel/painel.module.js';
 import { ResultadoModule } from './resultado/resultado.module.js';
@@ -72,6 +73,7 @@ import { IdentidadeGuard } from './common/guards/identidade.guard.js';
     DesignacaoPadraoModule,
     ApuracaoModule,
     CatalogoModule,
+    CriterioModule,
     PainelModule,
     ResultadoModule,
   ],

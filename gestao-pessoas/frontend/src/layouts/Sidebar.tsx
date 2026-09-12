@@ -1,5 +1,15 @@
 import { NavLink } from 'react-router-dom';
-import { ArrowLeft, CalendarRange, ClipboardList, FileText, LogOut, UserCheck, Users, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarRange,
+  ClipboardList,
+  FileText,
+  LogOut,
+  SlidersHorizontal,
+  UserCheck,
+  Users,
+  X,
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
 import type { UsuarioLogado } from '../services/api';
@@ -92,6 +102,18 @@ const itens: ItemDoMenu[] = [
    * ler nota** — `/resultados` segue só de `RH_ADMIN`.
    */
   { rotulo: 'Questionários', icone: FileText, para: '/questionarios', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO, ROLES.RH_CICLO] },
+
+  /**
+   * ⭐ **Só `RH_ADMIN`** — e a diferença para "Questionários" logo acima é
+   * proposital. LER o catálogo é de quem monta aplicação (precisa escolher
+   * critério da lista); MEXER no critério muda a régua de **todos os ciclos que
+   * o usarem**, o que é a autoridade de publicar, não a de montar.
+   *
+   * ⚠️ O rótulo é "Critérios da nota", não "Critérios": sozinha, a palavra
+   * confunde com critério de elegibilidade (quem entra no ciclo), que é outra
+   * coisa e mora na Designação.
+   */
+  { rotulo: 'Critérios da nota', icone: SlidersHorizontal, para: '/criterios', papeis: [ROLES.RH_ADMIN] },
 
   /**
    * CICLO — singular: a seção é sobre o objeto em que se trabalha, não sobre a

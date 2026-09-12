@@ -11,10 +11,18 @@ export function Modal({
   titulo,
   aoFechar,
   children,
+  largura = 'normal',
 }: {
   titulo: string;
   aoFechar: () => void;
   children: React.ReactNode;
+  /**
+   * `ampla` para conteúdo em GRADE (a linha de faixa tem 6 campos). Em `normal`
+   * a grade quebra numa coluna e cada faixa vira meia tela de rolagem — o que
+   * inviabiliza justamente o que se está conferindo, que é o conjunto.
+   * Não muda nada no celular: lá as duas ocupam a largura toda.
+   */
+  largura?: 'normal' | 'ampla';
 }) {
   return (
     <div
@@ -26,7 +34,9 @@ export function Modal({
         aria-modal
         aria-label={titulo}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl"
+        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl ${
+          largura === "ampla" ? "max-w-3xl" : "max-w-lg"
+        }`}
       >
         <h3 className="text-lg font-semibold text-slate-800">{titulo}</h3>
         <div className="mt-3">{children}</div>

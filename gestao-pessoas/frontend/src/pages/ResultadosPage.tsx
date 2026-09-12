@@ -227,11 +227,22 @@ export default function ResultadosPage() {
  */
 function valorDoCriterio(c: MemoriaDeCalculo['criterios'][number]): string {
   if (c.semDado) return '—';
+  /**
+   * ⭐ O bruto de um critério de DOMÍNIO é um CÓDIGO DE CADASTRO, e sozinho
+   * entre parênteses ele lia como nota: "Superior completo (35)" numa linha que
+   * tem, três colunas adiante, a pontuação real — 75. Dois números verdadeiros
+   * na mesma linha precisam do termo que os concilia, e aqui o termo é dizer o
+   * que o 35 é. Num critério NUMÉRICO isso não acontece: o bruto vem com
+   * unidade ("5,4 anos"), que já o distingue.
+   */
   const bruto =
-    c.valorTexto ??
-    (c.valorBruto === null
-      ? null
-      : `${nota(c.valorBruto)}${c.unidade ? ` ${c.unidade}` : ''}`);
+    c.valorTexto === null || c.valorTexto === undefined
+      ? c.valorBruto === null
+        ? null
+        : `${nota(c.valorBruto)}${c.unidade ? ` ${c.unidade}` : ''}`
+      : c.tipoValor === 'DOMINIO'
+        ? `código ${c.valorTexto}`
+        : c.valorTexto;
   if (c.faixaRotulo && bruto) return `${c.faixaRotulo} (${bruto})`;
   return c.faixaRotulo ?? bruto ?? '—';
 }

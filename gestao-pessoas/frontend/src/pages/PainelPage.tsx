@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { AlertTriangle, Calculator, MessageSquareWarning, UserMinus, UserX } from 'lucide-react';
+import { Link, useOutletContext } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Calculator,
+  MessageSquareWarning,
+  UserMinus,
+  UserX,
+} from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
@@ -353,6 +360,24 @@ export default function PainelPage() {
                       ? 'Resolve-se uma vez, no critério, e vale para todo mundo.'
                       : 'É dado de pessoa — resolve-se caso a caso.'}
                   </p>
+                  {/* ⭐ O aviso MANDA fazer uma coisa — agora ele leva até lá.
+                      Até o cadastro de critérios existir, "cadastre a faixa no
+                      critério" era instrução sem destino: não havia tela, e a
+                      saída real era pedir T.I. no banco. Texto que manda fazer
+                      sem dizer onde é o mesmo defeito de prometer capacidade.
+
+                      ⚠️ Só para quem PODE entrar (`RH_ADMIN`). Link que leva a
+                      403 é pior que nenhum: transforma "não é com você" em
+                      "o sistema está quebrado". */}
+                  {a.motivo === 'SEM_FAIXA' && tem(ROLES.RH_ADMIN) && (
+                    <Link
+                      to={`/criterios#criterio-${a.criterioCodigo}`}
+                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline"
+                    >
+                      Abrir as faixas de {a.criterioNome}
+                      <ArrowRight size={12} aria-hidden />
+                    </Link>
+                  )}
                 </div>
               </li>
             ))}
