@@ -1,11 +1,104 @@
 # Gestão de Pessoas — estado do projeto
 
-> Ponto de entrada para quem vai mexer no módulo. Diz onde estamos, o que não se
-> discute mais e onde ler o resto. Última revisão: **08/09/2026** (fim do dia).
+> **Ponto de entrada de quem vai mexer no módulo.** Comece pela ▶️ FILA logo
+> abaixo; o resto do arquivo é o porquê de cada coisa.
 >
-> Piloto previsto para **15/09/2026**.
+> ⚠️ **Não há commit nem contagem de testes escritos aqui, de propósito.**
+> Número que envelhece não deve morar onde todo mundo entra — a versão que este
+> arquivo declarasse estaria errada no dia seguinte, e quem a lesse não teria
+> como saber. **Meça antes de afirmar:**
+>
+> | Para saber | Rode |
+> |---|---|
+> | em que commit está o repo | `git fetch && git log --oneline -1 origin/main` |
+> | em que commit está PROD/HLG | `/health` → `versao.commit` do serviço |
+> | quantos testes existem | a suíte, no backend e no frontend |
+> | se um ciclo está pronto | `node dist/scripts/conferir-estado.js <ciclo>` |
+> | quem dá para avisar por e-mail | `node dist/scripts/conferir-email.js <ciclo>` |
+>
+> ⭐ É a mesma regra que vale para o código: *consulta que decide se algo está
+> pronto não se escreve à mão* — e afirmação que envelhece não se escreve num
+> cabeçalho.
 
-## ✅ PUBLICADO EM 09/09/2026 — `origin/main` = `eb1264a9`
+## ▶️ A FILA DE AMANHÃ (13/09, 08:00) — abrir por aqui
+
+### (a) 🔴 Esperando a Arielly — 9 itens, e um deles reordena tudo
+
+A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
+
+| # | Item | O que a resposta destrava |
+|---|---|---|
+| ~~1~~ | **As 39 perguntas — o CONTEÚDO** | ⚠️ **deixou de bloquear a fila (13/09).** Ela decide o conteúdo, **na tela**, quando o editor existir — não a ordem do trabalho |
+| 2 | A faixa "Menos de 1 ano" (são DUAS) | manter e corrigir o rótulo, ou mudar a régua — e aí decidir o que fazer com a regressão do `000006` como baseline |
+| 3 | Prefixo de CC × fábrica | remontar o público das 49 do `ADMINISTRATIVO - FABRICA`. **Não precisa de código** |
+| 4 | 2º `RH_ADMIN` (Claudimar) | destrava quem corrige a avaliação da própria gestora |
+| 5 | Recorte provisório — granularidade | define o ato de confirmar: linha, aplicação ou ciclo |
+| 6 | Treinamento parado em 14/11/2025 | destrava ligar (ou não) o `QTDE_TREINAMENTO` |
+| 7 | Divisão do `11010219` | formalizar a divisão Jaicler/Laís — hoje segue como está |
+| 8 | Reciprocidade A↔B | política: vale ou não, num ciclo que conta para mérito |
+| 9 | "Está no topo, não é avaliado" | falta o CONCEITO; hoje o único caminho mente no histórico |
+
+### (b) 🟢 Pronto para código — desenho fechado, é só executar
+
+| Frente | Custo | Estado |
+|---|---|---|
+| ~~**Flag de recorte** no ciclo~~ | ~~6h~~ | ✅ **FEITA em 13/09** — §3.1.142. ⚠️ Não confundir com o **item 5 da Arielly** (`aplicacao_publico.provisorio`, por linha), que segue aberto |
+| **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
+| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) ✅ §3.1.98 · **D** (7) ✅ §3.1.101 — **editor COMPLETO**. Cada bloco fecha numa CONTA, conferida antes do próximo |
+
+### (b-bis) 🔴 O QUE A MEDIÇÃO DE 13/09 TIROU E PÔS NA FILA
+
+| | |
+|---|---|
+| ⛔ **SAIU: notificação por e-mail (3–5 dias)** | alcança **2 dos 16** avaliadores e **3 das 344** pessoas do público. `rh.colaborador` não tem e-mail; ele vem de `core.usuarios`, e o TETO — já contando o que dá para consertar no Configurador — é **13 de 1.039**. §3.1.144 |
+| 🟢 **ENTROU: "não há como avisar" na tela do RH (~4h)** | a régua do *designar não dá acesso* aplicada ao aviso. Vale para qualquer canal futuro, e é o que o e-mail ia entregar de útil |
+| 🔴 **ENTROU: o `enableImplicitConversion` dos outros 3 backends (~2h cada)** | **assunto de plataforma**, não do módulo — `auth-gateway` (`bloquear`!) e `logistica` (`confirmarPendentes`). ⛔ **Não mexer sem decidir com o Marco**: os dois estão em PRODUÇÃO. §3.1.145 |
+| 🟢 **ENTROU: guarda de reabrir avaliação já devolvida (~4h)** | hoje não existe, e `devolutiva_em` **não pode** morar em `resultado_avaliacao`. §3.1.138 e §3.1.147(c) |
+| 💰 **COTADO: prévia do efeito na nota — ~1,5 dia** | §3.1.146. O trabalho não é a aritmética, é a política do delta de perguntas |
+
+### (c) 🟡 HLG — acesso CONFIRMADO; falta medir e agendar
+
+⚠️⚠️ **CORREÇÃO de 13/09 (Clenio): este bloco vinha dizendo "bloqueado esperando
+o Marco", e não é verdade há quatro dias.** O Marco **já confirmou acesso e dado
+em 09/09** — *"serve sim"* — e isso está registrado no HISTÓRICO deste arquivo.
+Eu repeti "ele não responde" por dois dias lendo o rótulo antigo em vez do
+registro. **O pedido que falta é menor e mais fácil:** medir em que commit HLG
+está e agendar uma janela.
+
+⭐ A lição é a mesma do cabeçalho: **rótulo de estado envelhece, e enquanto
+envelhece ele decide a conversa.** "Bloqueado esperando resposta" e "acesso
+confirmado, falta agendar" pedem coisas diferentes de pessoas diferentes.
+
+| O que falta | De quem | Tamanho |
+|---|---|---|
+| Medir o commit de HLG (`/health` → `versao.commit`) | T.I. (nós), com acesso já concedido | minutos |
+| Agendar a janela de aplicação | Marco | um combinado |
+| **Escrever o roteiro** do módulo | nós, **depois** de medir HLG | ~2h |
+
+⚠️ **O roteiro só se escreve depois da medição** — ele cita o commit de partida,
+e roteiro com alvo errado é pior que roteiro ausente.
+
+#### O tamanho da onda — medido em 13/09
+
+| | Medido | ⚠️ |
+|---|---|---|
+| Migrations do `gestao-pessoas` | **15** | eram 13 em 12/09; entraram a **view da régua** (`20260912200000`) e a **flag de recorte** (`20260913000000`) |
+| Migrations do `auth-gateway` na onda | **2** | número do registro anterior — **não remedido contra PROD** |
+| **Total da onda** | **17** | ⚠️ era 15 ontem. **Este número cresce a cada dia de trabalho** — não o cite de memória, conte os diretórios |
+| Serviços novos no compose | **3** | `gestao-pessoas-migrate`, `-backend`, `-frontend` |
+| `location` no nginx | **2** | `/gestao-pessoas/` e `/api/v1/gestao-pessoas/` (+ 2 upstreams) |
+| Jobs `*-migrate` com `migrate-guarda` | **6 de 7** | o único fora é o `inventario-migrate`, que roda SQL próprio e não usa Prisma |
+
+⚠️ **Estado de ambiente é o que mais envelhece aqui.** O que estava escrito
+(PROD em `6855c918`, sem o módulo) é o **declarado** — conferir por `/health`
+antes de afirmar.
+
+---
+
+
+## 🗄️ HISTÓRICO — 08 e 09/09/2026
+
+> ⚠️ **Os números abaixo são daquele dia e NÃO são o estado atual** — commits, contagens de ciclo e posição de ambiente. Ficam pelo relato das decisões; para o estado de hoje, meça (ver o cabeçalho).
 
 Publicado pelo Clenio no fim do dia: **`2835b51d..eb1264a9`**, 27 commits, 313 objetos. Local e
 remoto iguais (0 à frente, 0 atrás, árvore limpa). Publicações anteriores: 08/09
@@ -5632,7 +5725,10 @@ empate vai. Corrigido: a tela agora diz, com o exemplo da régua padrão.
 
 ## 📋 PENDÊNCIAS DA ARIELLY — a lista para levar (12/09/2026)
 
-Sete itens. Cada um é decisão **dela**, não da T.I. Onde há número, ele foi medido no DEV em
+**Nove itens.** ⚠️ Este texto dizia "Sete" e a lista abaixo sempre teve nove —
+a prosa envelheceu enquanto os itens cresciam. Corrigido em 13/09 pelo Clenio,
+que vinha somando resolvidos e chegando a onze; **nove é o número medido**,
+contando os `###` desta seção. Cada um é decisão **dela**, não da T.I. Onde há número, ele foi medido no DEV em
 12/09 e está aqui para a conversa não depender de memória.
 
 ### 1. As 39 perguntas — o CONTEÚDO (não é mais bloqueio de ordem)
@@ -6298,50 +6394,6 @@ decisão de gestão, que é dela.
 4. **Avaliador de licença** — lista separada na prévia (§3.1.81), como contexto operacional.
 
 5. **O método**: *conta que não bate detecta furo de guarda melhor que ler código* (§3.1.79).
-
----
-
-## ▶️ A FILA DE AMANHÃ (13/09, 08:00) — abrir por aqui
-
-### (a) 🔴 Esperando a Arielly — 9 itens, e um deles reordena tudo
-
-A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
-
-| # | Item | O que a resposta destrava |
-|---|---|---|
-| ~~1~~ | **As 39 perguntas — o CONTEÚDO** | ⚠️ **deixou de bloquear a fila (13/09).** Ela decide o conteúdo, **na tela**, quando o editor existir — não a ordem do trabalho |
-| 2 | A faixa "Menos de 1 ano" (são DUAS) | manter e corrigir o rótulo, ou mudar a régua — e aí decidir o que fazer com a regressão do `000006` como baseline |
-| 3 | Prefixo de CC × fábrica | remontar o público das 49 do `ADMINISTRATIVO - FABRICA`. **Não precisa de código** |
-| 4 | 2º `RH_ADMIN` (Claudimar) | destrava quem corrige a avaliação da própria gestora |
-| 5 | Recorte provisório — granularidade | define o ato de confirmar: linha, aplicação ou ciclo |
-| 6 | Treinamento parado em 14/11/2025 | destrava ligar (ou não) o `QTDE_TREINAMENTO` |
-| 7 | Divisão do `11010219` | formalizar a divisão Jaicler/Laís — hoje segue como está |
-| 8 | Reciprocidade A↔B | política: vale ou não, num ciclo que conta para mérito |
-| 9 | "Está no topo, não é avaliado" | falta o CONCEITO; hoje o único caminho mente no histórico |
-
-### (b) 🟢 Pronto para código — desenho fechado, é só executar
-
-| Frente | Custo | Estado |
-|---|---|---|
-| ~~**Flag de recorte** no ciclo~~ | ~~6h~~ | ✅ **FEITA em 13/09** — §3.1.142. ⚠️ Não confundir com o **item 5 da Arielly** (`aplicacao_publico.provisorio`, por linha), que segue aberto |
-| **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
-| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) ✅ §3.1.98 · **D** (7) ✅ §3.1.101 — **editor COMPLETO**. Cada bloco fecha numa CONTA, conferida antes do próximo |
-
-### (c) ⛔ Bloqueado fora — HLG e o Marco
-
-**O roteiro de deploy NÃO EXISTE**, e a onda cresceu. Medido em 12/09:
-
-| | Medido | ⚠️ |
-|---|---|---|
-| Migrations do `gestao-pessoas` | **13** | eram 11; entraram o **acervo** (`20260911230000`) e o **motivo do critério inativo** (`20260912020000`) |
-| Migrations do `auth-gateway` na onda | **2** | número do registro anterior — **não remedido contra PROD** |
-| **Total da onda** | **15** | não 13, e não 14 |
-| Serviços novos no compose | **3** | `gestao-pessoas-migrate`, `-backend`, `-frontend` |
-| `location` no nginx | **2** | `/gestao-pessoas/` e `/api/v1/gestao-pessoas/` (+ 2 upstreams) |
-| Jobs `*-migrate` com `migrate-guarda` | **6 de 7** | ⚠️ **já estão trocados** — o único fora é o `inventario-migrate`, que roda SQL próprio e não usa Prisma |
-
-⚠️ **PROD segue em `6855c918` e sem o Gestão de Pessoas.** Estado de ambiente envelhece: conferir
-`/health` → `versao.commit` antes de afirmar.
 
 ---
 
@@ -9215,3 +9267,257 @@ de confirmação estão nomeadas**, não contadas. Canário incluído.
 
 ⭐ É a terceira vez que a mesma pergunta rende achado: *o que acontece se o
 cliente mandar uma forma que a nossa tela nunca manda?*
+
+---
+
+### 3.1.144. 🔴🔴 COBERTURA DE E-MAIL — a notificação por e-mail NÃO é caminho
+
+Medição pedida antes de gastar 3–5 dias. **O resultado desqualifica o desenho**,
+e o primeiro fato já muda tudo:
+
+> ⛔ **`rh.colaborador` NÃO TEM CAMPO DE E-MAIL.** Nenhum. O e-mail não vem do
+> Protheus para o módulo — ele mora em **`core.usuarios.email`**, que é a CONTA
+> da plataforma.
+
+Isso não é detalhe de implementação: significa que **a cobertura de e-mail é
+limitada pela cobertura de CONTA**, que já é o gargalo conhecido do módulo
+([[feedback_designar_nao_da_acesso]]). Não são dois problemas — é o mesmo.
+
+#### Os três níveis (medidos em 13/09 por `dist/scripts/conferir-email.js`)
+
+| Nível | Pessoas | Com endereço | Sem |
+|---|---|---|---|
+| **1. Avaliadores do ENSAIO** | 16 | **2** (12,5%) | 14 — todos com conta, **conta sem e-mail** |
+| **2. Público do ENSAIO** (recebem devolutiva) | 344 | **3** (0,9%) | 341 — 323 sem conta, 18 conta sem e-mail |
+| **3. Cadastro inteiro** (produção) | 1.039 | **3** (0,3%) | 1.036 — 1.010 sem conta, 21 conta sem e-mail, 5 domínio de teste |
+
+**Distribuição:** 70 de 73 centros de custo têm **ZERO**. No ENSAIO, 13 de 16.
+Os três com alguém são INFORMÁTICA, FISCAL e ADMINISTRATIVO-FÁBRICA — o
+escritório. Supermercado Unaí (98), Agroveterinária (89) e Ração (61): zero.
+
+#### As duas perguntas do desenho, respondidas
+
+**(a) Que campo, e é confiável?** `core.usuarios.email`, preenchido à mão no
+Configurador — **não vem do Protheus**. Dos 48 endereços que existem: 38 são de
+contas **sem matrícula** (não casam com pessoa nenhuma do RH), 5 são domínio de
+teste, 2 não casam com colaborador. **Sobram 8.**
+
+**(b) E-mail repetido entre duas pessoas?** ⭐ **Impossível — a coluna é
+`UNIQUE`.** Respondido pelo schema, não por amostragem; e a consulta confirma
+zero. ⚠️ O que a UNIQUE **não** impede é **caixa de SETOR**: única no banco e
+ainda assim lida por várias pessoas.
+
+#### 🔴 UM ERRO MEU NA MEDIÇÃO, e ele é do tipo que decide errado
+
+A primeira versão do script classificava caixa de setor por uma lista de
+prefixos — `rh`, `ti`, `contato`, `financeiro`, `sac`, `compras`, `fiscal`,
+`adm` — e reportou **"e-mail de SETOR: 0"**.
+
+Na lista de endereços que casam com colaborador havia **três à vista**:
+`pcp@capul.com.br`, `nfservicos@capul.com.br`, `gerenciapostounai@capul.com.br`.
+Nenhum estava nos prefixos. **Zero por não reconhecer, não por não haver** — num
+número que decide se um canal de comunicação serve.
+
+⭐ **Caixa de setor é julgamento humano**: só quem conhece a empresa sabe que
+`pcp@` é o Planejamento e Controle da Produção. O script parou de fingir que
+decide: ele **LISTA todos** os endereços e chama a coluna de *a conferir*. Uma
+lista de 13 linhas se lê em dez segundos; uma heurística errada se acredita por
+meses. É a família do [[feedback_rotulo_ausente_nunca_e_palpite]] — **melhor não
+classificar do que classificar por palpite com cara de conta**.
+
+#### O TETO, se tudo que é consertável for consertado
+
+| | |
+|---|---|
+| Hoje enxergados pelo módulo | **8** (matrícula na conta casa com colaborador) |
+| **Consertável no Configurador** | **+10** — conta tem e-mail real, falta a **matrícula**; o nome casa com colaborador |
+| Menos os de domínio de teste | −5 |
+| **TETO REAL** | **13 pessoas de 1.039 — 1,3%** |
+| Dessas, caixa de setor | **3** (`pcp@`, `nfservicos@`, `gerenciapostounai@`) |
+| **Endereços de PESSOA** | **~10** |
+
+⚠️ **Não há segundo canal no dado:** `core.usuarios.telefone` está preenchido em
+**2 de 183** contas.
+
+#### ⛔ A CONSEQUÊNCIA — não construir notificação por e-mail agora
+
+Construir 3–5 dias para alcançar 2 dos 16 avaliadores do ensaio, e 3 das 344
+pessoas que receberiam devolutiva, é construir uma funcionalidade que **avisa o
+escritório e deixa o salão do supermercado sem saber**. Pior que não avisar:
+cria a impressão de que houve aviso.
+
+**O que eu recomendo, em ordem:**
+
+1. **A FILA JÁ É A NOTIFICAÇÃO.** O avaliador entra e vê o que tem para fazer.
+   O que falta não é o aviso — é o RH **saber quem ainda não entrou**, e isso o
+   painel já mede (`avaliadores`, `semDesignacao`). Custo: **zero**.
+2. **A tela do RH mostra quem NÃO pode ser avisado** — a régua da
+   [[feedback_designar_nao_da_acesso]] aplicada ao e-mail: a designação já diz
+   "esta pessoa não consegue entrar"; passa a dizer também "não há como avisar".
+   **Custo ~4h**, e vale para qualquer canal que venha depois.
+3. **Notificação por e-mail vira opcional e honesta** — envia para quem tem,
+   e a tela diz para quantos NÃO foi. **Só depois** de (2), e só se o RH quiser.
+
+⚠️ **Se a decisão for insistir no e-mail**, o pré-requisito não é técnico: é o
+RH cadastrar endereço para ~1.000 pessoas que em boa parte não têm e-mail
+corporativo. Isso é projeto do RH, não do módulo.
+
+---
+
+### 3.1.145. 🔴 O `enableImplicitConversion` É DE PLATAFORMA — 4 dos 5 backends
+
+Elevado a assunto de plataforma pelo Clenio. Medido em 13/09.
+
+| Backend | `enableImplicitConversion` | Campos `@IsBoolean` | Situação |
+|---|---|---|---|
+| **gestao-pessoas** | sim | 15 | ✅ **corrigido** — `@BooleanoEstrito()` + invariante |
+| **auth-gateway** | **sim** | **8** | 🔴 aberto |
+| **logistica** | **sim** | **20** | 🔴 aberto |
+| **fiscal** | **sim** | **0** | 🟡 configuração exposta, nada a explorar hoje |
+| **gestao-ti** | **não** | 36 | ✅ imune — `transform` sem conversão implícita |
+
+⭐ **É padrão copiado entre backends**, como o Clenio suspeitou. O `gestao-ti`,
+que é o mais antigo, é o único que não tem — a conversão implícita entrou nos
+que vieram depois.
+
+#### Os campos que mais doem
+
+**`auth-gateway`** — os booleanos são de controle de acesso:
+
+| Campo | Onde | Por que dói |
+|---|---|---|
+| **`bloquear`** | `varredura-matricula.controller.ts` | é a rotina que **DESATIVA quem saiu da empresa**. `"false"` → `true` **liga o bloqueio**. A memória diz explicitamente *"não ligar o bloqueio em PROD"* |
+| `autenticaPortal` | `create-usuario.dto` (2×) | troca o modo de autenticação da conta |
+| `ativo` | integração, departamento-funcionalidade | liga/desliga endpoint e funcionalidade |
+| `sac` | `email.controller` | escolhe a conta de e-mail |
+
+**`logistica`** — tem a **mesma flag de confirmação** do gestao-pessoas:
+
+| Campo | Onde | Por que dói |
+|---|---|---|
+| **`confirmarPendentes`** | `supervisor/dto.ts:28` | concluir planejamento com visita não apontada: as PLANEJADAS viram **PULADA**. `"false"` → `true` **pula visita** em vez de recusar |
+| `semNota` (3×), `requerAprovacao` (2×), `reiniciarCiclo`, `noLocal` (4×), `ativo` | despesa, frota, supervisor, veículo | `reiniciarCiclo` e `requerAprovacao` mexem em dinheiro e aprovação |
+
+⚠️ **Isto é INFERÊNCIA, não medição, para os outros três.** Eu medi contra a API
+**do gestao-pessoas**; nos demais confirmei que a **configuração é idêntica** e
+que os DTOs são da mesma forma, mas **não exercitei a API deles**. Pela regra do
+[[feedback_bundle_minificado_e_hipotese]], fica assim rotulado: para virar fato,
+é uma requisição com `{"campo":"false"}` em cada um.
+
+#### O que eu recomendo
+
+⛔ **Não corrigi os outros três** — Logística e auth-gateway estão **em
+PRODUÇÃO**, e mexer em validação global deles é mudança que entra em roteiro de
+deploy, não em commit de passagem. Fica para o Clenio decidir e o Marco saber
+**antes**.
+
+O conserto é o mesmo dos 15 daqui: copiar `common/booleano-estrito.ts`, trocar
+os `@IsBoolean()` e levar o invariante junto. **Custo: ~2h por backend**
+(auth-gateway 8 campos, logística 20), mais o teste de regressão de cada um.
+
+⚠️ E há uma alternativa mais radical que **NÃO recomendo agora**: tirar
+`enableImplicitConversion` do pipe. Consertaria a classe inteira de uma vez —
+e quebraria todo `@Query` que hoje depende da conversão para número. Numa base
+em produção, é troca de risco conhecido por risco não medido.
+
+---
+
+### 3.1.146. 💰 CUSTO DA PRÉVIA DO EFEITO NA NOTA (§3.1.84) — ~1,5 dia
+
+O Clenio quer levar número à Arielly, não promessa. A pergunta dela:
+*"quanto mudaria se eu publicasse uma versão nova?"*.
+
+**As peças já existem** e são puras: `calcularNotaAvaliacao(itens)` recebe uma
+entrada por pergunta com `valorRespondido`, `peso` e `maiorValor`;
+`pesosDerivados` produz os pesos do arranjo novo; `localizarFaixa` diz o
+conceito. Simular é montar os `itens` com as **mesmas respostas** e os **pesos
+novos**.
+
+| Peça | Custo | |
+|---|---|---|
+| Endpoint + service da simulação | **3h** | lê as ENVIADAS com respostas, recalcula com o arranjo novo |
+| ⭐ **A política do DELTA DE PERGUNTAS** | **2h** | é o trabalho de verdade, não a aritmética — ver abaixo |
+| Conceito antes × depois | **1h** | o número que importa à Arielly não é o delta em pontos, é **quantos mudam de conceito** |
+| Tela da prévia no editor | **3h** | total simulado, distribuição do delta, quantos mudam de conceito e **a lista de quem muda** |
+| Specs, incluindo o invariante de que a prévia não escreve | **2h** | |
+| **Total** | **~11h ≈ 1,5 dia** | |
+
+#### ⚠️ O que faz isto não ser trivial
+
+`calcularNotaAvaliacao` **recusa** questionário incompleto (`perguntasSemResposta
+> 0`) — e com razão: nota sobre formulário pela metade sai baixa e **parece
+desempenho**. Ao simular uma versão nova, três casos:
+
+| Caso | O que fazer |
+|---|---|
+| Questão **mantida** | usa a resposta que existe ✅ |
+| Questão **removida** | descarta a resposta ✅ |
+| ⛔ Questão **NOVA** | **ninguém respondeu.** Não há resposta honesta |
+
+⭐ **A prévia tem de RECUSAR o terceiro caso e dizer quantas**, não inventar
+zero nem média — é a regra da [[feedback_api_recusa_para_a_tela_perguntar]]. A
+frase certa é *"N avaliações não podem ser simuladas: a versão nova tem M
+perguntas que ninguém respondeu"*, e ela é mais útil que um número inventado.
+
+**Base disponível para demonstrar e testar** (medido em 13/09): 18 avaliações
+ENVIADAS com **210 respostas**, em 3 ciclos — SIMULACAO 09/09 (13 · 143),
+Avaliação Geral 2026 (4 · 56) e ZZ ENCERRA2 (1 · 11). ⚠️ O ENSAIO e o Piloto têm
+**zero respostas** — a prévia não teria o que mostrar neles.
+
+---
+
+### 3.1.147. 📌 REGISTROS DE MÉTODO — 13/09
+
+#### (a) ⭐⭐ Ferramenta fora de `src/` é ferramenta fora de TODA invariante
+
+O `conferir-estado.ts` nasceu em `scripts/`. A suíte ficou **verde** com ele
+quebrando duas invariantes — tocava `prisma.avaliacao` sem a porta e reescrevia
+o código do módulo dentro de SQL cru. As duas varreduras leem a partir de
+`src/`; o que está fora **não existe para elas**.
+
+⚠️ **Irmão do `ferramenta-fora-da-suite.invariante.spec.ts`**, que já cobria o
+outro lado (script que não roda na suíte). Este é o lado da VARREDURA: não basta
+o script rodar — ele precisa **ser lido** pelas invariantes.
+
+> **Gatilho:** ao criar qualquer `.ts` fora de `src/`, perguntar *"que invariante
+> deixa de ver este arquivo?"*. Se a resposta for "todas", ele vai para `src/`.
+
+#### (b) ⭐⭐ Dispensa por NOME DE ARQUIVO envelhece sozinha
+
+A lista de dispensados da separação de funções dispensa **arquivos**. O arquivo
+cresce; o texto continua dizendo o que era verdade quando foi escrito. Três
+casos: `resultado.service` (11/09), `ciclo.service` e `painel.service` (12/09) —
+os dois últimos afirmando *"só CONTA"* com um `findMany` dentro.
+
+⭐ **O que importa não é ter corrigido os textos — é a distinção que ficou:**
+
+| | |
+|---|---|
+| **`SO_AGREGA`** | quem se justifica por *"agregado, não lê o conteúdo de ninguém"*. **A máquina cobra**: só `count`/`groupBy`/`aggregate` |
+| Lista em prosa | quem lê linha, com o motivo por extenso — **honesta, e sem verificação nenhuma** |
+
+Uma dispensa verificável e uma dispensa confessadamente não verificável valem
+mais que quinze afirmações uniformes das quais ninguém sabe quais se sustentam.
+
+#### (c) ⛔ RESTRIÇÃO DE SCHEMA — `devolutiva_em` NÃO mora em `resultado_avaliacao`
+
+**Registrado antes de alguém implementar.** O `reabrir` **APAGA** o
+`ResultadoAvaliacao` — é o que o `efeitoDaReabertura` anuncia (a nota que vai
+ser apagada). O fato *"ela já viu o resultado"* seria deletado junto com a
+linha, **sumindo exatamente no ato contra o qual ele existe para avisar**.
+
+O carimbo tem de ficar em **`Avaliacao`** (que sobrevive à reabertura) ou numa
+tabela de eventos. Ver §3.1.138 para o custo da guarda (~4h).
+
+#### (d) ⭐ O arquivo que ficou fora do commit
+
+Commitei a flag de recorte por caminho explícito e **esqueci o `api.ts`** — sem
+ele o frontend não compila, e a árvore empurrada estava quebrada. O `tsc -b`
+local passou porque o arquivo estava **no disco e não no índice**.
+
+⚠️ É o modo de falha que a regra *"caminho explícito, nunca `add -A`"* tenta
+evitar, e desta vez não evitou: a lista foi escrita à mão e um caminho faltou.
+
+> ⭐ **A conferência que pega é comparar a ÁRVORE depois, não reler o diff** —
+> o `git status` depois do commit mostrou o arquivo sobrando. Ler o diff só
+> mostra o que ENTROU; nunca o que ficou de fora.

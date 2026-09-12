@@ -184,19 +184,30 @@ Plataforma corporativa modular com microservicos independentes:
 - **Fase 1b** (app entregador + prova de entrega/cofre + device-sessions): plano em `C:\Arquivos-de-projeto\clenio\Sistema de Rota\007_Fase1b_Plano_PRs.md`. PR 1b.1 (device-sessions no auth-gateway) feito em branch `feat/device-sessions`
 - Docs/decisoes: `C:\Arquivos-de-projeto\clenio\Sistema de Rota\` (002 spec, 003 adendo, 004 Fase1a, 007 Fase1b) + `memory/project_modulo_entregas_proximo.md`
 
-### 8. Gestao de Pessoas (`/gestao-pessoas`) *(em desenvolvimento — Set/2026 — piloto 15/09)*
+### 8. Gestao de Pessoas (`/gestao-pessoas`) *(em desenvolvimento — Set/2026)*
+
+> ⚠️ **NAO ha data de piloto.** O piloto de 15/09 foi **abandonado em 11/09** — o
+> modulo so vai a gente real depois do portao de liberacao (implementacao
+> completa -> ensaio integral pela skill -> so entao liberar). Estado e fila em
+> `docs/ESTADO-DO-PROJETO.md`, que abre pela FILA. **Nao cite commit, contagem de
+> teste nem data daqui — meca.**
 - Avaliacao de desempenho: ciclos, questionario **por perfil de centro de custo**
   (a melhoria pedida — o modelo antigo aplicava as mesmas 15 perguntas a ~1.000 pessoas),
   grupos ponderados, motor de calculo com renormalizacao.
 - Backend NestJS 11 + Prisma 6 (schema `rh` + `core` read-only via `$queryRaw`), porta 3004,
   prefixo `/api/v1/gestao-pessoas`.
-- **⭐⭐ O modulo so vira ATIVO quando as SETE telas existirem** (decisao 05/09; ATIVO em
-  06/09 pela migration `20260906030000_ativa_gestao_pessoas_no_hub`). Card no Hub com rota
-  por construir e pior que modulo ausente: o usuario clica, chega em tela vazia e conclui
-  que o sistema esta quebrado. A virada para ATIVO e **migration**, nunca UPDATE de
-  ambiente — a mao, o modulo fica ATIVO no DEV e INATIVO em producao sem nada registrar a
-  diferenca. As sete: fila do avaliador · responder · ciclos · aplicacoes · designacao ·
-  painel (+pendencias) · resultados (+memoria de calculo). ⚠️ O `status` **nao filtrava nada** ate 05/09 (coluna decorativa,
+- **⭐⭐ Card no Hub com rota por construir e pior que modulo ausente** — o usuario
+  clica, chega em tela vazia e conclui que o sistema esta quebrado. Por isso o modulo so
+  virou ATIVO com as telas de pe (decisao 05/09; ATIVO em 06/09 pela migration
+  `20260906030000_ativa_gestao_pessoas_no_hub`). A virada para ATIVO e **migration**, nunca
+  UPDATE de ambiente — a mao, o modulo fica ATIVO no DEV e INATIVO em producao sem nada
+  registrar a diferenca.
+  ⚠️ **Este item dizia "as SETE telas" e listava sete.** Eram as de 05/09 (fila do
+  avaliador · responder · ciclos · aplicacoes · designacao · painel · resultados); depois
+  entraram avaliadores, questionarios, criterios e as quatro do acervo. **Medido em 13/09:
+  13 rotas de tela e 7 itens de menu** — os numeros diferem porque quatro telas sao abas
+  dentro do ciclo e duas se abrem por link, nao por menu. **Nao decore o numero: conte as
+  `<Route>` em `frontend/src/App.tsx`.** ⚠️ O `status` **nao filtrava nada** ate 05/09 (coluna decorativa,
   embora o comentario do compose ja afirmasse o contrario); agora
   `build-modulos-response.ts` filtra e ha spec para isso. De proposito o **JWT NAO filtra**:
   INATIVO e "nao anunciar", nao kill switch — quem sabe a URL segue testando, e cortar acesso
@@ -211,8 +222,11 @@ Plataforma corporativa modular com microservicos independentes:
   avaliacao dela. Lista de designacao e relatorio **mostram a linha marcada, nunca filtram
   em silencio** — filtrar faria o total nao fechar.
 - **⭐ "Ativo" tem UMA definicao** (`src/common/elegibilidade.ts`): `RA_DEMISSA = ' '` e
-  `RA_SITFOLH <> 'D'`, que inclui **ferias (98) e afastados (47)**. `situacao = 'ATIVO'`
-  derrubaria 145 das 1.036 pessoas de todas as listas, calado.
+  `RA_SITFOLH <> 'D'`, que inclui **ferias e afastados**. `situacao = 'ATIVO'` derrubaria
+  **145 das 1.039** pessoas de todas as listas, calado (medido em 13/09; a populacao muda,
+  a regua nao). ⚠️ Vale tambem para SQL de terminal: e la que o erro engana pior, porque a
+  constante existe e nao da para importar. Use `dist/scripts/conferir-estado.js` ou a view
+  `rh.v_colaborador_elegivel`, que um invariante prende a constante.
 - **⭐ Tempo na funcao vem da TROCA de `R7_FUNCAO`**, nunca da ultima linha do SR7010: o
   dissidio coletivo grava a folha inteira todo 1o de novembro. Ver
   `src/sincronizacao/data-ultima-funcao.ts` — e a peca mais fragil do sync.
@@ -223,8 +237,18 @@ Plataforma corporativa modular com microservicos independentes:
   no catalogo* — nao existe porque **nao existe salvar**: `assertCriterioSalvavel` esta
   escrito, com spec, e sem chamador. E o momento mais barato de recusar, e volta com o
   cadastro de criterios.
-- **⭐ Modelo e SO o questionario** (05/09): grupo e organizacao visual e **nao tem peso** —
-  todo o peso esta na Pergunta. Os criterios cadastrais saem do modelo e viram
+- **⭐⭐ O PESO MORA NO GRUPO, e o peso por questao e DERIVADO** (acervo, 11–12/09).
+  ⚠️ Ate 12/09 este item afirmava o **oposto** — *"grupo nao tem peso, todo o peso esta na
+  Pergunta"* — que era verdade no desenho de 05/09 e foi **invertido pelo acervo**. Hoje:
+  `ArranjoGrupo.peso` guarda o peso **por classificacao**; `ArranjoPergunta` **nao tem
+  peso**; o peso de cada questao sai de `calculo/peso-derivado.ts`. Motivo: os pesos do
+  instrumento herdado ja eram assim — dentro de cada grupo todas as questoes pesavam igual
+  e as somas de grupo eram inteiras; `5,34/5,33/5,33` era 16÷3, resto de conta e nao
+  decisao. Consequencia pratica: **pOr ou tirar uma questao nao mexe em peso nenhum.**
+  ⛔ Nao reintroduza peso por questao no arranjo. E ⭐ **calcule no peso EXATO e arredonde
+  so para EXIBIR** (`pesosDerivados` devolve `peso` e `pesoExato`) — arredondar antes de
+  somar deslocou a nota de um grupo inteiro em 12/09.
+- **⭐ Modelo e SO o questionario** (05/09): os criterios cadastrais saem do modelo e viram
   `AplicacaoCriterio` (criterio + peso por perfil), com `Aplicacao.pesoAvaliacao` dizendo
   quanto o questionario vale. O avaliador nao pode ver "Tempo de Empresa: 75" ao lado das
   perguntas — ancora o julgamento. **`pesoAvaliacao > 0` e obrigatorio**: com ele, "todos os
@@ -240,7 +264,11 @@ Plataforma corporativa modular com microservicos independentes:
   entra em conta nenhuma; gravar criaria uma segunda verdade para manter em sincronia.
 - Roles: `RH_ADMIN` / `RH_MODELO` / `RH_CICLO` / `AVALIADOR` (ADMIN sempre). MODELO e CICLO
   separadas ate o RH confirmar o que a gestora delega.
-- Docs: `docs/06_especificacao_gestao_pessoas.md` · `docs/DECISAO_RH_ESCOLARIDADE.md` ·
+- ⚠️ **Notificacao por e-mail nao e caminho** (medido em 13/09): `rh.colaborador` **nao tem
+  campo de e-mail** — ele vem de `core.usuarios.email`, e o teto de alcance e **13 pessoas
+  de 1.039**, sendo 3 delas caixa de setor. Ver `dist/scripts/conferir-email.js`.
+- Docs: **`docs/ESTADO-DO-PROJETO.md` (abrir pela FILA no topo)** ·
+  `docs/06_especificacao_gestao_pessoas.md` · `docs/DECISAO_RH_ESCOLARIDADE.md` ·
   `docs/ADR-RH-01-colaborador-no-schema-rh.md` · `docs/ADR-RH-02-memoria-por-grupo-calculada.md`
 
 ---
