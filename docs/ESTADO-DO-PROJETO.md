@@ -8509,3 +8509,101 @@ procurando identificadores (`assert*`, `*.service.ts`, `prisma.*`, `efeitoDe*`,
 `§3.1.x`) e **todas as ocorrências estão em comentários**, não em texto de tela.
 Preciso de **em que tela e em que momento** apareceu — pode ser mensagem de erro
 vinda do backend, que não sai de uma string do frontend.
+
+---
+
+### 3.1.130. ⭐⭐ "TEXTO QUE O RH LÊ NÃO CITA FONTE" — e estava no DADO, não no código
+
+A varredura relatou *"caminho de código exposto em tela de RH"* e eu **não
+reproduzi** procurando no frontend: varri as strings renderizadas atrás de
+`assert*`, `*.service.ts`, `prisma.*`, `§3.1.x` e todas as ocorrências estavam
+em **comentários**.
+
+⚠️ **Estava no BANCO, gravado pelo seed.** A descrição do critério
+`TEMPO_FUNCAO` dizia, no cartão que a gestora de RH lê:
+
+> *"Anos desde a última TROCA de função (SR7010). Dissídio anual não conta como
+> troca — **ver `src/sincronizacao/data-ultima-funcao.ts`**."*
+
+⭐ **A lição de método:** procurei no lugar onde o texto é ESCRITO (o código da
+tela) e ele vinha de onde o texto é ARMAZENADO. Num módulo em que quase toda
+frase é literal no `.tsx`, a exceção é o texto de CADASTRO — e é justamente
+onde ninguém varre, porque não está no `grep` do repositório.
+
+#### Corrigido nos dois lados, no mesmo commit
+
+| Critério | Antes | Agora |
+|---|---|---|
+| `TEMPO_FUNCAO` | *"(SR7010) … ver `src/sincronizacao/data-ultima-funcao.ts`"* | *"Anos desde a última mudança de função. O reajuste anual do dissídio não conta como troca de função."* |
+| `ESCOLARIDADE` | *"(RA_GRINRAI / SX5 tabela 26)"* | *"Grau de instrução registrado no cadastro do Protheus."* |
+
+⚠️ **`prisma/seed.ts` E o banco do DEV**, alinhados no mesmo commit — o seed só
+roda em ambiente novo, e o DEV já tinha o texto antigo. Mesmo padrão do motivo
+do `QTDE_TREINAMENTO`.
+
+> ⭐ **O que a descrição responde é "o que este critério mede".** Onde o dado
+> mora é documentação técnica — e "ver o arquivo X" manda o RH a um lugar onde
+> ele não entra.
+
+#### A varredura completa das nove superfícies de texto: **zero**
+
+`criterio.descricao` · `criterio_faixa.rotulo` · `conceito_faixa.descricao` ·
+`classificacao.nome` · `pergunta.enunciado` · `pergunta_alternativa.descricao` ·
+`modelo.descricao` · `aplicacao.nome` · `ciclo.nome` — nenhuma cita caminho de
+arquivo, nome de função, tabela do Protheus ou `§`.
+
+#### E a duplicação: a descrição saía DUAS VEZES no cartão inativo
+
+`CriteriosPage` mostrava `c.descricao` na linha do cartão **e** dentro do bloco
+"Desativado" — que é onde ela é o motivo, com o contexto. No
+`QTDE_TREINAMENTO`, cuja descrição é a justificativa inteira, era um parágrafo
+longo repetido. Agora a linha de cima só aparece **quando o critério está
+ativo**.
+
+### 3.1.131. ⭐⭐ A DISCIPLINA DA MUTAÇÃO MORA NO CABEÇALHO DO ARQUIVO, não no ESTADO
+
+Aceito não escrever as contrapartes explícitas (§3.1.126) — 2h de ganho baixo
+contra 15min de mutação. **Mas regra que só existe no ESTADO se perde na
+terceira pessoa que mexer.**
+
+O bloco **"⚠️ QUANDO MEXER AQUI: RODE AS MUTAÇÕES"** entrou no cabeçalho dos
+**seis** arquivos que decidem nota — `nota-avaliacao`, `peso-derivado`,
+`apuracao`, `faixa`, `distribuir-peso`, `percentual` — com as quatro mutações,
+o número de testes que cada uma deve derrubar, e o aviso de que **toda mutação
+tem de provar que entrou**.
+
+⭐ É o mesmo princípio da §3.1.88 (*regra sem gatilho não pega nem quem a
+escreveu*): o gatilho é abrir o arquivo, e é lá que o texto tem de estar.
+
+### 3.1.132. ✅ OS SPECS DO FRONTEND — a fila atrás da barreira, fechada
+
+| Módulo | Situação |
+|---|---|
+| `reparticao.ts` | ✅ com o `repartirExato` (12/09) · **14 testes** |
+| `roles.ts` + `menu` | ✅ antes do percurso (§3.1.112) · **20 testes** |
+| `ciclo-encerrado.ts` | ✅ **agora** · 7 |
+| `motivo.ts` | ✅ **agora** · 5 |
+| `formato.ts` | ✅ **agora** · 12 |
+| `composicao-da-nota.ts` | ✅ **agora** · 7 |
+
+**65 testes no frontend**, de zero em 12/09 pela manhã.
+
+#### ⭐⭐ O teste do fuso — e a prova de que o fuso forçado PEGOU
+
+`new Date('2026-09-05')` é meia-noite **UTC**; a oeste de Greenwich
+`toLocaleDateString` devolve **04/09**. É a data-base do ciclo, o campo que
+ancora tempo de empresa, tempo na função e a janela de treinamento.
+
+⚠️ **Testar no fuso da máquina não vale** — e aqui isso não é hipótese: **o
+container é UTC**, e em UTC o defeito não acontece. O spec força
+`process.env.TZ = 'America/Sao_Paulo'` e roda o pior caso.
+
+⚠️ **E provei que o forçamento pega, por mutação:** trocando para `TZ = 'UTC'`,
+os dois testes de fuso **caem**. Sem essa prova, um `beforeAll` que não tivesse
+efeito deixaria o teste passar pelo motivo errado — exatamente o falso verde da
+§3.1.126.
+
+⭐ O spec inclui a **implementação errada escrita de propósito**:
+`expect(new Date('2026-09-05').toLocaleDateString('pt-BR')).toBe('04/09/2026')`.
+É o caso que falha quando deveria falhar, e ele documenta por que `data()` não
+usa `Date`.
