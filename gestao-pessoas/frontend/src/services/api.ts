@@ -150,6 +150,11 @@ export interface CicloDaLista {
   janelaTreinamentoMeses: number;
   incluirAfastados: boolean;
   valeParaMerito: boolean;
+  /**
+   * ⭐ O ciclo alcança a empresa inteira, ou só um recorte (piloto, uma área)?
+   * Decide se "fora de todas as aplicações" é pendência ou informação.
+   */
+  ehRecorte: boolean;
   /** Preenchidos conforme o ciclo anda — a tela usa para dizer desde quando. */
   abertoEm: string | null;
   encerradoEm: string | null;
@@ -202,6 +207,7 @@ export interface NovoCiclo {
   janelaTreinamentoMeses?: number;
   incluirAfastados?: boolean;
   valeParaMerito?: boolean;
+  ehRecorte?: boolean;
   conceitos: { descricao: string; limiteInferior: number; limiteSuperior: number; cor?: string; ordem: number }[];
 }
 
@@ -210,6 +216,13 @@ export const ciclos = {
   obter: (id: string) => rhApi.get<CicloDetalhado>(`/ciclos/${id}`).then((r) => r.data),
   criar: (dados: NovoCiclo) => rhApi.post<CicloDaLista>('/ciclos', dados).then((r) => r.data),
   abrir: (id: string) => rhApi.post(`/ciclos/${id}/abrir`).then((r) => r.data),
+  /**
+   * ⭐ Declara o ALCANCE do ciclo. Não move dado — muda o que o painel afirma
+   * sobre quem ficou fora de todas as aplicações. Vale com o ciclo encerrado:
+   * é rótulo, e travá-lo deixaria o ciclo fechado sem caminho de conserto.
+   */
+  marcarRecorte: (id: string, ehRecorte: boolean) =>
+    rhApi.patch<{ id: string; ehRecorte: boolean }>(`/ciclos/${id}/recorte`, { ehRecorte }).then((r) => r.data),
   /**
    * ⭐ A régua de conceitos. ⚠️ A fronteira NÃO é o status do ciclo: é a
    * APURAÇÃO — o conceito vira snapshot no resultado, e ciclo aberto não volta
@@ -979,7 +992,16 @@ export interface PessoaForaDoCiclo {
 }
 
 export interface PainelDoCiclo {
-  ciclo: { id: string; nome: string; status: StatusCiclo; periodoInicio: string; periodoFim: string; dataBase: string };
+  ciclo: {
+    id: string;
+    nome: string;
+    status: StatusCiclo;
+    periodoInicio: string;
+    periodoFim: string;
+    dataBase: string;
+    /** ⭐ Decide a LEITURA de `foraDeTodasAsAplicacoes`: buraco ou alcance declarado. */
+    ehRecorte: boolean;
+  };
   designados: number;
   enviadas: number;
   aFazer: number;
