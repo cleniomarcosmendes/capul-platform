@@ -5718,12 +5718,21 @@ avaliador que não seja o único avaliado.
 | `lidianyrocha` | **`lidyanerocha`** | ✅ | ✅ | ✅ | AVALIADOR |
 | `washigtondonato` | **`whashigtondonato`** | ✅ | ✅ | ✅ | AVALIADOR |
 | `liciaversiane` | **`liciaversiani`** | ✅ | ✅ | ✅ | AVALIADOR |
-| `cleniomarcos` | **`clenio`** | ✅ | ✅ | ✅ | 🔴 **SEM ACESSO** |
+| `cleniomarcos` | **`clenio`** | ✅ | ✅ | ✅ | ✅ AVALIADOR — **resolvido em 12/09** |
 | outros 13 | — | ✅ | ✅ | ✅ | AVALIADOR (Arielly: RH_ADMIN) |
 
-⭐ **`clenio` é o caso da Esmeralda outra vez** (§ [[feedback_designar_nao_da_acesso]]): a conta
-existe, o colaborador existe, a matrícula bate — e **não há permissão em `GESTAO_PESSOAS`**.
-Designá-lo criaria avaliações que ninguém consegue abrir. Resolve-se no Configurador.
+⭐ **`clenio` era o caso da Esmeralda outra vez** ([[feedback_designar_nao_da_acesso]]): a conta
+existia, o colaborador existia, a matrícula batia — e **não havia permissão em `GESTAO_PESSOAS`**.
+Designá-lo criaria avaliações que ninguém conseguiria abrir.
+
+✅ **Corrigido no Configurador em 12/09** (AVALIADOR, departamento T.I.), e **verificado por login
+real**: `GET /avaliacoes/minhas` devolve `[]`. ⭐ O `[]` é a prova — fila vazia significa que ele
+**passou** o `IdentidadeGuard`; se ainda faltasse acesso, a resposta seria **403**. Conferir a
+linha de permissão no banco não bastaria: a permissão é uma das três condições, e as outras duas
+(colaborador resolvido e matrícula única) só o login exercita.
+
+⚠️ **As 16 contas do recorte estão agora todas em ordem.** O item 5 do §7 ("o que o ensaio não vai
+testar") continua valendo por isso mesmo: o cenário de quem NÃO tem acesso saiu do ensaio.
 
 ⚠️ **Uma divergência de CC:** `renataborges` (001981) responde por `21012501` (SUPERMERCADO 25, 3
 pessoas) mas **está lotada em `21010101`** (SUPERMERCADO, 98). Não impede designar — só significa
@@ -5806,8 +5815,9 @@ sem perder nenhuma das três referências.
    apuração em escala real.
 4. **Multi-filial** — 15 dos 16 CCs são de uma filial só (`21010109` tem 2). A régua
    `(filial, CC)` não é exercitada.
-5. **O caminho de quem não tem conta** — o `clenio` é o único, e será resolvido antes. Fica de fora
-   justamente o cenário dos 46 sem conta do Piloto.
+5. **O caminho de quem não tem acesso** — era o `clenio`, **resolvido em 12/09**. Com as 16 contas
+   em ordem, fica de fora justamente o cenário dos 46 sem conta do Piloto: ninguém no ensaio
+   exercita a fila de quem foi designado e não consegue entrar.
 6. **Reabertura, devolução e encerramento com pendência** — a menos que o roteiro os inclua de
    propósito; não saem do recorte sozinhos.
 7. **A régua de conceitos em faixa extrema** — com 344 pessoas reais, `Insuficiente` e `Excelente`
