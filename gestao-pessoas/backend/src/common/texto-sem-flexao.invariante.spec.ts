@@ -95,6 +95,31 @@ describe('texto do backend não flexiona com número', () => {
     expect(arquivosTs(RAIZ).length).toBeGreaterThan(30);
   });
 
+
+/**
+ * ⭐⭐ O CANÁRIO — requisito de todo teste que varre fonte, não detalhe.
+ *
+ * O `expect(fontes.length).toBeGreaterThan(30)` acima prova que a varredura LEU
+ * arquivos. Não prova que ela ainda RECONHECE o que procura: se o padrão parar
+ * de casar (uma refatoração, um acento, uma aspa trocada), a lista de
+ * infratores vem vazia e o teste fica **verde por ausência de leitura** — a
+ * mesma classe do `npm test` que rodava "52 suítes, 0 testes" e do
+ * `tsc --noEmit` que checa zero arquivo.
+ *
+ * A prova é alimentar o próprio matcher com a forma ERRADA e exigir que ele a
+ * reconheça. Padrão herdado do `avaliacoes-que-contam.invariante.spec.ts`.
+ */
+  it('⚠️ o varredor reconhece as duas formas erradas quando elas existem', () => {
+    // A máquina de estados ainda enxerga texto dentro de aspas...
+    expect(trechosEmTexto(`throw new Error('Designe as ${'${n}'} pessoa(s)');`)).toEqual([
+      'Designe as ${n} pessoa(s)',
+    ]);
+    // ...e as duas formas continuam sendo reconhecidas dentro dele.
+    const texto = 'Designe as ${n} pessoas, que ainda não têm avaliador(es)';
+    expect(/\((s|es|ões|ãs)\)/.test(texto)).toBe(true);
+    expect(CONCORDAM.some((p) => new RegExp(`\\$\\{[^}]+\\}\\s+${p}\\b`).test(texto))).toBe(true);
+  });
+
   it('1 — nenhuma frase usa a forma parentética "(s)" / "(ões)"', () => {
     const infratores = varrer((texto) => {
       const m = /\w+\((?:s|es|as|ões|ãos)\)/.exec(texto);

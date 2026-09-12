@@ -23,6 +23,7 @@
  * DEVERIA estar.
  */
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 const RAIZ = path.join(__dirname, '..');
@@ -58,6 +59,42 @@ describe('fonte única — o literal mora com a constante', () => {
 
   it('encontra os arquivos do módulo (senão o teste passa por não varrer nada)', () => {
     expect(fontes.length).toBeGreaterThan(30);
+  });
+
+
+/**
+ * ⭐⭐ O CANÁRIO — requisito de todo teste que varre fonte, não detalhe.
+ *
+ * O `expect(fontes.length).toBeGreaterThan(30)` acima prova que a varredura LEU
+ * arquivos. Não prova que ela ainda RECONHECE o que procura: se o padrão parar
+ * de casar (uma refatoração, um acento, uma aspa trocada), a lista de
+ * infratores vem vazia e o teste fica **verde por ausência de leitura** — a
+ * mesma classe do `npm test` que rodava "52 suítes, 0 testes" e do
+ * `tsc --noEmit` que checa zero arquivo.
+ *
+ * A prova é alimentar o próprio matcher com a forma ERRADA e exigir que ele a
+ * reconheça. Padrão herdado do `avaliacoes-que-contam.invariante.spec.ts`.
+ */
+  it('⚠️ o varredor reconhece a cópia quando ela existe', () => {
+    /**
+     * ⚠️ O arquivo do canário nasce FORA da árvore varrida. Escrevê-lo dentro
+     * de `src/` (a primeira tentativa) fez as outras suítes que varrem o mesmo
+     * diretório lerem um arquivo que sumia no meio da execução — `ENOENT` em
+     * teste que não tem nada a ver com este. Canário que interfere no que ele
+     * observa não é canário.
+     */
+    const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'canario-'));
+    const comCopia = path.join(pasta, 'copia.ts');
+    try {
+      fs.writeFileSync(comCopia, "const x = 'GESTAO_PESSOAS';\n", 'utf8');
+      expect(infratores([comCopia], /'GESTAO_PESSOAS'/, 'common/roles-rh.ts')).toHaveLength(1);
+      // ...e o comentário continua dispensado, senão o varredor acusaria toda
+      // documentação que cita o valor.
+      fs.writeFileSync(comCopia, "// cita 'GESTAO_PESSOAS' de propósito\n", 'utf8');
+      expect(infratores([comCopia], /'GESTAO_PESSOAS'/, 'common/roles-rh.ts')).toEqual([]);
+    } finally {
+      fs.rmSync(pasta, { recursive: true, force: true });
+    }
   });
 
   it('ninguém reescreve o conjunto de STATUS_VIVOS', () => {

@@ -76,6 +76,38 @@ describe('invariante: acesso a avaliação passa pelo AvaliacaoAcessoService', (
     }))
     .filter(({ fonte }) => /prisma\.avaliacao\./.test(fonte));
 
+  /**
+   * ⭐⭐ CANÁRIO — requisito de todo teste que varre fonte, não detalhe.
+   *
+   * Sem ele, o dia em que `prisma.avaliacao.` deixar de aparecer com essa grafia
+   * (um `const { avaliacao } = this.prisma`, um repositório novo) a lista de
+   * suspeitos vem vazia e as três checagens abaixo ficam **verdes por não terem
+   * lido nada** — a mesma classe do `npm test` que rodava "52 suítes, 0 testes".
+   *
+   * São dois níveis, e o primeiro sozinho não basta: (a) a varredura leu
+   * arquivos; (b) ela ainda RECONHECE a forma que procura.
+   */
+  it('⚠️ a varredura leu o módulo e ainda reconhece quem toca avaliação', () => {
+    // (a) leu arquivos
+    expect(arquivosTs(RAIZ).length).toBeGreaterThan(30);
+    // (b) ainda reconhece a forma que procura, num texto sintético
+    expect(/prisma\.avaliacao\./.test('await this.prisma.avaliacao.findMany({})')).toBe(true);
+    expect(/prisma\.avaliacao\./.test('await this.prisma.resposta.findMany({})')).toBe(false);
+    // (c) e encontrou gente de verdade — zero suspeitos aqui seria verde por
+    //     não ter lido nada, não por o módulo estar limpo.
+    expect(suspeitos.length).toBeGreaterThan(0);
+
+    /**
+     * ⚠️ A primeira versão deste canário assumia que **todo dispensado toca
+     * avaliação**, e reprovou apontando `common/testing/prisma-mock.ts` — que
+     * está na lista e não contém `prisma.avaliacao.` (é o mock que DEFINE
+     * `avaliacao`). A lista de dispensados mistura duas coisas: quem toca a
+     * tabela por exceção acordada, e infraestrutura de teste. Fica registrado
+     * aqui em vez de "arrumado" na lista: mexer nela é mexer na exceção da
+     * separação de funções, que não se faz de passagem.
+     */
+  });
+
   it('nenhum arquivo toca prisma.avaliacao sem usar a porta', () => {
     const violacoes = suspeitos
       .filter(({ relativo }) => !DISPENSADOS[relativo])
