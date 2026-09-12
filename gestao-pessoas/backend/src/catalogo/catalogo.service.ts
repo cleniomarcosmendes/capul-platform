@@ -202,6 +202,9 @@ export class CatalogoService {
     }
 
     const percentuaisDosGrupos = percentuaisQueFecham(a.grupos.map((g) => g.peso));
+    const percentuaisPorQuestao = new Map(
+      percentuaisQueFecham(a.questoes.map((q) => q.peso)).map((p, i) => [a.questoes[i].id, p]),
+    );
 
     return {
       modeloId: a.modeloId,
@@ -239,7 +242,11 @@ export class CatalogoService {
           peso: q.peso,
           codigoOrigem: q.codigo,
           pontuacaoMaxima: Math.round(q.peso * q.maiorValor * 10_000) / 10_000,
-          percentualDoPeso: a.somaDosPesos > 0 ? (q.peso / a.somaDosPesos) * 100 : 0,
+          // ⚠️ A coluna por QUESTÃO também soma 100 — mesma varredura de 12/09
+          // que achou a dos grupos. `percentuaisPorQuestao` é calculado sobre a
+          // lista inteira do arranjo, não por classificação: o total de que
+          // estes percentuais são parte é o questionário, não o grupo.
+          percentualDoPeso: percentuaisPorQuestao.get(q.id) ?? 0,
           alternativas: q.alternativas.map((alt) => ({
             id: alt.id,
             descricao: alt.descricao,
