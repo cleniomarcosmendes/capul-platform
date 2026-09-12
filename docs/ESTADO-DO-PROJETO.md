@@ -5619,13 +5619,18 @@ empate vai. Corrigido: a tela agora diz, com o exemplo da régua padrão.
 Sete itens. Cada um é decisão **dela**, não da T.I. Onde há número, ele foi medido no DEV em
 12/09 e está aqui para a conversa não depender de memória.
 
-### 1. As 39 perguntas — usar como estão, ou revisar?
+### 1. As 39 perguntas — o CONTEÚDO (não é mais bloqueio de ordem)
 
 O instrumento veio transcrito do RD8010 e **ninguém do RH escolheu enunciado, peso ou
-alternativa**. A tela `/questionarios` existe e imprime — dá para ler tudo antes de decidir.
+alternativa**. A tela `/questionarios` existe e imprime — dá para ler tudo.
 
-⚠️ **A resposta muda a ordem do trabalho.** "Usar como estão" libera a entrada do valor INFORMADO
-(4–6 dias) como próxima frente. "Revisar" põe o **editor do acervo na frente: 3–3,5 semanas**.
+⚠️⚠️ **MUDANÇA DE ORDEM, 13/09 (Clenio).** Este item **deixou de bloquear a fila**. O raciocínio:
+se a meta é o sistema completo, **o editor do acervo entra de qualquer jeito** — a pergunta dela só
+decidia se vinha antes ou depois. Sem contato, vem antes.
+
+O que sobra é **decisão sobre o CONTEÚDO** — enunciado, peso por perfil, alternativas —, e ela a
+toma **na tela**, quando o editor existir. Não precisa de resposta antecipada para o trabalho
+começar.
 
 ### 2. A faixa "Menos de 1 ano" — são DUAS, e mexer arrasta três coisas
 
@@ -6288,7 +6293,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 
 | # | Item | O que a resposta destrava |
 |---|---|---|
-| **1** | **As 39 perguntas — usar ou revisar?** | ⭐ **é a que reordena a fila.** *"Usar"* → a entrada do INFORMADO segue como próxima frente. *"Revisar"* → **o editor do acervo passa na frente** (3–3,5 semanas) |
+| ~~1~~ | **As 39 perguntas — o CONTEÚDO** | ⚠️ **deixou de bloquear a fila (13/09).** Ela decide o conteúdo, **na tela**, quando o editor existir — não a ordem do trabalho |
 | 2 | A faixa "Menos de 1 ano" (são DUAS) | manter e corrigir o rótulo, ou mudar a régua — e aí decidir o que fazer com a regressão do `000006` como baseline |
 | 3 | Prefixo de CC × fábrica | remontar o público das 49 do `ADMINISTRATIVO - FABRICA`. **Não precisa de código** |
 | 4 | 2º `RH_ADMIN` (Claudimar) | destrava quem corrige a avaliação da própria gestora |
