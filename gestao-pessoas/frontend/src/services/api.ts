@@ -424,16 +424,22 @@ export const criterios = {
   atualizar: (id: string, dto: CriterioEntrada) =>
     rhApi.patch<CriterioDoCadastro>(`/criterios/${id}`, dto).then((r) => r.data),
   /** Substitui o conjunto INTEIRO — a validade é do conjunto, não da faixa. */
-  salvarFaixas: (id: string, faixas: Omit<FaixaDeCriterio, 'id' | 'tipo'>[]) =>
-    rhApi.put<CriterioDoCadastro>(`/criterios/${id}/faixas`, { faixas }).then((r) => r.data),
+  salvarFaixas: (
+    id: string,
+    faixas: Omit<FaixaDeCriterio, 'id' | 'tipo'>[],
+    confirmarSemFaixas = false,
+  ) =>
+    rhApi
+      .put<CriterioDoCadastro>(`/criterios/${id}/faixas`, { faixas, confirmarSemFaixas })
+      .then((r) => r.data),
   /**
    * ⭐ Confere sem gravar. É como a tela mostra a recusa ANTES do clique sem
    * reimplementar a regra: chama a MESMA função que o `salvarFaixas` chama.
    */
   conferirFaixas: (id: string, faixas: Omit<FaixaDeCriterio, 'id' | 'tipo'>[]) =>
     rhApi
-      .post<{ problemas: string[] }>(`/criterios/${id}/faixas/conferir`, { faixas })
-      .then((r) => r.data.problemas),
+      .post<{ problemas: string[]; avisos: string[] }>(`/criterios/${id}/faixas/conferir`, { faixas })
+      .then((r) => r.data),
 };
 
 export interface AplicacaoDoCiclo {

@@ -548,9 +548,11 @@ function DialogoFaixas({
     criterio.faixas.map(({ id: _id, tipo: _tipo, ...f }) => f),
   );
   const [problemas, setProblemas] = useState<string[]>([]);
+  const [avisos, setAvisos] = useState<string[]>([]);
   const [conferindo, setConferindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [confirmado, setConfirmado] = useState(false);
   const pedido = useRef(0);
 
   const comOrdem = useMemo(() => faixas.map((f, i) => ({ ...f, ordem: i })), [faixas]);
@@ -566,13 +568,18 @@ function DialogoFaixas({
     const t = setTimeout(() => {
       apiCriterios
         .conferirFaixas(criterio.id, comOrdem)
-        .then((p) => {
-          if (pedido.current === meu) setProblemas(p);
+        .then((r) => {
+          if (pedido.current !== meu) return;
+          setProblemas(r.problemas);
+          setAvisos(r.avisos);
         })
         .catch(() => {
           // Falha de rede na conferência não pode virar "está tudo certo": some
           // com a lista antiga em vez de afirmar o contrário do que se sabe.
-          if (pedido.current === meu) setProblemas([]);
+          if (pedido.current === meu) {
+            setProblemas([]);
+            setAvisos([]);
+          }
         })
         .finally(() => {
           if (pedido.current === meu) setConferindo(false);
@@ -598,7 +605,10 @@ function DialogoFaixas({
     setSalvando(true);
     setErro(null);
     try {
-      await apiCriterios.salvarFaixas(criterio.id, comOrdem);
+      // ⭐ O `true` só chega aqui depois de a pessoa ler o que se perde: a API
+      // recusa a primeira tentativa COM O DADO (quantas faixas, quantas
+      // aplicações), e é esse texto que o diálogo mostra.
+      await apiCriterios.salvarFaixas(criterio.id, comOrdem, confirmado);
       aoSalvar();
     } catch (e) {
       const m = (e as { response?: { data?: { message?: string | string[] } } }).response?.data
@@ -785,6 +795,27 @@ function DialogoFaixas({
               ))}
             </ul>
           </div>
+        ) : avisos.length > 0 ? (
+          /* ⚠️ AVISO não é PROBLEMA: não impede salvar, diz o que vai acontecer.
+             Antes a conferência respondia "sem problema" para apagar as 13
+             faixas de um critério em uso — afirmava que estava tudo certo. */
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
+            {avisos.map((a, i) => (
+              <p key={i} className="flex items-start gap-1.5 text-sm text-amber-900">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden />
+                <span>{a}</span>
+              </p>
+            ))}
+            <label className="mt-2 flex items-start gap-2 text-sm text-amber-900">
+              <input
+                type="checkbox"
+                checked={confirmado}
+                onChange={(e) => setConfirmado(e.target.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              Entendi, e quero deixar este critério sem nenhuma faixa.
+            </label>
+          </div>
         ) : faixas.length > 0 ? (
           <p className="flex items-center gap-1.5 text-sm text-emerald-700">
             <Check size={15} aria-hidden />
@@ -810,7 +841,7 @@ function DialogoFaixas({
         <button
           type="button"
           onClick={() => void salvar()}
-          disabled={salvando || conferindo || problemas.length > 0}
+          disabled={salvando || conferindo || problemas.length > 0 || (avisos.length > 0 && !confirmado)}
           className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
         >
           {salvando ? 'Salvando…' : 'Salvar faixas'}

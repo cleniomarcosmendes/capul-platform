@@ -69,4 +69,12 @@ export class FaixasDto {
   @ValidateNested({ each: true })
   @Type(() => FaixaDto)
   faixas!: FaixaDto[];
+
+  /**
+   * ⭐ Deixar um critério EM USO sem faixa nenhuma é ato destrutivo silencioso:
+   * ele para de pontuar todo mundo e sai da nota pela renormalização, sem erro.
+   * A API recusa e diz o que se perde; a tela pergunta e reenvia com este campo.
+   * Ver `feedback_api_recusa_para_a_tela_perguntar` — recusa COM o dado.
+   */
+  @IsOptional() @IsBoolean() confirmarSemFaixas?: boolean;
 }

@@ -211,21 +211,62 @@ export class CriterioService {
    *
    * ⚠️ Sem efeito colateral, de propósito: não grava, não audita, não trava.
    */
-  async conferirFaixas(criterioId: string, dto: FaixasDto): Promise<{ problemas: string[] }> {
+  async conferirFaixas(
+    criterioId: string,
+    dto: FaixasDto,
+  ): Promise<{ problemas: string[]; avisos: string[] }> {
     const criterio = await this.prisma.criterio.findUnique({
       where: { id: criterioId },
-      select: { tipoValor: true },
+      select: { tipoValor: true, nome: true, ativo: true, _count: { select: { aplicacoes: true } } },
     });
     if (!criterio) throw new NotFoundException('Critério não encontrado.');
-    return { problemas: validarFaixasDoCriterio(criterio.tipoValor, this.paraValidacao(criterio.tipoValor, dto)) };
+    return {
+      problemas: validarFaixasDoCriterio(criterio.tipoValor, this.paraValidacao(criterio.tipoValor, dto)),
+      /**
+       * ⚠️ AVISO ≠ PROBLEMA. Problema impede salvar; aviso diz o que vai
+       * acontecer. Ficar sem faixa é uma escolha legítima (é assim que se
+       * desmonta um critério), mas num critério EM USO é destrutivo e silencioso
+       * — e a conferência respondia `{problemas: []}`, isto é, **afirmava que
+       * estava tudo certo**. Afirmação errada é pior que silêncio.
+       */
+      avisos: this.avisosDasFaixas(dto, criterio.ativo, criterio._count.aplicacoes),
+    };
+  }
+
+  private avisosDasFaixas(dto: FaixasDto, ativo: boolean, aplicacoes: number): string[] {
+    if (dto.faixas.length > 0 || aplicacoes === 0 || !ativo) return [];
+    return [
+      'Sem nenhuma faixa este critério para de pontuar todo mundo: ele sai da nota pela ' +
+        'renormalização, em silêncio, sem aparecer como erro em lugar nenhum. ' +
+        `Aplicações que o usam: ${aplicacoes}.`,
+    ];
   }
 
   async salvarFaixas(criterioId: string, dto: FaixasDto, usuarioId: string) {
     const criterio = await this.prisma.criterio.findUnique({
       where: { id: criterioId },
-      include: { faixas: { orderBy: { ordem: 'asc' } } },
+      include: { faixas: { orderBy: { ordem: 'asc' } }, _count: { select: { aplicacoes: true } } },
     });
     if (!criterio) throw new NotFoundException('Critério não encontrado.');
+
+    // ⭐ A API RECUSA PARA A TELA PODER PERGUNTAR — com o dado, não só com um
+    // "tem certeza?". Sem isto, apagar as 13 faixas de ESCOLARIDADE (5
+    // aplicações, 1.037 pessoas com o dado no cadastro) passava sem uma palavra,
+    // e a conferência ainda respondia "sem problema".
+    if (
+      dto.faixas.length === 0 &&
+      criterio.faixas.length > 0 &&
+      criterio.ativo &&
+      criterio._count.aplicacoes > 0 &&
+      !dto.confirmarSemFaixas
+    ) {
+      throw new BadRequestException(
+        `Ficar sem nenhuma faixa faz "${criterio.nome}" parar de pontuar todo mundo — ele sai da ` +
+          'nota pela renormalização, em silêncio. Confirme se é isso mesmo. ' +
+          `Faixas que seriam apagadas: ${criterio.faixas.length}. ` +
+          `Aplicações que usam o critério: ${criterio._count.aplicacoes}.`,
+      );
+    }
 
     const faixas = this.paraValidacao(criterio.tipoValor, dto);
 

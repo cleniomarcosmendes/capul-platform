@@ -66,3 +66,73 @@ describe('CriterioService — o que a casca não pode desfazer', () => {
     });
   });
 });
+
+describe('faixas — o ato destrutivo silencioso', () => {
+  function comCriterio(over: Record<string, unknown> = {}) {
+    const prisma = createPrismaMock();
+    prisma.criterio.findUnique.mockResolvedValue({
+      id: 'c1',
+      nome: 'Escolaridade',
+      tipoValor: 'DOMINIO',
+      ativo: true,
+      faixas: [{ id: 'f1' }, { id: 'f2' }],
+      _count: { aplicacoes: 5 },
+      ...over,
+    });
+    const auditoria = { registrar: jest.fn().mockResolvedValue(undefined) };
+    return {
+      svc: new CriterioService(prisma as never, auditoria as never),
+      prisma,
+    };
+  }
+
+  /**
+   * ⭐⭐ Apagar todas as faixas de um critério EM USO é destrutivo e silencioso:
+   * ele para de pontuar todo mundo e sai da nota pela renormalização, sem erro.
+   * Até 11/09 passava sem uma palavra — e a conferência respondia
+   * `{problemas: []}`, isto é, AFIRMAVA que estava tudo certo.
+   */
+  it('recusa deixar sem faixa um critério em uso, e diz o que se perde', async () => {
+    const { svc, prisma } = comCriterio();
+    await expect(svc.salvarFaixas('c1', { faixas: [] }, 'u1')).rejects.toThrow(
+      /par(a|ar) de pontuar todo mundo/,
+    );
+    expect(prisma.criterioFaixa.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('a recusa traz os NÚMEROS — quantas faixas e quantas aplicações', async () => {
+    const { svc } = comCriterio();
+    await expect(svc.salvarFaixas('c1', { faixas: [] }, 'u1')).rejects.toThrow(/2[\s\S]*5|5[\s\S]*2/);
+  });
+
+  it('com a confirmação explícita, passa', async () => {
+    const { svc, prisma } = comCriterio();
+    prisma.$transaction.mockImplementation(async (cb: never) => (cb as unknown as (tx: unknown) => unknown)(prisma));
+    prisma.criterio.findMany.mockResolvedValue([]);
+    await svc.salvarFaixas('c1', { faixas: [], confirmarSemFaixas: true }, 'u1');
+    expect(prisma.criterioFaixa.deleteMany).toHaveBeenCalled();
+  });
+
+  it('critério que NÃO está em uso não precisa de confirmação', async () => {
+    const { svc, prisma } = comCriterio({ _count: { aplicacoes: 0 } });
+    prisma.$transaction.mockImplementation(async (cb: never) => (cb as unknown as (tx: unknown) => unknown)(prisma));
+    prisma.criterio.findMany.mockResolvedValue([]);
+    await svc.salvarFaixas('c1', { faixas: [] }, 'u1');
+    expect(prisma.criterioFaixa.deleteMany).toHaveBeenCalled();
+  });
+
+  it('a conferência AVISA antes do clique, sem bloquear', async () => {
+    const { svc } = comCriterio();
+    const r = await svc.conferirFaixas('c1', { faixas: [] });
+    expect(r.problemas).toEqual([]);
+    expect(r.avisos[0]).toMatch(/par(a|ar) de pontuar todo mundo/);
+  });
+
+  it('com faixas, não há aviso', async () => {
+    const { svc } = comCriterio();
+    const r = await svc.conferirFaixas('c1', {
+      faixas: [{ valorDominio: '45', pontuacao: 50 } as never],
+    });
+    expect(r.avisos).toEqual([]);
+  });
+});
