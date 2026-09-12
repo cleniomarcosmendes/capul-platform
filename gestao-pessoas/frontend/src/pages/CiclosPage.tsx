@@ -235,11 +235,16 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             {ciclo.incluirAfastados && ' · inclui afastados'}
           </p>
         </div>
+        {/* ⚠️ "Ver", não "Abrir". Nesta MESMA tela, "Abrir ciclo" é o ato
+            irreversível que libera os avaliadores para responder — e este aqui
+            só navega para o detalhe. Duas coisas com o mesmo nome, uma delas
+            sem volta: quem já ouviu "não abra o ciclo" hesita em clicar no
+            link que só mostra. */}
         <Link
           to={`/ciclos/${ciclo.id}`}
           className="alvo-toque inline-flex shrink-0 items-center gap-1 self-center rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:border-capul-300"
         >
-          Abrir <ChevronRight size={15} aria-hidden />
+          Ver <ChevronRight size={15} aria-hidden />
         </Link>
       </div>
 

@@ -537,6 +537,8 @@ export interface VersaoDoModelo {
   totalGrupos: number;
   totalQuestoes: number;
   somaDosPesos: number;
+  /** ⭐ A versão VIGENTE — a de maior número entre as publicadas. */
+  vigente: boolean;
   efeitoDeDescartar: Efeito;
 }
 

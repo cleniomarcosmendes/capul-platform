@@ -32,6 +32,20 @@ export interface VersaoDoModelo {
   totalQuestoes: number;
   /** Soma dos pesos das classificações — a pontuação do questionário. */
   somaDosPesos: number;
+  /**
+   * ⭐⭐ É a versão VIGENTE deste perfil? A de maior número entre as publicadas.
+   *
+   * ⚠️ **Duas publicadas ao mesmo tempo é DESENHO, não defeito.** A Aplicação
+   * aponta para uma versão ESPECÍFICA (`modeloVersaoId`) — as 8 do
+   * Administrativo apontam para a v1. Se publicar a v2 despublicasse a v1,
+   * essas 8 ficariam sem instrumento e as notas já calculadas sobre ela
+   * ficariam sem régua. Versão publicada é permanente, pela mesma razão que
+   * `efeitoDeDescartar` recusa apagá-la.
+   *
+   * O que faltava não era guarda: era **dizer qual vale**. A varredura viu v1 e
+   * v2 publicadas no mesmo dia, sem hora e sem marca, e não tinha como saber.
+   */
+  vigente: boolean;
   /** O que acontece se pedir para descartar. A tela lê para desabilitar. */
   efeitoDeDescartar: Efeito;
 }
@@ -59,7 +73,18 @@ export class VersaoService {
     });
     if (!modelo) throw new NotFoundException('Modelo não encontrado.');
 
+    /**
+     * ⚠️ A VIGENTE é a de MAIOR NÚMERO entre as publicadas, não a de data mais
+     * recente: duas podem ser publicadas no mesmo minuto (foi o caso da
+     * varredura), e aí a data não desempata. O número da versão é monotônico
+     * por construção (`max + 1`).
+     */
+    const vigenteId = modelo.versoes
+      .filter((v) => v.publicadoEm !== null)
+      .sort((a, b) => b.versao - a.versao)[0]?.id;
+
     return modelo.versoes.map((v) => ({
+      vigente: v.id === vigenteId,
       id: v.id,
       modeloId: modelo.id,
       modeloNome: modelo.nome,

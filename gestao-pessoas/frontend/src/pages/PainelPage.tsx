@@ -333,7 +333,7 @@ export default function PainelPage() {
                    no singular pede o artigo, não o algarismo. (09/09) */
                 conferencia.avaliacoesApuradas === 1
                 ? 'Nenhuma pendência na única avaliação enviada.'
-                : `Nenhuma pendência nas ${conferencia.avaliacoesApuradas} avaliações enviadas.`}
+                : `Nenhuma pendência nas ${contagem(conferencia.avaliacoesApuradas, 'avaliação', 'avaliações')} enviadas.`}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -432,7 +432,7 @@ export default function PainelPage() {
               {dados.enviadas === 0 ? (
                 <p className="text-sm text-slate-700">
                   <strong>
-                    {flexao(dados.designados, 'A única avaliação não foi enviada', `Nenhuma das ${dados.designados} avaliações foi enviada`)}.
+                    {flexao(dados.designados, 'A única avaliação não foi enviada', `Nenhuma das ${contagem(dados.designados, 'avaliação', 'avaliações')} foi enviada`)}.
                   </strong>{' '}
                   Não há o
                   que apurar — a apuração só alcança avaliação enviada.

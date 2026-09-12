@@ -42,6 +42,7 @@ import type {
   PreviaDaPublicacao,
   QuestaoDoAcervo,
 } from '../services/api';
+import { distribuirIgual } from '../lib/reparticao';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import { Modal } from '../components/Modal';
@@ -106,6 +107,48 @@ export default function ArranjoPage() {
     () => (local?.grupos ?? []).reduce((s, g) => s + (Number(g.peso.replace(',', '.')) || 0), 0),
     [local],
   );
+
+  /**
+   * ⭐⭐ O PESO QUE RESULTARIA do que está digitado agora.
+   *
+   * ⚠️ Antes, com alteração pendente, a tela escrevia "peso ao salvar" e
+   * **apagava o número de TODAS as questões** — inclusive as que a mudança não
+   * tocou —, exatamente no momento de decidir se a alteração está certa. Tirar
+   * o número da tela para dizer "não sei ainda" é pior que mostrar o antigo: a
+   * pessoa perde a referência de onde estava.
+   *
+   * ⭐ Dá para prever com confiança porque a regra é uma só e está testada:
+   * `distribuirIgual` é o gêmeo de `modelo/distribuirPeso`, com os mesmos casos
+   * no spec. Quem GRAVA continua sendo o servidor — isto é previsão, e o número
+   * volta dele ao salvar.
+   */
+  const pesoPrevisto = useMemo(() => {
+    if (!local) return new Map<string, number>();
+    const previsto = new Map<string, number>();
+    for (const g of local.grupos) {
+      const peso = Number(g.peso.replace(',', '.')) || 0;
+      const daClassificacao = local.questoes.filter(
+        (id) => porId.get(id)?.classificacaoId === g.classificacaoId,
+      );
+      const pesos = distribuirIgual(peso, daClassificacao.length);
+      daClassificacao.forEach((id, i) => previsto.set(id, pesos[i]));
+    }
+    return previsto;
+  }, [local, porId]);
+
+  /** A soma dos pesos previstos e a máxima que sairia deles. */
+  const somaDistribuidaPrevista = useMemo(
+    () => Math.round([...pesoPrevisto.values()].reduce((t, p) => t + p, 0) * 100) / 100,
+    [pesoPrevisto],
+  );
+  const maximaPrevista = useMemo(() => {
+    if (!local) return 0;
+    const total = local.questoes.reduce(
+      (t, id) => t + (pesoPrevisto.get(id) ?? 0) * (porId.get(id)?.maiorValor ?? 0),
+      0,
+    );
+    return Math.round(total * 10_000) / 10_000;
+  }, [local, pesoPrevisto, porId]);
 
   const sujo = useMemo(() => {
     if (!dados || !local) return false;
@@ -211,32 +254,47 @@ export default function ArranjoPage() {
               {num(sujo ? somaLocal : dados.somaDeclarada)}
             </strong>
           </span>
+          {/* ⚠️ Com alteração pendente, a distribuída também é PREVISTA — ela
+              sai da mesma repartição, questão a questão. Mostrar "do último
+              salvo" ao lado de uma declarada já atualizada era pôr dois números
+              de momentos diferentes na mesma linha. */}
           <span>
             Soma <strong className="text-slate-500">distribuída</strong>{' '}
-            <strong className="tabular-nums text-slate-800">{num(dados.somaDerivada)}</strong>
-            {sujo && <span className="ml-1 text-amber-700">(do último salvo)</span>}
+            <strong className="tabular-nums text-slate-800">
+              {num(sujo ? somaDistribuidaPrevista : dados.somaDerivada)}
+            </strong>
+            {sujo && <span className="ml-1 text-amber-700">(previsto)</span>}
           </span>
           <span>
             {/* ⚠️ A máxima é Σ(peso × maior valor) sobre a DISTRIBUÍDA, não sobre
                 a declarada — quem lê "declarada 75" espera 90 e vê 78. O termo
                 que concilia os dois números fica escrito. */}
             Pontuação máxima{' '}
-            <strong className="tabular-nums text-slate-800">{num(dados.pontuacaoMaxima)}</strong>
+            <strong className="tabular-nums text-slate-800">
+              {num(sujo ? maximaPrevista : dados.pontuacaoMaxima)}
+            </strong>
             <span className="ml-1 text-slate-500">
-              (= distribuída {num(dados.somaDerivada)} × 1,2)
+              (= distribuída {num(sujo ? somaDistribuidaPrevista : dados.somaDerivada)} × 1,2)
             </span>
+            {sujo && <span className="ml-1 text-amber-700">(previsto)</span>}
           </span>
         </div>
         <p className="mt-1 text-xs text-slate-500">
           {sujo ? (
             <span className="text-amber-700">
-              Alterações não salvas: a <strong>declarada</strong> já mostra o que você digitou; a
-              distribuída e a máxima só são recalculadas ao salvar.
+              <strong>Prévia da montagem</strong> — os números mostram o que vai resultar. Nada
+              foi gravado ainda; salve para confirmar.
             </span>
           ) : divergem ? (
             <span className="font-semibold text-red-800">
-              As duas somas não batem. A nota sairia sobre um denominador diferente do que a tela
-              mostra — não publique; avise a T.I.
+              {/* ⚠️ Dizia "avise a T.I." — e a causa quase sempre é de CADASTRO,
+                  que o RH resolve aqui mesmo: classificação com peso e sem
+                  questão. Mandar chamar a T.I. numa situação que a pessoa
+                  resolve em dois cliques é transformar um ajuste em chamado. */}
+              As duas somas não batem: a nota sairia sobre um denominador diferente do que a tela
+              mostra. Quase sempre é uma <strong>classificação com peso e sem questão</strong> —
+              procure abaixo a que está com <strong>0 questões</strong> e acrescente questões ou
+              tire-a do arranjo. Se todas tiverem questão, aí é defeito do sistema: avise a T.I.
             </span>
           ) : (
             'A declarada é o que foi digitado; a distribuída é o que a nota vai usar. Iguais, confere.'
@@ -364,12 +422,29 @@ export default function ArranjoPage() {
                 </span>
                 {/* ⚠️ "sem peso" nunca vira "peso 0": a questão conta, e ninguém
                     sabe quanto ainda. */}
+                {/* ⚠️ O número NUNCA some. Sem alteração pendente, é o gravado;
+                    com alteração, é o PREVISTO, marcado — e se a previsão não
+                    existir (classificação sem peso), diz "sem peso", que é um
+                    fato, não uma ausência de informação. */}
                 {!temPeso ? (
                   <span className="text-sm font-semibold text-red-700">sem peso</span>
-                ) : gravada?.peso != null && !sujo ? (
-                  <span className="text-sm tabular-nums text-slate-600">peso {num(gravada.peso)}</span>
+                ) : !sujo ? (
+                  <span className="text-sm tabular-nums text-slate-600">
+                    peso {num(gravada?.peso ?? pesoPrevisto.get(id) ?? 0)}
+                  </span>
                 ) : (
-                  <span className="text-sm text-slate-400">peso ao salvar</span>
+                  <span
+                    className="text-sm tabular-nums text-amber-700"
+                    title="Peso que vai resultar desta montagem. Confirmado ao salvar."
+                  >
+                    peso {num(pesoPrevisto.get(id) ?? 0)}
+                    {gravada?.peso != null &&
+                      Math.abs((pesoPrevisto.get(id) ?? 0) - gravada.peso) > 0.0001 && (
+                        <span className="ml-1 text-xs text-slate-400 line-through">
+                          {num(gravada.peso)}
+                        </span>
+                      )}
+                  </span>
                 )}
                 <div className="flex shrink-0 gap-1">
                   <Mover
@@ -523,7 +598,7 @@ export default function ArranjoPage() {
           )}
           {!semPermissaoPublicar && sujo && (
             <span className="mr-auto text-sm text-amber-700">
-              Alterações não salvas — a distribuição do peso só é recalculada ao salvar.
+              Alterações não salvas — os pesos ao lado são a prévia do que vai resultar.
             </span>
           )}
           <button

@@ -51,3 +51,24 @@ export function repartirExato(
 /** Percentuais que somam exatamente 100. */
 export const percentuaisQueFecham = (valores: readonly number[]) =>
   repartirExato(valores, 100, 2);
+
+/**
+ * ⭐⭐ REPARTIR EM PARTES IGUAIS — o gêmeo de `backend/modelo/distribuirPeso`.
+ *
+ * `10 ÷ 3` → `3,34 · 3,33 · 3,33`. O resto vai para as PRIMEIRAS, por ordem, e
+ * a soma fecha exata.
+ *
+ * ⚠️ Existe para a tela de montar o arranjo poder mostrar **o peso que
+ * resultaria** enquanto a pessoa digita. Antes ela escrevia "peso ao salvar" e
+ * **apagava o número de todas as questões** — inclusive as que a mudança não
+ * tocou — exatamente no momento de decidir se a alteração está certa.
+ *
+ * ⚠️ É a MESMA regra do backend, e por isso a mesma tabela de casos no spec. O
+ * que a tela mostra é previsão; quem grava é o servidor, e o número volta dele
+ * ao salvar. Divergir seria pior que não prever — por isso o spec.
+ */
+export function distribuirIgual(total: number, quantidade: number): number[] {
+  if (quantidade <= 0) return [];
+  if (!(total > 0)) return Array.from({ length: quantidade }, () => 0);
+  return repartirExato(Array.from({ length: quantidade }, () => 1), total, 2);
+}

@@ -46,9 +46,27 @@ export default function InstrumentoPage() {
   const [inst, setInst] = useState<InstrumentoCompleto | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [semPermissao, setSemPermissao] = useState(false);
+  /**
+   * ⚠️ Quem pode VERSIONAR — descoberto perguntando ao backend, não
+   * reimplementando a tabela de papéis. O bloco de versões some para quem não
+   * pode, e o AVISO acima precisa saber disso: senão ensina um caminho que a
+   * pessoa não tem.
+   */
+  const [podeVersionar, setPodeVersionar] = useState(false);
 
   useEffect(() => {
     void carregarModelos();
+  }, []);
+
+  useEffect(() => {
+    void catalogo.modelos().then((lista) => {
+      const algum = lista[0]?.versoes[0]?.id;
+      if (!algum) return;
+      apiVersoes
+        .previaDeDuplicar(algum)
+        .then(() => setPodeVersionar(true))
+        .catch(() => setPodeVersionar(false));
+    });
   }, []);
 
   useEffect(() => {
@@ -145,11 +163,27 @@ export default function InstrumentoPage() {
       <div className="mt-3 flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 print:hidden">
         <Info size={16} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
         <p className="text-sm text-amber-900">
+          {/* ⚠️ O texto ensinava a usar Duplicar, Montar e Publicar — botões que
+              o RH_CICLO NÃO VÊ: o bloco de versões some inteiro para quem não
+              pode versionar. Ele lia a instrução, procurava os botões e não
+              achava, e a conclusão razoável é que a tela está quebrada. Texto
+              que ensina um caminho tem de saber se a pessoa tem o caminho. */}
           <strong className="font-semibold">Versão publicada não se edita</strong> — dela saem
-          notas. O caminho é: <strong>Duplicar</strong> (abaixo) cria um rascunho,{' '}
-          <strong>Montar</strong> abre o editor dele — classificações, pesos e quais questões
-          entram —, e <strong>Publicar</strong> o torna o instrumento vigente. Enunciado e
-          alternativas de cada questão se editam no <strong>Acervo</strong>.
+          notas.{' '}
+          {podeVersionar ? (
+            <>
+              O caminho é: <strong>Duplicar</strong> (abaixo) cria um rascunho,{' '}
+              <strong>Montar</strong> abre o editor dele — classificações, pesos e quais questões
+              entram —, e <strong>Publicar</strong> o torna o instrumento vigente. Enunciado e
+              alternativas de cada questão se editam no <strong>Acervo</strong>.
+            </>
+          ) : (
+            <>
+              Para você esta tela é de <strong>leitura</strong>: mudar o questionário é de quem
+              monta o instrumento (RH_ADMIN ou RH_MODELO). O que você escolhe ao montar uma
+              aplicação é <strong>qual versão publicada</strong> usar.
+            </>
+          )}
         </p>
       </div>
 
@@ -442,18 +476,29 @@ function VersoesDoModelo({
               <span className={v.id === versaoId ? 'font-semibold text-slate-800' : 'text-slate-700'}>
                 v{v.versao}
               </span>{' '}
-              {v.publicadoEm ? (
-                <Etiqueta tom="neutro">publicada em {data(v.publicadoEm)}</Etiqueta>
-              ) : (
+              {/* ⚠️ "publicada" não basta quando há duas — e há, por desenho:
+                  a Aplicação aponta para uma versão ESPECÍFICA, então
+                  despublicar a anterior deixaria os ciclos que a usam sem
+                  instrumento. A varredura viu v1 e v2 publicadas no mesmo dia,
+                  sem hora e sem marca, e não tinha como saber qual valia. */}
+              {!v.publicadoEm ? (
                 <Etiqueta tom="ambar">rascunho</Etiqueta>
+              ) : v.vigente ? (
+                <Etiqueta tom="verde">vigente · publicada em {data(v.publicadoEm)}</Etiqueta>
+              ) : (
+                <Etiqueta tom="neutro">
+                  anterior · publicada em {data(v.publicadoEm)}
+                </Etiqueta>
               )}
               {/* ⭐ Os três números que conciliam com o que a tela abaixo mostra:
                   classificações, questões e a soma dos pesos (60 no herdado). */}
               <span className="ml-1 text-slate-500">
                 · {contagem(v.totalGrupos, 'classificação', 'classificações')} ·{' '}
                 {contagem(v.totalQuestoes, 'questão', 'questões')} · soma {num(v.somaDosPesos)}
+                {/* ⭐ A versão anterior não é lixo: ela continua sendo a régua
+                    dos ciclos que a usam, e é por isso que não se apaga. */}
                 {v.aplicacoesQueUsam > 0 &&
-                  ` · em ${contagem(v.aplicacoesQueUsam, 'aplicação', 'aplicações')}`}
+                  ` · ainda em uso por ${contagem(v.aplicacoesQueUsam, 'aplicação', 'aplicações')}`}
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-1">

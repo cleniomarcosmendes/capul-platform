@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { percentuaisQueFecham, repartirExato } from './reparticao';
+import { distribuirIgual, percentuaisQueFecham, repartirExato } from './reparticao';
 
 /**
  * ⚠️ Os MESMOS casos do gêmeo do backend (`common/percentual.spec.ts`),
@@ -44,5 +44,44 @@ describe('repartirExato', () => {
 
   it('1 casa também fecha', () => {
     expect(repartirExato([1, 1, 1], 100, 1)).toEqual([33.4, 33.3, 33.3]);
+  });
+});
+
+/**
+ * ⚠️ Os MESMOS casos do `distribuir-peso.spec.ts` do backend. Se as duas cópias
+ * divergirem, a tela passa a prever um peso que o servidor não grava — e o RH
+ * decide sobre um número que não vai existir.
+ */
+describe('distribuirIgual — o gêmeo do distribuirPeso do backend', () => {
+  it('10 ÷ 3 = 3,34 · 3,33 · 3,33 — o resto nas primeiras', () => {
+    expect(distribuirIgual(10, 3)).toEqual([3.34, 3.33, 3.33]);
+  });
+
+  it('16 ÷ 3 = 5,34 · 5,33 · 5,33 (o Relacionamento do Administrativo)', () => {
+    expect(distribuirIgual(16, 3)).toEqual([5.34, 5.33, 5.33]);
+  });
+
+  it('40 ÷ 3 = 13,34 · 13,33 · 13,33 (o descartável)', () => {
+    expect(distribuirIgual(40, 3)).toEqual([13.34, 13.33, 13.33]);
+  });
+
+  it('divisão exata não ganha centavo: 12 ÷ 2', () => {
+    expect(distribuirIgual(12, 2)).toEqual([6, 6]);
+  });
+
+  it('uma questão leva o peso inteiro', () => {
+    expect(distribuirIgual(13, 1)).toEqual([13]);
+  });
+
+  it('a soma sempre fecha no total', () => {
+    for (const [t, n] of [[16, 3], [10, 3], [9, 7], [60, 14], [5, 3]] as const) {
+      const v = distribuirIgual(t, n);
+      expect(Math.round(v.reduce((s, x) => s + x, 0) * 100) / 100).toBe(t);
+    }
+  });
+
+  it('peso zero ou sem questão não quebra', () => {
+    expect(distribuirIgual(0, 3)).toEqual([0, 0, 0]);
+    expect(distribuirIgual(10, 0)).toEqual([]);
   });
 });
