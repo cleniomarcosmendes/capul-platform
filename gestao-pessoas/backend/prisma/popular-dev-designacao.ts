@@ -218,10 +218,18 @@ async function main() {
   console.log(`   linhas gravadas: ${linhas.length}`);
 }
 
-main()
-  .then(() => prisma.$disconnect())
-  .catch(async (e) => {
-    console.error(e);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+/**
+ * ⚠️ GUARDA `require.main` — sem ela, IMPORTAR este arquivo já EXECUTA, e este
+ * grava no banco. Com ela, `ferramenta-fora-da-suite.invariante.spec.ts`
+ * consegue carregá-lo só para conferir que os imports ainda resolvem — que é o
+ * defeito que passou em 12/09 e só apareceu quando alguém foi medir.
+ */
+if (require.main === module) {
+  main()
+    .then(() => prisma.$disconnect())
+    .catch(async (e) => {
+      console.error(e);
+      await prisma.$disconnect();
+      process.exit(1);
+    });
+}

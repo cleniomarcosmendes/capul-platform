@@ -667,10 +667,18 @@ async function main() {
   await semearModelos();
 }
 
-main()
-  .then(() => console.log('seed concluído'))
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+/**
+ * ⚠️ GUARDA `require.main` — sem ela, IMPORTAR este arquivo já EXECUTA, e este
+ * grava no banco. Com ela, `ferramenta-fora-da-suite.invariante.spec.ts`
+ * consegue carregá-lo só para conferir que os imports ainda resolvem — que é o
+ * defeito que passou em 12/09 e só apareceu quando alguém foi medir.
+ */
+if (require.main === module) {
+  main()
+    .then(() => console.log('seed concluído'))
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}
