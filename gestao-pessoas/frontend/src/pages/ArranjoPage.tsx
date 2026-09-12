@@ -66,6 +66,13 @@ export default function ArranjoPage() {
   const [salvando, setSalvando] = useState(false);
   const [previa, setPrevia] = useState<PreviaDaPublicacao | null>(null);
   const [escolhendo, setEscolhendo] = useState(false);
+  /**
+   * ⚠️ Recusa de PERMISSÃO desabilita o botão. Antes o 403 voltava como erro e
+   * o botão continuava habilitado — dava para repetir indefinidamente o mesmo
+   * pedido que nunca vai passar. Erro de estado se tenta de novo; erro de
+   * permissão, não: nada mudou entre um clique e o outro.
+   */
+  const [semPermissaoPublicar, setSemPermissaoPublicar] = useState<string | null>(null);
 
   const carregar = useCallback(() => {
     Promise.all([apiArranjo.ler(versaoId), apiAcervo.listar()])
@@ -192,26 +199,41 @@ export default function ArranjoPage() {
         }`}
       >
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+          {/* ⚠️ ENQUANTO SE DIGITA a declarada é a DIGITADA, não a gravada.
+              A legenda diz "a declarada é o que foi digitado" e o número
+              mostrava o valor antigo — a tela contradizendo a própria legenda.
+              A distribuída e a máxima ficam explicitamente PARADAS, porque só o
+              backend as recalcula (reimplementar a repartição aqui seria a
+              terceira cópia da regra que já custou 59,97). */}
           <span>
             Soma <strong className="text-slate-500">declarada</strong>{' '}
-            <strong className="tabular-nums text-slate-800">{num(dados.somaDeclarada)}</strong>
+            <strong className="tabular-nums text-slate-800">
+              {num(sujo ? somaLocal : dados.somaDeclarada)}
+            </strong>
           </span>
           <span>
             Soma <strong className="text-slate-500">distribuída</strong>{' '}
             <strong className="tabular-nums text-slate-800">{num(dados.somaDerivada)}</strong>
+            {sujo && <span className="ml-1 text-amber-700">(do último salvo)</span>}
           </span>
           <span>
+            {/* ⚠️ A máxima é Σ(peso × maior valor) sobre a DISTRIBUÍDA, não sobre
+                a declarada — quem lê "declarada 75" espera 90 e vê 78. O termo
+                que concilia os dois números fica escrito. */}
             Pontuação máxima{' '}
             <strong className="tabular-nums text-slate-800">{num(dados.pontuacaoMaxima)}</strong>
-          </span>
-          {sujo && (
-            <span className="text-amber-700">
-              (não salvo — digitado agora: {num(somaLocal)})
+            <span className="ml-1 text-slate-500">
+              (= distribuída {num(dados.somaDerivada)} × 1,2)
             </span>
-          )}
+          </span>
         </div>
         <p className="mt-1 text-xs text-slate-500">
-          {divergem ? (
+          {sujo ? (
+            <span className="text-amber-700">
+              Alterações não salvas: a <strong>declarada</strong> já mostra o que você digitou; a
+              distribuída e a máxima só são recalculadas ao salvar.
+            </span>
+          ) : divergem ? (
             <span className="font-semibold text-red-800">
               As duas somas não batem. A nota sairia sobre um denominador diferente do que a tela
               mostra — não publique; avise a T.I.
@@ -496,7 +518,10 @@ export default function ArranjoPage() {
       {/* ── BARRA DE AÇÃO ──────────────────────────────────────────────────── */}
       <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 p-3 backdrop-blur">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-end gap-2">
-          {sujo && (
+          {semPermissaoPublicar && (
+            <span className="mr-auto text-sm text-slate-600">{semPermissaoPublicar}</span>
+          )}
+          {!semPermissaoPublicar && sujo && (
             <span className="mr-auto text-sm text-amber-700">
               Alterações não salvas — a distribuição do peso só é recalculada ao salvar.
             </span>
@@ -514,13 +539,21 @@ export default function ArranjoPage() {
             /* ⚠️ Publicar com alteração pendente publicaria o que está no banco,
                não o que está na tela — a §3.1.33 na sua forma mais cara. */
             title={
-              sujo
-                ? 'Salve o arranjo antes: publicar gravaria o que está no banco, não o que está na tela.'
-                : divergem
-                  ? 'As duas somas não batem.'
-                  : 'Publicar esta versão'
+              semPermissaoPublicar
+                ? semPermissaoPublicar
+                : sujo
+                  ? 'Salve o arranjo antes: publicar gravaria o que está no banco, não o que está na tela.'
+                  : divergem
+                    ? 'As duas somas não batem.'
+                    : 'Publicar esta versão'
             }
-            disabled={salvando || sujo || divergem || dados.problemasParaPublicar.length > 0}
+            disabled={
+              salvando ||
+              sujo ||
+              divergem ||
+              !!semPermissaoPublicar ||
+              dados.problemasParaPublicar.length > 0
+            }
             onClick={() =>
               void apiArranjo
                 .previaPublicar(versaoId)
@@ -557,6 +590,11 @@ export default function ArranjoPage() {
               setPrevia(null);
               carregar();
             } catch (e) {
+              if (ehFaltaDePermissao(e)) {
+                setSemPermissaoPublicar(
+                  mensagemDoErro(e, 'Publicar não é do seu perfil.'),
+                );
+              }
               setErro(mensagemDoErro(e, 'Não foi possível publicar.'));
               setPrevia(null);
             } finally {

@@ -439,15 +439,30 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
               )}
             </div>
 
-            {memoria.porGrupo.length > 0 && (
+            {memoria.porGrupo.length > 0 && (() => {
+              /** A soma dos pesos das classificações — o denominador da média. */
+              const somaDosPesos = memoria.porGrupo.reduce((t, g) => t + g.peso, 0);
+              return (
               <div className="mt-5">
+                {/* ⚠️ "por CLASSIFICAÇÃO", não "por grupo": é o termo do cadastro
+                    (§3.1.105, item 2.11) e é o que a pessoa procura no menu. */}
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Questionário, por grupo
+                  Questionário, por classificação
                 </h4>
                 <ul className="mt-2 space-y-1.5">
                   {memoria.porGrupo.map((g) => (
                     <li key={g.grupoId} className="flex items-center gap-3">
-                      <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{g.titulo}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-slate-700">
+                        {g.titulo}
+                        {/* ⭐⭐ O PESO — o número que DECIDE, e o único que a tela
+                            não mostrava. Sem ele estas barras são insumos sem
+                            ponderação: quem precisa explicar a nota para o
+                            avaliado não consegue refazer a conta. */}
+                        <span className="ml-1.5 text-xs tabular-nums text-slate-400">
+                          peso {nota(g.peso)}
+                          {somaDosPesos > 0 && ` · ${nota((g.peso / somaDosPesos) * 100)}%`}
+                        </span>
+                      </span>
                       <span className="w-24 shrink-0">
                         <span className="block h-1.5 overflow-hidden rounded-full bg-slate-100">
                           <span
@@ -462,12 +477,26 @@ function DialogoMemoria({ resultadoId, aoFechar }: { resultadoId: string; aoFech
                     </li>
                   ))}
                 </ul>
+                {/* ⚠️ Este rodapé AFIRMAVA O CONTRÁRIO do que a tela calcula:
+                    "grupo é organização visual, o peso está em cada pergunta".
+                    Era verdade até 10/09; a unificação do acervo (11/09) inverteu
+                    — o peso mora na CLASSIFICAÇÃO e o da questão é derivado dele.
+                    A nota do questionário é a média destas barras PONDERADA pelos
+                    pesos ao lado, e o texto mandava procurar o peso onde ele não
+                    está mais. Ver §3.1.115. */}
                 <p className="mt-2 text-xs text-slate-500">
-                  Calculada agora, sobre as respostas gravadas — não é um número congelado. Grupo é
-                  organização visual: o peso está em cada pergunta.
+                  Calculada agora, sobre as respostas gravadas — não é um número congelado.{' '}
+                  <strong>O peso é da classificação</strong>, e cada questão herda o dela repartido
+                  entre as questões daquela classificação neste perfil. A nota do questionário é a
+                  média destas linhas ponderada pelos pesos:{' '}
+                  <span className="tabular-nums">
+                    Σ(nota × peso) ÷ {nota(somaDosPesos)} = {nota(memoria.notaAvaliacao ?? 0)}
+                  </span>
+                  .
                 </p>
               </div>
-            )}
+              );
+            })()}
 
             {memoria.observacaoAvaliador && (
               <div className="mt-5">

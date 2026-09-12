@@ -261,8 +261,31 @@ export default function ClassificacoesPage() {
             onChange={(e) => setEditando({ ...editando, nome: e.target.value })}
             className="alvo-toque w-full rounded-xl border border-slate-300 px-3 text-slate-800"
           />
-          <p className="mt-2 text-sm text-slate-500">
-            O nome aparece no acervo e no questionário impresso. Renomear não muda peso nenhum.
+          {/* ⚠️ O aviso dizia "o acervo e o questionário impresso", e o alcance
+              é MAIOR: o nome novo aparece retroativamente em versão PUBLICADA e
+              na memória de cálculo de resultado já apurado, em ciclo encerrado.
+              A decisão de permitir foi tomada em 11/09 (é o mesmo conceito com
+              nome melhor) e continua valendo — o que estava errado era o aviso.
+              ⚠️ A tela vizinha (Critérios) PROTEGE isto e explica por quê; as
+              duas estão no mesmo menu com posturas opostas, e é deliberado:
+              critério carrega régua, classificação carrega rótulo. */}
+          <p className="mt-2 text-sm text-slate-600">
+            Renomear <strong>não muda peso nem nota</strong> — mas o nome novo passa a aparecer{' '}
+            <strong>retroativamente</strong> em tudo que cita a classificação:
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-slate-600">
+            <li>o acervo e o questionário impresso;</li>
+            <li>
+              <strong>versões já publicadas</strong>, inclusive as marcadas "confere com a gravada
+              na publicação";
+            </li>
+            <li>
+              a <strong>memória de cálculo de resultados já apurados</strong>, em ciclos encerrados.
+            </li>
+          </ul>
+          <p className="mt-1 text-sm text-slate-500">
+            Quem abrir um resultado de meses atrás vai ler o nome de hoje. Se o conceito for outro,
+            crie uma classificação nova em vez de renomear esta.
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <button

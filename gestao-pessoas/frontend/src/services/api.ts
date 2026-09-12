@@ -501,6 +501,9 @@ export interface QuestaoDoAcervo {
   usos: UsoDaQuestao[];
   /** Quantos usos são de versão PUBLICADA. O resto é rascunho. */
   usosPublicados: number;
+  /** ⚠️ PERFIS distintos — `usos` conta VERSÕES, e um perfil pode ter duas. */
+  perfisDistintos: number;
+  perfisPublicados: number;
   /** ⭐ O bloqueio vem JUNTO com a lista — nunca depois do primeiro render. */
   efeitos: EfeitosDaQuestao;
 }

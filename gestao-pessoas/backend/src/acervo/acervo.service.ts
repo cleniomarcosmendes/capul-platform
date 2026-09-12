@@ -74,6 +74,15 @@ export interface QuestaoDoAcervo {
    */
   usosPublicados: number;
   /**
+   * ⚠️ PERFIS distintos, não versões. O cartão dizia "usada em 7 perfis" para a
+   * `004`, que está em **5 perfis** e 7 VERSÕES (dois deles com v1 e v2). Contar
+   * versão e chamar de perfil infla o número que responde "mexer nisto afeta
+   * quem?" — e é a pergunta inteira do acervo.
+   */
+  perfisDistintos: number;
+  /** Desses perfis, quantos têm ao menos uma versão PUBLICADA usando a questão. */
+  perfisPublicados: number;
+  /**
    * ⭐⭐ O QUE PODE SER FEITO COM ELA — vem JUNTO com a lista.
    *
    * ⚠️ Até 12/09 vinha de `GET /acervo/questoes/:id/efeitos`, buscado no
@@ -193,6 +202,11 @@ export class AcervoService {
       const publicados = q.arranjos.filter(
         (a) => a.modeloVersao.publicadoEm !== null,
       ).length;
+      // ⚠️ Por MODELO, não por versão — ver `perfisDistintos`.
+      const modelos = new Set(q.arranjos.map((a) => a.modeloVersao.modeloId));
+      const modelosPublicados = new Set(
+        q.arranjos.filter((a) => a.modeloVersao.publicadoEm !== null).map((a) => a.modeloVersao.modeloId),
+      );
       // ⚠️ O MESMO contexto que `questao.service` monta — e por isso os mesmos
       // classificadores. Duas contas de "pode apagar?" divergiriam, e a tela
       // ofereceria o que a API recusa.
@@ -207,6 +221,8 @@ export class AcervoService {
       };
       return {
         usosPublicados: publicados,
+        perfisDistintos: modelos.size,
+        perfisPublicados: modelosPublicados.size,
         efeitos: {
           editarTexto: efeitoDeEditarTexto(ctx),
           reclassificar: efeitoDeReclassificar(ctx),

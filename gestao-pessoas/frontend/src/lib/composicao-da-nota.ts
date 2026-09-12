@@ -21,7 +21,7 @@
  * ⚠️ E a fração sai daqui nas duas telas. Uma segunda normalização divergiria no
  * primeiro caso de borda — que é exatamente como as duas passaram a discordar.
  */
-import { percentuaisQueFecham } from './reparticao';
+import { repartirExato } from './reparticao';
 
 export interface ItemComPeso {
   nome: string;
@@ -51,7 +51,13 @@ export function repartirPesos(itens: readonly ItemComPeso[]): FatiaDaNota[] {
    * peso 13,33 exibiam **22,22% e 22,21%** — pesos iguais com percentuais
    * diferentes —, e a coluna somava 100,01. Ver `lib/reparticao.ts`.
    */
-  const pcts = percentuaisQueFecham(itens.map((i) => i.peso));
+  /**
+   * ⚠️ UMA casa, porque é com uma casa que a tela exibe (`f.pct.toFixed(1)`).
+   * Repartir em 2 casas e exibir 1 desfaz a repartição: três critérios a 33,33%
+   * viram 33,3% e a coluna soma **99,9%**. A regra é repartir na PRECISÃO EM QUE
+   * SE EXIBE — arredondar depois de repartir é arredondar por item de novo.
+   */
+  const pcts = repartirExato(itens.map((i) => i.peso), 100, 1);
   return itens.map((i, n) => ({ ...i, pct: pcts[n] }));
 }
 

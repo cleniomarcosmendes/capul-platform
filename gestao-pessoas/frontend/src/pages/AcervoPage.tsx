@@ -137,8 +137,14 @@ export default function AcervoPage() {
         {dados.foraDeTodoPerfil > 0 && (
           <>
             <span aria-hidden>·</span>
+            {/* ⚠️ "fora de todo perfil" conta quem não está em arranjo NENHUM —
+                rascunho inclusive. O cartão de uma questão só em rascunho diz
+                "usada em 1 perfil — só em rascunho", e os dois pareciam
+                discordar. Não discordam: são recortes diferentes, e agora o
+                termo que os concilia está escrito. */}
             <span className="text-amber-800">
               <strong className="tabular-nums">{dados.foraDeTodoPerfil}</strong> fora de todo perfil
+              <span className="ml-1 text-slate-500">(nem em rascunho)</span>
             </span>
           </>
         )}
@@ -396,16 +402,25 @@ function CartaoDaQuestao({
               fatos diferentes: o segundo quer dizer que NINGUÉM responde esta
               questão ainda. Antes o rascunho aparecia só como uma etiqueta
               pequena ao lado do peso, e o fato se perdia entre os outros usos. */}
+          {/* ⚠️ PERFIS, não versões. Dizia "usada em 7 perfis" para uma questão
+              que está em 5 perfis e 7 versões — contava versão e chamava de
+              perfil, inflando justamente o número que responde "mexer nisto
+              afeta quem?". As versões continuam listadas abaixo, uma a uma. */}
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Usada em {contagem(q.usos.length, 'perfil', 'perfis')}
+            Usada em {contagem(q.perfisDistintos, 'perfil', 'perfis')}
+            {q.usos.length !== q.perfisDistintos && (
+              <span className="ml-1 normal-case text-slate-500">
+                ({contagem(q.usos.length, 'versão', 'versões')})
+              </span>
+            )}
             {q.usosPublicados === 0 && (
               <span className="ml-1 text-amber-700">
                 — só em rascunho, ninguém responde ainda
               </span>
             )}
-            {q.usosPublicados > 0 && q.usosPublicados < q.usos.length && (
+            {q.usosPublicados > 0 && q.perfisPublicados < q.perfisDistintos && (
               <span className="ml-1 normal-case text-slate-500">
-                ({q.usosPublicados} publicado{q.usosPublicados === 1 ? '' : 's'})
+                · {q.perfisPublicados} com versão publicada
               </span>
             )}
           </p>
