@@ -1,4 +1,6 @@
 import {
+  type MotivoAlerta,
+  ESCOPO_DO_MOTIVO,
   agregarAlertas,
   apurarColaborador,
   type AlertaApuracao,
@@ -223,5 +225,60 @@ describe('⭐ agregação de alertas — configuração × individual', () => {
       criterios: [ESCOLARIDADE], colaborador: pessoa({ grauInstrucaoCodigo: null }), ciclo,
     });
     expect(individuais[0]).toMatchObject({ escopo: 'INDIVIDUAL', valor: null });
+  });
+});
+
+describe('⭐⭐ escopo CALCULADO — atingir todo mundo muda o conselho', () => {
+  const alerta = (motivo: MotivoAlerta, codigo = 'META'): AlertaApuracao => ({
+    criterioCodigo: codigo,
+    criterioNome: 'Meta mensal',
+    motivo,
+    escopo: ESCOPO_DO_MOTIVO[motivo],
+    valor: null,
+    detalhe: '',
+  });
+
+  it('SEM_VALOR_INFORMADO em ALGUMAS pessoas segue INDIVIDUAL', () => {
+    const [a] = agregarAlertas([alerta('SEM_VALOR_INFORMADO'), alerta('SEM_VALOR_INFORMADO')], 10);
+    expect(a.escopo).toBe('INDIVIDUAL');
+    expect(a.resumo).toMatch(/2 pessoas sem valor informado/);
+  });
+
+  /**
+   * ⭐ O caso do critério INFORMADO recém-criado: a tabela de valores nasce
+   * vazia, então ninguém tem valor. "Resolve-se caso a caso" para 894 pessoas
+   * manda fazer 894 correções onde cabe uma importação.
+   */
+  it('SEM_VALOR_INFORMADO em TODO MUNDO vira CONFIGURACAO', () => {
+    const [a] = agregarAlertas([alerta('SEM_VALOR_INFORMADO'), alerta('SEM_VALOR_INFORMADO')], 2);
+    expect(a.escopo).toBe('CONFIGURACAO');
+    expect(a.resumo).toMatch(/NINGUÉM tem valor informado/);
+    expect(a.resumo).toMatch(/Importe os valores e reapure/);
+  });
+
+  it('SEM_DADO_CADASTRAL em todo mundo também — e aponta o sync, não a pessoa', () => {
+    const [a] = agregarAlertas([alerta('SEM_DADO_CADASTRAL')], 1);
+    expect(a.escopo).toBe('CONFIGURACAO');
+    expect(a.resumo).toMatch(/sincroniza/i);
+  });
+
+  it('SEM_FAIXA já era CONFIGURACAO e não muda com o total', () => {
+    expect(agregarAlertas([alerta('SEM_FAIXA')], 999)[0].escopo).toBe('CONFIGURACAO');
+    expect(agregarAlertas([alerta('SEM_FAIXA')], 1)[0].escopo).toBe('CONFIGURACAO');
+  });
+
+  /** Ciclo vazio: 0 de 0 não é "todo mundo" — seria promover sobre nada. */
+  it('sem total informado não promove nada', () => {
+    expect(agregarAlertas([alerta('SEM_VALOR_INFORMADO')])[0].escopo).toBe('INDIVIDUAL');
+  });
+
+  it('o de CONFIGURACAO vem PRIMEIRO na lista, que é a ordem de resolver', () => {
+    const lista = agregarAlertas(
+      [alerta('SEM_DADO_CADASTRAL', 'ESC'), alerta('SEM_VALOR_INFORMADO', 'META'), alerta('SEM_VALOR_INFORMADO', 'META')],
+      2,
+    );
+    expect(lista[0].motivo).toBe('SEM_VALOR_INFORMADO'); // 2 de 2 -> configuracao
+    expect(lista[0].escopo).toBe('CONFIGURACAO');
+    expect(lista[1].escopo).toBe('INDIVIDUAL'); // 1 de 2
   });
 });

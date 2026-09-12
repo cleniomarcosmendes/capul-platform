@@ -401,6 +401,12 @@ export class PainelService {
     return {
       /** Vazio = a abertura passa. Mesma função que a API roda no clique. */
       problemas: await this.ciclos.pendenciasParaAbrir(cicloId),
+      /**
+       * ⭐ O que NÃO impede abrir, mas quem abre precisa saber — hoje, critério
+       * INFORMADO sem nenhum valor no ciclo. Lista separada da de problemas:
+       * juntas, o aviso pareceria impedimento.
+       */
+      avisos: await this.ciclos.avisosParaAbrirCiclo(cicloId),
       totalAplicacoes: ciclo.aplicacoes.length,
       noPublico,
       /** Avaliações que já existem e serão liberadas para responder. */

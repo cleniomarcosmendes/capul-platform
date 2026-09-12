@@ -38,6 +38,7 @@ import {
 import type {
   CriterioDoCadastro,
   CriterioEntrada,
+  DistribuicaoDoCriterio,
   FaixaDeCriterio,
   ResolverDisponivel,
 } from '../services/api';
@@ -46,7 +47,12 @@ import { Etiqueta } from '../components/Etiqueta';
 import { Modal } from '../components/Modal';
 import { contagem } from '../lib/formato';
 
-type FaixaEditavel = Omit<FaixaDeCriterio, 'id' | 'tipo'>;
+/**
+ * ⚠️ O `id` FICA no estado editável — é como a linha se casa com a distribuição
+ * (quantas pessoas ela cobre hoje). Ele é retirado no envio: o backend
+ * substitui o conjunto inteiro e não aceita id de volta.
+ */
+type FaixaEditavel = Omit<FaixaDeCriterio, 'tipo'>;
 
 const FAIXA_NOVA: FaixaEditavel = {
   limiteInferior: null,
@@ -152,6 +158,19 @@ export default function CriteriosPage() {
       </header>
 
       <ExplicacaoDasOrigens />
+
+      {/* ⭐ A AUSÊNCIA EXPLICADA. Não existe apagar critério, e o comportamento
+          está certo: ele pode estar referenciado por resultados já apurados, e
+          apagá-lo deixaria a memória de cálculo sem o nome do que foi medido.
+          O que não estava certo era a tela calar — quem cria errado procura o
+          botão, não acha, e conclui que o sistema está incompleto. */}
+      <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+        <strong className="font-medium text-slate-700">Critério não se apaga.</strong> Ele fica
+        referenciado nos resultados já apurados — apagá-lo deixaria a memória de cálculo sem o nome
+        do que foi medido. Para tirar de uso, <strong>desative</strong>: ele para de poder entrar
+        em novas aplicações, some das que ainda não abriram, e os resultados antigos continuam
+        explicáveis. Ciclos que já o usam não mudam.
+      </p>
 
       <ol className="mt-4 space-y-3">
         {lista.map((c) => (
@@ -299,6 +318,24 @@ function CartaoDoCriterio({
           pessoa</strong> — a tela de importar planilha é a próxima entrega. Até lá ele não
           pontua ninguém: entra na apuração como "sem valor" e sai da nota.
         </p>
+      )}
+
+      {/* ⭐ POR QUE ESTÁ INATIVO — na tela, não só no ESTADO.
+          Um critério desligado sem motivo visível convida quem não conhece a
+          história a religá-lo achando que foi lapso. A descrição é onde o motivo
+          mora (o diálogo de edição pede isso ao desativar). */}
+      {!c.ativo && (
+        <div className="mt-2 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-sm">
+          <p className="font-medium text-slate-700">Desativado — não entra em nenhuma aplicação.</p>
+          {c.descricao ? (
+            <p className="mt-0.5 text-slate-600">{c.descricao}</p>
+          ) : (
+            <p className="mt-0.5 text-slate-500">
+              Sem motivo registrado. Quem desativar deve escrever o porquê na descrição — senão o
+              próximo a olhar religa achando que foi esquecimento.
+            </p>
+          )}
+        </div>
       )}
 
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
@@ -495,6 +532,14 @@ function DialogoCriterio({
               />
               Ativo — pode entrar em aplicações
             </label>
+            {/* Desativar sem dizer por quê é o que faz o próximo religar
+                achando que foi lapso. Pedido, não exigido: há casos óbvios. */}
+            {f.ativo === false && !(f.descricao ?? '').trim() && (
+              <p className="text-xs text-amber-800">
+                Escreva na descrição <strong>por que</strong> está desativado — é o que a lista
+                mostra, e é o que evita alguém religar sem conhecer o motivo.
+              </p>
+            )}
           </Campo>
         </div>
 
@@ -545,7 +590,7 @@ function DialogoFaixas({
 }) {
   const dominio = criterio.tipoValor === 'DOMINIO';
   const [faixas, setFaixas] = useState<FaixaEditavel[]>(
-    criterio.faixas.map(({ id: _id, tipo: _tipo, ...f }) => f),
+    criterio.faixas.map(({ tipo: _tipo, ...f }) => f),
   );
   const [problemas, setProblemas] = useState<string[]>([]);
   const [avisos, setAvisos] = useState<string[]>([]);
@@ -553,9 +598,30 @@ function DialogoFaixas({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmado, setConfirmado] = useState(false);
+  const [dist, setDist] = useState<DistribuicaoDoCriterio | null>(null);
   const pedido = useRef(0);
 
-  const comOrdem = useMemo(() => faixas.map((f, i) => ({ ...f, ordem: i })), [faixas]);
+  /**
+   * ⭐ O TAMANHO, antes de mexer. Apagar a faixa do código 45 de ESCOLARIDADE
+   * tira 480 pessoas da conta — elas caem em "sem faixa", o critério sai da nota
+   * delas pela renormalização, e nada avisa até a apuração.
+   *
+   * ⚠️ Carrega UMA vez, na abertura: a distribuição é do que está GRAVADO, não
+   * do que está sendo digitado. Recalcular a cada tecla mostraria o efeito de
+   * uma edição que ainda não existe — e a conta varre ~1.000 pessoas.
+   */
+  useEffect(() => {
+    apiCriterios
+      .distribuicao(criterio.id)
+      .then(setDist)
+      .catch(() => setDist(null));
+  }, [criterio.id]);
+
+  // O que VAI para a API: sem `id`, com a ordem da tela.
+  const comOrdem = useMemo(
+    () => faixas.map(({ id: _id, ...f }, i) => ({ ...f, ordem: i })),
+    [faixas],
+  );
 
   /**
    * ⭐ A recusa aparece ANTES do clique — e vem do SERVIDOR, não de uma segunda
@@ -639,6 +705,54 @@ function DialogoFaixas({
           "mais de X". O fim de uma faixa é o começo da próxima, e o valor da fronteira precisa
           pertencer a <strong>exatamente uma</strong> das duas.
         </p>
+      )}
+
+      {/* ⭐⭐ O QUE A RÉGUA MEDE, ao lado da régua. Sem isto o cadastro mostrava
+          os limites e escondia o tamanho: dá para apagar a faixa de 480 pessoas
+          sem que nada na tela diga que são 480. */}
+      {dist && (
+        <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-sm">
+          {!dist.aplicavel ? (
+            <p className="text-sky-900">{dist.motivo}</p>
+          ) : (
+            <>
+              <p className="text-sky-900">
+                Hoje, entre <strong className="tabular-nums">{dist.populacao}</strong> pessoas
+                ativas: <strong className="tabular-nums">{dist.populacao - dist.semFaixa - dist.semDado}</strong>{' '}
+                caem em alguma faixa
+                {dist.semDado > 0 && (
+                  <>
+                    , <strong className="tabular-nums">{dist.semDado}</strong> sem o dado no
+                    cadastro
+                  </>
+                )}
+                {dist.semFaixa > 0 && (
+                  <>
+                    , e <strong className="tabular-nums text-amber-800">{dist.semFaixa}</strong>{' '}
+                    <span className="text-amber-800">fora de qualquer faixa</span>
+                  </>
+                )}
+                .
+              </p>
+              {/* ⚠️ A DATA que ancora: tempo de empresa e de função mudam com
+                  ela, e número sem a data envelhece calado. */}
+              <p className="mt-0.5 text-xs text-sky-800">
+                Contado com a data de hoje ({dist.dataBase.slice(6, 8)}/{dist.dataBase.slice(4, 6)}/
+                {dist.dataBase.slice(0, 4)}). Num ciclo, quem ancora é a data-base dele.
+              </p>
+              {dist.valoresSemFaixa.length > 0 && (
+                <p className="mt-1.5 text-amber-900">
+                  Valores sem faixa:{' '}
+                  {dist.valoresSemFaixa
+                    .slice(0, 8)
+                    .map((v) => `${v.valor} (${v.pessoas})`)
+                    .join(' · ')}
+                  {dist.valoresSemFaixa.length > 8 && ' …'}
+                </p>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       <div className="mt-3 space-y-2">
@@ -741,7 +855,15 @@ function DialogoFaixas({
                 </div>
 
                 <div className="sm:col-span-2">
-                  <MiniRotulo>Pontos</MiniRotulo>
+                  <MiniRotulo>
+                    Pontos
+                    {/* O tamanho da faixa GRAVADA, ao lado do campo que a apaga. */}
+                    {f.id && dist?.aplicavel && (
+                      <span className="ml-1 text-sky-700">
+                        · {dist.porFaixa.find((x) => x.faixaId === f.id)?.pessoas ?? 0} hoje
+                      </span>
+                    )}
+                  </MiniRotulo>
                   <input
                     type="number"
                     min={0}

@@ -16,6 +16,7 @@ import { MOTIVO_MINIMO_EM_MASSA, faltamCaracteres } from '../common/motivo.js';
 import {
   CicloNaoAbrivelError,
   assertCicloAbrivel,
+  avisosParaAbrir,
   problemasParaAbrir,
   validarConceitos,
   type AplicacaoParaValidar,
@@ -167,6 +168,8 @@ export class CicloService {
   /** ⚠️ Um mapeamento só: a lista viva e a guarda leem o ciclo do mesmo jeito. */
   private aplicacoesParaValidar(
     ciclo: Awaited<ReturnType<CicloService['carregarParaAbertura']>>,
+    /** Quantos valores INFORMADOS já existem no ciclo, por critério. */
+    valoresPorCriterio: ReadonlyMap<string, number> = new Map(),
   ): AplicacaoParaValidar[] {
     return ciclo.aplicacoes.map((a) => ({
       nome: a.nome,
@@ -175,6 +178,7 @@ export class CicloService {
       modeloFinalidade: a.modeloVersao.modelo.finalidade,
       criterios: a.criterios.map((ac) => ({
         peso: Number(ac.peso),
+        valoresInformadosNoCiclo: valoresPorCriterio.get(ac.criterioId) ?? 0,
         criterio: {
           codigo: ac.criterio.codigo,
           nome: ac.criterio.nome,
@@ -184,6 +188,35 @@ export class CicloService {
         },
       })),
     }));
+  }
+
+  /**
+   * Quantos valores INFORMADOS existem neste ciclo, por critério. Um `groupBy`
+   * só — a alternativa seria uma consulta por critério dentro do laço.
+   */
+  private async valoresInformadosPorCriterio(cicloId: string): Promise<Map<string, number>> {
+    const linhas = await this.prisma.criterioValorInformado.groupBy({
+      by: ['criterioId'],
+      where: { cicloId },
+      _count: { _all: true },
+    });
+    return new Map(linhas.map((l) => [l.criterioId, l._count._all]));
+  }
+
+  /**
+   * ⭐ Os AVISOS da abertura — o que não impede abrir, mas quem abre precisa
+   * saber. Hoje: critério INFORMADO sem nenhum valor no ciclo.
+   *
+   * ⚠️ Separado de `pendenciasParaAbrir` de propósito: misturar as duas listas
+   * faria o aviso parecer impedimento, e a tela mostraria "não pode abrir" para
+   * algo que pode.
+   */
+  async avisosParaAbrirCiclo(cicloId: string): Promise<string[]> {
+    const [ciclo, valores] = await Promise.all([
+      this.carregarParaAbertura(cicloId),
+      this.valoresInformadosPorCriterio(cicloId),
+    ]);
+    return avisosParaAbrir(this.aplicacoesParaValidar(ciclo, valores));
   }
 
   private conceitosParaValidar(ciclo: { conceitos: { descricao: string; limiteInferior: unknown; limiteSuperior: unknown }[] }) {

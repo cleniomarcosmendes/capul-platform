@@ -355,8 +355,19 @@ const CRITERIOS = [
     // Ver docs/DECISAO_RH_ESCOLARIDADE.md §4.
     codigo: 'QTDE_TREINAMENTO',
     nome: 'Treinamentos no Período',
+    /**
+     * ⚠️ MESMO TEXTO da migration `20260912020000_motivo_do_criterio_inativo`.
+     * Base nova (seed) e base existente (migration) precisam dizer a mesma
+     * coisa — duas redações do mesmo motivo envelhecem separadas, e quem lê uma
+     * não sabe que existe a outra.
+     */
     descricao:
-      'Cursos concluídos na janela do ciclo (RA4010). Zero é valor legítimo, não ausência. INATIVO até o RH esclarecer por que o registro parou em 14/11/2025.',
+      'DESATIVADO (decisão de 05/09/2026, revista em 11/09): o registro de treinamento no ' +
+      'Protheus parou em 14/11/2025 — 1.188 registros em 2023, 1.011 em 2024, 64 em 2025 e ' +
+      'nada depois. Na janela de 12 meses do Piloto, 6 pessoas de 1.036 pontuariam. Ligar ' +
+      'assim puniria as outras por falta de REGISTRO, não por falta de curso: o critério não ' +
+      'distingue as duas coisas. Só religar depois que o RH esclarecer por que o registro ' +
+      'parou. O resolver, as faixas e a tela já existem — falta o dado.',
     tipoValor: 'NUMERICO' as const,
     codigoCalculo: 'QTDE_TREINAMENTO',
     unidade: 'cursos',

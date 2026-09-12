@@ -55,6 +55,7 @@ describe('invariante: os três lugares dizem o mesmo número', () => {
       { listar: jest.fn().mockResolvedValue([]) } as never,
       {
         pendenciasParaAbrir: jest.fn().mockResolvedValue([]),
+        avisosParaAbrirCiclo: jest.fn().mockResolvedValue([]),
         historicoDeReabertura: jest.fn().mockResolvedValue({ reaberturas: 0, ultimaReabertura: null }),
       } as never,
       { acessoDeAvaliadores: jest.fn().mockResolvedValue(new Map()) } as never,

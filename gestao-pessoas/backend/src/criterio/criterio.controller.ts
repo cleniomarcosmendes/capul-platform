@@ -3,6 +3,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator.js';
 import { ROLES } from '../common/roles-rh.js';
 import { CriterioService } from './criterio.service.js';
+import { DistribuicaoService } from './distribuicao.service.js';
 import { CriterioDto, FaixasDto } from './criterio.dto.js';
 
 /**
@@ -16,7 +17,10 @@ import { CriterioDto, FaixasDto } from './criterio.dto.js';
 @Controller('criterios')
 @Roles(ROLES.RH_ADMIN)
 export class CriterioController {
-  constructor(private readonly criterios: CriterioService) {}
+  constructor(
+    private readonly criterios: CriterioService,
+    private readonly distribuicoes: DistribuicaoService,
+  ) {}
 
   /** Os `codigoCalculo` que existem, para o `<select>`. Nunca campo de texto. */
   @Get('resolvers') resolvers() {
@@ -25,6 +29,19 @@ export class CriterioController {
 
   @Get() listar() {
     return this.criterios.listar();
+  }
+
+  /**
+   * ⭐ Quantas pessoas cada faixa cobre HOJE — quem mexe precisa ver o tamanho
+   * antes de mexer. Apagar a faixa do código 45 de ESCOLARIDADE tira 480
+   * pessoas da conta, e nada avisava até a apuração.
+   *
+   * Rota separada da listagem de propósito: varre a população inteira (~1.000
+   * pessoas com histórico funcional), e pendurá-la na lista faria toda abertura
+   * de tela pagar por um dado que só interessa a quem abriu as faixas.
+   */
+  @Get(':id/distribuicao') distribuicao(@Param('id') id: string) {
+    return this.distribuicoes.doCriterio(id);
   }
 
   @Post() criar(@Body() dto: CriterioDto, @CurrentUser() u: JwtPayload) {

@@ -417,7 +417,22 @@ export interface CriterioEntrada {
   ativo?: boolean;
 }
 
+export interface DistribuicaoDoCriterio {
+  aplicavel: boolean;
+  motivo: string | null;
+  /** A data que ancora os critérios temporais — HOJE, não um ciclo. */
+  dataBase: string;
+  populacao: number;
+  porFaixa: { faixaId: string; pessoas: number }[];
+  semFaixa: number;
+  valoresSemFaixa: { valor: string; pessoas: number }[];
+  semDado: number;
+}
+
 export const criterios = {
+  /** Quantas pessoas cada faixa cobre hoje — o tamanho, antes de mexer. */
+  distribuicao: (id: string) =>
+    rhApi.get<DistribuicaoDoCriterio>(`/criterios/${id}/distribuicao`).then((r) => r.data),
   listar: () => rhApi.get<CriterioDoCadastro[]>('/criterios').then((r) => r.data),
   resolvers: () => rhApi.get<ResolverDisponivel[]>('/criterios/resolvers').then((r) => r.data),
   criar: (dto: CriterioEntrada) => rhApi.post<CriterioDoCadastro>('/criterios', dto).then((r) => r.data),
@@ -790,6 +805,13 @@ export interface ResumoDoCiclo {
 export interface PreviaDaAbertura {
   /** Vazio = a abertura passa. Mesma função que a API roda no clique. */
   problemas: string[];
+  /**
+   * ⭐ O que NÃO impede abrir, mas quem abre precisa saber — hoje, critério
+   * INFORMADO sem nenhum valor no ciclo. Lista SEPARADA da de problemas: juntas,
+   * o aviso pareceria impedimento e a tela diria "não pode abrir" para algo que
+   * pode.
+   */
+  avisos: string[];
   totalAplicacoes: number;
   noPublico: number;
   /** Avaliações que já existem e serão liberadas — abrir NÃO cria nenhuma. */

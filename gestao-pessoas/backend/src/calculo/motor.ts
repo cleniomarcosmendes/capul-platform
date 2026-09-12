@@ -60,11 +60,43 @@ export interface ValorInformado {
 export type MotivoAlerta = 'SEM_FAIXA' | 'SEM_VALOR_INFORMADO' | 'SEM_DADO_CADASTRAL';
 export type EscopoAlerta = 'INDIVIDUAL' | 'CONFIGURACAO';
 
+/**
+ * O escopo PADRÃO de cada motivo — o que ele é quando atinge ALGUMAS pessoas.
+ *
+ * ⚠️ Não é a palavra final: `agregarAlertas` promove para CONFIGURACAO o motivo
+ * que atingiu TODO MUNDO. Ver `escopoAgregado` logo abaixo.
+ */
 export const ESCOPO_DO_MOTIVO: Readonly<Record<MotivoAlerta, EscopoAlerta>> = Object.freeze({
   SEM_FAIXA: 'CONFIGURACAO',
   SEM_VALOR_INFORMADO: 'INDIVIDUAL',
   SEM_DADO_CADASTRAL: 'INDIVIDUAL',
 });
+
+/**
+ * ⭐⭐ O ESCOPO É CALCULADO, NÃO FIXO — e a diferença é de CONSELHO.
+ *
+ * "É dado de pessoa — resolve-se caso a caso" está certo para 12 pessoas sem
+ * escolaridade no cadastro. Para **894 de 894**, é conselho errado na hora
+ * errada: ninguém tem o dado porque o critério não foi alimentado, e a saída é
+ * uma importação, não 894 correções.
+ *
+ * Um critério INFORMADO recém-criado cai exatamente nisso: a tabela de valores
+ * nasce vazia, e o alerta saía classificado como individual, ordenado ABAIXO
+ * dos de configuração, mandando o RH resolver pessoa a pessoa o que é um ato só.
+ *
+ * ⚠️ A promoção exige saber o TOTAL de apurados — por isso `agregarAlertas`
+ * passou a recebê-lo. Sem ele não dá para distinguir "12 de 894" de "12 de 12",
+ * e são coisas diferentes.
+ */
+export function escopoAgregado(
+  motivo: MotivoAlerta,
+  pessoasAtingidas: number,
+  totalApurado: number,
+): EscopoAlerta {
+  if (ESCOPO_DO_MOTIVO[motivo] === 'CONFIGURACAO') return 'CONFIGURACAO';
+  // `> 0` para não promover no ciclo vazio, onde 0 de 0 seria "todo mundo".
+  return totalApurado > 0 && pessoasAtingidas >= totalApurado ? 'CONFIGURACAO' : 'INDIVIDUAL';
+}
 
 export interface AlertaApuracao {
   criterioCodigo: string;
@@ -93,7 +125,11 @@ export interface AlertaAgregado {
  * Os de CONFIGURACAO vêm primeiro, e dentro de cada escopo os que afetam mais
  * gente — é a ordem em que se resolve.
  */
-export function agregarAlertas(alertas: readonly AlertaApuracao[]): AlertaAgregado[] {
+export function agregarAlertas(
+  alertas: readonly AlertaApuracao[],
+  /** Quantas pessoas foram apuradas no escopo — o denominador de "todo mundo". */
+  totalApurado = 0,
+): AlertaAgregado[] {
   const porChave = new Map<string, { alerta: AlertaApuracao; pessoas: number; valores: Set<string> }>();
 
   for (const a of alertas) {
@@ -105,22 +141,34 @@ export function agregarAlertas(alertas: readonly AlertaApuracao[]): AlertaAgrega
   }
 
   return [...porChave.values()]
-    .map(({ alerta, pessoas, valores }) => ({
-      criterioCodigo: alerta.criterioCodigo,
-      criterioNome: alerta.criterioNome,
-      motivo: alerta.motivo,
-      escopo: alerta.escopo,
-      pessoas,
-      valores: [...valores].sort(),
-      resumo: resumir(alerta, pessoas, [...valores].sort()),
-    }))
+    .map(({ alerta, pessoas, valores }) => {
+      // ⭐ O escopo sai daqui, não do alerta individual: só na agregação se sabe
+      // quantas pessoas o motivo atingiu, e é isso que decide se é caso a caso
+      // ou configuração.
+      const escopo = escopoAgregado(alerta.motivo, pessoas, totalApurado);
+      const atingeTodos = escopo === 'CONFIGURACAO' && ESCOPO_DO_MOTIVO[alerta.motivo] === 'INDIVIDUAL';
+      return {
+        criterioCodigo: alerta.criterioCodigo,
+        criterioNome: alerta.criterioNome,
+        motivo: alerta.motivo,
+        escopo,
+        pessoas,
+        valores: [...valores].sort(),
+        resumo: resumir(alerta, pessoas, [...valores].sort(), atingeTodos),
+      };
+    })
     .sort(
       (a, b) =>
         (a.escopo === b.escopo ? 0 : a.escopo === 'CONFIGURACAO' ? -1 : 1) || b.pessoas - a.pessoas,
     );
 }
 
-function resumir(alerta: AlertaApuracao, pessoas: number, valores: string[]): string {
+function resumir(
+  alerta: AlertaApuracao,
+  pessoas: number,
+  valores: string[],
+  atingeTodos = false,
+): string {
   const gente = `${pessoas} pessoa${pessoas > 1 ? 's' : ''}`;
   switch (alerta.motivo) {
     case 'SEM_FAIXA':
@@ -129,10 +177,23 @@ function resumir(alerta: AlertaApuracao, pessoas: number, valores: string[]): st
         `(${valores.join(', ')}). Cadastre a faixa no critério e reapure — enquanto isso, ` +
         'o critério fica fora da nota dessas pessoas.'
       );
+    /**
+     * ⭐ Duas frases porque são dois problemas. Faltar o valor de algumas
+     * pessoas é lacuna de importação; faltar o de TODAS é o critério que nunca
+     * foi alimentado — e aí a saída é uma importação, não N correções.
+     */
     case 'SEM_VALOR_INFORMADO':
-      return `${gente} sem valor informado para "${alerta.criterioNome}" neste ciclo.`;
+      return atingeTodos
+        ? `NINGUÉM tem valor informado para "${alerta.criterioNome}" neste ciclo — o critério ` +
+            'não foi alimentado. Ele está fora da nota de todo mundo, e a nota saiu como se ele ' +
+            `não existisse. Importe os valores e reapure. Pessoas afetadas: ${pessoas}.`
+        : `${gente} sem valor informado para "${alerta.criterioNome}" neste ciclo.`;
     default:
-      return `${gente} sem dado cadastral para "${alerta.criterioNome}".`;
+      return atingeTodos
+        ? `NINGUÉM tem dado cadastral para "${alerta.criterioNome}" — o critério está fora da ` +
+            'nota de todo mundo. Isso costuma ser falha da sincronização com o Protheus, não ' +
+            `cadastro de pessoa. Pessoas afetadas: ${pessoas}.`
+        : `${gente} sem dado cadastral para "${alerta.criterioNome}".`;
   }
 }
 

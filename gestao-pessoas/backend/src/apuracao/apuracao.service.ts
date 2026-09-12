@@ -197,7 +197,10 @@ export class ApuracaoService {
       escopo,
       avaliacoesApuradas: apuradas,
       semNotaDeAvaliacao: semNota,
-      alertas: agregarAlertas(todosAlertas),
+      // ⭐ O total vai junto: sem ele `agregarAlertas` não distingue "12 de 894"
+      // de "12 de 12", e é essa distinção que decide se o alerta é caso a caso
+      // ou configuração.
+      alertas: agregarAlertas(todosAlertas, apuradas),
     };
 
     if (!gravar) return relatorio;

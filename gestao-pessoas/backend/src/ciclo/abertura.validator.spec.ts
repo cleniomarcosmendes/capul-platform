@@ -1,6 +1,7 @@
 import {
   CicloNaoAbrivelError,
   assertCicloAbrivel,
+  avisosParaAbrir,
   conceitoDaNota,
   problemasParaAbrir,
   validarAplicacao,
@@ -243,5 +244,68 @@ describe('público vazio', () => {
     expect(problemas.join(' ')).toMatch(/Aprendizes/);
     expect(problemas.join(' ')).toMatch(/Indústria/);
     expect(problemas.join(' ')).not.toMatch(/"Loja"/);
+  });
+});
+
+describe('⭐ avisosParaAbrir — o que não impede abrir, mas precisa ser sabido', () => {
+  const informado = (codigo: string, valores: number) => ({
+    peso: 10,
+    valoresInformadosNoCiclo: valores,
+    criterio: { codigo, nome: `Critério ${codigo}`, origem: 'INFORMADO' as const, ativo: true },
+  });
+  const calculado = {
+    peso: 10,
+    criterio: {
+      codigo: 'TEMPO_EMPRESA',
+      nome: 'Tempo de Empresa',
+      origem: 'CALCULADO' as const,
+      codigoCalculo: 'TEMPO_EMPRESA',
+      ativo: true,
+    },
+  };
+  const app = (nome: string, criterios: unknown[]) => ({
+    nome,
+    pessoasNoPublico: 10,
+    pesoAvaliacao: 60,
+    modeloFinalidade: 'PRODUCAO' as const,
+    criterios: criterios as never,
+  });
+
+  /**
+   * ⭐ O caso que motivou: a conferência do painel roda sobre avaliações
+   * ENVIADA, então com zero enviadas ela diz "nada a conferir ainda" — a
+   * checagem existia e era inalcançável exatamente quando serviria. Este aviso
+   * é a mesma informação no único momento em que ela ainda muda algo.
+   */
+  it('avisa quando um critério INFORMADO não tem nenhum valor no ciclo', () => {
+    const a = avisosParaAbrir([app('Administrativo', [informado('META', 0)])]);
+    expect(a).toHaveLength(1);
+    expect(a[0]).toMatch(/ainda não tem nenhum valor neste ciclo/);
+    expect(a[0]).toMatch(/sem erro em lugar nenhum/);
+  });
+
+  it('não avisa quando já há valores', () => {
+    expect(avisosParaAbrir([app('Administrativo', [informado('META', 3)])])).toEqual([]);
+  });
+
+  /** CALCULADO lê do cadastro — não há o que importar, e avisar seria ruído. */
+  it('não avisa sobre critério CALCULADO', () => {
+    expect(avisosParaAbrir([app('Administrativo', [calculado])])).toEqual([]);
+  });
+
+  /** Um aviso por CRITÉRIO, não por aplicação: o ato de importar é um só. */
+  it('agrupa por critério e diz em quantas aplicações ele está', () => {
+    const a = avisosParaAbrir([
+      app('Administrativo', [informado('META', 0)]),
+      app('Loja', [informado('META', 0)]),
+    ]);
+    expect(a).toHaveLength(1);
+    expect(a[0]).toMatch(/Aplicações que o usam: 2\./);
+  });
+
+  it('não impede abrir — é lista separada de `problemasParaAbrir`', () => {
+    const aplicacoes = [app('Administrativo', [informado('META', 0)])];
+    expect(avisosParaAbrir(aplicacoes)).toHaveLength(1);
+    expect(problemasParaAbrir(aplicacoes, CONCEITOS)).toEqual([]);
   });
 });

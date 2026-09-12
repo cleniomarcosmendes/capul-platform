@@ -14,6 +14,15 @@ import {
 export interface CriterioDaAplicacao {
   peso: number;
   criterio: CriterioValidavel;
+  /**
+   * ⭐ Quantos valores deste critério já existem NESTE ciclo. Só faz sentido em
+   * `origem = INFORMADO`, cujo valor vem de planilha ou digitação — o CALCULADO
+   * lê do cadastro e não tem o que importar.
+   *
+   * Serve ao AVISO da abertura, não a um bloqueio: importar depois de abrir é
+   * legítimo (o ciclo dura semanas). O que não pode é abrir sem saber.
+   */
+  valoresInformadosNoCiclo?: number;
 }
 
 export interface AplicacaoParaValidar {
@@ -100,6 +109,47 @@ export function validarAplicacao(aplicacao: AplicacaoParaValidar): string[] {
   }
 
   return problemas;
+}
+
+/**
+ * ⭐⭐ AVISOS DA ABERTURA — o que não impede abrir, mas quem abre precisa saber.
+ *
+ * ⚠️ **Por que AVISO e não problema.** Um critério `INFORMADO` sem valor nenhum
+ * não torna o ciclo inválido: os valores chegam por planilha, e importar depois
+ * de abrir é o fluxo normal. Bloquear a abertura por isso pararia o ciclo por
+ * um trabalho que ainda tem semanas para acontecer.
+ *
+ * ⚠️ **E por que na ABERTURA, e não só depois.** A conferência de pendências do
+ * painel roda sobre avaliações `ENVIADA` — com zero enviadas ela responde
+ * *"nada a conferir ainda"*. Ou seja: a checagem que existia era **inalcançável
+ * exatamente quando serviria**, e só falava depois que as notas já tinham saído
+ * sem o critério. Este aviso é a mesma informação, no único momento em que ela
+ * ainda muda alguma coisa.
+ */
+export function avisosParaAbrir(aplicacoes: readonly AplicacaoParaValidar[]): string[] {
+  const semValor = new Map<string, { nome: string; aplicacoes: string[] }>();
+
+  for (const app of aplicacoes) {
+    for (const item of app.criterios) {
+      if (item.criterio.origem !== 'INFORMADO') continue;
+      if ((item.valoresInformadosNoCiclo ?? 0) > 0) continue;
+      const atual = semValor.get(item.criterio.codigo) ?? {
+        nome: item.criterio.nome,
+        aplicacoes: [],
+      };
+      atual.aplicacoes.push(app.nome);
+      semValor.set(item.criterio.codigo, atual);
+    }
+  }
+
+  // Número em posição de rótulo, no fim — nenhuma palavra concorda com ele.
+  return [...semValor.values()].map(
+    (c) =>
+      `O critério "${c.nome}" é INFORMADO e ainda não tem nenhum valor neste ciclo. ` +
+      'Sem os valores ele fica fora da nota de todo mundo, pela renormalização, e a nota sai ' +
+      'como se ele não existisse — sem erro em lugar nenhum. Importe antes de apurar. ' +
+      `Aplicações que o usam: ${c.aplicacoes.length}.`,
+  );
 }
 
 /**

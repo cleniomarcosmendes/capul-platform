@@ -333,6 +333,24 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
                 ⚠️ Fica FORA da lista âmbar de propósito: aquelas são pendências
                 do ciclo, esta é uma pendência de CADASTRO DE ACESSO, resolvida
                 em outro módulo e por outra pessoa. E não bloqueia. */}
+            {/* ⭐⭐ CRITÉRIO SEM VALOR — o último momento em que isto ainda muda
+                alguma coisa. A conferência de pendências do painel roda sobre
+                avaliações ENVIADA: com zero enviadas ela diz "nada a conferir
+                ainda", e só fala depois que as notas já saíram sem o critério.
+                Aviso, não bloqueio: importar depois de abrir é o fluxo normal. */}
+            {previaAbertura.avisos.length > 0 && (
+              <div className="mt-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-semibold">
+                  ⚠️ {contagem(previaAbertura.avisos.length, 'critério ainda não tem', 'critérios ainda não têm')}{' '}
+                  valor neste ciclo
+                </p>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {previaAbertura.avisos.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {previaAbertura.avaliadoresSemAcesso.length > 0 && (
               <div className="mt-2 rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
                 <p className="font-semibold">
