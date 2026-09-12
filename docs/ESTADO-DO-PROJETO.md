@@ -8229,3 +8229,124 @@ os concilia.
 ⚠️ **Aguardando os nomes.** Preciso de rótulo para: (1) as **2 sem avaliação**; (2) o total de
 canceladas × (3) as recuperáveis pelo "Devolver" × (4) as recuperáveis pelo "Incluir". No
 `Avaliação Geral` a conta fecha porque lá não há nenhuma das duas situações.
+
+---
+
+### 3.1.123. ⭐⭐ O QUE A REGRESSÃO 108/108 MEDE — e o que ela NÃO mede
+
+Registrado porque as duas ressalvas **mudam o valor da regressão como
+instrumento**, e sem elas o `108/108` é lido como uma garantia que ele não dá.
+
+**(1) Ela mede a divisão fixa por 18, com pesos IGUAIS.** O ciclo `000006` tinha
+18 questões de mesmo peso — e onde os pesos são iguais, o exato e o arredondado
+**coincidem**. A repartição por classificação (`peso_do_grupo ÷ n`, com resto)
+**nasceu depois dela** e não é exercitada por ela.
+
+**(2) Os 17 apurados não mudaram porque as respostas eram uniformes dentro de
+cada classificação.** Aí o centavo cancela no numerador: `valor × (3,34+3,33+3,33)`
+é o mesmo que `valor × 10`. **O efeito é real e não se manifestou nestes dados** —
+teria aparecido no primeiro ciclo com respostas variadas, ou seja, **no piloto**.
+
+> ⭐⭐ **"Passou na regressão" responde: o cálculo continua igual PARA OS DADOS QUE
+> ELA TEM.** É uma pergunta sobre continuidade, não sobre correção — e um dado
+> histórico uniforme não distingue duas implementações que só divergem quando
+> ele varia.
+
+#### O teste que a regressão não faz — `ordem-nao-muda-a-nota.spec.ts`
+
+Sintético e deliberadamente hostil: respostas **diferentes** dentro de uma
+classificação cujo peso tem **resto**, e as **6 permutações** da ordem das
+questões exigindo o mesmo resultado. Nos três pesos reais com resto (16÷3, 40÷3,
+10÷3) e no questionário inteiro.
+
+⚠️ **Com o teste do avesso junto:** o mesmo caso, com o peso ARREDONDADO, exige
+que as permutações **divirjam**. Sem ele o teste passaria mesmo se alguém
+trocasse `pesoExato` de volta por `peso` — passaria por não estar medindo nada.
+
+E o terceiro: **respostas uniformes não distinguem exato de arredondado**, que é
+a razão dos 17 não terem mudado, escrita como teste.
+
+### 3.1.124. ⭐⭐ FERRAMENTA DE MEDIÇÃO FORA DA SUÍTE QUEBRA EM SILÊNCIO
+
+Em 12/09 o `nota-avaliacao.ts` passou a importar `../common/erro-de-dominio.js`.
+A suíte ficou verde. A **regressão contra o Protheus parou de rodar** — o
+`ts-node` em CJS não resolve o sufixo `.js`. Descobri **na hora em que precisei
+dela**, que é sempre quando se descobre.
+
+⚠️ **`tsc --noEmit` NÃO teria pego:** o compilador resolve `.js` → `.ts` sem
+reclamar. Quem não resolve é o runtime. **Verificação que não percorre o mesmo
+caminho do uso não verifica o uso.**
+
+#### A varredura: as cinco ferramentas fora da suíte
+
+| Ferramenta | O que mede | Resolvido como |
+|---|---|---|
+| `scripts/regressao-protheus.ts` | o baseline contra o ciclo 000006 | ⭐ **entrou na suíte** — roda de ponta a ponta contra a amostra commitada e exige `108/108 \| divergentes: 0` |
+| `prisma/seed.ts` | o instrumento herdado | guarda `require.main` + teste de CARGA |
+| `prisma/popular-dev-ciclo-piloto.ts` | o ciclo do DEV | idem |
+| `prisma/popular-dev-designacao.ts` | as designações do DEV | idem |
+| `prisma/popular-dev-fila-do-avaliador.ts` | a fila do DEV | idem |
+
+⭐ **A divisão certa é por EFEITO, não por importância:** a regressão é **somente
+leitura** e tem a amostra commitada, então roda de verdade dentro da suíte. As
+outras quatro **gravam no banco** — para essas, o máximo verificável é *"ainda
+carrega"*, e é o que o teste faz.
+
+⚠️ **A guarda `require.main === module` é o que torna a ferramenta verificável.**
+Sem ela, importar já executa (e o `seed` grava), então nenhum teste consegue nem
+abrir o arquivo. As quatro não tinham; agora têm.
+
+**Validado por mutação:** removido o `experimentalResolver` do
+`tsconfig.seed.json`, o teste da regressão **reprova** — é exatamente o defeito
+que passou.
+
+### 3.1.125. 🏷️ OS QUATRO RÓTULOS DO SIMULACAO — e a regra que eles instituem
+
+Nomes decididos em 12/09, e as duas contas passaram a fechar na tela:
+
+| Rótulo | SIMULACAO |
+|---|---|
+| `no público` | **54** |
+| **`no público, sem avaliação criada`** | **2** |
+| **`canceladas (todas as origens)`** | **39** |
+| **`canceladas pelo encerramento — recuperáveis em Devolver canceladas`** | **37** |
+| **`excluídas por decisão do RH — recuperáveis em Designação › Incluir`** | **2** |
+
+`54 = 52 + 2` · `39 = 37 + 2`.
+
+⚠️ **"fora" e "sem avaliador" estavam proibidas**, e com razão: neste módulo
+"fora do ciclo" é quem a régua excluiu e "sem avaliador" é quem tem avaliação e
+falta quem responda. A varredura de 10/09 já achou dois "fora" com sentidos
+diferentes em abas vizinhas — repetir a palavra seria a terceira.
+
+> ⭐⭐ **A REGRA: origem e caminho de recuperação no MESMO rótulo.** Foi o que
+> faltou quando o "Excluir" produzia uma avaliação "cancelada" e ninguém sabia
+> desfazer: **o estado estava na tela e a saída não.**
+
+#### 🔴 E um erro meu no caminho, que a conta pegou
+
+A primeira versão do `noPublicoSemAvaliacao` filtrava por `elegivel`, com a
+justificativa de "não contar duas vezes com `foraDoCiclo`". Deu **0** onde eu
+mesmo tinha medido **2** — as duas eram justamente as que a régua excluiu.
+
+⭐ **Os dois números respondem perguntas diferentes e podem se sobrepor:**
+`foraDoCiclo` é *"a régua tirou"*, o outro é *"não existe avaliação"*. No
+SIMULACAO, 4 estão fora do ciclo e **2 delas têm avaliação cancelada**. Somar os
+dois nunca foi a conta; a conta é `noPublico = avaliações + sem avaliação`.
+
+⚠️ Evitar dupla contagem entre dois números **que não são partes do mesmo todo**
+foi o erro — e o que o pegou foi a conta não fechar, de novo.
+
+#### Sim, dá para derivar do nome do botão — e foi assim
+
+`lib/rotulos.ts` guarda `ROTULO_DEVOLVER` e `ROTULO_INCLUIR`, e o **botão** e a
+**legenda que manda usá-lo** leem a mesma constante.
+
+⚠️ **Por que importa:** o rótulo cita o nome do botão. Renomear o botão e não a
+legenda faz ela mandar procurar uma coisa que não existe mais — **pior que não
+dizer nada, porque a pessoa vai procurar.** Com a constante, renomear um
+renomeia os dois no mesmo commit, por construção.
+
+⚠️ Só entram ali nomes que **aparecem na tela e são citados em outro lugar**.
+Rótulo usado num sítio só continua onde está — constante sem segundo leitor é
+indireção sem ganho.
