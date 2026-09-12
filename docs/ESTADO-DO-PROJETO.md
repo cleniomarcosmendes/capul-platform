@@ -64,7 +64,8 @@ são de **pessoas reais**; medir com uma delas é o que custou a limpeza de 12/0
 
 | | Custo | |
 |---|---|---|
-| ▶️ **DEVOLUTIVA presencial, conduzida pelo AVALIADOR** | ~22h · **restam ~5h** | **Etapas 1 ✅ · 2 ✅ · 3 ✅** (§3.1.152, §3.1.153, §3.1.157 — as quatro somas fecham nos 17 apurados). Falta só a **4**: conduzir + guarda do reabrir (5h) |
+| ✅ ~~**DEVOLUTIVA presencial**~~ | ~22h | **FECHADA** — as 4 etapas (§3.1.152, §3.1.153, §3.1.157, §3.1.160). O ciclo do módulo fica completo de ponta a ponta pela 1ª vez |
+| 🚦 **ENSAIO INTEGRAL** | — | ⭐ **NÃO falta implementação** (§3.1.163). Faltam 3 decisões do Clenio: as 19 sem avaliação · o roteiro incluir *liberar* e *conduzir* · e o ensaio ESCREVE |
 | 📌 **Apontar erro de cadastro** (novo) | ~6h | §3.1.159 — o avaliador passa a VER escolaridade/tempo errados e não tem onde dizer. ⛔ Depois da devolutiva |
 | 🟢 **Prévia do efeito na nota** | ~1,5 dia | §3.1.146, **depois** da devolutiva |
 | ✂️ ~~"não há como avisar" (4h)~~ | **minutos** | cortado: vira uma frase na prévia da abertura dizendo que avisar é presencial. §3.1.151 |
@@ -10304,3 +10305,193 @@ objeto") — que é exatamente quando a devolutiva acontece.
 ⚠️ **O que NÃO fazer:** deixar o avaliador CORRIGIR o dado. O cadastro é do
 Protheus; escrever aqui criaria uma segunda verdade que o próximo sync apaga —
 e sem ninguém entender por quê. É **apontar**, não corrigir.
+
+---
+
+### 3.1.160. ✅ DEVOLUTIVA — ETAPA 4: CONDUZIR + a guarda do reabrir. **A DEVOLUTIVA ESTÁ FECHADA.**
+
+#### As três decisões de desenho, com o argumento
+
+**1. Marcar como conduzida é DECLARAÇÃO, não prova.** Ele pode marcar sem ter
+conversado e conversar sem marcar. O sistema não tem como saber, e **não finge
+que sabe**: o campo se chama `conduzidasDeclaradas` e a tela do RH lê
+*"Avaliadores que **declararam** ter conversado"*, com a frase explicando.
+⭐ Mesma disciplina do *"a conferir"* da caixa de setor (§3.1.144) — **rótulo
+honesto vale mais que número preciso sobre outra coisa.**
+
+**2. Reversível — e ⚠️ DISCORDEI da trava proposta.** O Clenio sugeriu *"enquanto
+o ciclo não fecha"*. **Essa trava tornaria o desfazer impossível no caso
+normal**, e quem mostra isso é a etapa 3: **a devolutiva acontece com o ciclo já
+ENCERRADO**. É o mesmo raciocínio do `marcarRecorte` — rótulo não se governa
+pelo estado que governa nota. Um teste cobra que o service **não consulte** o
+status do ciclo, para que acrescentar essa trava seja decisão consciente.
+
+**3. A ordem, e o que a reabertura faz com cada marca:**
+
+| | |
+|---|---|
+| conduzir sem estar liberada | ⛔ **recusa** — senão o número contaria conversas sobre notas que ninguém viu |
+| reaberta depois de conduzida | ⭐ **a marca FICA** — concordo: a conversa aconteceu, e apagar seria reescrever o passado |
+
+⭐⭐ **E guardar as duas datas rendeu uma resposta que nenhuma das duas opções
+daria sozinha:** `conduzidaEm < liberadaEm` significa **"você já conversou, mas
+sobre a nota ANTERIOR"**. Nem apagar nem manter às cegas diria isso. Sem coluna
+nova.
+
+#### ⛳ O portão — medido na API
+
+| passo | medido |
+|---|---|
+| conduzir **antes** de liberar | **403** *"O RH ainda não liberou… não há o que conversar"* |
+| o RH libera | `{liberadas: 1}` |
+| conduzir | `{conduzida: true, devolutivaConduzidaEm: …}` |
+| desfazer | `{conduzida: false, devolutivaConduzidaEm: null}` |
+| conduzir de novo | ✅ |
+| **reabrir sem confirmar** | **400** — *"já foi liberada… **Liberada em: 12/09/2026**… será preciso apurar, liberar e conversar de novo"* |
+| reabrir confirmando | **200** |
+| as marcas depois | **liberação limpa ✅ · conduzida preservada ✅** |
+| a auditoria | `valorAnterior` com **as duas datas**, estruturadas |
+| a fila do avaliador | `conversaDesfeitaPelaReabertura = true` |
+
+⚠️ **A guarda do ciclo vem ANTES da minha, e ensina a ordem certa:** reabrir a
+avaliação de um ciclo encerrado é recusado com *"reabra o CICLO primeiro"*. Na
+prática, reabrir uma devolutiva já liberada é sempre um ato de dois passos.
+
+#### 🔴 O buraco que a frase do reabrir expôs — a frase ficaria sem onde morar
+
+Reabrir **limpa** `devolutivaLiberadaEm`. Com os dois ramos do OR da fila, o
+cartão de quem **já conversou** sumiria — **e a frase que explica o sumiço
+sumiria junto**.
+
+⭐ Foi o §3.1.155 aplicado a si mesmo. A fila ganhou um **terceiro ramo**:
+`devolutivaConduzidaEm != null`. Ele só acrescenta o caso *"reaberta depois da
+conversa"* — antes de conversar não há o que explicar, e depois de re-liberada o
+segundo ramo já a traz.
+
+#### 🔴 E um erro meu de método: `str.replace` sem `assert`
+
+O `select` de `devolutivaConduzidaEm` foi para a **consulta errada** porque a
+âncora não casou — e `str.replace` do Python **não reclama**: devolve o texto
+intacto. Nove suítes pararam de compilar.
+
+⭐ **É a mesma família do "mutação que não pousou"**, agora na ferramenta de
+edição: eu tinha `assert` nas outras substituições do mesmo bloco e não nessa.
+E **pulei o `tsc`** depois dessa edição, indo direto para o jest.
+
+> **Substituição de texto sem asserção é mutação que pode não entrar** — e o
+> silêncio dela é idêntico ao sucesso.
+
+---
+
+### 3.1.161. ⭐⭐ CLASSE — regra certa cujo ESCOPO fica incompleto quando aparece um caso novo
+
+Formulada pelo Clenio em 13/09 a partir do buraco da fila, e ela merece nome
+próprio:
+
+> **O filtro estava certo. O que mudou não foi o princípio — foi o MUNDO:
+> apareceu trabalho que acontece DEPOIS do encerramento.**
+
+⚠️ **É a classe mais difícil de achar por revisão**, e a razão é exata: **o
+código continua fazendo exatamente o que foi pedido.** Não há bug para ver, não
+há teste vermelho, não há comentário errado — o filtro `ciclo ABERTO` de 11/09
+era a tradução fiel de *"a fila é o trabalho que dá para fazer"*, e continuou
+sendo depois que o mundo ganhou um trabalho a mais.
+
+**Só o percurso real encontra**, porque o sintoma não é erro: é **ausência**. A
+fila voltou vazia, e vazio é uma resposta plausível.
+
+#### Os dois casos confirmados até agora — e o que eles têm em comum
+
+| Onde | Escrito para | Ficou incompleto quando |
+|---|---|---|
+| `minhasAvaliacoes`: `ciclo ABERTO` | o trabalho de **responder** | surgiu trabalho **depois** do encerramento (13/09) |
+| `ResultadoController`: `@Roles(RH_ADMIN)` | só o RH lia nota | o **avaliador** passou a precisar ler (13/09, §3.1.153) |
+
+⭐ **Os dois são PORTÕES** — um de estado, outro de papel — e **os dois foram
+achados percorrendo o fluxo, não por grep.** É o padrão a guardar.
+
+#### Há outro lugar com a mesma forma? — varrido, e a resposta é honesta
+
+Varri os filtros de status do backend. **Não achei um terceiro**: os demais
+`status: 'ABERTO'` ou são **escrita** (`data:`, no abrir/reabrir ciclo) ou têm
+escopo que o caso novo não toca (`situacaoNosCiclosAbertos`, que é sobre o
+impacto de designar — e designar não acontece depois do encerramento).
+
+⚠️ **Mas não afirmo que não existe.** O grep acha filtros **escritos como
+status**; não acha portão de papel (`@Roles`), nem regra embutida numa
+condição composta — e foi exatamente um `@Roles` o outro caso. **Grep não
+encontra esta classe; percurso encontra.**
+
+> **O gatilho, e é o que fica:** ⭐ **quando um PASSO NOVO entra no fluxo, varra
+> os portões que os passos anteriores instalaram.** Cada um deles foi escrito
+> com a lista de casos daquele dia, e nenhum deles vai reclamar.
+
+---
+
+### 3.1.162. ⭐ A FRASE QUE FICA — falsa sensação de cobertura é pior que cobertura ausente
+
+Registrada a pedido do Clenio, das duas decisões de varredura de 13/09:
+
+> **Falsa sensação de cobertura é pior que cobertura ausente.**
+
+**Onde ela decidiu:**
+
+1. **Não reescrever os 14 specs** que mockam auditoria. A cegueira é
+   **estrutural** — mock não escreve no banco. Eles continuam válidos **para o
+   que provam** (*"o ato registra"*); o que não provam é que o registro **cabe**,
+   e isso virou conta (§3.1.154).
+2. **Duas colunas e não trinta** no invariante de folga. Cobrir as colunas que
+   vêm do Protheus daria a aparência de um invariante completo sobre uma
+   verificação que **não alcança dado de fora**.
+
+⚠️ O corolário incômodo: **um teste que cobre metade e diz que cobre metade vale
+mais que um que cobre tudo por fora e nada por dentro.** Quem lê a lista de
+invariantes tem de poder confiar no que ela afirma.
+
+---
+
+### 3.1.163. 🚦 O ENSAIO INTEGRAL — o que ainda falta, com todas as letras
+
+Pergunta do Clenio ao fechar a devolutiva. **Resposta: para o ensaio integral
+rodar de ponta a ponta, não falta implementação nenhuma.**
+
+O ciclo do módulo fica completo pela primeira vez:
+
+> montar instrumento → montar ciclo → designar → responder → enviar → apurar →
+> **liberar** → **conduzir**
+
+#### Os dois pré-requisitos do portão (§3.1.134), resolvidos
+
+| | Estado |
+|---|---|
+| **DEVOLUTIVA** (~1 semana estimada) | ✅ **feita em 4 etapas** — §3.1.152, §3.1.153, §3.1.157, §3.1.160 |
+| **NOTIFICAÇÃO** (3–5 dias estimados) | ✅ **resolvida sem construir**: e-mail alcança **3 de 1.039** (§3.1.144), então **a fila É a notificação** — custo zero. A frase na prévia da abertura foi escrita: *"Abrir o ciclo não avisa ninguém… combine o aviso pessoalmente"*, com o número de designados |
+
+#### O que eu já tinha medido, e continua valendo
+
+`ENSAIO PILOTO — 16 CCs` **[RASCUNHO]**: 344 no público · 344 elegíveis pela
+régua · **325 avaliações** (todas PENDENTE) · **16 de 16 avaliadores conseguem
+entrar** · **5 conceitos** contíguos · critérios das aplicações **todos
+CALCULADO**.
+
+#### ⚠️ Três coisas para o Clenio decidir ANTES de a skill rodar — nenhuma é código
+
+1. **As 19 pessoas no público sem avaliação criada.** Elas existem no recorte e
+   não têm avaliador designado. O ensaio roda com **325**, e as 19 ficam de
+   fora. É decisão de recorte, não defeito: ou designa antes, ou aceita e o
+   ensaio cobre 325.
+2. **O roteiro da skill precisa incluir os DOIS botões novos** — *liberar* (RH) e
+   *conduzir* (avaliador). Sem eles o ensaio termina no resultado, que é
+   exatamente o que o §3.1.134 veio evitar.
+3. ⛔ **O ensaio ESCREVE**, e escreve muito: 325 respostas, apuração, liberação e
+   conduções. Precisa acontecer no **ENSAIO**, e o Piloto 15/09 continua fora —
+   894 PENDENTE, 0 respostas.
+
+#### E o que o ensaio da skill continua NÃO validando
+
+⚠️ Sem mudança aqui: ele valida o **SISTEMA**, não as **PESSOAS**. Senha
+temporária, primeiro acesso sem ninguém do lado, e o celular em pé no salão do
+supermercado só aparecem em **HLG** — e HLG depende de medir o commit e agendar
+a janela com o Marco (bloco (c) da fila).
+
+⭐ **São dois ensaios, e o primeiro está desimpedido.**
