@@ -6878,3 +6878,61 @@ que as duas formas conhecidas não estão na frase.**
 
 `C001 — ZZ TESTE — Cuidado com o EPI`, para a tarja *"não está em nenhum perfil"* poder ser vista.
 Apagável em um clique, e sem resposta nenhuma.
+
+---
+
+### 3.1.92. 📝 CORREÇÃO DE LEITURA — a escala: 1 conjunto de VALORES, 60 textos
+
+Registro porque a leitura errada foi feita **na conversa, sobre um número que já estava certo no
+documento** — e é isso que a torna perigosa como precedente.
+
+A §3.1.83 mede duas coisas com resultados **opostos**:
+
+| | |
+|---|---|
+| Conjuntos de **VALORES** distintos entre as 15 questões | **1** — `0,3 · 0,6 · 0,9 · 1,2` |
+| Textos de âncora distintos | **60 de 60** |
+
+Na conversa de 12/09 isso foi resumido como *"15 conjuntos distintos, escala reutilizável não se
+paga"* — que é a linha dos **textos** aplicada aos **valores**. A consequência quase construída era
+um formulário pedindo os quatro valores a cada questão, ou seja, **abrindo à mão o grau de
+liberdade que a §3.1.86 fecha por invariante**.
+
+⚠️ **A lição não é "conferir o número"** — o número estava certo e escrito. É que **uma tabela com
+duas linhas de sentidos opostos vira uma frase só quando é resumida**, e o resumo fica com a linha
+que soa mais interessante. Quando um levantamento tiver duas metades que apontam para lados
+diferentes, o resumo **cita as duas ou não cita nenhuma**.
+
+⭐ Vale ao lado da regra 15 (*dois números verdadeiros na mesma tela precisam do termo que os
+concilia*): aqui foram dois números verdadeiros no mesmo levantamento, e o que faltou foi o termo
+dizendo que **um é sobre valor e o outro sobre texto**.
+
+### 3.1.93. ⭐⭐ FAMÍLIA — o 403 que fala de outra coisa (a terceira)
+
+| # | Caso | O que a pessoa tinha | O que faltava | O que a mensagem dizia |
+|---|---|---|---|---|
+| 1 | **Esmeralda** (08/09) | conta na plataforma | **o módulo** | "sem acesso" |
+| 2 | **clenio** (11/09) | conta e módulo | **a permissão** | 403 genérico |
+| 3 | **`zz.teste.modelo`** (12/09) | conta, módulo **e papel** | **o colaborador** | *"A matrícula 009901 não corresponde a nenhum colaborador ativo"* |
+
+⭐ **Toda rota do módulo exige que a matrícula do usuário resolva num `rh.colaborador` ATIVO** —
+`GET /acervo` inclusive, que é leitura de instrumento em branco e não toca em dado de pessoa
+nenhuma. A verificação é do `identidade.service`, roda antes de qualquer papel, e é o que mais
+confunde: **a mensagem fala de matrícula, quando quem lê está pensando em permissão.**
+
+O caminho errado que ela induz é ir ao **Configurador dar papel a quem já tem** — o mesmo sintoma
+da colisão de chapa ([[feedback_chapa_colide_5_digitos]]), por causa diferente.
+
+⚠️ **ENTRA NO ROTEIRO DE DEPLOY (HLG e PROD):**
+
+> **Dar papel no Configurador NÃO basta.** Para alguém entrar no Gestão de Pessoas são **quatro**
+> coisas, e faltando uma o sintoma é um 403 que aponta para a errada:
+> 1. conta na plataforma, ATIVA;
+> 2. o módulo `GESTAO_PESSOAS` atribuído;
+> 3. o papel (`RH_ADMIN` / `RH_MODELO` / `RH_CICLO` / `AVALIADOR`);
+> 4. **matrícula que resolva num `rh.colaborador` ATIVO** — o que exige a sincronização com o
+>    Protheus ter rodado, ou, para conta de serviço/teste, um colaborador criado à mão.
+
+Não é defeito a corrigir: é a decisão do ADR-RH-01 (o colaborador mora em `rh`) chegando na porta
+de entrada. O que **é** defeito é a mensagem mandar para o lugar errado, e isso fica anotado como
+melhoria de texto — hoje ela é tecnicamente exata e operacionalmente enganosa.
