@@ -7646,3 +7646,131 @@ specs cai.
 
 ⚠️ Isso destrava a classe inteira: até aqui, "não dá para testar no frontend" era razão para não
 consertar. Não é mais.
+
+---
+
+### 3.1.107. ⭐⭐ A BARREIRA ERA A FERRAMENTA — o que ficou sem conserto por falta de test runner
+
+O `vitest` custou **~1h** e vale muito mais que o `repartirPesos` que o motivou. Até 12/09,
+*"o frontend não tem test runner"* era uma razão **correta** para não consertar: copiar regra de
+arredondamento sem teste é pior que o defeito. A razão era boa; o que faltava era remover a
+condição, não conviver com ela.
+
+⚠️ **O padrão a reconhecer:** quando a mesma justificativa aparece pela segunda vez para adiar
+coisas diferentes, ela deixou de ser uma decisão sobre aquele item e virou uma **barreira**. O
+custo de derrubá-la se paga contra a fila inteira, não contra o item da vez — e é por isso que ela
+some das estimativas: cada item sozinho não justifica.
+
+#### A fila que estava atrás dela
+
+Todos os cinco são **cópias declaradas de regras do backend** — e cada um já tem, no próprio
+cabeçalho, a história de quando a cópia divergiu.
+
+| Módulo | Gêmeo no backend | O que decide | Já deu errado? | Custo |
+|---|---|---|---|---|
+| 🔴 **`roles.ts`** | `common/roles-rh.ts` | **quais itens de menu existem** | ⚠️ o cabeçalho registra: `modulos[].role` é denormalizado e mente com papéis por departamento — foi assim que `REGISTRADOR_FROTA` ficou com "só Início" na Logística. **Sintoma MUDO**: nada dá erro, o item só não existe | **~1,5h** |
+| 🟠 **`ciclo-encerrado.ts`** | `ciclo/ciclo-operavel.ts` | desabilitar-com-motivo em **todo botão de escrita do ciclo** | sim — as telas não sabiam da recusa e a pessoa descobria no clique (§3.1.12) | **~1h** |
+| 🟠 **`motivo.ts`** | `common/motivo.ts` | o mínimo de caracteres por ato | sim — `MOTIVO_MINIMO` valia **15** na tela e **3** no backend, com o mesmo nome. Nome igual com valor diferente é pior que número solto | **~45min** |
+| 🟡 **`composicao-da-nota.ts`** | (não tem — é regra de exibição) | como o peso vira percentual nas duas telas | sim — 22,22% × 22,21% (§3.1.105) | **~45min** |
+| 🟡 **`formato.ts`** | `common/texto-sem-flexao` (o invariante) | `data()` sem `Date` (fuso), `flexao`/`contagem` | sim — `new Date('2026-09-05')` volta **04/09** a oeste de Greenwich, e é a data-base que ancora todo cálculo temporal | **~1h** |
+
+**Total: ~5h.** Não bloqueia nada, e a ordem é a da tabela.
+
+⚠️ **O `roles.ts` é o mais urgente por um motivo de calendário, não de gravidade:** a próxima
+varredura vai rodar com `RH_MODELO` e `RH_CICLO`, papéis **nunca exercitados**, e é justamente ele
+que decide o que essas contas enxergam. Um erro ali aparece como *"a tela não tem o item"* — e vai
+ser lido como falta de permissão.
+
+### 3.1.108. ⭐⭐ PADRÃO — o bug que não reproduz na conta de quem investiga
+
+O `"Bem-vindo, !"` sobreviveu a **três varreduras** (Rodrigo · Arielly em 10/09 · Arielly em 12/09).
+Não porque fosse sutil — a causa é uma string com espaço à esquerda —, mas por **quem o procurava**.
+
+```
+[ Arielly Aparecida Jose Pereira    ]   ← veio do RA_NOME (CHAR de largura fixa)
+[Clenio Mendes]                          ← criada à mão, no Configurador
+```
+
+Quem investiga abre o sistema **com a própria conta**. As contas de quem desenvolve e administra
+são criadas à mão; as das 183 pessoas vêm de carga em lote. **O defeito estava exatamente na
+fronteira entre as duas populações**, e a população que investiga é a que não reproduz.
+
+> ⭐⭐ **Gatilho:** defeito relatado que não reproduz — antes de fechar como "não consegui
+> reproduzir", perguntar **em que a conta do investigador difere da conta de quem relatou**. Origem
+> do cadastro (à mão × carga), papel, departamento, filial, e se tem colaborador vinculado.
+
+⚠️ Duas outras armadilhas do módulo são da mesma forma, e as três juntas explicam por que testar
+com a conta errada custa caro:
+
+| | Quem NÃO reproduz |
+|---|---|
+| `"Bem-vindo, !"` | conta criada à mão |
+| **RBAC / menu** | **ADMIN** — tem bypass no `RolesGuard`, então nunca vê o item faltar |
+| **separação de funções** | quem não é avaliado no ciclo que está olhando |
+
+**É por isso que as três contas `zz.teste.*` existem** — e por que rodar a varredura com uma conta
+de pessoa real desfaz o motivo delas.
+
+#### 🚀 Entra no ROTEIRO DE DEPLOY (HLG e PROD)
+
+⚠️ **Limpeza de DADO, não migration de schema** — não vai no `prisma/migrations`, vai na lista de
+passos manuais do roteiro, junto com o "Reprocessar metadados" do Fiscal.
+
+```sql
+-- Nomes vindos do RA_NOME (CHAR de largura fixa) entram com espaço à esquerda
+-- e à direita. 74 linhas no DEV; conferir a contagem antes e depois.
+SELECT count(*) FROM core.usuarios
+ WHERE nome <> btrim(regexp_replace(nome, '\s+', ' ', 'g'));   -- antes
+
+UPDATE core.usuarios
+   SET nome = btrim(regexp_replace(nome, '\s+', ' ', 'g'))
+ WHERE nome <> btrim(regexp_replace(nome, '\s+', ' ', 'g'));
+
+SELECT count(*) FROM core.usuarios
+ WHERE nome <> btrim(regexp_replace(nome, '\s+', ' ', 'g'));   -- tem de ser 0
+```
+
+⚠️ O conserto de exibição no Hub já foi, e é o que garante que a **próxima** carga em lote não
+traga o sintoma de volta. O SQL é para os que já estão lá.
+
+### 3.1.109. ⭐⭐ REGRA DE MÉTODO — "a regra existe?" e "aparece onde a pessoa decide?" são DUAS varreduras
+
+Da correção do registro de 11/09 (a guarda do `[DEMO]`), e vale muito além dele.
+
+Em 11/09 varri as guardas por **momento da API** e escrevi, numa tabela, *"chega a tempo ✅"*. A
+API de fato validava em três pontos. **Na tela, a opção continuava selecionável** — a pessoa
+escolhia o modelo de DEMONSTRAÇÃO, nomeava a aplicação, distribuía os pesos, e a recusa chegava no
+Salvar.
+
+A tabela não estava errada sobre o que media. Estava respondendo **outra pergunta**.
+
+> ⭐⭐ **Toda varredura de "a regra existe?" precisa da segunda metade: "ela aparece onde a pessoa
+> DECIDE?".** A primeira se responde lendo o backend; a segunda, só percorrendo a tela — e é a
+> segunda que diz se a regra chega a tempo, porque quem precisa dela não está no backend.
+
+⚠️ **Aviso que não impede o clique não chega antes: chega junto com o trabalho perdido.** Texto sob
+o rótulo de um campo é documentação, não guarda. A guarda na tela é o `disabled` **com o motivo**.
+
+Vale ao lado de:
+- §3.1.104 (*divergência tela × API nas duas direções*) — aqui a API está certa e a tela é frouxa;
+- [[feedback_capacidade_sem_caminho_na_tela]] — lá a capacidade existe e não tem botão; aqui a
+  recusa existe e não tem freio;
+- §3.1.88 (*o grep acha onde a regra foi escrita, não onde ela deveria estar*) — a mesma cegueira,
+  um andar acima: o inventário acha os momentos que existem, não a superfície que falta.
+
+### 3.1.110. 📌 `[DEMO] Modelo de Treinamento` é FIXTURE DE PRODUTO, não resíduo de teste
+
+**Decidido em 12/09: fica.** Registrado porque o nome com `[DEMO]` convida a apagá-lo numa
+limpeza, e ele é o único caso de três coisas ao mesmo tempo:
+
+| | |
+|---|---|
+| **Única escala diferente** | soma **50**, máxima **60** — todos os outros são 60/72 |
+| **Foi ele que expôs o `pontuacaoMaximaDoArranjo`** | qualquer conta que assuma 60/72 passa nos três perfis reais e falha nele |
+| **Único `finalidade = DEMONSTRACAO` permanente** | a guarda que recusa modelo de demonstração em ciclo válido **só é exercitável porque ele existe** |
+
+Veio do `seed.ts`, junto com os outros três — não é sobra de teste de ninguém.
+
+⚠️ **Não confundir com `ZZ MODELO DESCARTAVEL`**, que é área de varredura e tem SQL de limpeza
+próprio (§3.1.103). O critério: **`[DEMO]` nasce do seed e fica; `ZZ` é criado para um percurso e
+sai depois dele.**
