@@ -32,8 +32,18 @@ export interface QuestaoCarregada {
   ordem: number;
   classificacaoId: string;
   classificacaoNome: string;
-  /** Derivado do peso da classificação — nunca lido do banco. */
+  /**
+   * Derivado do peso da classificação — nunca lido do banco. **É o EXIBIDO**:
+   * duas casas, com o centavo do resto na primeira por ordem, e é o que
+   * reproduz os 44 pesos herdados do Protheus.
+   */
   peso: number;
+  /**
+   * ⭐⭐ O mesmo peso SEM arredondar. **É o de CALCULAR** — com o arredondado, as
+   * mesmas respostas dão notas diferentes conforme qual questão ficou com o
+   * centavo (§3.1.115).
+   */
+  pesoExato: number;
   maiorValor: number;
   alternativas: AlternativaDoArranjo[];
 }
@@ -94,7 +104,7 @@ export async function carregarArranjo(
         ordem: ap.ordem,
       })),
       v.grupos.map((g) => ({ classificacaoId: g.classificacaoId, peso: Number(g.peso) })),
-    ).map((d) => [d.perguntaId, d.peso]),
+    ).map((d) => [d.perguntaId, d]),
   );
 
   const questoes: QuestaoCarregada[] = v.perguntas.map((ap) => {
@@ -106,7 +116,13 @@ export async function carregarArranjo(
       ordem: ap.ordem,
       classificacaoId: ap.pergunta.classificacaoId,
       classificacaoNome: ap.pergunta.classificacao.nome,
-      peso: derivados.get(ap.perguntaId) ?? 0,
+      peso: derivados.get(ap.perguntaId)?.peso ?? 0,
+      /**
+       * ⭐⭐ O peso EXATO — é ele que entra na conta da nota. Ver
+       * `calculo/peso-derivado.ts`: com o arredondado, as mesmas respostas dão
+       * notas diferentes conforme qual questão ficou com o centavo do resto.
+       */
+      pesoExato: derivados.get(ap.perguntaId)?.pesoExato ?? 0,
       maiorValor: valores.length ? Math.max(...valores) : 0,
       alternativas: ap.pergunta.alternativas.map((a) => ({
         id: a.id,

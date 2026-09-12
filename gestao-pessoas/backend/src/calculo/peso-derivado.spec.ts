@@ -43,7 +43,7 @@ describe('pesosDerivados', () => {
 
   it('questão única leva o peso inteiro da classificação', () => {
     const r = pesosDerivados([q('a', 'G', 0)], [{ classificacaoId: 'G', peso: 13 }]);
-    expect(r).toEqual([{ perguntaId: 'a', classificacaoId: 'G', peso: 13 }]);
+    expect(r).toEqual([{ perguntaId: 'a', classificacaoId: 'G', peso: 13, pesoExato: 13 }]);
   });
 
   it('classificação com peso e SEM questão é ignorada (arranjo pela metade)', () => {
@@ -150,7 +150,52 @@ describe('⭐⭐ reprodução do instrumento herdado — os 44 pesos reais', () 
 describe('pontuacaoMaximaDoArranjo', () => {
   it('falha alto quando uma questão do arranjo não tem alternativa', () => {
     expect(() =>
-      pontuacaoMaximaDoArranjo([{ perguntaId: 'a', classificacaoId: 'G', peso: 5 }], new Map()),
+      pontuacaoMaximaDoArranjo([{ perguntaId: 'a', peso: 5 }], new Map()),
     ).toThrow(/sem alternativas/);
+  });
+});
+
+describe('⭐⭐ pesoExato — a nota não pode depender de quem ficou em primeiro', () => {
+  /**
+   * Medido na varredura de 12/09: com pesos `3,34 / 3,33 / 3,33` e as MESMAS
+   * respostas, a nota do grupo dá **66,68 ou 66,65** conforme qual questão
+   * ficou com o centavo do resto. Até 0,08 no grupo e 0,01 na nota final — e
+   * quem decide o desvio é a ORDEM no arranjo, escolha de quem monta.
+   */
+  const arranjo = [
+    { perguntaId: 'q1', classificacaoId: 'c1', ordem: 0 },
+    { perguntaId: 'q2', classificacaoId: 'c1', ordem: 1 },
+    { perguntaId: 'q3', classificacaoId: 'c1', ordem: 2 },
+  ];
+  const pesos = [{ classificacaoId: 'c1', peso: 10 }];
+
+  it('o EXIBIDO é o arredondado, com o centavo na primeira', () => {
+    expect(pesosDerivados(arranjo, pesos).map((p) => p.peso)).toEqual([3.34, 3.33, 3.33]);
+  });
+
+  it('o EXATO é igual para todas — é a divisão pura', () => {
+    const exatos = pesosDerivados(arranjo, pesos).map((p) => p.pesoExato);
+    expect(exatos[0]).toBe(exatos[1]);
+    expect(exatos[1]).toBe(exatos[2]);
+    expect(exatos[0]).toBeCloseTo(10 / 3, 12);
+  });
+
+  /** ⚠️ E os dois somam o peso da classificação: 10, pelos dois caminhos. */
+  it('as duas somas fecham em 10', () => {
+    const d = pesosDerivados(arranjo, pesos);
+    expect(d.reduce((s, p) => s + p.peso, 0)).toBeCloseTo(10, 10);
+    expect(d.reduce((s, p) => s + p.pesoExato, 0)).toBeCloseTo(10, 10);
+  });
+
+  it('a ordem muda o EXIBIDO e não muda o EXATO', () => {
+    const invertido = [
+      { perguntaId: 'q3', classificacaoId: 'c1', ordem: 0 },
+      { perguntaId: 'q2', classificacaoId: 'c1', ordem: 1 },
+      { perguntaId: 'q1', classificacaoId: 'c1', ordem: 2 },
+    ];
+    const a = new Map(pesosDerivados(arranjo, pesos).map((p) => [p.perguntaId, p]));
+    const b = new Map(pesosDerivados(invertido, pesos).map((p) => [p.perguntaId, p]));
+    expect(a.get('q1')!.peso).not.toBe(b.get('q1')!.peso); // 3,34 × 3,33
+    expect(a.get('q1')!.pesoExato).toBe(b.get('q1')!.pesoExato);
   });
 });

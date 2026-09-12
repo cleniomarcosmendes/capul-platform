@@ -487,6 +487,54 @@ export class AvaliacaoService {
    * segunda implementação dela divergiria da nota do envio no primeiro peso que
    * mudasse, e a tela diria dois números diferentes para a mesma avaliação.
    */
+  /**
+   * ⭐⭐ A MEMÓRIA POR QUESTÃO — o que a devolutiva precisa ter na mão.
+   *
+   * Sete barras e um total não sustentam conversa: o RH mostra "Relacionamento
+   * 66,67" e não tem como dizer O QUE melhorar. Com a âncora escolhida visível
+   * ("Raramente falta no trabalho"), a conversa tem objeto.
+   *
+   * ⚠️ Devolve o peso EXIBIDO (o arredondado), não o de calcular: quem confere
+   * na mão soma o que está na tela. A nota do grupo, essa, sai do exato — e é
+   * por isso que a soma dos pesos exibidos pode divergir do denominador em
+   * centavos. O rodapé da tela diz de onde vem cada número.
+   */
+  async questoesRespondidasDa(avaliacaoId: string) {
+    const avaliacao = await this.prisma.avaliacao.findUniqueOrThrow({
+      where: { id: avaliacaoId },
+      include: {
+        aplicacao: { select: { modeloVersaoId: true } },
+        respostas: { select: { perguntaId: true, alternativaId: true, valor: true } },
+      },
+    });
+    const porPergunta = new Map(avaliacao.respostas.map((r) => [r.perguntaId, r]));
+    const arranjo = await carregarArranjo(this.prisma, avaliacao.aplicacao.modeloVersaoId);
+
+    return arranjo.questoes.map((q) => {
+      const r = porPergunta.get(q.id);
+      const escolhida = r ? q.alternativas.find((a) => a.id === r.alternativaId) : undefined;
+      return {
+        perguntaId: q.id,
+        codigo: q.codigo,
+        enunciado: q.enunciado,
+        classificacaoId: q.classificacaoId,
+        ordem: q.ordem,
+        peso: q.peso,
+        maiorValor: q.maiorValor,
+        /** `null` quando a questão ficou sem resposta (avaliação cancelada). */
+        valor: r ? Number(r.valor) : null,
+        /** ⭐ O TEXTO da âncora — é o que dá objeto à conversa. */
+        respostaEscolhida: escolhida?.descricao ?? null,
+        /** Todas as âncoras, para a devolutiva mostrar o que viria depois. */
+        ancoras: q.alternativas.map((a) => ({
+          descricao: a.descricao,
+          valor: a.valor,
+          escolhida: a.id === r?.alternativaId,
+        })),
+      };
+    });
+  }
+
   async notaPorGrupoDa(avaliacaoId: string) {
     const itens = await this.itensRespondidos(avaliacaoId);
     const notas = notaPorGrupo(itens as ItemRespondido[]);
@@ -540,7 +588,17 @@ export class AvaliacaoService {
     return arranjo.questoes.map((q) => ({
       perguntaId: q.id,
       grupoId: q.classificacaoId,
-      peso: q.peso,
+      /**
+       * ⭐⭐ `pesoExato`, não `peso`. Ver §3.1.115: com o arredondado, as MESMAS
+       * respostas dão 66,68 ou 66,65 conforme qual questão ficou com o centavo
+       * do resto — e quem decide isso é a ORDEM das questões no arranjo, que é
+       * escolha de quem monta, não do RH que avalia.
+       *
+       * O arredondado continua sendo o que a tela mostra (`pesoExibido`): ele
+       * é o que reproduz o instrumento herdado e o que soma exatamente 60.
+       */
+      peso: q.pesoExato,
+      pesoExibido: q.peso,
       maiorValor: q.maiorValor,
       valorRespondido: respostas.get(q.id) ?? null,
     }));

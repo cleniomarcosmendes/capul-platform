@@ -5,5 +5,12 @@
     "moduleResolution": "node",
     "resolvePackageJsonExports": false
   },
-  "include": ["prisma/seed.ts"]
+  "include": ["prisma/seed.ts"],
+  /* ⚠️ Sem isto o script quebra desde 12/09: `nota-avaliacao.ts` passou a
+     importar `../common/erro-de-dominio.js` (a base dos erros de domínio) e o
+     ts-node CJS não resolve o sufixo `.js` para o `.ts` correspondente.
+     `experimentalResolver` faz essa ponte — é o mesmo que o Jest já faz pelo
+     `moduleNameMapper`. A regressão do 000006 é a única coisa que roda por
+     aqui, e ela precisa continuar rodando: é o baseline contra o Protheus. */
+  "ts-node": { "experimentalResolver": true }
 }

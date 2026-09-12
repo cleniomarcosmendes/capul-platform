@@ -56,7 +56,33 @@ export interface PesoDaClassificacao {
 export interface PesoDaQuestao {
   perguntaId: string;
   classificacaoId: string;
+  /**
+   * O peso ARREDONDADO a duas casas, com o centavo do resto na primeira por
+   * ordem. **É o número que se EXIBE** — e o que reproduz os 44 pesos herdados
+   * do Protheus.
+   */
   peso: number;
+  /**
+   * ⭐⭐ O peso EXATO: `peso_da_classificação ÷ n`, sem arredondar. **É o número
+   * com que se CALCULA.**
+   *
+   * ── POR QUE OS DOIS (12/09/2026) ────────────────────────────────────────
+   *
+   * Medido na varredura: com pesos `3,34 / 3,33 / 3,33` e as MESMAS respostas,
+   * a nota do grupo dá **66,68 ou 66,65** conforme qual questão ficou com o
+   * centavo. Até 0,08 ponto no grupo e 0,01 na nota final — e **quem decide o
+   * desvio é a ORDEM das questões no arranjo**, que é escolha de quem monta,
+   * não do RH que avalia.
+   *
+   * *"A nota depende de qual questão ficou em primeiro"* é indefensável numa
+   * devolutiva. Com o peso exato, `Σ(valor × peso)` não depende da ordem — o
+   * denominador é o mesmo e o numerador também.
+   *
+   * ⚠️ O arredondado NÃO sai de cena: ele é o que o RH lê, o que reproduz o
+   * instrumento herdado, e o que soma exatamente 60. A regra é **calcular no
+   * exato e arredondar só para exibir** — o inverso do que se fazia.
+   */
+  pesoExato: number;
 }
 
 export class ClassificacaoSemPesoError extends ErroDeDominio {
@@ -109,9 +135,14 @@ export function pesosDerivados(
     // diferentes entre duas leituras — e a nota mudaria sem ninguém ter mexido
     // em nada.
     const ordenadas = [...doGrupo].sort((a, b) => a.ordem - b.ordem);
-    const pesos = distribuirPeso(pesoPorClassificacao.get(classificacaoId) as number, ordenadas.length);
+    const total = pesoPorClassificacao.get(classificacaoId) as number;
+    const pesos = distribuirPeso(total, ordenadas.length);
+    // ⚠️ O exato é o mesmo para todas as questões da classificação — é a
+    // divisão pura. É justamente por ser igual que a nota deixa de depender de
+    // quem ficou em primeiro.
+    const exato = total / ordenadas.length;
     ordenadas.forEach((q, i) => {
-      resultado.push({ perguntaId: q.perguntaId, classificacaoId, peso: pesos[i] });
+      resultado.push({ perguntaId: q.perguntaId, classificacaoId, peso: pesos[i], pesoExato: exato });
     });
   }
 
@@ -125,7 +156,17 @@ export function pesosDerivados(
  * onde acrescentar uma pergunta levava a nota acima de 100 sem acusar erro.
  */
 export function pontuacaoMaximaDoArranjo(
-  pesosPorQuestao: readonly PesoDaQuestao[],
+  /**
+   * ⚠️ Aceita o mínimo de que precisa — id e peso. Exigir `PesoDaQuestao`
+   * inteiro obrigaria todo chamador a carregar `pesoExato` e `classificacaoId`
+   * que esta conta não usa.
+   *
+   * ⚠️ E o peso aqui é o ARREDONDADO, de propósito: a máxima é o número que a
+   * publicação GRAVA e que a tela confere contra o gravado — tem de ser o mesmo
+   * que sai de somar os pesos exibidos. Com Σ(exibidos) = 60 exato, dá 72 pelos
+   * dois caminhos; o que muda é qual deles alguém consegue refazer na mão.
+   */
+  pesosPorQuestao: readonly { perguntaId: string; peso: number }[],
   maiorValorPorPergunta: ReadonlyMap<string, number>,
 ): number {
   // ⚠️ ARREDONDAR UMA VEZ SÓ, no fim. Arredondar por questão parece inofensivo
