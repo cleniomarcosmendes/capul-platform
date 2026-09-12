@@ -33,14 +33,30 @@ const DISPENSADOS: Record<string, string> = {
   'avaliacao/avaliacao.service.ts':
     'usa a porta em todo acesso individual; as demais consultas são do questionário, não da avaliação',
   'ciclo/ciclo.service.ts':
-    'só CONTA avaliações pendentes antes de encerrar o ciclo — agregado, não lê o conteúdo de ninguém',
+    'CONTA as pendentes antes de encerrar; e, na DEVOLUÇÃO DA FILA, lê e reabre as canceladas pelo ' +
+    'encerramento — em LOTE, por ciclo, sem recorte por pessoa (mesma forma da apuracao.service). ' +
+    'Reabrir está entre os atos protegidos, e passa aqui por dois motivos: ninguém consegue MIRAR ' +
+    'a própria linha, porque o alvo é `status=CANCELADA + origem=ENCERRAMENTO` do ciclo inteiro; e ' +
+    'devolver a avaliação de quem é o AVALIADO não lhe dá acesso a nada — devolve o trabalho para a ' +
+    'fila do AVALIADOR dele. O que a prévia lê é motivo do cancelamento e se havia resposta, ' +
+    'nunca nota nem conteúdo. ' +
+    '⚠️ Até 12/09/2026 esta dispensa dizia apenas "só CONTA": foi escrita quando o arquivo só ' +
+    'contava, e a devolução da fila entrou depois. A dispensa é por NOME DE ARQUIVO — o arquivo ' +
+    'cresce e o texto fica.',
   'designacao/designacao.service.ts':
     'CRIA a designação. Ser designado não é mexer na própria avaliação: a gestora precisa ser designada ' +
     'para o superior dela receber a tarefa. Designar a si mesma como AVALIADORA é barrado no service.',
   'painel/painel.service.ts':
-    'só CONTA — groupBy por status e por avaliador, e groupBy de avaliadoId para saber quem ainda ' +
-    'não foi designado. Mesma frase do ciclo.service: agregado, não lê o conteúdo de ninguém. ' +
-    'A separação de funções não tem o que proteger num total.',
+    'CONTA (groupBy por status, por avaliador e de avaliadoId, para saber quem falta designar) — ' +
+    'a separação de funções não tem o que proteger num total. A única leitura de linha busca ' +
+    '`avaliadorId` das avaliações apontadas como "não é minha equipe", para pôr NOME em quem ' +
+    'avisou: é chave estrangeira virando pessoa, não o conteúdo da avaliação. ' +
+    '⚠️ Até 12/09/2026 dizia "só CONTA", e esse findMany já existia.',
+  'scripts/conferir-estado.ts':
+    'ferramenta de CONFERÊNCIA, só leitura: dois groupBy (por status e por avaliador) para dizer ' +
+    'quantas existem. Agregado, não lê o conteúdo de ninguém — e não há requisitante para a porta ' +
+    'checar: inventar um usuário só para satisfazer a guarda faria a guarda registrar um acesso ' +
+    'que não houve. Está em SO_AGREGA, então a frase acima é cobrada pela máquina.',
   'aplicacao/aplicacao.service.ts':
     'só CONTA avaliações antes de tirar alguém do público da aplicação — para não deixar a ' +
     'Avaliacao órfã do recorte que a originou. Mesma frase do ciclo.service e do ' +
@@ -59,6 +75,25 @@ const DISPENSADOS: Record<string, string> = {
     'apuração em LOTE, por ciclo ou aplicação — a exceção já acordada, com escopo guardado por ' +
     'assertEscopoReapuracaoValido (nunca por colaborador)',
 };
+
+/**
+ * ⭐⭐ Dispensados que se justificam por **"agregado, não lê o conteúdo de
+ * ninguém"** — a frase mais repetida da lista acima.
+ *
+ * Ela é uma AFIRMAÇÃO SOBRE O CÓDIGO, e até 12/09/2026 nada a conferia: a
+ * dispensa é por NOME DE ARQUIVO, o arquivo cresce, e o texto fica dizendo o
+ * que era verdade no dia em que foi escrito. Aconteceu três vezes —
+ * `resultado.service` (11/09), `ciclo.service` e `painel.service` (12/09, este
+ * commit): as três diziam "só CONTA" com um `findMany` dentro.
+ *
+ * Quem entra AQUI aceita que a máquina cobre a frase: em `prisma.avaliacao`,
+ * só formas de contagem. Quem lê linha fica na lista de cima, com o motivo
+ * escrito por extenso — o que é honesto, e continua sem verificação.
+ */
+const SO_AGREGA = ['aplicacao/aplicacao.service.ts', 'scripts/conferir-estado.ts'];
+
+/** Formas de `prisma.avaliacao.X` que NÃO são contagem. */
+const LE_OU_ESCREVE = /prisma\.avaliacao\.(?!count\b|groupBy\b|aggregate\b)([a-zA-Z]+)/g;
 
 function arquivosTs(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -115,6 +150,20 @@ describe('invariante: acesso a avaliação passa pelo AvaliacaoAcessoService', (
       .map(({ relativo }) => relativo);
 
     expect(violacoes).toEqual([]);
+  });
+
+  it('⭐ quem foi dispensado por "só agrega" continua só agregando', () => {
+    // Canário: a forma procurada ainda distingue contagem de leitura.
+    expect([...'x = prisma.avaliacao.findMany()'.matchAll(LE_OU_ESCREVE)]).toHaveLength(1);
+    expect([...'x = prisma.avaliacao.groupBy()'.matchAll(LE_OU_ESCREVE)]).toHaveLength(0);
+    expect([...'x = prisma.avaliacao.count()'.matchAll(LE_OU_ESCREVE)]).toHaveLength(0);
+
+    const fora: string[] = [];
+    for (const relativo of SO_AGREGA) {
+      const fonte = fs.readFileSync(path.join(RAIZ, relativo), 'utf8');
+      for (const m of fonte.matchAll(LE_OU_ESCREVE)) fora.push(`${relativo} → ${m[0]}`);
+    }
+    expect(fora).toEqual([]);
   });
 
   it('⭐ nenhuma rota que toca avaliação dispensa o vínculo de colaborador', () => {

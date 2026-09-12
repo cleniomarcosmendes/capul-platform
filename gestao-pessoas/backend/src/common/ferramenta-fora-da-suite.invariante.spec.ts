@@ -46,6 +46,14 @@ const FERRAMENTAS = [
 ];
 
 describe('⭐⭐ invariante — ferramenta fora da suíte não pode quebrar calada', () => {
+  /**
+   * ⚠️ `src/scripts/conferir-estado.ts` NÃO entra nesta lista, e por um motivo
+   * melhor: ele mora em `src/` e é **compilado pelo build do serviço**. Se um
+   * import dele quebrar, o `tsc` quebra — sinal mais alto que um teste de
+   * carga. Foi de propósito que ele saiu de `scripts/`: depender do `ts-node`
+   * com `experimentalResolver` era depender do mesmo resolvedor que já quebrou
+   * uma ferramenta de medição em silêncio (§3.1.124).
+   */
   it('⚠️ canário — os arquivos existem e a lista não está vazia', () => {
     expect(FERRAMENTAS.length).toBeGreaterThan(3);
     const sumidos = FERRAMENTAS.filter((f) => !fs.existsSync(path.join(RAIZ, f.arquivo)));
