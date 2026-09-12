@@ -8710,3 +8710,85 @@ Continuam faltando, e nenhum é meu:
 1. **o commit real de HLG** — só o Marco mede (`/health → versao.commit`);
 2. **a decisão sobre a Onda A** — separar do módulo os 5 jobs de
    `migrate-guarda`, combinada em 11/09 e ainda em aberto.
+
+---
+
+### 3.1.134. 🚪 O PORTÃO DE LIBERAÇÃO — implementação → ensaio integral → gente real
+
+**Encadeamento combinado em 12/09.** Nada é liberado para a Arielly e os
+avaliadores de verdade antes de a skill percorrer o ciclo INTEIRO — os 16
+avaliadores e a Arielly, respondendo como o usuário responderá, até a apuração e
+a devolutiva.
+
+#### 1. O ensaio integral ESCREVE
+
+Vai haver avaliação **respondida, enviada e apurada**. O lugar é o
+**`ENSAIO PILOTO — 16 CCs`** (325 avaliações, RASCUNHO), que existe exatamente
+para isso.
+
+⛔ **O `Piloto 15/09` continua em 894 PENDENTE, 0 respostas, e NÃO participa.**
+
+#### 2. ⭐⭐ O que o ensaio da skill NÃO valida — são DOIS ensaios, não um
+
+> **O da skill valida o SISTEMA. O de HLG valida as PESSOAS.**
+
+O ensaio integral roda com **16 papéis na mesma máquina, com sessão aberta por
+quem conduz**. Ele não valida:
+- gente real recebendo **senha temporária** e trocando no primeiro acesso;
+- alguém entrando **sem ninguém do lado**, sem saber onde clicar;
+- o e-mail chegando na caixa da pessoa, no computador dela.
+
+⚠️ Esse pedaço **só acontece em HLG** e **depende do Marco**. Tratá-los como um
+ensaio só é o erro: o primeiro dá verde e o segundo é onde aparece "não consegui
+entrar".
+
+#### 3. PRÉ-REQUISITOS — os dois listados, e o que MEDI
+
+| | Custo | Por quê |
+|---|---|---|
+| **DEVOLUTIVA** | ~1 semana | Sem ela o ciclo **não tem fim**: a régua de conceitos diz *"é este texto que a pessoa recebe"* e não existe tela onde alguém receba. O ensaio não pode terminar no resultado |
+| **NOTIFICAÇÃO** | 3–5 dias | É o que faz o avaliador **saber que tem trabalho**. Sem ela o ensaio testa um sistema em que ninguém é avisado |
+
+**Medi o resto, e o ensaio está pronto no que depende de dado:**
+
+| Conferência | Resultado |
+|---|---|
+| Conceitos do ENSAIO (a régua da apuração) | ✅ **5 faixas contíguas 0–100** |
+| Critérios das aplicações | ✅ **todos CALCULADO** (`ESCOLARIDADE`, `TEMPO_EMPRESA`, `TEMPO_FUNCAO`) |
+| Os 16 avaliadores conseguem entrar? | ✅ **16 de 16** — conta ativa, permissão e colaborador elegível |
+| A Arielly | ✅ `RH_ADMIN`, conta e colaborador ATIVO |
+
+⭐⭐ **Consequência que muda a fila: "entrada do valor INFORMADO" NÃO é
+pré-requisito do ensaio.** Nenhuma aplicação do ENSAIO usa critério `INFORMADO`
+— os três são calculados do cadastro. Era a suposição mais cara da lista, e o
+dado a desfaz.
+
+#### 🔴 E um pré-requisito meu que quase virou bloqueio falso
+
+Ao medir quem entra, filtrei por `col.situacao = 'ATIVO'` e achei **2 de 16
+travados** — MARCIO ANTONIO (33 avaliações) e LICIA VERSIANI (1). Ia reportar
+como pré-requisito.
+
+⚠️ **Régua errada.** `SITUACOES_ELEGIVEIS = ['ATIVO','AFASTADO','FERIAS']`, e os
+dois são FÉRIAS e AFASTADO — **elegíveis**. Com a régua certa: **16 de 16**.
+
+⭐ É o defeito que o próprio ESTADO alerta desde o começo (*"`situacao = 'ATIVO'`
+derrubaria 145 das 1.036 pessoas de todas as listas, calado"*) — e eu o cometi
+numa consulta de conferência, que é onde ele engana pior: **a conta parece
+medir, e mede outra coisa.** A régua tem nome e é importável; escrever
+`'ATIVO'` à mão numa query de conferência é reescrever a constante fora dela
+(§3.1 fonte-única), só que em SQL, onde nenhum teste varre.
+
+#### ⚠️ Um caso que o ensaio vai exercitar de graça, e vale saber
+
+A aplicação **`Aprendizes`** (18 avaliações) tem **zero critérios** e
+`pesoAvaliacao = 100`: a nota final é a nota do questionário, pura. É o caso que
+a regra *"`pesoAvaliacao > 0` faz o caso especial cair da fórmula"* existe para
+cobrir, e ele nunca foi percorrido de ponta a ponta com dado.
+
+#### 📄 E o `_Pos_exec` vira PASSO NUMERADO
+
+No roteiro de 04/09 ele é recomendação no fim — e **não foi escrito** (§3.1.133).
+No nosso ele é **passo numerado do checklist**, com o número dele.
+
+> ⭐ **Passo que não tem número não é executado.**
