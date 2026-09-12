@@ -5375,3 +5375,36 @@ resultado lá: a linha dela vem sem nota e sem conceito, a das outras intacta, a
 ⚠️ Na primeira rodada o passo do CSV acusou "0 linhas" — **era o script de prova lendo o campo
 errado** (`csv.conteudo` em vez de `.linhas`), não um defeito. Conferir antes de chamar de achado:
 falso vermelho destrói a ferramenta.
+
+---
+
+### 3.1.68. 🔑 CONTA DE TESTE do módulo no DEV — `zz.teste.rh` (11/09)
+
+Criada em 11/09 a pedido do Clenio. **Não substitui a decisão de quem é o segundo `RH_ADMIN` de
+verdade** — essa continua com a Arielly (ver `common/roles-rh.ts`: a separação de funções exige
+dois, porque a gestora também é avaliada).
+
+| | |
+|---|---|
+| Login / senha | `zz.teste.rh` / `TesteRh2026` |
+| Papel | `RH_ADMIN` em `GESTAO_PESSOAS`, departamento T.I. |
+| Matrícula | `009900` (faixa `0099xx` estava vazia) |
+| Colaborador | `zz-teste-ti-colaborador` — *"ZZ CONTA DE TESTE T.I. — NÃO É PESSOA"* |
+| Centro de custo | `ZZTESTE` — **nenhuma aplicação mira este CC**, então ela não entra em ciclo |
+
+⚠️ **Por que precisou de um COLABORADOR, e não só de um usuário:** o `IdentidadeGuard` falha
+fechada — usuário sem matrícula que bata com colaborador ativo **não entra no módulo**. O próprio
+guard já registrava a consequência: *"contas de SISTEMA sem matrícula não acessam o módulo (…) o
+segundo RH_ADMIN precisa ser uma PESSOA com matrícula"*. Uma conta de teste é o mesmo caso.
+
+⚠️ **`rh.colaborador` foi de 1.036 para 1.037.** Toda contagem populacional do DEV muda em 1. Não
+afeta ciclo (CC fora de qualquer aplicação, e o público do Piloto já está montado nominalmente),
+mas afeta *"quantas pessoas ativas existem"*. Para remover:
+
+```sql
+DELETE FROM rh.colaborador WHERE matricula = '009900';   -- e o usuário, no Configurador
+```
+
+⭐ **Duas personas da varredura de 10/09 não rodaram por falta de conta** — este é o mesmo
+gargalo que [[feedback_designar_nao_da_acesso]] registra do lado do avaliador: *designar não dá
+acesso*, e **testar também exige conta que exista**.
