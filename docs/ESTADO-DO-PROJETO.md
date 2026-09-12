@@ -6936,3 +6936,82 @@ da colisão de chapa ([[feedback_chapa_colide_5_digitos]]), por causa diferente.
 Não é defeito a corrigir: é a decisão do ADR-RH-01 (o colaborador mora em `rh`) chegando na porta
 de entrada. O que **é** defeito é a mensagem mandar para o lugar errado, e isso fica anotado como
 melhoria de texto — hoje ela é tecnicamente exata e operacionalmente enganosa.
+
+---
+
+### 3.1.94. ✅ OS INVARIANTES DE GUARDA DE ESCRITA — quatro serviços, três exceções, zero furos
+
+Pedido antes do Bloco C, e pela razão certa: **o Bloco C é onde o peso passa a ser escrito pela mão
+do RH**, e designação e critério precisavam estar cobertos antes de mexer em peso.
+
+Ficou em **um arquivo só**, dirigido por tabela — `common/guarda-de-escrita.invariante.spec.ts`.
+Quatro serviços em vez de quatro arquivos, porque assim a **lista de exceções é uma tabela que se
+lê de uma vez**, que é o que precisa ser revisado.
+
+| Serviço | Regra(s) exigida(s) | Métodos que escrevem | Exceções |
+|---|---|---|---|
+| `designacao.service` | `assertCicloOperavel` **e** um classificador `efeitoDe…`/`efeitoDo…` | 3 | **0** |
+| `criterio.service` | `assertSalvavel` ou `assertFaixasValidas` | 3 | **0** |
+| `aplicacao.service` | afere o ciclo · **e** valida a aplicação | 5 | **2** (na 2ª regra) |
+| `ciclo.service` | afere o estado do ciclo | 7 | **1** |
+
+#### 🔍 A LISTA DE EXCEÇÕES — as três, com o porquê
+
+**1. `ciclo.criar` — não afere o estado do ciclo.**
+> Não há ciclo ainda: este é o método que o cria. Não existe estado a aferir, e o que precisa ser
+> validado (o período) é validado por `validarPeriodo`.
+
+**2. `aplicacao.adicionarAoPublico` — não chama `validarAplicacao`.**
+> O público **não é campo da Aplicação** — é tabela à parte. `validarAplicacao` confere nome, peso
+> do questionário e critérios, nada do que este método toca; e a regra do público ("aplicação sem
+> público não alcança ninguém") é cobrada na **abertura do ciclo**, por `problemasParaAbrir`, que é
+> o único momento em que ela decide algo. Rodá-la aqui recusaria incluir uma pessoa por causa de um
+> peso que ninguém mexeu. ⚠️ Ele **passa** na primeira regra: chama
+> `assertCicloDaAplicacaoOperavel`.
+
+**3. `aplicacao.removerDoPublico` — mesma coisa.**
+> Mexe no público, não na Aplicação. E é o ato de **corrigir**: travá-lo por um problema em outro
+> campo prenderia o erro dentro da aplicação, que é o oposto do que a guarda existe para fazer.
+
+#### O que NÃO virou exceção, e quase virou
+
+Três métodos do ciclo — `encerrar`, `reabrir`, `devolverCanceladasDoEncerramento` — não chamam
+`assertCicloOperavel`, e a primeira leitura os classificou como candidatos a exceção. **Não são.**
+Eles aferem o estado, só que **inline e com estado específico**, porque são a *transição* do ciclo:
+`encerrar` exige ABERTO (a guarda genérica aceitaria RASCUNHO), e `reabrir` exige ENCERRADO —
+exatamente o estado que a guarda genérica **recusa**. A regra foi escrita para aceitar as duas
+formas (`assertCiclo…(` **ou** `ciclo.status [!=]==`), em vez de abrir três exceções para o que é
+guarda de verdade escrita de outro jeito.
+
+⭐ Foi o momento em que a regra da exceção pagou: as três linhas de justificativa não saíam com
+convicção, e a razão era que **elas não eram exceções**.
+
+#### ⚠️ Validado por MUTAÇÃO, não por construção
+
+Verde ao escrever não prova nada — o teste podia estar procurando a coisa errada. Rodei quatro
+mutações contra cópias do fonte:
+
+| Mutação | Resultado |
+|---|---|
+| Tirar `assertCicloOperavel` de dentro do `designar` | ✕ **reprova, nomeando `designar`** |
+| Método novo que faz `update` sem guarda nenhuma | ✕ **reprova, nomeando `mutacaoMetodoNovoSemGuarda`** |
+| `adicionarAoPublico` passa a chamar a guarda (exceção vira ficção) | ✕ **reprova como exceção sobrando** |
+| Trocar a indentação, quebrando a varredura | ✕ **reprova no canário** ("encontrou 0 métodos") |
+
+⭐ **O canário é a parte que quase faltou.** Sem ele, uma refatoração que mudasse a forma dos
+métodos faria o `split` devolver zero e **todas as regras ficariam verdes** — verde por ausência de
+leitura, que é o pior resultado possível num teste de guarda. Mesma classe do
+`npm test` que rodava "52 suítes, 0 testes" (§3.1.-) e do `tsc --noEmit` que checa zero arquivo.
+
+#### ⚠️ Custo real: ~2h, não 1,5 dia
+
+Eu estimei **1,5 dia** e gastei cerca de **duas horas**. A estimativa assumia achar e tapar furos;
+**não havia nenhum** — os quatro serviços já chamavam as guardas em todos os 18 métodos que
+escrevem. O que sobrou foi o trabalho de decidir a lista de exceções, e ela tem três entradas em
+vez das dez que eu temia.
+
+Registro a diferença porque a estimativa errada foi **para cima e por medo**, e esse é o tipo que
+não aparece: entrega antes do prazo passa por boa notícia. O que ela de fato mede é que o padrão do
+classificador já estava aplicado com disciplina — a dívida que eu supunha não existia.
+
+Suíte: **65 suítes, 785 testes**.
