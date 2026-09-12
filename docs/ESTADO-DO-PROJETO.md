@@ -6309,7 +6309,7 @@ A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
 |---|---|---|
 | **Flag de recorte** no ciclo | **6h** | desenho **aprovado** (derivar por percentual inventa limiar, e limiar arbitrário erra calado) |
 | **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
-| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) · **D** (7). Cada bloco fecha numa CONTA, conferida antes do próximo |
+| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) ✅ §3.1.98 · **D** (7). Cada bloco fecha numa CONTA, conferida antes do próximo |
 
 ### (c) ⛔ Bloqueado fora — HLG e o Marco
 
@@ -7105,3 +7105,99 @@ próprio arquivo em vez de "arrumado"** — mexer nessa lista é mexer na exceç
 funções, que não se faz de passagem.
 
 Suíte: **65 suítes, 788 testes**.
+
+---
+
+### 3.1.98. ✅ BLOCO C DO EDITOR — montar o arranjo e publicar (12/09)
+
+O bloco de maior risco: **é aqui que o peso passa a ser escrito pela mão do RH**. Até hoje todos os
+pesos do módulo vinham do seed, transcritos do RD8010.
+
+#### As três travas de desenho da montagem
+
+**1. Só RASCUNHO.** Versão publicada é imutável — dela saem notas. A recusa ensina a saída
+("duplique-a e mexa lá").
+
+**2. O ARRANJO INTEIRO DE UMA VEZ**, nunca "adiciona um / tira um". Com operações item a item
+existe um instante em que a classificação já tem peso e ainda não tem questão — e é **exatamente
+esse estado** que faz a soma declarada divergir da derivada. Gravar tudo numa transação **elimina o
+estado intermediário** em vez de tentar tolerá-lo. Mesma razão do `reordenar` das classificações.
+
+**3. AS DUAS SOMAS VÊM JUNTAS, sempre.** `somaDeclarada` (o que foi digitado) e `somaDerivada` (o
+que a nota vai usar) são calculadas por caminhos diferentes e devolvidas lado a lado — na API e no
+topo da tela, com o termo que as concilia escrito. É a conta da §3.1.86.
+
+⚠️ **A montagem NÃO valida como se fosse publicar.** Rascunho meio montado é o estado normal de
+quem está montando: barrar "classificação sem questão" ao salvar impediria o RH de criar a
+classificação antes de escolher as questões dela, que é a ordem natural. O que é erro na publicação
+volta na resposta como `problemasParaPublicar`, para a tela dizer o que falta **sem impedir de
+salvar** — é a §3.1.96 (*guarda que impede o conserto*) aplicada à montagem.
+
+#### A validação que faltava — e é a que pega dinheiro
+
+`publicacao.validator.ts` foi **reescrito** (era a adaptação de ~4h prevista na §3.1.82: ele
+descrevia `{ titulo, perguntas: [{ peso }] }`, forma que a migration do acervo acabou, e passou
+seis dias verde e sem chamador). Saiu "peso da pergunta > 0" — não há tal campo. Entrou:
+
+> ⭐⭐ **Classificação com peso e SEM questão.**
+
+`pesosDerivados` ignora esse grupo de propósito — arranjo pela metade não impede ninguém de
+responder. Mas **o peso dele some da conta**: declarada 60, derivada 50, e a pontuação máxima sai
+sobre a derivada. Ninguém vê, porque os dois números parecem certos cada um por si. Na montagem é
+aviso; **na publicação é erro**, e a frase diz para quanto a soma cairia.
+
+#### 🔴 Dois defeitos achados rodando o portão
+
+**1. A recusa da publicação virava 500.** `ModeloNaoPublicavelError` é `Error` puro; sem
+mapeamento, o Nest devolvia *"Erro interno do servidor"* e **a lista de problemas — que é o produto
+inteiro do validador — sumia no caminho.** ⚠️ O `assertArranjoPublicavel` tem spec **verde**: ela
+exercita a FUNÇÃO, não a ROTA. Mesmo padrão do `CicloNaoAbrivelError` em `ciclo.service.ts:150`,
+que já estava certo — e que eu não copiei.
+
+**2. A coluna de percentuais somava 100,01.** Com pesos 16/10/34 sobre 60, `(peso ÷ soma) × 100`
+arredondado por item dá 26,67 + 16,67 + 56,67. Nasceu `common/percentual.ts`
+(`percentuaisQueFecham`, método do maior resto) — e **a mesma função foi aplicada ao catálogo**, que
+tinha o defeito desde sempre na tela do instrumento.
+
+⚠️ **A primeira versão dela ordenava o resto em ponto FLUTUANTE**, e o spec reprovou: as três
+frações de 16/10/34 são a mesma (0,666…), mas o float as devolve diferentes na 13ª casa — o
+centésimo ia para a terceira parte em vez da primeira. A soma continuava 100; o que mudava era
+**quem recebia, por ruído de representação**. Tudo em inteiros: empate é empate, e o desempate é a
+ordem.
+
+⭐ São **duas** funções e não uma: `distribuirPeso` reparte um total em partes IGUAIS;
+`percentuaisQueFecham` recebe partes DESIGUAIS e distribui só o centésimo do arredondamento. Mesma
+regra, trabalhos diferentes.
+
+#### 🚪 OS CINCO PORTÕES
+
+Montado um perfil descartável (`ZZ PORTAO C`), publicado, conferido e apagado.
+
+| # | Portão | Resultado |
+|---|---|---|
+| 1 | Perfil novo montado soma exatamente 60 | ✅ **60,0000** em 2 classificações |
+| 2 | Pontuação máxima gravada = calculada | ✅ **72 × 72** |
+| 3 | Regressão do `000006` continua 108/108 | ✅ **idênticas: 108/108, divergentes: 0** |
+| 4 | Os 44 pesos das PUBLICADAS, 0 divergências | ✅ **44 pesos, 0** — 72/72/72/60 |
+| 5 | Declarada = derivada em todo arranjo, API e tela | ✅ **6 de 6 arranjos**, e a soma por questão bate com a declarada nos 6 |
+
+**A montagem que prova a regra**: `Assiduidade` peso **16 ÷ 3 questões** (com a C001 dentro) →
+`5,34 + 5,33 + 5,33`; `Relacionamento` peso **44 ÷ 3** → `14,67 + 14,67 + 14,66`. Soma **60,0000**,
+máxima **72**, percentuais **100,00**.
+
+**A armadilha, deliberada:** montei primeiro com uma classificação de peso 10 e nenhuma questão.
+Declarada 60, derivada 50 — e o sistema recusou publicar dizendo *"a soma cairia para 50 sem nada
+acusar"*.
+
+#### Guardas conferidas
+
+| | |
+|---|---|
+| `RH_MODELO` publicando | **403** — monta, não publica |
+| Editar arranjo de versão publicada | 400, com a saída escrita |
+| Publicar duas vezes | 400 |
+| Descartar versão recém-publicada | 400 |
+| Arranjo vazio | 400, pelas duas pontas, **sem** empilhar "as somas não batem" em cima |
+
+**Piloto: 894 PENDENTE, 0 respostas. ENSAIO: RASCUNHO, 325.** Órfãos de arranjo: **0**.
+Suíte: **66 suítes, 794 testes**.
