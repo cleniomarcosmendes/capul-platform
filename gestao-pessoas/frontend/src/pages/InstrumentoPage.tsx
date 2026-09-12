@@ -8,19 +8,24 @@
  * *"este questionário é o que você quer usar no piloto?"* — e essa resposta muda
  * a ordem de todo o trabalho que vem depois.
  *
- * ⚠️ **É LEITURA PURA, e a tela diz isso em voz alta.** O editor de questionário
- * é outro trabalho, de semanas. Tela que parece editável e não é seria a dívida
- * do §3.1.33 outra vez — *texto que promete capacidade é dívida* —, então aqui
- * não há botão de salvar, nem campo, nem menu de ação: há um aviso dizendo por
- * onde a mudança passa hoje.
+ * ⚠️ **O CONTEÚDO continua sendo leitura pura** — enunciado, peso e alternativa
+ * não se editam aqui, e o editor do arranjo é a Etapa 3. O que entrou em 12/09
+ * (Etapa 2) foi só o CICLO DE VIDA DA VERSÃO: duplicar uma versão publicada
+ * para um rascunho, e descartar o rascunho.
+ *
+ * ⚠️ O aviso da tela foi reescrito junto. Ele dizia *"não há por onde editá-lo
+ * no sistema"*, o que passou a ser meia verdade no dia em que o duplicar
+ * nasceu — e meia verdade num aviso de capacidade é a dívida do §3.1.33 pelo
+ * avesso: em vez de prometer o que não existe, esconde o que passou a existir.
  *
  * ⚠️ O nome no menu é **"Questionários"**, não "Editar questionários": ele
  * descreve o objeto, não uma capacidade que não existe.
  */
 import { useEffect, useState } from 'react';
-import { AlertTriangle, FileText, Info, Printer, Sigma } from 'lucide-react';
-import { catalogo, ehFaltaDePermissao, mensagemDoErro } from '../services/api';
-import type { InstrumentoCompleto, ModeloDoCatalogo } from '../services/api';
+import { AlertTriangle, Copy, FileText, Info, Printer, Sigma, Trash2 } from 'lucide-react';
+import { catalogo, ehFaltaDePermissao, mensagemDoErro, versoes as apiVersoes } from '../services/api';
+import type { Efeito, InstrumentoCompleto, ModeloDoCatalogo, VersaoDoModelo } from '../services/api';
+import { Modal } from '../components/Modal';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import { contagem, data, flexao } from '../lib/formato';
@@ -123,12 +128,19 @@ export default function InstrumentoPage() {
           "Somente leitura" sozinho deixa a pessoa procurando o botão; dizer que
           a alteração passa pela T.I. hoje responde a pergunta seguinte, que ela
           faria de qualquer jeito. */}
+      {/* ⚠️ Reescrito em 12/09: dizia "não há por onde editá-lo no sistema", e
+          passou a ser meia verdade no dia em que o duplicar nasceu. O aviso
+          agora separa o que JÁ dá (abrir um rascunho) do que ainda não dá
+          (mexer no conteúdo dele) — porque é a segunda metade que a pessoa vai
+          procurar assim que clicar em Duplicar. */}
       <div className="mt-3 flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 print:hidden">
         <Info size={16} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
         <p className="text-sm text-amber-900">
-          <strong className="font-semibold">Esta tela é só de leitura.</strong> O questionário veio
-          transcrito do Protheus (RD8010) e ainda não há por onde editá-lo no sistema — mudar
-          enunciado, peso ou alternativa passa pela T.I. hoje. Confira e diga o que precisa mudar.
+          <strong className="font-semibold">O conteúdo aqui é só de leitura.</strong> O
+          questionário veio transcrito do Protheus (RD8010). Já dá para{' '}
+          <strong>abrir um rascunho</strong> a partir de uma versão publicada (abaixo), mas{' '}
+          <strong>editar o rascunho ainda não</strong> — mudar enunciado, peso ou alternativa passa
+          pela T.I. hoje. Confira e diga o que precisa mudar.
         </p>
       </div>
 
@@ -147,6 +159,17 @@ export default function InstrumentoPage() {
           ))}
         </select>
       </label>
+
+      {inst && (
+        <VersoesDoModelo
+          modeloId={inst.modeloId}
+          versaoId={inst.versaoId}
+          aoMudar={(id) => {
+            void carregarModelos();
+            if (id) setVersaoId(id);
+          }}
+        />
+      )}
 
       {!inst && <div className="mt-4"><Carregando linhas={6} /></div>}
       {inst && <Instrumento inst={inst} />}
@@ -307,5 +330,190 @@ function Dado({ rotulo, valor, nota }: { rotulo: string; valor: string; nota?: s
       <dd className="font-medium tabular-nums text-slate-800">{valor}</dd>
       {nota && <dd className="text-xs text-slate-500">{nota}</dd>}
     </div>
+  );
+}
+
+/**
+ * ⭐⭐ AS VERSÕES DO PERFIL — o ciclo de vida, que a Etapa 2 abriu.
+ *
+ * ⚠️ Um rascunho por perfil, e a recusa vem do backend com a frase pronta
+ * (`previa-duplicar`), não de uma regra escrita aqui. A prévia é a MESMA função
+ * que o ato consulta: se a tela tivesse a própria cópia, ela prometeria o que o
+ * ato recusa — foi o defeito do §3.1.33.
+ */
+function VersoesDoModelo({
+  modeloId,
+  versaoId,
+  aoMudar,
+}: {
+  modeloId: string;
+  versaoId: string;
+  aoMudar: (novaVersaoId?: string) => void;
+}) {
+  const [lista, setLista] = useState<VersaoDoModelo[] | null>(null);
+  const [previa, setPrevia] = useState<Efeito | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [semPermissao, setSemPermissao] = useState(false);
+  const [confirmando, setConfirmando] = useState<VersaoDoModelo | null>(null);
+  const [duplicando, setDuplicando] = useState<VersaoDoModelo | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  useEffect(() => {
+    setLista(null);
+    setSemPermissao(false);
+    apiVersoes
+      .doModelo(modeloId)
+      .then(setLista)
+      .catch((e) => {
+        // ⚠️ Sem permissão o bloco INTEIRO some — RH_CICLO lê o instrumento,
+        // mas não versiona. Erro vermelho aqui seria ruído numa tela que ele
+        // tem todo o direito de ver.
+        if (ehFaltaDePermissao(e)) setSemPermissao(true);
+        else setErro(mensagemDoErro(e, 'Não foi possível carregar as versões.'));
+      });
+  }, [modeloId]);
+
+  async function abrirDuplicar(v: VersaoDoModelo) {
+    setErro(null);
+    try {
+      setPrevia(await apiVersoes.previaDeDuplicar(v.id));
+      setDuplicando(v);
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível consultar o efeito.'));
+    }
+  }
+
+  async function agir(f: () => Promise<unknown>, novaVersao?: (r: unknown) => string | undefined) {
+    setErro(null);
+    setOcupado(true);
+    try {
+      const r = await f();
+      const lista2 = await apiVersoes.doModelo(modeloId);
+      setLista(lista2);
+      aoMudar(novaVersao?.(r));
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível concluir.'));
+    } finally {
+      setOcupado(false);
+      setConfirmando(null);
+      setDuplicando(null);
+    }
+  }
+
+  if (semPermissao) return null;
+  if (!lista) return null;
+
+  return (
+    <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm print:hidden">
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Versões deste perfil
+      </h3>
+      {erro && (
+        <div className="mt-2">
+          <Erro mensagem={erro} />
+        </div>
+      )}
+      <ul className="mt-2 divide-y divide-slate-100">
+        {lista.map((v) => (
+          <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <div className="min-w-0 text-sm">
+              <span className={v.id === versaoId ? 'font-semibold text-slate-800' : 'text-slate-700'}>
+                v{v.versao}
+              </span>{' '}
+              {v.publicadoEm ? (
+                <Etiqueta tom="neutro">publicada em {data(v.publicadoEm)}</Etiqueta>
+              ) : (
+                <Etiqueta tom="ambar">rascunho</Etiqueta>
+              )}
+              {/* ⭐ Os três números que conciliam com o que a tela abaixo mostra:
+                  classificações, questões e a soma dos pesos (60 no herdado). */}
+              <span className="ml-1 text-slate-500">
+                · {contagem(v.totalGrupos, 'classificação', 'classificações')} ·{' '}
+                {contagem(v.totalQuestoes, 'questão', 'questões')} · soma {num(v.somaDosPesos)}
+                {v.aplicacoesQueUsam > 0 &&
+                  ` · em ${contagem(v.aplicacoesQueUsam, 'aplicação', 'aplicações')}`}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              {v.publicadoEm && (
+                <button
+                  type="button"
+                  onClick={() => void abrirDuplicar(v)}
+                  disabled={ocupado}
+                  className="alvo-toque inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-30"
+                >
+                  <Copy size={15} aria-hidden /> Duplicar
+                </button>
+              )}
+              <button
+                type="button"
+                /* ⭐ Desabilitado COM o motivo, nunca escondido: o `title` é a
+                   frase que a API devolveria. */
+                title={v.efeitoDeDescartar.frase}
+                onClick={() => setConfirmando(v)}
+                disabled={ocupado || v.efeitoDeDescartar.acao === 'RECUSAR'}
+                className="alvo-toque inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-2.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-30"
+              >
+                <Trash2 size={15} aria-hidden /> Descartar
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {duplicando && previa && (
+        <Modal titulo={`Duplicar a v${duplicando.versao}?`} aoFechar={() => setDuplicando(null)}>
+          <p className="text-sm text-slate-700">{previa.frase}</p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setDuplicando(null)}
+              className="alvo-toque rounded-xl border border-slate-300 px-4 text-sm text-slate-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={ocupado || previa.acao === 'RECUSAR'}
+              onClick={() =>
+                void agir(
+                  () => apiVersoes.duplicar(duplicando.id),
+                  (r) => (r as { id: string }).id,
+                )
+              }
+              className="alvo-toque rounded-xl bg-slate-800 px-4 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Criar rascunho
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {confirmando && (
+        <Modal
+          titulo={`Descartar o rascunho v${confirmando.versao}?`}
+          aoFechar={() => setConfirmando(null)}
+        >
+          <p className="text-sm text-slate-700">{confirmando.efeitoDeDescartar.frase}</p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmando(null)}
+              className="alvo-toque rounded-xl border border-slate-300 px-4 text-sm text-slate-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={ocupado}
+              onClick={() => void agir(() => apiVersoes.descartar(confirmando.id))}
+              className="alvo-toque rounded-xl bg-red-600 px-4 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Descartar
+            </button>
+          </div>
+        </Modal>
+      )}
+    </section>
   );
 }

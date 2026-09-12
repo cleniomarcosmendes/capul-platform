@@ -7,6 +7,7 @@ import {
   FileText,
   LogOut,
   SlidersHorizontal,
+  Tags,
   UserCheck,
   Users,
   X,
@@ -113,6 +114,13 @@ const itens: ItemDoMenu[] = [
    * OBJETO — quando o editor existir, ele não muda.
    */
   { rotulo: 'Acervo de questões', icone: FileStack, para: '/acervo', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO, ROLES.RH_CICLO] },
+
+  /**
+   * ⚠️ Papéis MENORES que os do acervo: aqui se CADASTRA, e cadastrar
+   * classificação é montar o instrumento (RH_MODELO), não escolher um
+   * (RH_CICLO). Mesma separação do cadastro de critérios.
+   */
+  { rotulo: 'Classificações', icone: Tags, para: '/classificacoes', papeis: [ROLES.RH_ADMIN, ROLES.RH_MODELO] },
 
   /**
    * ⭐ **Só `RH_ADMIN`** — e a diferença para "Questionários" logo acima é

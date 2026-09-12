@@ -498,6 +498,64 @@ export const acervo = {
   listar: () => rhApi.get<AcervoCompleto>('/acervo').then((r) => r.data),
 };
 
+/** O `{ acao, frase }` que a tela lê para desabilitar COM o motivo. */
+export interface Efeito {
+  acao: 'PERMITIR' | 'RECUSAR';
+  frase: string;
+}
+
+export interface VersaoDoModelo {
+  id: string;
+  modeloId: string;
+  modeloNome: string;
+  versao: number;
+  publicadoEm: string | null;
+  aplicacoesQueUsam: number;
+  totalGrupos: number;
+  totalQuestoes: number;
+  somaDosPesos: number;
+  efeitoDeDescartar: Efeito;
+}
+
+export const versoes = {
+  doModelo: (modeloId: string) =>
+    rhApi.get<VersaoDoModelo[]>(`/modelos/${modeloId}/versoes`).then((r) => r.data),
+  previaDeDuplicar: (versaoId: string) =>
+    rhApi.get<Efeito>(`/modelos/versoes/${versaoId}/previa-duplicar`).then((r) => r.data),
+  duplicar: (versaoId: string) =>
+    rhApi
+      .post<{ id: string; versao: number; grupos: number; questoes: number }>(
+        `/modelos/versoes/${versaoId}/duplicar`,
+      )
+      .then((r) => r.data),
+  descartar: (versaoId: string) =>
+    rhApi.delete<{ ok: true }>(`/modelos/versoes/${versaoId}`).then((r) => r.data),
+};
+
+export interface ClassificacaoDoCadastro {
+  id: string;
+  nome: string;
+  ordem: number;
+  ativa: boolean;
+  questoes: number;
+  arranjos: number;
+  arranjosPublicados: number;
+  efeitoDeApagar: Efeito;
+  efeitoDeDesativar: Efeito;
+  efeitoDeReativar: Efeito;
+}
+
+export const classificacoes = {
+  listar: () => rhApi.get<ClassificacaoDoCadastro[]>('/classificacoes').then((r) => r.data),
+  criar: (nome: string) => rhApi.post('/classificacoes', { nome }).then((r) => r.data),
+  renomear: (id: string, nome: string) =>
+    rhApi.patch(`/classificacoes/${id}`, { nome }).then((r) => r.data),
+  reordenar: (ids: string[]) => rhApi.put('/classificacoes/ordem', { ids }).then((r) => r.data),
+  desativar: (id: string) => rhApi.post(`/classificacoes/${id}/desativar`).then((r) => r.data),
+  reativar: (id: string) => rhApi.post(`/classificacoes/${id}/reativar`).then((r) => r.data),
+  apagar: (id: string) => rhApi.delete(`/classificacoes/${id}`).then((r) => r.data),
+};
+
 export interface AplicacaoDoCiclo {
   id: string;
   nome: string;

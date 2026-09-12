@@ -13,6 +13,7 @@ import ResultadosPage from './pages/ResultadosPage';
 import InstrumentoPage from './pages/InstrumentoPage';
 import CriteriosPage from './pages/CriteriosPage';
 import AcervoPage from './pages/AcervoPage';
+import ClassificacoesPage from './pages/ClassificacoesPage';
 import NaoEncontradaPage from './pages/NaoEncontradaPage';
 
 /**
@@ -59,6 +60,7 @@ export default function App() {
                 mostra UM perfil por vez; aqui a questão aparece uma vez só,
                 com os perfis que a usam. */}
             <Route path="/acervo" element={<AcervoPage />} />
+            <Route path="/classificacoes" element={<ClassificacoesPage />} />
             {/* Cadastro do CATÁLOGO de critérios. Fora de `/ciclos/:id` pelo
                 mesmo motivo dos outros dois cadastros: a régua vale para todo
                 ciclo, e cada aplicação escolhe o PESO dela. */}
