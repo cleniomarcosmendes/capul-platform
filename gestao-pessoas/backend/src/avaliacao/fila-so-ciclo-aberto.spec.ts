@@ -1,5 +1,18 @@
 /**
- * ⭐⭐ A FILA É O TRABALHO QUE DÁ PARA FAZER — só ciclo ABERTO entra.
+ * ⭐⭐ A FILA É O TRABALHO QUE DÁ PARA FAZER.
+ *
+ * ⚠️ **A REGRA MUDOU EM 13/09, e o princípio não.** Eram só os ciclos ABERTOS;
+ * agora é `ciclo ABERTO` **OU** `devolutiva liberada`. O motivo é o mesmo de
+ * sempre — conduzir uma devolutiva liberada **É** trabalho que dá para fazer —
+ * e o percurso real é que denunciou: a fila do avaliador voltou **VAZIA** com
+ * uma devolutiva esperando por ele, porque a devolutiva acontece justamente
+ * **com o ciclo ENCERRADO** (o RH encerra, apura, confere e libera).
+ *
+ * ⭐ Tudo o que este teste protegia continua protegido, e a lista de casos é a
+ * prova: ENCERRADO **sem** devolutiva continua fora, RASCUNHO continua fora, e
+ * o recorte por `cicloId` continua sem substituir o filtro.
+ *
+ * ── O texto original, que explica cada guarda ────────────────────────────────
  *
  * Achado de 10/09, e é defeito de regra permanente, não de tela: `minhasAvaliacoes`
  * filtrava por avaliador e por `not: CANCELADA`, e **por nada mais**. Nenhum
@@ -40,21 +53,42 @@ async function whereDaFila(cicloId?: string) {
   return prisma.avaliacao.findMany.mock.calls[0][0].where;
 }
 
-describe('a fila do avaliador só mostra ciclo ABERTO', () => {
-  it('a consulta filtra pelo status do ciclo', async () => {
-    expect(await whereDaFila()).toEqual(
-      expect.objectContaining({ ciclo: { status: 'ABERTO' } }),
-    );
+/** O ramo do OR que fala de ciclo, e o que fala de devolutiva. */
+async function ramos() {
+  const where = await whereDaFila();
+  const or = where.OR as { ciclo?: { status: string }; devolutivaLiberadaEm?: unknown }[];
+  return {
+    where,
+    or,
+    porCiclo: or.find((r) => r.ciclo),
+    porDevolutiva: or.find((r) => r.devolutivaLiberadaEm),
+  };
+}
+
+describe('a fila do avaliador: ciclo ABERTO OU devolutiva liberada', () => {
+  it('a consulta tem exatamente os dois ramos, e nada mais', async () => {
+    const { or, porCiclo, porDevolutiva } = await ramos();
+    expect(or).toHaveLength(2);
+    expect(porCiclo).toEqual({ ciclo: { status: 'ABERTO' } });
+    expect(porDevolutiva).toEqual({ devolutivaLiberadaEm: { not: null } });
+  });
+
+  it('⭐ ENCERRADO COM devolutiva liberada PASSA — é o caso que motivou a mudança', async () => {
+    // Sem este ramo a tela da devolutiva fica sem caminho: rota que existe e
+    // ninguém alcança é rota que não existe.
+    const { porDevolutiva } = await ramos();
+    expect(porDevolutiva).toBeDefined();
+    expect(porDevolutiva).not.toHaveProperty('ciclo');
   });
 
   /**
    * O caso que motivou o conserto: depois do encerramento do Piloto, ninguém
    * pode continuar vendo as 894 na fila.
    */
-  it('ENCERRADO não passa — é o caso do dia seguinte ao encerramento', async () => {
-    const where = await whereDaFila();
-    expect(where.ciclo).not.toEqual({ status: { not: 'ENCERRADO' } });
-    expect(where.ciclo.status).toBe('ABERTO');
+  it('ENCERRADO SEM devolutiva continua fora — o dia seguinte ao encerramento', async () => {
+    const { porCiclo } = await ramos();
+    expect(porCiclo?.ciclo).not.toEqual({ status: { not: 'ENCERRADO' } });
+    expect(porCiclo?.ciclo?.status).toBe('ABERTO');
   });
 
   /**
@@ -62,19 +96,22 @@ describe('a fila do avaliador só mostra ciclo ABERTO', () => {
    * uma allowlist de "tudo menos encerrado" deixaria esse ciclo na fila.
    */
   it('RASCUNHO também não passa — designar é permitido antes de abrir', async () => {
-    const where = await whereDaFila();
+    const { where, porCiclo } = await ramos();
     expect(JSON.stringify(where)).not.toContain('RASCUNHO');
-    expect(where.ciclo.status).toBe('ABERTO');
+    expect(porCiclo?.ciclo?.status).toBe('ABERTO');
   });
 
   /**
    * O recorte por ciclo é do CLIENTE (a tela pede um ciclo). Ele estreita,
    * nunca amplia: pedir um ciclo encerrado pelo id não pode devolver nada.
    */
-  it('o recorte por cicloId não substitui o filtro de status', async () => {
+  it('o recorte por cicloId não substitui os dois ramos', async () => {
     const where = await whereDaFila('ciclo-encerrado');
     expect(where.cicloId).toBe('ciclo-encerrado');
-    expect(where.ciclo).toEqual({ status: 'ABERTO' });
+    expect(where.OR).toHaveLength(2);
+    // ⚠️ Estreita, nunca amplia: o `cicloId` entra em AND com o OR, então pedir
+    //    um ciclo encerrado sem devolutiva continua devolvendo nada.
+    expect(where.OR[0]).toEqual({ ciclo: { status: 'ABERTO' } });
   });
 
   /** O filtro novo não pode ter comido o antigo. */

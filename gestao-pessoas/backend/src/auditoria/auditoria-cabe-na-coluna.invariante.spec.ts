@@ -38,7 +38,7 @@ function arquivosTs(dir: string): string[] {
  * mesma disciplina da `regua-em-sql.invariante`. Um número copiado envelhece
  * sozinho, e o teste passaria a medir contra um teto que o banco não tem mais.
  */
-function limiteDaColuna(): number {
+function limiteDaColuna(coluna: 'acao' | 'entidade'): number {
   const arquivos = fs
     .readdirSync(MIGRATIONS, { withFileTypes: true })
     .filter((e) => e.isDirectory())
@@ -50,13 +50,19 @@ function limiteDaColuna(): number {
   for (const f of arquivos) {
     const sql = fs.readFileSync(f, 'utf8');
     // A criação original: `"acao" VARCHAR(40) NOT NULL`
-    for (const m of sql.matchAll(/"acao"\s+VARCHAR\((\d+)\)/gi)) limite = Number(m[1]);
+    for (const m of sql.matchAll(new RegExp(`"${coluna}"\\s+VARCHAR\\((\\d+)\\)`, 'gi'))) {
+      limite = Number(m[1]);
+    }
     // E qualquer ALTER posterior — a ÚLTIMA no tempo é a que vale.
-    for (const m of sql.matchAll(/ALTER\s+COLUMN\s+"acao"\s+TYPE\s+VARCHAR\((\d+)\)/gi)) {
+    for (const m of sql.matchAll(
+      new RegExp(`ALTER\\s+COLUMN\\s+"${coluna}"\\s+TYPE\\s+VARCHAR\\((\\d+)\\)`, 'gi'),
+    )) {
       limite = Number(m[1]);
     }
   }
-  if (limite === null) throw new Error('Não achei o tamanho de rh.auditoria.acao nas migrations.');
+  if (limite === null) {
+    throw new Error(`Não achei o tamanho de rh.auditoria.${coluna} nas migrations.`);
+  }
   return limite;
 }
 
@@ -65,16 +71,17 @@ const fontes = arquivosTs(RAIZ).map((f) => ({
   conteudo: fs.readFileSync(f, 'utf8'),
 }));
 
-/** `acao: 'X'` — o valor inteiro é conhecido. */
-function acoesLiterais(): { onde: string; valor: string }[] {
+/** `<campo>: 'X'` — o valor inteiro é conhecido. */
+function literais(campo: 'acao' | 'entidade'): { onde: string; valor: string }[] {
   const achados: { onde: string; valor: string }[] = [];
   for (const f of fontes) {
-    for (const m of f.conteudo.matchAll(/acao:\s*'([^']+)'/g)) {
+    for (const m of f.conteudo.matchAll(new RegExp(`${campo}:\\s*'([^']+)'`, 'g'))) {
       achados.push({ onde: f.relativo, valor: m[1] });
     }
   }
   return achados;
 }
+const acoesLiterais = () => literais('acao');
 
 /**
  * ``acao: `PREFIXO:${verbo}` `` — o prefixo é conhecido, o verbo não.
@@ -101,7 +108,7 @@ function verbos(): string[] {
 }
 
 describe('invariante: a ação da auditoria cabe na coluna', () => {
-  const LIMITE = limiteDaColuna();
+  const LIMITE = limiteDaColuna('acao');
 
   it('⚠️ a varredura leu o módulo e ainda reconhece as duas formas', () => {
     expect(fontes.length).toBeGreaterThan(30);
@@ -144,5 +151,32 @@ describe('invariante: a ação da auditoria cabe na coluna', () => {
     const maiorVerbo = verbos().sort((a, b) => b.length - a.length)[0].length;
     const folga = LIMITE - (maiorPrefixo + maiorVerbo);
     expect(folga).toBeGreaterThanOrEqual(20);
+  });
+
+  /**
+   * ⭐ A GENERALIZAÇÃO — medida antes de escrever, não presumida.
+   *
+   * Varri as 30 colunas `VARCHAR` do schema `rh` procurando outras com o mesmo
+   * risco. **Só `entidade` compartilha a forma**: valor que nasce de LITERAL do
+   * código, num campo com teto. As demais ou vêm do **Protheus**
+   * (`matricula`, `filial`, `centro_custo`, `cpf`) — e nenhum invariante sobre
+   * o FONTE alcança dado que chega de fora — ou têm **formato fixo**
+   * (`conceito_faixa.cor` = `#RRGGBB`, 7 em 10; `auditoria.ip` = 45, o máximo de
+   * um IPv6).
+   *
+   * ⚠️ Por isso o invariante genérico é **este**, com duas colunas, e não uma
+   * varredura de todas: cobrir as do Protheus daria falsa sensação de conta
+   * fechada sobre a metade que ele não consegue medir.
+   */
+  describe('a MESMA conta para `entidade` — a outra coluna da mesma forma', () => {
+    const LIMITE_ENTIDADE = limiteDaColuna('entidade');
+
+    it('nenhuma entidade literal estoura, e sobra folga', () => {
+      const valores = literais('entidade');
+      expect(valores.length).toBeGreaterThan(5);
+      const maior = valores.map((v) => v.valor.length).sort((a, b) => b - a)[0];
+      expect(maior).toBeLessThanOrEqual(LIMITE_ENTIDADE);
+      expect(LIMITE_ENTIDADE - maior).toBeGreaterThanOrEqual(20);
+    });
   });
 });

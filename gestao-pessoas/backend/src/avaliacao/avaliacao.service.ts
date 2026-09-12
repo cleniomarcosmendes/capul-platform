@@ -82,7 +82,22 @@ export class AvaliacaoService {
          * filtro, a barra da Arielly somava SIMULACAO com Piloto e anunciava
          * "13 de 26 enviadas" — dois ciclos, um número, nenhum deles verdadeiro.
          */
-        ciclo: { status: 'ABERTO' },
+        /**
+         * ⭐⭐ …OU A DEVOLUTIVA JÁ LIBERADA — acrescentado em 13/09, e o percurso
+         * real é que denunciou: a fila do avaliador voltou **vazia** com uma
+         * devolutiva liberada esperando por ele.
+         *
+         * ⚠️ A devolutiva acontece **justamente com o ciclo ENCERRADO** — o RH
+         * encerra, apura, confere e libera. Com `status: 'ABERTO'` sozinho, o
+         * cartão nunca aparece, e a tela da devolutiva fica sem caminho: rota
+         * que existe e ninguém alcança é rota que não existe.
+         *
+         * ⭐ E não contradiz o filtro de cima: a regra continua sendo *"a fila é
+         * o trabalho que dá para FAZER"*. Conduzir uma devolutiva liberada É
+         * trabalho que dá para fazer — em ciclo encerrado inclusive, que é onde
+         * ele quase sempre estará.
+         */
+        OR: [{ ciclo: { status: 'ABERTO' } }, { devolutivaLiberadaEm: { not: null } }],
         ...(cicloId ? { cicloId } : {}),
       },
       orderBy: { criadoEm: 'asc' },
@@ -93,6 +108,13 @@ export class AvaliacaoService {
         enviadaEm: true,
         centroCustoSnapshot: true,
         cargoSnapshot: true,
+        /**
+         * ⭐ A DEVOLUTIVA — a fila precisa saber, senão o cartão da enviada
+         * continua inerte e a rota da etapa 2 fica sem caminho na tela.
+         * ⚠️ É a DATA, não um booleano: o cartão diz "liberada em 13/09", e um
+         * booleano obrigaria uma segunda consulta para dizer desde quando.
+         */
+        devolutivaLiberadaEm: true,
         // ⚠️ O CICLO vem junto porque a fila NÃO é de um ciclo só: podem existir
         // dois abertos ao mesmo tempo (a produção abre por ondas de unidade), e
         // sem dizer de qual é cada linha a pessoa vê um total que não bate com
@@ -155,6 +177,14 @@ export class AvaliacaoService {
         perguntasRespondidas: Math.min(l._count.respostas, total),
         /** Quando ele disse que esta pessoa não é da equipe dele. Marca, não filtra. */
         contestadaEm: contestadaEm.get(l.id) ?? null,
+        /**
+         * ⭐ Nulo = o RH ainda não liberou, e o cartão segue inerte. Com data, o
+         * cartão vira caminho para a devolutiva.
+         * ⚠️ **Não é permissão** — quem decide o acesso é o service da rota, por
+         * REGISTRO. Isto é só o que a tela precisa para saber se há para onde ir:
+         * *gate de leitura não se escreve na fila* (§ regra do módulo).
+         */
+        devolutivaLiberadaEm: l.devolutivaLiberadaEm,
       };
     });
 
