@@ -103,10 +103,14 @@ export interface GrupoDoInstrumento {
   titulo: string;
   ordem: number;
   /**
-   * ⚠️ Grupo NÃO tem peso próprio (decisão de 05/09): isto é a SOMA dos pesos
-   * das perguntas dele. Vai junto porque é o balanço que o RH precisa enxergar
-   * para julgar o instrumento — e vem de `somatorioPorGrupo`, a mesma função
-   * que a futura tela de montagem vai usar.
+   * ⚠️ INVERTEU em 11/09 (acervo de questões): o peso mora no GRUPO — é
+   * `ArranjoGrupo.peso`, declarado por classificação neste perfil —, e o peso
+   * de cada questão é DERIVADO dele por divisão. Até 10/09 era o contrário:
+   * o peso era da pergunta e isto aqui era a soma.
+   *
+   * Os dois números coincidem (a soma dos derivados fecha exata, por
+   * construção), mas quem manda é este; o comentário antigo mandava ler
+   * `somatorioPorGrupo`, que não participa mais deste caminho.
    */
   pesoTotal: number;
   percentual: number;
@@ -172,11 +176,18 @@ export class CatalogoService {
   /**
    * O instrumento inteiro de UMA versão. Ver `InstrumentoCompleto`.
    *
-   * ⭐ A pontuação máxima vem em DUAS colunas — a gravada na publicação e a
-   * recalculada agora, pela mesma `pontuacaoMaxima()` que a publicação usa.
-   * Iguais, é conferência; diferentes, alguém mexeu no banco por fora e a nota
-   * de todo mundo está saindo sobre um denominador que não é o do instrumento.
-   * Mostrar só uma delas esconderia exatamente o caso que importa.
+   * ⭐ A pontuação máxima vem em DUAS colunas — a GRAVADA na publicação e a
+   * RECALCULADA agora, por `pontuacaoMaximaDoArranjo()` (em `calculo/`), sobre
+   * os pesos derivados. Iguais, é conferência; diferentes, alguém mexeu no
+   * banco por fora e a nota de todo mundo está saindo sobre um denominador que
+   * não é o do instrumento. Mostrar só uma delas esconderia o caso que importa.
+   *
+   * ⚠️ As versões publicadas ANTES de 11/09 gravaram a coluna pela antiga
+   * `pontuacaoMaxima()` do `publicacao.validator`, que somava peso por
+   * pergunta. Bate com a nova nas 3 herdadas (conferido: 72, 72, 72) porque a
+   * derivação reproduz os pesos históricos — mas são funções diferentes, e
+   * a do validator hoje **não tem chamador de produção**: ela volta na Etapa 4
+   * (publicar), adaptada ao arranjo.
    */
   async instrumento(versaoId: string): Promise<InstrumentoCompleto> {
     const a = await carregarArranjo(this.prisma, versaoId);
