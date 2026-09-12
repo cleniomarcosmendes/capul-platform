@@ -351,6 +351,41 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
                 </ul>
               </div>
             )}
+            {/* ⭐⭐ QUEM PODE ENTRAR MAS NÃO ESTÁ TRABALHANDO — a irmã que
+                faltava (12/09). A prévia conferia UMA condição de impedimento
+                (acesso) e não a outra: férias e afastamento não impedem entrar,
+                mas a avaliação fica parada com quem não está no trabalho.
+                ⚠️ Bloco SEPARADO do de acesso, e em outro tom: "sem conta" se
+                resolve no Configurador, com outra pessoa; "de férias" se
+                resolve redesignando ou esperando, e é decisão do RH. Juntos, o
+                segundo seria lido como defeito de cadastro. */}
+            {previaAbertura.avaliadoresDeLicenca.length > 0 && (
+              <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+                <p className="font-semibold">
+                  ⓘ {contagem(previaAbertura.avaliacoesComAvaliadorDeLicenca, 'avaliação está', 'avaliações estão')}{' '}
+                  com {contagem(previaAbertura.avaliadoresDeLicenca.length, 'avaliador de licença', 'avaliadores de licença')}
+                </p>
+                <p className="mt-0.5 text-xs">
+                  Eles <strong>conseguem entrar</strong> — férias e afastamento não bloqueiam o
+                  acesso. Só não estão no trabalho. Não impede abrir: quem voltar responde
+                  normalmente; se não for voltar a tempo, redesigne.
+                </p>
+                <ul className="mt-1.5 space-y-0.5">
+                  {previaAbertura.avaliadoresDeLicenca.slice(0, 6).map((a) => (
+                    <li key={a.avaliadorId}>
+                      <strong>{a.nome}</strong> ({a.matricula}) ·{' '}
+                      {a.situacao === 'FERIAS' ? 'férias' : 'afastado'} ·{' '}
+                      {contagem(a.avaliacoes, 'avaliação', 'avaliações')}
+                    </li>
+                  ))}
+                  {previaAbertura.avaliadoresDeLicenca.length > 6 && (
+                    <li className="text-xs">
+                      e mais {previaAbertura.avaliadoresDeLicenca.length - 6}
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
             {previaAbertura.avaliadoresSemAcesso.length > 0 && (
               <div className="mt-2 rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
                 <p className="font-semibold">

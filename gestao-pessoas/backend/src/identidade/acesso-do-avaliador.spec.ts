@@ -60,3 +60,58 @@ describe('classificarAcesso', () => {
     }
   });
 });
+
+describe('⭐⭐ SEM_VINCULO — o quarto degrau, e o fato errado que estava escrito (12/09)', () => {
+  const conta = (over: Partial<ContaEncontrada> = {}): ContaEncontrada => ({
+    usuarioId: 'u1',
+    username: 'fulano',
+    statusConta: 'ATIVO',
+    permissoesNoModulo: 1,
+    ...over,
+  });
+
+  /**
+   * O caso fatal e invisível: tem conta, tem permissão, e leva 403 no
+   * `IdentidadeGuard` porque a matrícula não está entre os elegíveis
+   * (DEMITIDO). A prévia dizia "OK".
+   */
+  it('conta e permissão OK, mas sem vínculo -> SEM_VINCULO', () => {
+    expect(classificarAcesso(conta(), false)).toBe('SEM_VINCULO');
+  });
+
+  it('a mensagem explica que o acesso é negado NA ENTRADA', () => {
+    expect(motivoDoAcesso('SEM_VINCULO')).toMatch(/negado na entrada/);
+    expect(motivoDoAcesso('SEM_VINCULO')).toMatch(/desligado/);
+  });
+
+  /**
+   * ⚠️ ORDEM: depois de conta e status, ANTES de permissão. Mandar alguém ao
+   * Configurador dar permissão a quem foi desligado é o pior conselho dos três.
+   */
+  it('sem conta continua vencendo — não se fala de vínculo de quem não tem conta', () => {
+    expect(classificarAcesso(null, false)).toBe('SEM_CONTA');
+  });
+
+  it('conta inativa vence o vínculo', () => {
+    expect(classificarAcesso(conta({ statusConta: 'INATIVO' }), false)).toBe('CONTA_INATIVA');
+  });
+
+  it('sem vínculo vence SEM_PERMISSAO', () => {
+    expect(classificarAcesso(conta({ permissoesNoModulo: 0 }), false)).toBe('SEM_VINCULO');
+  });
+
+  /**
+   * ⭐⭐ O fato que este arquivo afirmava errado até 12/09: dizia que o afastado
+   * "continua sem conseguir entrar". `SITUACOES_ELEGIVEIS` é
+   * ['ATIVO','AFASTADO','FERIAS'] — ele ENTRA. Licença é problema de
+   * disponibilidade, não de acesso, e vai em lista separada na prévia.
+   */
+  it('COM vínculo (inclusive afastado e de férias) o acesso é OK', () => {
+    expect(classificarAcesso(conta(), true)).toBe('OK');
+  });
+
+  /** `undefined` = quem chamou não conferiu. A classificação não opina. */
+  it('sem a conferência de vínculo, não opina', () => {
+    expect(classificarAcesso(conta())).toBe('OK');
+  });
+});

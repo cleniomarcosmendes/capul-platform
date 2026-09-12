@@ -382,21 +382,43 @@ export class PainelService {
     const acessos = await this.identidade.acessoDeAvaliadores(
       [...nomes.values()].map((c) => c.matricula),
     );
-    const avaliadoresSemAcesso = porAvaliador
-      .map((l) => {
-        const c = nomes.get(l.avaliadorId);
-        const a = c ? acessos.get(c.matricula) : undefined;
-        return {
-          avaliadorId: l.avaliadorId,
-          nome: c?.nome ?? '(colaborador não encontrado)',
-          matricula: c?.matricula ?? '',
-          acesso: a?.acesso ?? 'SEM_CONTA',
-          motivo: a?.motivo ?? null,
-          avaliacoes: l._count._all,
-        };
-      })
-      .filter((x) => x.acesso !== 'OK')
-      .sort((a, b) => b.avaliacoes - a.avaliacoes || a.nome.localeCompare(b.nome, 'pt-BR'));
+    const comAcesso = porAvaliador.map((l) => {
+      const c = nomes.get(l.avaliadorId);
+      const a = c ? acessos.get(c.matricula) : undefined;
+      return {
+        avaliadorId: l.avaliadorId,
+        nome: c?.nome ?? '(colaborador não encontrado)',
+        matricula: c?.matricula ?? '',
+        acesso: a?.acesso ?? 'SEM_CONTA',
+        motivo: a?.motivo ?? null,
+        situacao: a?.situacao ?? null,
+        avaliacoes: l._count._all,
+      };
+    });
+    const porTamanho = (a: { avaliacoes: number; nome: string }, b: { avaliacoes: number; nome: string }) =>
+      b.avaliacoes - a.avaliacoes || a.nome.localeCompare(b.nome, 'pt-BR');
+
+    const avaliadoresSemAcesso = comAcesso.filter((x) => x.acesso !== 'OK').sort(porTamanho);
+
+    /**
+     * ⭐⭐ QUEM PODE ENTRAR MAS NÃO ESTÁ TRABALHANDO — a irmã que faltava (12/09).
+     *
+     * A prévia conferia UMA condição de impedimento (acesso) e não a irmã dela.
+     * Férias e afastamento **não impedem entrar** — `SITUACOES_ELEGIVEIS` inclui
+     * os dois —, mas a avaliação fica parada com quem não está no trabalho.
+     *
+     * ⚠️ **Lista SEPARADA da de acesso, de propósito.** São providências
+     * diferentes: "sem conta" resolve-se no Configurador, com outra pessoa;
+     * "de férias" resolve-se redesignando ou esperando, e é decisão do RH.
+     * Juntas, a segunda seria lida como defeito de cadastro e mandaria o RH ao
+     * lugar errado.
+     *
+     * ⚠️ E é AVISO, nunca bloqueio: quem volta de férias responde normalmente.
+     * Medido em 12/09 no Piloto: 10 avaliadores, 264 das 894 avaliações.
+     */
+    const avaliadoresDeLicenca = comAcesso
+      .filter((x) => x.acesso === 'OK' && (x.situacao === 'FERIAS' || x.situacao === 'AFASTADO'))
+      .sort(porTamanho);
 
     return {
       /** Vazio = a abertura passa. Mesma função que a API roda no clique. */
@@ -429,6 +451,10 @@ export class PainelService {
        * resolvido com o ciclo já aberto.
        */
       avaliadoresSemAcesso,
+      /** Entram, mas estão de licença — lista separada: outra providência. */
+      avaliadoresDeLicenca,
+      /** Quantas avaliações estão paradas com quem está de licença. */
+      avaliacoesComAvaliadorDeLicenca: avaliadoresDeLicenca.reduce((t, a) => t + a.avaliacoes, 0),
       /** Quantas avaliações estão nas mãos deles — o número que dói. */
       avaliacoesSemAvaliadorComAcesso: avaliadoresSemAcesso.reduce((t, a) => t + a.avaliacoes, 0),
     };

@@ -846,6 +846,19 @@ export interface PreviaDaAbertura {
   /** Quantas avaliações estão nas mãos deles — o número que dói. */
   avaliacoesSemAvaliadorComAcesso: number;
   /**
+   * ⭐ Entram normalmente (férias e afastamento NÃO impedem o acesso), mas não
+   * estão no trabalho. Lista SEPARADA da de acesso: a providência é outra —
+   * redesignar ou esperar, decisão do RH, não do Configurador.
+   */
+  avaliadoresDeLicenca: {
+    avaliadorId: string;
+    nome: string;
+    matricula: string;
+    situacao: string | null;
+    avaliacoes: number;
+  }[];
+  avaliacoesComAvaliadorDeLicenca: number;
+  /**
    * No público e FORA do ciclo — pela régua **ou** por exclusão manual do RH.
    * ⚠️ Chamava-se `barradosPelaRegua` e o nome afirmava a causa, e só uma
    * delas: a conta é `!elegivel`, e a decisão manual sobrepõe a régua.

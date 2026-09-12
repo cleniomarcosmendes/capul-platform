@@ -187,10 +187,27 @@ export class IdentidadeService {
    */
   async acessoDeAvaliadores(
     matriculas: readonly string[],
-  ): Promise<Map<string, { acesso: AcessoDoAvaliador; motivo: string | null; username: string | null }>> {
+  ): Promise<
+    Map<
+      string,
+      {
+        acesso: AcessoDoAvaliador;
+        motivo: string | null;
+        username: string | null;
+        /**
+         * ⭐ A situação do colaborador — `null` quando a matrícula não está
+         * entre os elegíveis. Sai junto porque responde a OUTRA pergunta que a
+         * mesma consulta já pode responder: quem está de licença. Estar de
+         * férias **não impede entrar** (`SITUACOES_ELEGIVEIS` inclui FERIAS e
+         * AFASTADO) — impede TRABALHAR, e são providências diferentes.
+         */
+        situacao: string | null;
+      }
+    >
+  > {
     const resultado = new Map<
       string,
-      { acesso: AcessoDoAvaliador; motivo: string | null; username: string | null }
+      { acesso: AcessoDoAvaliador; motivo: string | null; username: string | null; situacao: string | null }
     >();
     if (matriculas.length === 0) return resultado;
 
@@ -219,6 +236,23 @@ export class IdentidadeService {
        WHERE upper(trim(u.matricula)) IN (${Prisma.join(candidatas)})
     `);
 
+    /**
+     * ⭐ A SITUAÇÃO de cada matrícula, na mesma varredura. Uma consulta a mais,
+     * e ela responde as duas perguntas que faltavam: quem está DESLIGADO (403
+     * garantido na entrada, e a prévia dizia "OK") e quem está de LICENÇA (entra,
+     * mas não está trabalhando).
+     */
+    const colaboradores = await this.prisma.colaborador.findMany({
+      where: {
+        matricula: { in: candidatas },
+        situacao: { in: SITUACOES_ELEGIVEIS as unknown as $Enums.SituacaoColaborador[] },
+      },
+      select: { matricula: true, situacao: true },
+    });
+    const situacaoPorChapa = new Map(
+      colaboradores.map((c) => [c.matricula.toUpperCase().trim(), c.situacao as string]),
+    );
+
     const porChapa = new Map<string, ContaEncontrada>();
     for (const c of contas) {
       porChapa.set(c.matricula, {
@@ -236,11 +270,18 @@ export class IdentidadeService {
         chapasEquivalentes(matricula)
           .map((forma) => porChapa.get(forma))
           .find((c): c is ContaEncontrada => c !== undefined) ?? null;
-      const acesso = classificarAcesso(conta);
+      const situacao =
+        chapasEquivalentes(matricula)
+          .map((forma) => situacaoPorChapa.get(forma))
+          .find((x): x is string => x !== undefined) ?? null;
+      // `situacao === null` significa: nenhuma linha entre os ELEGÍVEIS bate com
+      // esta chapa — é exatamente o que o `IdentidadeGuard` vai concluir depois.
+      const acesso = classificarAcesso(conta, situacao !== null);
       resultado.set(matricula, {
         acesso,
         motivo: motivoDoAcesso(acesso),
         username: conta?.username ?? null,
+        situacao,
       });
     }
     return resultado;
