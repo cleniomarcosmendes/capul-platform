@@ -21,6 +21,7 @@
  * ⚠️ E a fração sai daqui nas duas telas. Uma segunda normalização divergiria no
  * primeiro caso de borda — que é exatamente como as duas passaram a discordar.
  */
+import { percentuaisQueFecham } from './reparticao';
 
 export interface ItemComPeso {
   nome: string;
@@ -45,10 +46,22 @@ export interface FatiaDaNota extends ItemComPeso {
 export function repartirPesos(itens: readonly ItemComPeso[]): FatiaDaNota[] {
   const total = itens.reduce((s, i) => s + i.peso, 0);
   if (total <= 0) return [];
-  return itens.map((i) => ({ ...i, pct: (i.peso / total) * 100 }));
+  /**
+   * ⚠️ `percentuaisQueFecham`, não `(peso / total) × 100`. Dois critérios de
+   * peso 13,33 exibiam **22,22% e 22,21%** — pesos iguais com percentuais
+   * diferentes —, e a coluna somava 100,01. Ver `lib/reparticao.ts`.
+   */
+  const pcts = percentuaisQueFecham(itens.map((i) => i.peso));
+  return itens.map((i, n) => ({ ...i, pct: pcts[n] }));
 }
 
-/** `60` de um total de `60` → `"100,0%"`. Uma casa: a tela não é planilha. */
+/**
+ * `60` de um total de `60` → `"100,0%"`.
+ *
+ * ⚠️ Isto é uma fração ISOLADA (um número sobre um total), não uma coluna que
+ * precisa fechar — por isso continua sendo divisão direta. Quando N frações
+ * aparecem juntas e devem somar 100, quem serve é `repartirPesos`.
+ */
 export function fracao(peso: number, total: number): string {
   if (total <= 0) return '—';
   return `${((peso / total) * 100).toFixed(1).replace('.', ',')}%`;

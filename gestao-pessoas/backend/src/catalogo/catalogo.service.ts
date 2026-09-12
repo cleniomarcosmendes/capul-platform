@@ -16,7 +16,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { SITUACOES_ELEGIVEIS } from '../common/elegibilidade.js';
 import { resolverRegistrado } from '../calculo/resolvers/registry.js';
 import { carregarArranjo } from '../arranjo/carregar-arranjo.js';
-import { percentuaisQueFecham } from '../common/percentual.js';
+import { percentuaisQueFecham, repartirExato } from '../common/percentual.js';
 import { NotFoundException } from '@nestjs/common';
 
 export interface VersaoDeModelo {
@@ -205,6 +205,25 @@ export class CatalogoService {
     const percentuaisPorQuestao = new Map(
       percentuaisQueFecham(a.questoes.map((q) => q.peso)).map((p, i) => [a.questoes[i].id, p]),
     );
+    /**
+     * ⭐ O "vale até" por questão, repartido para FECHAR na pontuação máxima.
+     *
+     * ⚠️ Era `peso × maiorValor` arredondado por item, e a coluna somava
+     * **72,01** contra a máxima 72 — 5,34 × 1,2 = 6,408 vira 6,41, e três de um
+     * grupo somam 19,23 onde o grupo vale 19,2. Mesma família do 100,01%
+     * (§3.1.99): arredondar por item não fecha.
+     *
+     * ⚠️ E é repartido a partir do PESO REAL (exato em centavos), não do peso
+     * exibido: partir do que está na tela propagaria o arredondamento da
+     * exibição para dentro da conta.
+     */
+    const valeAtePorQuestao = new Map(
+      repartirExato(
+        a.questoes.map((q) => q.peso * q.maiorValor),
+        a.pontuacaoMaximaCalculada,
+        2,
+      ).map((v, i) => [a.questoes[i].id, v]),
+    );
 
     return {
       modeloId: a.modeloId,
@@ -241,7 +260,7 @@ export class CatalogoService {
           ordem: q.ordem,
           peso: q.peso,
           codigoOrigem: q.codigo,
-          pontuacaoMaxima: Math.round(q.peso * q.maiorValor * 10_000) / 10_000,
+          pontuacaoMaxima: valeAtePorQuestao.get(q.id) ?? 0,
           // ⚠️ A coluna por QUESTÃO também soma 100 — mesma varredura de 12/09
           // que achou a dos grupos. `percentuaisPorQuestao` é calculado sobre a
           // lista inteira do arranjo, não por classificação: o total de que
