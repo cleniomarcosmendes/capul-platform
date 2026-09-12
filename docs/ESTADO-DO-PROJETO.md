@@ -7668,13 +7668,13 @@ cabeçalho, a história de quando a cópia divergiu.
 
 | Módulo | Gêmeo no backend | O que decide | Já deu errado? | Custo |
 |---|---|---|---|---|
-| 🔴 **`roles.ts`** | `common/roles-rh.ts` | **quais itens de menu existem** | ⚠️ o cabeçalho registra: `modulos[].role` é denormalizado e mente com papéis por departamento — foi assim que `REGISTRADOR_FROTA` ficou com "só Início" na Logística. **Sintoma MUDO**: nada dá erro, o item só não existe | **~1,5h** |
+| ✅ ~~`roles.ts`~~ | `common/roles-rh.ts` | **quais itens de menu existem** | **FEITO em 12/09** — §3.1.112 |  ~~1,5h~~ |
 | 🟠 **`ciclo-encerrado.ts`** | `ciclo/ciclo-operavel.ts` | desabilitar-com-motivo em **todo botão de escrita do ciclo** | sim — as telas não sabiam da recusa e a pessoa descobria no clique (§3.1.12) | **~1h** |
 | 🟠 **`motivo.ts`** | `common/motivo.ts` | o mínimo de caracteres por ato | sim — `MOTIVO_MINIMO` valia **15** na tela e **3** no backend, com o mesmo nome. Nome igual com valor diferente é pior que número solto | **~45min** |
 | 🟡 **`composicao-da-nota.ts`** | (não tem — é regra de exibição) | como o peso vira percentual nas duas telas | sim — 22,22% × 22,21% (§3.1.105) | **~45min** |
 | 🟡 **`formato.ts`** | `common/texto-sem-flexao` (o invariante) | `data()` sem `Date` (fuso), `flexao`/`contagem` | sim — `new Date('2026-09-05')` volta **04/09** a oeste de Greenwich, e é a data-base que ancora todo cálculo temporal | **~1h** |
 
-**Total: ~5h.** Não bloqueia nada, e a ordem é a da tabela.
+**Total: ~5h; feito o primeiro, restam ~3,5h nos quatro.** Não bloqueia nada.
 
 ⚠️ **O `roles.ts` é o mais urgente por um motivo de calendário, não de gravidade:** a próxima
 varredura vai rodar com `RH_MODELO` e `RH_CICLO`, papéis **nunca exercitados**, e é justamente ele
@@ -7839,3 +7839,107 @@ devolve 403 falando de matrícula (§3.1.93). Se a varredura tomar esse 403, é 
 ⚠️ **Rodar a varredura com as três contas, nunca com conta de pessoa real.** A de 12/09 rodou como
 `ariellypereira` e custou 7 linhas de auditoria a remover — e, pior, deixou `RH_MODELO` e
 `RH_CICLO` sem percurso, que era o motivo dela (§3.1.108).
+
+---
+
+### 3.1.112. ✅ `roles.ts` COM SPEC — e o defeito do `REGISTRADOR_FROTA` NÃO é herdado
+
+Feito antes do percurso, pelo argumento de calendário: a varredura vai rodar com `RH_MODELO` e
+`RH_CICLO`, papéis nunca exercitados, e é este arquivo que decide o que essas contas enxergam.
+**Erro aqui aparece como "a tela não tem o item" e é lido como falta de permissão** — foi
+exatamente essa confusão que levou a varredura de 12/09 a ser refeita como `ariellypereira`, com a
+conclusão de que "o cadastro de questionários não existia".
+
+#### ⚠️ A confirmação pedida: o defeito NÃO é herdado
+
+O cabeçalho do arquivo citava o `REGISTRADOR_FROTA` que ficou com "só Início" na Logística. **Esse
+caso é de lá, e está citado como precedente — não como defeito presente aqui.** Conferido nos dois
+lados:
+
+| | Lê | Fallback |
+|---|---|---|
+| `backend/common/roles-rh.ts` → `rolesRh` | `departamentos[].role`, deduplicado | o legado `modulos[].role` só quando não há nenhuma role em `departamentos[]` |
+| `frontend/lib/roles.ts` → `rolesDoModulo` | **idêntico** | **idêntico** |
+
+**Nenhum lugar do módulo lê `modulos[].role` direto** — varrido: zero ocorrências fora do próprio
+`roles.ts`. O módulo nasceu depois do incidente e já nasceu certo; o comentário foi reescrito para
+dizer isso, porque como estava lia-se como bug em aberto.
+
+⚠️ **Nos três tokens de teste o denormalizado coincide com o real** (uma role por conta), então
+**eles não exercitam o caso**. Quem exercita é o spec, com o token de duas roles em departamentos
+diferentes. É a razão de o teste existir e não bastar "conferir na tela".
+
+#### O que ganhou spec
+
+⭐ **`temPapel` saiu de dentro de um `useMemo`.** A decisão *"este papel serve?"* — com o bypass do
+ADMIN — vivia no `AuthContext`: pura, decisiva e **inalcançável por teste**. Agora mora em
+`lib/roles.ts`. **11 testes**, incluindo o que trava a "simplificação": um token com `RH_MODELO` no
+denormalizado e `RH_CICLO` num segundo departamento — se alguém trocar a função por `mod.role`, a
+linha cai.
+
+⭐ **`ITENS_DO_MENU` e `filtrarPorPapel` saíram do `Sidebar.tsx`** para que a matriz abaixo seja
+**gerada da lista de verdade** (`menu.spec.ts`, 9 testes). Matriz escrita à mão envelhece no
+primeiro item novo, e o sintoma de estar errada é mudo.
+
+⚠️ **Escrevi um "achado" que não existia.** Esperava que o `RH_MODELO` visse o cabeçalho `[CICLO]`
+órfão, por ser o último da lista e a condição `proximo != null` parecer deixá-lo passar. Errei:
+`undefined != null` é `false` e a seção sai. O teste ficou — invertido — porque o caso do **fim da
+lista** é o único que a leitura do código não resolve à primeira vista, e o próximo item
+acrescentado ao fim muda quem é o último.
+
+#### 📋 A MATRIZ — o que cada papel vê no menu
+
+| Item | RH_ADMIN | RH_MODELO | RH_CICLO | AVALIADOR |
+|---|:---:|:---:|:---:|:---:|
+| **Minhas avaliações** | ✅ | ✅ | ✅ | ✅ |
+| *[CADASTROS]* | ✅ | ✅ | ✅ | — |
+| Quem avalia quem | ✅ | — | — | — |
+| Questionários | ✅ | ✅ | ✅ | — |
+| Acervo de questões | ✅ | ✅ | ✅ | — |
+| Classificações | ✅ | ✅ | — | — |
+| Critérios da nota | ✅ | — | — | — |
+| *[CICLO]* | ✅ | — | ✅ | — |
+| Ciclos | ✅ | — | ✅ | — |
+
+Lê-se em três linhas:
+- **RH_ADMIN** vê tudo.
+- **RH_MODELO** monta o INSTRUMENTO — e não vê Ciclos, nem "Quem avalia quem", nem "Critérios".
+- **RH_CICLO** monta o CICLO e **lê** o instrumento (escolher modelo por nome sem ver o conteúdo é
+  decidir às cegas), mas não o edita: sem Classificações.
+
+⚠️ **"Minhas avaliações" não tem condição de papel**, de propósito (§3.1.3): ser avaliador é fato
+do DADO, não papel do JWT — a gestora avalia 13 pessoas tendo só `RH_ADMIN`.
+
+⚠️ **ADMIN vê o mesmo que RH_ADMIN**, pelo bypass — e é por isso que **varredura feita com ADMIN
+não mede RBAC**. Está como teste, para não ser esquecido.
+
+> ⭐ **Uso operacional:** quando a varredura disser *"não achei o item X"*, esta tabela responde na
+> hora se é **tela** (deveria aparecer e não aparece) ou **papel** (não é para aparecer mesmo).
+
+### 3.1.113. ⭐⭐ REGRA — justificativa repetida para adiar coisas diferentes é BARREIRA, não decisão
+
+Formulada ao derrubar o "o frontend não tem test runner" (§3.1.107), e vale além dele.
+
+> **Quando a mesma justificativa aparece pela segunda vez para adiar coisas DIFERENTES, ela deixou
+> de ser uma decisão sobre aquele item e virou uma barreira. O custo de derrubá-la se paga contra a
+> FILA inteira, não contra o item da vez.**
+
+⚠️ **Por que ela some das estimativas.** Avaliada item a item, a barreira nunca se paga: "1h de
+setup para consertar um percentual de 0,01" é obviamente ruim, e é a conta que se faz — porque a
+fila não está na frente de quem decide. O `vitest` custou 1h e destravou **cinco** módulos que
+somam ~5h de conserto e três defeitos já conhecidos.
+
+⚠️ **E a justificativa costuma ser CORRETA**, que é o que a torna difícil de ver: copiar regra de
+arredondamento sem teste é mesmo pior que o defeito. O erro não é aceitar a razão — é aceitá-la
+duas vezes sem perguntar o que custaria removê-la.
+
+**Gatilho:** ao escrever "não dá para fazer X porque Y" pela segunda vez, com X diferente,
+**parar e orçar Y**. Se o orçamento de Y for menor que a soma dos X represados, Y vira a tarefa.
+
+Outras candidatas do projeto, com a mesma forma:
+
+| Barreira | O que está represado atrás |
+|---|---|
+| *"o app não é buildado nesta máquina"* | tudo que exige APK novo espera o Marco/Douglas — e a fila não é visível |
+| *"o roteiro de deploy não existe"* | 15 migrations, 3 serviços e 2 `location` esperando desde 11/09 |
+| *"não há tela para informar o valor"* | o critério INFORMADO inteiro, cadastrado e sem pontuar ninguém |
