@@ -5293,3 +5293,85 @@ confirma a implementação; **dado real confirma a intenção**.
 ⚠️ **Corolário para a casca.** Service que "normaliza" antes de validar tem de provar que a
 normalização não apaga um caso que a regra recusaria. **Sanitizar em silêncio o que a regra manda
 recusar é pior que não validar**: some com o sintoma e deixa a pessoa com a crença errada.
+
+---
+
+### 3.1.67. ⭐⭐ SEPARAÇÃO DE FUNÇÕES — a regra vale para AGIR **e para LER** (11/09)
+
+Item 17 da varredura. O CSV já omitia a própria linha; a **tela** mostrava nota, conceito e o
+botão da memória de cálculo, e a **memória** devolvia tudo — apenas *registrando*
+`proprioResultado: true` na auditoria. **Registrar não é impedir**: a trilha provava o acesso
+depois de ele ter acontecido.
+
+#### ⚠️ Não foi esquecimento — foi decisão registrada, e o texto a legitimava
+
+A dispensa de `resultado.service.ts` no `separacao-funcoes.invariante.spec.ts` dizia, por escrito:
+
+> *"a linha de quem gera o arquivo fica FORA dos dois CSV: **na tela a própria linha aparece
+> marcada**, mas arquivo que sai do sistema é outro ato."*
+
+Marcar foi tratado como suficiente para a tela. O texto da dispensa foi corrigido junto com o
+código — senão a próxima leitura reafirma a regra antiga, e o invariante passa a defender o furo.
+
+⭐ **Lição de forma:** dispensa de invariante não descreve só *por que o arquivo está fora* — ela
+**afirma qual é a regra**. Quando a regra muda, o texto da dispensa é código.
+
+#### As três superfícies, agora iguais
+
+| Superfície | Antes | Agora |
+|---|---|---|
+| CSV do ciclo | linha fora do arquivo ✅ | igual |
+| **Tela de Resultados** | 🔴 nota, conceito e botão da memória | linha **aparece**, sem nota, conceito nem renormalização |
+| **Memória de cálculo** | 🔴 devolvia tudo, só auditava | **403** em qualquer papel, com a tentativa auditada |
+
+- **Zerado no SERVIDOR**, não escondido no cliente — esconder na tela deixaria o número viajando
+  no JSON, e quem chamasse a API direto o leria.
+- Verificação por **REGISTRO** (`ehProprioAvaliado`), nunca por papel: `RH_ADMIN` e o `ADMIN` da
+  plataforma incluídos.
+- **A linha fica**, com nome e matrícula, no mesmo tom que o módulo já usa com o avaliador
+  (*"a sua própria avaliação não fica visível para você"*). Omiti-la faria o total da tela divergir
+  do total do ciclo sem explicação.
+- A própria linha deixou de ser BOTÃO: botão que abre 403 convida ao clique e responde com erro,
+  que a pessoa lê como defeito.
+
+#### ⭐⭐ A MÉDIA precisou mudar — sem isso a omissão não valeria nada
+
+Pergunta do Clenio, e a resposta é **sim, era trivialmente recuperável**:
+
+```
+própria = média × N − Σ(notas das outras linhas)
+```
+
+Com N linhas visíveis e N−1 notas na tela, é uma subtração. Esconder o número e mantê-lo dentro
+da média não esconde nada.
+
+A média passou a ser sobre `comNota` (exclui a própria) e o rótulo diz **"sobre N, sem a sua"** —
+dois números verdadeiros lado a lado precisam do termo que os concilia. **As CONTAGENS seguem
+sobre tudo**: elas não permitem deduzir nota nenhuma.
+
+#### A varredura dos outros caminhos de leitura
+
+| Caminho | Devolve nota individual? | Aplica a regra? |
+|---|---|---|
+| `resultado.doCiclo` (tela) | sim | ✅ agora |
+| `resultado.csvDoCiclo` | sim | ✅ já aplicava |
+| `resultado.memoria` | sim (completa) | ✅ agora, com 403 |
+| `resultado.csvDeCanceladas` | não (canceladas não têm nota) | n/a |
+| `ciclo.previaDaDevolucao` | **não** — nomes + contagem de respostas | n/a |
+| `apuracao.conferir/apurar` | **não** — contagens e alertas agregados | n/a |
+| `avaliacao.enviar` | sim (própria, no envio) | já barrado: `responder`/`editar` recusam no próprio |
+| `painel.*` | não — só agregados | n/a |
+
+**Nada a mudar fora do `resultado.service`.** Registrado assim porque a pergunta *"quais aplicam e
+quais não"* vale mais que a correção: da próxima vez a varredura começa desta tabela.
+
+#### Verificação
+
+`resultado/propria-nota.spec.ts` (novo) cobre as três superfícies com os dois ramos. E o caminho
+foi percorrido **contra dado real** no ciclo SIMULACAO, rodando o serviço como uma pessoa que tem
+resultado lá: a linha dela vem sem nota e sem conceito, a das outras intacta, a memória própria dá
+403 com auditoria, a de terceiro abre, e o CSV sai com **12 de 13** sem o nome nem a matrícula dela.
+
+⚠️ Na primeira rodada o passo do CSV acusou "0 linhas" — **era o script de prova lendo o campo
+errado** (`csv.conteudo` em vez de `.linhas`), não um defeito. Conferir antes de chamar de achado:
+falso vermelho destrói a ferramenta.
