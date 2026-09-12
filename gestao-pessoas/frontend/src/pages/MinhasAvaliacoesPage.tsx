@@ -104,7 +104,18 @@ export default function MinhasAvaliacoesPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-24 pt-4 sm:pt-6">
-      <ProgressoGeral total={itens.length} concluidas={itens.filter((i) => i.status === 'ENVIADA').length} />
+      {/* ⚠️ A BARRA CONTA SÓ O TRABALHO DE RESPONDER, e o filtro é explícito.
+          Desde 13/09 a fila traz também devolutivas liberadas — que costumam
+          estar em ciclo ENCERRADO. Somá-las aqui faria a barra misturar dois
+          ciclos num número que não é de nenhum, que é exatamente o defeito que
+          o filtro do backend foi criado para evitar. Uma devolutiva não é uma
+          avaliação "concluída": é outro trabalho. */}
+      <ProgressoGeral
+        total={itens.filter((i) => i.ciclo.status === 'ABERTO').length}
+        concluidas={
+          itens.filter((i) => i.ciclo.status === 'ABERTO' && i.status === 'ENVIADA').length
+        }
+      />
 
       <Busca
         valor={busca}
@@ -378,6 +389,8 @@ interface GrupoDeCiclo {
   emAndamento: ItemDaFila[];
   aResponder: ItemDaFila[];
   enviadas: ItemDaFila[];
+  /** ⭐ Conversa que ele ainda tem de ter — não é "já fez". Ver `agruparPorCiclo`. */
+  devolutivas: ItemDaFila[];
 }
 
 /**
@@ -397,8 +410,18 @@ function agruparPorCiclo(itens: ItemDaFila[]): GrupoDeCiclo[] {
   const mapa = new Map<string, GrupoDeCiclo>();
   for (const item of itens) {
     const g =
-      mapa.get(item.ciclo.id) ?? { ciclo: item.ciclo, emAndamento: [], aResponder: [], enviadas: [] };
-    if (item.status === 'ENVIADA') g.enviadas.push(item);
+      mapa.get(item.ciclo.id) ??
+      { ciclo: item.ciclo, emAndamento: [], aResponder: [], enviadas: [], devolutivas: [] };
+    /**
+     * ⭐ DEVOLUTIVA LIBERADA é seção PRÓPRIA, não "enviada".
+     *
+     * São dois trabalhos diferentes: enviada é o que ele já fez e não precisa
+     * mais olhar; devolutiva liberada é uma conversa que ele **ainda tem de
+     * ter**. Misturá-las esconderia a única linha acionável dentro de um bloco
+     * que o avaliador aprendeu a ignorar.
+     */
+    if (item.status === 'ENVIADA' && item.devolutivaLiberadaEm) g.devolutivas.push(item);
+    else if (item.status === 'ENVIADA') g.enviadas.push(item);
     else if (item.perguntasRespondidas > 0) g.emAndamento.push(item);
     else g.aResponder.push(item);
     mapa.set(item.ciclo.id, g);
@@ -425,7 +448,12 @@ function BlocoDoCiclo({
       <CabecalhoDoCiclo
         ciclo={grupo.ciclo}
         aResponder={grupo.emAndamento.length + grupo.aResponder.length}
-        total={grupo.emAndamento.length + grupo.aResponder.length + grupo.enviadas.length}
+        total={
+          grupo.emAndamento.length +
+          grupo.aResponder.length +
+          grupo.enviadas.length +
+          grupo.devolutivas.length
+        }
       />
 
       {grupo.emAndamento.length > 0 && (
@@ -450,6 +478,28 @@ function BlocoDoCiclo({
           </h3>
           <ul className="space-y-2">
             {grupo.aResponder.map((item) => (
+              <li key={item.id}>
+                <Cartao item={item} aoContestar={aoContestar} />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {/* ⭐⭐ DEVOLUTIVAS — em CIMA das enviadas, porque é trabalho que falta.
+          "Enviadas" é o bloco que o avaliador aprendeu a não olhar; pôr a
+          conversa que ele ainda precisa ter lá dentro seria escondê-la. */}
+      {grupo.devolutivas.length > 0 && (
+        <>
+          <h3 className="mb-2 mt-6 px-1 text-sm font-semibold text-emerald-700">
+            Devolutivas liberadas ({grupo.devolutivas.length})
+          </h3>
+          <p className="mb-2 px-1 text-xs text-slate-500">
+            O RH liberou o resultado destas pessoas. Abra cada uma e converse com ela — a tela traz
+            a nota, o que você respondeu pergunta a pergunta, e de onde veio a nota final.
+          </p>
+          <ul className="space-y-2">
+            {grupo.devolutivas.map((item) => (
               <li key={item.id}>
                 <Cartao item={item} aoContestar={aoContestar} />
               </li>
@@ -616,9 +666,18 @@ function Cartao({
               <Lock size={12} aria-hidden /> {item.motivoRestricao}
             </span>
           ) : enviada ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-capul-600">
-              <CheckCircle2 size={14} aria-hidden /> Enviada
-            </span>
+            /* ⭐ O rótulo diz o PRÓXIMO PASSO quando ele existe. "Enviada" com
+               um cartão clicável seria uma promessa muda: a pessoa não saberia
+               que há devolutiva ali dentro. */
+            item.devolutivaLiberadaEm ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                <CheckCircle2 size={14} aria-hidden /> Devolutiva liberada — abra para conversar
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-capul-600">
+                <CheckCircle2 size={14} aria-hidden /> Enviada
+              </span>
+            )
           ) : (
             <ProgressoDoItem
               respondidas={item.perguntasRespondidas}
@@ -636,7 +695,7 @@ function Cartao({
           </p>
         )}
       </div>
-      {!item.restrita && !enviada && (
+      {!item.restrita && (!enviada || item.devolutivaLiberadaEm) && (
         <ChevronRight size={20} className="shrink-0 self-center text-slate-300" aria-hidden />
       )}
     </>
@@ -677,7 +736,30 @@ function Cartao({
       </div>
     );
   }
-  if (enviada) return <div className={`${classe} border-slate-200 opacity-75`}>{conteudo}</div>;
+  /**
+   * ⭐⭐ A ENVIADA DEIXA DE SER INERTE QUANDO O RH LIBERA A DEVOLUTIVA.
+   *
+   * Até 13/09 ela era um `<div>` apagado, de propósito — não havia para onde ir
+   * depois de enviar. Agora há: liberada, o cartão vira o caminho para a
+   * conversa com a pessoa.
+   *
+   * ⚠️ Isto **não é permissão** — quem decide o acesso é o servidor, por
+   * registro (é a própria? é dele? foi liberada?). A fila só sabe se há para
+   * onde ir: *gate de leitura não se escreve na fila*.
+   */
+  if (enviada) {
+    if (!item.devolutivaLiberadaEm) {
+      return <div className={`${classe} border-slate-200 opacity-75`}>{conteudo}</div>;
+    }
+    return (
+      <Link
+        to={`/devolutiva/${item.id}`}
+        className={`${classe} border-emerald-200 bg-emerald-50/40 transition hover:border-emerald-300 hover:shadow active:bg-emerald-50`}
+      >
+        {conteudo}
+      </Link>
+    );
+  }
 
   return (
     <div>

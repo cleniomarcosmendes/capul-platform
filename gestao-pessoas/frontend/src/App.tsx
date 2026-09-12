@@ -16,6 +16,7 @@ import AcervoPage from './pages/AcervoPage';
 import ClassificacoesPage from './pages/ClassificacoesPage';
 import ArranjoPage from './pages/ArranjoPage';
 import NaoEncontradaPage from './pages/NaoEncontradaPage';
+import DevolutivaPage from './pages/DevolutivaPage';
 
 /**
  * ⭐⭐ A RAIZ DO MÓDULO É A FILA, PARA TODO MUNDO — sem desvio por papel.
@@ -46,6 +47,9 @@ export default function App() {
               tela de celular — espaço que, respondendo em pé no corredor da
               loja, é uma alternativa a menos visível por vez. */}
           <Route path="/avaliacao/:id" element={<AvaliacaoResponderPage />} />
+          {/* ⭐ Fora do layout com menu, como o responder: as duas são telas de
+              trabalho do avaliador, abertas com a pessoa do lado. */}
+          <Route path="/devolutiva/:id" element={<DevolutivaPage />} />
           <Route element={<Layout />}>
             <Route path="/" element={<MinhasAvaliacoesPage />} />
             <Route path="/ciclos" element={<CiclosPage />} />

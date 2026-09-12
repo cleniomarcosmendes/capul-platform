@@ -70,6 +70,12 @@ export interface ItemDaFila {
   /** true quando é a avaliação do próprio usuário — aparece, mas não abre. */
   restrita: boolean;
   motivoRestricao?: string;
+  /**
+   * ⭐ Quando o RH liberou a devolutiva. Nulo = o cartão da enviada segue
+   * inerte; com data, ele vira caminho para a tela da devolutiva.
+   * ⚠️ **Não é permissão** — quem decide o acesso é o servidor, por registro.
+   */
+  devolutivaLiberadaEm: string | null;
 }
 
 export interface Alternativa {
@@ -1696,5 +1702,21 @@ export const devolutiva = {
       .post<{ liberadas: number; jaEstavam: number; recebidas: number }>('/devolutiva/liberar', {
         avaliacaoIds,
       })
+      .then((r) => r.data),
+};
+
+
+/** A devolutiva que o AVALIADOR abre — a mesma memória do RH, mais a data. */
+export type DevolutivaDoAvaliador = MemoriaDeCalculo & { devolutivaLiberadaEm: string };
+
+export const devolutivaDoAvaliador = {
+  /**
+   * ⭐ Pela chave que o avaliador TEM (`avaliacaoId`). Os três portões — é a
+   * própria? é dele? o RH liberou? — são do servidor, e os dois 403 têm frases
+   * diferentes de propósito: um é temporário, o outro definitivo.
+   */
+  obter: (avaliacaoId: string) =>
+    rhApi
+      .get<DevolutivaDoAvaliador>(`/devolutiva/avaliacao/${avaliacaoId}`)
       .then((r) => r.data),
 };
