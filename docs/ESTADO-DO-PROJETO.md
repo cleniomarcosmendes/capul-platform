@@ -8607,3 +8607,106 @@ efeito deixaria o teste passar pelo motivo errado — exatamente o falso verde d
 `expect(new Date('2026-09-05').toLocaleDateString('pt-BR')).toBe('04/09/2026')`.
 É o caso que falha quando deveria falhar, e ele documenta por que `data()` não
 usa `Date`.
+
+---
+
+### 3.1.133. 📄 O ROTEIRO DE 04/09 — as duas confirmações, e o MODELO do nosso
+
+Localizado em `C:\Arquivos-de-projeto\PlatformCapul_20260904_Roteiro_Deploy.md`
+(270 linhas, `a021c8c4` → `6855c918`). Lido inteiro.
+
+#### ✅ As duas coisas que estavam em aberto
+
+**1. O `auth-gateway` em `a021c8c4` NÃO é drift.** Os sete rebuildados são
+`inventario-backend`, `inventario-frontend`, `gestao-ti-frontend`,
+`fiscal-frontend`, `logistica-backend`, `logistica-frontend`, `fiscal-backend`.
+**O `auth-gateway` não aparece uma única vez no roteiro** — zero ocorrências. E o
+§4 escreve o critério de inclusão:
+
+> *"mudaram de comportamento o backend do Inventário, o backend da Logística e
+> quatro frontends. O `fiscal-backend` entra por **coerência de versão** — o que
+> mudou nele foi só limpeza de imports…"*
+
+A leitura de 10/09 estava certa e agora tem **confirmação documental**: rodar
+`a021c8c4` é o estado esperado de quem não entrou na onda, não deriva.
+
+**2. HLG recebeu o mesmo roteiro.** Cabeçalho: *"Ambientes: **homologação
+primeiro, produção depois**"*. O `6855c918` declarado para HLG **provavelmente
+procede** — mas continua sendo *provavelmente*: ⚠️ **o que falta é medir**, e
+`/health → versao.commit` é quem responde. Só o Marco tem acesso.
+
+#### ⭐⭐ O que COPIAR dele — seis peças
+
+| # | Peça | Por quê |
+|---|---|---|
+| 1 | **Gate que confere NO BANCO** (§5.1) | Duas queries: a linha em `schema_migrations` **e** a coluna existindo. *"Se vier vazio, a migration NÃO foi aplicada — pare e investigue."* Mensagem de job é o que o job diz de si; o banco é o que aconteceu |
+| 2 | **`nginx -s reload` marcado NÃO OPCIONAL** (§7), com o motivo | *"O container novo recebe um IP novo e o nginx continua apontando para o antigo — sem o reload, as telas respondem 502."* O motivo é o que impede alguém de pular |
+| 3 | **`build-com-versao.sh` explicado** (§4) | *"Use o script, não o `docker compose build` puro… Sem ele a imagem sai marcada `desconhecido`."* — que é **exatamente** o que se vê no DEV quando se esquece |
+| 4 | **§9 "Avisar os usuários"** | Cinco itens, cada um com o que a pessoa vai estranhar e o que fazer. **É metade do valor do documento**: sem ele o deploy funciona e o suporte recebe as ligações |
+| 5 | **O `_Pos_exec.md`** | *"Salve este arquivo como `…_Pos_exec.md` com o retorno REAL de cada query, qualquer erro, e os passos que não bateram. Esse arquivo é lido antes de escrever o próximo roteiro."* |
+| 6 | **§6 — a verificação que só existe NAQUELE deploy** | Uma query sobre o dado vivo, para provar que a mudança de comportamento não pegou ninguém no meio: *"nenhuma lista em contagem pode ter virado aberta"* |
+
+⚠️ **O §6 do nosso são DOIS**, e ambos já estão medidos:
+- **conferência de destino** — nenhuma avaliação com resposta antes do piloto
+  (hoje: Piloto `894 PENDENTE / 0 respostas`);
+- **limpeza das 74 linhas** com espaço no `RA_NOME` (§3.1.108), com o `SELECT`
+  de contagem antes e depois.
+
+#### 🔴 E uma peça que o modelo NÃO tem: o `_Pos_exec` de 04/09 não foi escrito
+
+O único `_Pos_exec` no diretório é o de **05/05**. O roteiro de 04/09 manda
+escrever um e ele não existe.
+
+⚠️ **A regra que o próprio documento institui foi quebrada na execução dele** — e
+é a peça que impede o mesmo tropeço se repetir. Registrado porque no nosso a
+tentação vai ser maior: 15 migrations e 3 serviços novos produzem mais retorno
+para anotar, e é justamente aí que se pula.
+
+#### ⚠️ AS DIFERENÇAS DE ESCALA — elas mudam o risco, não só o tempo
+
+| | 04/09 (o modelo) | O NOSSO |
+|---|---|---|
+| Migrations | **1**, SQL puro, por **bind-mount** — *"este job NÃO precisa de build"* | **15** Prisma, e o job **tem build próprio** |
+| Serviços | 7 **rebuildados** | **3 NOVOS no compose** |
+| `docker-compose.yml` / `nginx.conf` / `.env` | **NÃO mexe** | **compose + 2 `location` no nginx** |
+| Jobs de migration | `inventario-migrate`, SQL | **6 de 7 trocados para `migrate-guarda`** |
+| Arquivo que precisa existir no servidor ANTES | — | ⚠️ **`scripts/migrate-guarda/` é bind-mount**: tem de estar no disco antes de qualquer `up` |
+| Tempo | 20–30 min | a estimar, e **não é comparável** |
+| Rollback | *"nada aqui é destrutivo… a coluna pode ficar"* | **a estabelecer** — 15 migrations Prisma não se desfazem por omissão |
+
+⭐ **A diferença que mais muda o risco não é o número de migrations: é `mexe em
+compose/nginx`.** O roteiro de 04/09 pôde dizer *"nada aqui é destrutivo"* porque
+a topologia não mudava — `git pull` + build + `up -d` dos mesmos serviços. O
+nosso **acrescenta serviços e rotas**, e um `up -d` parcial deixa o nginx
+apontando para o que não existe.
+
+⚠️ E o `migrate-guarda` por bind-mount é a armadilha que o modelo não tem: o
+`git pull` do §3 resolve, **desde que o roteiro diga que resolve**. Se alguém
+copiar o comando de `up` sem o pull completo, o job sobe sem a guarda.
+
+#### ⭐⭐ O §9 do nosso é de outra natureza: o módulo é NOVO
+
+Os cinco itens de 04/09 são todos *"isto mudou de comportamento"*. **Não temos
+comportamento anterior.** O nosso §9 responde três perguntas:
+
+1. **Quem ganha acesso** — e o card aparece no Hub para essas pessoas;
+2. **Quem NÃO ganha**, e por quê (não é esquecimento);
+3. **O que a pessoa vê ao clicar** — a fila do avaliador, vazia para quem não tem
+   designação, com o estado explicando.
+
+⚠️ **E entra o §3.1.93, que vai gerar chamado se não estiver escrito:**
+
+> **Dar papel no Configurador NÃO basta.** São quatro coisas — conta ativa,
+> módulo atribuído, papel, **e matrícula que resolva num `rh.colaborador`
+> ATIVO**. Faltando a quarta, a pessoa toma **403 falando de matrícula** — e a
+> mensagem manda para o Configurador, onde já está tudo certo.
+
+⭐ É a terceira aparição da família do *403 que fala de outra coisa*, e a primeira
+que dá para prevenir **antes** de alguém tropeçar.
+
+#### ⛔ NÃO escrever o roteiro ainda
+
+Continuam faltando, e nenhum é meu:
+1. **o commit real de HLG** — só o Marco mede (`/health → versao.commit`);
+2. **a decisão sobre a Onda A** — separar do módulo os 5 jobs de
+   `migrate-guarda`, combinada em 11/09 e ainda em aberto.
