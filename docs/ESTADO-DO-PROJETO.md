@@ -7015,3 +7015,93 @@ não aparece: entrega antes do prazo passa por boa notícia. O que ela de fato m
 classificador já estava aplicado com disciplina — a dívida que eu supunha não existia.
 
 Suíte: **65 suítes, 785 testes**.
+
+---
+
+### 3.1.95. ⭐⭐ O CASO QUE VALIDOU A REGRA DA EXCEÇÃO — "se não consegue escrever o porquê, é furo"
+
+A regra nasceu como precaução e foi exercitada no mesmo dia, com resultado que **mudou o desenho**.
+
+Ao montar o invariante do `ciclo.service`, três métodos apareceram como candidatos a exceção:
+`encerrar`, `reabrir` e `devolverCanceladasDoEncerramento`. Nenhum chama `assertCicloOperavel`.
+Sentei para escrever a linha do porquê de cada um — e **nenhuma saiu com convicção.**
+
+A razão é que **não eram exceções**. Os três aferem o estado do ciclo, só que **inline e com
+estado específico**, porque são a *transição* do ciclo:
+
+| Método | Exige | Por que a guarda genérica não serve |
+|---|---|---|
+| `encerrar` | ABERTO | `assertCicloOperavel` aceitaria RASCUNHO |
+| `devolverCanceladas…` | ABERTO | idem |
+| `reabrir` | **ENCERRADO** | é exatamente o estado que a guarda genérica **recusa** |
+
+⭐ **A saída certa não era abrir três exceções — era corrigir a REGRA.** Ela passou a aceitar as
+duas formas (`assertCiclo…(` **ou** `ciclo.status [!=]==`). Três exceções ali teriam escondido
+guarda de verdade escrita de outro jeito, e a lista de exceções — que é o que alguém relê daqui a
+seis meses — teria três entradas dizendo "este não precisa", sobre métodos que precisam e cumprem.
+
+**O que a regra fez de fato:** ela não pegou um furo. Ela pegou uma **regra mal formulada**, e o
+sintoma foi a justificativa não sair. Escrever o porquê é o teste da regra tanto quanto do método.
+
+### 3.1.96. ⭐⭐ FRASE — guarda que impede o CONSERTO é pior que guarda ausente
+
+Da justificativa do `aplicacao.removerDoPublico`, e vale muito além dele:
+
+> **Travar o ato de corrigir por causa de um problema em outro campo prende o erro dentro do
+> registro** — que é o oposto do que a guarda existe para fazer.
+
+Uma guarda ausente deixa passar o erro. Uma guarda no caminho do conserto **fecha a porta com o
+erro dentro**, e a pessoa que queria arrumar recebe uma recusa que fala de outra coisa. Ao decidir
+onde uma validação entra, a pergunta é *"isto está no caminho de errar, ou no caminho de
+desfazer?"*.
+
+Parente de [[feedback_dialogo_diz_o_que_se_perde]] e do §3.1.33: as duas famílias são sobre o ato
+de correção sendo tratado como se fosse o ato original.
+
+### 3.1.97. ⭐⭐ REQUISITO — todo teste que varre fonte precisa de CANÁRIO
+
+Não é detalhe de implementação: é **requisito de existência**. Teste de varredura sem canário pode
+estar verde por **não ter lido nada**, e ninguém descobre — a lista de infratores vazia é
+indistinguível de "não há infratores".
+
+**Mesma classe** do `npm test` que rodava *"52 suítes, 0 testes"* e do `tsc --noEmit` que checa
+zero arquivo e sai 0 ([[feedback_frontend_typecheck_tsc_b]]). O padrão do defeito é sempre o mesmo:
+**a ferramenta responde "tudo certo" para a pergunta que ela não chegou a fazer.**
+
+#### Os dois níveis, e o primeiro sozinho não basta
+
+| Nível | Prova | Quebra quando |
+|---|---|---|
+| **(a) leu arquivos** | `expect(fontes.length).toBeGreaterThan(30)` | a caminhada de diretório quebra |
+| **(b) ainda RECONHECE** | alimentar o próprio matcher com a forma ERRADA e exigir que ele a reconheça | o padrão para de casar — refatoração, acento, aspa trocada |
+
+⚠️ A maioria tinha só o (a). **O (b) é o que importa**, e é o que estava faltando.
+
+#### O levantamento dos 7 — e os 3 consertos
+
+| Teste | Antes | Agora |
+|---|---|---|
+| `avaliacoes-que-contam` | ✅ (a) + (b) — *"o varredor reconhece a forma errada quando ela existe"* | — |
+| `motivo` | ✅ (a) + (b) (`declaram.length >= 3`) | — |
+| `guarda-de-escrita` | ✅ (a) + (b), por nascer com a regra | — |
+| `versao-publicada` | ✅ (b) implícito: exige a lista EXATA de arquivos, que vazia reprova | — |
+| `fonte-unica` | ⚠️ só (a) | ✅ **canário escrito** |
+| `texto-sem-flexao` | ⚠️ só (a) | ✅ **canário escrito** |
+| `separacao-funcoes` | 🔴 **nenhum dos dois** | ✅ **canário escrito** |
+
+#### ⚠️ Dois achados no conserto
+
+**1. Canário que interfere no que observa não é canário.** A primeira versão do canário do
+`fonte-unica` escrevia um arquivo de teste **dentro de `src/`** e o apagava no fim. As outras suítes
+que varrem o mesmo diretório leram o arquivo no instante em que ele sumia: `ENOENT` em dois testes
+que não têm nada a ver com este. O arquivo do canário nasce **fora da árvore varrida**
+(`mkdtempSync`).
+
+**2. O canário do `separacao-funcoes` reprovou na primeira escrita — e a premissa errada era
+minha.** Assumi que *todo dispensado toca avaliação*; `common/testing/prisma-mock.ts` está na lista
+e não contém `prisma.avaliacao.` (é o mock que **define** `avaliacao`). A lista de DISPENSADOS
+mistura duas coisas: exceção acordada de domínio, e infraestrutura de teste. **Ficou registrado no
+próprio arquivo em vez de "arrumado"** — mexer nessa lista é mexer na exceção da separação de
+funções, que não se faz de passagem.
+
+Suíte: **65 suítes, 788 testes**.
