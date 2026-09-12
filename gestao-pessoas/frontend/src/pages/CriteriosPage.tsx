@@ -314,9 +314,13 @@ function CartaoDoCriterio({
       {c.origem === 'INFORMADO' && c.ativo && c.valoresInformados === 0 && !semFaixa && (
         <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-sky-50 px-2.5 py-1.5 text-sm text-sky-900">
           <Info size={14} className="mt-0.5 shrink-0" aria-hidden />
-          O critério está pronto, mas <strong>ainda não há como informar o valor de cada
-          pessoa</strong> — a tela de importar planilha é a próxima entrega. Até lá ele não
-          pontua ninguém: entra na apuração como "sem valor" e sai da nota.
+          {/* ⚠️ Reescrito em 12/09: a frase antiga dizia "ainda não há como
+              informar o valor", e quem lesse concluiria que o cadastro inteiro
+              não serve. O que falta é só a ENTRADA do valor — o critério, as
+              faixas e o peso já se cadastram nesta tela e na de Aplicações. */}
+          As faixas deste critério estão cadastradas, mas <strong>ninguém tem valor
+          informado ainda</strong> — a tela de importar planilha é a próxima entrega. Até lá
+          ele entra na apuração como "sem valor" e sai da nota pela renormalização.
         </p>
       )}
 

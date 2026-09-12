@@ -28,6 +28,13 @@ export default function ClassificacoesPage() {
   const [editando, setEditando] = useState<{ id: string; nome: string } | null>(null);
   const [confirmando, setConfirmando] = useState<ClassificacaoDoCadastro | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  /**
+   * ⚠️ Criar não dava retorno nenhum: o campo esvaziava e o item ia para o FIM
+   * de uma lista longa, abaixo da dobra — indistinguível de "não aconteceu
+   * nada". Criar questão já mostrava banner; aqui não. Duas telas do mesmo
+   * editor, dois comportamentos para o mesmo ato.
+   */
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const carregar = useCallback(() => {
     api
@@ -112,12 +119,32 @@ export default function ClassificacoesPage() {
         </div>
       )}
 
+      {/* ⭐ O retorno do ato, no mesmo formato do "questão criada" do Acervo —
+          e dizendo as duas coisas que a pessoa vai procurar em seguida: onde
+          ela foi parar, e que ainda não vale nada. */}
+      {aviso && (
+        <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <Check size={15} className="mt-0.5 shrink-0" aria-hidden />
+          <span className="flex-1">{aviso}</span>
+          <button type="button" onClick={() => setAviso(null)} className="shrink-0 underline">
+            ok
+          </button>
+        </p>
+      )}
+
       <form
         className="mt-4 flex flex-wrap gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           if (!novoNome.trim()) return;
-          void agir(() => api.criar(novoNome)).then(() => setNovoNome(''));
+          const nome = novoNome.trim();
+          void agir(() => api.criar(nome)).then(() => {
+            setNovoNome('');
+            setAviso(
+              `Classificação "${nome}" criada — e ela ainda NÃO está em nenhum perfil. ` +
+                'Entra no fim da lista; para valer, um perfil precisa declarar quanto ela pesa.',
+            );
+          });
         }}
       >
         <input

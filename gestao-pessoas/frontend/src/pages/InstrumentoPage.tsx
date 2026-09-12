@@ -13,10 +13,12 @@
  * (Etapa 2) foi só o CICLO DE VIDA DA VERSÃO: duplicar uma versão publicada
  * para um rascunho, e descartar o rascunho.
  *
- * ⚠️ O aviso da tela foi reescrito junto. Ele dizia *"não há por onde editá-lo
- * no sistema"*, o que passou a ser meia verdade no dia em que o duplicar
- * nasceu — e meia verdade num aviso de capacidade é a dívida do §3.1.33 pelo
- * avesso: em vez de prometer o que não existe, esconde o que passou a existir.
+ * ⚠️ O aviso da tela foi reescrito DUAS vezes no mesmo dia, e a segunda é a
+ * lição: ele dizia *"editar o rascunho ainda não — passa pela T.I."* horas
+ * depois de a tela de montar o arranjo entrar no ar. **Texto que nega
+ * capacidade existente faz alguém deixar de usar o que já funciona** — é a
+ * §3.1.33 pelo avesso, e custa mais que prometer o que não existe, porque
+ * ninguém reclama de uma função que acredita não existir.
  *
  * ⚠️ O nome no menu é **"Questionários"**, não "Editar questionários": ele
  * descreve o objeto, não uma capacidade que não existe.
@@ -55,11 +57,18 @@ export default function InstrumentoPage() {
     void carregarInstrumento(versaoId);
   }, [versaoId]);
 
-  async function carregarModelos() {
+  /**
+   * @param manter versão que deve continuar selecionada. Sem ela, a tela abre
+   *   no primeiro modelo de PRODUÇÃO — o que é certo na primeira carga e
+   *   ERRADO em toda recarga depois de um ato, porque joga a pessoa para outro
+   *   perfil sem ela ter pedido.
+   */
+  async function carregarModelos(manter?: string) {
     setErro(null);
     try {
       const lista = await catalogo.modelos();
       setModelos(lista);
+      if (manter) return;
       // Abre já no primeiro modelo de PRODUÇÃO — o [DEMO] não é o que o RH veio ver.
       const primeira = lista.find((m) => m.finalidade === 'PRODUCAO')?.versoes[0] ?? lista[0]?.versoes[0];
       if (primeira) setVersaoId(primeira.id);
@@ -136,11 +145,11 @@ export default function InstrumentoPage() {
       <div className="mt-3 flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 print:hidden">
         <Info size={16} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
         <p className="text-sm text-amber-900">
-          <strong className="font-semibold">O conteúdo aqui é só de leitura.</strong> O
-          questionário veio transcrito do Protheus (RD8010). Já dá para{' '}
-          <strong>abrir um rascunho</strong> a partir de uma versão publicada (abaixo), mas{' '}
-          <strong>editar o rascunho ainda não</strong> — mudar enunciado, peso ou alternativa passa
-          pela T.I. hoje. Confira e diga o que precisa mudar.
+          <strong className="font-semibold">Versão publicada não se edita</strong> — dela saem
+          notas. O caminho é: <strong>Duplicar</strong> (abaixo) cria um rascunho,{' '}
+          <strong>Montar</strong> abre o editor dele — classificações, pesos e quais questões
+          entram —, e <strong>Publicar</strong> o torna o instrumento vigente. Enunciado e
+          alternativas de cada questão se editam no <strong>Acervo</strong>.
         </p>
       </div>
 
@@ -164,9 +173,18 @@ export default function InstrumentoPage() {
         <VersoesDoModelo
           modeloId={inst.modeloId}
           versaoId={inst.versaoId}
-          aoMudar={(id) => {
-            void carregarModelos();
+          /**
+           * ⚠️ A versão nova é selecionada ANTES de recarregar a lista de
+           * modelos. Na ordem inversa (que era a de 12/09), `carregarModelos`
+           * repunha a "primeira de PRODUÇÃO" e a tela pulava para o
+           * Administrativo — um perfil protegido, com Montar e Descartar à mão
+           * de quem tinha acabado de duplicar OUTRO. E como o `<select>` só
+           * recebe a versão nova depois do recarregamento, ela não aparecia
+           * até dar F5.
+           */
+          aoMudar={async (id) => {
             if (id) setVersaoId(id);
+            await carregarModelos(id);
           }}
         />
       )}
@@ -203,7 +221,11 @@ function Instrumento({ inst }: { inst: InstrumentoCompleto }) {
         </div>
 
         <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
-          <Dado rotulo="Grupos" valor={String(inst.totalGrupos)} />
+          {/* ⚠️ "Classificações", não "Grupos". Eram o MESMO número com dois
+              nomes na mesma tela — e "Classificações" é também o nome do
+              cadastro no menu, então é ele que vale: o termo da tela é o termo
+              do cadastro, senão a pessoa procura "grupos" e não acha. */}
+          <Dado rotulo="Classificações" valor={String(inst.totalGrupos)} />
           <Dado rotulo="Perguntas" valor={String(inst.totalPerguntas)} />
           <Dado rotulo="Alternativas" valor={String(inst.totalAlternativas)} />
           <Dado rotulo="Publicado em" valor={data(inst.publicadoEm)} />
@@ -254,7 +276,7 @@ function Instrumento({ inst }: { inst: InstrumentoCompleto }) {
                   pergunta, que é justamente onde ele não está mais. */}
               <span className="text-sm text-slate-500">
                 <Sigma size={13} className="mr-1 inline text-slate-400" aria-hidden />
-                peso do grupo: <strong className="tabular-nums">{num(g.pesoTotal)}</strong> ·{' '}
+                peso da classificação: <strong className="tabular-nums">{num(g.pesoTotal)}</strong> ·{' '}
                 {pct(g.percentual)} do questionário
               </span>
             </div>
@@ -314,7 +336,7 @@ function Instrumento({ inst }: { inst: InstrumentoCompleto }) {
 
       <p className="mt-4 text-xs text-slate-500">
         {contagem(inst.totalPerguntas, 'pergunta', 'perguntas')} em{' '}
-        {contagem(inst.totalGrupos, 'grupo', 'grupos')} ·{' '}
+        {contagem(inst.totalGrupos, 'classificação', 'classificações')} ·{' '}
         {flexao(inst.totalAlternativas, 'a alternativa vale', 'as alternativas valem')} 0,3 · 0,6 ·
         0,9 · 1,2, como no RD8010. A nota do questionário é a soma de{' '}
         <em>peso × valor ÷ maior valor</em> dividida pela soma dos pesos.
@@ -348,7 +370,7 @@ function VersoesDoModelo({
 }: {
   modeloId: string;
   versaoId: string;
-  aoMudar: (novaVersaoId?: string) => void;
+  aoMudar: (novaVersaoId?: string) => void | Promise<void>;
 }) {
   const [lista, setLista] = useState<VersaoDoModelo[] | null>(null);
   const [previa, setPrevia] = useState<Efeito | null>(null);
@@ -390,7 +412,7 @@ function VersoesDoModelo({
       const r = await f();
       const lista2 = await apiVersoes.doModelo(modeloId);
       setLista(lista2);
-      aoMudar(novaVersao?.(r));
+      await aoMudar(novaVersao?.(r));
     } catch (e) {
       setErro(mensagemDoErro(e, 'Não foi possível concluir.'));
     } finally {

@@ -55,11 +55,23 @@ export default function CiclosPage() {
           <h2 className="text-lg font-semibold text-slate-800">Ciclos de avaliação</h2>
           <p className="text-sm text-slate-500">Período, data-base e régua de conceitos.</p>
         </div>
+        {/* ⚠️ Desabilitado quando a LISTA foi recusada. Ter o papel não basta:
+            toda rota do módulo exige matrícula que resolva num colaborador
+            ATIVO (§3.1.93), e sem ele o `POST /ciclos` devolve 403 — conferido,
+            nada é gravado. O botão habilitado ao lado do banner de recusa
+            abria o diálogo inteiro e pré-preenchido, e o trabalho só se perdia
+            no Salvar. O motivo fica no `title`, nunca escondendo o botão. */}
         {tem(ROLES.RH_ADMIN, ROLES.RH_CICLO) && (
           <button
             type="button"
             onClick={() => setCriando(true)}
-            className="alvo-toque inline-flex shrink-0 items-center gap-2 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-capul-700"
+            disabled={!!erro}
+            title={
+              erro
+                ? 'Indisponível enquanto o acesso ao módulo estiver recusado — ver a mensagem abaixo.'
+                : 'Criar um ciclo de avaliação'
+            }
+            className="alvo-toque inline-flex shrink-0 items-center gap-2 rounded-xl bg-capul-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-capul-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={16} aria-hidden /> Novo ciclo
           </button>

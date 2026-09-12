@@ -886,6 +886,12 @@ function DialogoNovaAplicacao({
               <span className="mt-0.5 block text-xs text-slate-500">
                 Só versões publicadas. Modelo de DEMONSTRAÇÃO não abre ciclo válido.
               </span>
+              {/* ⚠️ A opção DEMONSTRAÇÃO fica DESABILITADA, não só rotulada.
+                  O aviso acima existia desde 11/09 e a guarda da API também —
+                  mas a opção continuava selecionável, e a recusa só chegava
+                  depois de nomear a aplicação e distribuir os pesos. Aviso que
+                  não impede o clique não chega antes: chega junto com o
+                  trabalho perdido. Ver §3.1.105. */}
               <select
                 value={versaoId}
                 onChange={(e) => setVersaoId(e.target.value)}
@@ -893,9 +899,15 @@ function DialogoNovaAplicacao({
               >
                 <option value="">Escolha…</option>
                 {versoes.map((v) => (
-                  <option key={v.id} value={v.id}>
+                  <option
+                    key={v.id}
+                    value={v.id}
+                    disabled={v.finalidade === 'DEMONSTRACAO'}
+                  >
                     {v.modeloNome} · v{v.versao} · {contagem(v.perguntas, 'pergunta', 'perguntas')}
-                    {v.finalidade === 'DEMONSTRACAO' ? ' (DEMONSTRAÇÃO)' : ''}
+                    {v.finalidade === 'DEMONSTRACAO'
+                      ? ' — DEMONSTRAÇÃO, não abre ciclo válido'
+                      : ''}
                   </option>
                 ))}
               </select>
