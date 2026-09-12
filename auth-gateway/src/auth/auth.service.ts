@@ -34,7 +34,22 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, ip?: string, userAgent?: string) {
-    const { login, senha } = dto;
+    const { senha } = dto;
+
+    /**
+     * ⚠️ `trim()` no identificador — defeito achado em 12/09/2026.
+     *
+     * `"clenio "` (com um espaço à direita) devolvia **401 "Credenciais
+     * invalidas"**, indistinguível de senha errada. Quem cola o usuário de uma
+     * planilha, de um chat ou de uma célula de tabela leva o espaço junto, e a
+     * mensagem manda conferir a senha — que está certa.
+     *
+     * ⚠️ A SENHA não é trimada, de propósito: espaço em senha é caractere
+     * legítimo, e comê-lo rejeitaria silenciosamente quem escolheu uma assim.
+     * O identificador é um nome; a senha é um segredo. Não recebem o mesmo
+     * tratamento.
+     */
+    const login = dto.login.trim();
 
     const isEmail = login.includes('@');
 

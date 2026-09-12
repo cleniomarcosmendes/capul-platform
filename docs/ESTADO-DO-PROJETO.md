@@ -7943,3 +7943,58 @@ Outras candidatas do projeto, com a mesma forma:
 | *"o app não é buildado nesta máquina"* | tudo que exige APK novo espera o Marco/Douglas — e a fila não é visível |
 | *"o roteiro de deploy não existe"* | 15 migrations, 3 serviços e 2 `location` esperando desde 11/09 |
 | *"não há tela para informar o valor"* | o critério INFORMADO inteiro, cadastrado e sem pontuar ninguém |
+
+---
+
+### 3.1.114. 🔑 "Não consigo logar" — o que a AUDITORIA respondeu, e o defeito que estava ao lado
+
+Relatado em 12/09: as três contas de teste não entravam pela tela. **A API aceitava as três** — o
+que descartava senha errada no cadastro, conta inativa e falta de permissão.
+
+⭐ **Quem respondeu foi `core.system_logs`**, e em uma consulta. A tabela grava `LOGIN_FAILURE` com
+o `usuario_id` **quando o usuário foi encontrado** e sem ele quando não foi — então a mesma linha
+distingue *"não existe"* de *"senha não confere"*:
+
+```
+15:42:33 | LOGIN_FAILURE | zz.teste.modelo | digitou: zz.teste.modelo
+                           ↑ usuario_id preenchido = ACHOU a conta
+```
+
+**Usuário certo, senha rejeitada.** Não era o cadastro, não era o papel, não era o vínculo de
+colaborador — as três hipóteses que a tela sugere. A senha é `TesteRh2026`, e **qualquer variação
+de caixa ou espaço falha**: `TesteRH2026`, `testerh2026`, `TesteRh2026 ` → 401.
+
+> ⭐ **Antes de investigar "por que não loga", perguntar ao log se a conta foi ENCONTRADA.** As duas
+> falhas dão a mesma mensagem para quem digita — de propósito, para não revelar quais contas
+> existem — e respostas opostas para quem investiga.
+
+#### 🔴 O defeito ao lado: o identificador não era trimado
+
+Medido no caminho: **`"clenio "` (um espaço à direita) devolvia 401** — e a mensagem é
+*"Credenciais invalidas"*, que manda conferir a **senha**, que está certa. Vale para a plataforma
+inteira, não só para estas contas.
+
+Quem cola o usuário de uma planilha, de um chat ou **de uma célula de tabela** leva o espaço junto.
+⚠️ E é o caso desta conversa: as credenciais foram entregues numa tabela markdown.
+
+**Corrigido** (`auth-gateway/auth.service.ts`): `dto.login.trim()`.
+
+⚠️ **A SENHA continua sem trim, de propósito.** Espaço em senha é caractere legítimo, e comê-lo
+rejeitaria em silêncio quem escolheu uma assim. **O identificador é um nome; a senha é um
+segredo — não recebem o mesmo tratamento.**
+
+#### 🟡 Fica em aberto: o login é sensível a MAIÚSCULAS
+
+`Clenio` → 401. Não consertei porque é decisão de identidade, não defeito óbvio, e a medição diz
+que dá para tomar com segurança:
+
+| | |
+|---|---|
+| Usernames que colidem sem caixa | **0** |
+| E-mails que colidem sem caixa | **0** |
+| Usernames com maiúscula | **1** de 183 |
+
+⚠️ Tornar a busca case-insensitive **sem** um índice único em `lower(username)` deixa a porta
+aberta para `Joao` e `joao` coexistirem depois — e aí a ambiguidade vira erro de autenticação, que
+é o pior lugar para ela. O par certo é **`ILIKE` + índice único**, e o índice é migration no schema
+`core`, que toca PROD. **Custo ~2h**, e é decisão de quem manda no cadastro.
