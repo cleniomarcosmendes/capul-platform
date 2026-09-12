@@ -27,7 +27,6 @@ import { acervo, ehFaltaDePermissao, mensagemDoErro, questoes as apiQuestoes } f
 import type {
   AcervoCompleto,
   ClassificacaoDoAcervo,
-  EfeitosDaQuestao,
   QuestaoDoAcervo,
 } from '../services/api';
 import { Modal } from '../components/Modal';
@@ -245,33 +244,28 @@ function CartaoDaQuestao({
   aoEditar: () => void;
   aoMudar: () => void;
 }) {
-  const [efeitos, setEfeitos] = useState<EfeitosDaQuestao | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   /**
-   * ⚠️ Os efeitos são buscados por questão, sob demanda — 15 chamadas na
-   * abertura seriam 15 consultas para desabilitar botões que talvez ninguém
-   * clique. Buscar no primeiro hover/foco é o meio-termo: o botão nasce
-   * habilitado e a API recusa se for o caso, e a frase chega antes do clique
-   * em qualquer uso normal.
+   * ⭐⭐ O BLOQUEIO VEM COM A LISTA — `q.efeitos`, do próprio `GET /acervo`.
+   *
+   * ⚠️ Até 12/09 ele era buscado no primeiro hover do cartão, "para não fazer
+   * 15 consultas na abertura". O resultado é que a `005` (19 respostas) e a
+   * `016` (em 1 perfil) **nasciam com Editar e Apagar habilitados e sem
+   * aviso**, e só desabilitavam depois de uma interação. Tela que decide
+   * habilitar com dado que chega depois do primeiro render mostra, no
+   * intervalo, exatamente o oposto da verdade — e o intervalo é onde a pessoa
+   * clica. Ver §3.1.104.
    */
-  async function carregarEfeitos() {
-    if (efeitos || !podeEditar) return;
-    try {
-      setEfeitos(await apiQuestoes.efeitos(q.id));
-    } catch {
-      /* sem efeitos a tela não trava: a API continua sendo quem decide. */
-    }
-  }
+  const efeitos = q.efeitos;
 
   async function agir(f: () => Promise<unknown>) {
     setErro(null);
     setOcupado(true);
     try {
       await f();
-      setEfeitos(null);
       aoMudar();
     } catch (e) {
       setErro(mensagemDoErro(e, 'Não foi possível concluir.'));
@@ -282,11 +276,7 @@ function CartaoDaQuestao({
   }
 
   return (
-    <div
-      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-      onMouseEnter={() => void carregarEfeitos()}
-      onFocus={() => void carregarEfeitos()}
-    >
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -308,7 +298,7 @@ function CartaoDaQuestao({
             <BotaoDoCartao
               rotulo="Editar"
               icone={<Pencil size={15} aria-hidden />}
-              efeito={efeitos?.editarTexto}
+              efeito={efeitos.editarTexto}
               ocupado={ocupado}
               aoClicar={aoEditar}
             />
@@ -316,7 +306,7 @@ function CartaoDaQuestao({
               <BotaoDoCartao
                 rotulo="Desativar"
                 icone={<Ban size={15} aria-hidden />}
-                efeito={efeitos?.desativar}
+                efeito={efeitos.desativar}
                 ocupado={ocupado}
                 aoClicar={() => void agir(() => apiQuestoes.desativar(q.id))}
               />
@@ -324,7 +314,7 @@ function CartaoDaQuestao({
               <BotaoDoCartao
                 rotulo="Reativar"
                 icone={<Check size={15} aria-hidden />}
-                efeito={efeitos?.reativar}
+                efeito={efeitos.reativar}
                 ocupado={ocupado}
                 aoClicar={() => void agir(() => apiQuestoes.reativar(q.id))}
               />
@@ -333,7 +323,7 @@ function CartaoDaQuestao({
               rotulo="Apagar"
               icone={<Trash2 size={15} aria-hidden />}
               tom="perigo"
-              efeito={efeitos?.apagar}
+              efeito={efeitos.apagar}
               ocupado={ocupado}
               aoClicar={() => setConfirmando(true)}
             />
@@ -348,15 +338,35 @@ function CartaoDaQuestao({
       {/* ⭐ O motivo da recusa fica VISÍVEL quando é o texto que está travado —
           é a recusa que mais surpreende, porque "corrigir um acento" parece
           inofensivo e não é depois que alguém respondeu. */}
-      {podeEditar && efeitos?.editarTexto.acao === 'RECUSAR' && (
+      {podeEditar && efeitos.editarTexto.acao === 'RECUSAR' && (
         <p className="mt-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
           {efeitos.editarTexto.frase}
         </p>
       )}
 
-      {confirmando && (
+      {/* ⚠️ BLOQUEADA: o diálogo mostra o MOTIVO e uma saída, nunca a ação
+          destrutiva. Até 12/09 ele renderizava o texto da recusa no lugar do
+          texto de confirmação — com o botão vermelho "Apagar" ATIVO ao lado.
+          Quem lesse rápido clicaria; quem lesse devagar entenderia que o
+          sistema está pedindo confirmação de algo que ele mesmo recusa. */}
+      {confirmando && efeitos.apagar.acao === 'RECUSAR' && (
+        <Modal titulo={`Não dá para apagar a ${q.codigo}`} aoFechar={() => setConfirmando(false)}>
+          <p className="text-sm text-slate-700">{efeitos.apagar.frase}</p>
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setConfirmando(false)}
+              className="alvo-toque rounded-xl bg-slate-800 px-4 text-sm font-medium text-white"
+            >
+              Entendi
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {confirmando && efeitos.apagar.acao === 'PERMITIR' && (
         <Modal titulo={`Apagar a questão ${q.codigo}?`} aoFechar={() => setConfirmando(false)}>
-          <p className="text-sm text-slate-700">{efeitos?.apagar.frase}</p>
+          <p className="text-sm text-slate-700">{efeitos.apagar.frase}</p>
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
@@ -382,8 +392,22 @@ function CartaoDaQuestao({
           mexer. E o peso é o EFETIVO de cada perfil, não o do grupo. */}
       {q.usos.length > 0 ? (
         <div className="mt-2">
+          {/* ⚠️ "usada em 1 perfil" e "usada em 1 perfil, só em rascunho" são
+              fatos diferentes: o segundo quer dizer que NINGUÉM responde esta
+              questão ainda. Antes o rascunho aparecia só como uma etiqueta
+              pequena ao lado do peso, e o fato se perdia entre os outros usos. */}
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
             Usada em {contagem(q.usos.length, 'perfil', 'perfis')}
+            {q.usosPublicados === 0 && (
+              <span className="ml-1 text-amber-700">
+                — só em rascunho, ninguém responde ainda
+              </span>
+            )}
+            {q.usosPublicados > 0 && q.usosPublicados < q.usos.length && (
+              <span className="ml-1 normal-case text-slate-500">
+                ({q.usosPublicados} publicado{q.usosPublicados === 1 ? '' : 's'})
+              </span>
+            )}
           </p>
           <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
             {q.usos.map((u) => (
@@ -436,10 +460,13 @@ function CartaoDaQuestao({
 /**
  * ⭐ Botão cujo estado vem do CLASSIFICADOR do backend.
  *
- * ⚠️ `efeito` indefinido = **ainda não perguntei**, e aí o botão fica
- * HABILITADO. Desabilitar por ausência de informação seria esconder capacidade
- * por causa de uma requisição que não voltou — e quem decide de verdade é a
- * API, que recusa com a frase se for o caso.
+ * ⚠️ `efeito` é OBRIGATÓRIO desde 12/09. Ele era opcional, com a justificativa
+ * de que "indefinido = ainda não perguntei, e aí o botão fica habilitado
+ * porque quem decide é a API". A justificativa está errada pelo meio: a API
+ * decide o que ACONTECE, mas a tela decide o que a pessoa TENTA — e um botão
+ * habilitado sobre uma questão com 19 respostas convida a um clique que só vai
+ * ser recusado depois. O tipo não-opcional é o que garante que o dado venha
+ * com a lista. Ver §3.1.104.
  */
 function BotaoDoCartao({
   rotulo,
@@ -452,15 +479,15 @@ function BotaoDoCartao({
   rotulo: string;
   icone: React.ReactNode;
   tom?: 'neutro' | 'perigo';
-  efeito?: { acao: 'PERMITIR' | 'RECUSAR'; frase: string };
+  efeito: { acao: 'PERMITIR' | 'RECUSAR'; frase: string };
   ocupado: boolean;
   aoClicar: () => void;
 }) {
-  const bloqueado = efeito?.acao === 'RECUSAR';
+  const bloqueado = efeito.acao === 'RECUSAR';
   return (
     <button
       type="button"
-      title={efeito?.frase ?? rotulo}
+      title={efeito.frase}
       onClick={aoClicar}
       disabled={ocupado || bloqueado}
       className={`alvo-toque inline-flex items-center gap-1.5 rounded-lg border px-2.5 text-sm disabled:opacity-30 ${

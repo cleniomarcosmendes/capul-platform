@@ -52,9 +52,12 @@ export class QuestaoController {
     return this.questoes.escala();
   }
 
-  @Get(':id/efeitos') efeitos(@Param('id') id: string) {
-    return this.questoes.efeitos(id);
-  }
+  /**
+   * ⚠️ Não existe `GET :id/efeitos`. Existiu por meio dia, buscado no hover do
+   * cartão, e foi o defeito da §3.1.104: estado de bloqueio que chega depois do
+   * primeiro render mostra o oposto da verdade no intervalo. Os efeitos vêm com
+   * a LISTA, em `GET /acervo`.
+   */
 
   @Post() criar(@Body() dto: QuestaoDto, @CurrentUser() user: JwtPayload) {
     return this.questoes.criar(dto, user.sub);

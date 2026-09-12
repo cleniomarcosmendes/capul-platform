@@ -22,6 +22,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { pesosDerivados } from '../calculo/peso-derivado.js';
+import {
+  efeitoDeApagarQuestao,
+  efeitoDeDesativarQuestao,
+  efeitoDeEditarTexto,
+  efeitoDeReativarQuestao,
+  efeitoDeReclassificar,
+  type ContextoQuestao,
+  type Efeito,
+} from './efeito-de-questionar.js';
 
 export interface UsoDaQuestao {
   modeloVersaoId: string;
@@ -55,6 +64,33 @@ export interface QuestaoDoAcervo {
    * diferentes, e a primeira deixa quem criou achando que já vale.
    */
   usos: UsoDaQuestao[];
+  /**
+   * ⭐ Quantos dos usos são de versão PUBLICADA — o resto é rascunho.
+   *
+   * ⚠️ "usada em 1 perfil" e "usada em 1 perfil, só em rascunho" são fatos
+   * diferentes: o segundo quer dizer que **ninguém responde essa questão
+   * ainda**. O cartão dizia só "(rascunho)" numa etiqueta ao lado do peso, e o
+   * fato se perdia entre os outros usos.
+   */
+  usosPublicados: number;
+  /**
+   * ⭐⭐ O QUE PODE SER FEITO COM ELA — vem JUNTO com a lista.
+   *
+   * ⚠️ Até 12/09 vinha de `GET /acervo/questoes/:id/efeitos`, buscado no
+   * primeiro hover do cartão. O resultado é que a `005` (19 respostas) e a
+   * `016` (em 1 perfil) nasciam com **Editar e Apagar habilitados e sem
+   * aviso**, e só desabilitavam depois de uma interação. Tela que decide
+   * habilitar com dado que chega depois do primeiro render mostra, no
+   * intervalo, o oposto da verdade — e o intervalo é onde a pessoa clica.
+   * Ver §3.1.104.
+   */
+  efeitos: {
+    editarTexto: Efeito;
+    reclassificar: Efeito;
+    desativar: Efeito;
+    reativar: Efeito;
+    apagar: Efeito;
+  };
 }
 
 export interface ClassificacaoDoAcervo {
@@ -83,6 +119,7 @@ export class AcervoService {
         include: {
           classificacao: true,
           alternativas: { orderBy: { ordem: 'asc' } },
+          _count: { select: { respostas: true } },
           arranjos: {
             include: {
               modeloVersao: { include: { modelo: { select: { nome: true } } } },
@@ -153,7 +190,30 @@ export class AcervoService {
 
     const linhas: QuestaoDoAcervo[] = questoes.map((q) => {
       const valores = q.alternativas.map((a) => Number(a.valor));
+      const publicados = q.arranjos.filter(
+        (a) => a.modeloVersao.publicadoEm !== null,
+      ).length;
+      // ⚠️ O MESMO contexto que `questao.service` monta — e por isso os mesmos
+      // classificadores. Duas contas de "pode apagar?" divergiriam, e a tela
+      // ofereceria o que a API recusa.
+      const ctx: ContextoQuestao = {
+        codigo: q.codigo,
+        enunciado: q.enunciado,
+        classificacaoNome: q.classificacao.nome,
+        ativa: q.ativa,
+        respostas: q._count.respostas,
+        arranjos: q.arranjos.length,
+        arranjosPublicados: publicados,
+      };
       return {
+        usosPublicados: publicados,
+        efeitos: {
+          editarTexto: efeitoDeEditarTexto(ctx),
+          reclassificar: efeitoDeReclassificar(ctx),
+          desativar: efeitoDeDesativarQuestao(ctx),
+          reativar: efeitoDeReativarQuestao(ctx),
+          apagar: efeitoDeApagarQuestao(ctx),
+        },
         id: q.id,
         codigo: q.codigo,
         enunciado: q.enunciado,

@@ -37,14 +37,6 @@ export interface QuestaoEntrada {
   ancoras: AncoraEntrada[];
 }
 
-export interface EfeitosDaQuestao {
-  editarTexto: Efeito;
-  reclassificar: Efeito;
-  desativar: Efeito;
-  reativar: Efeito;
-  apagar: Efeito;
-}
-
 /**
  * ⭐ PREFIXO DAS QUESTÕES CRIADAS AQUI.
  *
@@ -229,18 +221,6 @@ export class QuestaoService {
       valorAnterior: { codigo: atual.codigo, enunciado: atual.enunciado },
     });
     return { ok: true };
-  }
-
-  /** Os cinco efeitos de uma questão — a tela lê para desabilitar com o motivo. */
-  async efeitos(id: string): Promise<EfeitosDaQuestao> {
-    const ctx = this.contexto(await this.carregar(id));
-    return {
-      editarTexto: efeitoDeEditarTexto(ctx),
-      reclassificar: efeitoDeReclassificar(ctx),
-      desativar: efeitoDeDesativarQuestao(ctx),
-      reativar: efeitoDeReativarQuestao(ctx),
-      apagar: efeitoDeApagarQuestao(ctx),
-    };
   }
 
   // ── privados ──────────────────────────────────────────────────────────────

@@ -33,6 +33,8 @@ function questao(over: Record<string, unknown> = {}) {
       { id: 'a2', descricao: 'Nunca falta', valor: 1.2, ordem: 1 },
     ],
     arranjos: [],
+    /** ⚠️ O bloqueio vem com a lista desde 12/09 — a contagem é parte do dado. */
+    _count: { respostas: 0 },
     ...over,
   };
 }
@@ -170,5 +172,73 @@ describe('⭐⭐ fora de todo perfil — é informação, não ausência', () =>
   it('acervo vazio não quebra', async () => {
     const a = await servico().listar();
     expect(a).toMatchObject({ totalQuestoes: 0, foraDeTodoPerfil: 0, questoes: [] });
+  });
+});
+
+describe('⭐⭐ o BLOQUEIO vem com a lista, não depois do primeiro render', () => {
+  /**
+   * O defeito da varredura de 12/09: `efeitos` era buscado no primeiro hover do
+   * cartão, e a `005` (19 respostas) nascia com Editar e Apagar HABILITADOS e
+   * sem aviso. Tela que decide habilitar com dado que chega depois do primeiro
+   * render mostra, no intervalo, o oposto da verdade — e o intervalo é onde a
+   * pessoa clica.
+   */
+  it('questão com resposta gravada já vem com editar/apagar RECUSADOS', async () => {
+    const a = await servico({
+      questoes: [questao({ _count: { respostas: 19 } })],
+      classificacoes: [CLASSIF],
+    }).listar();
+    expect(a.questoes[0].efeitos.editarTexto.acao).toBe('RECUSAR');
+    expect(a.questoes[0].efeitos.apagar.acao).toBe('RECUSAR');
+    expect(a.questoes[0].efeitos.editarTexto.frase).toMatch(/19 respostas gravadas/);
+  });
+
+  it('questão em perfil já vem com reclassificar/apagar RECUSADOS', async () => {
+    const a = await servico({
+      questoes: [questao({ arranjos: [usoEm('v1', 'Administrativo')] })],
+      classificacoes: [CLASSIF],
+      arranjos: [{ modeloVersaoId: 'v1', classificacaoId: 'c1', peso: 10 }],
+    }).listar();
+    expect(a.questoes[0].efeitos.reclassificar.acao).toBe('RECUSAR');
+    expect(a.questoes[0].efeitos.apagar.acao).toBe('RECUSAR');
+  });
+
+  it('questão solta vem com tudo PERMITIDO, menos reativar (já está ativa)', async () => {
+    const a = await servico({ questoes: [questao()], classificacoes: [CLASSIF] }).listar();
+    const e = a.questoes[0].efeitos;
+    expect([e.editarTexto.acao, e.reclassificar.acao, e.desativar.acao, e.apagar.acao]).toEqual([
+      'PERMITIR', 'PERMITIR', 'PERMITIR', 'PERMITIR',
+    ]);
+    expect(e.reativar.acao).toBe('RECUSAR');
+  });
+});
+
+describe('⭐ uso que só existe em RASCUNHO', () => {
+  /**
+   * "usada em 1 perfil" e "usada em 1 perfil, só em rascunho" são fatos
+   * diferentes: o segundo quer dizer que ninguém responde a questão ainda.
+   */
+  it('conta quantos usos são de versão publicada', async () => {
+    const a = await servico({
+      questoes: [
+        questao({ arranjos: [usoEm('v1', 'Administrativo', false)] }),
+        questao({
+          id: 'q2',
+          codigo: '005',
+          arranjos: [usoEm('v1', 'Administrativo', false), usoEm('v2', 'Loja', true)],
+        }),
+      ],
+      classificacoes: [CLASSIF],
+      arranjos: [
+        { modeloVersaoId: 'v1', classificacaoId: 'c1', peso: 10 },
+        { modeloVersaoId: 'v2', classificacaoId: 'c1', peso: 10 },
+      ],
+    }).listar();
+    // ⚠️ Está em 1 perfil e nenhum publicado — não é "fora de todo perfil",
+    // e também não é "em uso".
+    expect(a.questoes[0].usos).toHaveLength(1);
+    expect(a.questoes[0].usosPublicados).toBe(0);
+    expect(a.foraDeTodoPerfil).toBe(0);
+    expect(a.questoes[1].usosPublicados).toBe(1);
   });
 });

@@ -462,6 +462,20 @@ export const criterios = {
 // Diferente de `catalogo.instrumento`, que lê UM arranjo por vez: ali as 15
 // questões aparecem como 39 linhas, uma por perfil que as usa.
 // ---------------------------------------------------------------------------
+/** O `{ acao, frase }` que a tela lê para desabilitar COM o motivo. */
+export interface Efeito {
+  acao: 'PERMITIR' | 'RECUSAR';
+  frase: string;
+}
+
+export interface EfeitosDaQuestao {
+  editarTexto: Efeito;
+  reclassificar: Efeito;
+  desativar: Efeito;
+  reativar: Efeito;
+  apagar: Efeito;
+}
+
 export interface UsoDaQuestao {
   modeloVersaoId: string;
   modeloNome: string;
@@ -485,6 +499,10 @@ export interface QuestaoDoAcervo {
   maiorValor: number;
   /** Vazio é INFORMAÇÃO: a questão existe e não está em perfil nenhum. */
   usos: UsoDaQuestao[];
+  /** Quantos usos são de versão PUBLICADA. O resto é rascunho. */
+  usosPublicados: number;
+  /** ⭐ O bloqueio vem JUNTO com a lista — nunca depois do primeiro render. */
+  efeitos: EfeitosDaQuestao;
 }
 
 export interface ClassificacaoDoAcervo {
@@ -505,12 +523,6 @@ export interface AcervoCompleto {
 export const acervo = {
   listar: () => rhApi.get<AcervoCompleto>('/acervo').then((r) => r.data),
 };
-
-/** O `{ acao, frase }` que a tela lê para desabilitar COM o motivo. */
-export interface Efeito {
-  acao: 'PERMITIR' | 'RECUSAR';
-  frase: string;
-}
 
 export interface VersaoDoModelo {
   id: string;
@@ -650,14 +662,6 @@ export interface EscalaDoAcervo {
   doFallback: boolean;
 }
 
-export interface EfeitosDaQuestao {
-  editarTexto: Efeito;
-  reclassificar: Efeito;
-  desativar: Efeito;
-  reativar: Efeito;
-  apagar: Efeito;
-}
-
 export interface QuestaoEntrada {
   enunciado: string;
   classificacaoId: string;
@@ -666,8 +670,6 @@ export interface QuestaoEntrada {
 
 export const questoes = {
   escala: () => rhApi.get<EscalaDoAcervo>('/acervo/questoes/escala').then((r) => r.data),
-  efeitos: (id: string) =>
-    rhApi.get<EfeitosDaQuestao>(`/acervo/questoes/${id}/efeitos`).then((r) => r.data),
   criar: (dados: QuestaoEntrada) =>
     rhApi.post<{ codigo: string; aviso: string }>('/acervo/questoes', dados).then((r) => r.data),
   editar: (id: string, dados: QuestaoEntrada) =>
