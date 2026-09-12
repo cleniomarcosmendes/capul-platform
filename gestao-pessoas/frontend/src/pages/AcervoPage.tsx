@@ -11,16 +11,27 @@
  * ele, responde *"mexer nesta questão afeta quem?"*, que é o que se pergunta
  * antes de mexer.
  *
- * ⚠️ **LEITURA PURA**, como a `/questionarios` quando nasceu — e pelo mesmo
- * motivo: tela que parece editável e não é seria promessa de capacidade. Aqui
- * não há botão de salvar, nem campo; há o aviso dizendo por onde a mudança
- * passa hoje. Editar é a Etapa 6 deste plano; quando existir, o rótulo do menu
- * não muda — a tela é que ganha o que fazer.
+ * ⭐ **Deixou de ser leitura pura em 12/09 (Etapa 6):** criar, editar,
+ * desativar e apagar questão são daqui. O rótulo do menu não mudou — ele nomeia
+ * o OBJETO, e era essa a razão de tê-lo escolhido assim.
+ *
+ * ⚠️ Cada botão que pode recusar é desabilitado **com o motivo**, e o motivo é a
+ * frase que a API devolveria (`GET /acervo/questoes/:id/efeitos`). As duas
+ * recusas duras têm causas diferentes e não se confundem: **resposta gravada**
+ * trava o TEXTO (reescrever muda o que a pessoa respondeu), **estar em arranjo**
+ * trava a CLASSIFICAÇÃO (o peso é derivado dela).
  */
-import { useEffect, useState } from 'react';
-import { AlertTriangle, FileStack, Info, Search } from 'lucide-react';
-import { acervo, ehFaltaDePermissao, mensagemDoErro } from '../services/api';
-import type { AcervoCompleto, QuestaoDoAcervo } from '../services/api';
+import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Ban, Check, FileStack, Info, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { acervo, ehFaltaDePermissao, mensagemDoErro, questoes as apiQuestoes } from '../services/api';
+import type {
+  AcervoCompleto,
+  ClassificacaoDoAcervo,
+  EfeitosDaQuestao,
+  QuestaoDoAcervo,
+} from '../services/api';
+import { Modal } from '../components/Modal';
+import { FormularioDeQuestao } from './FormularioDeQuestao';
 import { Carregando, Erro, Vazio } from '../components/Estado';
 import { Etiqueta } from '../components/Etiqueta';
 import { contagem, flexao } from '../lib/formato';
@@ -36,8 +47,13 @@ export default function AcervoPage() {
   const [semPermissao, setSemPermissao] = useState(false);
   const [classificacao, setClassificacao] = useState('');
   const [busca, setBusca] = useState('');
+  /** `undefined` = fechado · `null` = criando · questão = editando. */
+  const [editando, setEditando] = useState<QuestaoDoAcervo | null | undefined>(undefined);
+  const [aviso, setAviso] = useState<string | null>(null);
+  /** `false` quando a conta LÊ o acervo mas não pode escrever nele (RH_CICLO). */
+  const [podeEditar, setPodeEditar] = useState(false);
 
-  useEffect(() => {
+  const carregar = useCallback(() => {
     acervo
       .listar()
       .then(setDados)
@@ -45,6 +61,22 @@ export default function AcervoPage() {
         if (ehFaltaDePermissao(e)) setSemPermissao(true);
         else setErro(mensagemDoErro(e, 'Não foi possível carregar o acervo.'));
       });
+  }, []);
+
+  useEffect(carregar, [carregar]);
+
+  /**
+   * ⚠️ Quem pode ESCREVER é pergunta separada de quem pode LER — `/acervo`
+   * aceita os três papéis de RH e o editor só dois. Descubro perguntando ao
+   * backend (a escala é a rota mais barata do editor), em vez de reimplementar
+   * a tabela de papéis aqui: uma segunda cópia do RBAC mostraria botão que a
+   * API recusa, que é a §3.1.33 outra vez.
+   */
+  useEffect(() => {
+    apiQuestoes
+      .escala()
+      .then(() => setPodeEditar(true))
+      .catch(() => setPodeEditar(false));
   }, []);
 
   if (semPermissao) {
@@ -67,7 +99,8 @@ export default function AcervoPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
-      <header>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
         <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-800">
           <FileStack size={20} className="text-slate-400" aria-hidden />
           Acervo de questões
@@ -77,6 +110,16 @@ export default function AcervoPage() {
           pesar diferente em cada um — é o peso do grupo naquele perfil, repartido entre as questões
           dele pela mesma regra que a avaliação usa para calcular a nota.
         </p>
+        </div>
+        {podeEditar && (
+          <button
+            type="button"
+            onClick={() => setEditando(null)}
+            className="alvo-toque inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-800 px-4 text-sm font-medium text-white"
+          >
+            <Plus size={15} aria-hidden /> Nova questão
+          </button>
+        )}
       </header>
 
       <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
@@ -130,18 +173,40 @@ export default function AcervoPage() {
         </div>
       </div>
 
-      <p className="mt-4 flex items-start gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-        <Info size={15} className="mt-0.5 shrink-0 text-slate-400" aria-hidden />
-        <span>
-          Esta tela é de <strong>leitura</strong>. Hoje a mudança no acervo passa pela T.I. — o
-          editor está em construção, e quando existir ele aparece aqui.
-        </span>
-      </p>
+      {/* ⚠️ O aviso sobrevive só para quem NÃO pode escrever. Mantê-lo para
+          quem tem o botão ao lado seria a tela se contradizendo. */}
+      {!podeEditar && (
+        <p className="mt-4 flex items-start gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <Info size={15} className="mt-0.5 shrink-0 text-slate-400" aria-hidden />
+          <span>
+            Para você esta tela é de <strong>leitura</strong>. Criar e editar questão é de quem
+            monta o instrumento (RH_ADMIN ou RH_MODELO).
+          </span>
+        </p>
+      )}
+
+      {/* ⭐⭐ O aviso da criação — "criada" e "criada, e ainda não está em
+          nenhum perfil" são frases diferentes. Vem do BACKEND, junto com a
+          questão, para ser a mesma frase em qualquer cliente. */}
+      {aviso && (
+        <p className="mt-4 flex items-start gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden />
+          <span className="flex-1">{aviso}</span>
+          <button type="button" onClick={() => setAviso(null)} className="shrink-0 underline">
+            ok
+          </button>
+        </p>
+      )}
 
       <ol className="mt-3 space-y-3">
         {visiveis.map((q) => (
           <li key={q.id}>
-            <CartaoDaQuestao questao={q} />
+            <CartaoDaQuestao
+              questao={q}
+              podeEditar={podeEditar}
+              aoEditar={() => setEditando(q)}
+              aoMudar={carregar}
+            />
           </li>
         ))}
         {visiveis.length === 0 && (
@@ -150,13 +215,78 @@ export default function AcervoPage() {
           </li>
         )}
       </ol>
+
+      {editando !== undefined && (
+        <FormularioDeQuestao
+          questao={editando}
+          classificacoes={dados.classificacoes.filter(
+            (c): c is ClassificacaoDoAcervo => c.ativa || c.id === editando?.classificacaoId,
+          )}
+          aoFechar={() => setEditando(undefined)}
+          aoSalvar={(a) => {
+            setEditando(undefined);
+            if (a) setAviso(a);
+            carregar();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function CartaoDaQuestao({ questao: q }: { questao: QuestaoDoAcervo }) {
+function CartaoDaQuestao({
+  questao: q,
+  podeEditar,
+  aoEditar,
+  aoMudar,
+}: {
+  questao: QuestaoDoAcervo;
+  podeEditar: boolean;
+  aoEditar: () => void;
+  aoMudar: () => void;
+}) {
+  const [efeitos, setEfeitos] = useState<EfeitosDaQuestao | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  /**
+   * ⚠️ Os efeitos são buscados por questão, sob demanda — 15 chamadas na
+   * abertura seriam 15 consultas para desabilitar botões que talvez ninguém
+   * clique. Buscar no primeiro hover/foco é o meio-termo: o botão nasce
+   * habilitado e a API recusa se for o caso, e a frase chega antes do clique
+   * em qualquer uso normal.
+   */
+  async function carregarEfeitos() {
+    if (efeitos || !podeEditar) return;
+    try {
+      setEfeitos(await apiQuestoes.efeitos(q.id));
+    } catch {
+      /* sem efeitos a tela não trava: a API continua sendo quem decide. */
+    }
+  }
+
+  async function agir(f: () => Promise<unknown>) {
+    setErro(null);
+    setOcupado(true);
+    try {
+      await f();
+      setEfeitos(null);
+      aoMudar();
+    } catch (e) {
+      setErro(mensagemDoErro(e, 'Não foi possível concluir.'));
+    } finally {
+      setOcupado(false);
+      setConfirmando(false);
+    }
+  }
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div
+      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+      onMouseEnter={() => void carregarEfeitos()}
+      onFocus={() => void carregarEfeitos()}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -164,11 +294,88 @@ function CartaoDaQuestao({ questao: q }: { questao: QuestaoDoAcervo }) {
             <Etiqueta tom="neutro">{q.classificacaoNome}</Etiqueta>
             {!q.ativa && <Etiqueta tom="ambar">Inativa</Etiqueta>}
           </div>
+          {/* ⚠️ "RD8010" era verdade quando todas vinham do Protheus. Questão
+              criada aqui recebe código com prefixo `C` — dizer RD8010 nela
+              seria atribuir ao Protheus uma decisão do RH. */}
           <p className="mt-0.5 font-mono text-xs text-slate-400">
-            RD8010 {q.codigo} · vale até {num(q.maiorValor)} por questão
+            {/^\d+$/.test(q.codigo) ? `RD8010 ${q.codigo}` : `criada aqui · ${q.codigo}`} · vale até{' '}
+            {num(q.maiorValor)} por questão
           </p>
         </div>
+
+        {podeEditar && (
+          <div className="flex shrink-0 flex-wrap items-center gap-1">
+            <BotaoDoCartao
+              rotulo="Editar"
+              icone={<Pencil size={15} aria-hidden />}
+              efeito={efeitos?.editarTexto}
+              ocupado={ocupado}
+              aoClicar={aoEditar}
+            />
+            {q.ativa ? (
+              <BotaoDoCartao
+                rotulo="Desativar"
+                icone={<Ban size={15} aria-hidden />}
+                efeito={efeitos?.desativar}
+                ocupado={ocupado}
+                aoClicar={() => void agir(() => apiQuestoes.desativar(q.id))}
+              />
+            ) : (
+              <BotaoDoCartao
+                rotulo="Reativar"
+                icone={<Check size={15} aria-hidden />}
+                efeito={efeitos?.reativar}
+                ocupado={ocupado}
+                aoClicar={() => void agir(() => apiQuestoes.reativar(q.id))}
+              />
+            )}
+            <BotaoDoCartao
+              rotulo="Apagar"
+              icone={<Trash2 size={15} aria-hidden />}
+              tom="perigo"
+              efeito={efeitos?.apagar}
+              ocupado={ocupado}
+              aoClicar={() => setConfirmando(true)}
+            />
+          </div>
+        )}
       </div>
+
+      {erro && (
+        <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-sm text-red-800">{erro}</p>
+      )}
+
+      {/* ⭐ O motivo da recusa fica VISÍVEL quando é o texto que está travado —
+          é a recusa que mais surpreende, porque "corrigir um acento" parece
+          inofensivo e não é depois que alguém respondeu. */}
+      {podeEditar && efeitos?.editarTexto.acao === 'RECUSAR' && (
+        <p className="mt-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
+          {efeitos.editarTexto.frase}
+        </p>
+      )}
+
+      {confirmando && (
+        <Modal titulo={`Apagar a questão ${q.codigo}?`} aoFechar={() => setConfirmando(false)}>
+          <p className="text-sm text-slate-700">{efeitos?.apagar.frase}</p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmando(false)}
+              className="alvo-toque rounded-xl border border-slate-300 px-4 text-sm text-slate-700"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={ocupado}
+              onClick={() => void agir(() => apiQuestoes.apagar(q.id))}
+              className="alvo-toque rounded-xl bg-red-600 px-4 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Apagar
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* ⭐⭐ ONDE ELA É USADA — o campo que dá sentido à lista. Responde
           "mexer nesta questão afeta quem?", que é o que se pergunta antes de
@@ -223,5 +430,47 @@ function CartaoDaQuestao({ questao: q }: { questao: QuestaoDoAcervo }) {
         </ul>
       </details>
     </div>
+  );
+}
+
+/**
+ * ⭐ Botão cujo estado vem do CLASSIFICADOR do backend.
+ *
+ * ⚠️ `efeito` indefinido = **ainda não perguntei**, e aí o botão fica
+ * HABILITADO. Desabilitar por ausência de informação seria esconder capacidade
+ * por causa de uma requisição que não voltou — e quem decide de verdade é a
+ * API, que recusa com a frase se for o caso.
+ */
+function BotaoDoCartao({
+  rotulo,
+  icone,
+  tom = 'neutro',
+  efeito,
+  ocupado,
+  aoClicar,
+}: {
+  rotulo: string;
+  icone: React.ReactNode;
+  tom?: 'neutro' | 'perigo';
+  efeito?: { acao: 'PERMITIR' | 'RECUSAR'; frase: string };
+  ocupado: boolean;
+  aoClicar: () => void;
+}) {
+  const bloqueado = efeito?.acao === 'RECUSAR';
+  return (
+    <button
+      type="button"
+      title={efeito?.frase ?? rotulo}
+      onClick={aoClicar}
+      disabled={ocupado || bloqueado}
+      className={`alvo-toque inline-flex items-center gap-1.5 rounded-lg border px-2.5 text-sm disabled:opacity-30 ${
+        tom === 'perigo'
+          ? 'border-red-200 text-red-700 hover:bg-red-50'
+          : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+      }`}
+    >
+      {icone}
+      {rotulo}
+    </button>
   );
 }

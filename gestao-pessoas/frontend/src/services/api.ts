@@ -487,10 +487,18 @@ export interface QuestaoDoAcervo {
   usos: UsoDaQuestao[];
 }
 
+export interface ClassificacaoDoAcervo {
+  id: string;
+  nome: string;
+  ordem: number;
+  ativa: boolean;
+  questoes: number;
+}
+
 export interface AcervoCompleto {
   totalQuestoes: number;
   foraDeTodoPerfil: number;
-  classificacoes: { id: string; nome: string; ordem: number; ativa: boolean; questoes: number }[];
+  classificacoes: ClassificacaoDoAcervo[];
   questoes: QuestaoDoAcervo[];
 }
 
@@ -544,6 +552,41 @@ export interface ClassificacaoDoCadastro {
   efeitoDeDesativar: Efeito;
   efeitoDeReativar: Efeito;
 }
+
+export interface EscalaDoAcervo {
+  valores: number[];
+  maiorValor: number;
+  uniforme: boolean;
+  divergentes: string[];
+  doFallback: boolean;
+}
+
+export interface EfeitosDaQuestao {
+  editarTexto: Efeito;
+  reclassificar: Efeito;
+  desativar: Efeito;
+  reativar: Efeito;
+  apagar: Efeito;
+}
+
+export interface QuestaoEntrada {
+  enunciado: string;
+  classificacaoId: string;
+  ancoras: { descricao: string; valor?: number }[];
+}
+
+export const questoes = {
+  escala: () => rhApi.get<EscalaDoAcervo>('/acervo/questoes/escala').then((r) => r.data),
+  efeitos: (id: string) =>
+    rhApi.get<EfeitosDaQuestao>(`/acervo/questoes/${id}/efeitos`).then((r) => r.data),
+  criar: (dados: QuestaoEntrada) =>
+    rhApi.post<{ codigo: string; aviso: string }>('/acervo/questoes', dados).then((r) => r.data),
+  editar: (id: string, dados: QuestaoEntrada) =>
+    rhApi.patch(`/acervo/questoes/${id}`, dados).then((r) => r.data),
+  desativar: (id: string) => rhApi.post(`/acervo/questoes/${id}/desativar`).then((r) => r.data),
+  reativar: (id: string) => rhApi.post(`/acervo/questoes/${id}/reativar`).then((r) => r.data),
+  apagar: (id: string) => rhApi.delete(`/acervo/questoes/${id}`).then((r) => r.data),
+};
 
 export const classificacoes = {
   listar: () => rhApi.get<ClassificacaoDoCadastro[]>('/classificacoes').then((r) => r.data),
