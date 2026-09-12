@@ -540,6 +540,75 @@ export const versoes = {
     rhApi.delete<{ ok: true }>(`/modelos/versoes/${versaoId}`).then((r) => r.data),
 };
 
+export interface GrupoDoArranjoEdicao {
+  classificacaoId: string;
+  titulo: string;
+  peso: number;
+  questoes: number;
+  percentual: number;
+}
+
+export interface QuestaoDoArranjoEdicao {
+  perguntaId: string;
+  codigo: string;
+  enunciado: string;
+  ativa: boolean;
+  classificacaoId: string;
+  classificacaoNome: string;
+  ordem: number;
+  /** Derivado. `null` = a classificação não tem peso neste arranjo. */
+  peso: number | null;
+  maiorValor: number;
+}
+
+export interface ArranjoDeEdicao {
+  versaoId: string;
+  modeloId: string;
+  modeloNome: string;
+  versao: number;
+  publicado: boolean;
+  /** O que o RH digitou. */
+  somaDeclarada: number;
+  /** O que a nota vai usar. ⚠️ Tem de ser igual à de cima. */
+  somaDerivada: number;
+  pontuacaoMaxima: number;
+  grupos: GrupoDoArranjoEdicao[];
+  questoes: QuestaoDoArranjoEdicao[];
+  problemasParaPublicar: string[];
+}
+
+export interface PreviaDaPublicacao {
+  versaoId: string;
+  modeloNome: string;
+  versao: number;
+  publicado: boolean;
+  problemas: string[];
+  somaDeclarada: number;
+  somaDerivada: number;
+  pontuacaoMaxima: number;
+  somaDaPublicadaAtual: number | null;
+  frase: string;
+}
+
+export const arranjo = {
+  ler: (versaoId: string) =>
+    rhApi.get<ArranjoDeEdicao>(`/modelos/versoes/${versaoId}/arranjo`).then((r) => r.data),
+  gravar: (
+    versaoId: string,
+    corpo: { grupos: { classificacaoId: string; peso: number }[]; questoes: { perguntaId: string }[] },
+  ) => rhApi.put<ArranjoDeEdicao>(`/modelos/versoes/${versaoId}/arranjo`, corpo).then((r) => r.data),
+  previaPublicar: (versaoId: string) =>
+    rhApi
+      .get<PreviaDaPublicacao>(`/modelos/versoes/${versaoId}/previa-publicar`)
+      .then((r) => r.data),
+  publicar: (versaoId: string) =>
+    rhApi
+      .post<{ versao: number; pontuacaoMaxima: number; somaDosPesos: number }>(
+        `/modelos/versoes/${versaoId}/publicar`,
+      )
+      .then((r) => r.data),
+};
+
 export interface ClassificacaoDoCadastro {
   id: string;
   nome: string;

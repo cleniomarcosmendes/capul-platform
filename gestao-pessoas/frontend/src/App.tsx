@@ -14,6 +14,7 @@ import InstrumentoPage from './pages/InstrumentoPage';
 import CriteriosPage from './pages/CriteriosPage';
 import AcervoPage from './pages/AcervoPage';
 import ClassificacoesPage from './pages/ClassificacoesPage';
+import ArranjoPage from './pages/ArranjoPage';
 import NaoEncontradaPage from './pages/NaoEncontradaPage';
 
 /**
@@ -61,6 +62,8 @@ export default function App() {
                 com os perfis que a usam. */}
             <Route path="/acervo" element={<AcervoPage />} />
             <Route path="/classificacoes" element={<ClassificacoesPage />} />
+            {/* Sem item de menu: chega-se por Questionários → Montar, sobre um rascunho. */}
+            <Route path="/arranjo/:versaoId" element={<ArranjoPage />} />
             {/* Cadastro do CATÁLOGO de critérios. Fora de `/ciclos/:id` pelo
                 mesmo motivo dos outros dois cadastros: a régua vale para todo
                 ciclo, e cada aplicação escolhe o PESO dela. */}

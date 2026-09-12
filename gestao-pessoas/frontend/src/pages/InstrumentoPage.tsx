@@ -22,7 +22,7 @@
  * descreve o objeto, não uma capacidade que não existe.
  */
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Copy, FileText, Info, Printer, Sigma, Trash2 } from 'lucide-react';
+import { AlertTriangle, Copy, FileText, Info, Pencil, Printer, Sigma, Trash2 } from 'lucide-react';
 import { catalogo, ehFaltaDePermissao, mensagemDoErro, versoes as apiVersoes } from '../services/api';
 import type { Efeito, InstrumentoCompleto, ModeloDoCatalogo, VersaoDoModelo } from '../services/api';
 import { Modal } from '../components/Modal';
@@ -435,6 +435,16 @@ function VersoesDoModelo({
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-1">
+              {/* ⭐ Capacidade com CAMINHO na tela: a rota /arranjo existe desde
+                  a Etapa 3, e sem este botão não haveria como chegar nela. */}
+              {!v.publicadoEm && (
+                <a
+                  href={`/gestao-pessoas/arranjo/${v.id}`}
+                  className="alvo-toque inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 text-sm font-medium text-white"
+                >
+                  <Pencil size={15} aria-hidden /> Montar
+                </a>
+              )}
               {v.publicadoEm && (
                 <button
                   type="button"
