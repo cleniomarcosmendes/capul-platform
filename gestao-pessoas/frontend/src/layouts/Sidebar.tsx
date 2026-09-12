@@ -48,7 +48,7 @@ import type { UsuarioLogado } from '../services/api';
  * é o Piloto quando é o Geral, sem erro nenhum na tela. O ciclo mora na URL.
  */
 
-type ItemDoMenu =
+export type ItemDoMenu =
   | { secao: string; papeis?: string[] }
   | {
       rotulo: string;
@@ -59,7 +59,7 @@ type ItemDoMenu =
       fim?: boolean;
     };
 
-const itens: ItemDoMenu[] = [
+export const ITENS_DO_MENU: ItemDoMenu[] = [
   /**
    * ⭐⭐ SEM CONDIÇÃO DE PAPEL, e isto é REGRA do módulo — não esquecimento.
    * Ver `docs/ESTADO-DO-PROJETO.md` §3.1.3.
@@ -155,8 +155,14 @@ const itens: ItemDoMenu[] = [
    */
 ];
 
-/** Mesma limpeza dos outros cinco módulos: cabeçalho de seção sem item some. */
-function filtrarPorPapel(lista: ItemDoMenu[], tem: (...p: string[]) => boolean): ItemDoMenu[] {
+/**
+ * Mesma limpeza dos outros cinco módulos: cabeçalho de seção sem item some.
+ *
+ * ⭐ Exportada desde 12/09 para o `menu.spec.ts` produzir a matriz de "o que
+ * cada papel vê" a partir da LISTA DE VERDADE. Uma matriz escrita à mão num
+ * documento envelhece no primeiro item novo; esta quebra.
+ */
+export function filtrarPorPapel(lista: ItemDoMenu[], tem: (...p: string[]) => boolean): ItemDoMenu[] {
   const visiveis = lista.filter((i) => !i.papeis || tem(...i.papeis));
   return visiveis.filter((item, idx) => {
     if (!('secao' in item)) return true;
@@ -175,7 +181,7 @@ interface Props {
 
 export default function Sidebar({ aberta = false, aoFechar, euSou }: Props) {
   const { usuario, tem, logout } = useAuth();
-  const visiveis = filtrarPorPapel(itens, tem);
+  const visiveis = filtrarPorPapel(ITENS_DO_MENU, tem);
   const nome = euSou?.nome ?? usuario?.nome ?? usuario?.username ?? null;
   const filial = euSou?.filialAtual;
 

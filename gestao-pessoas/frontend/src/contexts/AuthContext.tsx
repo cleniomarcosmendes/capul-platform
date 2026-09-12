@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ROLES, rolesDoModulo, type UsuarioDoToken as Usuario } from '../lib/roles';
+import { rolesDoModulo, temPapel, type UsuarioDoToken as Usuario } from '../lib/roles';
 import { authApi } from '../services/api';
 
 interface Contexto {
@@ -51,8 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       usuario,
       carregando,
       roles,
-      // ADMIN é bypass de plataforma, como no RolesGuard do backend.
-      tem: (...alvos) => roles.includes(ROLES.ADMIN) || alvos.some((a) => roles.includes(a)),
+      // ⚠️ A regra mora em `lib/roles.ts`, com spec. Aqui dentro do `useMemo`
+      // ela era pura, decisiva e inalcançável por teste — e é ela que decide
+      // se um item de menu existe.
+      tem: (...alvos) => temPapel(roles, ...alvos),
       /**
        * ⚠️ SAIR AQUI É SAIR DE TUDO. Todos os módulos são servidos da mesma
        * origem (`https://<host>/...`), então dividem o mesmo `localStorage`:
