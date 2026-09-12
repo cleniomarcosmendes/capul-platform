@@ -5668,6 +5668,23 @@ montado** naquela vez, por quem o montou.
 devem responder o questionário de Loja, o de Produção, ou um terceiro? O código contábil não tem
 opinião sobre isso — quem tinha era o atalho usado na montagem.
 
+#### ⭐⭐ E o item cresceu: é o maior bloco gerencial fora do supermercado
+
+Medido em 12/09 sobre os 16 CCs do ensaio: dos **39 cargos gerenciais**,
+**8 estão no `21011202` ADMINISTRATIVO - FABRICA** — três `GER GADO CORTE E LEITE`, um
+`GERENTE ADMINISTRATI` (truncado no cadastro), um `GERENTE GERAL` e três `SUPERVISOR ADM
+COMERCIAL`. Só o supermercado tem mais.
+
+⚠️ **Correção do enquadramento:** este item deixou de ser *"80 pessoas no questionário errado"*.
+Passa a ser: **o maior bloco gerencial fora do supermercado está no CC cuja classificação está em
+dúvida** — e o questionário que essas 49 pessoas respondem é decidido pelo mesmo atalho que está
+em questão.
+
+⚠️ **Correção de fato:** o `21011202` **ESTÁ no recorte do ensaio** (é um dos 16), e tem
+responsável presente — `lidyanerocha` (002336) está lotada nele. O rótulo *"INDUSTRIA"* que
+circulou para este CC está errado: no cadastro ele se chama **ADMINISTRATIVO - FABRICA**. Quem é
+`GERENCIA INDUSTRIAL` é o `41010121`, com **1 pessoa**.
+
 ### 4. Segundo `RH_ADMIN` — encaminhamento: Claudimar
 
 **Medido:** hoje só `ariellypereira` tem `RH_ADMIN`. `claudimaroliveira` (001079, DIRETOR EXECUTIVO)
@@ -5848,3 +5865,81 @@ sem perder nenhuma das três referências.
    propósito; não saem do recorte sozinhos.
 7. **A régua de conceitos em faixa extrema** — com 344 pessoas reais, `Insuficiente` e `Excelente`
    podem simplesmente não ocorrer, e aí as faixas ficam sem exercício (não por defeito, por dado).
+
+---
+
+### 3.1.76. 🧪 ENSAIO PILOTO — 16 CCs · MONTADO EM RASCUNHO, NÃO ABERTO (12/09)
+
+Ciclo `ENSAIO PILOTO — 16 CCs`, **RASCUNHO**. Período **01/11/2026 a 30/11/2026**, data-base
+**30/11/2026** — fora de setembro, sem sobrepor o Piloto (que é 01–30/09). A data-base dentro do
+período, como a validação exige.
+
+⚠️ **Nada foi tocado fora dele:** Piloto segue **894 PENDENTE, 0 respostas**; `rh.colaborador`
+segue 1.037; os 17 resultados apurados seguem lá.
+
+#### Público — por LISTA DE PARES `(filial, centroCusto)`, nunca prefixo
+
+| Aplicação | Público | Avaliações | Sem avaliador |
+|---|---:|---:|---:|
+| Aprendizes | 19 | **19** | 0 |
+| Administrativo | 67 | **66** | **1** |
+| Operação de Loja | 257 | **257** | 0 |
+| Produção e Indústria | 1 | **1** | 0 |
+| **Total** | **344** | **343** | **1** |
+
+⭐ **A ordem da montagem importou.** `Aprendizes` foi montado PRIMEIRO, nominalmente pelos 19 ids;
+os outros três por lista de CCs. A `Operação de Loja` encontrou **276** e adicionou **257** — o
+sistema **pulou sozinho** os 19 que já estavam em outra aplicação do ciclo. Montado na ordem
+inversa, os aprendizes teriam caído em Loja e a aplicação deles ficaria vazia.
+
+#### Designação — duas passadas, manual
+
+**1ª, por centro de custo:** cada um dos 16 responsáveis avalia quem está no CC dele. O
+`11010219` foi dividido entre Jaicler e Laís, alternado — **arbitrário, só para exercitar**.
+
+**2ª, hierárquica:** o Claudimar avalia os **16** outros responsáveis. ⚠️ São **16, não 15**: o
+`11010219` tem dois responsáveis, então há 17 no total e 16 além dele.
+
+| Avaliador | Fila | Aplicações que atravessa |
+|---|---:|---|
+| ADRIANA (003113) | 96 | Aprendizes + Loja |
+| THIAGO (004060) | 88 | Aprendizes + Loja |
+| LIDYANE (002336) | 48 | Aprendizes + Loja |
+| MARCIO (001960) | 36 | Aprendizes + Loja |
+| **CLAUDIMAR (001079)** | **16** | **Administrativo + Loja + Produção** |
+| ESMERALDA · CLENIO · VANIA · DENISE · ARIELLY | 14 · 13 · 7 · 6 · 5 | Administrativo |
+| RENATA · JAICLER · JULIANA | 3 · 3 · 3 | Loja / Administrativo |
+| IVAN · LAÍS · LÍCIA | 2 · 2 · 1 | Administrativo |
+
+⭐ **A designação atravessa aplicação sem problema** — o Claudimar avalia gente das TRÊS, e o
+sistema não pede que avaliador e avaliado estejam na mesma. É o que torna a 2ª passada possível.
+
+#### As conferências
+
+| Pergunta | Resposta |
+|---|---|
+| Quem ficou sem avaliador | **1 — o Claudimar**, e é o desenho: o diretor-presidente não está no cadastro |
+| Quem avalia e não é avaliado | **1 — o Claudimar**, o mesmo |
+| Quem é avaliado e não avalia | **328** (os 344 menos os 16 avaliadores) |
+| **Reciprocidades (A↔B)** | **nenhuma** |
+
+⭐ **A ausência de reciprocidade não foi imposta pelo sistema** — nada impede A avaliar B e B
+avaliar A. Ela é consequência do desenho de duas passadas: os responsáveis são avaliados pelo
+Claudimar, não uns pelos outros. Se a Arielly decidir outra hierarquia, a reciprocidade volta a
+ser possível e ninguém será avisado.
+
+#### ⚠️ O 429 do nginx durante a montagem — throttle funcionando, não defeito
+
+O primeiro script disparou 343 designações sem pausa e levou **191 recusas `429 Too Many
+Requests`** do nginx. **Não é defeito**: é o throttle protegendo a API. Refeito com pausa de 120 ms
+e reintento exponencial, completou sem erro.
+
+⭐ Fica registrado porque é armadilha de diagnóstico: um 429 em massa **parece** o sistema
+quebrando, e o log do backend não mostra nada — o nginx recusa antes de chegar lá. Script de carga
+contra esta plataforma precisa de ritmo.
+
+#### O que este ensaio NÃO testa
+
+Ver §3.1.75 §7 — e vale reler antes de tirar conclusão dele. Em resumo: **Produção e Indústria não
+é exercitada** (1 pessoa, que é o próprio avaliador — decisão consciente), não há critério
+`INFORMADO`, o volume é 344 contra 894, e nenhum avaliador está sem acesso ao módulo.
