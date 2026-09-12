@@ -8121,3 +8121,111 @@ não se edita, então o contador nunca chega a zero. Uma classificação citada 
 
 ⭐ **A regra que faltava estar escrita: repartir na precisão em que se exibe.** Arredondar depois de
 repartir é arredondar por item de novo, e desfaz a repartição.
+
+---
+
+### 3.1.119. ✅ O CENTAVO — calcular no EXATO, exibir o arredondado (opção A)
+
+Decisão de 12/09 sobre o artefato medido na §3.1.115. **`pesosDerivados` passou a devolver dois
+números**, e a regra é uma frase:
+
+> ⭐⭐ **Calcula-se no peso EXATO; arredonda-se só para EXIBIR.** Era o inverso.
+
+| | Para quê |
+|---|---|
+| `peso` — arredondado, com o centavo na primeira por ordem | **exibir**: é o que o RH lê, o que reproduz os 44 pesos herdados, e o que soma exatamente 60 |
+| `pesoExato` — `peso_da_classificação ÷ n`, sem arredondar | **calcular**: `Σ(valor × peso)` deixa de depender de qual questão ficou em primeiro |
+
+`itensRespondidos` usa o exato; `pontuacaoMaximaDoArranjo` continua no arredondado, de propósito —
+a máxima é o número que a publicação GRAVA e que a tela confere contra o gravado, então tem de ser
+o mesmo que sai de somar os pesos exibidos. Pelos dois caminhos dá 72; o que muda é qual deles
+alguém refaz na mão.
+
+#### 📐 AS DUAS MEDIÇÕES PEDIDAS
+
+**(a) Divergência máxima contra o Protheus nas 108: ZERO.** `108/108 idênticas, 0 divergentes`.
+
+⚠️ **E a razão importa mais que o número.** Não é que o Protheus também distribua o centavo — é que
+o ciclo `000006` tinha **18 questões de peso IGUAL**, e onde os pesos são iguais o exato e o
+arredondado coincidem. **A regressão não exercita o caso**, e agora está escrito: ela mede a
+divisão fixa por 18, não a repartição por classificação, que nasceu depois.
+
+**(b) Mudam de conceito: NENHUM dos 17.** Maior diferença: **0,0000 ponto**.
+
+⚠️ Também aqui a razão vale o registro: o desvio só aparece quando as respostas **diferem dentro da
+mesma classificação**. Se as três questões de Relacionamento receberam a mesma âncora, o numerador
+é `valor × (3,34+3,33+3,33)` de qualquer jeito e o centavo cancela. Nos 17 apurados foi o que
+aconteceu. **O efeito é real e não se manifestou nestes dados** — não é a mesma coisa que "não
+existe", e teria aparecido no primeiro ciclo com respostas variadas.
+
+⚠️ **`Avaliacao.notaAvaliacao` é CONGELADA no envio**, então nenhuma nota gravada muda com esta
+correção. O que é recalculado na leitura é a memória por classificação — e se um dia o congelado e
+o recalculado divergirem, **o rodapé da memória mostra**, porque ele agora escreve a conta.
+
+#### 🔴 Achado no caminho: eu tinha quebrado a regressão
+
+O script `regressao-protheus.ts` **parou de rodar** quando `nota-avaliacao.ts` passou a importar
+`../common/erro-de-dominio.js` (§3.1.100): o `ts-node` em CJS não resolve o sufixo `.js` para o
+`.ts`. Ninguém percebeu porque **o script não está na suíte** — roda à mão, quando se quer o
+baseline.
+
+⚠️ **Ferramenta de medição fora da suíte quebra em silêncio, e a hora em que se descobre é a hora
+em que se precisa dela.** Corrigido com `"ts-node": { "experimentalResolver": true }` no
+`tsconfig.seed.json`, com o porquê escrito lá.
+
+### 3.1.120. ✅ MEMÓRIA DE CÁLCULO PERGUNTA A PERGUNTA — a devolutiva com objeto
+
+Sete barras e um total não sustentam conversa: o RH mostra *"Relacionamento 66,67"* e não tem como
+dizer **o que** melhorar. Com a âncora escolhida visível — *"Prefere trabalhar sozinho, mas se
+solicitado ajuda"* — a conversa tem objeto.
+
+`GET /resultados/:id` passou a trazer `porQuestao`: enunciado, peso exibido, valor, **o texto da
+âncora escolhida** e as quatro âncoras com a marcação de qual foi. Na tela, **expansível por
+classificação** — 14 linhas abertas onde havia 7 barras trocaria um problema por outro.
+
+**Conferido em resultado real:** 7 classificações, 14 questões, soma dos pesos **60**, e
+`Σ(nota × peso) ÷ 60 = 63,19` = **a nota gravada**. O `Relacionamento e Conduta` que a varredura
+viu em **66,65** agora lê **66,67**.
+
+### 3.1.121. 📌 A MONTAGEM DO ENSAIO ESTÁ EM NOME DE UMA CONTA DE TESTE
+
+**Fato registrado, não desfeito.** As **348 designações** do `ENSAIO PILOTO — 16 CCs`, mais o ciclo,
+as 4 aplicações e os públicos, foram gravados em **12/09 entre 02:33 e 03:35 pela conta
+`zz.teste.rh`** — *"ZZ CONTA DE TESTE T.I. (RH_ADMIN) — NAO E PESSOA"*.
+
+⚠️ **Quem auditar aquelas designações vai ler o nome de uma conta de teste**, e não vai encontrar a
+pessoa que decidiu. Não se desfaz: reescrever autoria em auditoria é pior que o problema — o
+registro passaria a afirmar algo que não aconteceu.
+
+> ⭐ **REGRA, daqui para a frente: montagem de coisa que FICA vai na conta de quem decidiu, não na
+> de teste.** Conta de teste é para PERCORRER — abrir telas, exercitar recusa, ver se o botão está
+> onde deveria. O que sobrevive ao percurso (ciclo, aplicação, designação, publicação) leva o nome
+> de quem responde por ele.
+
+⚠️ O sinal de que a regra foi quebrada é fácil de ver e ninguém olha: **`ZZ` no campo "criado por"**
+de um registro que não é descartável.
+
+### 3.1.122. 🏷️ SIMULACAO — os quatro rótulos que faltam nomear
+
+A tela mostra `0 + 13 + 39 + 4` e diz **"54 no público"**, e a soma dá 56. **Medido:**
+
+| | |
+|---|---|
+| Público nominal (pessoas distintas) | **54** |
+| Avaliações que existem | **52** (39 CANCELADA + 13 ENVIADA) |
+| **Pessoas no público SEM avaliação nenhuma** | **2** |
+| Canceladas: pelo ENCERRAMENTO | **37** |
+| Canceladas: por DECISÃO DO RH (o "Excluir") | **2** |
+
+⭐ **As duas divergências são a mesma classe** (regra 15): dois números verdadeiros sem o termo que
+os concilia.
+
+- `54 × 52`: a diferença são **2 pessoas que entraram no público e nunca tiveram avaliação criada**
+  — e a tela não tem nome para elas.
+- `39 × 37`: as 39 são o total de canceladas; a seção conta só as **37 que o "Devolver canceladas"
+  alcança**, porque ele só reverte as de origem `ENCERRAMENTO`. As outras 2 voltam pelo "Incluir",
+  na aba Designação.
+
+⚠️ **Aguardando os nomes.** Preciso de rótulo para: (1) as **2 sem avaliação**; (2) o total de
+canceladas × (3) as recuperáveis pelo "Devolver" × (4) as recuperáveis pelo "Incluir". No
+`Avaliação Geral` a conta fecha porque lá não há nenhuma das duas situações.
