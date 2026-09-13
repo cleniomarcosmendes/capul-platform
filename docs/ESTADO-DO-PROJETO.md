@@ -11713,3 +11713,141 @@ caso mais duro**, e é bom que seja ela: é a maior fila das duas listas.
 ⭐ **Cinco veem só o ENSAIO** (Clenio, Denise, Juliana, Ivan, Lícia) — são o
 grupo de controle involuntário: se a confusão aparecer só nas onze, é a
 convivência; se aparecer nas dezesseis, é outra coisa.
+
+---
+
+### 3.1.193. 🔴🔴 ENSAIO — ACHADO 01: o REABRIR era a MINHA guarda sem caminho na tela
+
+**O corpo do 400, medido antes de consertar:**
+
+> *"A devolutiva desta avaliação já foi liberada… **Liberada em: 12/09/2026**.
+> Reabrir apaga a nota e tira a devolutiva do ar; se você seguir, será preciso
+> apurar, liberar e conversar de novo. **Confirme para reabrir assim.**"*
+
+⭐⭐ **É a guarda que EU construí na etapa 4, funcionando exatamente como
+desenhada.** O backend está certo. **A tela nunca manda `confirmarJaDevolvida`
+— eu construí a guarda e o parâmetro, e não construí o jeito de confirmar.**
+
+#### Como passou pelo meu portão da etapa 4
+
+> **O portão mediu a API, não a TELA.** Eu escrevi *"reabrir sem confirmar 400
+> com a data · reabrir confirmando 200"* — e fiz as duas com **curl**, passando
+> o parâmetro **à mão**. Nenhum dos dois cliques existia.
+
+⚠️ **É a QUARTA ocorrência de capacidade sem caminho na tela** — depois do
+`RH_MODELO`, do `devolutivaEm` sem escritor e do `?cicloId=`. E é a pior das
+quatro, porque a mensagem de erro **manda fazer uma coisa que o botão não faz**:
+*texto que promete capacidade, na forma de SAÍDA DE UM ERRO*, empurrando de
+volta ao erro com a autoridade do sistema.
+
+> ⭐ **A lição do portão: medir por curl prova o CONTRATO, nunca o CAMINHO.**
+> Um portão que só chama a API não distingue "existe" de "alcançável" — e todas
+> as quatro ocorrências desta família passaram por portões desse tipo.
+
+#### O conserto
+
+Caixa de confirmação no diálogo, que **só aparece quando há o que confirmar**
+(`efeito.devolutivaLiberadaEm`), dizendo desde quando está liberada **e se o
+avaliador declarou ter conversado**. O botão fica **desabilitado com o motivo à
+vista**, nunca escondido.
+
+⚠️ **Sobre "não mostra erro":** o modal **renderiza** `{erro && <Erro/>}` e o
+handler grava. O que não existia era a **saída** — e erro sem saída é lido como
+tela travada, que é o que a skill reportou.
+
+---
+
+### 3.1.194. 🔴🔴 ENSAIO — ACHADO 02: a conta dos Aprendizes está CERTA. O furado era o meu ALARME
+
+**Medido no resultado real:** `ISABELLY MESQUITA` — `notaAvaliacao 64,17` ·
+`pesoAvaliacao 100` · `0 critérios` · **`notaFinal 64,17`** · grupos somam 60 e
+`Σ(nota×peso) ÷ 60 = 64,17`. **A conta fecha por inteiro.**
+
+#### Respondendo às três perguntas
+
+**Por que o `estado-de-partida` dizia "soma 60,00 ✅"?** ⭐ **Porque aquela
+checagem está certa** — ela compara *soma declarada (grupos)* com *soma derivada
+(questões)*, **as duas do instrumento**. Ela nunca olhou `pesoAvaliacao`.
+
+**A conta furada é da aplicação ou do instrumento?** ⭐⭐ **De nenhum dos dois.
+Era da minha verificação.** `conferirComposicao` comparava a **soma dos grupos**
+(60 — a escala interna do instrumento) com **`pesoAvaliacao`** (100 — quanto o
+questionário vale **contra os critérios**). **São coisas diferentes.**
+
+| aplicação | pesoAvaliacao | soma dos grupos | a minha checagem dizia |
+|---|---|---|---|
+| **Aprendizes** | **100** | 60 | ⛔ **"não fecha"** — falso |
+| Administrativo · Operação de Loja · Produção e Indústria | 60 | 60 | "coincidem" — **por acidente** |
+
+⚠️ **Coincidiram em 3 de 4 e eu generalizei da coincidência.** É literalmente
+[[feedback_numero_preciso_pode_ser_resto_de_conta]] aplicado a mim: tomei um
+acidente aritmético por regra.
+
+> ⭐⭐⭐ **E o custo foi um FALSO VERMELHO em cima de 14 devolutivas corretas.**
+> Falso vermelho destrói a ferramenta — e este destruiu a única coisa que a
+> etapa 3 tinha para oferecer: a tela que **confere a própria conta**. Se ela
+> grita sobre dado certo, o avaliador aprende a ignorá-la, e aí ela não serve
+> para o dia em que estiver certa.
+
+**A verificação subir para antes?** ⛔ **A que existia, não** — promovê-la para
+a apuração e para o diálogo de liberar teria **bloqueado 14 liberações
+corretas**. ⚠️ *Guarda errada promovida é pior que guarda tarde.*
+
+⭐ **A que ficou no lugar é verdadeira e vale promover:** `Σ pesos dos grupos ==
+Σ pesos das questões` — a mesma do `estado-de-partida`, e a que **de fato** pega
+furo (foi ela que pegaria o 59,97).
+
+**E as 14 já liberadas?** ⭐ **Nada a fazer. Os dados estão certos.** O que
+estava errado era o aviso, e ele saiu.
+
+---
+
+### 3.1.195. 📌 ENSAIO — ACHADO 06 → LISTA DA ARIELLY: o avaliador não alcança os extremos
+
+⛔ **Não mexido — é decisão dela.** Registrado com os números do ensaio:
+
+| | |
+|---|---|
+| âncoras valem | **25 · 50 · 75 · 100** — nunca **0** |
+| notas mínimas observadas | **30,56** e **38,89** |
+| notas máximas observadas | **77,78** e **83,33** |
+| nos 72 resultados | **0 Insuficiente** e **0 Excelente** |
+
+⭐ **Os dois conceitos extremos são decididos por Escolaridade, Tempo de Empresa
+e Tempo na Função** — **33,3% da nota que não depende de ninguém na conversa.**
+O avaliador não consegue dar **nem a pior nem a melhor** avaliação.
+
+**As opções, para ela decidir:**
+
+1. **A âncora mais baixa valer 0** — devolve o extremo inferior ao avaliador.
+   ⚠️ Muda a escala do instrumento herdado e invalida a regressão dos 108;
+2. **Régua de conceitos diferente** — faixas ajustadas ao alcance real
+   (30–84). ⚠️ "Excelente" passa a significar outra coisa que em 2025;
+3. **Aceitar que os extremos sejam cadastrais** — é o estado de hoje, e a
+   decisão é dizer isso em voz alta em vez de descobrir depois.
+
+---
+
+### 3.1.196. 🔴 ENSAIO — ACHADO 10: a ORDENAÇÃO entrega a nota que a tela esconde
+
+A linha do próprio RH aparece em Resultados **na posição ordenada por nota
+decrescente**, entre 83,33 e 77,78 — **janela de 5,55 pontos, e o conceito com
+certeza**. Zeramos o número no servidor e **esquecemos a ORDEM**.
+
+⭐ **A regra que sai: esconder um VALOR não esconde nada se a POSIÇÃO, a
+CONTAGEM ou a MÉDIA forem calculadas com ele.** Toda supressão precisa perguntar
+*"que outros números foram derivados do que eu escondi?"*.
+
+⛔ **Ainda não consertado** — entra no bloco abaixo, junto com a varredura dos
+outros lugares onde posição/contagem/média vazam.
+
+---
+
+### 3.1.197. ✅ A SOMA DAS 16 FILAS FECHA EM 325
+
+Pergunta do Clenio sobre avaliados repetidos entre `clenio` e `renataborges`.
+
+**Medido: `325 avaliações · 325 avaliados distintos · 0 avaliados com mais de
+uma`.** ⭐ **Não há duplicata de designação.** O que ele viu é **a mesma pessoa
+em DOIS CICLOS** (ENSAIO e Piloto), como o achado 03 sugeria — e é o efeito
+esperado da convivência que a opção 4 aceitou.

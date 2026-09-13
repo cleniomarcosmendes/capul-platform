@@ -958,6 +958,10 @@ export interface PreviaDaDesignacao {
 }
 
 export interface EfeitoDaReabertura {
+  /** ⭐ Quando o RH liberou. Não-nulo = reabrir EXIGE `confirmarJaDevolvida`. */
+  devolutivaLiberadaEm?: string | null;
+  /** O avaliador DECLAROU ter conversado — muda o peso da decisão. */
+  devolutivaConduzidaEm?: string | null;
   /** ⭐ true quando há resultado apurado — a reabertura vai APAGÁ-LO. */
   apagaResultado: boolean;
   notaFinal: number | null;
@@ -969,8 +973,10 @@ export const avaliacoesRh = {
   efeitoDaReabertura: (avaliacaoId: string) =>
     rhApi.get<EfeitoDaReabertura>(`/avaliacoes/${avaliacaoId}/efeito-da-reabertura`).then((r) => r.data),
   /** ⚠️ RH_ADMIN, motivo obrigatório, e APAGA o resultado apurado — ver §3.1.43. */
-  reabrir: (avaliacaoId: string, motivo: string) =>
-    rhApi.post(`/avaliacoes/${avaliacaoId}/reabrir`, { motivo }).then((r) => r.data),
+  reabrir: (avaliacaoId: string, motivo: string, confirmarJaDevolvida = false) =>
+    rhApi
+      .post(`/avaliacoes/${avaliacaoId}/reabrir`, { motivo, confirmarJaDevolvida })
+      .then((r) => r.data),
 };
 
 export interface ProgressoDaAplicacao {

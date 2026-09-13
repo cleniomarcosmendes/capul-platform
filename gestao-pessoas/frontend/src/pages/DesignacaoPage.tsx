@@ -1449,11 +1449,25 @@ function DialogoReabrir({
     };
   }, [linha.avaliacaoId]);
 
+  /**
+   * ⭐⭐ A CONFIRMAÇÃO QUE FALTAVA — e a falta dela travou o ensaio de 13/09.
+   *
+   * A API recusa com **400** quando a devolutiva já foi liberada, e a mensagem
+   * termina em *"Confirme para reabrir assim"*. **A tela não tinha como
+   * confirmar** — então o erro aparecia mandando fazer uma coisa que o botão
+   * não fazia. É a dívida do §texto-que-promete-capacidade, na pior forma: como
+   * SAÍDA DE UM ERRO, empurrando de volta ao erro com a autoridade do sistema.
+   *
+   * ⚠️ Foi a etapa 4 que construiu a guarda e o parâmetro, e mediu **pela API**:
+   * "sem confirmar 400 · confirmando 200". O portão nunca passou pela TELA.
+   */
+  const [confirmaJaDevolvida, setConfirmaJaDevolvida] = useState(false);
+
   async function confirmar() {
     setSalvando(true);
     setErro(null);
     try {
-      await avaliacoesRh.reabrir(linha.avaliacaoId!, motivo.trim());
+      await avaliacoesRh.reabrir(linha.avaliacaoId!, motivo.trim(), confirmaJaDevolvida);
       await aoReabrir();
     } catch (e) {
       setErro(mensagemDoErro(e));
@@ -1520,6 +1534,37 @@ function DialogoReabrir({
         </span>
       </label>
 
+      {/* ⭐ Só aparece quando há o que confirmar. Caixa marcada por engano num
+          diálogo que quase nunca a mostra é pior que caixa ausente. */}
+      {efeito?.devolutivaLiberadaEm && (
+        <div className="mt-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p>
+            <strong>A devolutiva desta pessoa já foi liberada</strong> em{' '}
+            {new Date(efeito.devolutivaLiberadaEm).toLocaleDateString('pt-BR')} — o avaliador já
+            pode ter mostrado a nota para ela.
+            {efeito.devolutivaConduzidaEm && (
+              <>
+                {' '}
+                <strong>E ele declarou que já conversou</strong>, em{' '}
+                {new Date(efeito.devolutivaConduzidaEm).toLocaleDateString('pt-BR')}.
+              </>
+            )}
+          </p>
+          <label className="alvo-toque mt-2 flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={confirmaJaDevolvida}
+              onChange={(e) => setConfirmaJaDevolvida(e.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              Entendi: reabrir tira a devolutiva do ar, e será preciso{' '}
+              <strong>apurar, liberar e conversar de novo</strong>.
+            </span>
+          </label>
+        </div>
+      )}
+
       {erro && <div className="mt-3"><Erro mensagem={erro} /></div>}
 
       <div className="mt-5 flex gap-2">
@@ -1532,7 +1577,13 @@ function DialogoReabrir({
         </button>
         <button
           type="button"
-          disabled={salvando || efeito === null || motivo.trim().length < MOTIVO_MINIMO}
+          disabled={
+            salvando ||
+            efeito === null ||
+            motivo.trim().length < MOTIVO_MINIMO ||
+            // ⚠️ Desabilitado COM o motivo à vista (a caixa acima), nunca escondido.
+            Boolean(efeito?.devolutivaLiberadaEm && !confirmaJaDevolvida)
+          }
           onClick={() => void confirmar()}
           className="alvo-toque flex-1 rounded-xl bg-rose-700 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
         >

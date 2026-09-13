@@ -140,7 +140,7 @@ export default function DevolutivaPage() {
               {!conf.gruposBatem &&
                 `A soma dos grupos dá ${fmtNota(conf.detalhe.questionarioPelosGrupos)} e o questionário marcou ${fmtNota(dados.notaAvaliacao)}. `}
               {!conf.pesoDosGruposBate &&
-                `Os pesos dos grupos somam ${conf.detalhe.somaDosGrupos} e o questionário vale ${dados.pesoAvaliacao}. `}
+                `Os pesos dos grupos somam ${conf.detalhe.somaDosGrupos} e os das questões, ${conf.detalhe.somaDasQuestoes}. `}
               {!conf.percentuaisFecham && 'A coluna de percentuais não soma 100. '}
             </p>
           </div>

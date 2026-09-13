@@ -100,11 +100,47 @@ describe('⚠️ a conferência REPROVA quando não fecha — senão é decoraç
     expect(c.tudoFecha).toBe(false);
   });
 
-  it('peso de grupo adulterado é pego pelas DUAS checagens de grupo', () => {
+  it('peso de grupo adulterado é pego pela média ponderada', () => {
     const porGrupo = REAL.porGrupo.map((g, i) => (i === 0 ? { ...g, peso: 8 } : g));
     const c = conferirComposicao({ ...REAL, porGrupo });
-    expect(c.pesoDosGruposBate).toBe(false); // 59 ≠ 60
-    expect(c.gruposBatem).toBe(false); // e a média ponderada muda
+    expect(c.gruposBatem).toBe(false);
+  });
+
+  /**
+   * ⭐⭐ A CHECAGEM DOS PESOS COMPARA GRUPOS × QUESTÕES — nunca `pesoAvaliacao`.
+   *
+   * ⚠️ Até 13/09 ela comparava com `pesoAvaliacao`, e as duas coincidiam em 3
+   * das 4 aplicações **por acidente**. Em `Aprendizes` (peso 100, instrumento
+   * 60) a tela gritou "a conta não está fechando" sobre **14 devolutivas
+   * corretas**. Falso VERMELHO destrói a ferramenta.
+   */
+  it('⭐ peso do questionário 100 com instrumento de 60 é CORRETO — não é furo', () => {
+    const aprendiz = {
+      ...REAL,
+      pesoAvaliacao: 100,
+      criterios: [],
+      notaFinal: 64.17,
+      notaAvaliacao: 64.17,
+      porGrupo: [{ grupoId: 'g1', titulo: 'Único', nota: 64.17, peso: 60 }],
+      porQuestao: [
+        { perguntaId: 'p1', codigo: '1', enunciado: 'x', classificacaoId: 'g1', peso: 60,
+          maiorValor: 1.2, valor: 0.9, respostaEscolhida: 'x', ancoras: [] },
+      ],
+    };
+    const c = conferirComposicao(aprendiz);
+    expect(c.pesoDosGruposBate).toBe(true);
+    expect(c.tudoFecha).toBe(true);
+  });
+
+  it('⭐ mas peso derivado que NÃO soma o declarado continua sendo pego — o 59,97', () => {
+    const furado = {
+      ...REAL,
+      porQuestao: [
+        { perguntaId: 'p1', codigo: '1', enunciado: 'x', classificacaoId: 'g1', peso: 59.97,
+          maiorValor: 1.2, valor: 0.9, respostaEscolhida: 'x', ancoras: [] },
+      ],
+    };
+    expect(conferirComposicao(furado).pesoDosGruposBate).toBe(false);
   });
 
   it('⭐ nota de grupo adulterada é pega mesmo com os pesos certos', () => {

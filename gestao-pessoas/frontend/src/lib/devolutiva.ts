@@ -121,12 +121,31 @@ export interface Conferencia {
   finalBate: boolean;
   /** Σ(nota do grupo × peso) ÷ Σpesos bate com a nota do questionário? */
   gruposBatem: boolean;
-  /** Σ dos pesos dos grupos é o peso do questionário? */
+  /**
+   * ⭐ Σ dos pesos dos GRUPOS é Σ dos pesos das QUESTÕES?
+   *
+   * ⚠️⚠️ Até 13/09 esta checagem comparava a soma dos grupos com
+   * `pesoAvaliacao` — **duas coisas diferentes**, que coincidiam em 3 das 4
+   * aplicações por acidente (escala do instrumento 60, peso do questionário
+   * 60). Em `Aprendizes` (peso **100**, instrumento **60**) a coincidência
+   * quebra, e a tela do avaliador gritou **"a conta não está fechando"** em
+   * cima de **14 devolutivas corretas**.
+   *
+   * ⭐ `pesoAvaliacao` é quanto o questionário vale **contra os critérios**; a
+   * soma dos grupos é a **escala interna do instrumento**. A nota do
+   * questionário é normalizada 0–100, então a escala não precisa ter relação
+   * nenhuma com o peso. Medido: `Aprendizes` nota 64,17 → final 64,17 ✅.
+   */
   pesoDosGruposBate: boolean;
   /** Todas as quatro. É o que a tela usa para decidir se pode se afirmar. */
   tudoFecha: boolean;
   /** Para a mensagem, quando não fecha. */
-  detalhe: { finalRefeita: number; questionarioPelosGrupos: number; somaDosGrupos: number };
+  detalhe: {
+    finalRefeita: number;
+    questionarioPelosGrupos: number;
+    somaDosGrupos: number;
+    somaDasQuestoes: number;
+  };
 }
 
 /** Duas casas — a mesma precisão de `Decimal(6,2)` no banco. */
@@ -162,7 +181,15 @@ export function conferirComposicao(m: MemoriaParaDevolutiva): Conferencia {
   const percentuaisFecham = c.fatias.length === 0 || somaPct === 100;
   const finalBate = bate(finalRefeita, m.notaFinal);
   const gruposBatem = m.porGrupo.length === 0 || bate(questionarioPelosGrupos, m.notaAvaliacao);
-  const pesoDosGruposBate = m.porGrupo.length === 0 || bate(somaDosGrupos, m.pesoAvaliacao);
+  /**
+   * ⚠️ Contra a soma das QUESTÕES, não contra `pesoAvaliacao`. É a mesma conta
+   * que o `estado-de-partida.js` faz ("soma declarada × soma derivada"), e é a
+   * que de fato detecta furo: se os pesos derivados não somarem o declarado, a
+   * repartição perdeu (ou ganhou) peso pelo caminho — foi o defeito do 59,97.
+   */
+  const somaDasQuestoes = duasCasas(m.porQuestao.reduce((s, q) => s + q.peso, 0));
+  const pesoDosGruposBate =
+    m.porGrupo.length === 0 || m.porQuestao.length === 0 || bate(somaDosGrupos, somaDasQuestoes);
 
   return {
     percentuaisFecham,
@@ -170,6 +197,6 @@ export function conferirComposicao(m: MemoriaParaDevolutiva): Conferencia {
     gruposBatem,
     pesoDosGruposBate,
     tudoFecha: percentuaisFecham && finalBate && gruposBatem && pesoDosGruposBate,
-    detalhe: { finalRefeita, questionarioPelosGrupos, somaDosGrupos },
+    detalhe: { finalRefeita, questionarioPelosGrupos, somaDosGrupos, somaDasQuestoes },
   };
 }
