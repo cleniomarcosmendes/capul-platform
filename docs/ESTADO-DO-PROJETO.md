@@ -11368,3 +11368,115 @@ leem do **banco**, não de resposta HTTP — os `.get` deles são `Map.get`.
 > ⚠️ **A regra:** em relatório de conferência, **ausência e ZERO significam
 > coisas opostas.** Ou se confere o HTTP antes de parsear, ou se acessa a chave
 > **sem default** e se deixa quebrar.
+
+---
+
+### 3.1.183. ✅ AS TRÊS RECOMENDAÇÕES DO FILTRO NA ORIGEM — aceitas em 13/09
+
+Aceitas pelo Clenio como escritas, e o enquadramento dele mudou com a medição:
+
+> ⭐ **O que sai é UMA LINHA e UMA COLUNA, não o sistema de elegibilidade.**
+> (Uma linha de `avaliarElegibilidade` — o ramo AFASTADO — e a coluna
+> `ciclo.incluirAfastados` que a parametriza. As outras duas decisões da régua
+> já estão mortas: `CARGO_INELEGIVEL` não tem coluna e `DEMITIDO` não tem
+> ninguém.)
+
+#### 1. Duas listas, motivo em TEXTO LIVRE — ⛔ sem enum
+
+> ⭐⭐ **"Quem define os valores define as políticas possíveis."**
+
+Um enum de motivos seria **a régua voltando como vocabulário**: a lista de
+valores admissíveis é, na prática, a lista de políticas que o RH pode ter. Texto
+livre não decide nada — guarda o que a origem sabe e a tela exibe.
+
+#### 2. Sem motivo, a tela diz *"não veio na lista de avaliados"*
+
+⚠️ **A frase feia é a certa.** Inventar um motivo que não temos é o defeito que
+a heurística de prefixo custou em §3.1.144 (*"SETOR: 0"* sobre três caixas de
+setor à vista).
+
+#### 3. Demitido: aceitar, registrar **E MOSTRAR A ETIQUETA**
+
+O Clenio registrou que corrigi a inclinação dele pela metade certa:
+
+> **"Aceitar em silêncio abriria mão da régua E esconderia o fato."**
+
+Recusar seria a régua sobrevivendo como veto; aceitar calado seria o pior dos
+dois mundos. *"Demitido em 12/10"* ao lado do nome muda a conversa do avaliador,
+e é informação que ele precisa ter.
+
+---
+
+#### ⚠️⚠️ EM DESTAQUE — `SITUACOES_ELEGIVEIS` FICA, e as duas se parecem
+
+| | `SITUACOES_ELEGIVEIS` | `avaliarElegibilidade` |
+|---|---|---|
+| responde | *"esta pessoa EXISTE para o módulo?"* | *"esta pessoa é AVALIADA neste ciclo?"* |
+| inclui AFASTADO e FERIAS? | ✅ **sim, de propósito** | ⛔ afastado sai (se `!incluirAfastados`) |
+| o filtro na origem substitui? | ⛔ **NÃO** | ✅ sim |
+
+⭐ **É ela que faz a LÍCIA (AFASTADA) e o MÁRCIO (FÉRIAS) entrarem para
+avaliar** — 34 avaliações do ENSAIO dependem disso. E tirá-la junto **derrubaria
+145 pessoas de todas as listas, calado**.
+
+> ⚠️ **As duas se parecem e decidem coisas opostas.** É a armadilha mais provável
+> desta mudança: quem for remover "a régua" vai encontrar as duas no mesmo grep.
+
+---
+
+### 3.1.184. ⭐⭐⭐ A FRASE DOS FALSOS VERDES
+
+> **Teste vermelho chama atenção sozinho; verde falso só é desmascarado por
+> outro número que discorda dele.**
+
+Três em poucas horas, em 13/09 — e nos três **o que salvou foi a conta não
+bater**, nunca a leitura do erro:
+
+| # | O falso verde | Por que passou | O número que discordou |
+|---|---|---|---|
+| **1** | **429** lido como *"não entra"* | 6 contas boas sem token, e "sem token" parece recusa | **`UPDATE 16`** contra 6 falhando |
+| **2** | **mock de auditoria** verde | prova que `registrar` foi CHAMADO, nunca que a linha POUSOU | a **tabela vazia** depois do exercício |
+| **3** | **404** lido como zero | `.get('problemas', [])` sobre o corpo do erro | **`avaliadoresDeLicenca = 0`** contra a Lícia estar AFASTADO |
+
+⚠️ **Os três eram VERDES.** Nenhum apareceu como falha, e nenhum teria aparecido
+por revisão — é por isso que o portão de cada etapa deste módulo é uma **CONTA**,
+e não uma leitura.
+
+⭐ E o corolário prático: **um relatório de conferência precisa de pelo menos
+dois números que se conciliem.** Um número sozinho não tem como estar errado.
+
+---
+
+### 3.1.185. 📸 PRÉVIA DA ABERTURA DO ENSAIO — capturada ANTES de abrir
+
+⚠️ **Ela perde o sentido depois da abertura**, então foi salva agora. HTTP
+conferido **antes** de parsear — a lição do §3.1.180.
+
+| | |
+|---|---|
+| **problemas** | **0** — a abertura passa |
+| **avisos** | **0** |
+| totalAplicacoes | 4 |
+| noPublico | 344 |
+| **designados** | **325** |
+| semAvaliador | **1** (o Claudimar) |
+| **foraDoCiclo** | **18** — as afastadas, pela régua do ciclo |
+| **aplicacoesProvisorias** | **4** — ⚠️ **todas**; é o item 5 da Arielly, e some com o filtro na origem |
+| avaliadoresSemAcesso | **0** |
+| **avaliadoresDeLicenca** | **2** — MARCIO (FÉRIAS, 33) e LÍCIA (AFASTADO, 1) |
+| avaliacoesComAvaliadorDeLicenca | **34** |
+| avaliacoesSemAvaliadorComAcesso | **0** |
+
+⭐ **As 34 avaliações com avaliador de licença são a prova viva do destaque
+acima:** sem `SITUACOES_ELEGIVEIS` incluindo AFASTADO e FERIAS, essas 34 ficariam
+sem quem as respondesse.
+
+#### E o `estado-de-partida.js` ganhou o quadro por avaliador
+
+**4-bis — o que cada avaliador encontra ao entrar**: a contagem por CICLO, com o
+STATUS de cada um, e o total que de fato cai na fila.
+
+⭐ Ele **não reimplementa a regra da fila** — imprime os números e o status para
+quem lê aplicar a regra. Reimplementar foi o que me fez reprovar a Arielly em
+§3.1.165. **A prova de verdade continua sendo `conferir-login-ensaio.sh`, que
+entra de fato.**

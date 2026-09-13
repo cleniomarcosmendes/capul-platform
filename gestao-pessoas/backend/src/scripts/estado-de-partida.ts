@@ -171,6 +171,44 @@ async function main() {
   }
   console.log(`   conseguem entrar: ${entram} de ${cols.length}`);
 
+  /**
+   * ── 4-bis. O QUE CADA AVALIADOR VAI ENCONTRAR AO ENTRAR ───────────────────
+   *
+   * ⚠️ A fila mostra **os ciclos ABERTOS** (mais devolutiva liberada e conduzida
+   * — ver `minhasAvaliacoes`). Com dois ciclos abertos ao mesmo tempo, o
+   * avaliador vê os DOIS, em blocos separados por ciclo.
+   *
+   * ⭐ Este quadro imprime a contagem por CICLO e o STATUS de cada um, em vez de
+   * reimplementar a regra da fila: uma segunda implementação de "o que aparece"
+   * divergiria no primeiro caso de borda — foi o que aconteceu comigo em 13/09,
+   * quando este script reprovou a ARIELLY que o `conferir-estado` aprovava.
+   * **A prova de verdade é `conferir-login-ensaio.sh`, que entra de fato.**
+   */
+  const porAvaliadorECiclo = await prisma.avaliacao.groupBy({
+    by: ['avaliadorId', 'cicloId'],
+    where: { avaliadorId: { in: cols.map((c) => c.id) }, ...ONDE_A_AVALIACAO_CONTA },
+    _count: { _all: true },
+  });
+  const ciclos = await prisma.ciclo.findMany({ select: { id: true, nome: true, status: true } });
+  const cicloPorId = new Map(ciclos.map((c) => [c.id, c]));
+
+  console.log('\n4-bis. O QUE CADA AVALIADOR ENCONTRA AO ENTRAR');
+  console.log('   ⚠️ só os ciclos ABERTOS aparecem na fila — os demais estão aqui para conferência');
+  for (const c of cols.sort((a, b) => a.nome.localeCompare(b.nome))) {
+    const linhas = porAvaliadorECiclo
+      .filter((x) => x.avaliadorId === c.id)
+      .map((x) => ({ ciclo: cicloPorId.get(x.cicloId), n: x._count._all }))
+      .sort((a, b) => (b.ciclo?.status === 'ABERTO' ? 1 : 0) - (a.ciclo?.status === 'ABERTO' ? 1 : 0));
+    const naFila = linhas
+      .filter((l) => l.ciclo?.status === 'ABERTO')
+      .reduce((s, l) => s + l.n, 0);
+    console.log(`   ${c.matricula} ${c.nome.slice(0, 26).padEnd(28)} na fila: ${String(naFila).padStart(3)}`);
+    for (const l of linhas) {
+      const marca = l.ciclo?.status === 'ABERTO' ? '  →' : '   ·';
+      console.log(`     ${marca} ${String(l.n).padStart(3)}  ${l.ciclo?.nome ?? '?'} [${l.ciclo?.status}]`);
+    }
+  }
+
   // ── 5. A CONTA QUE TEM DE FECHAR ──────────────────────────────────────────
   const publico = await prisma.aplicacaoPublico.findMany({
     where: { cicloId: ciclo.id },
