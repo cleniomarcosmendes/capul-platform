@@ -20,97 +20,51 @@
 > pronto não se escreve à mão* — e afirmação que envelhece não se escreve num
 > cabeçalho.
 
-## ▶️ A FILA DE AMANHÃ (13/09, 08:00) — abrir por aqui
+## ▶️ A FILA DE AMANHÃ (14/09, 08:00) — abrir por aqui
 
-### (a) 🔴 Esperando a Arielly — 9 itens, e um deles reordena tudo
+> 🎯 **O ensaio integral RODOU em 13/09**: 72 enviadas · 72 apuradas · 71
+> devolutivas liberadas · 3 conduzidas · 4 aplicações · **0 toques no Piloto**.
+> ⛔ **NÃO limpar** — os 72 resultados são a evidência do bloco de consertos.
+> A limpeza está pronta e ensaiada em `gestao-pessoas/scripts/limpar-ensaio-integral.sql`.
 
-A lista está em **📋 PENDÊNCIAS DA ARIELLY**. O que cada resposta destrava:
+### (a) 🟢 PRONTO PARA CÓDIGO
 
-⚠️ **Quatro contas de teste agora** — `zz.teste.rh` (RH_ADMIN) · `.modelo` ·
-`.ciclo` · **`.avaliador`** (13/09, §3.1.156). As 18 contas com papel AVALIADOR
-são de **pessoas reais**; medir com uma delas é o que custou a limpeza de 12/09.
-
-| # | Item | O que a resposta destrava |
+| Frente | Custo | |
 |---|---|---|
-| ~~1~~ | **As 39 perguntas — o CONTEÚDO** | ⚠️ **deixou de bloquear a fila (13/09).** Ela decide o conteúdo, **na tela**, quando o editor existir — não a ordem do trabalho |
-| 2 | A faixa "Menos de 1 ano" (são DUAS) | manter e corrigir o rótulo, ou mudar a régua — e aí decidir o que fazer com a regressão do `000006` como baseline |
-| 3 | Prefixo de CC × fábrica | remontar o público das 49 do `ADMINISTRATIVO - FABRICA`. **Não precisa de código** |
-| 4 | 2º `RH_ADMIN` (Claudimar) | destrava quem corrige a avaliação da própria gestora |
-| 5 | Recorte provisório — granularidade | define o ato de confirmar: linha, aplicação ou ciclo |
-| 6 | Treinamento parado em 14/11/2025 | destrava ligar (ou não) o `QTDE_TREINAMENTO` |
-| 7 | Divisão do `11010219` | formalizar a divisão Jaicler/Laís — hoje segue como está |
-| 8 | Reciprocidade A↔B | política: vale ou não, num ciclo que conta para mérito |
-| 9 | "Está no topo, não é avaliado" | falta o CONCEITO; hoje o único caminho mente no histórico |
+| ⭐ **Achado 10 — o vazamento pela ORDENAÇÃO** | **4h** | **PRIMEIRO.** A linha do próprio RH aparece em Resultados na posição ordenada por nota (entre 83,33 e 77,78 — janela de **5,55 pontos**, e o conceito com certeza). Inclui **varrer** onde mais posição, contagem ou média entregam o que o valor esconde. ⭐ *Esconder um VALOR não esconde nada se outros números forem derivados dele* |
+| **Os 10 achados do bloco** (03–05, 07–09, 11–14) | **~10–14h** | ⚠️ **Estimativa grossa, e assumida como tal**: eu vi 4 dos 14. O Clenio traz **o relatório completo da skill** amanhã de manhã, e a estimativa vira medição |
+| 🔴 **Reconferir pela TELA o que foi feito DEPOIS do ensaio** | **~1h** | §3.1.198 — a caixa do reabrir · os 14 avisos `<Feito>` · a etiqueta de recorte na lista · a correção do falso vermelho. **Ninguém clicou em nada disso** |
 
-### (b) 🟢 Pronto para código — desenho fechado, é só executar
+⚠️ **Já consertados hoje, aguardando conferência de tela:** os dois bloqueantes —
+o `confirmarJaDevolvida` no diálogo (§3.1.193) e o falso vermelho dos Aprendizes
+(§3.1.194).
 
-| Frente | Custo | Estado |
-|---|---|---|
-| ~~**Flag de recorte** no ciclo~~ | ~~6h~~ | ✅ **FEITA em 13/09** — §3.1.142. ⚠️ Não confundir com o **item 5 da Arielly** (`aplicacao_publico.provisorio`, por linha), que segue aberto |
-| **Entrada do valor INFORMADO** | **4–6 dias** | as 3 decisões **fechadas**: três baldes na prévia · substitui e **nunca soma** · quem não está na planilha **não é tocado** · lote com desfazer · prévia grava por **id**, sem reler o arquivo · ciclo já apurado = **opção (ii)** (marca os resultados como desatualizados) |
-| **Editor do acervo** | **3–3,5 semanas** | ▶️ **EM CURSO, por BLOCOS com portão** (reorganizado em 12/09). **A** (2+5) ✅ §3.1.87 · **B** (6) ✅ §3.1.91 · **C** (3+4) ✅ §3.1.98 · **D** (7) ✅ §3.1.101 — **editor COMPLETO**. Cada bloco fecha numa CONTA, conferida antes do próximo |
+### (b) 🔴 Esperando a Arielly — a lista ganhou um item
 
-### (b-bis) 🔴 O QUE A MEDIÇÃO DE 13/09 TIROU E PÔS NA FILA
+⭐ **NOVO — os extremos** (§3.1.195): as âncoras valem **25/50/75/100, nunca 0**.
+Nos 72 resultados do ensaio: **0 Insuficiente e 0 Excelente**. Mínimas 30,56 e
+38,89; máximas 77,78 e 83,33. **O avaliador não consegue dar nem a pior nem a
+melhor avaliação** — os dois extremos são decididos pelos critérios cadastrais,
+33,3% que não depende de ninguém na conversa. Três opções registradas: âncora
+mais baixa valendo **0** · **régua diferente** · **aceitar** que os extremos
+sejam cadastrais.
 
-| | |
-|---|---|
-| ⛔ **SAIU: notificação por e-mail (3–5 dias)** | alcança **2 dos 16** avaliadores e **3 das 344** pessoas do público. `rh.colaborador` não tem e-mail; ele vem de `core.usuarios`, e o TETO — já contando o que dá para consertar no Configurador — é **13 de 1.039**. §3.1.144 |
-| 🟢 **ENTROU: "não há como avisar" na tela do RH (~4h)** | a régua do *designar não dá acesso* aplicada ao aviso. Vale para qualquer canal futuro, e é o que o e-mail ia entregar de útil |
-| 🔴 **ENTROU: o `enableImplicitConversion` dos outros 3 backends (~2h cada)** | **assunto de plataforma**, não do módulo — `auth-gateway` (`bloquear`!) e `logistica` (`confirmarPendentes`). ⛔ **Não mexer sem decidir com o Marco**: os dois estão em PRODUÇÃO. §3.1.145 |
-| 🟢 **ENTROU: guarda de reabrir avaliação já devolvida (~4h)** | hoje não existe, e `devolutiva_em` **não pode** morar em `resultado_avaliacao`. §3.1.138 e §3.1.147(c) |
-| 💰 **COTADO: prévia do efeito na nota — ~1,5 dia** | §3.1.146. O trabalho não é a aritmética, é a política do delta de perguntas |
+⚠️ E os itens **3** (prefixo de CC) e **5** (recorte provisório) **caem quando a
+lista de avaliados vier tratada da origem** — o 3 só com a coluna de perfil
+(§3.1.150, §3.1.181).
 
-### (b-ter) 🟢 O QUE 13/09 DECIDIU — a fila depois das decisões do Clenio
+### (c) 🟡 O MARCO — duas coisas independentes entre si
 
-| | Custo | |
-|---|---|---|
-| ✅ ~~**DEVOLUTIVA presencial**~~ | ~22h | **FECHADA** — as 4 etapas (§3.1.152, §3.1.153, §3.1.157, §3.1.160). O ciclo do módulo fica completo de ponta a ponta pela 1ª vez |
-| 🚦 **ENSAIO INTEGRAL** | — | ⭐ **PREPARADO** (§3.1.167): ENSAIO marcado como recorte · estado de partida em `estado-de-partida.js` · limpeza escrita e ensaiada com ROLLBACK. ⛔ As 19 **NÃO** são designadas (§3.1.166 — 18 pela régua do ciclo, 1 é o Claudimar). **Falta só o roteiro da skill** |
-| 📌 **Apontar erro de cadastro** (novo) | ~6h | §3.1.159 — o avaliador passa a VER escolaridade/tempo errados e não tem onde dizer. ⛔ Depois da devolutiva |
-| 🟢 **Prévia do efeito na nota** | ~1,5 dia | §3.1.146, **depois** da devolutiva |
-| ✂️ ~~"não há como avisar" (4h)~~ | **minutos** | cortado: vira uma frase na prévia da abertura dizendo que avisar é presencial. §3.1.151 |
-| 🔴 **Booleano nos outros backends** | ~2h cada | **não é nosso agora** — aviso escrito em `docs/AVISO_MARCO_VALIDACAO_BOOLEANA.md`, o Marco decide a janela. §3.1.149 |
-| 🟡 **Filtro dos avaliados vem da ORIGEM** | a definir | §3.1.150 — precisa de **uma coluna de perfil** no CSV, senão o item 3 da Arielly não cai |
+1. ⭐ **`docs/AVISO_MARCO_VALIDACAO_BOOLEANA.md`** — **independente do módulo**.
+   Buraco **latente** (não incidente) em `auth-gateway` e `logística`: a string
+   `"false"` chega como `true`. Medido, com a transcrição no arquivo. Ele decide
+   **a janela**; o código e o teste são nossos, ~2h por backend.
+2. **HLG** — acesso **confirmado desde 09/09**; falta **medir o commit** (`/health`
+   → `versao.commit`) e **agendar a janela**. ⚠️ O roteiro do módulo só se
+   escreve **depois** de medir: roteiro com alvo errado é pior que roteiro
+   ausente.
 
-### (c) 🟡 HLG — acesso CONFIRMADO; falta medir e agendar
-
-⚠️⚠️ **CORREÇÃO de 13/09 (Clenio): este bloco vinha dizendo "bloqueado esperando
-o Marco", e não é verdade há quatro dias.** O Marco **já confirmou acesso e dado
-em 09/09** — *"serve sim"* — e isso está registrado no HISTÓRICO deste arquivo.
-Eu repeti "ele não responde" por dois dias lendo o rótulo antigo em vez do
-registro. **O pedido que falta é menor e mais fácil:** medir em que commit HLG
-está e agendar uma janela.
-
-⭐ A lição é a mesma do cabeçalho: **rótulo de estado envelhece, e enquanto
-envelhece ele decide a conversa.** "Bloqueado esperando resposta" e "acesso
-confirmado, falta agendar" pedem coisas diferentes de pessoas diferentes.
-
-| O que falta | De quem | Tamanho |
-|---|---|---|
-| Medir o commit de HLG (`/health` → `versao.commit`) | T.I. (nós), com acesso já concedido | minutos |
-| Agendar a janela de aplicação | Marco | um combinado |
-| **Escrever o roteiro** do módulo | nós, **depois** de medir HLG | ~2h |
-
-⚠️ **O roteiro só se escreve depois da medição** — ele cita o commit de partida,
-e roteiro com alvo errado é pior que roteiro ausente.
-
-#### O tamanho da onda — medido em 13/09
-
-| | Medido | ⚠️ |
-|---|---|---|
-| Migrations do `gestao-pessoas` | **15** | eram 13 em 12/09; entraram a **view da régua** (`20260912200000`) e a **flag de recorte** (`20260913000000`) |
-| Migrations do `auth-gateway` na onda | **2** | número do registro anterior — **não remedido contra PROD** |
-| **Total da onda** | **17** | ⚠️ era 15 ontem. **Este número cresce a cada dia de trabalho** — não o cite de memória, conte os diretórios |
-| Serviços novos no compose | **3** | `gestao-pessoas-migrate`, `-backend`, `-frontend` |
-| `location` no nginx | **2** | `/gestao-pessoas/` e `/api/v1/gestao-pessoas/` (+ 2 upstreams) |
-| Jobs `*-migrate` com `migrate-guarda` | **6 de 7** | o único fora é o `inventario-migrate`, que roda SQL próprio e não usa Prisma |
-
-⚠️ **Estado de ambiente é o que mais envelhece aqui.** O que estava escrito
-(PROD em `6855c918`, sem o módulo) é o **declarado** — conferir por `/health`
-antes de afirmar.
-
----
-
+⛔ **Piloto 15/09: 894 PENDENTE, 0 respostas** — conferido no fechamento.
 
 ## 🗄️ HISTÓRICO — 08 e 09/09/2026
 
@@ -11851,3 +11805,98 @@ Pergunta do Clenio sobre avaliados repetidos entre `clenio` e `renataborges`.
 uma`.** ⭐ **Não há duplicata de designação.** O que ele viu é **a mesma pessoa
 em DOIS CICLOS** (ENSAIO e Piloto), como o achado 03 sugeria — e é o efeito
 esperado da convivência que a opção 4 aceitou.
+
+---
+
+## 🌙 FECHAMENTO DE 13/09/2026
+
+O dia em que o **ensaio integral rodou**: **72 enviadas · 72 apuradas · 71
+devolutivas liberadas · 3 conduzidas · 4 aplicações · 0 toques no Piloto.**
+
+⛔ **O ensaio NÃO foi limpo** — os 72 resultados são a evidência, e o bloco de
+consertos vai precisar deles.
+
+---
+
+### 3.1.198. ⭐⭐⭐ MEDIR POR CURL PROVA O CONTRATO, NUNCA O CAMINHO
+
+> **A guarda estava certa. O parâmetro estava certo. E não havia como confirmar
+> pela tela.**
+
+Foi assim que o `reabrir` chegou ao ensaio quebrado: eu construí
+`confirmarJaDevolvida`, medi *"sem confirmar 400 · confirmando 200"* — **as duas
+com curl, passando o parâmetro à mão** — e dei o portão da etapa 4 por fechado.
+**Nenhum dos dois cliques existia.**
+
+⚠️ **Quarta ocorrência de capacidade sem caminho, e a pior das quatro**: a
+mensagem de erro terminava em *"Confirme para reabrir assim"* — **mandando fazer
+o que o botão não fazia**. Texto que promete capacidade **como saída de um
+erro** empurra de volta ao erro com a autoridade do sistema.
+
+#### ⚠️ A consequência para os meus portões — e quais precisam de reconferência
+
+**Um portão medido por curl não é portão de percurso.** Mas a resposta honesta é
+melhor do que eu esperava, porque **o próprio ensaio foi o portão de tela**. O
+rastro em `rh.auditoria` diz o que foi de fato exercitado **pela tela**:
+
+| ato | rastro | portão |
+|---|---|---|
+| `ENVIAR` | **72** | responder/enviar ✅ |
+| `LIBERAR_DEVOLUTIVA` | **71** | **etapa 1** ✅ |
+| `LER_RESULTADO_INDIVIDUAL` | 18 | **etapa 2** ✅ |
+| `DEVOLUTIVA_CONDUZIDA` / `DESMARCADA` | **4 / 1** | **etapa 4 (conduzir e desfazer)** ✅ |
+| `ACESSO_NEGADO_PROPRIO_AVALIADO:devolutiva` | 1 | a guarda da própria ✅ |
+| `MARCAR_RECORTE` · `ABRIR` · `APURAR` | 1 · 1 · 2 | ✅ |
+| **`reabrir`** | 11 acessos, **0 reaberturas** | ⛔ **o único que não passou** |
+
+⭐ **De tudo o que foi construído ANTES do ensaio, só o `reabrir` não tinha
+caminho — e foi exatamente ele que quebrou.** O ensaio pagou por si.
+
+> 🔴 **O que precisa de reconferência pela TELA amanhã é o que foi construído
+> DEPOIS do ensaio, hoje, e ninguém clicou:**
+>
+> 1. **A caixa de confirmação do reabrir** (o conserto de hoje) — é o mesmo
+>    ponto que falhou; conferir clicando, não por curl;
+> 2. **Os 14 avisos de sucesso** (`<Feito>`) — verificados só por `tsc` e por
+>    texto no bundle. ⚠️ **Um aviso que renderiza onde ninguém olha é o mesmo
+>    silêncio** — o defeito não é ter o componente, é ele ser visto;
+> 3. **A etiqueta "alcança parte da empresa"** no card da lista de Ciclos —
+>    nunca vista renderizada;
+> 4. **A correção do falso vermelho** — confirmar que a tela do avaliador dos
+>    **Aprendizes** parou de gritar.
+
+---
+
+### 3.1.199. ⭐⭐⭐ FALSO VERMELHO SOBRE DADO CORRETO — o alarme que ensina a ser ignorado
+
+`conferirComposicao` comparava a **soma dos GRUPOS** (60 — a escala interna do
+instrumento) com **`pesoAvaliacao`** (100 — quanto o questionário vale **contra
+os critérios**). **Coisas diferentes**, que coincidiam em **3 das 4 aplicações
+por acidente** — e eu **generalizei da coincidência**.
+
+Resultado: a tela do avaliador gritou *"a conta desta avaliação não está
+fechando"* sobre **14 devolutivas corretas**. Medido: `Aprendizes` nota 64,17 →
+final 64,17, grupos reconciliando. **A conta fechava por inteiro.**
+
+> ⭐⭐⭐ **Falso vermelho sobre dado correto destrói a única coisa que a etapa 3
+> oferecia — a tela que confere a própria conta.**
+>
+> **Alarme errado é pior que alarme ausente, porque ensina a ignorar o alarme.**
+> Alarme ausente deixa o defeito passar uma vez; alarme errado treina a pessoa a
+> passar por cima de todos, inclusive do dia em que ele estiver certo.
+
+⚠️ E o corolário para a promoção de guardas: **promover a checagem errada para a
+apuração e para o diálogo de liberar teria BLOQUEADO 14 liberações corretas.**
+*Guarda errada promovida é pior que guarda tarde.*
+
+⭐ No lugar ficou uma que é verdadeira: **Σ pesos dos grupos == Σ pesos das
+questões** — a mesma do `estado-de-partida`, e a que de fato pegaria o 59,97.
+
+---
+
+### 3.1.200. ✅ A SOMA DAS 16 FILAS FECHA EM 325
+
+**325 avaliações · 325 avaliados distintos · ZERO com mais de uma.** Não há
+duplicata de designação: o repetido entre `clenio` e `renataborges` é **a mesma
+pessoa em dois ciclos** (ENSAIO e Piloto), o efeito esperado da convivência que a
+opção 4 aceitou como matéria do ensaio.
