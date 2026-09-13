@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarRange, ChevronRight, Lock, Plus, Unlock } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
+import { Feito, useFeito } from '../components/Feito';
 import { EtiquetaDeCiclo } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
@@ -30,6 +31,7 @@ import { MOTIVO_MINIMO_EM_MASSA } from '../lib/motivo';
 export default function CiclosPage() {
   const { tem } = useAuth();
   const [lista, setLista] = useState<CicloDaLista[] | null>(null);
+  const { feito, avisar } = useFeito();
   const [erro, setErro] = useState<string | null>(null);
   const [semPermissao, setSemPermissao] = useState(false);
   const [criando, setCriando] = useState(false);
@@ -105,6 +107,9 @@ export default function CiclosPage() {
         </ul>
       )}
 
+      {/* ⭐ Aviso de sucesso — ver `components/Feito.tsx`. */}
+      <Feito mensagem={feito} />
+
       {criando && (
         <DialogoNovoCiclo
           aoFechar={() => setCriando(false)}
@@ -112,6 +117,7 @@ export default function CiclosPage() {
             await ciclos.criar(dados);
             setCriando(false);
             await carregar();
+            avisar(`Ciclo "${dados.nome}" criado, em RASCUNHO.`);
           }}
         />
       )}
@@ -122,6 +128,7 @@ export default function CiclosPage() {
 function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () => Promise<void> }) {
   const { tem } = useAuth();
   const [ocupado, setOcupado] = useState(false);
+  const { feito, avisar } = useFeito();
   const [problemas, setProblemas] = useState<string[] | null>(null);
   const [confirmandoAbrir, setConfirmandoAbrir] = useState(false);
   const [previaAbertura, setPreviaAbertura] = useState<PreviaDaAbertura | null>(null);
@@ -138,6 +145,7 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
       setReabrindo(false);
       setMotivoReabertura('');
       await aoMudar();
+      avisar(`Ciclo "${ciclo.nome}" reaberto.`);
     } catch (e) {
       setProblemas([mensagemDoErro(e)]);
     } finally {
@@ -188,6 +196,16 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           ));
       setEncerrandoComPendencia(false);
       setMotivoPendencia('');
+      /**
+       * ⚠️ A frase diz O QUE MUDOU, não "ok": abrir um ciclo faz 325 avaliações
+       * aparecerem em 16 filas, e encerrar as tira de todas. Quem clicou precisa
+       * saber qual dos dois aconteceu.
+       */
+      avisar(
+        acao === 'abrir'
+          ? `Ciclo "${ciclo.nome}" ABERTO — as avaliações entraram na fila dos avaliadores.`
+          : `Ciclo "${ciclo.nome}" ENCERRADO — ele sai das filas e não aceita mais resposta.`,
+      );
       await aoMudar();
     } catch (e) {
       // A validação de abertura devolve um ARRAY de problemas. Juntar tudo numa
@@ -688,6 +706,10 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
           </div>
         </Modal>
       )}
+
+      {/* ⭐ O aviso fica NO CARTÃO do ciclo que mudou — não numa barra global.
+          Com vários ciclos na lista, "Ciclo aberto" no topo não diz QUAL. */}
+      <Feito mensagem={feito} />
 
       {problemas && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">

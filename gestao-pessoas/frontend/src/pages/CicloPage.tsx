@@ -4,6 +4,7 @@ import { NavLink, Outlet, useParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, ArrowRight, CalendarRange, CheckCircle2, ChevronDown, Lock, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Carregando, Erro } from '../components/Estado';
+import { Feito, useFeito } from '../components/Feito';
 import { EtiquetaDeCiclo } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
@@ -639,6 +640,7 @@ function PeriodoDoCiclo({
   aoSalvar: () => void;
 }) {
   const [aberta, setAberta] = useState(false);
+  const { feito, avisar } = useFeito();
   const [inicio, setInicio] = useState(ciclo.periodoInicio.slice(0, 10));
   const [fim, setFim] = useState(ciclo.periodoFim.slice(0, 10));
   const [salvando, setSalvando] = useState(false);
@@ -665,6 +667,7 @@ function PeriodoDoCiclo({
     setSalvo(false);
     try {
       await apiCiclos.ajustarPeriodo(ciclo.id, inicio, fim);
+      avisar('Período do ciclo ajustado.');
       setSalvo(true);
       aoSalvar();
     } catch (e) {
@@ -676,6 +679,8 @@ function PeriodoDoCiclo({
 
   return (
     <section className="mt-3 rounded-2xl border border-slate-200 bg-white">
+      {/* ⭐ Aviso de sucesso — components/Feito.tsx */}
+      <Feito mensagem={feito} />
       <button
         type="button"
         onClick={() => setAberta((v) => !v)}
@@ -771,6 +776,7 @@ function ReguaDeConceitos({
   aoSalvar: () => Promise<void> | void;
 }) {
   const [aberta, setAberta] = useState(false);
+  const { feito, avisar } = useFeito();
   const [faixas, setFaixas] = useState(() =>
     ciclo.conceitos.map((c) => ({
       descricao: c.descricao,
@@ -794,6 +800,8 @@ function ReguaDeConceitos({
 
   return (
     <section className="mt-3 rounded-2xl border border-slate-200 bg-white">
+      {/* ⭐ Aviso de sucesso — components/Feito.tsx */}
+      <Feito mensagem={feito} />
       <button
         type="button"
         onClick={() => setAberta((v) => !v)}
@@ -925,6 +933,7 @@ function ReguaDeConceitos({
                   setSalvo(false);
                   try {
                     await apiCiclos.ajustarConceitos(ciclo.id, faixas);
+                    avisar('Régua de conceitos gravada.');
                     setSalvo(true);
                     await aoSalvar();
                   } catch (e) {

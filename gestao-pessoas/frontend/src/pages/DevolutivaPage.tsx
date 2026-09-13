@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, ChevronDown, ChevronUp, RotateCcw, TriangleAlert } from 'lucide-react';
 import { Carregando, Erro } from '../components/Estado';
+import { Feito, useFeito } from '../components/Feito';
 import { Etiqueta } from '../components/Etiqueta';
 import { dataHora, nota as fmtNota } from '../lib/formato';
 import {
@@ -47,6 +48,7 @@ export default function DevolutivaPage() {
   const [dados, setDados] = useState<DevolutivaDoAvaliador | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [marcando, setMarcando] = useState(false);
+  const { feito, avisar } = useFeito();
 
   /**
    * ⚠️ Recarrega em vez de mexer no estado local: a tela lê
@@ -59,6 +61,7 @@ export default function DevolutivaPage() {
     setMarcando(true);
     try {
       await devolutivaDoAvaliador.marcarConduzida(id, conduzida);
+      avisar(conduzida ? 'Conversa registrada.' : 'Registro da conversa desfeito.');
       setDados(await devolutivaDoAvaliador.obter(id));
     } catch (e) {
       setErro(mensagemDoErro(e, 'Não foi possível registrar a conversa.'));
@@ -103,6 +106,9 @@ export default function DevolutivaPage() {
           Liberada pelo RH em {dataHora(dados.devolutivaLiberadaEm)}.
         </p>
       </header>
+
+      {/* ⭐ Aviso de sucesso no topo — ver `components/Feito.tsx`. */}
+      <Feito mensagem={feito} />
 
       {/* ⭐⭐ CONVERSOU SOBRE A NOTA ANTERIOR — derivado das duas datas.
           A marca de conduzida NÃO é apagada na reabertura (a conversa

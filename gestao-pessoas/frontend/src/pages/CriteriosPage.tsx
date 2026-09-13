@@ -43,6 +43,7 @@ import type {
   ResolverDisponivel,
 } from '../services/api';
 import { Carregando, Erro, Vazio } from '../components/Estado';
+import { Feito, useFeito } from '../components/Feito';
 import { Etiqueta } from '../components/Etiqueta';
 import { Modal } from '../components/Modal';
 import { contagem } from '../lib/formato';
@@ -603,6 +604,7 @@ function DialogoFaixas({
   const [faixas, setFaixas] = useState<FaixaEditavel[]>(
     criterio.faixas.map(({ tipo: _tipo, ...f }) => f),
   );
+  const { feito, avisar } = useFeito();
   const [problemas, setProblemas] = useState<string[]>([]);
   const [avisos, setAvisos] = useState<string[]>([]);
   const [conferindo, setConferindo] = useState(false);
@@ -686,6 +688,7 @@ function DialogoFaixas({
       // recusa a primeira tentativa COM O DADO (quantas faixas, quantas
       // aplicações), e é esse texto que o diálogo mostra.
       await apiCriterios.salvarFaixas(criterio.id, comOrdem, confirmado);
+      avisar('Faixas gravadas.');
       aoSalvar();
     } catch (e) {
       const m = (e as { response?: { data?: { message?: string | string[] } } }).response?.data
@@ -698,6 +701,8 @@ function DialogoFaixas({
 
   return (
     <Modal titulo={`Faixas de ${criterio.nome}`} aoFechar={aoFechar} largura="ampla">
+      {/* ⭐ Aviso de sucesso — components/Feito.tsx */}
+      <Feito mensagem={feito} />
       <p className="text-sm text-slate-600">
         A faixa diz <strong>quantos pontos</strong> cada valor vale, de 0 a 100. O peso do critério
         na nota é outra coisa — é escolhido por perfil, na montagem da aplicação.

@@ -9,6 +9,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
+import { Feito, useFeito } from '../components/Feito';
 import { Etiqueta } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
@@ -53,6 +54,7 @@ export default function PainelPage() {
   const [confirmando, setConfirmando] = useState(false);
   const [resultadoApuracao, setResultado] = useState<string | null>(null);
   const [marcando, setMarcando] = useState(false);
+  const { feito, avisar } = useFeito();
 
   /** Quem monta o ciclo declara o alcance dele — mesma dupla da rota. */
   const podeDeclararAlcance = tem(ROLES.RH_ADMIN) || tem(ROLES.RH_CICLO);
@@ -69,6 +71,16 @@ export default function PainelPage() {
     try {
       await ciclosApi.marcarRecorte(ciclo.id, ehRecorte);
       await carregar();
+      /**
+       * ⚠️ O AVISO É OBRIGATÓRIO AQUI, e este ato é a razão de o padrão existir:
+       * ele muda a COR de um bloco e mais nada. Quem não estiver olhando o bloco
+       * conclui que falhou e clica de novo — foi o que aconteceu em 13/09.
+       */
+      avisar(
+        ehRecorte
+          ? 'Ciclo marcado como recorte. Quem está fora das aplicações deixou de ser pendência.'
+          : 'Marca de recorte retirada. Quem está fora das aplicações volta a ser pendência.',
+      );
     } catch (e) {
       setErro(mensagemDoErro(e, 'Não foi possível declarar o alcance do ciclo.'));
     } finally {
@@ -133,6 +145,8 @@ export default function PainelPage() {
 
   return (
     <div className="space-y-6">
+      {/* ⭐ O aviso de sucesso fica NO TOPO, onde quem clicou está olhando. */}
+      <Feito mensagem={feito} />
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-baseline justify-between gap-3">
           <p className="text-lg font-semibold text-slate-800">

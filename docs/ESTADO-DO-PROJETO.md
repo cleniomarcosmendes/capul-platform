@@ -11480,3 +11480,118 @@ STATUS de cada um, e o total que de fato cai na fila.
 quem lê aplicar a regra. Reimplementar foi o que me fez reprovar a Arielly em
 §3.1.165. **A prova de verdade continua sendo `conferir-login-ensaio.sh`, que
 entra de fato.**
+
+---
+
+### 3.1.186. 🕐 A LINHA DO TEMPO DO ENSAIO — e por que minha medição dizia RASCUNHO
+
+| quando | ato | por |
+|---|---|---|
+| 12/09 02:33 | `CRIAR` | `zz.teste.rh` |
+| **13/09 00:25:14** | **`ABRIR`** | ⚠️ **`zz.teste.rh`** |
+| 13/09 00:42:15 | `MARCAR_RECORTE` (`false → true`) | ✅ **`ariellypereira`** |
+
+⭐ **Minha medição foi ANTES das 00:25** — a auditoria tinha só o `CRIAR`, e o
+status era RASCUNHO. **Estava certa no instante em que foi feita**, e a abertura
+veio depois. Fecha o mistério: quando a skill foi clicar às 00:42, o ciclo já
+estava aberto havia 17 minutos, e por isso **não havia botão "Abrir"**.
+
+⚠️ **A autoria do `ABRIR` é do `zz.teste.rh`.** É o mesmo problema que o Clenio
+fez questão de corrigir no recorte — e o `ABRIR` é o ato maior dos dois: ele pôs
+325 avaliações em 16 filas. Fica registrado; a trilha diz conta de teste.
+
+---
+
+### 3.1.187. 🔴🔴 NENHUM AVISO DE SUCESSO — o defeito que quase produziu um retrato falso
+
+**O incidente:** o `PATCH` do recorte respondeu **200**, o dado gravou, e a tela
+**não disse nada** — a única evidência foi um bloco mudar de cor num canto. O
+Clenio concluiu que falhou, escreveu que não tinha funcionado, e eu **quase
+entreguei um "depois" que era o "antes"**.
+
+> ⭐⭐ **O sistema não mentiu: ele não disse nada, e o silêncio foi lido como
+> falha.** Silêncio é pior que erro — erro manda tentar de novo **com
+> informação**; silêncio manda tentar de novo **às cegas**.
+
+⚠️ **Estava na varredura de 10/09 como item 12** (*"nenhum aviso de sucesso
+visível após enviar, cancelar ou reabrir"*), classificado pelo Clenio como
+**falta de explicação**. Ele registrou a correção: **era defeito**, e quatro dias
+depois o custo apareceu — *um ato aplicado que ninguém sabia ter acontecido*.
+
+#### (a) A LISTA — medida, não impressão
+
+**47 atos de escrita** nas telas. Na primeira medição, **37 sem confirmação**.
+
+⚠️ **A primeira contagem por TELA foi impressão, não lista** — o `PainelPage`
+aparecia como "SIM" porque tem `setResultado` da apuração, enquanto o
+`marcarRecorte` (o ato do incidente) não avisava nada. **Refeito por ATO.**
+
+⚠️ E a lista por ato teve **falso positivo**: o `contestarDesignacao` avisa por
+`setConfirmacao`, que meu regex não conhecia. Corrigido — *a varredura também
+precisa ser conferida*.
+
+#### (b) O PADRÃO — `components/Feito.tsx`, um só
+
+`useFeito()` + `<Feito mensagem={feito} />`. Some sozinho em 6s, com
+`role="status"` e `aria-live="polite"` — sem isso, **quem não enxerga a tela não
+recebe aviso nenhum**, e a ausência de feedback é, para essa pessoa, o estado
+permanente.
+
+⭐ **A frase diz O QUE FOI FEITO, não "ok".** *"Ciclo ABERTO — as avaliações
+entraram na fila dos avaliadores"* responde a pergunta que a pessoa tem;
+*"Sucesso!"* não responde nenhuma.
+
+#### (c) OS QUE MUDAM ESTADO SEM MUDAR A TELA — feitos primeiro
+
+**14 de 37 aplicados**, escolhidos por este critério:
+
+| Tela | Ato | Por que era invisível |
+|---|---|---|
+| **Painel** | `marcarRecorte` | ⭐ **o ato do incidente** — muda a cor de um bloco e nada mais |
+| **Ciclos** | `abrir` · `encerrar` · `criar` · `reabrir` | o cartão muda um selo pequeno; abrir põe 325 avaliações em 16 filas |
+| **Devolutiva** | `marcarConduzida` | troca um botão por outro |
+| **Arranjo** | `gravar` | ⭐ **nada muda**: a tela já mostrava o que foi gravado |
+| **Critérios** | `salvarFaixas` | o modal fecha e pronto |
+| **Ciclo** | `ajustarPeriodo` · `ajustarConceitos` | valores no cabeçalho |
+| **Aplicações** | `editar` | idem |
+
+**Restam 23**, todos com mudança visível na tela (linha some, lista reordena,
+modal fecha) — são os menos perigosos, e a lista está no commit. ⚠️ **Não
+afirmo que estão bons: afirmo que são os que sobraram**, e o padrão está pronto
+para eles.
+
+---
+
+### 3.1.188. ⚖️ O BOTÃO DE RECORTE SEM DIÁLOGO — minha recomendação
+
+O Clenio apontou a inconsistência de atrito: **o recorte muda como o Painel
+classifica 667 pessoas em clique único, enquanto apagar uma classificação vazia
+pede confirmação.**
+
+⭐ **Recomendo NÃO acrescentar diálogo, e o critério é o que o ato FAZ:**
+
+| | Recorte | Apagar classificação |
+|---|---|---|
+| toca nota? | ⛔ não | não |
+| desfaz em um clique? | ✅ **sim** — o botão vira *"deveria alcançar a empresa inteira"* | ⛔ não |
+| alguém vê antes de você desfazer? | ⛔ não (é rótulo de tela) | — |
+
+**Diálogo é para o que não volta.** Pôr confirmação no reversível **treina a
+pessoa a clicar "sim" sem ler** — e aí o diálogo do irreversível, que é o que
+importa, também passa batido. *Fricção uniforme é fricção que não informa.*
+
+> ⚠️ **MAS: o feedback vira obrigatório.** Sem diálogo E sem aviso, não há
+> **nenhum** momento em que o sistema diga que o ato aconteceu — que é
+> exatamente o buraco de 13/09. **Feito.**
+
+⭐ **A regra que fica: um ato precisa de PELO MENOS UM dos dois — confirmação
+antes ou aviso depois. Irreversível precisa dos dois; reversível precisa do
+aviso.** Nenhum dos dois é o que aconteceu aqui.
+
+#### E a marca de recorte não aparece no card da lista de Ciclos
+
+Confirmado: `ehRecorte` **só aparece no Painel**. Quem olha a lista de ciclos não
+tem como saber que aquele ciclo é um recorte — e é justamente na lista que se
+comparam ciclos entre si. ⚠️ **Não construído** (é a tela que o ensaio vai medir);
+custo **~30min**: uma `<Etiqueta>` no card, ao lado de *"vale para mérito"*, que
+já existe e é o precedente exato.

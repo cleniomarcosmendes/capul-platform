@@ -44,6 +44,7 @@ import type {
 } from '../services/api';
 import { distribuirIgual } from '../lib/reparticao';
 import { Carregando, Erro, Vazio } from '../components/Estado';
+import { Feito, useFeito } from '../components/Feito';
 import { Etiqueta } from '../components/Etiqueta';
 import { Modal } from '../components/Modal';
 import { contagem } from '../lib/formato';
@@ -60,6 +61,7 @@ export default function ArranjoPage() {
   const { versaoId = '' } = useParams();
   const navegar = useNavigate();
   const [dados, setDados] = useState<ArranjoDeEdicao | null>(null);
+  const { feito, avisar } = useFeito();
   const [acervo, setAcervo] = useState<AcervoCompleto | null>(null);
   const [local, setLocal] = useState<Rascunho | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -177,6 +179,11 @@ export default function ArranjoPage() {
         })),
         questoes: local.questoes.map((perguntaId) => ({ perguntaId })),
       });
+      /**
+       * ⚠️ Gravar o arranjo NÃO muda nada visível: a tela já mostrava o que
+       * foi gravado. Sem o aviso, o único jeito de saber é sair e voltar.
+       */
+      avisar('Arranjo gravado no rascunho desta versão.');
       setDados(a);
       setLocal({
         grupos: a.grupos.map((g) => ({ classificacaoId: g.classificacaoId, peso: String(g.peso) })),
@@ -192,6 +199,8 @@ export default function ArranjoPage() {
   if (semPermissao) {
     return (
       <div className="px-4 pt-5">
+        {/* ⭐ Aviso de sucesso — components/Feito.tsx */}
+        <Feito mensagem={feito} />
         <Vazio
           titulo="Sem permissão para montar o instrumento"
           detalhe="Montar o arranjo é do RH_ADMIN ou do RH_MODELO."

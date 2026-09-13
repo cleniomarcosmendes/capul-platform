@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { AlertTriangle, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { Carregando, Erro, Vazio } from '../components/Estado';
+import { Feito, useFeito } from '../components/Feito';
 import { Etiqueta } from '../components/Etiqueta';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES } from '../lib/roles';
@@ -179,6 +180,7 @@ function CartaoDeAplicacao({
   aoMudarPublico: () => Promise<void> | void;
 }) {
   const [editandoPublico, setEditandoPublico] = useState(false);
+  const { feito, avisar } = useFeito();
   /** O que abre e o que não abre — vem do backend quando ela pede para editar. */
   const [efeito, setEfeito] = useState<EfeitoDeEditarAplicacao | null>(null);
   const [editando, setEditando] = useState(false);
@@ -206,6 +208,8 @@ function CartaoDeAplicacao({
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      {/* ⭐ Aviso de sucesso — components/Feito.tsx */}
+      <Feito mensagem={feito} />
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-semibold text-slate-800">{aplicacao.nome}</h3>
         <Etiqueta tom="azul">{contagem(aplicacao._count.avaliacoes, 'avaliação', 'avaliações')}</Etiqueta>
@@ -248,6 +252,7 @@ function CartaoDeAplicacao({
           aoFechar={() => setEditando(false)}
           aoSalvar={async (dados) => {
             await apiAplicacoes.editar(aplicacao.id, dados);
+            avisar('Aplicação atualizada.');
             setEditando(false);
             await aoMudarPublico();
           }}
