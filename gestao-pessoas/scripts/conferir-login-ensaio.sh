@@ -23,6 +23,12 @@ for u in $CONTAS; do
   CODE=$(echo "$R" | tail -1); BODY=$(echo "$R" | head -n -1)
   # ⚠️ 429 NÃO é "não entra" — é "não perguntei direito". Rótulo próprio.
   if [ "$CODE" = "429" ]; then printf '  ⏳ %-20s THROTTLE (429) — aumente a espera\n' "$u"; falhou=$((falhou+1)); continue; fi
+  # ⚠️ `.get(...,'')` aqui é SEGURO porque o CÓDIGO HTTP foi conferido antes (429
+  #    tem ramo próprio) e, sem token, a linha impressa mostra o código. Em
+  #    relatório de conferência, `.get` com default sobre corpo de resposta
+  #    transforma AUSÊNCIA em VALOR — e ausência e zero significam coisas
+  #    opostas. Ver §3.1.180: um `.get('problemas', [])` sobre o corpo de um 404
+  #    me fez imprimir "0 problemas" sobre uma rota que não existe.
   T=$(echo "$BODY" | python3 -c "import sys,json;print(json.load(sys.stdin).get('accessToken',''))" 2>/dev/null)
   if [ -z "$T" ]; then printf '  ⛔ %-20s LOGIN %s\n' "$u" "$CODE"; falhou=$((falhou+1)); continue; fi
   # ⭐ Entrar no auth NÃO basta: o módulo tem o IdentidadeGuard (matrícula ↔

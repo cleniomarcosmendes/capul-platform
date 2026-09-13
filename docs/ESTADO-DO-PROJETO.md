@@ -11162,3 +11162,209 @@ semAvaliador 1` (o Claudimar) · `avaliadoresSemAcesso: 0` · **`avaliadoresDeLi
 
 ⚠️ Os dois **têm acesso e vão avaliar** — é aviso, não impedimento, e o ensaio
 vai exercitá-lo.
+
+---
+
+### 3.1.181. 📐 O FILTRO NA ORIGEM — o que a régua decide hoje, e o que sairia (MEDIDO, não construído)
+
+⛔ **Nada construído, nada mexido.** Isto é levantamento para a decisão, e o
+ensaio roda com o que existe hoje.
+
+#### ⭐⭐ O ARGUMENTO, registrado como o Clenio o formulou
+
+> **A avaliação é sobre um PERÍODO DE UM ANO; a situação do colaborador é de um
+> INSTANTE.** Barrar alguém por estar de férias na data-base é deixar de avaliar
+> doze meses de trabalho por causa de uma semana — e **a data-base é escolha de
+> calendário, não fato sobre a pessoa.** Quem sabe se a pessoa trabalhou o
+> suficiente no período é o RH, olhando o ano.
+>
+> **E o caso que fecha:** alguém demitido em outubro trabalhou dez meses. Hoje a
+> régua o barra, e **avaliar quem saiu pode ser exatamente o que o RH quer** —
+> para histórico, para rescisão, para saber se a saída era evitável.
+
+⚠️ É mais forte que *"evitar régua duplicada"* porque não fala de manutenção:
+fala de **estar errado**. Uma régua bem escrita e sem duplicação continuaria
+respondendo à pergunta errada.
+
+---
+
+#### 1. O QUE A RÉGUA DECIDE HOJE — e o tamanho é menor do que parece
+
+Há **três réguas distintas** que costumam ser chamadas de "a régua", e só uma
+delas é sobre ser AVALIADO:
+
+| | Régua | Pergunta que responde | O filtro na origem toca? |
+|---|---|---|---|
+| **A** | `SITUACOES_ELEGIVEIS` = `[ATIVO, AFASTADO, FERIAS]` | *"esta pessoa EXISTE para o módulo?"* — acesso, listas, denominadores | ⛔ **não** |
+| **B** | `avaliarElegibilidade(candidato, {incluirAfastados})` | *"esta pessoa é AVALIADA neste ciclo?"* | ✅ **é esta** |
+| **C** | `RA_DEMISSA = ' ' AND RA_SITFOLH <> 'D'` (SQL de extração) | *"esta pessoa entra no `rh.colaborador`?"* | ⭐ **já É a origem** |
+
+⭐⭐ **O achado que reenquadra tudo: a régua C JÁ É o filtro na origem.** O que
+está sendo decidido não é criar um filtro fora — é **mover mais decisão para
+onde uma parte dela já mora**.
+
+##### E das três decisões da régua B, DUAS ESTÃO MORTAS — medido
+
+| Motivo | Dispara hoje? | Por quê |
+|---|---|---|
+| `CARGO_INELEGIVEL` (categoria `P`, Presidente/Vice) | ⛔ **nunca** | **`rh.colaborador` não tem coluna `categoria_funcional`** — os chamadores passam `categoriaFuncional: null`. Os 2 saem por decisão registrada, à mão |
+| `REGRA_CICLO` — DEMITIDO na data-base | ⛔ **nunca** | **0 demitidos na base**: a régua C já os barra na extração. O ramo existe e nada o alcança |
+| `REGRA_CICLO` — AFASTADO + `!incluirAfastados` | ✅ **é o único vivo** | **47 pessoas** na base · **18** no ENSAIO |
+
+> ⭐ **O que sairia é UMA regra, UM motivo, 47 pessoas.** Não é o sistema de
+> elegibilidade inteiro — é uma linha de `avaliarElegibilidade` e a coluna
+> `ciclo.incluirAfastados` que a parametriza.
+
+##### Quem consome, e o que cada um responde
+
+| Consumidor | Régua | Responde sobre |
+|---|---|---|
+| `identidade.service` (2×) · `acesso-do-avaliador` | **A** | **ACESSO** — quem entra no módulo. ⛔ **não muda** |
+| `designacao.service` (5 pontos) · `aplicacao.service` (prévia e alvo) · `painel.foraDeTodasAsAplicacoes` | **B** | **AVALIADO** — é o que muda |
+| `designacao-padrao` (2×) · `catalogo.service` (2×) | **A** | listas de escolha e o cadastro de quem avalia quem — ⛔ **não muda** |
+| `criterio/distribuicao.service` | **A** | a **população de referência** do histograma de escolaridade/tempo — ⛔ **não muda** |
+| `scripts/conferir-*` e `estado-de-partida` | **A** | conferência — ⛔ **não muda** |
+
+---
+
+#### 2. COM A LISTA PRONTA — o que some, o que vira leitura, o que fica
+
+| Ponto | Destino |
+|---|---|
+| `avaliarElegibilidade` (ramo AFASTADO) | **some** — a origem já não manda |
+| `ciclo.incluirAfastados` | **some** como régua; ⚠️ vira **rótulo histórico** dos ciclos antigos |
+| A lista de candidatos da Designação | **vira leitura da lista** — deixa de ser "todos os elegíveis menos os barrados" |
+| `painel.foraDeTodasAsAplicacoes` | **muda de significado**: hoje é *"elegível que ninguém pôs no público"*; passaria a ser *"veio na lista e ninguém pôs no público"* — continua útil, e continua sendo a conta que fecha |
+| **`SITUACOES_ELEGIVEIS`** | ⛔ **FICA, e é essencial** — ela responde ACESSO, não avaliação. É o que faz o avaliador AFASTADO (Lícia) e o de FÉRIAS (Márcio) **entrarem** |
+| Separação de funções, `IdentidadeGuard`, cadastro de avaliadores | ⛔ **não são tocados** |
+
+⚠️ **A confusão que precisa não acontecer:** `SITUACOES_ELEGIVEIS` incluir
+AFASTADO e FERIAS **não é uma política sobre avaliação** — é a definição de
+"pessoa viva no cadastro". Tirá-la junto derrubaria 145 pessoas de **todas** as
+listas, calado. É o defeito que o ESTADO alerta desde o primeiro dia.
+
+---
+
+#### 3. ⭐ O QUE SE PERDE — a régua também EXPLICA
+
+Hoje a tela diz **"Fora: regra ciclo — Afastado na data-base do ciclo, e este
+ciclo está configurado para não incluir afastados"**, e a pessoa entende. Com a
+lista pronta, o módulo **não sabe o motivo** — e *"esta pessoa não está no
+ciclo"* sem explicação **é pior que a régua**.
+
+⚠️ A pergunta *"por que fulano não foi avaliado?"* continua sendo feita ao RH. O
+que muda é que **a resposta passa a morar fora do sistema.**
+
+**O que eu recomendo que a origem mande junto — e por quê:**
+
+| Opção | O que dá | Custo |
+|---|---|---|
+| **Nada** — o módulo diz *"não veio na lista"* | ⭐ **honesto**, e melhor que inventar. Mas joga a pergunta inteira para fora | zero |
+| ⭐⭐ **Um campo `motivo` livre, opcional, na LISTA DOS EXCLUÍDOS** | o RH continua respondendo **dentro do sistema**, e a origem escreve o que ela sabe | pequeno |
+| Um enum de motivos | ⛔ **não** — seria a régua voltando, agora como vocabulário: quem define o enum define as políticas possíveis |
+
+> ⭐ **A recomendação: a origem manda DUAS listas — os avaliados e os excluídos
+> com motivo em TEXTO LIVRE.** Sem enum. O módulo não interpreta: guarda e
+> exibe. Assim a tela continua dizendo *"Fora: <o que o RH escreveu>"* em vez de
+> *"não veio na lista"*.
+>
+> ⚠️ E quando não vier motivo, a tela diz exatamente **"não veio na lista de
+> avaliados"** — a frase feia é a certa. **Honestidade primeiro: inventar um
+> motivo que não temos é o defeito que a §3.1.144 acabou de me custar** (a
+> heurística de prefixo que dizia "SETOR: 0").
+
+---
+
+#### 4. OS ESTADOS QUE DEIXAM DE EXISTIR
+
+| Estado | Destino |
+|---|---|
+| **As 18 afastadas no público sem avaliação** | ⭐ **some de vez** — elas não viriam na lista, então não entrariam no público |
+| **"no público, sem avaliação criada"** | ⚠️ **muda de dono, não some.** Continua possível: alguém na lista sem avaliador designado (é o caso do Claudimar hoje). O que some é a *causa afastado* |
+| **Item 5 da Arielly — recorte provisório** | ⭐ **some de vez** (já registrado em §3.1.150): a flag marca *"veio de um atalho da T.I."*, e público que chega pronto é decisão do RH por construção |
+| **Item 3 da Arielly — prefixo de CC** | 🟡 **só some com a coluna de perfil**. Sem ela, a T.I. continua adivinhando o questionário por código contábil |
+| `ciclo.incluirAfastados` | vira **rótulo histórico** — os ciclos de 2026 precisam dele para explicar o próprio passado |
+
+---
+
+#### 5. A ORIGEM MANDA UM DEMITIDO — **registrar e seguir**
+
+⭐ **Concordo com a inclinação do Clenio, e o argumento é o dele:** recusar seria
+**a régua sobrevivendo como veto** — o módulo dizendo "não" a uma decisão que
+deixou de ser dele.
+
+**O desenho que eu recomendo:**
+
+1. **Aceita**, cria a avaliação normalmente;
+2. **Registra na auditoria** — *"recebida da origem com situação DEMITIDO"*;
+3. ⭐ **A TELA MOSTRA a etiqueta**, na linha da pessoa. Não como aviso de erro:
+   como **fato**. *"Demitido em 12/10"* ao lado do nome muda a conversa do
+   avaliador, e é informação que ele precisa ter.
+
+⚠️ **O que NÃO fazer:** aceitar em silêncio. Aceitar sem mostrar é a metade ruim
+das duas — o módulo abre mão da régua **e** esconde o fato. A régua deixa de
+decidir; o fato continua sendo fato.
+
+---
+
+#### 6. O CONTRATO MÍNIMO
+
+Hoje o sync lê **três CSVs** (`colaboradores`, `historico_funcao`,
+`treinamentos`), por cabeçalho, e `FonteCsvService` é **somente leitura**.
+
+**O mínimo que o módulo precisaria receber:**
+
+| Campo | Obrigatório | Por quê |
+|---|---|---|
+| `filial` + `matricula` | ✅ | é a chave (`@@unique([filial, matricula])`) |
+| ⭐ `perfil_avaliacao` | ✅ **sim** | sem ele o item 3 da Arielly **não cai** — `AplicacaoPublico` tem `@@unique([cicloId, colaboradorId])`, então **estar no público JÁ É a escolha do questionário** |
+| `avaliado` (S/N) ou duas listas | ✅ | é o filtro em si |
+| `motivo` (texto livre) | ⚠️ só para os excluídos | ver o item 3 — é o que salva a explicação |
+
+**E se chegar alguém que não existe em `rh.colaborador`?**
+
+⭐ **Recusar a LINHA e relatar, nunca criar a pessoa.** O módulo não é dono do
+cadastro: criar colaborador a partir da lista de avaliados faria a lista virar
+uma segunda porta de entrada de gente, e o próximo sync do Protheus encontraria
+alguém que ele não conhece.
+
+⚠️ E **recusar a linha, não o arquivo** — é a regra que o próprio
+`FonteCsvService` já segue para a data de admissão: *"estourar aqui derrubaria o
+arquivo inteiro por causa de uma linha"*. O relatório do sync diz quem ficou de
+fora, com a matrícula.
+
+---
+
+### 3.1.182. ⭐⭐⭐ O PADRÃO DO DIA — três falsos verdes, e a conta é que pegou os três
+
+Formulado pelo Clenio, e é a lição mais importante de 13/09:
+
+| # | O falso verde | O que salvou |
+|---|---|---|
+| 1 | **429** lido como *"não entra"* — 6 contas boas reprovadas | `UPDATE 16` não batia com 6 falhando |
+| 2 | **mock de auditoria** provando a CHAMADA, nunca que a linha pousou | a tabela vazia depois do exercício |
+| 3 | **404** lido como zero — `.get('problemas', [])` sobre o corpo do erro | `avaliadoresDeLicenca = 0` não batia com a Lícia estar AFASTADO |
+
+> ⭐⭐⭐ **Nos três, o que salvou foi a CONTA NÃO BATER — nunca a leitura do erro.**
+> A conta que não fecha é o detector mais confiável que temos.
+
+⚠️ E os três eram **verdes**: nenhum apareceu como falha. Um teste vermelho
+chama atenção sozinho; **um verde falso só é desmascarado por outro número que
+discorda dele.** É por isso que o portão de cada etapa deste módulo é uma CONTA,
+e não uma revisão.
+
+#### A varredura do `.get` com default — pedida pelo Clenio
+
+**Uma ocorrência** no que fica no repositório:
+`conferir-login-ensaio.sh:26` → `.get('accessToken','')`.
+
+⭐ **E ela é segura por construção**, o que também é informação: o código HTTP é
+conferido **antes** (o 429 tem ramo próprio) e, sem token, a linha impressa
+**mostra o código**. Comentário acrescentado no arquivo para que continue assim.
+
+Os três scripts `.ts` (`conferir-estado`, `conferir-email`, `estado-de-partida`)
+leem do **banco**, não de resposta HTTP — os `.get` deles são `Map.get`.
+
+> ⚠️ **A regra:** em relatório de conferência, **ausência e ZERO significam
+> coisas opostas.** Ou se confere o HTTP antes de parsear, ou se acessa a chave
+> **sem default** e se deixa quebrar.
