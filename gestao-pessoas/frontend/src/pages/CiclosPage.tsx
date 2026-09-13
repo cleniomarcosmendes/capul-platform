@@ -228,6 +228,18 @@ function CartaoDeCiclo({ ciclo, aoMudar }: { ciclo: CicloDaLista; aoMudar: () =>
             {ciclo.valeParaMerito && (
               <span className="text-xs font-medium text-amber-700">vale para mérito</span>
             )}
+            {/* ⭐⭐ A MARCA DE RECORTE NA LISTA — é aqui que se COMPARAM ciclos.
+                Até 13/09 `ehRecorte` só aparecia no Painel, e quem olhava a
+                lista não tinha como saber que um ciclo alcança 16 centros de
+                custo e o outro a empresa inteira. Comparar dois números de
+                cobertura sem saber que os denominadores são diferentes é a
+                família do "dois números verdadeiros sem o termo que os
+                concilia" — e aqui o termo é o alcance.
+                ⚠️ Mesmo lugar e mesmo peso visual do "vale para mérito": os
+                dois dizem o que o ciclo É, não o que aconteceu com ele. */}
+            {ciclo.ehRecorte && (
+              <span className="text-xs font-medium text-slate-500">alcança parte da empresa</span>
+            )}
           </div>
           <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
             <span className="inline-flex items-center gap-1.5">

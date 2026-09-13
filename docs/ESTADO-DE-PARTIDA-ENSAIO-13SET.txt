@@ -1,0 +1,186 @@
+══════════════════════════════════════════════════════════════════════════════
+ESTADO DE PARTIDA — o que NÃO deve mudar com o ensaio
+gerado em 2026-09-13T01:03:11.961Z
+══════════════════════════════════════════════════════════════════════════════
+
+1. CICLO
+   nome ..................... ENSAIO PILOTO — 16 CCs
+   status ................... ABERTO
+   período .................. 2026-11-01 a 2026-11-30
+   data-base ................ 2026-11-30   ⚠️ ancora TODO cálculo temporal
+   janela de treinamento .... 12 meses
+   incluir afastados ........ false   ⚠️ é o que decide se afastado gera avaliação
+   vale para mérito ......... false
+   é RECORTE ................ true   (declarado por quem monta, nunca derivado)
+
+2. RÉGUA DE CONCEITOS — faixas: 5
+    1. Insuficiente           [0.00 , 25.00)
+    2. Abaixo do esperado     [25.00 , 50.00)
+    3. Atende                 [50.00 , 75.00)
+    4. Supera                 [75.00 , 90.00)
+    5. Excelente              [90.00 , 100.00)
+   contígua: sim
+
+3. APLICAÇÕES (4)
+
+   ▸ Aprendizes
+     modelo/versão .......... Administrativo v1
+     peso do questionário ... 100.00
+     centros de custo ....... 16
+     público ................ 19
+     avaliações ............. 18  PENDENTE=18
+     INSTRUMENTO: 4 grupos · 11 questões
+       Assiduidade e Pontualidade           peso  12.00 · 2 questões
+       Relacionamento e Conduta             peso  16.00 · 3 questões
+       Iniciativa e Adaptabilidade          peso  16.00 · 3 questões
+       Qualidade e Organização              peso  16.00 · 3 questões
+       soma declarada (grupos) .. 60.00
+       soma derivada (questões) . 60.00  ✅ bate
+       pontuação máxima ......... 72.00
+     CRITÉRIOS (0):
+     soma dos pesos da nota final: 100.00
+
+   ▸ Administrativo
+     modelo/versão .......... Administrativo v1
+     peso do questionário ... 60.00
+     centros de custo ....... 16
+     público ................ 67
+     avaliações ............. 63  PENDENTE=63
+     INSTRUMENTO: 4 grupos · 11 questões
+       Assiduidade e Pontualidade           peso  12.00 · 2 questões
+       Relacionamento e Conduta             peso  16.00 · 3 questões
+       Iniciativa e Adaptabilidade          peso  16.00 · 3 questões
+       Qualidade e Organização              peso  16.00 · 3 questões
+       soma declarada (grupos) .. 60.00
+       soma derivada (questões) . 60.00  ✅ bate
+       pontuação máxima ......... 72.00
+     CRITÉRIOS (3):
+       ESCOLARIDADE       peso 10.00 · CALCULADO · ativo
+       TEMPO_EMPRESA      peso 10.00 · CALCULADO · ativo
+       TEMPO_FUNCAO       peso 10.00 · CALCULADO · ativo
+     soma dos pesos da nota final: 90.00
+
+   ▸ Operação de Loja
+     modelo/versão .......... Operação de Loja v1
+     peso do questionário ... 60.00
+     centros de custo ....... 16
+     público ................ 257
+     avaliações ............. 243  PENDENTE=243
+     INSTRUMENTO: 7 grupos · 14 questões
+       Assiduidade e Pontualidade           peso   9.00 · 2 questões
+       Relacionamento e Conduta             peso  10.00 · 3 questões
+       Iniciativa e Adaptabilidade          peso   9.00 · 3 questões
+       Qualidade e Organização              peso   9.00 · 3 questões
+       Atendimento ao Cliente               peso  13.00 · 1 questões
+       Metas e Trabalho sob Pressão         peso   5.00 · 1 questões
+       Apresentação Pessoal                 peso   5.00 · 1 questões
+       soma declarada (grupos) .. 60.00
+       soma derivada (questões) . 60.00  ✅ bate
+       pontuação máxima ......... 72.00
+     CRITÉRIOS (3):
+       ESCOLARIDADE       peso 10.00 · CALCULADO · ativo
+       TEMPO_EMPRESA      peso 10.00 · CALCULADO · ativo
+       TEMPO_FUNCAO       peso 10.00 · CALCULADO · ativo
+     soma dos pesos da nota final: 90.00
+
+   ▸ Produção e Indústria
+     modelo/versão .......... Produção e Indústria v1
+     peso do questionário ... 60.00
+     centros de custo ....... 16
+     público ................ 1
+     avaliações ............. 1  PENDENTE=1
+     INSTRUMENTO: 7 grupos · 14 questões
+       Assiduidade e Pontualidade           peso  10.00 · 2 questões
+       Relacionamento e Conduta             peso   9.00 · 3 questões
+       Iniciativa e Adaptabilidade          peso   9.00 · 3 questões
+       Qualidade e Organização              peso  12.00 · 3 questões
+       Conhecimento Técnico                 peso  12.00 · 1 questões
+       Metas e Trabalho sob Pressão         peso   5.00 · 1 questões
+       Apresentação Pessoal                 peso   3.00 · 1 questões
+       soma declarada (grupos) .. 60.00
+       soma derivada (questões) . 60.00  ✅ bate
+       pontuação máxima ......... 72.00
+     CRITÉRIOS (3):
+       ESCOLARIDADE       peso 10.00 · CALCULADO · ativo
+       TEMPO_EMPRESA      peso 10.00 · CALCULADO · ativo
+       TEMPO_FUNCAO       peso 10.00 · CALCULADO · ativo
+     soma dos pesos da nota final: 90.00
+
+4. AVALIADORES (16) — régua: ATIVO, AFASTADO, FERIAS
+   ✅ 003113 ADRIANA CAETANO VASCONCELOS    fila= 91 · adrianacaetano       · AVALIADOR    · ATIVO
+   ✅ 002448 ARIELLY APARECIDA JOSE PEREI   fila=  5 · ariellypereira       · RH_ADMIN     · ATIVO
+   ✅ 001079 CLAUDIMAR DIAS DE OLIVEIRA     fila= 15 · claudimaroliveira    · AVALIADOR    · ATIVO
+   ✅ 001047 CLENIO MARCOS MENDES           fila= 13 · clenio               · AVALIADOR    · ATIVO
+   ✅ 001106 DENISE ALVES DE A PEREIRA      fila=  6 · denisealves          · AVALIADOR    · ATIVO
+   ✅ 001277 ESMERALDA ALVES DA SILVA       fila= 13 · esmeraldasilva       · AVALIADOR    · ATIVO
+   ✅ 003969 IVAN LUCAS CAIXETA             fila=  2 · ivanlucas            · AVALIADOR    · ATIVO
+   ✅ 001134 JAICLER FERREIRA DE ANDRADE    fila=  3 · jaiclerferreira      · AVALIADOR    · ATIVO
+   ✅ 001907 JULIANA DA SILVA COUTO         fila=  3 · julianacouto         · AVALIADOR    · ATIVO
+   ✅ 002865 LAIS LOURENCO DA SILVA         fila=  2 · laislourenco         · AVALIADOR    · ATIVO
+   ✅ 005380 LICIA VERSIANI QUEIROZ         fila=  1 · liciaversiani        · AVALIADOR    · AFASTADO
+   ✅ 002336 LIDYANE APARECIDA C G ROCHA    fila= 46 · lidyanerocha         · AVALIADOR    · ATIVO
+   ✅ 001960 MARCIO ANTONIO BRANDAO         fila= 33 · marcioantonio        · AVALIADOR    · FERIAS
+   ✅ 001981 RENATA BORGES FREITAS CASTRO   fila=  3 · renataborges         · AVALIADOR    · ATIVO
+   ✅ 004060 THIAGO MACEDO ROCHA            fila= 83 · thiagomacedo         · AVALIADOR    · ATIVO
+   ✅ 001086 VANIA LUCIA DA COSTA           fila=  6 · vanialucia           · AVALIADOR    · ATIVO
+   conseguem entrar: 16 de 16
+
+4-bis. O QUE CADA AVALIADOR ENCONTRA AO ENTRAR
+   ⚠️ só os ciclos ABERTOS aparecem na fila — os demais estão aqui para conferência
+   003113 ADRIANA CAETANO VASCONCELO   na fila: 175
+       →  91  ENSAIO PILOTO — 16 CCs [ABERTO]
+       →  84  Piloto 15/09/2026 [ABERTO]
+   002448 ARIELLY APARECIDA JOSE PER   na fila:  18
+       →  13  Piloto 15/09/2026 [ABERTO]
+       →   5  ENSAIO PILOTO — 16 CCs [ABERTO]
+        ·  13  SIMULACAO 09/09 [ENCERRADO]
+   001079 CLAUDIMAR DIAS DE OLIVEIRA   na fila:  65
+       →   6  ZZ ENCERRA2 09/09 [ABERTO]
+       →  44  Piloto 15/09/2026 [ABERTO]
+       →  15  ENSAIO PILOTO — 16 CCs [ABERTO]
+   001047 CLENIO MARCOS MENDES         na fila:  13
+       →  13  ENSAIO PILOTO — 16 CCs [ABERTO]
+   001106 DENISE ALVES DE A PEREIRA    na fila:   6
+       →   6  ENSAIO PILOTO — 16 CCs [ABERTO]
+   001277 ESMERALDA ALVES DA SILVA     na fila:  26
+       →  13  ENSAIO PILOTO — 16 CCs [ABERTO]
+       →  13  Piloto 15/09/2026 [ABERTO]
+   003969 IVAN LUCAS CAIXETA           na fila:   2
+       →   2  ENSAIO PILOTO — 16 CCs [ABERTO]
+   001134 JAICLER FERREIRA DE ANDRAD   na fila:   6
+       →   3  ENSAIO PILOTO — 16 CCs [ABERTO]
+       →   3  Piloto 15/09/2026 [ABERTO]
+   001907 JULIANA DA SILVA COUTO       na fila:   3
+       →   3  ENSAIO PILOTO — 16 CCs [ABERTO]
+   002865 LAIS LOURENCO DA SILVA       na fila:   4
+       →   2  Piloto 15/09/2026 [ABERTO]
+       →   2  ENSAIO PILOTO — 16 CCs [ABERTO]
+   005380 LICIA VERSIANI QUEIROZ       na fila:   1
+       →   1  ENSAIO PILOTO — 16 CCs [ABERTO]
+   002336 LIDYANE APARECIDA C G ROCH   na fila:  47
+       →   1  Piloto 15/09/2026 [ABERTO]
+       →  46  ENSAIO PILOTO — 16 CCs [ABERTO]
+   001960 MARCIO ANTONIO BRANDAO       na fila:  66
+       →  33  ENSAIO PILOTO — 16 CCs [ABERTO]
+       →  33  Piloto 15/09/2026 [ABERTO]
+   001981 RENATA BORGES FREITAS CAST   na fila:  16
+       →  13  Piloto 15/09/2026 [ABERTO]
+       →   3  ENSAIO PILOTO — 16 CCs [ABERTO]
+   004060 THIAGO MACEDO ROCHA          na fila: 166
+       →  83  ENSAIO PILOTO — 16 CCs [ABERTO]
+       →  83  Piloto 15/09/2026 [ABERTO]
+   001086 VANIA LUCIA DA COSTA         na fila:  12
+       →   6  Piloto 15/09/2026 [ABERTO]
+       →   6  ENSAIO PILOTO — 16 CCs [ABERTO]
+
+5. ⛳ A CONTA
+   público (pessoas distintas) ......... 344
+       AFASTADO   18
+       ATIVO      298
+       FERIAS     28
+   − afastados (incluirAfastados=false) .. 18
+   = elegíveis pela régua do CICLO ..... 326
+   avaliações que contam ............... 325
+   (canceladas, fora da conta) ......... 0
+   diferença ........................... 1
+   ⚠️ 1 elegível(is) do ciclo sem avaliação — quem é, e por quê, precisa estar registrado

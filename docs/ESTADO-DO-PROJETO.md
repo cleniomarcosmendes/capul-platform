@@ -11595,3 +11595,121 @@ tem como saber que aquele ciclo é um recorte — e é justamente na lista que s
 comparam ciclos entre si. ⚠️ **Não construído** (é a tela que o ensaio vai medir);
 custo **~30min**: uma `<Etiqueta>` no card, ao lado de *"vale para mérito"*, que
 já existe e é o precedente exato.
+
+---
+
+### 3.1.189. 🔴 O `ABRIR` DO ENSAIO ESTÁ EM NOME DE UMA CONTA DE TESTE — a segunda vez
+
+> ⚠️ **O ato que pôs 325 avaliações em 16 filas está registrado como
+> `zz.teste.rh`.** É a **segunda vez** que montagem de coisa que fica sai em
+> nome de conta de teste — a primeira foram as **348 `DESIGNAR`**.
+
+⛔ **Fica assim, por decisão do Clenio, e o argumento é o mesmo que descartou o
+encerramento do Piloto:** desfazer exigiria **encerrar e reabrir**, o que
+**escreve nas 325** e grava `encerradoEm` como cicatriz permanente. **O remédio
+seria pior que a doença.**
+
+#### ⭐ E a lição operacional, registrada pelo Clenio como dele
+
+> **"A regra de 'montagem de coisa que fica vai na conta de quem decidiu' só
+> funciona se quem decide executar de fato — e eu falhei nisso duas vezes hoje."**
+
+Ele escreveu *"vou abrir agora"*, não abriu, e alguém abriu depois com a conta
+errada. ⚠️ **A regra é sobre autoria, mas depende de EXECUÇÃO** — e entre
+"decidi" e "executei" cabe exatamente o buraco em que a conta errada entra.
+
+⭐ O que fecharia o buraco não é mais disciplina: é o sistema **dizer que fez**
+(§3.1.187) — porque a metade do problema foi ele não saber se o clique tinha
+funcionado.
+
+---
+
+### 3.1.190. ✅ DECISÃO — a regra dos diálogos e dos avisos
+
+Aceita inteira pelo Clenio em 13/09:
+
+> ⭐⭐ **Um ato precisa de PELO MENOS UM dos dois — confirmação ANTES ou aviso
+> DEPOIS. Irreversível precisa dos dois; reversível precisa do aviso.**
+
+**E o argumento contra diálogo no reversível:** ele **treina a pessoa a clicar
+"sim" sem ler** — e aí o diálogo do irreversível, que é o que importa, **passa
+batido também**. *Fricção uniforme é fricção que não informa.*
+
+#### ⭐ E a frase do aviso — a diferença entre avisar e decorar
+
+> **"Ciclo ABERTO — as avaliações entraram na fila dos avaliadores"**, não
+> **"Sucesso!"**.
+
+O primeiro responde a pergunta que a pessoa tem (*o que aconteceu no mundo?*); o
+segundo responde *"o botão funcionou"*, que ela já supunha. ⚠️ Aviso que não
+informa vira enfeite, e enfeite se ignora — o que devolve o problema do silêncio
+com um passo a mais.
+
+---
+
+### 3.1.191. ✅ A ETIQUETA DE RECORTE NA LISTA DE CICLOS (30min, feitos)
+
+Até 13/09 `ehRecorte` **só aparecia no Painel** — e é na LISTA que se comparam
+ciclos entre si.
+
+⭐ **Comparar dois números de cobertura sem saber que os denominadores são
+diferentes** é a família do *"dois números verdadeiros sem o termo que os
+concilia"* — e aqui o termo é o **alcance**.
+
+Etiqueta *"alcança parte da empresa"*, no mesmo lugar e com o mesmo peso visual
+do *"vale para mérito"* — os dois dizem o que o ciclo **É**, não o que aconteceu
+com ele.
+
+⚠️ **Sobre os 23 atos que sobraram sem aviso**, o Clenio registrou a ressalva
+como escrita: *"você não afirma que estão bons, afirma que são os que sobraram —
+isso é honesto e é diferente de cobertura"*. **O ensaio vai passar por vários; se
+algum não avisar na prática, aparece.**
+
+---
+
+### 3.1.192. 📸 O ESTADO DE PARTIDA — salvo em `docs/ESTADO-DE-PARTIDA-ENSAIO-13SET.txt`
+
+Gerado com o ENSAIO **ABERTO** e **`ehRecorte = true`**. É o retrato a conferir
+no fim, e o arquivo está no repositório para não depender de memória.
+
+**O que ele diz, em uma tela:**
+
+| | |
+|---|---|
+| ciclo | `ENSAIO PILOTO — 16 CCs` · **ABERTO** · 01–30/11/2026 · data-base **30/11** · `incluirAfastados=false` · **`ehRecorte=true`** |
+| conceitos | **5 faixas contíguas** 0–100 |
+| aplicações | **4** — Aprendizes (19/18, ⚠️ peso 100 e **zero critérios**) · Administrativo (67/63) · Operação de Loja (257/243) · **Produção e Indústria** (1/1) |
+| instrumento | as 4 com **soma declarada = soma derivada = 60,00** e **máxima 72,00** ✅ |
+| avaliadores | **16 de 16 entram** |
+| ⛳ a conta | 344 público − 18 afastados = **326** elegíveis do ciclo · **325** avaliações · falta **1** (o Claudimar) |
+
+#### ⭐ O 4-bis — o que cada conta encontra ao entrar
+
+**As duas maiores filas do ensaio:**
+
+| | ENSAIO | Piloto | total na fila |
+|---|---|---|---|
+| **ADRIANA CAETANO** | **91** | 84 | **175** |
+| **THIAGO MACEDO** | **83** | 83 | **166** |
+| MARCIO ANTONIO | 33 | 33 | 66 |
+| CLAUDIMAR | 15 | 44 (+6 ZZ ENCERRA2) | **65** |
+| LIDYANE | 46 | 1 | 47 |
+| ESMERALDA | 13 | 13 | 26 |
+| ARIELLY | 5 | 13 | 18 |
+| RENATA | 3 | 13 | 16 |
+| CLENIO | **13** | — | **13** (⭐ só ENSAIO) |
+| VANIA | 6 | 6 | 12 |
+| DENISE | **6** | — | 6 |
+| JAICLER | 3 | 3 | 6 |
+| LAIS | 2 | 2 | 4 |
+| JULIANA | **3** | — | 3 |
+| IVAN | **2** | — | 2 |
+| LÍCIA | **1** | — | 1 |
+
+⚠️ **Onze das 16 veem os dois ciclos misturados** — é a convivência que a opção 4
+aceitou como matéria do ensaio. **A Adriana com 175 cartões em dois blocos é o
+caso mais duro**, e é bom que seja ela: é a maior fila das duas listas.
+
+⭐ **Cinco veem só o ENSAIO** (Clenio, Denise, Juliana, Ivan, Lícia) — são o
+grupo de controle involuntário: se a confusão aparecer só nas onze, é a
+convivência; se aparecer nas dezesseis, é outra coisa.
